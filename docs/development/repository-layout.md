@@ -10,6 +10,7 @@ orqst/
 │   │   └── src/server.ts
 │   └── dashboard/              # React SPA
 │       ├── src/App.tsx
+│       ├── src/ModelAnalytics.tsx
 │       ├── src/use-observatory.ts
 │       ├── src/i18n.ts
 │       ├── src/locales/{en-US,pt-BR}.json
@@ -121,6 +122,7 @@ React UI and browser transport:
 - `use-observatory.ts` — bootstrap, snapshot, WebSocket, cursor deduplication,
   reconnect, polling fallback;
 - `App.tsx` — all views;
+- `ModelAnalytics.tsx` — dedicated ranking view with aggregate filters and coverage;
 - `i18n.ts` and `locales/` — localization;
 - `styles.css` — Tailwind v4 import plus component styles.
 

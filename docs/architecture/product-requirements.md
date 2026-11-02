@@ -6,7 +6,8 @@ This public capability inventory follows the owner-approved desktop direction.
 It records implementation coverage, not a completion report or a release claim.
 The [roadmap](../../ROADMAP.md) defines the six phases and their acceptance gates.
 Observer Core/Bridge separation and the local Analytics library are implemented
-and integration-tested. Phase 1 remains incomplete; the full Analytics screen,
+and integration-tested. A first browser ranking screen and bounded API also exist;
+Phase 1 remains incomplete. The full Analytics workflow,
 durable historical coverage and Desktop acceptance are still pending.
 
 The audit inspected the workspace manifests, protocol, adapter normalization and
@@ -91,24 +92,24 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 ### Mandatory Model Usage Analytics
 
-| Requirement                                                                  | Coverage | Evidence and remaining work                                                                                                               | Phase   |
-| ---------------------------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| Dedicated Most Used Models screen; model/provider ranking                    | Partial  | Aggregation library implemented; no accepted screen/ranking in U.                                                                         | 1, 2    |
-| Default rank by reported total tokens; alternative sessions/runs/active time | Partial  | D has cumulative session totals; no period/model rank or evidenced execution/active-time basis.                                           | 1, 2    |
-| Today/7d/30d/custom; all/one project; agent/provider/model filters           | Absent   | U workspace filtering is not period-based model Analytics.                                                                                | 2       |
-| Model bars, time evolution, percentage share; leader/token/session cards     | Absent   | No model charts or associated coverage-aware cards.                                                                                       | 2       |
-| Input/output/cache breakdown; separate tokens from money                     | Partial  | U/D token breakdown exists; no Analytics aggregation/cost qualification.                                                                  | 1, 2    |
-| Observed model/provider/session/project/time/source/reliability              | Partial  | P/C retain source/model context; qualified local attribution exists; provider identity and durable coverage remain incomplete.            | 1       |
-| Unidentified model bucket; no inferred assignment                            | Partial  | SessionView.model is nullable and U displays unknown; Analytics unidentified bucket/contained-interval policy implemented; no screen yet. | 1, 2    |
-| Cumulative deduplication, imported/managed distinction, coverage             | Partial  | D deduplicates totals; no managed mode or Analytics period/retention coverage projection.                                                 | 1, 2, 4 |
-| Side-by-side two or more models, including different agents                  | Absent   | No comparator; display names such as DeepSeek/Sol do not prove capability or model equivalence.                                           | 2, 3    |
-| Total/per-run/mean/median successful-task tokens, time/success/cost          | Absent   | No task outcome/attempt/equivalence dataset; unavailable must not become zero.                                                            | 1, 2, 4 |
-| Input/output/cache/reasoning distinctions by availability                    | Partial  | P has input/output/cached/total; reasoning and provider-specific cache-write distinctions unavailable in current Usage.                   | 1, 3    |
-| Equivalent project/category/difficulty/period comparisons                    | Absent   | No explicit task equivalence metadata or comparative guard.                                                                               | 1, 2    |
-| Distinguish most used, efficient successful task and verified best value     | Absent   | No outcome-qualified efficiency/value ranking.                                                                                            | 2       |
-| Task outcomes, failures, repair attempts and coverage; no token-only quality | Partial  | C records turn outcomes/tool events; these do not establish task correctness or repairs.                                                  | 1, 2, 4 |
-| CSV/Markdown report without prompts/secrets/private content                  | Absent   | No Analytics exporter or export-field allowlist yet.                                                                                      | 2       |
-| Source-reconciled multi-model totals, functional filters, no fictitious data | Absent   | Required integration/real-machine acceptance not recorded.                                                                                | 2       |
+| Requirement                                                                  | Coverage | Evidence and remaining work                                                                                                              | Phase   |
+| ---------------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Dedicated Most Used Models screen; model/provider ranking                    | Partial  | Library, bounded API and browser ranking implemented; provider identity and real multi-model acceptance pending.                         | 1, 2    |
+| Default rank by reported total tokens; alternative sessions/runs/active time | Partial  | D has cumulative session totals; no period/model rank or evidenced execution/active-time basis.                                          | 1, 2    |
+| Today/7d/30d/custom; all/one project; agent/provider/model filters           | Partial  | Calendar/custom/workspace/exact agent/model and implemented-adapter filters exist; provider filter unavailable.                          | 2       |
+| Model bars, time evolution, percentage share; leader/token/session cards     | Partial  | Share bars and leader/token/session cards implemented; time evolution absent.                                                            | 2       |
+| Input/output/cache breakdown; separate tokens from money                     | Partial  | Aggregate and browser breakdown implemented; cost qualification unavailable.                                                             | 1, 2    |
+| Observed model/provider/session/project/time/source/reliability              | Partial  | P/C retain source/model context; qualified local attribution exists; provider identity and durable coverage remain incomplete.           | 1       |
+| Unidentified model bucket; no inferred assignment                            | Partial  | SessionView.model is nullable and U displays unknown; Analytics bucket/contained-interval policy and browser unknown labels implemented. | 1, 2    |
+| Cumulative deduplication, imported/managed distinction, coverage             | Partial  | Canonical deduplication, observed origin and qualified period/retention gaps implemented; managed mode absent.                           | 1, 2, 4 |
+| Side-by-side two or more models, including different agents                  | Absent   | No comparator; display names such as DeepSeek/Sol do not prove capability or model equivalence.                                          | 2, 3    |
+| Total/per-run/mean/median successful-task tokens, time/success/cost          | Absent   | No task outcome/attempt/equivalence dataset; unavailable must not become zero.                                                           | 1, 2, 4 |
+| Input/output/cache/reasoning distinctions by availability                    | Partial  | P has input/output/cached/total; reasoning and provider-specific cache-write distinctions unavailable in current Usage.                  | 1, 3    |
+| Equivalent project/category/difficulty/period comparisons                    | Absent   | No explicit task equivalence metadata or comparative guard.                                                                              | 1, 2    |
+| Distinguish most used, efficient successful task and verified best value     | Absent   | No outcome-qualified efficiency/value ranking.                                                                                           | 2       |
+| Task outcomes, failures, repair attempts and coverage; no token-only quality | Partial  | C records turn outcomes/tool events; these do not establish task correctness or repairs.                                                 | 1, 2, 4 |
+| CSV/Markdown report without prompts/secrets/private content                  | Absent   | No Analytics exporter or export-field allowlist yet.                                                                                     | 2       |
+| Source-reconciled multi-model totals, functional filters, no fictitious data | Partial  | Unmocked two-model synthetic browser/API/observer reconciliation passes; real multi-model acceptance pending.                            | 2       |
 
 ### Token Optimizer and distribution
 

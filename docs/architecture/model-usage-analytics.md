@@ -3,10 +3,10 @@
 ## Status and purpose
 
 **Mandatory for the functional Desktop MVP.** A read-only local aggregation foundation
-is implemented; Desktop integration remains in progress. Ranking screens, charts,
-comparator and export are not accepted as complete until integrated and validated
-against real available data. The implementation boundary below describes the current
-library; subsequent sections specify the broader product requirements.
+and bounded summary API are implemented, along with a first browser ranking view.
+Desktop integration, time series, comparator and export remain incomplete. Real
+multi-model acceptance is still pending. The implementation boundaries below describe
+current behavior; subsequent sections specify the broader product requirements.
 [Coverage](product-requirements.md) and the [roadmap](../../ROADMAP.md) distinguish
 the existing observer from required delivery.
 
@@ -57,6 +57,34 @@ and large-archive performance remain future work.
 Fourteen synthetic Analytics tests cover contracts, cumulative accounting, model
 changes, windows, scopes, unavailable versus zero, retention, replay, schema preservation
 and source identity. They do not establish real-provider ranking or full Desktop acceptance.
+
+## Implemented browser increment
+
+Open **Most used models** in the existing dashboard sidebar, or `/#models`. The view
+uses the bounded summary API, with token ranking by default and a separate observed
+session order. It shows leader, reported total and distinct-session cards, share bars,
+input/output/cache columns, unidentified models, unavailable values and coverage gaps.
+Shares use the selected query's covered total, including unidentified contributions;
+model filters narrow that denominator. Session rows are not additive across models.
+
+Periods are local calendar days: today, today plus the preceding 6 or 29 days,
+inclusive custom dates, or all history. Local midnight boundaries become half-open
+UTC instants, including DST transitions. Invalid custom intervals send no request.
+Workspace selection is shared with the overview; agent/model fields accept exact
+observed IDs and the adapter selector lists implemented observers. There is no
+underlying provider selector because provider identity is not established.
+
+Requests refresh on opening, filter changes, explicit refresh and debounced cursor
+changes; snapshot polling without new events does not recompute Analytics. Aborted
+or late requests cannot replace current results. Capacity failures clear results and
+show an explicit warning, without fabricated zeros or partial totals. Model labels
+render as plain text. Both locales and mobile table navigation are supported.
+
+Integration passed lint/types, 64 Node tests, build and 11 Chromium tests, including
+one unmocked two-model synthetic observer-to-API-to-screen test. Real provider
+multi-model allocation, large-archive performance, temporal charts, exports,
+equivalent-task comparison and the full Desktop workflow remain unvalidated or
+unimplemented. No complete Analytics MVP acceptance is claimed.
 
 ## Measurement identity and provenance
 

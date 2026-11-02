@@ -98,3 +98,19 @@ The [Analytics acceptance cases](../architecture/model-usage-analytics.md#integr
 are required before claiming the complete screen. The global Desktop MVP also needs
 real-machine terminal/model selection, native notification, Markdown save and filtered
 model usage evidence without Bridge regression. No 1.0 announcement before owner acceptance.
+
+## Browser Analytics integration
+
+The bounded aggregate route and first ranking view passed `pnpm lint`,
+`pnpm typecheck`, `pnpm test` (64 Node cases), `pnpm build` and `pnpm test:browser`
+(11 Chromium cases). Tests include strict query/auth/privacy/admission boundaries,
+calendar/DST filters, races, empty/null/zero/error states, escaping, mobile layout
+and both locales. Most new UI cases intercept clearly synthetic summaries; one
+unmocked integration writes two synthetic session files only inside the disposable
+browser source root, then reconciles ranking/shares through the actual observer,
+Store and HTTP route. Native histories and the installed database are not test fixtures.
+
+After clarifying the capacity message, locale parity, build and the affected
+error/unmocked browser cases passed again. No paid provider call or real multi-model
+benchmark was run. Real multi-model ranking, large-history performance, time series,
+exports and qualified task comparisons remain outside this acceptance.

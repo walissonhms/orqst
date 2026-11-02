@@ -7,6 +7,14 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Browser **Most used models** view with reported-token/session ranking, share bars,
+  summary cards, calendar/custom periods, workspace/agent/adapter/model filters,
+  unidentified models and explicit unavailable/coverage/capacity states. Refresh is
+  debounced on source events; stale requests cannot replace current filters. Includes
+  bilingual/mobile checks and unmocked synthetic observer-to-screen reconciliation.
+  Time series, exports, task-qualified comparisons and real multi-model acceptance
+  remain pending; no optimizer or Desktop runtime is activated.
+
 - Authenticated `GET /api/analytics/models` with aggregate-only model usage,
   explicit unavailable metrics and counted coverage gaps. Strict query validation
   rejects duplicates/unknowns; admission caps 100 sessions, 1000 retained envelopes

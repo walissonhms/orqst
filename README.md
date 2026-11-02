@@ -13,28 +13,29 @@ to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
 
 > **Project status:** pre-release. Core/Bridge lifecycle separation and a local Analytics
-> aggregation library are implemented and integration-tested. Desktop Analytics remains
-> planned. Electron, integrated terminals, managed execution and Cloud connectivity are
+> aggregation API and first browser ranking screen are implemented and integration-tested.
+> Full Desktop Analytics remains incomplete. Electron, integrated terminals, managed execution and Cloud connectivity are
 > not shipped. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
 > Community is licensed under [Apache-2.0](LICENSE) and operates without Cloud.
 
 ## What works today
 
-| Area                                                                         | State                                       |
-| ---------------------------------------------------------------------------- | ------------------------------------------- |
-| Codex CLI session discovery (read-only)                                      | Implemented                                 |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                 |
-| Normalized event protocol with runtime validation                            | Implemented                                 |
-| Local SQLite persistence, migrations, retention                              | Implemented                                 |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                 |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                 |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                 |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions |
-| Claude Code adapter                                                          | Contract only, not implemented              |
-| OpenCode adapter                                                             | Contract only, not implemented              |
-| Managed execution and structured delegation                                  | Planned, not implemented                    |
-| ORQST Cloud, accounts, billing                                               | Not implemented                             |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                    |
+| Area                                                                         | State                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------ |
+| Codex CLI session discovery (read-only)                                      | Implemented                                      |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                      |
+| Normalized event protocol with runtime validation                            | Implemented                                      |
+| Local SQLite persistence, migrations, retention                              | Implemented                                      |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                      |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                      |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                      |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions      |
+| Claude Code adapter                                                          | Contract only, not implemented                   |
+| OpenCode adapter                                                             | Contract only, not implemented                   |
+| Managed execution and structured delegation                                  | Planned, not implemented                         |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                  |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                         |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
@@ -45,6 +46,10 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Phase 1 increment delivered:** UI-independent observer Core and evidence-backed
   model Analytics library. Lifecycle/artifact contracts and durable historical
   measurement coverage remain incomplete; this does not complete Phase 1.
+- **Browser Analytics increment delivered:** open **Most used models** in the sidebar
+  or `/#models`. Rank covered observations by reported tokens or observed sessions;
+  filter local calendar periods, workspace, exact agent/model IDs and implemented
+  CLI adapter. Unknown models, missing usage and incomplete coverage stay explicit.
 - **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
   robust provider integrations, managed sessions, evidence-gated optimizer integration,
   and distribution. Desktop includes Terminal, Monitor/Notifications, Artifacts,
@@ -249,11 +254,12 @@ and [SECURITY.md](SECURITY.md).
   protected by a per-process session cookie and loopback binding, which assumes
   a single trusted OS user.
 - **Redaction is best-effort.** Secrets in unusual formats may survive.
-- **Analytics is in progress.** Model rankings, period filters, charts, comparisons
-  and exports are not yet accepted as a complete feature. Unknown models must remain
-  unidentified, absent metrics must remain unavailable, and imported history must show
-  its coverage. Most used, lowest usage per successful task and best value are distinct;
-  cost needs verified prices and billing mode. See the [design](docs/architecture/model-usage-analytics.md).
+- **Analytics is partial.** The first browser screen has ranking, share bars, filters
+  and coverage. Requests exceeding 100 candidate sessions, 1000 retained envelopes or
+  2 MiB of evidence return a capacity warning without partial sums. Narrow workspace,
+  agent or adapter scopes may help; a shorter period can need the same history.
+  Time series, export, task-qualified comparisons, verified costs and Desktop delivery
+  remain pending. Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
   report provider quota.
@@ -262,6 +268,14 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The later browser Analytics integration passed lint, typecheck, 64 Node tests, build
+and 11 Chromium tests. One unmocked browser test ingests two synthetic source sessions
+through the observer and reconciles their model ranking/shares to the aggregate API.
+Other Analytics UI fixtures exercise filters, DST/calendar windows, races, missing
+values, errors, escaping, mobile layout and en-US/pt-BR. This is synthetic functional
+evidence, not real-provider comparative acceptance. A final copy clarification was
+checked with locale parity, build and the two relevant browser cases.
 
 The Core/Analytics integration on 2026-11-02 passed `pnpm lint`, `pnpm typecheck`,
 `pnpm test` (57 cases), `pnpm build` and `pnpm test:browser` (3 Chromium cases).
