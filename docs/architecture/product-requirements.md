@@ -17,7 +17,8 @@ strict TypeScript ~6.0.3, built-in `node:sqlite`, zod ^4.6.7, React ^19.3.1,
 Vite ^8.3.5, Tailwind ^4.3.3 and i18next ^26.7.1, as declared in the
 [root](../../package.json) and [dashboard](../../apps/dashboard/package.json)
 manifests. These are declared constraints, not claims that every installed package
-is exactly that version. No Electron/PTY dependency is declared in the audited baseline.
+is exactly that version. No Electron/PTY dependency was declared in that baseline. The later ADR-030 slice
+adds Electron45.2.1 as a checkout-only observer client; PTY remains absent.
 
 **Existing** means implemented in the inspected baseline, with test references where
 available; it does not mean freshly validated on a real machine. **Partial** means
@@ -56,7 +57,7 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 | Requirement                                                          | Coverage | Evidence and remaining work                                                                                                              | Phase |
 | -------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| Electron terminal with multiple tabs/sessions per project            | Absent   | U is a browser observer; no Electron or PTY runtime.                                                                                     | 2     |
+| Electron terminal with multiple tabs/sessions per project            | Absent   | U is shared with a minimal Electron observer client; no PTY, terminal tabs or execution.                                                 | 2     |
 | Live terminal output, interactive input and controlled interruption  | Absent   | Timeline streaming is implemented; terminal transport and authorized control are not.                                                    | 2, 4  |
 | Execute installed agents with supported configuration/permissions    | Absent   | B never launches agents; version-specific start/control must be validated.                                                               | 3, 4  |
 | Foreground/minimized monitoring while monitor runs                   | Partial  | Independent bridge/service and browser stream exist; native Desktop minimized behavior unvalidated.                                      | 2     |

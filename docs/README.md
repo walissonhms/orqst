@@ -7,6 +7,8 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 - [Public six-phase roadmap and integration gate](../ROADMAP.md)
 - [Changelog](../CHANGELOG.md)
+- [macOS Desktop checkout client](development/desktop.md) — setup, verified Electron
+  runtime, trust/lifetime, offline behavior and distribution limits.
 
 ## Architecture
 

@@ -328,3 +328,25 @@ grant, file access, rendering, export, endpoint, authentication change or contro
 capability is introduced. Existing source-read-only protections, v1 transports and
 single-writer persistence are unchanged. Provider control and future dereferencing
 require their own evidence and security design.
+
+## Minimal Electron observer client review
+
+The macOS checkout client is a separate unprivileged HTTP consumer of the existing
+Bridge. It imports no Core/database and starts/stops no service or agent. Its renderer
+has sandbox/context isolation/webSecurity enabled, Node integration disabled and no
+preload, IPC or webview. An in-memory session disables cache; permission checks/requests,
+device permissions, downloads, new windows, subframes and external navigation are denied.
+A network allowlist restricts requests to the selected IPv4 loopback origin and `/ws`;
+configuration accepts only a bounded integer port. Captured content and local-listener
+responses remain untrusted. The fallback protocol serves only fixed localized escaped
+text with `default-src 'none'`; it exposes no filesystem or privileged bridge.
+
+No cookie/header rewriting, CORS exception, authentication bypass or CSP relaxation is
+introduced. The same trusted-local-user limitation applies: bootstrap is not proof of
+server identity, encryption or authority for agent control. The client has no filesystem
+content API, shell opening, native notifications or execution. Closing/quitting it cannot
+stop or preserve a crashed Bridge; observation belongs to that independent process.
+Electron has its own bundled runtime and no SQLite/native-addon ABI dependency here.
+Packaging, fuses/signing/notarization, updates and native permission flows require a
+separate distribution review; the checkout command is not a signed release. See
+[Desktop development](../development/desktop.md) for setup/version sources.

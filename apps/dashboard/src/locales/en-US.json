@@ -200,5 +200,10 @@
       "identity_conflict": "Source identity conflict",
       "non_monotonic_components": "Non-monotonic usage components"
     }
+  },
+  "desktopShell": {
+    "unavailable": "Local Bridge unavailable",
+    "retry": "ORQST will retry in five seconds. Start the Bridge separately if it is stopped.",
+    "lifetime": "Closing this window does not stop the service or the external agents."
   }
 }

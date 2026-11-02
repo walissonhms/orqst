@@ -200,5 +200,10 @@
       "identity_conflict": "Conflito de identidade da fonte",
       "non_monotonic_components": "Componentes de uso não monotônicos"
     }
+  },
+  "desktopShell": {
+    "unavailable": "Bridge local indisponível",
+    "retry": "O ORQST tentará novamente em cinco segundos. Inicie o Bridge separadamente se estiver parado.",
+    "lifetime": "Fechar esta janela não encerra o serviço nem os agentes externos."
   }
 }

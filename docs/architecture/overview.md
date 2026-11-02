@@ -299,8 +299,8 @@ Browser client -----+--> Local bridge --> Core --> Adapters
 
 The observer Core extraction above is implemented with the same Node runtime/service
 and API behavior; it requires no extra daemon. The remaining target modules are not
-implemented by that extraction. Electron, PTY and managed native provider protocol
-versions remain undecided.
+implemented by that extraction. The later ADR-030 observer client selects Electron45.2.1;
+PTY and managed native provider protocol versions remain undecided.
 
 ## State, recovery and history — planned
 
@@ -375,3 +375,15 @@ all historical tokens. Time-filtered aggregation requires compatible baselines,
 deduplication and retention coverage. Comparisons require explicit task equivalence,
 outcomes and repair coverage; costs require verified rates/billing basis. See the
 [Analytics design](model-usage-analytics.md). The optimizer remains inactive.
+
+## Implemented Desktop observer slice (ADR-030)
+
+`apps/desktop` adds a separate macOS Electron client over the existing Bridge-served
+React bundle. It depends on Electron/i18next, imports no Core/Store and launches no
+Bridge or agent. Node24 remains the Bridge runtime; Electron45.2.1 has its own verified
+runtime. The main process owns only a sandboxed window and an in-memory browser session,
+with no preload/IPC. Browser and Electron clients share unchanged cookie-authenticated
+REST/WS. Window close/quit does not stop observation; only an active independent Bridge
+can observe. A local script-free page retries initial load failure; loaded dashboards
+keep the existing reconnect behavior. See [Desktop development](../development/desktop.md)
+for URL/permission policy, dependency sources and the unimplemented distribution scope.

@@ -194,3 +194,32 @@ built-bundle checks apply even though no new dashboard feature or transport is a
 Ingestion code is unchanged, so this increment does not require a new real-source
 `validate:local` run. Native artifacts, current source availability and process/task
 outcomes remain unvalidated and unimplemented.
+
+## Minimal macOS Desktop observer
+
+On 2026-11-02, the first Electron checkout client passed `pnpm lint`,
+`pnpm typecheck`, `pnpm test` (109 cases including six independent Desktop policy
+cases), `pnpm build`, `ORQST_BROWSER_PORT=4320 pnpm test:browser` (13 cases) and
+`pnpm test:desktop`. The private development toolchain was Node24.22.2/pnpm10.34.9;
+the real Electron45.2.1 window reported Chromium156.0.8078.75, bundled Node24.22.1
+and module ABI150 on macOS26.3/arm64. Independent QA also reran the native smoke.
+No Bridge/SQLite native-addon compatibility is inferred from this runtime: the client
+imports neither Core nor database.
+
+`tests/desktop-policy.test.ts` covers bounded port and URL containment;
+`tests/desktop-qa.test.ts` independently checks policy negatives, source hardening,
+no preload/IPC/control and dependency ownership. `scripts/smoke-desktop.ts` uses
+Playwright `_electron` with real Chromium, a real Bridge and only disposable synthetic
+sessions/storage/profile on an ephemeral port. It verifies Node globals absent,
+denied new windows/notifications, native-session HttpOnly/Strict cookies, online UI,
+Bridge restart and dashboard reconnect, native window close/reopen, initial Bridge
+offline fallback/retry and Bridge survival after quitting Desktop. Captures live in
+ignored `test-results/desktop-smoke/{online,offline}.png`. The app menu uses native
+roles; fallback text follows OS locale, while the existing dashboard retains its own
+language preference. Setup and limits are in [Desktop development](desktop.md).
+
+The installed Bridge/service/database and native provider sessions were not used,
+restarted or migrated. No provider call, global installation, release or paid signing
+was performed. Ingestion is unchanged; `validate:local` was not rerun for this slice.
+This does not validate a packaged/signed `.app`, other macOS versions/Intel,
+Windows/Linux, native notifications/tray, long-running soak or the complete Desktop MVP.

@@ -519,3 +519,40 @@ native history. No source-root ID or dereference grant is invented. Future trans
 need negotiation/authorization; extraction/rendering/export/file writes still need
 their existing product/security decisions. Local tests are not process-control or
 Desktop acceptance. See [exact contracts](../api/lifecycle-contracts.md).
+
+---
+
+## ADR-030 — Minimal macOS Electron observer client
+
+**Status:** Authorized first Desktop slice on 2026-11-02; implemented as a development
+checkout client. Native and independent QA evidence is recorded in development testing;
+this does not complete Phase 2 or authorize managed execution/distribution.
+
+**Context.** Core/Bridge ownership and React dashboard already work independently.
+Embedding Core/SQLite in Electron would create runtime/ABI and second-writer risks.
+The owner authorized the smallest macOS window, connection/reconnection and independent
+service lifetime, excluding execution, PTY, updater and paid signing.
+
+**Decision.** Add `apps/desktop` as a transport-only Electron client. Its only runtime
+library is the existing i18next localization stack; Electron is an exact dev dependency.
+Use Electron 45.2.1, the verified latest stable on this date (Chromium 156.0.8078.75,
+Node 24.22.1, MIT; macOS13+), and existing esbuild for its standalone CommonJS main.
+Workspace and Bridge retain Node24/pnpm10 and `node:sqlite`; Electron imports neither
+Core nor database and never launches the Bridge. No ABI equivalence is claimed.
+Sources and registry reproduction are in [Desktop development](../development/desktop.md).
+
+Load only the configured IPv4 loopback port, with the same browser cookie/CSP/Host/Origin
+transport. Use an in-memory session, sandbox/context isolation, no Node renderer,
+no preload/IPC, no webview, denied permission/download/new-window/external navigation,
+and a request allowlist. A script-free custom-protocol unavailable page retries the
+initial connection; the loaded dashboard keeps its existing reconnect logic. Window
+close/quit has no service/observer side effect. macOS activation reopens the window.
+
+**Consequences.** Browser observation, v1 transport, schema2/immutable migrations,
+metrics, privacy and adapter flags remain unchanged. No new filesystem/control grant
+or credential/cost is required. `pnpm build` also builds Desktop; the explicit local
+Electron binary download uses upstream checksums without changing pnpm's esbuild-only
+build-script policy. No Forge/builder dependency is necessary to run from a checkout.
+Packager, `.app` identity, signing/notarization, installers, updates and wider OS coverage
+remain deferred distribution decisions. A future release must recheck Electron support,
+carry binary third-party notices and separately validate packaging/permissions/lifetime.

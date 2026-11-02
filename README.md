@@ -14,7 +14,8 @@ prompts or write into observed sessions.
 
 > **Project status:** pre-release. Core/Bridge lifecycle separation and a local Analytics
 > aggregation API and first browser ranking screen are implemented and integration-tested.
-> Full Desktop Analytics remains incomplete. Electron, integrated terminals, managed execution and Cloud connectivity are
+> Full Desktop Analytics remains incomplete. A minimal macOS Electron observer client
+> runs from the checkout; integrated terminals, managed execution and Cloud connectivity are
 > not shipped. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
 > Community is licensed under [Apache-2.0](LICENSE) and operates without Cloud.
 
@@ -28,6 +29,7 @@ prompts or write into observed sessions.
 | Local SQLite persistence, migrations, retention                              | Implemented                                      |
 | Loopback REST API and WebSocket streaming                                    | Implemented                                      |
 | React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                      |
+| macOS Electron window over the existing local Bridge                         | Implemented checkout client; no installer        |
 | Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending |
 | English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                      |
 | Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions      |
@@ -43,7 +45,8 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 ## Delivery status and roadmap
 
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
-  dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
+  dashboard, en-US/pt-BR UI, macOS user-service helper and minimal Electron observer
+  client listed above.
 - **Phase 1 increment delivered:** UI-independent observer Core and evidence-backed
   model Analytics library with schema-2 compact durable metric/model evidence.
   Historical coverage remains qualified. Versioned local observed-session evidence
@@ -119,7 +122,7 @@ bundle served by the bridge in production and by Vite in development.
 - Node.js `>=24 <25` (pinned in `.node-version`; `engine-strict=true`)
 - pnpm `10.34.9` (declared in `package.json`; Corepack can provide it)
 - Codex CLI installed and used at least once, so that session files exist
-- A modern browser for the dashboard
+- A modern browser for the dashboard; macOS13+ for the optional Electron client
 
 The `node:sqlite` API is tied to the pinned Node major. Changing the Node major
 requires revalidating the database layer.
@@ -146,6 +149,24 @@ pnpm start
 `pnpm start` must run from the repository root: the bridge resolves the
 dashboard bundle at `apps/dashboard/dist` relative to the current working
 directory.
+
+## Optional macOS Desktop window
+
+The Electron client uses the independently running Bridge and existing React dashboard.
+After `pnpm install` and `pnpm build`:
+
+```bash
+pnpm --filter @orqst/desktop exec install-electron --no # explicit official binary download
+pnpm desktop
+# ORQST_DESKTOP_PORT=4320 pnpm desktop # separately configured loopback Bridge
+```
+
+`pnpm dev:desktop` rebuilds/opens the shell without starting a Bridge. Window close,
+reopen and quitting Desktop preserve the service/observer. If the service is unavailable,
+the client shows an honest offline state and retries. There is no preload/IPC, Node
+renderer access or agent control; permissions/external navigation are denied. This
+is a checkout client, without `.app` packaging, signing, updater or native notifications.
+See [Desktop setup, verified runtime and trust/lifetime](docs/development/desktop.md).
 
 ## Managed background service on macOS
 
@@ -174,7 +195,11 @@ Uninstall stops the service and removes its plist; it preserves the database, ba
 | --------------------- | ----------------------------------------------------------------------------------- |
 | `pnpm install`        | Install workspace dependencies                                                      |
 | `pnpm dev`            | Run the bridge in watch mode plus the Vite dev server                               |
-| `pnpm build`          | Build the dashboard and bridge/Analytics worker bundles in `dist/`                  |
+| `pnpm build`          | Build dashboard, Bridge/Analytics worker and Desktop shell bundles                  |
+| `pnpm dev:desktop`    | Build/open the Electron client; requires an independent Bridge                      |
+| `pnpm build:desktop`  | Build only the Electron shell                                                       |
+| `pnpm desktop`        | Open the last built Electron shell                                                  |
+| `pnpm test:desktop`   | Real Electron/macOS smoke with a disposable synthetic Bridge/profile                |
 | `pnpm start`          | Run the built bridge (`node dist/bridge.mjs`)                                       |
 | `pnpm test`           | Run the Node test suites with `tsx --test`                                          |
 | `pnpm test:browser`   | Run Chromium end-to-end tests using an isolated synthetic source                    |
@@ -194,6 +219,7 @@ start the built bridge with `node --env-file=.env dist/bridge.mjs`.
 | Variable               | Default                            | Accepted values           | Meaning                                                |
 | ---------------------- | ---------------------------------- | ------------------------- | ------------------------------------------------------ |
 | `ORQST_PORT`           | `4317`                             | integer `1024`–`65535`    | Loopback HTTP/WebSocket port                           |
+| `ORQST_DESKTOP_PORT`   | `4317`                             | integer `1024`–`65535`    | Desktop client target port on fixed `127.0.0.1`        |
 | `ORQST_DATA_DIR`       | `~/.orqst`                         | absolute or relative path | Directory holding `orqst.db`                           |
 | `ORQST_CODEX_SESSIONS` | `${CODEX_HOME:-~/.codex}/sessions` | path                      | Codex session root to observe                          |
 | `ORQST_RETENTION_DAYS` | `30`                               | integer `1`–`3650`        | Event-detail retention window                          |
@@ -275,7 +301,7 @@ and [SECURITY.md](SECURITY.md).
   disconnect/shutdown cancel and await cleanup. Explicit errors show no partial sums.
   Native SQL cleanup can delay termination. Narrow workspace, agent or adapter scopes
   may help; a shorter period can need the same history.
-  Time series, export, task-qualified comparisons, verified costs and Desktop delivery
+  Time series, export, task-qualified comparisons, verified costs and full Desktop delivery
   remain pending. Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
@@ -306,10 +332,18 @@ The Core/Analytics integration on 2026-11-02 passed `pnpm lint`, `pnpm typecheck
 `pnpm validate:local --with-browser` checked disposable copies of 8 real sessions,
 with stable replay/restart, preserved cumulative totals and unchanged source prefixes.
 The installed service was not restarted. Analytics model attribution itself has
-synthetic acceptance only; Desktop, native notifications and real-provider ranking
+synthetic acceptance only; full Desktop, native notifications and real-provider ranking
 remain unvalidated. See [Core lifecycle](docs/architecture/overview.md#observer-core-lifecycle).
 
-Earlier observer baseline evidence follows; it is distinct from that integration.
+The minimal Desktop increment on 2026-11-02 passed lint, types, 109 Node cases,
+full build, 13 Chromium cases on isolated port 4320 and real Electron45.2.1 smoke on
+macOS26.3/arm64. Independent QA added six policy/security cases and reran the smoke.
+Temporary synthetic sessions/storage/profile exercised window rendering, isolation,
+cookies, initial offline/retry, loaded reconnect and close/reopen/quit lifetime.
+Installed storage/service, real-provider acceptance and packaging were not exercised.
+See [Desktop testing](docs/development/testing.md#minimal-macos-desktop-observer).
+
+Earlier observer baseline evidence follows; it is distinct from those increments.
 
 On macOS, using isolated Node 24.22.2 and pnpm 10.34.9:
 

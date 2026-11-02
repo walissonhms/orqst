@@ -7,6 +7,15 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Minimal macOS Electron observer client loading the existing Bridge-served React
+  dashboard, with sandbox/context isolation, no preload/IPC or Node renderer access,
+  bounded loopback URL policy, denied permissions/downloads/external windows and
+  a localized initial-offline page with automatic retry. Closing/reopening/quitting
+  the client preserves the independently running Bridge and observer. Electron45.2.1
+  is pinned; existing Node24/pnpm10, schema2, transport and adapter flags are preserved.
+  Desktop dev/build/smoke commands are available; packaging, signing, updates, native
+  notifications, tray and managed execution remain outside this increment.
+
 - Strict version-1 local `orqst.lifecycle` schemas and Core queries for exact retained
   observed-session evidence and artifact message references. Explicit unavailable
   values distinguish turn, task, process, worker identity and missing observation
