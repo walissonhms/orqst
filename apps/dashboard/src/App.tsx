@@ -37,6 +37,7 @@ import type {
   Usage,
 } from '@orqst/protocol';
 import { api } from './api';
+import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 
 function useFormatting() {
@@ -375,6 +376,14 @@ export function App() {
   const { t, i18n } = useTranslation();
   const f = useFormatting();
   const [workspaceId, setWorkspaceId] = useState('');
+  const [view, setView] = useState<'overview' | 'models'>(
+    location.hash === '#models' ? 'models' : 'overview',
+  );
+  useEffect(() => {
+    const navigate = () => setView(location.hash === '#models' ? 'models' : 'overview');
+    window.addEventListener('hashchange', navigate);
+    return () => window.removeEventListener('hashchange', navigate);
+  }, []);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [selected, setSelected] = useState<string>();
@@ -540,6 +549,23 @@ export function App() {
           <span>{t('brand')}</span>
         </a>
         <p className="brand-tagline">{t('tagline')}</p>
+        <nav aria-label={t('analytics.navigation')}>
+          {(['overview', 'models'] as const).map((page) => (
+            <a
+              key={page}
+              className={`workspace-link ${view === page ? 'active' : ''}`}
+              href={page === 'models' ? '#models' : '#overview'}
+              aria-current={view === page ? 'page' : undefined}
+              onClick={() => {
+                setView(page);
+                setMenuOpen(false);
+              }}
+            >
+              <Activity size={16} />
+              <span>{t(page === 'models' ? 'analytics.title' : 'overview')}</span>
+            </a>
+          ))}
+        </nav>
         <div className="nav-heading">
           <span>{t('workspaceNav')}</span>
           <button
@@ -613,7 +639,7 @@ export function App() {
             <Command size={15} />
             <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
             <ChevronRight size={14} />
-            <strong>{t('overview')}</strong>
+            <strong>{t(view === 'models' ? 'analytics.title' : 'overview')}</strong>
           </div>
           <div className="topbar-actions">
             <span className={`connection connection-${connection}`} role="status">
@@ -643,283 +669,296 @@ export function App() {
           </div>
         </header>
         <main>
-          <div className="page-heading">
-            <div>
-              <span className="eyebrow">
-                <Radio size={12} />
-                {t('readOnly')}
-              </span>
-              <h1>{t('heading')}</h1>
-              <p>{t('description')}</p>
-            </div>
-            <div className="heading-decoration">
-              <Activity size={40} />
-            </div>
-          </div>
-          {(error || saveError) && (
-            <p className="notice" role="alert">
-              {t(saveError ? 'savedError' : 'error')}
-            </p>
-          )}
-          {notice && (
-            <div className="notice" role="status">
-              {t(notice)}
-              <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
-          <section className="stats" aria-label={t('overview')}>
-            <div className="stat">
-              <span>
-                {t('sessions')}
-                <Terminal size={15} />
-              </span>
-              <strong>{f.number(sessions.length)}</strong>
-              <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
-            </div>
-            <div className="stat">
-              <span>
-                {t('running')}
-                <Activity size={15} />
-              </span>
-              <strong>
-                {f.number(sessions.filter((session) => session.status === 'running').length)}
-                <i className="stat-live" />
-              </strong>
-              <small>{t('latest')}</small>
-            </div>
-            <div className="stat">
-              <span>
-                {t('attention')}
-                <Bell size={15} />
-              </span>
-              <strong className={attention.length ? 'amber-text' : ''}>
-                {f.number(attention.length)}
-              </strong>
-              <small>{t('liveOnly')}</small>
-            </div>
-            <div className="stat">
-              <span>
-                {t('tokens')}
-                <Zap size={15} />
-              </span>
-              <strong>{f.compact(usage.total)}</strong>
-              <small>{t('tokenScope')}</small>
-            </div>
-          </section>
-          <section className="panel agents-panel">
-            <div className="panel-heading">
-              <h2>
-                <Terminal size={17} />
-                {t('agents')}
-                <span className="count-badge">{sessions.length}</span>
-              </h2>
-              <span className="subtle-label">{t('latest')}</span>
-            </div>
-            <div className="filters">
-              <label className="search-box">
-                <Search size={15} />
-                <input
-                  aria-label={t('search')}
-                  placeholder={t('search')}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-              </label>
-              <label className="status-filter">
-                <Settings2 size={14} />
-                <select
-                  aria-label={t('status')}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                >
-                  <option value="">{t('allStatuses')}</option>
-                  {(
-                    [
-                      'running',
-                      'waiting_for_user',
-                      'completed',
-                      'failed',
-                      'interrupted',
-                      'unknown',
-                    ] as const
-                  ).map((value) => (
-                    <option value={value} key={value}>
-                      {t(`statusLabels.${value}`)}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={12} />
-              </label>
-            </div>
-            {!sessions.length ? (
-              <div className="empty-state">
-                <span className="empty-icon">
-                  <Sparkles size={27} />
-                </span>
-                <h3>{t('emptyTitle')}</h3>
-                <p>{t('emptyBody')}</p>
-                {snapshot?.diagnostics.scanning && (
-                  <span className="connection">{t('syncing')}</span>
-                )}
-              </div>
-            ) : (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>{t('agent')}</th>
-                      <th>{t('status')}</th>
-                      <th>{t('duration')}</th>
-                      <th>{t('lastActivity')}</th>
-                      <th>{t('tokens')}</th>
-                      <th>
-                        <span className="sr-only">{t('viewSession')}</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((session) => (
-                      <tr
-                        key={session.id}
-                        className={selected === session.id ? 'selected-row' : ''}
-                      >
-                        <td>
-                          <button className="agent-cell" onClick={() => setSelected(session.id)}>
-                            <span
-                              className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
-                            >
-                              {session.parentSessionId ? (
-                                <GitBranch size={17} />
-                              ) : (
-                                <Terminal size={17} />
-                              )}
-                            </span>
-                            <span>
-                              <strong>{session.agentName}</strong>
-                              <small title={session.task ?? ''}>
-                                {session.task ?? t('noTask')}
-                              </small>
-                            </span>
-                          </button>
-                        </td>
-                        <td>
-                          <Status status={session.status} />
-                        </td>
-                        <td className="mono muted">{f.duration(session)}</td>
-                        <td className="mono muted">{f.date(session.lastActivity)}</td>
-                        <td className="mono token-cell">{f.compact(session.usage.total)}</td>
-                        <td>
-                          <button
-                            className="icon-button"
-                            aria-label={`${t('viewSession')} ${session.agentName}`}
-                            onClick={() => setSelected(session.id)}
-                          >
-                            <ChevronRight size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {!filtered.length && <p className="empty-copy">{t('filteredEmpty')}</p>}
-              </div>
-            )}
-            <div className="panel-footer">
-              <span className="tiny-dot" />
-              {t('observedNote')}
-            </div>
-          </section>
-          {selectedSession && snapshot ? (
-            <SessionDetail
-              key={selectedSession.id}
-              session={selectedSession}
-              snapshot={snapshot}
-              onClose={() => setSelected(undefined)}
-              onSave={() => {
-                void refresh();
-              }}
-            />
+          {view === 'models' ? (
+            <ModelAnalytics workspaceId={workspaceId} snapshot={snapshot} />
           ) : (
-            <div className="lower-grid">
-              <section className="panel activity-panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Activity size={17} />
-                    {t('activity')}
-                  </h2>
-                  <span className="subtle-label">{f.number(recent.length)}</span>
+            <>
+              <div className="page-heading">
+                <div>
+                  <span className="eyebrow">
+                    <Radio size={12} />
+                    {t('readOnly')}
+                  </span>
+                  <h1>{t('heading')}</h1>
+                  <p>{t('description')}</p>
                 </div>
-                <Timeline events={recent.slice(-45)} />
-                <div className="panel-footer">
-                  {t('limitNotice', { count: Math.min(recent.length, 45) })}
+                <div className="heading-decoration">
+                  <Activity size={40} />
+                </div>
+              </div>
+              {(error || saveError) && (
+                <p className="notice" role="alert">
+                  {t(saveError ? 'savedError' : 'error')}
+                </p>
+              )}
+              {notice && (
+                <div className="notice" role="status">
+                  {t(notice)}
+                  <button
+                    className="icon-button"
+                    aria-label={t('close')}
+                    onClick={() => setNotice('')}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+              <section className="stats" aria-label={t('overview')}>
+                <div className="stat">
+                  <span>
+                    {t('sessions')}
+                    <Terminal size={15} />
+                  </span>
+                  <strong>{f.number(sessions.length)}</strong>
+                  <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
+                </div>
+                <div className="stat">
+                  <span>
+                    {t('running')}
+                    <Activity size={15} />
+                  </span>
+                  <strong>
+                    {f.number(sessions.filter((session) => session.status === 'running').length)}
+                    <i className="stat-live" />
+                  </strong>
+                  <small>{t('latest')}</small>
+                </div>
+                <div className="stat">
+                  <span>
+                    {t('attention')}
+                    <Bell size={15} />
+                  </span>
+                  <strong className={attention.length ? 'amber-text' : ''}>
+                    {f.number(attention.length)}
+                  </strong>
+                  <small>{t('liveOnly')}</small>
+                </div>
+                <div className="stat">
+                  <span>
+                    {t('tokens')}
+                    <Zap size={15} />
+                  </span>
+                  <strong>{f.compact(usage.total)}</strong>
+                  <small>{t('tokenScope')}</small>
                 </div>
               </section>
-              <div className="right-column">
-                <section className="panel attention-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <Bell size={16} />
-                      {t('attention')}
-                    </h2>
-                    <span className="count-badge">{attention.length}</span>
-                  </div>
-                  {attention.length ? (
-                    <div className="attention-list">
-                      {attention.slice(0, 10).map((session) => (
-                        <button onClick={() => setSelected(session.id)} key={session.id}>
-                          <span>
-                            <strong>{session.agentName}</strong>
-                            <Status status={session.status} />
-                          </span>
-                          <ChevronRight size={16} />
-                        </button>
+              <section className="panel agents-panel">
+                <div className="panel-heading">
+                  <h2>
+                    <Terminal size={17} />
+                    {t('agents')}
+                    <span className="count-badge">{sessions.length}</span>
+                  </h2>
+                  <span className="subtle-label">{t('latest')}</span>
+                </div>
+                <div className="filters">
+                  <label className="search-box">
+                    <Search size={15} />
+                    <input
+                      aria-label={t('search')}
+                      placeholder={t('search')}
+                      value={query}
+                      onChange={(event) => setQuery(event.target.value)}
+                    />
+                  </label>
+                  <label className="status-filter">
+                    <Settings2 size={14} />
+                    <select
+                      aria-label={t('status')}
+                      value={status}
+                      onChange={(event) => setStatus(event.target.value)}
+                    >
+                      <option value="">{t('allStatuses')}</option>
+                      {(
+                        [
+                          'running',
+                          'waiting_for_user',
+                          'completed',
+                          'failed',
+                          'interrupted',
+                          'unknown',
+                        ] as const
+                      ).map((value) => (
+                        <option value={value} key={value}>
+                          {t(`statusLabels.${value}`)}
+                        </option>
                       ))}
+                    </select>
+                    <ChevronDown size={12} />
+                  </label>
+                </div>
+                {!sessions.length ? (
+                  <div className="empty-state">
+                    <span className="empty-icon">
+                      <Sparkles size={27} />
+                    </span>
+                    <h3>{t('emptyTitle')}</h3>
+                    <p>{t('emptyBody')}</p>
+                    {snapshot?.diagnostics.scanning && (
+                      <span className="connection">{t('syncing')}</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>{t('agent')}</th>
+                          <th>{t('status')}</th>
+                          <th>{t('duration')}</th>
+                          <th>{t('lastActivity')}</th>
+                          <th>{t('tokens')}</th>
+                          <th>
+                            <span className="sr-only">{t('viewSession')}</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map((session) => (
+                          <tr
+                            key={session.id}
+                            className={selected === session.id ? 'selected-row' : ''}
+                          >
+                            <td>
+                              <button
+                                className="agent-cell"
+                                onClick={() => setSelected(session.id)}
+                              >
+                                <span
+                                  className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
+                                >
+                                  {session.parentSessionId ? (
+                                    <GitBranch size={17} />
+                                  ) : (
+                                    <Terminal size={17} />
+                                  )}
+                                </span>
+                                <span>
+                                  <strong>{session.agentName}</strong>
+                                  <small title={session.task ?? ''}>
+                                    {session.task ?? t('noTask')}
+                                  </small>
+                                </span>
+                              </button>
+                            </td>
+                            <td>
+                              <Status status={session.status} />
+                            </td>
+                            <td className="mono muted">{f.duration(session)}</td>
+                            <td className="mono muted">{f.date(session.lastActivity)}</td>
+                            <td className="mono token-cell">{f.compact(session.usage.total)}</td>
+                            <td>
+                              <button
+                                className="icon-button"
+                                aria-label={`${t('viewSession')} ${session.agentName}`}
+                                onClick={() => setSelected(session.id)}
+                              >
+                                <ChevronRight size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {!filtered.length && <p className="empty-copy">{t('filteredEmpty')}</p>}
+                  </div>
+                )}
+                <div className="panel-footer">
+                  <span className="tiny-dot" />
+                  {t('observedNote')}
+                </div>
+              </section>
+              {selectedSession && snapshot ? (
+                <SessionDetail
+                  key={selectedSession.id}
+                  session={selectedSession}
+                  snapshot={snapshot}
+                  onClose={() => setSelected(undefined)}
+                  onSave={() => {
+                    void refresh();
+                  }}
+                />
+              ) : (
+                <div className="lower-grid">
+                  <section className="panel activity-panel">
+                    <div className="panel-heading">
+                      <h2>
+                        <Activity size={17} />
+                        {t('activity')}
+                      </h2>
+                      <span className="subtle-label">{f.number(recent.length)}</span>
                     </div>
-                  ) : (
-                    <div className="quiet-state">
-                      <CheckCircle2 size={26} />
-                      <strong>{t('attentionEmpty')}</strong>
-                      <p>{t('attentionBody')}</p>
+                    <Timeline events={recent.slice(-45)} />
+                    <div className="panel-footer">
+                      {t('limitNotice', { count: Math.min(recent.length, 45) })}
                     </div>
-                  )}
-                </section>
-                <section className="panel usage-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <Zap size={16} />
-                      {t('usage')}
-                    </h2>
-                  </div>
-                  <div className="usage-body">
-                    <TokenSummary usage={usage} />
-                  </div>
-                </section>
-                <section className="panel diagnostics-panel">
-                  <div className="panel-heading">
-                    <h2>
-                      <ShieldCheck size={16} />
-                      {t('diagnostics')}
-                    </h2>
-                  </div>
-                  <dl>
-                    {[
-                      ['sourceFiles', snapshot?.diagnostics.files ?? 0],
-                      ['malformed', snapshot?.diagnostics.malformed ?? 0],
-                      ['oversized', snapshot?.diagnostics.oversized ?? 0],
-                      ['scanErrors', snapshot?.diagnostics.errors ?? 0],
-                    ].map(([key, value]) => (
-                      <div key={key}>
-                        <dt>{t(String(key))}</dt>
-                        <dd>{f.number(Number(value))}</dd>
+                  </section>
+                  <div className="right-column">
+                    <section className="panel attention-panel">
+                      <div className="panel-heading">
+                        <h2>
+                          <Bell size={16} />
+                          {t('attention')}
+                        </h2>
+                        <span className="count-badge">{attention.length}</span>
                       </div>
-                    ))}
-                  </dl>
-                  <p className="fine-print">{t('retentionNote')}</p>
-                </section>
-              </div>
-            </div>
+                      {attention.length ? (
+                        <div className="attention-list">
+                          {attention.slice(0, 10).map((session) => (
+                            <button onClick={() => setSelected(session.id)} key={session.id}>
+                              <span>
+                                <strong>{session.agentName}</strong>
+                                <Status status={session.status} />
+                              </span>
+                              <ChevronRight size={16} />
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="quiet-state">
+                          <CheckCircle2 size={26} />
+                          <strong>{t('attentionEmpty')}</strong>
+                          <p>{t('attentionBody')}</p>
+                        </div>
+                      )}
+                    </section>
+                    <section className="panel usage-panel">
+                      <div className="panel-heading">
+                        <h2>
+                          <Zap size={16} />
+                          {t('usage')}
+                        </h2>
+                      </div>
+                      <div className="usage-body">
+                        <TokenSummary usage={usage} />
+                      </div>
+                    </section>
+                    <section className="panel diagnostics-panel">
+                      <div className="panel-heading">
+                        <h2>
+                          <ShieldCheck size={16} />
+                          {t('diagnostics')}
+                        </h2>
+                      </div>
+                      <dl>
+                        {[
+                          ['sourceFiles', snapshot?.diagnostics.files ?? 0],
+                          ['malformed', snapshot?.diagnostics.malformed ?? 0],
+                          ['oversized', snapshot?.diagnostics.oversized ?? 0],
+                          ['scanErrors', snapshot?.diagnostics.errors ?? 0],
+                        ].map(([key, value]) => (
+                          <div key={key}>
+                            <dt>{t(String(key))}</dt>
+                            <dd>{f.number(Number(value))}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <p className="fine-print">{t('retentionNote')}</p>
+                    </section>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </main>
         <footer className="app-footer">

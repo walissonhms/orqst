@@ -1512,3 +1512,134 @@ th:nth-last-child(2) {
     scroll-behavior: auto !important;
   }
 }
+
+.analytics-filter-panel {
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.analytics-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 15px;
+}
+.analytics-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #9ba8b3;
+  flex: 1 1 160px;
+  min-width: 0;
+}
+.analytics select,
+.analytics input:not([type='checkbox']) {
+  color: #d9e0e5;
+  background: #11171c;
+  border: 1px solid #34424d;
+  border-radius: 5px;
+  padding: 9px;
+  max-width: 100%;
+}
+.analytics-filters .analytics-checkbox {
+  flex-direction: row;
+  align-items: center;
+  padding: 9px 0;
+}
+.analytics-coverage,
+.analytics-filter-panel .fine-print {
+  margin-bottom: 12px;
+  line-height: 1.7;
+}
+.analytics-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.analytics-stats .stat > strong {
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+.analytics-stats .stat > .analytics-leader {
+  font-size: 20px;
+  letter-spacing: -0.3px;
+}
+.analytics-stats small {
+  display: block;
+  line-height: 1.6;
+  color: #93a4b0;
+}
+.analytics-note {
+  margin: 16px 20px;
+  line-height: 1.7;
+}
+.analytics-table {
+  min-width: 850px;
+}
+.analytics-table th[scope='row'] {
+  text-transform: none;
+  letter-spacing: normal;
+  color: #d9e0e5;
+  max-width: 240px;
+  white-space: normal;
+}
+.analytics-model {
+  overflow-wrap: anywhere;
+}
+.analytics-provider {
+  display: block;
+  color: #93a4b0;
+  font-weight: 400;
+  margin-top: 6px;
+}
+.analytics-bar {
+  display: block;
+  width: 100px;
+  height: 6px;
+  background: #24332e;
+  border-radius: 3px;
+  margin-top: 7px;
+}
+.analytics-bar i {
+  display: block;
+  height: 100%;
+  background: #72dbb6;
+  border-radius: inherit;
+}
+.analytics-evidence {
+  padding: 20px;
+  margin-top: 20px;
+  line-height: 1.8;
+}
+.analytics-evidence p {
+  margin-top: 10px;
+}
+.analytics .panel-heading {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 66px;
+  gap: 12px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.analytics .page-heading {
+  gap: 12px;
+  align-items: flex-start;
+}
+.analytics .page-heading p {
+  line-height: 1.7;
+}
+.analytics .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 700px) {
+  .analytics-stats {
+    grid-template-columns: 1fr;
+  }
+  .analytics .page-heading {
+    flex-direction: column;
+  }
+  .analytics-filters label {
+    flex-basis: 100%;
+  }
+}
