@@ -122,7 +122,7 @@ bundle served by the bridge in production and by Vite in development.
 
 ## Manual Artifacts
 
-Open a session's Activity and choose **Extract artifact manually** on a retained
+Open a session's **Execution timeline** and choose **Extract artifact manually** on a retained
 assistant/agent response. Its panel keeps recorded provenance and immutable retained
 source separate from a temporary editable draft, with a limited inert preview and
 explicit raw/readable clipboard actions. No automatic recognition or complete-source

@@ -1,6 +1,6 @@
 # Manual Artifacts — first slice
 
-In a session's **Activity**, choose **Extract artifact manually** on one retained
+In a session's **Execution timeline**, choose **Extract artifact manually** on one retained
 Codex assistant/agent message. The separate panel stays within the session flow;
 it does not launch or modify an agent. Selection is explicit for every message,
 including ambiguous content. No automatic Markdown recognition is implemented.

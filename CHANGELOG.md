@@ -7,7 +7,7 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
-- First manual Artifacts slice in session Activity: explicit retained assistant/agent
+- First manual Artifacts slice in session Execution timeline: explicit retained assistant/agent
   message extraction with strict versioned identity/source checks, immutable retained
   source/provenance, limited inert preview, separate memory-only draft and gesture-only
   raw/readable copying with honest failure. A read-only authenticated query uses the same
