@@ -152,3 +152,32 @@ cached, a subset of input), preserved schema 1 and exited cleanly. Disposable
 storage and non-production loopback ports were used; the installed service and
 native histories were not test targets. These are bounded synthetic checks, not
 real-provider or arbitrary-archive acceptance.
+
+## Durable metric evidence upgrade
+
+Use Node 24/pnpm 10 and disposable databases only. `pnpm test` includes synthetic
+schema-1 upgrade/backfill, failed migration/rollback/reopen, transactional ingestion,
+retention before/after upgrade, deterministic replay/mirrors, conflicting/missing
+models, canonical totals/cache and worker parity/budget/cleanup regressions. These
+fixtures do not prove real-provider comparative rankings or installed-service upgrade.
+Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, then
+`ORQST_BROWSER_PORT=4320 pnpm test:browser` only if that port is free. Never stop an
+unrelated listener. `pnpm validate:local` reads bounded native sources into disposable
+storage; it makes no provider calls and prints aggregates, not content.
+
+Production/service paths still build `dist/bridge.mjs` and colocated
+`dist/analytics-worker.mjs`; development workers register tsx internally. Tests must
+exercise source workers without a prebuild and the built bridge separately. No
+service install/restart is part of this increment. The owner integrates schema 2
+only after review and a SQLite-aware backup including WAL. An older writer refuses
+schema 2; test recovery against a disposable backup rather than downgrading installed
+storage. Backfill time/disk and unbounded-on-disk metric growth remain operational
+limits despite bounded query budgets. See [data model](../architecture/data-model.md).
+
+The durable-evidence increment was checked on macOS with Node 24.22.2 and pnpm
+10.34.9: lint, types, 90 Node cases, build and 13 Chromium cases passed. Bounded local
+validation used 8 real source copies/8 sessions in disposable storage: replay and
+restart were stable, cumulative totals reconciled, source prefixes were unchanged,
+and built Bridge/browser smoke passed, including the production Analytics worker
+route. No installed database migration, service restart, provider call or real-model
+comparative acceptance was performed.

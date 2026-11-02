@@ -15,14 +15,27 @@ below are logical responsibilities only, not SQL entities that already exist.
 ## Schema version
 
 The schema is versioned with `PRAGMA user_version`. The repository currently
-contains exactly one migration (version 1). On startup:
+contains two migrations (current version 2). Migration 1 is unchanged. On startup:
 
 - a database newer than the application refuses to open;
 - older databases are upgraded inside a transaction, one version at a time;
 - there is no downgrade path.
 
 Any future schema change must add a new migration; existing migrations are
-immutable.
+immutable. Migration 2 creates `analytics_evidence` and backfills only model/usage
+records still present in `events`, in the same transaction as `user_version=2`.
+It does not read native files or reconstruct deleted events from session summaries.
+Failure rolls back the entire version-2 transaction and closes the failed connection;
+reopening retries the migration. Existing tables, IDs, event sequence, settings,
+checkpoints and canonical totals are not rewritten. There is no downgrade: an old
+Store rejects schema 2. The read-only Analytics worker explicitly supports 1 and 2,
+rejects other versions and never migrates.
+
+Upgrade is a writer startup operation. Development checks use disposable databases
+only. Applying it to an installed database requires owner integration after review,
+a SQLite-aware backup and upgrade/replay tests. Backfill is synchronous and can take
+time and disk/WAL space proportional to retained metric evidence; it is atomic, not
+an online background migration.
 
 ## Tables
 
@@ -102,6 +115,32 @@ Indexes:
 The full event is stored as JSON so the protocol can evolve additively while
 the indexed columns support ordering, filtering, and retention.
 
+### `analytics_evidence` (schema 2)
+
+| Column       | Type                 | Notes                                                                 |
+| ------------ | -------------------- | --------------------------------------------------------------------- |
+| `sequence`   | INTEGER PK           | Original event sequence; not an independent cursor                    |
+| `id`         | TEXT UNIQUE NOT NULL | Original deterministic event ID; replay tombstone after detail expiry |
+| `session_id` | TEXT NOT NULL        | References `sessions(id)`; deliberately no FK to `events`             |
+| `timestamp`  | TEXT NOT NULL        | Original source event time                                            |
+| `metadata`   | TEXT NOT NULL        | Explicit metric/identity/provenance JSON allowlist                    |
+
+Indexes cover `(session_id, sequence)` and `timestamp`. Only events declaring a
+model or usage produce rows. Metadata keeps original event, machine, agent, adapter,
+session and workspace IDs; timestamp; source file/offset/line/hash/record type;
+turn ID; model; usage, usage kind and response ID. No prompt, message, tool arguments,
+tool results, cwd, task/result summary, credential block or arbitrary payload is
+copied. Source paths and observed labels/IDs remain sensitive, untrusted local
+metadata; a source reference does not grant permission to open that path. No new
+provider identity, session mode, quality or baseline is inferred or persisted.
+Current workspace assignment still governs Analytics filtering.
+
+The table retains observations, not calculated deltas or a model assigned to an
+entire session. It preserves rejected mirrors and conflicting declarations so replay
+can apply the same conservative accounting and identity checks. Source disappearance
+does not delete the observation or establish source availability. The original hash
+and location remain evidence of what was observed, not proof the file still exists.
+
 ### `messages`
 
 | Column       | Type          | Notes                                            |
@@ -177,10 +216,11 @@ synchronization. A future sync feature must not reuse it without a new design.
 `Store.ingest(event, live)` runs in a transaction:
 
 1. Validate the event with `eventSchema`; reject anything invalid.
-2. Deduplicate by `events.id`. A duplicate returns `undefined` and changes
-   nothing.
+2. Deduplicate by `events.id` and `analytics_evidence.id`. A duplicate returns
+   `undefined` and changes nothing, including after metric detail expiry.
 3. Upsert machine, workspace, agent, and session rows as needed.
-4. Insert the event and obtain its monotonic `sequence`.
+4. Insert the event and obtain its monotonic `sequence`; insert its compact
+   evidence, when applicable, in this same transaction.
 5. Update session window (`started_at`, `last_activity`), cwd, parent, model,
    status, task, and result only under their timestamp guards.
 6. Insert a message row for `agent.message` with a role and text.
@@ -215,8 +255,8 @@ Consequences:
 
 - A session total means "the largest cumulative snapshot observed", not "the
   sum of every record".
-- Turn-level usage is available only when the source record carries it and the
-  event remains inside the retention window.
+- Turn-level usage contributes no canonical totals. Compact evidence retains only
+  the primary `usage` and its `usageKind`, not auxiliary turn/response usage fields.
 - There is no cost, budget, quota, or context-window calculation.
 
 ## Retention
@@ -231,14 +271,24 @@ together.
 Retained after detail expiry:
 
 - sessions and their summaries (`task`, `result`, status, timestamps),
-- token totals,
+- token totals and compact metric/model evidence,
 - workspaces, agents, machines,
 - read checkpoints.
 
 The event cursor is derived from `sqlite_sequence` and is not reset by deletion,
 so clients never see a cursor move backwards after retention runs.
 
-Retention runs once at startup and then hourly.
+Retention runs once at startup and then hourly. Store migration/backfill finishes
+before Core performs startup retention, so existing rows are captured before their
+details expire. Compact metric/model evidence has
+**no automatic time expiry**, matching retained session identities and cumulative
+totals (ADR-009, extended by ADR-028). `ORQST_RETENTION_DAYS` continues to govern
+only details. This is local metric history, not a transcript cache. It grows with
+model/usage observations; query budgets limit reads, not database size. There is no
+new selective purge API or implicit eviction. Removing local storage is an explicit
+owner operation; backups retain their own copies and are never rewritten by retention.
+A separate finite metric TTL or selective erasure/compaction policy needs product
+approval and missing-baseline handling; it is not silently enabled here.
 
 ## Filesystem hardening
 
@@ -300,32 +350,23 @@ session's model does not justify pricing its entire history at the latest rate.
 See [planned contracts](../api/lifecycle-contracts.md) and ADRs 017, 020 and 023 in
 [architecture decisions](decisions.md).
 
-## Planned Analytics accounting boundary
+## Durable Analytics accounting boundary
 
-The implemented `Store.modelAnalytics()` foundation is a read-only projection of
-retained `events`, `sessions`, `agents` and `token_usage`; schema version remains 1.
-It adds no tables or indexes and never persists derived model attribution. See the
-[foundation semantics](model-usage-analytics.md#implemented-local-foundation) for
-interval boundaries, canonical reconciliation and unavailable/coverage behavior.
-The HTTP summary now reads the same retained data through a separate read-only
-SQLite WAL snapshot in a disposable worker. It admits all selected envelopes before
-JSON inspection, projects only metric/identity/provenance metadata, and folds one
-session at a time into aggregate counts/totals. It never writes derived attribution
-or instantiates another Store. Canonical cumulative admission, source priority,
-cache subsets, current workspace assignment, half-open windows, unidentified models
-and retention gaps are unchanged. Limits/cancellation return errors without partial
-results; see the [API contract](../api/rest.md#get-apianalyticsmodels).
-Durable historical measurement storage remains future work.
+`Store.modelAnalytics()` and the worker replay compact metric/model observations,
+using retained events as a compatibility fallback. Each record is read once.
+Retained event envelopes still consume the original admission budget; after detail
+expiry their compact metadata consumes it instead. The read-only worker uses a
+separate WAL snapshot, bounds evidence before JSON parsing, and projects only
+allowlisted metadata. Only aggregate counts/totals cross its boundary. No derived
+attribution is written. See the [API contract](../api/rest.md#get-apianalyticsmodels).
 
-The existing session summary keeps one cumulative total and the latest observed
-model. That is insufficient for period/model ranking after model changes or detail
-retention. Do not group all session usage by its latest model or sum cumulative
-event snapshots. New measurement storage must preserve source time, compatible
-baselines, model/provider evidence, reliability, session origin and coverage, with
-explicit unidentified/unattributed buckets and unavailable values. Existing numeric
-defaults are not evidence of reported zero. Task outcomes, attempts, equivalence,
-active time and verified prices need their own source-backed basis.
-
-See [Analytics design](model-usage-analytics.md) for required semantics. Publish
-actual tables/indexes and migration/replay/retention tests with the implementation;
-this design adds no SQL entity or migration and does not rewrite migration 1.
+Schema-1 details removed before upgrade are unavailable forever unless separately
+observed from an existing authorized source by normal ingestion. Migration does not
+reset checkpoints or trigger a source rescan. A surviving `token_usage` row or latest
+`sessions.model` cannot seed a compact measurement or baseline. Missing canonical
+evidence remains a gap; a first retained positive snapshot stays an unidentified
+unbounded snapshot, and windows without a contained baseline omit its usage.
+Subsequent detail retention preserves the evidence already captured in schema 2,
+including model changes and identity conflicts. Cache subsets, mirror priority,
+unknown models, unavailable metrics and all v1 transport/accounting shapes remain.
+Coverage remains unverified, never upgraded to complete by migration.

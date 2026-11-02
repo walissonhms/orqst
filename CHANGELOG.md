@@ -7,6 +7,15 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Additive SQLite schema 2 with compact durable metric/model evidence, transactional
+  ingestion and backfill only from retained events. Original IDs/sequences, source
+  provenance, model declarations, identity checks and cumulative/cache semantics
+  survive detail expiry; expired pre-upgrade history stays unavailable. No prompts,
+  messages, tool arguments/results or cwd are copied into this evidence. Its explicit
+  lifetime matches retained totals without automatic expiry. Worker readers support
+  schemas 1/2 without writes or migrations; v1 APIs, query budgets and cleanup remain.
+  Installed upgrade requires separate owner review/backup/integration.
+
 - Configurable isolated browser fixture port through `ORQST_BROWSER_PORT`, shared
   by Playwright and the fixture server. Invalid values and production port 4317
   are rejected; server reuse stays disabled and temporary storage stays unique.

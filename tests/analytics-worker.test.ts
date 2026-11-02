@@ -520,7 +520,7 @@ test('worker keeps the main thread responsive and does not block the writer', as
   }
 });
 
-test('read-only reader requires canonical path, schema 1 and WAL; writer remains usable', async () => {
+test('read-only reader requires canonical path, supported schema and WAL; writer remains usable', async () => {
   const fixture = createAnalyticsWorkerFixture();
   try {
     seedParity(fixture.store);
@@ -550,7 +550,7 @@ test('read-only reader requires canonical path, schema 1 and WAL; writer remains
 
     const schema = new DatabaseSync(fixture.database, { readOnly: true });
     try {
-      assert.equal(Number(schema.prepare('PRAGMA user_version').get()?.user_version), 1);
+      assert.equal(Number(schema.prepare('PRAGMA user_version').get()?.user_version), 2);
       assert.equal(
         String(schema.prepare('PRAGMA journal_mode').get()?.journal_mode).toLowerCase(),
         'wal',
@@ -579,13 +579,26 @@ test('read-only reader requires canonical path, schema 1 and WAL; writer remains
     fixture.close();
   }
 
+  // Schema 1 remains a read-only fallback for archives created before durable
+  // evidence existed; no backfill or write is attempted by the reader.
+  const legacy = createAnalyticsWorkerFixture();
+  try {
+    seedParity(legacy.store);
+    const writer = new DatabaseSync(legacy.database);
+    writer.exec('DROP TABLE analytics_evidence; PRAGMA user_version=1');
+    writer.close();
+    assert.equal(readModelAnalyticsSummary(legacy.database).sessions, 4);
+  } finally {
+    legacy.close();
+  }
+
   const schemaDirectory = mkdtempSync(join(tmpdir(), 'orqst-schema-'));
   try {
     const file = join(schemaDirectory, 'schema.db');
     const store = new Store(file);
     store.close();
     const writer = new DatabaseSync(file);
-    writer.exec('PRAGMA user_version=2');
+    writer.exec('PRAGMA user_version=3');
     writer.close();
     assert.throws(
       () => readModelAnalyticsSummary(realpathSync(file)),

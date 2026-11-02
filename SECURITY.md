@@ -141,7 +141,11 @@ These are known boundaries, not hidden assumptions:
 - Raw logs, encrypted reasoning, account/identity blocks, and environment or
   configuration payloads are not copied into the database.
 - Event details expire under the configured retention window. Session summaries
-  and token totals remain.
+  and token totals remain. Compact schema-2 metric/model evidence also remains
+  without automatic expiry, matching those totals; source references/labels/IDs
+  remain sensitive local metadata. Its allowlist excludes prompts, messages, tool
+  arguments/results, cwd and credential blocks. Backfill reads only retained events.
+  This does not alter existing summary text or backup retention.
 - Deleting `~/.orqst` (or the configured data directory) removes local history.
   Back up only if you understand that the database contains captured prompts and
   tool output.

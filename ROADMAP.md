@@ -8,8 +8,9 @@ Community remains Apache-2.0 and independent of Cloud. Release metadata remains
 The integrated baseline is the read-only Codex observer in [README](README.md).
 
 Incremental, non-destructive development is authorized. **The observer Core extraction and local Analytics library are
-implemented and integration-tested; Phase 1 remains incomplete.** Durable historical
-measurements and lifecycle/artifact contracts still need work. There is no blanket “Phase 1 awaiting approval” gate.
+implemented and integration-tested; Phase 1 remains incomplete.** Compact durable metric/model evidence is implemented with additive schema 2;
+pre-upgrade gaps remain qualified and installed upgrade awaits owner integration.
+Lifecycle/artifact contracts still need work. There is no blanket “Phase 1 awaiting approval” gate.
 Passing checks permits incremental progress within scope; product decisions,
 destructive actions, credentials, external costs and ungranted permissions still
 require a decision. Development authorization is not production activation.
@@ -68,8 +69,9 @@ controls, providers or fabricated metrics count toward acceptance.
 Core extraction is bounded: preserve Node `>=24 <25`, pnpm 10.x, SQLite, existing
 adapters and one writer. It does not activate Electron, PTY, execution, optimizer,
 Cloud, delegation or public binding. Extraction alone needs no schema migration;
-The current Analytics library also adds no migration; durable measurement storage
-requires additive migration design and recovery tests.
+The durable Analytics increment adds migration 2 beside unchanged migration 1.
+It retains compact evidence alongside totals, backfills only surviving details and
+requires upgrade/recovery tests and owner review/backup before installed migration.
 Do not install/restart the owner's service as a side effect of a check.
 
 Integration must review the file/dependency map, ownership, start/stop behavior,
@@ -97,8 +99,9 @@ inactive throughout current Core/Analytics development.
 ## Open decisions and explicit gates
 
 - Core API/ownership and service/asset path compatibility at Phase 1 integration.
-- Period baselines, model-change attribution, retention and local Analytics migration
-  policy before publishing reliable time-filtered totals.
+- Installed schema-2 migration after review/backup; historical coverage remains
+  qualified. Compact evidence has no automatic expiry alongside totals (ADR-028);
+  finite metric TTL, selective erasure or compaction require a separate policy decision.
 - Electron/PTY versions, packager, signing/update strategy and crash lifetime before
   Desktop integration; no same-PTY survival guarantee across Core crash/reboot.
 - Control principal, grant storage, OS secret backend, executable/environment policy

@@ -461,3 +461,32 @@ Integrated lint/types, 57 automated cases, build, 3 Chromium cases and bounded
 real-source/built-Bridge/browser validation passed. The installed service was not
 restarted. Real-model Analytics attribution, full-archive load, reboot and Desktop
 acceptance remain unvalidated; see [testing](../development/testing.md#incremental-delivery-and-integration).
+
+---
+
+## ADR-028 — Durable, content-minimized Analytics evidence
+
+**Status:** Implemented in code in the authorized durable-metrics increment; installed
+migration and real-model acceptance require separate owner integration/review.
+
+**Decision.** Add immutable migration 2 beside unchanged migration 1. The sole Store
+writer inserts an allowlisted metric/model observation with the original event ID,
+sequence, identities, time, source location/hash, turn/response IDs and usage kind in
+the same ingestion transaction. Backfill only surviving event evidence in the schema
+transaction; do not use latest model or totals as historical evidence. Retain this
+compact evidence without automatic expiry alongside existing canonical totals and
+session identities. Detail retention and existing summary content policy are unchanged.
+This extends ADR-009's summary lifetime to the approved metric history, consistent
+with ADR-020's identifiers/source references/metrics boundary; no transcript cache is
+created. Finite metric TTL, selective erasure and storage compaction remain separate
+policy changes requiring explicit approval, not implicit detail-retention settings.
+
+**Consequences.** Metric duplicates remain suppressed after detail deletion. Native
+sources, checkpoints, existing summaries and backups are not rewritten. Historical
+gaps remain unknown; conservative deltas/model changes/cache/mirror semantics and
+v1 APIs remain unchanged. Compact records grow with observations and source references
+are sensitive plaintext local metadata. Read-only workers explicitly support schema
+1 and 2, perform no migration and preserve budgets, deadlines, isolation and cleanup.
+An older writer rejects schema 2; rollback means restoring a reviewed pre-upgrade
+backup, never dropping the table or lowering `user_version` on an installed database.
+See [data lifecycle and migration](data-model.md) and [testing](../development/testing.md).

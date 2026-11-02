@@ -77,12 +77,19 @@ and provenance metadata; messages, tool arguments, task/results and cwd are neve
 materialized in JavaScript for this query. Only the aggregate allowlist crosses
 back to the bridge. Evidence is folded one session at a time.
 
-Fixed admission limits are **5000 candidate sessions, 250000 retained envelopes,
-256 MiB of UTF-8 envelope bytes, 8 MiB per envelope and 64 MiB of projected metric
+The reader explicitly supports database schemas 1 and 2 without migrating or
+writing. Schema 2 preserves compact metric/model evidence after detail expiry;
+schema-1 evidence already deleted before upgrade remains unavailable. The response
+shape, coverage qualification and conservative interval/model attribution are unchanged.
+
+Fixed admission limits are **5000 candidate sessions, 250000 evidence records,
+256 MiB of UTF-8 evidence bytes, 8 MiB per record and 64 MiB of projected metric
 metadata and 2 MiB of aggregate response**. Envelope admission happens before JSON inspection; projected bytes
 are checked before parsing each metadata record. The worker checks aggregate response
 bytes before transferring a result to the observer. All selected history counts,
-including message-only records and out-of-window baselines. A narrower
+including retained message-only records, durable records whose details expired and
+out-of-window baselines. A record counts once: its retained envelope consumes bytes
+until detail expiry, then compact metadata does. No new unbounded query path is added. A narrower
 workspace/agent/adapter scope may help; a narrower period still needs retained
 baselines and a model filter does not reduce admission scope.
 
@@ -110,7 +117,8 @@ Errors contain only an explicit code, with no partial report:
 No SQLite diagnostic, private path or individual source reference is returned in
 errors. The unrestricted synchronous library `modelAnalytics()` and legacy bounded
 `modelAnalyticsSummary()` remain available for local inspection; HTTP uses neither.
-No table, index or migration is added. The database remains schema version 1.
+Schema 2 adds durable compact evidence through the sole Store writer; the route
+and worker do not migrate or write. See [data lifecycle](../architecture/data-model.md).
 
 ### `GET /api/snapshot`
 

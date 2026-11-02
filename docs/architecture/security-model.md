@@ -296,3 +296,22 @@ scopes, stale approval IDs, invalid IPC origins, malformed/version-mismatched
 requests, duplicate/reordered delivery, unsafe source references, disconnection,
 process exit, recovery and uncertain results. Document scope and limitations;
 architecture approval is not evidence that these controls have passed.
+
+## Review note — durable Analytics evidence
+
+Schema 2 adds an explicit SQL allowlist for metric/model observations and provenance;
+no full envelope or arbitrary payload enters the compact table. It excludes prompts,
+messages, tool arguments/results, cwd and credential blocks. Observed labels, IDs,
+source paths and hashes are still untrusted sensitive local metadata, retained without
+automatic expiry alongside canonical totals. This is not secret-proof storage or a
+transcript cache. Existing detail/summary/backup policies are unchanged. No source
+access, external transport, telemetry, new endpoint or permission is introduced.
+
+Only Store migrates/writes. Backfill and schema version commit atomically; failure
+rolls back, closes the connection and leaves the previous version retryable. It reads
+only surviving event rows and never reconstructs previously expunged provenance.
+Worker connections stay read-only/query-only, support schemas 1/2 explicitly and
+retain budgets/deadline/cleanup. The summary allowlist still strips individual
+evidence, source paths and captured content. No source file or installed database is
+modified during development checks. Installed upgrade needs review, backup and tests;
+there is no destructive downgrade or automatic rewrite of backups.

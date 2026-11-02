@@ -4,7 +4,7 @@ import { randomInt } from 'node:crypto';
 import { once } from 'node:events';
 import { join } from 'node:path';
 import { chromium } from '@playwright/test';
-import type { Snapshot } from '@orqst/protocol';
+import type { Snapshot, ModelAnalyticsSummary } from '@orqst/protocol';
 
 /** Bounded smoke of the built application, using only disposable copies of real session data. */
 export async function smokeBuilt(
@@ -63,6 +63,13 @@ export async function smokeBuilt(
     await page.locator('.session-detail .timeline-event').first().waitFor();
     const response = await page.request.get(base + '/api/snapshot');
     assert.equal(response.status(), 200);
+    // Exercise the colocated production worker bundle, not only the dev/tsx entry.
+    const analyticsResponse = await page.request.get(base + '/api/analytics/models');
+    assert.equal(analyticsResponse.status(), 200);
+    const analytics = (await analyticsResponse.json()) as ModelAnalyticsSummary;
+    assert.equal(analytics.contract, 'orqst.model-analytics');
+    assert.equal(analytics.contractVersion, 1);
+    assert.equal(analytics.coverage.sessions, expectedSessions);
     // No screenshots or captured conversation text are exported from this check.
   } finally {
     await browser?.close();

@@ -20,9 +20,15 @@ import {
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
 import {
+  analyticsEvidenceMigration,
+  analyticsEvidenceQueries,
+  analyticsMetadataSql,
+} from './analytics-evidence.js';
+import {
   aggregateModelAnalytics,
   summarizeModelAnalytics,
   type AnalyticsSession,
+  type AnalyticsEvent,
 } from './analytics.js';
 export {
   readModelAnalyticsSummary,
@@ -31,8 +37,8 @@ export {
 } from './analytics-reader.js';
 
 type Row = Record<string, unknown>;
-// Legacy synchronous library budgets. Count every retained envelope inspected by SQLite's
-// JSON predicate, including message-only records and out-of-window baselines.
+// Legacy synchronous library budgets. Count retained envelopes and compact records
+// whose details expired, including message-only records and out-of-window baselines.
 export const MODEL_ANALYTICS_LIMITS = Object.freeze({
   sessions: 100,
   events: 1000,
@@ -70,6 +76,7 @@ CREATE TABLE notifications (id TEXT PRIMARY KEY REFERENCES events(id) ON DELETE 
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE synchronization_state (source TEXT PRIMARY KEY, offset INTEGER NOT NULL, line INTEGER NOT NULL, identity TEXT NOT NULL, anchor TEXT NOT NULL, state TEXT NOT NULL);
 `,
+  analyticsEvidenceMigration,
 ];
 
 export class Store {
@@ -97,14 +104,19 @@ export class Store {
     this.db.exec(
       'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;',
     );
-    const version = Number(this.get('PRAGMA user_version')?.user_version);
-    if (version > migrations.length)
-      throw new Error('Database schema is newer than this application');
-    for (let index = version; index < migrations.length; index++)
-      this.transaction(() => {
-        this.db.exec(migrations[index]!);
-        this.db.exec(`PRAGMA user_version=${index + 1}`);
-      });
+    try {
+      const version = Number(this.get('PRAGMA user_version')?.user_version);
+      if (version > migrations.length)
+        throw new Error('Database schema is newer than this application');
+      for (let index = version; index < migrations.length; index++)
+        this.transaction(() => {
+          this.db.exec(migrations[index]!);
+          this.db.exec(`PRAGMA user_version=${index + 1}`);
+        });
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
     this.machineId = this.setting<string>('machineId', randomUUID());
     this.run(
       'INSERT OR IGNORE INTO machines VALUES (?,?)',
@@ -189,7 +201,11 @@ export class Store {
   ingest(input: AgentEvent, live = false): StoredEvent | undefined {
     const event = eventSchema.parse(input);
     return this.transaction(() => {
-      if (this.get('SELECT 1 FROM events WHERE id=?', event.id)) return undefined;
+      if (
+        this.get('SELECT 1 FROM events WHERE id=?', event.id) ||
+        this.get('SELECT 1 FROM analytics_evidence WHERE id=?', event.id)
+      )
+        return undefined;
       const p = event.payload;
       this.run('INSERT OR IGNORE INTO machines VALUES (?,?)', event.machineId, event.timestamp);
       this.run(
@@ -223,6 +239,12 @@ export class Store {
         event.type,
         JSON.stringify(event),
       );
+      if (p.model !== undefined || p.usage !== undefined)
+        this.run(
+          `INSERT INTO analytics_evidence(sequence,id,session_id,timestamp,metadata)
+           SELECT sequence,id,session_id,timestamp,${analyticsMetadataSql} FROM events WHERE id=?`,
+          event.id,
+        );
       this.run(
         'UPDATE sessions SET last_activity=MAX(last_activity,?), started_at=MIN(started_at,?) WHERE id=?',
         event.timestamp,
@@ -492,7 +514,7 @@ export class Store {
         return clauses.join(' AND ');
       };
       conditions.push(
-        `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) OR (${window('t.timestamp')}))`,
+        `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) OR EXISTS (SELECT 1 FROM analytics_evidence c WHERE c.session_id=s.id AND ${window('c.timestamp')}) OR (${window('t.timestamp')}))`,
       );
     }
     const sessionRows = this.all(
@@ -508,10 +530,7 @@ export class Store {
       let bytes = 0;
       // Admit ALL selected sessions before fetching any envelope or running json_type.
       // LIMIT permits a single overflow probe, never materializing an unbounded history.
-      const budget = this.stmt(
-        `SELECT length(CAST(envelope AS BLOB)) AS bytes FROM events
-         WHERE session_id=? ORDER BY sequence LIMIT ?`,
-      );
+      const budget = this.stmt(analyticsEvidenceQueries(true).budget);
       for (const row of sessionRows) {
         for (const event of budget.iterate(
           String(row.id),
@@ -543,13 +562,8 @@ export class Store {
             },
       // Read all retained model/usage evidence for baselines; apply the period only to deltas.
       // The projection below never returns captured text, task/result content or cwd.
-      events: this.all(
-        `SELECT sequence,envelope FROM events WHERE session_id=? AND
-         (json_type(envelope,'$.payload.model') IS NOT NULL OR json_type(envelope,'$.payload.usage') IS NOT NULL)
-         ORDER BY sequence`,
-        String(row.id),
-      ).map((event) => ({
-        ...(JSON.parse(String(event.envelope)) as AgentEvent),
+      events: this.all(analyticsEvidenceQueries(true).projection, String(row.id)).map((event) => ({
+        ...(JSON.parse(String(event.metadata)) as AnalyticsEvent),
         sequence: Number(event.sequence),
       })),
     }));

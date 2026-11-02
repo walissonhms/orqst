@@ -186,7 +186,9 @@ Ignored by Git and not part of the source layout:
 ## Planned boundaries
 
 The layout above includes the integrated observer Core and Analytics library.
-Broader Phase 1 contracts and durable historical measurements remain incomplete.
+Compact durable metric/model evidence is implemented in schema 2; pre-upgrade
+historical gaps remain qualified and installed upgrade awaits owner integration.
+Broader Phase 1 contracts remain incomplete.
 There is no accepted Desktop, PTY runtime,
 orchestrator or Cloud implementation. New packages must follow the approved phase and
 have concrete responsibilities; see [ROADMAP](../../ROADMAP.md) and

@@ -410,7 +410,7 @@ test('Analytics byte budgets admit larger messages and reject oversized records 
     const response = await ctx.get();
     assert.equal(response.status, 503);
     assert.deepEqual(await response.json(), { error: 'analytics_capacity_exceeded' });
-    assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 1);
+    assert.equal(db.prepare('PRAGMA user_version').get()?.user_version, 2);
   } finally {
     db.close();
     await ctx.close();

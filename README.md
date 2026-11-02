@@ -44,8 +44,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
   dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
 - **Phase 1 increment delivered:** UI-independent observer Core and evidence-backed
-  model Analytics library. Lifecycle/artifact contracts and durable historical
-  measurement coverage remain incomplete; this does not complete Phase 1.
+  model Analytics library with schema-2 compact durable metric/model evidence.
+  Historical coverage remains qualified; lifecycle/artifact contracts and installed
+  migration acceptance are incomplete. This does not complete Phase 1.
 - **Browser Analytics increment delivered:** open **Most used models** in the sidebar
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
@@ -209,7 +210,10 @@ Invalid numeric values fail startup instead of silently falling back.
 - There is no telemetry and no automatic upload. The Cloud Edition is not
   implemented.
 - Event details expire according to `ORQST_RETENTION_DAYS`. Session summaries
-  and token totals are retained.
+  and token totals are retained. Schema-2 compact metric/model evidence also survives
+  detail expiry without automatic expiration; it contains only metric, identity and
+  provenance metadata. Pre-upgrade deleted evidence is not reconstructed. See
+  [data lifecycle and migration](docs/architecture/data-model.md).
 
 See [docs/architecture/security-model.md](docs/architecture/security-model.md)
 and [SECURITY.md](SECURITY.md).

@@ -1,5 +1,6 @@
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite';
 import { lstatSync, realpathSync } from 'node:fs';
+import { analyticsEvidenceQueries } from './analytics-evidence.js';
 import {
   modelAnalyticsQuerySchema,
   type ModelAnalyticsQuery,
@@ -34,8 +35,10 @@ export function readModelAnalyticsSummary(
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=100; BEGIN');
-    if (db.prepare('PRAGMA user_version').get()?.user_version !== 1)
-      throw new Error('Unsupported Analytics database schema');
+    const version = Number(db.prepare('PRAGMA user_version').get()?.user_version);
+    if (version !== 1 && version !== 2) throw new Error('Unsupported Analytics database schema');
+    const durable = version === 2;
+    const evidenceQueries = analyticsEvidenceQueries(durable);
     if (db.prepare('PRAGMA journal_mode').get()?.journal_mode !== 'wal')
       throw new Error('Analytics requires WAL');
     const conditions: string[] = [];
@@ -64,7 +67,7 @@ export function readModelAnalyticsSummary(
         return clauses.join(' AND ');
       };
       conditions.push(
-        `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) OR (${window('t.timestamp')}))`,
+        `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) ${durable ? `OR EXISTS (SELECT 1 FROM analytics_evidence c WHERE c.session_id=s.id AND ${window('c.timestamp')})` : ''} OR (${window('t.timestamp')}))`,
       );
     }
     const rows = db
@@ -77,10 +80,7 @@ export function readModelAnalyticsSummary(
     if (rows.length > limits.sessions) throw new AnalyticsReadCapacityError();
     let events = 0;
     let bytes = 0;
-    const budget = db.prepare(
-      `SELECT length(CAST(envelope AS BLOB)) AS bytes FROM events
-       WHERE session_id=? ORDER BY sequence LIMIT ?`,
-    );
+    const budget = db.prepare(evidenceQueries.budget);
     // No JSON parsing before every selected session passes admission. Message-only
     // records and out-of-period baselines consume the same scan budget.
     for (const row of rows) {
@@ -95,32 +95,17 @@ export function readModelAnalyticsSummary(
     // SQLite inspects bounded envelopes, but never transfers messages, tool arguments,
     // results or cwd to JavaScript. Provenance remains worker-local and is stripped
     // by the summary projection before crossing the worker boundary.
-    const projection = db.prepare(
-      `SELECT sequence,json_object(
-         'id',json_extract(envelope,'$.id'),
-         'timestamp',json_extract(envelope,'$.timestamp'),
-         'machineId',json_extract(envelope,'$.machineId'),
-         'agentId',json_extract(envelope,'$.agentId'),
-         'adapter',json_extract(envelope,'$.adapter'),
-         'source',json_extract(envelope,'$.source'),
-         'correlation',json_object('turnId',json_extract(envelope,'$.correlation.turnId')),
-         'payload',json_object(
-           'model',json_extract(envelope,'$.payload.model'),
-           'usage',json_extract(envelope,'$.payload.usage'),
-           'usageKind',json_extract(envelope,'$.payload.usageKind'),
-           'responseId',json_extract(envelope,'$.payload.responseId'))
-       ) AS metadata FROM events WHERE session_id=? AND
-       (json_type(envelope,'$.payload.model') IS NOT NULL OR json_type(envelope,'$.payload.usage') IS NOT NULL)
-       ORDER BY sequence`,
-    );
+    const projection = db.prepare(evidenceQueries.projection);
     let projectedBytes = 0;
     function* sessions(): Generator<AnalyticsSession> {
       for (const row of rows) {
         const retained: AnalyticsEvent[] = [];
         for (const record of projection.iterate(String(row.id))) {
           const metadata = String(record.metadata);
-          projectedBytes += Buffer.byteLength(metadata);
-          if (projectedBytes > limits.projectionBytes) throw new AnalyticsReadCapacityError();
+          const size = Buffer.byteLength(metadata);
+          projectedBytes += size;
+          if (size > limits.recordBytes || projectedBytes > limits.projectionBytes)
+            throw new AnalyticsReadCapacityError();
           retained.push({
             ...JSON.parse(metadata),
             sequence: Number(record.sequence),

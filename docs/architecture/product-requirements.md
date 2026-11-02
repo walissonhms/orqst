@@ -41,16 +41,16 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 ### Core and Bridge
 
-| Requirement                                                    | Coverage | Evidence and remaining work                                                                                                                                | Phase |
-| -------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| Independent Core/Bridge responsibilities and provider adapters | Existing | ObserverCore and createBridge own lifecycle/resources; Core and Bridge lifecycle tests pass.                                                               | 1     |
-| Versioned normalized event contracts                           | Existing | P validates v1 at runtime; future lifecycle/control families still design only.                                                                            | 1     |
-| Projects, sessions, observed states and local history          | Existing | D/B/U support workspaces, associations and session history; not owned processes.                                                                           | 1     |
-| Managed process/session ownership                              | Absent   | No runtime control in B; future explicit observed/managed boundary.                                                                                        | 4     |
-| Started/running/completed/error/interrupted/waiting events     | Partial  | P/C cover observed turns; unsupported native paths remain fixture-only; no process/task completion inference.                                              | 1, 3  |
-| Approval pending and usage-limit evidence                      | Absent   | No validated dedicated approval/quota capability; input request compatibility is not proof of either.                                                      | 3     |
-| Metrics by source/model/session/project/time                   | Partial  | File provenance, timestamps, model and cumulative usage in P/C/D; retained-evidence interval attribution implemented; durable coverage remains incomplete. | 1     |
-| Safe persistence/migrations and recovery                       | Existing | D/C and store/observer tests cover replay, checkpoints, truncation/rotation and retention; Analytics migration still needs design.                         | 1     |
+| Requirement                                                    | Coverage | Evidence and remaining work                                                                                                                                                 | Phase |
+| -------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Independent Core/Bridge responsibilities and provider adapters | Existing | ObserverCore and createBridge own lifecycle/resources; Core and Bridge lifecycle tests pass.                                                                                | 1     |
+| Versioned normalized event contracts                           | Existing | P validates v1 at runtime; future lifecycle/control families still design only.                                                                                             | 1     |
+| Projects, sessions, observed states and local history          | Existing | D/B/U support workspaces, associations and session history; not owned processes.                                                                                            | 1     |
+| Managed process/session ownership                              | Absent   | No runtime control in B; future explicit observed/managed boundary.                                                                                                         | 4     |
+| Started/running/completed/error/interrupted/waiting events     | Partial  | P/C cover observed turns; unsupported native paths remain fixture-only; no process/task completion inference.                                                               | 1, 3  |
+| Approval pending and usage-limit evidence                      | Absent   | No validated dedicated approval/quota capability; input request compatibility is not proof of either.                                                                       | 3     |
+| Metrics by source/model/session/project/time                   | Partial  | File provenance, timestamps, model and cumulative usage in P/C/D; compact durable interval evidence implemented; pre-upgrade gaps stay qualified.                           | 1     |
+| Safe persistence/migrations and recovery                       | Existing | D/C and store/observer tests cover replay, checkpoints, truncation/rotation and retention; Schema 2 adds compact evidence/backfill; installed upgrade awaits review/backup. | 1     |
 
 ### Terminal, Monitor and Notifications
 

@@ -8,8 +8,10 @@ an observability-first open-source platform with an independent Core, Electron a
 primary desktop client, shared React UI, browser access and future managed agents.
 No target module, process control or Cloud connection is implemented by Phase 0.
 The observer Core/Bridge lifecycle extraction and local Analytics aggregation
-foundation are implemented and integration-tested. Broader Phase 1 contracts,
-durable metric history and Desktop delivery remain incomplete. See the
+foundation are implemented and integration-tested. Schema 2 adds compact durable
+metric/model evidence; installed upgrade awaits owner integration and historical
+coverage remains qualified. Broader Phase 1 contracts and Desktop delivery remain
+incomplete. See the
 [six-phase roadmap](../../ROADMAP.md), [requirement coverage](product-requirements.md),
 [Analytics design](model-usage-analytics.md) and [ADR-026](decisions.md#adr-026--six-phase-desktop-delivery-and-mandatory-local-analytics).
 The current-runtime sections describe the integrated observer; target sections remain planned.
@@ -99,7 +101,8 @@ Small pure helpers:
 
 Owns SQLite through Node's built-in `node:sqlite` `DatabaseSync`.
 
-- Single versioned migration applied through `PRAGMA user_version`.
+- Two additive versioned migrations applied through `PRAGMA user_version`;
+  migration 2 preserves compact metric/model evidence independently of detail retention.
 - WAL journal mode, foreign keys, `busy_timeout`, `secure_delete`.
 - Prepared-statement cache, explicit transactions, idempotent event ingestion.
 - Read models for sessions, workspaces, notifications, and totals.

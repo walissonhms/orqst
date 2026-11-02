@@ -265,7 +265,7 @@ test('unreported metrics stay unavailable, measured zero stays observed, and con
   }
 });
 
-test('retention keeps v1 totals but does not reconstruct model attribution or invent provenance', () => {
+test('retention keeps durable attribution and v1 totals without reconstructing deleted events', () => {
   const store = new Store(':memory:', 1);
   try {
     store.ingest(snapshot('old-zero', 0, usage(0), 'a'));
@@ -277,14 +277,16 @@ test('retention keeps v1 totals but does not reconstruct model attribution or in
     store.retain(Date.parse('2026-11-05T00:00:00Z'));
     let report = store.modelAnalytics();
     assert.deepEqual(report.usage, store.totals());
-    assert.equal(report.models.find((row) => row.model === null)?.usage?.total, 30);
+    assert.equal(report.models.find((row) => row.model === null)?.usage?.total, 20);
+    assert.equal(report.models.find((row) => row.model === 'a')?.usage?.total, 10);
     assert.equal(report.models.find((row) => row.model === 'b')?.usage, null);
+    assert.deepEqual(report.coverage.gaps, []);
     assert.equal(store.modelAnalytics({ from: '2026-11-03T00:00:00Z' }).usage, null);
     store.retain(Date.parse('2026-11-06T00:00:00Z'));
     report = store.modelAnalytics();
-    assert.equal(report.usage, null);
+    assert.deepEqual(report.usage, store.totals());
     assert.equal(store.totals().total, 30);
-    assert.equal(report.coverage.gaps[0]?.reason, 'canonical_evidence_missing');
+    assert.deepEqual(report.coverage.gaps, []);
     assert.equal(report.coverage.sessionsWithCanonicalUsage, 1);
   } finally {
     store.close();
@@ -309,7 +311,7 @@ test('inconsistent components and invalid usage are explicit gaps, never negativ
   }
 });
 
-test('reopening and replay preserve Analytics and do not change schema version 1', () => {
+test('reopening and replay preserve Analytics on schema version 2', () => {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-analytics-synthetic-'));
   const file = join(directory, 'analytics.db');
   const events = [snapshot('zero', 0, usage(0), 'a'), snapshot('used', 1, usage(20), 'a')];
@@ -323,7 +325,7 @@ test('reopening and replay preserve Analytics and do not change schema version 1
     assert.deepEqual(store.modelAnalytics(), report);
     const readOnly = new DatabaseSync(file, { readOnly: true });
     try {
-      assert.equal(readOnly.prepare('PRAGMA user_version').get()?.user_version, 1);
+      assert.equal(readOnly.prepare('PRAGMA user_version').get()?.user_version, 2);
     } finally {
       readOnly.close();
     }
