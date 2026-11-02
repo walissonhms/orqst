@@ -7,6 +7,11 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Evidence-backed local model Analytics projection through `Store.modelAnalytics()`
+  and additive TypeScript/query contracts. It reconciles retained canonical snapshot
+  deltas, keeps ambiguous model usage unidentified and reports unavailable metrics
+  and coverage gaps. No HTTP endpoint, dashboard screen or schema migration is added.
+
 - Foundational Token Optimizer architecture (ADR-025), Disabled/Economy/Intelligent
   design and integration contracts for future Core, routing, adapters and analytics.
 - Standalone synthetic token-optimization benchmark with fixed-model provider

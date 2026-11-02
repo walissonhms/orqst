@@ -346,13 +346,19 @@ activity.
 }
 ```
 
-## Planned model Analytics compatibility
+## Local model Analytics contract
 
-The Analytics foundation is in progress, not an accepted new v1 API. Current
-`Usage` numeric defaults and nullable `SessionView.model` do not establish metric
-coverage, a measured zero, task success or historical model allocation. A later
-qualified projection must retain source/time/basis, unavailable reasons and
+`modelAnalyticsQuerySchema` and `ModelAnalyticsReport` are additive exports from
+`@orqst/protocol`, used by the local `Store.modelAnalytics()` library method. The report
+identifies itself as `orqst.model-analytics`, `contractVersion: 1`; it is not sent over
+the existing REST/WS protocol. See the [implemented foundation](../architecture/model-usage-analytics.md#implemented-local-foundation)
+for filters, interval semantics, provenance and coverage limitations. Source references
+can contain private paths and require an export allowlist before external reporting.
+
+Current `Usage` numeric defaults and nullable `SessionView.model` do not establish metric
+coverage, a measured zero, task success or historical model allocation. Qualified
+projections must retain source/time/basis, unavailable reasons and
 unidentified models without changing existing cumulative/cache semantics. No metric
 or lifecycle family may be silently inserted into the closed v1 stream.
-See [Analytics design](../architecture/model-usage-analytics.md); actual schemas and
-transport documentation must accompany integration, with v1 compatibility tests.
+Transport documentation must accompany any future endpoint integration, with v1
+compatibility tests. No existing v1 event or message is extended by this projection.

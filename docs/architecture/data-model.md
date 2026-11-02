@@ -302,6 +302,13 @@ See [planned contracts](../api/lifecycle-contracts.md) and ADRs 017, 020 and 023
 
 ## Planned Analytics accounting boundary
 
+The implemented `Store.modelAnalytics()` foundation is a read-only projection of
+retained `events`, `sessions`, `agents` and `token_usage`; schema version remains 1.
+It adds no tables or indexes and never persists derived model attribution. See the
+[foundation semantics](model-usage-analytics.md#implemented-local-foundation) for
+interval boundaries, canonical reconciliation and unavailable/coverage behavior.
+Durable historical measurement storage remains future work.
+
 The existing session summary keeps one cumulative total and the latest observed
 model. That is insufficient for period/model ranking after model changes or detail
 retention. Do not group all session usage by its latest model or sum cumulative

@@ -2,17 +2,54 @@
 
 ## Status and purpose
 
-**Mandatory for the functional Desktop MVP.** The measurement/aggregation foundation
-is in progress alongside Core/Bridge separation. Ranking, filters, charts, comparator
-and export are not accepted as complete until integrated and validated against real
-available data. This document specifies planned semantics, not a wire API or SQL
-schema. [Coverage](product-requirements.md) and the [roadmap](../../ROADMAP.md)
-distinguish the existing observer from required delivery.
+**Mandatory for the functional Desktop MVP.** A read-only local aggregation foundation
+is implemented; Desktop integration remains in progress. Ranking screens, charts,
+comparator and export are not accepted as complete until integrated and validated
+against real available data. The implementation boundary below describes the current
+library; subsequent sections specify the broader product requirements.
+[Coverage](product-requirements.md) and the [roadmap](../../ROADMAP.md) distinguish
+the existing observer from required delivery.
 
 Analytics means local analysis of source-backed usage. It does not introduce tracking,
 remote telemetry, accounts, billing, automatic uploads or Cloud content storage.
 No prompt, secret, conversation, terminal output, source code or private path belongs
 in an exported usage report. Redaction remains best-effort, not a privacy guarantee.
+
+## Implemented local foundation
+
+`Store.modelAnalytics(query)` returns the separate `orqst.model-analytics` version 1
+projection. It adds no REST route, WebSocket message, table, index or migration.
+Query filters support explicit offset-aware `from`/`to` instants, current workspace
+assignment, agent, adapter and model; `model: null` selects unidentified attribution.
+Calendar presets and provider filtering are not implemented. Adapter is the CLI,
+while the underlying provider remains unavailable.
+
+The projection replays the existing cumulative admission rule and reconciles its
+latest retained snapshot with the canonical session total. Duplicate events, mirrors,
+response increments and turn snapshots do not add consumption. Only intervals whose
+end is within the half-open window and whose start is at or after `from` contribute.
+Crossing intervals are omitted with a coverage gap; no interpolation occurs. Without
+a lower bound, the first snapshot contributes its lifetime usage to the unidentified
+bucket because its time distribution and earlier models are unknown.
+
+Model attribution requires consistent nonempty model evidence at both snapshot
+boundaries with no conflicting intervening declaration. Missing or changed models
+retain an unidentified contribution. Evidence includes event/source references,
+intervals and observed session origin. It is intended for local inspection and may
+include source file paths; it is **not** a privacy-safe export payload.
+
+Rows rank covered reported totals and retain `usage: null` when no measurement can
+be attributed. Session counts describe observed sessions and are not additive across
+model rows. Coverage is always qualified as unverified, with explicit gaps for missing
+canonical evidence, invalid/non-monotonic usage, identity conflicts and period boundaries.
+Retention can remove the evidence needed for allocation even when v1 totals survive.
+Executions, active duration, outcomes, equivalence, reasoning, prices and costs remain
+unavailable. The query reads retained evidence synchronously; benchmark large archives
+and design bounded queries before exposing it through interactive transport.
+
+Fourteen synthetic Analytics tests cover contracts, cumulative accounting, model
+changes, windows, scopes, unavailable versus zero, retention, replay, schema preservation
+and source identity. They do not establish real-provider ranking or full Desktop acceptance.
 
 ## Measurement identity and provenance
 
