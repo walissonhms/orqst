@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import type {
   AgentStatus,
+  ArtifactExtractionRequest,
   Preferences,
   SessionView,
   Snapshot,
@@ -37,6 +38,7 @@ import type {
   Usage,
 } from '@orqst/protocol';
 import { api } from './api';
+import { ArtifactPanel } from './ArtifactPanel';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 import { sessionFromHash } from './session-link';
@@ -116,7 +118,15 @@ function TokenSummary({ usage }: { usage: Usage }) {
     </>
   );
 }
-function Timeline({ events }: { events: StoredEvent[] }) {
+function Timeline({
+  events,
+  onExtract,
+  extractionOpen = false,
+}: {
+  events: StoredEvent[];
+  onExtract?: (event: StoredEvent) => void;
+  extractionOpen?: boolean;
+}) {
   const { t } = useTranslation();
   const f = useFormatting();
   const visible = [...events].sort(
@@ -160,6 +170,22 @@ function Timeline({ events }: { events: StoredEvent[] }) {
                 <pre>{event.payload.text ?? event.payload.result}</pre>
               </details>
             )}
+            {onExtract &&
+              event.type === 'agent.message' &&
+              ((event.payload.role === 'assistant' &&
+                event.source.recordType === 'response_item:message') ||
+                (event.payload.role === 'agent' &&
+                  event.source.recordType === 'response_item:agent_message')) &&
+              Boolean(event.payload.text?.trim()) && (
+                <button
+                  className="button"
+                  disabled={extractionOpen}
+                  id={`artifact-extract-${event.sequence}`}
+                  onClick={() => onExtract(event)}
+                >
+                  {t('artifacts.extract')}
+                </button>
+              )}
             {event.payload.usage && (
               <div className="event-usage">
                 <Zap size={12} />
@@ -207,6 +233,8 @@ function SessionDetail({
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<'activity' | 'results' | 'usage'>('activity');
+  const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
+  const sessionHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     let active = true;
     setEvents([]);
@@ -272,7 +300,7 @@ function SessionDetail({
       <div className="panel-heading">
         <div>
           <span className="eyebrow">{t('details')}</span>
-          <h2>
+          <h2 tabIndex={-1} ref={sessionHeading}>
             <Terminal size={19} />
             {session.agentName}
           </h2>
@@ -333,7 +361,23 @@ function SessionDetail({
       {tab === 'activity' && (
         <>
           <p className="fine-print detail-intro">{t('originalText')}</p>
-          <Timeline events={events} />
+          <Timeline
+            events={events}
+            extractionOpen={Boolean(artifactRequest)}
+            onExtract={(event) => {
+              setArtifactRequest({
+                contractVersion: 1,
+                sequence: event.sequence,
+                eventId: event.id,
+                sessionId: event.sessionId,
+                machineId: event.machineId,
+                adapter: event.adapter,
+                workspaceId: event.workspaceId,
+                agentId: event.agentId,
+                sourceHash: event.source.hash,
+              });
+            }}
+          />
           {hasOlder && (
             <button
               className="button history-button"
@@ -345,6 +389,20 @@ function SessionDetail({
             </button>
           )}
         </>
+      )}
+      {artifactRequest && (
+        <ArtifactPanel
+          request={artifactRequest}
+          onClose={() => {
+            setArtifactRequest(undefined);
+            requestAnimationFrame(() => {
+              const trigger = document.getElementById(
+                `artifact-extract-${artifactRequest.sequence}`,
+              );
+              (trigger ?? sessionHeading.current)?.focus();
+            });
+          }}
+        />
       )}
       {tab === 'results' && (
         <div className="result-content">

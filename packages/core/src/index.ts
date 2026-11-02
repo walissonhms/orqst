@@ -3,6 +3,10 @@ import { Store } from '@orqst/database';
 import { CodexObserver, type CodexObserverOptions } from '@orqst/adapter-codex';
 import {
   eventSchema,
+  artifactExtractionRequestSchema,
+  artifactExtractionResultSchema,
+  artifactTextLimit,
+  type ArtifactExtractionResult,
   lifecycleRequestSchema,
   type ArtifactReferenceResult,
   type ObservedSessionEvidenceResult,
@@ -89,6 +93,46 @@ export class ObserverCore {
     return event
       ? projectArtifactReference(event)
       : { availability: 'unavailable', reason: 'event_not_retained' };
+  }
+
+  /** Read one explicitly selected retained message. No source file or durable cache is opened. */
+  extractArtifact(request: unknown): ArtifactExtractionResult {
+    const parsed = artifactExtractionRequestSchema.safeParse(request);
+    if (!parsed.success) throw new Error('Invalid artifact request');
+    const { sequence, contractVersion, eventId, sessionId } = parsed.data;
+    const event = this.lifecycleEvent(sequence, contractVersion);
+    if (!event) return { availability: 'unavailable', reason: 'event_not_retained' };
+    if (
+      event.id !== eventId ||
+      event.sessionId !== sessionId ||
+      event.machineId !== parsed.data.machineId ||
+      event.adapter !== parsed.data.adapter ||
+      event.workspaceId !== parsed.data.workspaceId ||
+      event.agentId !== parsed.data.agentId ||
+      event.source.hash !== parsed.data.sourceHash
+    )
+      return { availability: 'unavailable', reason: 'identity_mismatch' };
+    const reference = projectArtifactReference(event);
+    if (reference.availability === 'unavailable') return reference;
+    if (Buffer.byteLength(event.payload.text!, 'utf8') > artifactTextLimit)
+      return { availability: 'unavailable', reason: 'content_limit' };
+    const result = artifactExtractionResultSchema.safeParse({
+      availability: 'available',
+      value: {
+        contract: 'orqst.artifacts',
+        contractVersion: 1,
+        selection: 'manual_message',
+        eventSchemaVersion: event.schemaVersion,
+        reference: reference.value,
+        original: {
+          text: event.payload.text,
+          representation: 'retained_redacted_text',
+          completeness: 'not_verified',
+        },
+      },
+    });
+    if (!result.success) throw new Error('Invalid retained artifact evidence');
+    return result.data;
   }
 
   private lifecycleEvent(sequence: number, contractVersion: unknown): StoredEvent | undefined {

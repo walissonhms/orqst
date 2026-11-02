@@ -249,3 +249,35 @@ another real Electron process against the same canonical temporary profile, prov
 single-instance restore of a minimized window and reopen after window close. It
 never addresses the owner profile or installed Bridge. Ingestion remains unchanged;
 `pnpm validate:local` was not rerun. Visual OS delivery remains outside these results.
+
+## Manual Artifacts first slice
+
+`tests/artifacts.test.ts` covers strict extraction identity/version/source matching,
+read-only Core behavior, the unchanged `reference_only` projection, unsupported messages,
+UTF-8 byte limits, retention gaps, authenticated HTTP protections and inert block parsing.
+`tests/artifacts-qa.test.ts` adds independent contract, multibyte, retention, renderer
+boundary and unwired-transport cases, all using synthetic disposable data.
+
+`tests/browser/artifacts.spec.ts` exercises the actual session-to-panel flow, immutable
+source versus draft, limited hostile-content preview, real browser clipboard writes,
+denied clipboard reporting, oversized draft rejection, explicit accessible textarea label,
+focus restoration after changing tabs, pt-BR and narrow layout. Missing/malformed responses
+are tested separately from the unmocked successful extraction path. To avoid concurrent
+Playwright output collisions, use a dedicated output directory for each validation run:
+
+```bash
+ORQST_BROWSER_PORT=49578 pnpm test:browser --output=/tmp/orqst-artifacts-browser
+```
+
+Choose a free nonproduction port for your machine; the fixture refuses production port
+4317 and never reuses an existing listener. The extended `pnpm test:desktop` uses only its
+own ephemeral Bridge/data/profile and exercises real Electron source/preview/edit and
+clipboard result reporting under unchanged denied permissions. On the validation machine,
+the Electron write was denied and the UI reported failure; successful native clipboard
+copy is not claimed. Browser permission-granted clipboard success is tested separately.
+No privileged clipboard fallback is shipped. Smoke captures remain ignored generated output.
+
+This slice changes no ingestion reader or adapter; `pnpm validate:local` was not rerun.
+No installed service/database/user profile is part of these tests. Save destination grants,
+overwrite/cancel and external editor checks belong to the pending file-contract slice,
+not this panel delivery. See [Artifacts behavior and limits](../api/artifacts.md).

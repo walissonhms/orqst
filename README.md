@@ -21,25 +21,25 @@ prompts or write into observed sessions.
 
 ## What works today
 
-| Area                                                                         | State                                            |
-| ---------------------------------------------------------------------------- | ------------------------------------------------ |
-| Codex CLI session discovery (read-only)                                      | Implemented                                      |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                      |
-| Normalized event protocol with runtime validation                            | Implemented                                      |
-| Local SQLite persistence, migrations, retention                              | Implemented                                      |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                      |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                      |
-| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer        |
-| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending      |
-| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                      |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions      |
-| Claude Code adapter                                                          | Contract only, not implemented                   |
-| OpenCode adapter                                                             | Contract only, not implemented                   |
-| Local observed-session evidence / artifact references                        | Implemented library only; no new API or UI       |
-| Managed execution and structured delegation                                  | Planned, not implemented                         |
-| ORQST Cloud, accounts, billing                                               | Not implemented                                  |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                         |
+| Area                                                                         | State                                             |
+| ---------------------------------------------------------------------------- | ------------------------------------------------- |
+| Codex CLI session discovery (read-only)                                      | Implemented                                       |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                       |
+| Normalized event protocol with runtime validation                            | Implemented                                       |
+| Local SQLite persistence, migrations, retention                              | Implemented                                       |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                       |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                       |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer         |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending       |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending  |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                       |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions       |
+| Claude Code adapter                                                          | Contract only, not implemented                    |
+| OpenCode adapter                                                             | Contract only, not implemented                    |
+| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added |
+| Managed execution and structured delegation                                  | Planned, not implemented                          |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                   |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                          |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
@@ -52,7 +52,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   model Analytics library with schema-2 compact durable metric/model evidence.
   Historical coverage remains qualified. Versioned local observed-session evidence
   and artifact message references now have strict schemas and Core consumers; broader
-  lifecycle transport and artifact extraction remain planned. This does not complete Phase 1.
+  lifecycle transport remains planned. The first manual Artifacts slice adds bounded
+  retained-message extraction, source/preview/draft editing and explicit copying; file
+  saving and external editor integration remain pending. This does not complete Phase 1.
 - **Browser Analytics increment delivered:** open **Most used models** in the sidebar
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
@@ -99,7 +101,8 @@ no optimizer setting or automatic token reduction exists in the current runtime.
 The Core also exposes version-1 local queries for one retained observation or an
 explicit artifact message reference. They validate identity/source metadata at runtime,
 keep task/process and missing timestamps unavailable, and never return captured bodies
-or open source paths. They add no REST/WS route, file writer or Desktop capability.
+or open source paths. Those metadata queries remain local-only. A separate bounded manual Artifacts query
+and session panel are now available, without a file writer or privileged Desktop capability.
 See [lifecycle contracts](docs/api/lifecycle-contracts.md).
 
 There is one long-running process. Analytics queries use one disposable Node worker
@@ -116,6 +119,18 @@ bundle served by the bridge in production and by Vite in development.
   a public interface.
 - **No cloud dependency:** local operation requires no account, API key,
   telemetry, or upload.
+
+## Manual Artifacts
+
+Open a session's Activity and choose **Extract artifact manually** on a retained
+assistant/agent response. Its panel keeps recorded provenance and immutable retained
+source separate from a temporary editable draft, with a limited inert preview and
+explicit raw/readable clipboard actions. No automatic recognition or complete-source
+claim is made; expired evidence stays unavailable. Extraction/drafts are capped at
+32 KiB UTF-8. Copy failures are reported; Desktop permissions may deny copying.
+Saving `.md` with a native destination grant, overwrite confirmation and opening an
+external editor are pending the next file-contract review. No files or sessions are
+written. See [contract, behavior and limits](docs/api/artifacts.md).
 
 ## Requirements
 

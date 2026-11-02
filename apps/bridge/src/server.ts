@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import {
   preferencesSchema,
+  artifactExtractionRequestSchema,
   modelAnalyticsQuerySchema,
   type Snapshot,
   type StoredEvent,
@@ -14,6 +15,7 @@ import {
 import { codexDescriptor } from '@orqst/adapter-codex';
 import { claudeDescriptor } from '@orqst/adapter-claude';
 import { opencodeDescriptor } from '@orqst/adapter-opencode';
+import type { ObserverCore } from '@orqst/core';
 import type { Store } from '@orqst/database';
 import { AnalyticsQueries, AnalyticsQueryError } from './analytics.js';
 import type { Config } from './config.js';
@@ -39,7 +41,7 @@ const modelAnalyticsHttpQuerySchema = z
 export function createLocalServer(
   store: Store,
   config: Config,
-  observer: Pick<Snapshot, 'diagnostics'>,
+  observer: Pick<Snapshot, 'diagnostics'> & Partial<Pick<ObserverCore, 'extractArtifact'>>,
 ) {
   const analytics = new AnalyticsQueries(store.databasePath);
   const secret = randomBytes(32).toString('hex');
@@ -161,6 +163,19 @@ export function createLocalServer(
           } finally {
             response.off('close', cancel);
           }
+          return;
+        }
+        if (url.pathname === '/api/artifacts/extract' && request.method === 'POST') {
+          const parsed = artifactExtractionRequestSchema.safeParse(await body(request));
+          if (!parsed.success || url.search) {
+            reply(response, 400, { error: 'invalid_artifact_request' });
+            return;
+          }
+          if (!observer.extractArtifact) {
+            reply(response, 503, { error: 'artifacts_unavailable' });
+            return;
+          }
+          reply(response, 200, observer.extractArtifact(parsed.data));
           return;
         }
         if (url.pathname === '/api/events' && request.method === 'GET') {

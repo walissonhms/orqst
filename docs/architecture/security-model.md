@@ -371,3 +371,19 @@ app identity, permission and Focus limitations remain explicit. OS delivery and 
 require separate acceptance. The existing trusted-local-listener limitation still applies;
 source shape validation does not re-open or authenticate a filesystem source. See
 [Desktop details](../development/desktop.md).
+
+## Manual Artifacts boundary review — 2026-11-02
+
+The separate strict `orqst.artifacts` v1 contract adds a read-only authenticated POST
+for one exact retained message. Every requested identity and source hash must match
+the same validated event that supplies its reference and body. JSON/request limits,
+Host/Origin/cookie/fetch-metadata checks, no-store and sanitized errors are preserved.
+The 32768-byte UTF-8 content ceiling rejects oversized bodies without truncation.
+No metrics/summary reconstruction, filesystem dereference, new writer or migration exists.
+
+The panel renders untrusted strings only through React text nodes and fixed limited
+block elements: no active HTML, anchors, media, remote loads or privileged renderer.
+Drafts remain in memory and cannot mutate retained originals or sessions. Clipboard
+writes require explicit gestures and failures are visible. No Desktop permission
+exception, preload or IPC is added. File save grants/overwrite/editor authority remain
+pending a separate review. See [contract and limits](../api/artifacts.md).

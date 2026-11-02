@@ -38,6 +38,14 @@ A request with an untrusted `Host`, a mismatched `Origin`, or a cross-site
 
 ## Read endpoints
 
+### `POST /api/artifacts/extract`
+
+Explicit read-only extraction of one exact retained assistant/agent message, using
+strict `orqst.artifacts` contract version 1 and complete event identity/source-version
+matching. Same cookie/Host/Origin/JSON-body protections, 32 KiB UTF-8 text ceiling,
+no-store and sanitized errors. No source-file access or persistence. See the
+[request, response, availability and security review](artifacts.md).
+
 ### `GET /api/analytics/models`
 
 Returns `ModelAnalyticsSummary`, an aggregate projection identified by

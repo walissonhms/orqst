@@ -25,6 +25,16 @@ await writeFile(
       type: 'message',
       role: 'user',
       content: [{ type: 'input_text', text: 'Disposable synthetic desktop fixture' }],
+    }) +
+    record('response_item', {
+      type: 'message',
+      role: 'assistant',
+      content: [
+        {
+          type: 'output_text',
+          text: '# Synthetic Desktop Artifact\n\n<script>window.orqstInjected=true</script>\n![remote](https://example.invalid/artifact.png)',
+        },
+      ],
     }),
 );
 const config = {
@@ -110,6 +120,48 @@ try {
     })),
     { require: 'undefined', process: 'undefined' },
   );
+  // Exercise the real shared Artifacts UI without adding renderer permissions or native IPC.
+  await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
+  await page
+    .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
+    .click();
+  const artifact = page.locator('.artifact-panel');
+  await expect(artifact.locator('pre.artifact-content')).toContainText(
+    'Synthetic Desktop Artifact',
+  );
+  await artifact
+    .getByRole('button', { name: /Copy original Markdown|Copiar Markdown original/ })
+    .click();
+  await expect(artifact.locator('[role="alert"], [role="status"]')).toContainText(
+    /Copied to clipboard|Clipboard copy failed|Copiado para|A cópia falhou/,
+  );
+  const artifactClipboard = await artifact.locator('[role="alert"], [role="status"]').innerText();
+  await artifact.getByRole('button', { name: /Edit draft|Editar rascunho/, exact: true }).click();
+  await artifact
+    .getByRole('textbox')
+    .fill(
+      '# Synthetic edited Desktop draft\n- safe text\n<img src="https://example.invalid/x" onerror="window.orqstInjected=true">',
+    );
+  await artifact
+    .getByRole('button', { name: /Draft preview|Prévia do rascunho/, exact: true })
+    .click();
+  await expect(
+    artifact.getByRole('heading', { name: 'Synthetic edited Desktop draft' }),
+  ).toBeVisible();
+  assert.equal(await artifact.locator('a,img,iframe,script,object,embed').count(), 0);
+  assert.equal(await page.evaluate(() => Reflect.get(window, 'orqstInjected')), undefined);
+  await artifact
+    .getByRole('button', { name: /Original source|Fonte original/, exact: true })
+    .click();
+  await expect(artifact.locator('pre.artifact-content')).toContainText(
+    'Synthetic Desktop Artifact',
+  );
+  await expect(artifact.locator('pre.artifact-content')).not.toContainText('edited Desktop draft');
+  await artifact
+    .getByRole('button', {
+      name: /Close artifact and discard draft|Fechar artefato e descartar rascunho/,
+    })
+    .click();
   const versions = await desktop.evaluate(() => ({
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -294,6 +346,7 @@ try {
         platform: process.platform,
         versions,
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
+        artifactClipboard,
       },
       null,
       2,

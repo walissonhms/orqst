@@ -1643,3 +1643,87 @@ th:nth-last-child(2) {
     flex-basis: 100%;
   }
 }
+
+.artifact-panel {
+  margin: 20px;
+  padding: 16px;
+  border: 1px solid #3e655a;
+  border-radius: 8px;
+  min-width: 0;
+}
+.artifact-panel .panel-heading {
+  padding: 0 0 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.artifact-panel > p {
+  margin: 12px 0;
+}
+.artifact-provenance {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr);
+  gap: 8px 12px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.artifact-provenance dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.artifact-modes,
+.artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+.artifact-modes [aria-pressed='true'] {
+  border-color: #77c7a5;
+  color: #9cd9c2;
+}
+.artifact-content,
+.artifact-editor textarea {
+  display: block;
+  width: 100%;
+  max-height: 500px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.7;
+  background: #101b23;
+  padding: 16px;
+  border: 1px solid #2b3f4d;
+  border-radius: 5px;
+  color: #b0c5d1;
+}
+.artifact-content pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.artifact-content ul {
+  padding-left: 20px;
+}
+.artifact-editor {
+  display: block;
+  font-size: 12px;
+}
+.artifact-editor textarea {
+  margin-top: 8px;
+  min-height: 250px;
+  resize: vertical;
+}
+.artifact-editor textarea:focus-visible {
+  outline: 2px solid #77c7a5;
+  outline-offset: 2px;
+}
+@media (max-width: 600px) {
+  .artifact-panel {
+    margin: 12px;
+    padding: 12px;
+  }
+  .artifact-provenance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

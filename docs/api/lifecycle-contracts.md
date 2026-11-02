@@ -8,7 +8,9 @@ not a transport or lifecycle event stream. All objects use
 `contract: "orqst.lifecycle"`, `contractVersion: 1`. Unknown fields are rejected,
 including content fields. This does not change `schemaVersion: 1`, v1 REST/WS,
 statuses, event IDs, adapter capabilities or SQLite schema 2. Migrations 1/2 are
-unchanged. There is no lifecycle endpoint, subscription, command or UI.
+unchanged. There is no lifecycle endpoint, subscription or command. A later separate
+[manual Artifacts slice](artifacts.md) consumes these unchanged references and adds
+its own bounded extraction contract and session UI.
 
 ### Queries and version selection
 

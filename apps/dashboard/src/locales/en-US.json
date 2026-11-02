@@ -223,5 +223,43 @@
       "failed": "Observed execution failed",
       "intervention": "Observed session requests your input"
     }
+  },
+  "artifacts": {
+    "extract": "Extract artifact manually",
+    "title": "Manual artifact",
+    "close": "Close artifact and discard draft",
+    "manualNote": "You selected one retained assistant/agent message. No automatic Markdown recognition or document completeness is claimed.",
+    "loading": "Checking retained message…",
+    "loadFailed": "Unable to load this artifact. No source content was opened.",
+    "project": "Recorded project ID",
+    "session": "Native session ID",
+    "agent": "Observed agent ID",
+    "machine": "Machine ID",
+    "provider": "Adapter / role",
+    "date": "Event date (UTC)",
+    "event": "Event ID / sequence",
+    "version": "Artifact contract / event version",
+    "provenanceNote": "Project and agent IDs are recorded evidence, not current manual associations or independent worker identity. Source was not rechecked; observation time and independent agent identity were not recorded. The source hash identifies the source record, not a saved document revision.",
+    "retainedNote": "Original here means retained redacted text, which may be incomplete or previously truncated. It is immutable in this panel. Source completeness is not verified. Maximum extraction: 32 KiB UTF-8; larger messages are unavailable.",
+    "views": "Artifact views",
+    "source": "Original source",
+    "preview": "Draft preview",
+    "edit": "Edit draft",
+    "draft": "Separate draft (memory only)",
+    "draftNote": "Edits affect only this in-memory draft. Closing the artifact, changing session or reloading discards it. Preview supports headings, bullet lists and fenced code; other syntax, HTML, links and images stay literal and inactive.",
+    "limit": "Draft exceeds 32 KiB UTF-8. This edit was rejected; the previous draft remains.",
+    "copyOriginal": "Copy original Markdown",
+    "copyMarkdown": "Copy draft Markdown",
+    "copyReadable": "Copy readable draft text",
+    "copied": "Copied to clipboard.",
+    "copyFailed": "Clipboard copy failed or is unavailable. Nothing was confirmed copied.",
+    "pending": "Next slice, pending file-contract review: save .md with a native destination grant, explicit overwrite confirmation, and external editor. These actions are not available yet.",
+    "unavailable": {
+      "event_not_retained": "This event is no longer retained. Content will not be reconstructed from summaries or metrics.",
+      "identity_mismatch": "The selected event identity or source version does not match. Select a retained message again.",
+      "unsupported_adapter": "Artifacts are not available for this adapter.",
+      "not_artifact_message": "This event is not a supported retained assistant/agent message.",
+      "content_limit": "Retained message exceeds 32 KiB UTF-8. Extraction is unavailable; no truncated artifact was created."
+    }
   }
 }

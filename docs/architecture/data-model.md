@@ -380,3 +380,13 @@ v1 IDs and cumulative metric accounting are unchanged. Missing/expired events pr
 used to recreate message references. References do not extend retention or guarantee
 that a native source file still exists. No captured body enters the new projections.
 See [local lifecycle contracts](../api/lifecycle-contracts.md).
+
+## Manual Artifacts memory-only slice
+
+Manual extraction adds no table, migration, writer or retained content cache. It reads
+one existing exact event and preserves its reference/body together. An expired event
+stays unavailable even when session summaries or durable metric evidence survive.
+The dashboard's separate draft exists only in memory, with no draft history or saved
+document revision. “Original” denotes retained redacted text of unverified completeness;
+the source hash identifies the original record, not a saved Markdown file. See
+[Artifacts](../api/artifacts.md).

@@ -190,6 +190,15 @@ bodies, detecting Markdown, dereferencing paths or writing files. See
 [exact contract and limits](../api/lifecycle-contracts.md) and
 [ADR-029](decisions.md#adr-029--local-observed-evidence-and-artifact-reference-contracts).
 
+### Manual Artifacts
+
+A separate [strict extraction contract](../api/artifacts.md) reads one exact retained
+message through Core and the existing Store. The authenticated Bridge exposes only this
+bounded query; body and reference derive from the same event. The dashboard keeps an
+immutable retained original and an independent in-memory draft, with inert limited preview
+and explicit clipboard gestures. There is no new writer, cache, source reader or native
+file authority. Saving/overwrite grants and external editor integration remain pending.
+
 ### `apps/dashboard`
 
 A React single-page application built with Vite, styled with Tailwind CSS v4,

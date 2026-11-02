@@ -220,3 +220,13 @@ app identity, permission and Focus limitations remain explicit. OS delivery and 
 require separate acceptance. The existing trusted-local-listener limitation still applies;
 source shape validation does not re-open or authenticate a filesystem source. See
 [Desktop details](docs/development/desktop.md).
+
+## Manual Artifacts
+
+Manual extraction reads only one authenticated, identity/source-matched retained
+assistant/agent message, capped at 32 KiB UTF-8. Missing evidence is not reconstructed.
+The original retained representation remains immutable; draft edits are memory-only.
+The limited preview uses inert React text, without active HTML, links, images or remote
+loads. Clipboard writes require explicit gestures and report failures. No source-file,
+filesystem/shell, save/overwrite or external-editor authority is introduced. See the
+[boundary review and contract](docs/api/artifacts.md#security-review-note).

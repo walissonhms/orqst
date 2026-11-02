@@ -223,5 +223,43 @@
       "failed": "Falha observada na execução",
       "intervention": "Sessão observada solicita sua resposta"
     }
+  },
+  "artifacts": {
+    "extract": "Extrair artefato manualmente",
+    "title": "Artefato manual",
+    "close": "Fechar artefato e descartar rascunho",
+    "manualNote": "Você selecionou uma mensagem retida de assistente/agente. Não há reconhecimento automático de Markdown nem garantia de documento completo.",
+    "loading": "Verificando mensagem retida…",
+    "loadFailed": "Não foi possível carregar este artefato. Nenhum conteúdo da fonte foi aberto.",
+    "project": "ID do projeto registrado",
+    "session": "ID da sessão nativa",
+    "agent": "ID do agente observado",
+    "machine": "ID da máquina",
+    "provider": "Adaptador / papel",
+    "date": "Data do evento (UTC)",
+    "event": "ID do evento / sequência",
+    "version": "Contrato de artefato / versão do evento",
+    "provenanceNote": "IDs de projeto e agente são evidência registrada, não associações manuais atuais nem identidade de worker independente. A fonte não foi reverificada; horário de observação e identidade independente do agente não foram registrados. O hash identifica o registro da fonte, não uma revisão salva do documento.",
+    "retainedNote": "Original aqui significa texto retido e redigido, que pode estar incompleto ou ter sido truncado anteriormente. Ele é imutável neste painel. A completude da fonte não foi verificada. Extração máxima: 32 KiB UTF-8; mensagens maiores ficam indisponíveis.",
+    "views": "Visualizações do artefato",
+    "source": "Fonte original",
+    "preview": "Prévia do rascunho",
+    "edit": "Editar rascunho",
+    "draft": "Rascunho separado (somente memória)",
+    "draftNote": "Edições afetam apenas este rascunho em memória. Fechar o artefato, trocar de sessão ou recarregar o descarta. A prévia suporta títulos, listas simples e blocos de código; demais sintaxes, HTML, links e imagens permanecem literais e inativos.",
+    "limit": "O rascunho excede 32 KiB UTF-8. Esta edição foi rejeitada; o rascunho anterior permanece.",
+    "copyOriginal": "Copiar Markdown original",
+    "copyMarkdown": "Copiar Markdown do rascunho",
+    "copyReadable": "Copiar texto legível do rascunho",
+    "copied": "Copiado para a área de transferência.",
+    "copyFailed": "A cópia falhou ou está indisponível. Nenhuma cópia foi confirmada.",
+    "pending": "Próxima fatia, pendente de revisão do contrato de arquivo: salvar .md com grant nativo de destino, confirmação explícita de sobrescrita e editor externo. Essas ações ainda não estão disponíveis.",
+    "unavailable": {
+      "event_not_retained": "Este evento não está mais retido. O conteúdo não será reconstruído a partir de resumos ou métricas.",
+      "identity_mismatch": "A identidade ou versão da fonte do evento selecionado não corresponde. Selecione novamente uma mensagem retida.",
+      "unsupported_adapter": "Artefatos não estão disponíveis para este adaptador.",
+      "not_artifact_message": "Este evento não é uma mensagem retida de assistente/agente suportada.",
+      "content_limit": "A mensagem retida excede 32 KiB UTF-8. A extração está indisponível; nenhum artefato truncado foi criado."
+    }
   }
 }
