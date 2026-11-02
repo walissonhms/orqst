@@ -3,6 +3,7 @@ import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createBridge } from '../../apps/bridge/src/app.js';
+import { browserPort } from '../helpers/browser-port.js';
 const dir = await mkdtemp(join(tmpdir(), 'orqst-browser-'));
 const root = join(dir, 'sessions');
 await mkdir(root);
@@ -76,7 +77,7 @@ await writeFile(
   ].join(''),
 );
 const app = createBridge({
-  port: 4318,
+  port: browserPort,
   dataDir: dir,
   sessionsDir: root,
   dashboardDir: resolve('apps/dashboard/dist'),
