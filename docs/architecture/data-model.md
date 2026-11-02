@@ -370,3 +370,13 @@ Subsequent detail retention preserves the evidence already captured in schema 2,
 including model changes and identity conflicts. Cache subsets, mirror priority,
 unknown models, unavailable metrics and all v1 transport/accounting shapes remain.
 Coverage remains unverified, never upgraded to complete by migration.
+
+## Local lifecycle/reference projections
+
+The Phase 1 Core queries project one retained `events.envelope` by exact sequence;
+there is no lifecycle/artifact table, migration or secondary writer. Migrations 1/2,
+v1 IDs and cumulative metric accounting are unchanged. Missing/expired events produce
+`event_not_retained`; session summaries and durable `analytics_evidence` are never
+used to recreate message references. References do not extend retention or guarantee
+that a native source file still exists. No captured body enters the new projections.
+See [local lifecycle contracts](../api/lifecycle-contracts.md).

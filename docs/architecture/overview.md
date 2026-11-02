@@ -9,8 +9,8 @@ primary desktop client, shared React UI, browser access and future managed agent
 No target module, process control or Cloud connection is implemented by Phase 0.
 The observer Core/Bridge lifecycle extraction and local Analytics aggregation
 foundation are implemented and integration-tested. Schema 2 adds compact durable
-metric/model evidence; installed upgrade awaits owner integration and historical
-coverage remains qualified. Broader Phase 1 contracts and Desktop delivery remain
+metric/model evidence; historical coverage remains qualified. The local Phase 1
+observation/reference contracts below are implemented. Broader contracts and Desktop delivery remain
 incomplete. See the
 [six-phase roadmap](../../ROADMAP.md), [requirement coverage](product-requirements.md),
 [Analytics design](model-usage-analytics.md) and [ADR-026](decisions.md#adr-026--six-phase-desktop-delivery-and-mandatory-local-analytics).
@@ -81,7 +81,9 @@ The contract shared by every other package. It contains:
 - adapter capability and descriptor interfaces;
 - read-model types used by the API and dashboard (`SessionView`,
   `WorkspaceView`, `NotificationView`, `Snapshot`);
-- WebSocket stream message types.
+- WebSocket stream message types;
+- strict local versioned observed-session evidence and artifact-reference schemas,
+  consumed by Core queries independently of the v1 stream.
 
 It has no filesystem, database, HTTP, or React dependency. Runtime validation
 happens at ingestion and at API boundaries, not only at compile time.
@@ -172,6 +174,21 @@ Integration on macOS passed 57 automated cases, 3 Chromium cases and bounded bui
 Bridge/browser validation with disposable real-source copies. This is not full-archive,
 reboot or continuous-soak acceptance. The read-only Analytics library is described
 in [its implementation boundary](model-usage-analytics.md#implemented-local-foundation).
+
+### Local observed-session evidence and artifact references
+
+`ObserverCore.observedSessionEvidence(sequence, contractVersion = 1)` and
+`artifactReference(sequence, contractVersion = 1)` consume the additive protocol
+schemas. They read one exact retained v1 event through the existing Store, validate
+version/identity/source metadata, and return a strict metadata projection or explicit
+absence. A sequence gap never selects a later event. Nothing is persisted or emitted.
+
+Session discovery is historical, a turn state requires a closed Codex source mapping,
+and process/task state and independent worker identity remain unavailable. Query order
+has no lifecycle effect. References identify assistant/agent messages without copying
+bodies, detecting Markdown, dereferencing paths or writing files. See
+[exact contract and limits](../api/lifecycle-contracts.md) and
+[ADR-029](decisions.md#adr-029--local-observed-evidence-and-artifact-reference-contracts).
 
 ### `apps/dashboard`
 

@@ -44,7 +44,7 @@ a product capability. All required acceptance checks remain in the roadmap.
 | Requirement                                                    | Coverage | Evidence and remaining work                                                                                                                                                 | Phase |
 | -------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
 | Independent Core/Bridge responsibilities and provider adapters | Existing | ObserverCore and createBridge own lifecycle/resources; Core and Bridge lifecycle tests pass.                                                                                | 1     |
-| Versioned normalized event contracts                           | Existing | P validates v1 at runtime; future lifecycle/control families still design only.                                                                                             | 1     |
+| Versioned normalized event contracts                           | Existing | P validates v1 and separate local observation/reference schemas; Core consumes them. Lifecycle transport/control remains planned.                                           | 1     |
 | Projects, sessions, observed states and local history          | Existing | D/B/U support workspaces, associations and session history; not owned processes.                                                                                            | 1     |
 | Managed process/session ownership                              | Absent   | No runtime control in B; future explicit observed/managed boundary.                                                                                                         | 4     |
 | Started/running/completed/error/interrupted/waiting events     | Partial  | P/C cover observed turns; unsupported native paths remain fixture-only; no process/task completion inference.                                                               | 1, 3  |
@@ -67,17 +67,17 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 ### Artifacts and Model Manager
 
-| Requirement                                                         | Coverage | Evidence and remaining work                                                        | Phase |
-| ------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------- | ----- |
-| Structured Markdown recognition; manual extraction when ambiguous   | Absent   | U shows captured responses as plain text; no artifact extraction.                  | 2     |
-| Independent artifact panel with safe source/preview/edit            | Absent   | No artifact entity/editor/renderer; captured content remains untrusted.            | 2     |
-| Copy raw Markdown/rendered text; save .md; external editor          | Absent   | No artifact clipboard/save-dialog/editor workflow.                                 | 2     |
-| Artifact project/session/agent/date provenance and original/history | Partial  | P/D source events provide some foundations; no versioned artifact history.         | 1, 2  |
-| Confirm overwrite; never silently replace files                     | Absent   | No artifact file writer exists; confirmation is required before adding one.        | 2     |
-| Project/agent/model selectors always accessible in session          | Partial  | U selects workspace/session and displays model; no agent/model execution selector. | 2     |
-| Agent/project model defaults and session override                   | Absent   | No configuration path in B/U.                                                      | 2, 4  |
-| Supported models/capabilities, valid combinations, reasoning/Fast   | Absent   | I/P have observation flags, not validated model discovery/configuration.           | 2, 3  |
-| Model changes only when supported, restart/impact explicit          | Absent   | Observing model changes in C does not implement changing them.                     | 3, 4  |
+| Requirement                                                         | Coverage | Evidence and remaining work                                                                                                          | Phase |
+| ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----- |
+| Structured Markdown recognition; manual extraction when ambiguous   | Absent   | U shows captured responses as plain text; no artifact extraction.                                                                    | 2     |
+| Independent artifact panel with safe source/preview/edit            | Absent   | No artifact entity/editor/renderer; captured content remains untrusted.                                                              | 2     |
+| Copy raw Markdown/rendered text; save .md; external editor          | Absent   | No artifact clipboard/save-dialog/editor workflow.                                                                                   | 2     |
+| Artifact project/session/agent/date provenance and original/history | Partial  | P/Core provide versioned references to retained message evidence without bodies or extraction; no artifact document/version history. | 1, 2  |
+| Confirm overwrite; never silently replace files                     | Absent   | No artifact file writer exists; confirmation is required before adding one.                                                          | 2     |
+| Project/agent/model selectors always accessible in session          | Partial  | U selects workspace/session and displays model; no agent/model execution selector.                                                   | 2     |
+| Agent/project model defaults and session override                   | Absent   | No configuration path in B/U.                                                                                                        | 2, 4  |
+| Supported models/capabilities, valid combinations, reasoning/Fast   | Absent   | I/P have observation flags, not validated model discovery/configuration.                                                             | 2, 3  |
+| Model changes only when supported, restart/impact explicit          | Absent   | Observing model changes in C does not implement changing them.                                                                       | 3, 4  |
 
 ### Live Metrics
 

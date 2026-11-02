@@ -7,6 +7,17 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Strict version-1 local `orqst.lifecycle` schemas and Core queries for exact retained
+  observed-session evidence and artifact message references. Explicit unavailable
+  values distinguish turn, task, process, worker identity and missing observation
+  time; only closed source-backed Codex turn mappings qualify. References preserve
+  original identity/provenance without bodies, Markdown parsing, source access or
+  file writes. No transport/UI, migration, dependency or adapter capability is added;
+  v1 REST/WS, statuses, IDs, accounting and schema 2 remain unchanged.
+- Cross-cutting roadmap criteria for code quality, independent review, security,
+  privacy, compatibility, bounded work, licensing and honest verification evidence,
+  linked to existing public policies without new approval gates.
+
 - Additive SQLite schema 2 with compact durable metric/model evidence, transactional
   ingestion and backfill only from retained events. Original IDs/sequences, source
   provenance, model declarations, identity checks and cumulative/cache semantics

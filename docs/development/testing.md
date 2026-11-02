@@ -181,3 +181,16 @@ restart were stable, cumulative totals reconciled, source prefixes were unchange
 and built Bridge/browser smoke passed, including the production Analytics worker
 route. No installed database migration, service restart, provider call or real-model
 comparative acceptance was performed.
+
+## Local lifecycle and artifact-reference contracts
+
+`tests/lifecycle.test.ts` verifies strict version/identity/provenance validation,
+independent historical session/turn/task/process semantics, exact retained sequence
+selection, detail expiry and content exclusion. `tests/lifecycle-qa.test.ts` provides
+independent adversarial coverage in a separate file. These use synthetic in-memory and disposable file-backed
+Store/Core fixtures; they do not read native session files or touch installed state.
+The existing API/WS and browser suites remain the compatibility checks. Build and
+built-bundle checks apply even though no new dashboard feature or transport is added.
+Ingestion code is unchanged, so this increment does not require a new real-source
+`validate:local` run. Native artifacts, current source availability and process/task
+outcomes remain unvalidated and unimplemented.

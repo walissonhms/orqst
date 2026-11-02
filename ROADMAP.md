@@ -9,8 +9,9 @@ The integrated baseline is the read-only Codex observer in [README](README.md).
 
 Incremental, non-destructive development is authorized. **The observer Core extraction and local Analytics library are
 implemented and integration-tested; Phase 1 remains incomplete.** Compact durable metric/model evidence is implemented with additive schema 2;
-pre-upgrade gaps remain qualified and installed upgrade awaits owner integration.
-Lifecycle/artifact contracts still need work. There is no blanket “Phase 1 awaiting approval” gate.
+pre-upgrade gaps remain qualified. Local versioned observed-session evidence and
+artifact message references are implemented with runtime validation; broader
+lifecycle transport, extraction and managed contracts remain planned. There is no blanket “Phase 1 awaiting approval” gate.
 Passing checks permits incremental progress within scope; product decisions,
 destructive actions, credentials, external costs and ungranted permissions still
 require a decision. Development authorization is not production activation.
@@ -18,6 +19,24 @@ require a decision. Development authorization is not production activation.
 The [requirement matrix](docs/architecture/product-requirements.md) audits existing,
 partial and absent behavior. The [Analytics design](docs/architecture/model-usage-analytics.md)
 defines mandatory Desktop metrics without inventing provider data.
+
+## Mandatory quality and security criteria for each increment
+
+Apply the public [contribution policy](CONTRIBUTING.md), [security policy](SECURITY.md),
+[security model](docs/architecture/security-model.md) and
+[verification guidance](docs/development/testing.md) to every delivery:
+
+- Follow verified project versions, architecture and existing patterns; keep scope
+  minimal and code readable and maintainable. Review the resulting diff independently.
+- Preserve data integrity, provenance, migrations and API compatibility; validate
+  untrusted inputs, permissions and resource boundaries. Protect privacy and secrets.
+- Bound work, memory and I/O; explain performance limits and failure behavior. Review
+  dependency necessity, provenance and license compatibility before adding one.
+- Run appropriate lint, types, tests, build and integration checks. Report actual
+  outcomes, skipped checks and remaining limitations without certification or implied
+  release acceptance. Preserve earlier evidence rather than rewriting it.
+
+These are cross-cutting delivery criteria, not additional approval gates.
 
 ## Phase numbering migration
 
@@ -46,7 +65,7 @@ P1 delivers the functional desktop; P2 completes evidence and distribution.
 | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 / P0 / Implemented; integration-tested     | Extract UI-independent observer Core; Bridge retains transport/composition entry point.                                      | Existing adapters, store, v1 protocol; explicit lifecycle ownership.                                                | Two writers, shutdown races, service/asset path regressions.                                  | Lifecycle tests for readiness, bind failure, repeated stop and partial startup; preserve REST/WS, IDs, settings, checkpoints, retention and replay; one SQLite writer.                                                            |
 | 1 / P0 / Partial; library integration-tested | Analytics foundation: source-backed metric/model/session contracts and durable time basis.                                   | Codex cumulative accounting and model event evidence; schema/compatibility review.                                  | Assigning history to latest model, duplicate cumulative totals, missing values becoming zero. | Mixed/unknown models, mirrors, replay, missing baselines, retention and safe migration tests; old data and v1 clients preserved; unsupported fields explicitly unavailable.                                                       |
-| 1 / P0 / Planned                             | Normalize lifecycle and artifact references without reinterpreting v1 statuses.                                              | Version negotiation and documented provider evidence.                                                               | Turn completion confused with task success or process exit.                                   | Unknown versions rejected, source references retained; started/running/completed/error/interrupted/waiting evidence tested; approval/quota only when exposed.                                                                     |
+| 1 / P0 / Partial; local library tested       | Normalize lifecycle and artifact references without reinterpreting v1 statuses.                                              | Version negotiation and documented provider evidence.                                                               | Turn completion confused with task success or process exit.                                   | Unknown versions rejected, source references retained; started/running/completed/error/interrupted/waiting evidence tested; approval/quota only when exposed.                                                                     |
 | 2 / P1 / Planned                             | Electron shell, shared React UI, multiple project/session terminal tabs and live output.                                     | Phase 1; Electron/PTY versions, authentication and ownership decisions.                                             | Renderer privileges, terminal escape sequences, accidental process lifetime coupling.         | IPC sender/argument validation, reconnect/resize/output tests; macOS packaging smoke; closing UI does not stop independent work. Terminal input/interrupt requires Phase 4 control gate.                                          |
 | 2 / P1 / Planned                             | Monitor, native macOS notifications, tray, history, pending count, silence/preferences and click-to-session.                 | Source-confirmed events; active monitor; native permission policy.                                                  | Import alerts, false completion, notification content leakage.                                | Foreground/minimized tests; duplicate suppression; completion/error/attention/approval/interruption only with evidence; denied permissions honest; native delivery verified on device.                                            |
 | 2 / P1 / Planned                             | Artifacts extraction and independent source/preview/edit panel; copy raw/rendered text, save Markdown, external editor.      | Safe rendering, source/version provenance and file grant policy.                                                    | Untrusted HTML/links, ambiguous extraction, silent overwrite.                                 | Manual extraction fallback; hostile Markdown; preserve originals/history and project/session/agent/date; save dialog/cancel/overwrite tests; no file replaced without confirmation.                                               |
@@ -81,7 +100,10 @@ real-source/browser compatibility checks. The later bounded Analytics API and fi
 web ranking view passed lint/types, 64 Node cases, build and 11 Chromium cases,
 including unmocked two-model synthetic observer-to-screen reconciliation.
 See [testing](docs/development/testing.md#incremental-delivery-and-integration) for
-limits. Phase 1 still needs broader contracts and durable historical coverage.
+limits. Phase 1 now also includes strict local schemas and Core queries for retained observed-session
+evidence and artifact message references (ADR-029). They preserve separate turn/task/process
+semantics and explicit unavailable values, and add no stream, schema migration or UI.
+Phase 1 still needs broader contracts and qualified historical coverage.
 
 ## Optimizer evidence and activation
 

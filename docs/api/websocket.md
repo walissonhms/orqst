@@ -2,7 +2,7 @@
 
 > **Current observation API baseline.** This roadmap update changes no routes,
 > payloads, authentication or behavior on this page. The
-> [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
+> [lifecycle contracts](lifecycle-contracts.md) define future semantics,
 > not implemented control endpoints or new messages on the current stream.
 
 The bridge streams stored and live events to the dashboard over a single
@@ -154,3 +154,10 @@ The dashboard does not need a manual page refresh.
 - The cookie is `HttpOnly` and `SameSite=Strict`.
 - The `Origin` check is mandatory for the upgrade.
 - Event content is untrusted and is rendered as plain text by the dashboard.
+
+## Local lifecycle projection boundary
+
+The versioned observed-session evidence and artifact-reference queries are Core
+library methods only. They add no route or message to this transport. Existing
+bootstrap authorization does not grant source dereferencing or process/task control.
+See [implemented local contracts](lifecycle-contracts.md#implemented-local-observation-slice-phase-1).

@@ -1,23 +1,133 @@
-# Planned lifecycle contracts
+# Lifecycle contracts
 
-## Status and compatibility
+## Implemented local observation slice (Phase 1)
 
-**Phase 0 design only. No runtime schemas, exported TypeScript types, endpoints,
-database tables or capabilities are added by this document.** See
-[ADRs 015–024](../architecture/decisions.md#adr-015--managed-execution-and-external-observation)
-and [ROADMAP](../../ROADMAP.md).
+`packages/protocol/src/lifecycle.ts` exports strict zod schemas and inferred types;
+`ObserverCore` is their concrete runtime consumer. This is a local library contract,
+not a transport or lifecycle event stream. All objects use
+`contract: "orqst.lifecycle"`, `contractVersion: 1`. Unknown fields are rejected,
+including content fields. This does not change `schemaVersion: 1`, v1 REST/WS,
+statuses, event IDs, adapter capabilities or SQLite schema 2. Migrations 1/2 are
+unchanged. There is no lifecycle endpoint, subscription, command or UI.
 
-The implemented [event protocol](protocol.md) remains `schemaVersion: 1`.
-Its event names, adapter enum, source fields, statuses, REST responses and `/ws`
-messages remain unchanged. Existing clients continue observing Codex normally.
+### Queries and version selection
 
-Future lifecycle messages use a separate `contract: "orqst.lifecycle"` namespace
-and `contractVersion: 1`. This is not `schemaVersion: 2` of the observation stream.
-Do not emit these messages on the existing `/ws` channel. A later implementation
-must negotiate contract versions and capabilities explicitly, select a transport,
-and publish its wire specification before exposing commands. No path is reserved
-or implemented here. Unknown required contracts are rejected before side effects;
-optional unknown fields may only be ignored where that contract permits them.
+```ts
+core.observedSessionEvidence(sequence: number, contractVersion: unknown = 1)
+core.artifactReference(sequence: number, contractVersion: unknown = 1)
+```
+
+Both are synchronous, after Core initialization, and read at most one retained
+v1 event using the existing Store and indexed sequence cursor. No source file is
+opened, no observation is started and nothing is persisted. The exact requested
+sequence must match: retention gaps never select the next surviving event. Neither
+query falls back to durable Analytics evidence or session summary text.
+
+The local caller selects the required version explicitly (default 1). Only numeric
+literal `1` is supported; strings, null and unknown versions fail before any Store
+read. Sequence must be a positive safe integer. Errors are sanitized fixed messages:
+`Invalid lifecycle request` or `Invalid retained lifecycle evidence`; errors include
+no validation input, captured content or source path. An uninitialized/stopped Core
+retains its existing `Core store is not open` error for valid requests.
+
+Results discriminate on `availability`:
+
+- `available` contains `value`, validated against the corresponding result schema.
+- `unavailable` contains only `reason`: `event_not_retained` (missing or expired),
+  `unsupported_adapter` (anything other than Codex), or `not_artifact_message`
+  (artifact query only). There is no implicit null or partial successful value.
+
+These checks are local version selection, not network negotiation. A future
+transport must negotiate separately before delivering this contract.
+
+### Identity, provenance and unavailable values
+
+`observedSessionIdentitySchema` carries `sessionRef` with `machineId`, literal
+`adapterId: "codex"`, and `nativeSessionId` copied from the retained event, plus its
+original `workspaceId` and `observedAgent: { id, basis: "v1_agent_id" }`. The workspace
+is the event's recorded scope, not a later manual assignment. Opaque IDs are not
+rewritten; nonblank strings of at most 1024 characters without control characters
+are required. The session-scoped v1 agent ID is not promoted to a managed worker:
+`agentInstanceId` is explicitly `{ availability: "unavailable", reason: "not_recorded" }`.
+No task, process, parentage, machine registration or authorization is fabricated.
+
+`retainedObservationEvidenceSchema` carries `kind: "retained_v1_event"`, the original
+`eventId`, safe positive `sequence`, UTC ISO `occurredAt` from the event timestamp,
+and the exact `source` fields: relative `file`, safe nonnegative byte `offset`,
+safe positive `line`, lowercase SHA-256 `hash`, and nonblank `recordType`.
+File identifiers are limited to 4096 characters; absolute paths, URLs, backslashes,
+control characters and empty/dot/traversal segments are rejected. These stricter
+projection checks do not change the v1 ingestion schema. Invalid retained metadata
+fails the entire projection with the sanitized error above.
+
+The historical ingestion time was not persisted, so `observedAt` is explicitly
+unavailable with reason `not_recorded`; query time is never substituted.
+`sourceVerification: "not_rechecked"` means the reference identifies retained evidence,
+not proof that a file still exists or matches its hash. There is no source-root grant,
+dereference API or content read authority. IDs, paths, hashes and labels remain
+sensitive untrusted local metadata; the schemas do not guarantee secret-free strings.
+
+### Historical session and independent states
+
+`observedSessionEvidenceSchema` has `type: "observed_session.evidence"`,
+`mode: "observed"`, `identity`, `evidence`, and these independent resource fields:
+
+| Field           | Implemented meaning                                                                                                                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`       | `{ state: "discoverable", basis: "retained_history" }` describes historical discovery only, not present filesystem availability, attachment or process liveness.                                                    |
+| `turn.identity` | Available `value` only from the retained v1 `correlation.turnId`; otherwise unavailable with `not_recorded`. Native direct versus adapter-carried correlation cannot be distinguished without rereading the source. |
+| `turn.state`    | Available `value` only for the closed Codex mapping below; otherwise unavailable with `no_turn_state_evidence`. It describes this record, never a latest-state reduction.                                           |
+| `task`          | Unavailable with `task_evidence_not_recorded`; provider `task_complete` is not ORQST task success.                                                                                                                  |
+| `process`       | Unavailable with `process_not_observed`; no PID, exit or liveness claim.                                                                                                                                            |
+
+The Core requires all three columns below to match; intervention additionally
+requires tool name `request_user_input` or `functions.request_user_input`:
+
+| Source record type                                              | v1 event type / payload status                     | Turn state         |
+| --------------------------------------------------------------- | -------------------------------------------------- | ------------------ |
+| `event_msg:task_started`                                        | `agent.started` / `running`                        | `running`          |
+| `event_msg:task_complete`                                       | `agent.completed` / `completed`                    | `completed`        |
+| `event_msg:error`, `event_msg:task_failed`                      | `agent.failed` / `failed`                          | `failed`           |
+| `event_msg:turn_aborted`                                        | `agent.updated` / `interrupted`                    | `interrupted`      |
+| `response_item:function_call`, `response_item:custom_tool_call` | `agent.intervention.required` / `waiting_for_user` | `waiting_for_user` |
+
+No inference uses prose, elapsed time, status alone or tool completion. Query order,
+duplicates and old timestamps cannot advance a task or rewrite a turn outcome: the
+queries project one immutable retained fact and maintain no new state machine.
+Generic schemas validate shape; the Core supplies the source-backed mapping. Pending,
+unknown, approval and quota transitions are not invented where no evidence exists.
+
+### Artifact references, without extraction
+
+`artifactReferenceSchema` has `type: "artifact.reference"`,
+`kind: "message_reference"`, the same `identity`/`evidence`, explicit `turnIdentity`,
+message `role`, and `content: { availability: "unavailable", reason: "reference_only" }`.
+The reference is identified by the existing event ID and sequence; no artifact ID,
+format, filename, title, extraction timestamp or document version is invented.
+
+Only an explicitly requested `agent.message` qualifies, with nonblank retained text
+and matching source/role: `response_item:message`/`assistant` or
+`response_item:agent_message`/`agent`. User messages, tools, empty text, final result
+summaries and arbitrary status events return `not_artifact_message`. A reference is
+not an assertion that its message is Markdown or an extracted artifact.
+
+The projection uses an explicit metadata allowlist. It never returns message bodies,
+result excerpts, tool arguments/results, cwd, model labels or parentSessionId. It does
+not interpret Markdown, render HTML, follow links, open source paths, save files or
+create new caches. The existing v1 captured content and retention remain unchanged.
+
+The schemas and Core queries are covered by synthetic contract/runtime tests and
+independent QA in separate files; see [testing](../development/testing.md). This is
+not validation of provider process control, native artifact extraction or Desktop.
+
+## Planned transport and broader lifecycle design
+
+The remaining sections retain the broader design from
+[ADRs 015–024](../architecture/decisions.md#adr-015--managed-execution-and-external-observation).
+Their command/event envelope, other sources, managed states, delegation, permissions
+and qualified metrics remain planned. The local slice above is not an implementation
+of those event families. Do not emit it on `/ws`; publish transport negotiation and
+authorization before exposing any future operation. No path is reserved here.
 
 ## Identities and ownership
 
@@ -257,19 +367,20 @@ comparable history and explicit assumptions. Otherwise report unavailable.
 Do not claim a confidence level or calibrated interval without validation.
 
 These quality fields do not exist in current `Usage`; v1 responses remain unchanged.
-No estimator, price feed, quota checker or metric endpoint is implemented here.
+No estimator, price feed or quota checker is implemented by these lifecycle contracts.
+The separate implemented Analytics endpoint is documented in [REST](rest.md).
 
 ## Implementation acceptance gate
 
-Before implementing these contracts, publish the exact schemas, limits, transport
+Before implementing the remaining transport/control contracts, publish exact schemas, limits, transport
 negotiation and authorization design for that phase. Add synthetic compatibility
 fixtures without changing existing v1 semantics. Verify state transition legality,
 missing evidence, unknown versions, duplicate/reordered delivery, permission
 revocation, timeouts, cancellation and uncertain results. Test provider contracts
 against explicitly authorized real sessions separately from fixtures and CI.
 
-The updated Phase 1 covers observer Core extraction and the qualified metric
-foundation, both in progress pending integration. This does not activate the planned
+Phase 1 has implemented observer Core extraction, the qualified metric foundation
+and the bounded local observation/reference slice above; the broader phase remains incomplete. This does not activate the planned
 control protocol. See the [integration gate](../../ROADMAP.md#phase-1-compatibility-and-integration-gate)
 and [Analytics design](../architecture/model-usage-analytics.md). The six-phase
 sequence and incremental-development authorization supersede the original phase

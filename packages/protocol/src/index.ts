@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export * from './analytics.js';
+export * from './lifecycle.js';
 
 export const statusSchema = z.enum([
   'running',

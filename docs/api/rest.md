@@ -2,7 +2,7 @@
 
 > **Current observation API.** The aggregate Analytics route below is additive;
 > existing observation routes and WebSocket messages retain their shapes. The
-> [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
+> [lifecycle contracts](lifecycle-contracts.md) define future semantics,
 > not implemented control endpoints or new messages on the current stream.
 
 The bridge exposes a small JSON API on the loopback interface. It is intended
@@ -328,3 +328,10 @@ There is no `Access-Control-Allow-Origin` header. The API is same-origin only.
 The API has no `/v1` prefix. The dashboard and bridge ship together, and the
 event protocol carries `schemaVersion` for persisted data. A future external
 API would need its own versioning and authentication design.
+
+## Local lifecycle projection boundary
+
+The versioned observed-session evidence and artifact-reference queries are Core
+library methods only. They add no route or message to this transport. Existing
+bootstrap authorization does not grant source dereferencing or process/task control.
+See [implemented local contracts](lifecycle-contracts.md#implemented-local-observation-slice-phase-1).

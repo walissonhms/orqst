@@ -1,7 +1,14 @@
 import { join } from 'node:path';
 import { Store } from '@orqst/database';
 import { CodexObserver, type CodexObserverOptions } from '@orqst/adapter-codex';
-import type { StoredEvent } from '@orqst/protocol';
+import {
+  eventSchema,
+  lifecycleRequestSchema,
+  type ArtifactReferenceResult,
+  type ObservedSessionEvidenceResult,
+  type StoredEvent,
+} from '@orqst/protocol';
+import { projectArtifactReference, projectObservedSession } from './lifecycle.js';
 
 export interface CoreOptions {
   dataDir: string;
@@ -63,6 +70,42 @@ export class ObserverCore {
   get diagnostics(): Observer['diagnostics'] {
     if (!this.observer) throw new Error('Core observer is not initialized');
     return this.observer.diagnostics;
+  }
+
+  /** Point-in-history evidence only; this is not a current session/process state query. */
+  observedSessionEvidence(
+    sequence: number,
+    contractVersion: unknown = 1,
+  ): ObservedSessionEvidenceResult {
+    const event = this.lifecycleEvent(sequence, contractVersion);
+    return event
+      ? projectObservedSession(event)
+      : { availability: 'unavailable', reason: 'event_not_retained' };
+  }
+
+  /** Explicitly reference an existing provider message without extracting its content. */
+  artifactReference(sequence: number, contractVersion: unknown = 1): ArtifactReferenceResult {
+    const event = this.lifecycleEvent(sequence, contractVersion);
+    return event
+      ? projectArtifactReference(event)
+      : { availability: 'unavailable', reason: 'event_not_retained' };
+  }
+
+  private lifecycleEvent(sequence: number, contractVersion: unknown): StoredEvent | undefined {
+    if (!lifecycleRequestSchema.safeParse({ sequence, contractVersion }).success)
+      throw new Error('Invalid lifecycle request');
+    const store = this.store;
+    let event: StoredEvent | undefined;
+    try {
+      event = store.events(sequence - 1, 1)[0];
+    } catch {
+      // Corrupt JSON/SQLite diagnostics can contain captured content or local paths.
+      throw new Error('Invalid retained lifecycle evidence');
+    }
+    if (!event || event.sequence !== sequence) return undefined;
+    const parsed = eventSchema.safeParse(event);
+    if (!parsed.success) throw new Error('Invalid retained lifecycle evidence');
+    return { ...parsed.data, sequence: event.sequence };
   }
 
   subscribe(listener: EventListener): () => void {

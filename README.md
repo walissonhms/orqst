@@ -33,6 +33,7 @@ prompts or write into observed sessions.
 | Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions      |
 | Claude Code adapter                                                          | Contract only, not implemented                   |
 | OpenCode adapter                                                             | Contract only, not implemented                   |
+| Local observed-session evidence / artifact references                        | Implemented library only; no new API or UI       |
 | Managed execution and structured delegation                                  | Planned, not implemented                         |
 | ORQST Cloud, accounts, billing                                               | Not implemented                                  |
 | Multi-machine observability and remote connectivity                          | Planned, not implemented                         |
@@ -45,8 +46,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
 - **Phase 1 increment delivered:** UI-independent observer Core and evidence-backed
   model Analytics library with schema-2 compact durable metric/model evidence.
-  Historical coverage remains qualified; lifecycle/artifact contracts and installed
-  migration acceptance are incomplete. This does not complete Phase 1.
+  Historical coverage remains qualified. Versioned local observed-session evidence
+  and artifact message references now have strict schemas and Core consumers; broader
+  lifecycle transport and artifact extraction remain planned. This does not complete Phase 1.
 - **Browser Analytics increment delivered:** open **Most used models** in the sidebar
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
@@ -89,6 +91,12 @@ no optimizer setting or automatic token reduction exists in the current runtime.
   @orqst/bridge  ── HTTP + WebSocket on 127.0.0.1 only ──►  @orqst/dashboard
   (single process)                                           React + Vite + Tailwind + i18next
 ```
+
+The Core also exposes version-1 local queries for one retained observation or an
+explicit artifact message reference. They validate identity/source metadata at runtime,
+keep task/process and missing timestamps unavailable, and never return captured bodies
+or open source paths. They add no REST/WS route, file writer or Desktop capability.
+See [lifecycle contracts](docs/api/lifecycle-contracts.md).
 
 There is one long-running process. Analytics queries use one disposable Node worker
 thread at a time with a separate read-only SQLite WAL connection. The bridge

@@ -315,3 +315,16 @@ retain budgets/deadline/cleanup. The summary allowlist still strips individual
 evidence, source paths and captured content. No source file or installed database is
 modified during development checks. Installed upgrade needs review, backup and tests;
 there is no destructive downgrade or automatic rewrite of backups.
+
+## Local lifecycle/reference projection review
+
+The additive Phase 1 schemas and Core queries validate numeric version and bounded
+sequence before reading one retained event. Strict allowlists exclude captured bodies,
+result excerpts, tool input/output and cwd; fixed error messages expose no validation
+input or path. Invalid identity/provenance fails closed. Source references remain
+sensitive untrusted metadata and are explicitly not rechecked; shape validation is
+not filesystem containment verification or permission to open a path. No source-root
+grant, file access, rendering, export, endpoint, authentication change or control
+capability is introduced. Existing source-read-only protections, v1 transports and
+single-writer persistence are unchanged. Provider control and future dereferencing
+require their own evidence and security design.

@@ -490,3 +490,32 @@ are sensitive plaintext local metadata. Read-only workers explicitly support sch
 An older writer rejects schema 2; rollback means restoring a reviewed pre-upgrade
 backup, never dropping the table or lowering `user_version` on an installed database.
 See [data lifecycle and migration](data-model.md) and [testing](../development/testing.md).
+
+---
+
+## ADR-029 — Local observed evidence and artifact reference contracts
+
+**Status:** Implemented local Phase 1 slice on 2026-11-02; broader ADR-024 transport/control remains planned.
+
+**Context.** The design-only lifecycle document separates sessions, turns, tasks and
+processes, while the runtime has only v1 status/events and Analytics contracts.
+Retained Codex events already contain source-backed identities and provenance; they
+do not persist ingestion time, process lifetime or validated task outcomes.
+
+**Decision.** Add strict version-1 `orqst.lifecycle` schemas and synchronous Core
+library queries for one exact retained event. Validate the requested version before
+Store reads and validate returned metadata at runtime. Preserve native session IDs
+and label v1 agent identity explicitly; independent worker identity is unavailable.
+Session discovery is historical; turn state uses a closed source/event/status mapping.
+Task/process evidence and missing timestamps remain unavailable. An explicitly
+requested artifact reference identifies an existing assistant/agent message without
+copying content or asserting document extraction. Return explicit absence on detail
+expiry; do not reconstruct from summaries or durable Analytics evidence.
+
+**Consequences.** No new dependency, persistence, migration, source access, API/WS
+message, permission or provider capability. SQLite schemas 1/2 and all v1 behavior
+remain unchanged. Source metadata is sensitive and has not been rechecked against
+native history. No source-root ID or dereference grant is invented. Future transports
+need negotiation/authorization; extraction/rendering/export/file writes still need
+their existing product/security decisions. Local tests are not process-control or
+Desktop acceptance. See [exact contracts](../api/lifecycle-contracts.md).

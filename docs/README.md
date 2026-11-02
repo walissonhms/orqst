@@ -48,9 +48,9 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [WebSocket API](api/websocket.md) — handshake, replay, resync, live delivery.
 - [Event protocol](api/protocol.md) — implemented observation envelope, payload,
   usage, provenance and versioning.
-- [Planned lifecycle contracts](api/lifecycle-contracts.md) — Phase 0 design for
-  resource states, tasks/delegation, capabilities, permissions and qualified metrics;
-  no runtime endpoints or schemas are added.
+- [Lifecycle contracts](api/lifecycle-contracts.md) — implemented local schemas/Core
+  queries for observed-session evidence and artifact references; broader lifecycle
+  transport, tasks/delegation, permissions and managed states remain planned.
 
 ## Development
 

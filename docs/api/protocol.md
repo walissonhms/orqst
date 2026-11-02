@@ -9,8 +9,10 @@ database, the bridge, and the dashboard. It is defined with zod in
 This page describes the implemented observation protocol. Phase 0 does not change
 `packages/protocol`, `schemaVersion: 1`, existing event names/statuses, file source
 fields or REST/WebSocket behavior. Approved future lifecycle and control semantics
-are documented separately in [planned lifecycle contracts](lifecycle-contracts.md).
-They are not accepted by current schemas or emitted by the current bridge.
+are documented separately in [lifecycle contracts](lifecycle-contracts.md). The additive
+Phase 1 local schemas/Core queries validate observed-session evidence and artifact
+references under their own namespace. Neither these projections nor the future event
+families are accepted by `eventSchema` or emitted by the bridge.
 
 ## Design rules
 
