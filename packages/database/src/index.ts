@@ -1,5 +1,5 @@
 import { DatabaseSync, type StatementSync, type SQLInputValue } from 'node:sqlite';
-import { chmodSync, mkdirSync, lstatSync } from 'node:fs';
+import { chmodSync, mkdirSync, lstatSync, realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
@@ -17,13 +17,21 @@ import {
   type ModelAnalyticsQuery,
   type ModelAnalyticsReport,
   type ModelAnalyticsSummary,
-  type AnalyticsGap,
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
-import { aggregateModelAnalytics, type AnalyticsSession } from './analytics.js';
+import {
+  aggregateModelAnalytics,
+  summarizeModelAnalytics,
+  type AnalyticsSession,
+} from './analytics.js';
+export {
+  readModelAnalyticsSummary,
+  ANALYTICS_READ_LIMITS,
+  AnalyticsReadCapacityError,
+} from './analytics-reader.js';
 
 type Row = Record<string, unknown>;
-// Fixed synchronous HTTP budgets. Count every retained envelope inspected by SQLite's
+// Legacy synchronous library budgets. Count every retained envelope inspected by SQLite's
 // JSON predicate, including message-only records and out-of-window baselines.
 export const MODEL_ANALYTICS_LIMITS = Object.freeze({
   sessions: 100,
@@ -68,6 +76,7 @@ export class Store {
   private db: DatabaseSync;
   private statements = new Map<string, StatementSync>();
   readonly machineId: string;
+  readonly databasePath: string | null;
   readonly retentionDays: number;
   constructor(file: string, retentionDays = 30) {
     this.retentionDays = retentionDays;
@@ -84,6 +93,7 @@ export class Store {
     }
     this.db = new DatabaseSync(file);
     if (file !== ':memory:') chmodSync(file, 0o600);
+    this.databasePath = file === ':memory:' ? null : realpathSync(file);
     this.db.exec(
       'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;',
     );
@@ -451,34 +461,9 @@ export class Store {
     // One snapshot covers budget admission and evidence reads, including when another
     // local connection writes. No aggregate or source data is persisted here.
     const report = this.transaction(() => this.readModelAnalytics(input, true));
-    const gaps = new Map<AnalyticsGap['reason'], number>();
-    for (const gap of report.coverage.gaps) gaps.set(gap.reason, (gaps.get(gap.reason) ?? 0) + 1);
-    return {
-      contract: report.contract,
-      contractVersion: report.contractVersion,
-      query: report.query,
-      basis: report.basis,
-      usage: report.usage,
-      sessions: report.sessions,
-      models: report.models.map(({ adapter, provider, model, sessions, usage }) => ({
-        adapter,
-        provider,
-        model,
-        sessions,
-        usage,
-      })),
-      coverage: {
-        scope: report.coverage.scope,
-        complete: report.coverage.complete,
-        reason: report.coverage.reason,
-        sessions: report.coverage.sessions,
-        sessionsWithCanonicalUsage: report.coverage.sessionsWithCanonicalUsage,
-        unidentifiedContributions: report.coverage.unidentifiedContributions,
-        gaps: [...gaps].map(([reason, count]) => ({ reason, count })),
-      },
-      unavailable: report.unavailable,
-    };
+    return summarizeModelAnalytics(report);
   }
+
   private readModelAnalytics(input: ModelAnalyticsQuery, bounded: boolean): ModelAnalyticsReport {
     const query = modelAnalyticsQuerySchema.parse(input);
     const conditions: string[] = [];

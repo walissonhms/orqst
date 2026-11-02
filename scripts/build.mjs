@@ -1,7 +1,11 @@
 import { build } from 'esbuild';
 await build({
-  entryPoints: ['apps/bridge/src/main.ts'],
-  outfile: 'dist/bridge.mjs',
+  entryPoints: {
+    bridge: 'apps/bridge/src/main.ts',
+    'analytics-worker': 'apps/bridge/src/analytics-worker.ts',
+  },
+  outdir: 'dist',
+  outExtension: { '.js': '.mjs' },
   bundle: true,
   platform: 'node',
   target: 'node24',

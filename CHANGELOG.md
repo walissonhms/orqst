@@ -7,6 +7,23 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Configurable isolated browser fixture port through `ORQST_BROWSER_PORT`, shared
+  by Playwright and the fixture server. Invalid values and production port 4317
+  are rejected; server reuse stays disabled and temporary storage stays unique.
+
+- Bounded worker-backed Analytics for larger retained histories: read-only SQLite
+  WAL snapshots, compact metric metadata and per-session folding keep query work
+  off the observer thread. Limits are 5000 sessions/250000 envelopes/256 MiB of
+  evidence/8 MiB per record/64 MiB projected metadata/2 MiB response; one query runs at a time with
+  no queue and a 10-second watchdog through confirmed cleanup. Timeout responds
+  independently of termination; the slot remains busy until cleanup is confirmed.
+  Late success is rejected; shutdown awaits cleanup even after timeout. Includes
+  deterministic delayed-termination regression tests.
+  Capacity, busy, timeout, cancellation and unavailable errors return no partial
+  results or private diagnostics, with localized dashboard states. The production
+  build includes a separate worker; tests require no prebuild or new dependency.
+  Summary v1, schema 1, the single writer and conservative accounting are preserved.
+
 - Browser **Most used models** view with reported-token/session ranking, share bars,
   summary cards, calendar/custom periods, workspace/agent/adapter/model filters,
   unidentified models and explicit unavailable/coverage/capacity states. Refresh is
@@ -17,8 +34,8 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 - Authenticated `GET /api/analytics/models` with aggregate-only model usage,
   explicit unavailable metrics and counted coverage gaps. Strict query validation
-  rejects duplicates/unknowns; admission caps 100 sessions, 1000 retained envelopes
-  and 2 MiB of evidence, returning 503 instead of partial totals. Source references
+  rejects duplicates/unknowns; the initial synchronous admission capped 100 sessions,
+  1000 retained envelopes and 2 MiB (superseded by the worker increment above). Source references
   and captured content are excluded; existing v1 routes/stream and schema 1 remain.
 
 - UI-independent `@orqst/core` observation lifecycle, composed by `createBridge()`

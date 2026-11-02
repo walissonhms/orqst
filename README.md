@@ -89,7 +89,9 @@ no optimizer setting or automatic token reduction exists in the current runtime.
   (single process)                                           React + Vite + Tailwind + i18next
 ```
 
-There is one long-running process. The bridge composes `@orqst/core`, which owns
+There is one long-running process. Analytics queries use one disposable Node worker
+thread at a time with a separate read-only SQLite WAL connection. The bridge
+composes `@orqst/core`, which owns
 the observer, single SQLite store and retention lifecycle; the bridge owns REST,
 WebSocket and signal handling. The dashboard is a static
 bundle served by the bridge in production and by Vite in development.
@@ -163,7 +165,7 @@ Uninstall stops the service and removes its plist; it preserves the database, ba
 | --------------------- | ----------------------------------------------------------------------------------- |
 | `pnpm install`        | Install workspace dependencies                                                      |
 | `pnpm dev`            | Run the bridge in watch mode plus the Vite dev server                               |
-| `pnpm build`          | Build the dashboard, then bundle the bridge to `dist/bridge.mjs`                    |
+| `pnpm build`          | Build the dashboard and bridge/Analytics worker bundles in `dist/`                  |
 | `pnpm start`          | Run the built bridge (`node dist/bridge.mjs`)                                       |
 | `pnpm test`           | Run the Node test suites with `tsx --test`                                          |
 | `pnpm test:browser`   | Run Chromium end-to-end tests using an isolated synthetic source                    |
@@ -255,9 +257,12 @@ and [SECURITY.md](SECURITY.md).
   a single trusted OS user.
 - **Redaction is best-effort.** Secrets in unusual formats may survive.
 - **Analytics is partial.** The first browser screen has ranking, share bars, filters
-  and coverage. Requests exceeding 100 candidate sessions, 1000 retained envelopes or
-  2 MiB of evidence return a capacity warning without partial sums. Narrow workspace,
-  agent or adapter scopes may help; a shorter period can need the same history.
+  and coverage. Worker queries admit up to 5000 candidate sessions, 250000 retained
+  envelopes, 256 MiB of evidence, 8 MiB per record, 64 MiB of metric metadata and 2 MiB of aggregate response.
+  One read-only worker runs at a time, with no queue and a 10-second watchdog;
+  disconnect/shutdown cancel and await cleanup. Explicit errors show no partial sums.
+  Native SQL cleanup can delay termination. Narrow workspace, agent or adapter scopes
+  may help; a shorter period can need the same history.
   Time series, export, task-qualified comparisons, verified costs and Desktop delivery
   remain pending. Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
@@ -268,6 +273,13 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The larger-history Analytics worker increment passed lint, types, 80 Node tests,
+build and 13 Chromium tests, including a synthetic 310-session/approximately-57000-event
+archive. A separate smoke ran both production bundles through the authenticated
+endpoint with disposable synthetic SQLite storage (310 sessions/1240 events).
+The installed service was not restarted; real-provider multi-model acceptance and
+arbitrary-archive latency remain unvalidated.
 
 The later browser Analytics integration passed lint, typecheck, 64 Node tests, build
 and 11 Chromium tests. One unmocked browser test ingests two synthetic source sessions

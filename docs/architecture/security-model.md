@@ -16,12 +16,24 @@ authentication/trust checks and no-store/CSP headers. Its allowlisted response
 excludes contribution evidence, source paths, event/session identifiers and captured
 messages/results; it retains aggregate model labels and query metadata. Strict
 query validation and fixed session/event/byte admission precede JSON inspection.
-Overflow returns 503 with no partial report. No control authority, public bind,
-telemetry or schema change is introduced. Evidence budgets do not bound total SQL
-latency, and the unrestricted local library report remains sensitive.
-See [route limits](../api/rest.md#get-apianalyticsmodels). Synthetic API tests cover
-authentication/origin, validation, admission boundaries and response-field privacy;
-they are not a certification or a large-archive performance assessment.
+A separate read-only SQLite connection runs in a disposable Node worker, never
+through a second Store/writer or a migration. WAL snapshots permit concurrent
+ingestion; workers select only metric/identity/provenance fields and return only
+the summary allowlist. Full contributions/provenance stay worker-local, one session
+at a time. Existing file permissions and loopback controls remain unchanged.
+
+One worker may run per bridge, with no queue, a 10-second watchdog and bounded
+V8 heap. Success requires confirmed cleanup within the deadline. The watchdog
+can return timeout while termination is pending; the slot remains occupied until
+termination is confirmed. Disconnect/shutdown cancel the query, and shutdown awaits
+a separate cleanup promise even after a timeout response. Budget/timeout/busy/cancel/
+unavailable errors return no partial sums and no SQLite diagnostics or paths.
+Native SQL cleanup and OS/event-loop scheduling can delay termination or the
+watchdog callback; heap limits are not an RSS guarantee. No control authority, public
+bind, telemetry or schema change is introduced. The unrestricted local library
+report remains sensitive. See [route limits](../api/rest.md#get-apianalyticsmodels).
+Synthetic API/worker tests exercise these controls; they do not certify arbitrary
+archive performance, multi-user isolation or full data redaction.
 
 | Boundary                      | Trust                                                                   |
 | ----------------------------- | ----------------------------------------------------------------------- |

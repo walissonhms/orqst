@@ -19,7 +19,7 @@ in an exported usage report. Redaction remains best-effort, not a privacy guaran
 
 `Store.modelAnalytics(query)` returns the separate `orqst.model-analytics` version 1
 projection. It adds no WebSocket message, table, index or migration. The separate
-bounded `Store.modelAnalyticsSummary()` is exposed through authenticated
+aggregate summary is exposed through authenticated
 [`GET /api/analytics/models`](../api/rest.md#get-apianalyticsmodels), with aggregate
 gap counts and no individual evidence or captured content. The complete local
 report described below remains a library-only inspection surface.
@@ -49,10 +49,23 @@ canonical evidence, invalid/non-monotonic usage, identity conflicts and period b
 Retention can remove the evidence needed for allocation even when v1 totals survive.
 Executions, active duration, outcomes, equivalence, reasoning, prices and costs remain
 unavailable. The unrestricted library query reads retained evidence synchronously.
-HTTP admission limits are 100 sessions, 1000 retained envelopes and 2 MiB of evidence
-bytes; excess returns 503 without partial results. All selected session history counts,
-including message-only events and out-of-window baselines. Durable metric storage
-and large-archive performance remain future work.
+HTTP uses a disposable worker with a read-only SQLite WAL snapshot and compact
+metric/identity/provenance projection, folding one session at a time. The observer
+remains the only writer; no message, tool argument or result content is loaded into
+JavaScript for the query. The aggregate response and conservative replay semantics
+are unchanged. Admission allows 5000 sessions, 250000 envelopes, 256 MiB of evidence,
+8 MiB per record, 64 MiB of projected metadata and 2 MiB of aggregate response. All selected history counts,
+including message-only records and baselines. One query runs at a time without a
+queue; a 10-second watchdog covers setup through confirmed cleanup. Success after
+the deadline is rejected; timeout responds independently while the slot remains
+occupied until termination is confirmed. Disconnect cancels the query and shutdown
+awaits cleanup even after timeout. Native SQL and OS/event-loop scheduling may
+delay termination or the watchdog callback. Explicit capacity/busy/timeout/
+cancel/unavailable errors contain no partial result or diagnostics. See the
+[route contract](../api/rest.md#get-apianalyticsmodels) for exact limits and failures.
+The old synchronous `Store.modelAnalyticsSummary()` remains a library surface with
+its original 100-session/1000-event/2-MiB bounds. Durable metric storage and arbitrary
+archive performance remain future work.
 
 Fourteen synthetic Analytics tests cover contracts, cumulative accounting, model
 changes, windows, scopes, unavailable versus zero, retention, replay, schema preservation

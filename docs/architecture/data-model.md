@@ -307,6 +307,14 @@ retained `events`, `sessions`, `agents` and `token_usage`; schema version remain
 It adds no tables or indexes and never persists derived model attribution. See the
 [foundation semantics](model-usage-analytics.md#implemented-local-foundation) for
 interval boundaries, canonical reconciliation and unavailable/coverage behavior.
+The HTTP summary now reads the same retained data through a separate read-only
+SQLite WAL snapshot in a disposable worker. It admits all selected envelopes before
+JSON inspection, projects only metric/identity/provenance metadata, and folds one
+session at a time into aggregate counts/totals. It never writes derived attribution
+or instantiates another Store. Canonical cumulative admission, source priority,
+cache subsets, current workspace assignment, half-open windows, unidentified models
+and retention gaps are unchanged. Limits/cancellation return errors without partial
+results; see the [API contract](../api/rest.md#get-apianalyticsmodels).
 Durable historical measurement storage remains future work.
 
 The existing session summary keeps one cumulative total and the latest observed

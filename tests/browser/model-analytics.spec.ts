@@ -237,6 +237,49 @@ test('loading, unavailable versus zero, empty, HTTP errors and explicit retry', 
   await expect(page.getByText('No model observations match this query.')).toBeVisible();
 });
 
+for (const [locale, errors] of [
+  [
+    'en-US',
+    [
+      ['analytics_busy', 503, 'Another local analytics query is running'],
+      ['analytics_timeout', 504, 'exceeded its time budget'],
+      ['analytics_unavailable', 503, 'Local analytics is unavailable'],
+      ['analytics_cancelled', 503, 'Local analytics is unavailable'],
+    ],
+  ],
+  [
+    'pt-BR',
+    [
+      ['analytics_busy', 503, 'Outra consulta local de Analytics'],
+      ['analytics_timeout', 504, 'excedeu o limite de tempo'],
+      ['analytics_unavailable', 503, 'O Analytics local está indisponível'],
+      ['analytics_cancelled', 503, 'O Analytics local está indisponível'],
+    ],
+  ],
+] as const) {
+  test(`worker errors are explicit, localized and retryable in ${locale}`, async ({ page }) => {
+    let current: (typeof errors)[number] | undefined;
+    await page.route('**/api/analytics/models?*', async (route) => {
+      if (current) await route.fulfill({ status: current[1], json: { error: current[0] } });
+      else await route.fulfill({ json: report() });
+    });
+    await page.goto('/#models');
+    await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
+    await page.getByLabel('Language').selectOption(locale);
+    const refresh = page.locator('.analytics .page-heading button');
+    for (const error of errors) {
+      current = error;
+      await refresh.click();
+      await expect(page.getByRole('alert')).toContainText(error[2]);
+      await expect(page.locator('.analytics-table')).toHaveCount(0);
+      await expect(page.locator('.analytics-stats')).toHaveCount(0);
+      current = undefined;
+      await refresh.click();
+      await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
+    }
+  });
+}
+
 test('late synthetic responses cannot overwrite the current filter', async ({ page }) => {
   await syntheticApi(page);
   await openModels(page);

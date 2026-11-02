@@ -71,9 +71,18 @@ No Cloud service, remote transport or cryptographic protocol exists here yet.
 The aggregate Analytics read endpoint inherits the observation cookie, Host/Origin
 and fetch-metadata checks. Its explicit response projection excludes individual
 source references and captured content, but retains model labels and filter metadata.
-Admission bounds retained evidence and returns 503 on excess without partial sums;
-this does not provide fixed latency or multi-user isolation. The full local library
-report can contain source paths and must not be used directly as an export payload.
+A disposable worker reads a SQLite WAL snapshot through a read-only connection;
+the observer remains the only writer. Only metric/identity/provenance metadata is
+materialized in that worker and only aggregates return to the bridge. Evidence,
+projected bytes and V8 heap are bounded; one query runs at a time without a queue.
+A 10-second watchdog covers startup through confirmed cleanup; late success is
+rejected. Timeout responds while termination may still be pending, retaining the
+slot until termination is confirmed. Client disconnect and shutdown cancel the
+query; shutdown awaits cleanup even after timeout. Errors are explicit and exclude
+diagnostics, paths and partial sums. Native SQL cleanup and OS/event-loop scheduling
+can delay termination or the watchdog callback; this does not provide hard real-time
+latency, a process RSS cap or multi-user isolation. The full local library report
+can contain source paths and must not be used directly as an export payload.
 See the [route contract](docs/api/rest.md#get-apianalyticsmodels).
 
 ORQST is designed for a **single trusted OS user on a local machine**.

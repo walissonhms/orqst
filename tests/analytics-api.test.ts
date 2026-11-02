@@ -6,7 +6,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { request } from 'node:http';
-import { AnalyticsCapacityError, MODEL_ANALYTICS_LIMITS, Store } from '@orqst/database';
+import {
+  AnalyticsCapacityError,
+  MODEL_ANALYTICS_LIMITS,
+  ANALYTICS_READ_LIMITS,
+  Store,
+} from '@orqst/database';
 import type { AgentEvent, ModelAnalyticsQuery, ModelAnalyticsSummary } from '@orqst/protocol';
 import { createLocalServer } from '../apps/bridge/src/server.js';
 
@@ -54,7 +59,9 @@ function seed(store: Store) {
     adapter: 'manual',
   });
 }
-async function setup(store = new Store(':memory:')) {
+async function setup(existingStore?: Store) {
+  const directory = existingStore ? null : mkdtempSync(join(tmpdir(), 'orqst-analytics-http-'));
+  const store = existingStore ?? new Store(join(directory!, 'synthetic.db'));
   const app = createLocalServer(
     store,
     {
@@ -90,6 +97,7 @@ async function setup(store = new Store(':memory:')) {
     close: async () => {
       await app.close();
       store.close();
+      if (directory) rmSync(directory, { recursive: true, force: true });
     },
   };
 }
@@ -329,7 +337,7 @@ test('Analytics HTTP rejects duplicates, unknowns, invalid combinations and exce
   }
 });
 
-test('Analytics session budget admits the boundary and rejects the entire excess report', async () => {
+test('Analytics HTTP supports sessions above the legacy synchronous budget', async () => {
   const ctx = await setup();
   try {
     for (let index = 0; index < MODEL_ANALYTICS_LIMITS.sessions; index++)
@@ -338,8 +346,8 @@ test('Analytics session budget admits the boundary and rejects the entire excess
     ctx.store.ingest({ ...event('excess-session'), sessionId: 'synthetic-excess-session' });
     assert.throws(() => ctx.store.modelAnalyticsSummary(), AnalyticsCapacityError);
     const response = await ctx.get();
-    assert.equal(response.status, 503);
-    assert.deepEqual(await response.json(), { error: 'analytics_capacity_exceeded' });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).sessions, MODEL_ANALYTICS_LIMITS.sessions + 1);
     assert.equal(ctx.store.modelAnalytics().sessions, MODEL_ANALYTICS_LIMITS.sessions + 1);
     assert.equal((await summary(await ctx.get('?workspaceId=missing'))).sessions, 0);
   } finally {
@@ -347,7 +355,7 @@ test('Analytics session budget admits the boundary and rejects the entire excess
   }
 });
 
-test('Analytics event budget includes non-model records, all sessions and out-of-period baselines', async () => {
+test('Analytics HTTP supports events above the legacy synchronous budget', async () => {
   const ctx = await setup();
   try {
     for (let index = 0; index < MODEL_ANALYTICS_LIMITS.events; index++)
@@ -361,12 +369,11 @@ test('Analytics event budget includes non-model records, all sessions and out-of
         ...event(`in-period-${index}`, 2, { model: 'synthetic-model' }),
         sessionId: `synthetic-session-${index}`,
       });
-      assert.equal((await ctx.get()).status, 503);
+      assert.equal((await ctx.get()).status, 200);
     }
     for (const query of ['', '?model=missing', '?from=' + encodeURIComponent(time(1))]) {
       const response = await ctx.get(query);
-      assert.equal(response.status, 503);
-      assert.deepEqual(await response.json(), { error: 'analytics_capacity_exceeded' });
+      assert.equal(response.status, 200);
     }
     assert.equal((await ctx.get('?workspaceId=missing')).status, 200);
     assert.equal(ctx.store.modelAnalytics().coverage.sessions, 2);
@@ -375,7 +382,7 @@ test('Analytics event budget includes non-model records, all sessions and out-of
   }
 });
 
-test('Analytics byte budget counts UTF-8 envelopes exactly before fetching/parsing JSON', async () => {
+test('Analytics byte budgets admit larger messages and reject oversized records before JSON parsing', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-analytics-capacity-synthetic-'));
   const file = join(directory, 'synthetic.db');
   const store = new Store(file);
@@ -393,11 +400,11 @@ test('Analytics byte budget counts UTF-8 envelopes exactly before fetching/parsi
     );
     assert.equal((await ctx.get()).status, 200);
     store.ingest({ ...event('additional-session'), sessionId: 'synthetic-second-session' });
-    assert.equal((await ctx.get()).status, 503);
+    assert.equal((await ctx.get()).status, 200);
     // Deliberately invalid oversized JSON proves admission precedes SQLite json_type
     // and JSON.parse; otherwise this would be a parsing error rather than capacity.
     db.prepare('UPDATE events SET envelope=?').run(
-      '!'.repeat(MODEL_ANALYTICS_LIMITS.evidenceBytes + 1),
+      '!'.repeat(ANALYTICS_READ_LIMITS.recordBytes + 1),
     );
     assert.throws(() => store.modelAnalyticsSummary(), AnalyticsCapacityError);
     const response = await ctx.get();

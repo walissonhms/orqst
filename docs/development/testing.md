@@ -114,3 +114,41 @@ After clarifying the capacity message, locale parity, build and the affected
 error/unmocked browser cases passed again. No paid provider call or real multi-model
 benchmark was run. Real multi-model ranking, large-history performance, time series,
 exports and qualified task comparisons remain outside this acceptance.
+
+## Worker Analytics queries
+
+`pnpm test` runs the TypeScript worker directly using the existing tsx development
+loader; no build, new dependency or installed database is required. Fixtures use
+clearly synthetic events and disposable file-backed SQLite WAL stores, because an
+isolated worker cannot read a connection-local `:memory:` database. The synchronous
+local inspection library still supports in-memory stores.
+
+`pnpm build` emits both `dist/bridge.mjs` and `dist/analytics-worker.mjs`. Deploy both
+together; production workers do not load tsx or source TypeScript. Test bundle
+execution only with disposable storage and synthetic sources, using an unused
+loopback port. Do not restart the installed service as part of tests.
+
+Worker checks cover history beyond the old synchronous API budgets, aggregate
+parity, cumulative/source priority/cache/replay semantics, scopes, unknown models,
+retention, concurrent ingestion, cancellation, timeout, concurrency rejection and
+read-only/schema preservation. Browser checks cover localized worker errors and
+retry without stale/partial totals. These checks do not establish arbitrary archive
+latency, long-running load, real-provider multi-model acceptance or the Desktop MVP.
+The watchdog responds with timeout independently of cleanup, and success requires
+confirmed cleanup before the deadline. A delayed-termination fake verifies that
+no late success is accepted, the slot stays busy, and shutdown still awaits cleanup.
+Native SQL and OS/event-loop scheduling may delay termination or the watchdog
+callback; the deadline is not a hard real-time guarantee.
+
+For concurrent browser runs, use a free `ORQST_BROWSER_PORT`; the production port
+4317 is rejected. See [isolated browser test ports](browser-tests.md).
+
+The worker increment was checked with Node 24/pnpm 10: lint, typecheck, 80 Node
+cases, build and 13 Chromium cases passed. The 310-session/approximately-57000-event
+archive case uses synthetic SQLite data. A separate production-bundle smoke started
+`node dist/bridge.mjs`, exercised the authenticated endpoint and its colocated worker
+with 310 synthetic sessions/1240 events, reconciled 31000 reported tokens (12400
+cached, a subset of input), preserved schema 1 and exited cleanly. Disposable
+storage and non-production loopback ports were used; the installed service and
+native histories were not test targets. These are bounded synthetic checks, not
+real-provider or arbitrary-archive acceptance.

@@ -68,14 +68,19 @@ export function ModelAnalytics({
     const timer = setTimeout(() => {
       void fetch(request, { credentials: 'same-origin', signal: controller.signal })
         .then(async (response) => {
-          if (!response.ok)
+          if (!response.ok) {
+            const body = (await response.json()) as { error?: string };
+            const reasons: Record<string, string> = {
+              analytics_capacity_exceeded: 'capacity',
+              analytics_busy: 'busy',
+              analytics_timeout: 'timeout',
+              analytics_cancelled: 'workerUnavailable',
+              analytics_unavailable: 'workerUnavailable',
+            };
             throw new Error(
-              response.status === 503
-                ? 'capacity'
-                : response.status === 400
-                  ? 'invalidQuery'
-                  : 'error',
+              response.status === 400 ? 'invalidQuery' : (reasons[body.error ?? ''] ?? 'error'),
             );
+          }
           const data = (await response.json()) as ModelAnalyticsSummary;
           if (active) setResult({ key, data, at: new Date() });
         })
@@ -84,7 +89,10 @@ export function ModelAnalytics({
             setFailure({
               key,
               reason:
-                error instanceof Error && ['capacity', 'invalidQuery'].includes(error.message)
+                error instanceof Error &&
+                ['capacity', 'invalidQuery', 'busy', 'timeout', 'workerUnavailable'].includes(
+                  error.message,
+                )
                   ? error.message
                   : 'error',
             });

@@ -14,7 +14,8 @@ import {
 import { codexDescriptor } from '@orqst/adapter-codex';
 import { claudeDescriptor } from '@orqst/adapter-claude';
 import { opencodeDescriptor } from '@orqst/adapter-opencode';
-import { AnalyticsCapacityError, type Store } from '@orqst/database';
+import type { Store } from '@orqst/database';
+import { AnalyticsQueries, AnalyticsQueryError } from './analytics.js';
 import type { Config } from './config.js';
 
 const modelAnalyticsHttpQuerySchema = z
@@ -40,6 +41,7 @@ export function createLocalServer(
   config: Config,
   observer: Pick<Snapshot, 'diagnostics'>,
 ) {
+  const analytics = new AnalyticsQueries(store.databasePath);
   const secret = randomBytes(32).toString('hex');
   let port = config.port;
   const sockets = new WebSocketServer({
@@ -144,11 +146,20 @@ export function createLocalServer(
             reply(response, 400, { error: 'invalid_query' });
             return;
           }
+          const controller = new AbortController();
+          const cancel = () => controller.abort();
+          response.once('close', cancel);
           try {
-            reply(response, 200, store.modelAnalyticsSummary(parsed.data));
+            const report = await analytics.query(parsed.data, controller.signal);
+            if (!response.destroyed) reply(response, 200, report);
           } catch (error) {
-            if (!(error instanceof AnalyticsCapacityError)) throw error;
-            reply(response, 503, { error: 'analytics_capacity_exceeded' });
+            if (!(error instanceof AnalyticsQueryError)) throw error;
+            if (!response.destroyed)
+              reply(response, error.code === 'analytics_timeout' ? 504 : 503, {
+                error: error.code,
+              });
+          } finally {
+            response.off('close', cancel);
           }
           return;
         }
@@ -342,6 +353,7 @@ export function createLocalServer(
         for (const socket of sockets.clients) socket.terminate();
         await Promise.all([
           httpClosed,
+          analytics.close(),
           new Promise<void>((resolve) => sockets.close(() => resolve())),
         ]);
       })();

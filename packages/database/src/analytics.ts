@@ -4,11 +4,21 @@ import {
   type AnalyticsGap,
   type ModelAnalyticsQuery,
   type ModelAnalyticsReport,
+  type ModelAnalyticsSummary,
   type ModelAnalyticsRow,
   type ModelUsageContribution,
   type StoredEvent,
   type Usage,
 } from '@orqst/protocol';
+
+/** Only metric, identity and provenance fields are needed to replay attribution. */
+export type AnalyticsEvent = Pick<
+  StoredEvent,
+  'id' | 'timestamp' | 'machineId' | 'agentId' | 'adapter' | 'sequence' | 'source'
+> & {
+  correlation: Pick<StoredEvent['correlation'], 'turnId'>;
+  payload: Pick<StoredEvent['payload'], 'model' | 'usage' | 'usageKind' | 'responseId'>;
+};
 
 export interface AnalyticsSession {
   id: string;
@@ -17,12 +27,13 @@ export interface AnalyticsSession {
   agentId: string;
   adapter: StoredEvent['adapter'];
   canonical: { usage: Usage; timestamp: string; priority: number } | null;
-  events: StoredEvent[];
+  events: AnalyticsEvent[];
 }
 
-const priority = (event: StoredEvent) => (event.source.recordType === 'token_usage_record' ? 2 : 1);
-const model = (event: StoredEvent) => event.payload.model?.trim() || null;
-const evidence = (event: StoredEvent): AnalyticsEvidence => ({
+const priority = (event: AnalyticsEvent) =>
+  event.source.recordType === 'token_usage_record' ? 2 : 1;
+const model = (event: AnalyticsEvent) => event.payload.model?.trim() || null;
+const evidence = (event: AnalyticsEvent): AnalyticsEvidence => ({
   eventId: event.id,
   sequence: event.sequence,
   timestamp: event.timestamp,
@@ -53,10 +64,10 @@ function add(left: Usage, right: Usage): Usage {
   return sum;
 }
 function intervalModels(
-  events: StoredEvent[],
-  start: StoredEvent,
-  end: StoredEvent,
-): StoredEvent[] {
+  events: AnalyticsEvent[],
+  start: AnalyticsEvent,
+  end: AnalyticsEvent,
+): AnalyticsEvent[] {
   // Closed boundaries are conservative when simultaneous records cannot establish model order.
   // Binary search avoids rescanning the entire model history for every usage interval.
   let lower = 0;
@@ -68,7 +79,7 @@ function intervalModels(
     if (Date.parse(events[middle]!.timestamp) < from) lower = middle + 1;
     else upper = middle;
   }
-  const result: StoredEvent[] = [];
+  const result: AnalyticsEvent[] = [];
   for (let index = lower; index < events.length; index++) {
     const event = events[index]!;
     if (Date.parse(event.timestamp) > to) break;
@@ -111,7 +122,7 @@ export function aggregateModelAnalytics(
     return value;
   }
   for (const session of sessions) {
-    const gap = (reason: AnalyticsGap['reason'], events: StoredEvent[] = []) =>
+    const gap = (reason: AnalyticsGap['reason'], events: AnalyticsEvent[] = []) =>
       gaps.push({ sessionId: session.id, reason, eventIds: events.map((event) => event.id) });
     const conflicts = session.events.filter(
       (event) =>
@@ -135,7 +146,7 @@ export function aggregateModelAnalytics(
     }
     // Replay the existing v1 admission rule in persisted sequence order, including source priority.
     // Equal-time replacements are one snapshot, not additional consumption.
-    const chain: StoredEvent[] = [];
+    const chain: AnalyticsEvent[] = [];
     for (const event of session.events) {
       const usage = event.payload.usage;
       if (!usage || event.payload.usageKind !== 'session_cumulative') continue;
@@ -284,4 +295,73 @@ export function aggregateModelAnalytics(
       taskEquivalence: 'not_recorded',
     },
   };
+}
+
+/** Explicit aggregate allowlist; no individual source or captured content leaves the reader. */
+export function summarizeModelAnalytics(report: ModelAnalyticsReport): ModelAnalyticsSummary {
+  const gaps = new Map<AnalyticsGap['reason'], number>();
+  for (const gap of report.coverage.gaps) gaps.set(gap.reason, (gaps.get(gap.reason) ?? 0) + 1);
+  return {
+    contract: report.contract,
+    contractVersion: report.contractVersion,
+    query: report.query,
+    basis: report.basis,
+    usage: report.usage,
+    sessions: report.sessions,
+    models: report.models.map(({ adapter, provider, model, sessions, usage }) => ({
+      adapter,
+      provider,
+      model,
+      sessions,
+      usage,
+    })),
+    coverage: {
+      scope: report.coverage.scope,
+      complete: report.coverage.complete,
+      reason: report.coverage.reason,
+      sessions: report.coverage.sessions,
+      sessionsWithCanonicalUsage: report.coverage.sessionsWithCanonicalUsage,
+      unidentifiedContributions: report.coverage.unidentifiedContributions,
+      gaps: [...gaps].map(([reason, count]) => ({ reason, count })),
+    },
+    unavailable: report.unavailable,
+  };
+}
+
+/** Fold one session at a time so full evidence/contributions never accumulate across history. */
+export function aggregateModelAnalyticsSummary(
+  sessions: Iterable<AnalyticsSession>,
+  query: ModelAnalyticsQuery,
+): ModelAnalyticsSummary {
+  const result = summarizeModelAnalytics(aggregateModelAnalytics([], query));
+  const rows = new Map<string, ModelAnalyticsSummary['models'][number]>();
+  const gaps = new Map<AnalyticsGap['reason'], number>();
+  for (const session of sessions) {
+    const next = summarizeModelAnalytics(aggregateModelAnalytics([session], query));
+    if (next.usage) result.usage = add(result.usage ?? emptyUsage(), next.usage);
+    result.sessions += next.sessions;
+    result.coverage.sessions += next.coverage.sessions;
+    result.coverage.sessionsWithCanonicalUsage += next.coverage.sessionsWithCanonicalUsage;
+    result.coverage.unidentifiedContributions += next.coverage.unidentifiedContributions;
+    for (const gap of next.coverage.gaps)
+      gaps.set(gap.reason, (gaps.get(gap.reason) ?? 0) + gap.count);
+    for (const row of next.models) {
+      const key = JSON.stringify([row.adapter, row.model]);
+      const previous = rows.get(key);
+      if (!previous) rows.set(key, row);
+      else {
+        previous.sessions += row.sessions;
+        if (row.usage) previous.usage = add(previous.usage ?? emptyUsage(), row.usage);
+      }
+    }
+  }
+  result.models = [...rows.values()].sort(
+    (left, right) =>
+      (right.usage?.total ?? -1) - (left.usage?.total ?? -1) ||
+      JSON.stringify([left.adapter, left.model]).localeCompare(
+        JSON.stringify([right.adapter, right.model]),
+      ),
+  );
+  result.coverage.gaps = [...gaps].map(([reason, count]) => ({ reason, count }));
+  return result;
 }

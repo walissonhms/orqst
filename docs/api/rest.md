@@ -71,17 +71,45 @@ paths, hashes, messages and task/result content. Workspace/agent filter IDs and
 observed model labels remain metadata. This local response is not yet a user-facing
 CSV/Markdown export format.
 
-Synchronous admission is limited to **100 candidate sessions, 1000 retained event
-envelopes and 2 MiB of UTF-8 envelope bytes** across those sessions, including
-message-only events and out-of-window baselines. Budgets are checked before JSON
-inspection/materialization. Excess returns
-`503 {"error":"analytics_capacity_exceeded"}` with no partial sums. A narrower
-workspace/agent/adapter scope may help; a narrower period still needs retained
-baselines and a model filter does not reduce admission scope. These are evidence
-budgets, not a guarantee of fixed query latency or full-archive support.
+Queries run in a disposable Node worker with a separate **read-only SQLite WAL
+snapshot**. The observer remains the only writer. SQLite projects metric, identity
+and provenance metadata; messages, tool arguments, task/results and cwd are never
+materialized in JavaScript for this query. Only the aggregate allowlist crosses
+back to the bridge. Evidence is folded one session at a time.
 
-The library's unrestricted `modelAnalytics()` is not exposed through this route;
-`modelAnalyticsSummary()` uses one transaction for admission and evidence reads.
+Fixed admission limits are **5000 candidate sessions, 250000 retained envelopes,
+256 MiB of UTF-8 envelope bytes, 8 MiB per envelope and 64 MiB of projected metric
+metadata and 2 MiB of aggregate response**. Envelope admission happens before JSON inspection; projected bytes
+are checked before parsing each metadata record. The worker checks aggregate response
+bytes before transferring a result to the observer. All selected history counts,
+including message-only records and out-of-window baselines. A narrower
+workspace/agent/adapter scope may help; a narrower period still needs retained
+baselines and a model filter does not reduce admission scope.
+
+One query runs at a time per bridge, with **no queue**. A **10-second watchdog**
+covers setup, worker startup, reading/aggregation and confirmed cleanup. The
+watchdog returns a timeout when its callback runs, even if termination is still
+pending; a result is successful only if cleanup is confirmed before the deadline.
+Client disconnect and bridge shutdown also cancel the worker. The concurrency slot
+stays occupied until termination is confirmed; shutdown awaits that separate cleanup
+promise even after a timeout response. Native SQLite operations, observer event-loop
+scheduling and OS scheduling can delay termination or the watchdog callback; this
+is not a hard real-time latency guarantee. The worker's V8 heap is capped at 256 MiB old
+and 16 MiB young generation; this is not a total process RSS cap.
+
+Errors contain only an explicit code, with no partial report:
+
+| HTTP | Error                         | Meaning                                                                                     |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------------------- |
+| 503  | `analytics_capacity_exceeded` | Evidence/metadata budget exceeded; narrow scope.                                            |
+| 503  | `analytics_busy`              | Another query or its cleanup is active; retry later.                                        |
+| 504  | `analytics_timeout`           | Watchdog expired; narrow scope or retry.                                                    |
+| 503  | `analytics_cancelled`         | Bridge is closing or the request was cancelled. A disconnected client receives no response. |
+| 503  | `analytics_unavailable`       | Read-only worker/database failure, unsupported schema/WAL mode, or in-memory store.         |
+
+No SQLite diagnostic, private path or individual source reference is returned in
+errors. The unrestricted synchronous library `modelAnalytics()` and legacy bounded
+`modelAnalyticsSummary()` remain available for local inspection; HTTP uses neither.
 No table, index or migration is added. The database remains schema version 1.
 
 ### `GET /api/snapshot`
