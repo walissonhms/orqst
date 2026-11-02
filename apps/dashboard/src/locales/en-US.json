@@ -335,5 +335,12 @@
       "failed": "Save failed or the destination changed. No file was written. Choose a regular .md file of at most 32 KiB, or a new name.",
       "write_failed": "Writing or verification failed. The selected file may have been created or partially changed; inspect it before retrying. It was not opened."
     }
+  },
+  "modelObservation": {
+    "identifier": "Observed model identifier",
+    "notRecorded": "Not recorded",
+    "limits": "Model evidence limits",
+    "historyNote": "Historical session summary. The model observation time is unavailable; this identifier may differ from the latest model in the source.",
+    "availabilityNote": "Model discovery is not implemented. Availability, capabilities and selection have not been verified."
   }
 }

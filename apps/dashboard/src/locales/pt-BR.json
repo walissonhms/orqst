@@ -335,5 +335,12 @@
       "failed": "O salvamento falhou ou o destino mudou. Nenhum arquivo foi escrito. Escolha um arquivo .md regular de até 32 KiB ou outro nome.",
       "write_failed": "A escrita ou verificação falhou. O arquivo selecionado pode ter sido criado ou parcialmente alterado; confira antes de tentar novamente. Ele não foi aberto."
     }
+  },
+  "modelObservation": {
+    "identifier": "Identificador de modelo observado",
+    "notRecorded": "Não registrado",
+    "limits": "Limites da evidência de modelo",
+    "historyNote": "Resumo histórico da sessão. O horário da observação do modelo está indisponível; este identificador pode diferir do modelo mais recente na origem.",
+    "availabilityNote": "A descoberta de modelos não está implementada. Disponibilidade, capacidades e seleção não foram verificadas."
   }
 }

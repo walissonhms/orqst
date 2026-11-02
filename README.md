@@ -126,6 +126,14 @@ bundle served by the bridge in production and by Vite in development.
 - **No cloud dependency:** local operation requires no account, API key,
   telemetry, or upload.
 
+## Observed model identifier
+
+The session header labels its historical model identifier explicitly and discloses
+that its observation time, current availability, capabilities and selection are
+unverified. Missing identifiers stay unrecorded. This first observational Model
+Manager increment adds no discovery, model picker or agent controls. See
+[Model Manager evidence and limits](docs/architecture/model-manager.md).
+
 ## Confirmed Live Metrics
 
 Session details and the Artifacts panel show **Confirmed session tokens** from one

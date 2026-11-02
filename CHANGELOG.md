@@ -17,6 +17,11 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Session-header observed model identifier with English/Portuguese evidence limits:
+  model observation time is unavailable and availability, capabilities and selection
+  remain unverified. This observational Model Manager increment adds no catalog,
+  configuration, model picker or process control.
+
 - Browser aggregate Model Usage Analytics CSV/Markdown export with gesture-only
   bounded runtime validation, explicit null/coverage/gap semantics, private filter
   value omission, spreadsheet literals/large-integer preservation and inert Markdown.

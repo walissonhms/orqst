@@ -972,6 +972,23 @@ th:nth-last-child(2) {
   font-size: 9px;
   overflow-wrap: anywhere;
 }
+.session-model {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.session-model summary {
+  margin-top: 8px;
+  cursor: pointer;
+}
+.session-model summary:focus-visible {
+  outline: 2px solid #77c7a5;
+  outline-offset: 2px;
+}
+.session-model p {
+  color: #91a9b7;
+  line-height: 1.6;
+}
 .session-task {
   font-size: 11px;
   line-height: 1.8;

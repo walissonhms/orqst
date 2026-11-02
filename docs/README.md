@@ -43,6 +43,9 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Claude Code](adapters/claude.md) — contract only.
 - [OpenCode](adapters/opencode.md) — contract only.
 
+- [Model Manager evidence and limits](architecture/model-manager.md) — observed identifiers,
+  discovery inventory and dependencies before selection or execution.
+
 ## API and protocol
 
 - [REST API](api/rest.md) — bootstrap, snapshot, history, preferences,

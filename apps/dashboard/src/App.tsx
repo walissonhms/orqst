@@ -319,8 +319,16 @@ function SessionDetail({
       <div className="session-meta">
         <Status status={session.status} />
         <code>{session.id}</code>
-        <span>{session.model ?? t('unknown')}</span>
         <span>{f.duration(session)}</span>
+        <div className="session-model">
+          <span>{t('modelObservation.identifier')}: </span>
+          <code>{session.model ?? t('modelObservation.notRecorded')}</code>
+          <details>
+            <summary>{t('modelObservation.limits')}</summary>
+            <p>{t('modelObservation.historyNote')}</p>
+            <p>{t('modelObservation.availabilityNote')}</p>
+          </details>
+        </div>
       </div>
       <LiveMetrics state={metrics} announce />
       {session.status === 'waiting_for_user' && <p className="notice">{t('interventionNote')}</p>}
