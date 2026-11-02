@@ -5,6 +5,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@orqst/core": "workspace:*",
     "@orqst/protocol": "workspace:*",
     "@orqst/shared": "workspace:*",
     "@orqst/database": "workspace:*",

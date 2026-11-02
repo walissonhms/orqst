@@ -2,9 +2,7 @@
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { Store } from '@orqst/database';
-import { CodexObserver } from '@orqst/adapter-codex';
-import { createLocalServer } from '../../apps/bridge/src/server.js';
+import { createBridge } from '../../apps/bridge/src/app.js';
 const dir = await mkdtemp(join(tmpdir(), 'orqst-browser-'));
 const root = join(dir, 'sessions');
 await mkdir(root);
@@ -77,32 +75,18 @@ await writeFile(
     }),
   ].join(''),
 );
-const store = new Store(join(dir, 'db'));
-const observer = new CodexObserver({
-  root,
-  store,
+const app = createBridge({
+  port: 4318,
+  dataDir: dir,
+  sessionsDir: root,
+  dashboardDir: resolve('apps/dashboard/dist'),
+  retentionDays: 30,
   pollMs: 500,
-  onEvent: (event, live) => app.broadcast(event, live),
+  dev: false,
 });
-const app = createLocalServer(
-  store,
-  {
-    port: 4318,
-    dataDir: dir,
-    sessionsDir: root,
-    dashboardDir: resolve('apps/dashboard/dist'),
-    retentionDays: 30,
-    pollMs: 500,
-    dev: false,
-  },
-  observer,
-);
-await app.listen();
-await observer.start();
+await app.start();
 async function stop() {
-  await observer.stop();
-  await app.close();
-  store.close();
+  await app.stop();
   await rm(dir, { recursive: true, force: true });
   await rm(stateFile!, { force: true });
 }

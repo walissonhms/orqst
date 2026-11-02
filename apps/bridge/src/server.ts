@@ -10,7 +10,7 @@ import {
   type StoredEvent,
   type StreamMessage,
 } from '@orqst/protocol';
-import { codexDescriptor, type CodexObserver } from '@orqst/adapter-codex';
+import { codexDescriptor } from '@orqst/adapter-codex';
 import { claudeDescriptor } from '@orqst/adapter-claude';
 import { opencodeDescriptor } from '@orqst/adapter-opencode';
 import type { Store } from '@orqst/database';
@@ -19,7 +19,7 @@ import type { Config } from './config.js';
 export function createLocalServer(
   store: Store,
   config: Config,
-  observer: Pick<CodexObserver, 'diagnostics'>,
+  observer: Pick<Snapshot, 'diagnostics'>,
 ) {
   const secret = randomBytes(32).toString('hex');
   let port = config.port;
@@ -271,6 +271,7 @@ export function createLocalServer(
     }
   }, 15000);
   heartbeat.unref();
+  let closing: Promise<void> | undefined;
   return {
     server,
     snapshot,
@@ -294,13 +295,21 @@ export function createLocalServer(
       });
       return port;
     },
-    async close(): Promise<void> {
-      clearInterval(heartbeat);
-      for (const socket of sockets.clients) socket.terminate();
-      await new Promise<void>((resolve) => sockets.close(() => resolve()));
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
+    close(): Promise<void> {
+      closing ??= (async () => {
+        clearInterval(heartbeat);
+        const httpClosed = new Promise<void>((resolve, reject) =>
+          server.close((error: NodeJS.ErrnoException | undefined) =>
+            error && error.code !== 'ERR_SERVER_NOT_RUNNING' ? reject(error) : resolve(),
+          ),
+        );
+        for (const socket of sockets.clients) socket.terminate();
+        await Promise.all([
+          httpClosed,
+          new Promise<void>((resolve) => sockets.close(() => resolve())),
+        ]);
+      })();
+      return closing;
     },
   };
 }

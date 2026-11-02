@@ -24,6 +24,9 @@ importers:
       '@orqst/adapter-codex':
         specifier: workspace:*
         version: link:packages/adapters/codex
+      '@orqst/core':
+        specifier: workspace:*
+        version: link:packages/core
       '@orqst/database':
         specifier: workspace:*
         version: link:packages/database
@@ -81,6 +84,9 @@ importers:
       '@orqst/adapter-opencode':
         specifier: workspace:*
         version: link:../../packages/adapters/opencode
+      '@orqst/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@orqst/database':
         specifier: workspace:*
         version: link:../../packages/database
@@ -157,6 +163,18 @@ importers:
       '@orqst/protocol':
         specifier: workspace:*
         version: link:../../protocol
+
+  packages/core:
+    dependencies:
+      '@orqst/adapter-codex':
+        specifier: workspace:*
+        version: link:../adapters/codex
+      '@orqst/database':
+        specifier: workspace:*
+        version: link:../database
+      '@orqst/protocol':
+        specifier: workspace:*
+        version: link:../protocol
 
   packages/database:
     dependencies:
