@@ -1,4 +1,14 @@
-import { app, BrowserWindow, Menu, protocol, session } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  nativeImage,
+  Notification,
+  protocol,
+  session,
+  Tray,
+} from 'electron';
+import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
 import { createInstance } from 'i18next';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
@@ -18,6 +28,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 const origin = bridgeOrigin(process.env.ORQST_DESKTOP_PORT);
 let window: BrowserWindow | undefined;
+const ownsInstance = app.requestSingleInstanceLock();
 
 async function start(): Promise<void> {
   await app.whenReady();
@@ -29,6 +40,7 @@ async function start(): Promise<void> {
   });
   // In-memory browser state: no captured content or cookies persisted by this client.
   const browserSession = session.fromPartition('orqst-desktop', { cache: false });
+  browserSession.setUserAgent(`${browserSession.getUserAgent()} ORQSTDesktop/0.1`);
   await browserSession.setProxy({ mode: 'direct' });
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   browserSession.setPermissionCheckHandler(() => false);
@@ -57,8 +69,14 @@ async function start(): Promise<void> {
     Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
   );
 
+  let targetSession: string | undefined;
   function openWindow(): void {
     if (window && !window.isDestroyed()) {
+      if (window.isMinimized()) window.restore();
+      if (targetSession)
+        void window
+          .loadURL(`${origin}/#session=${encodeURIComponent(targetSession)}`)
+          .catch(() => {});
       window.show();
       window.focus();
       return;
@@ -106,7 +124,9 @@ async function start(): Promise<void> {
       clearRetry();
       showingOffline = false;
       try {
-        await current.loadURL(`${origin}/`);
+        await current.loadURL(
+          targetSession ? `${origin}/#session=${encodeURIComponent(targetSession)}` : `${origin}/`,
+        );
       } catch {
         await showOffline();
       }
@@ -135,7 +155,170 @@ async function start(): Promise<void> {
     });
     void connect();
   }
-  app.on('activate', openWindow);
+  const monitor = new DesktopMonitor();
+  let connected = false;
+  let pending = 0;
+  let enabled = false;
+  let nativeFailed = false;
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const activeNotifications = new Set<Notification>();
+  // Owned monochrome 16x16 template icon, generated from a fixed pixel pattern.
+  const pixels = Buffer.alloc(16 * 16 * 4);
+  for (let y = 2; y < 14; y++)
+    for (let x = 2; x < 14; x++) {
+      if (x < 5 || x > 10 || y < 5 || y > 10) pixels[(y * 16 + x) * 4 + 3] = 255;
+    }
+  const icon = nativeImage.createFromBitmap(pixels, { width: 16, height: 16, scaleFactor: 1 });
+  icon.setTemplateImage(true);
+  const tray = new Tray(icon);
+  const updateTray = () => {
+    if (stopped || tray.isDestroyed()) return;
+    const state = i18n.t(`desktopShell.${connected ? 'connected' : 'offline'}`);
+    tray.setToolTip(`ORQST — ${state}`);
+    tray.setTitle(connected && pending ? String(pending) : '');
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        {
+          id: 'desktop-open',
+          label: i18n.t('desktopShell.open'),
+          click: () => {
+            targetSession = undefined;
+            openWindow();
+          },
+        },
+        { id: 'desktop-state', label: state, enabled: false },
+        {
+          id: 'desktop-pending',
+          label: i18n.t(connected ? 'desktopShell.pending' : 'desktopShell.pendingUnknown', {
+            count: pending,
+          }),
+          enabled: false,
+        },
+        { type: 'separator' },
+        {
+          id: 'desktop-native',
+          label: i18n.t('desktopShell.nativeToggle'),
+          type: 'checkbox',
+          checked: enabled,
+          enabled: Notification.isSupported(),
+          click: (item) => {
+            enabled = item.checked;
+            nativeFailed = false;
+            updateTray();
+          },
+        },
+        {
+          id: 'desktop-native-status',
+          label: i18n.t(
+            `desktopShell.${nativeFailed ? 'nativeFailed' : !Notification.isSupported() ? 'nativeUnsupported' : enabled ? 'nativeEnabled' : 'nativeDisabled'}`,
+          ),
+          enabled: false,
+        },
+        { label: i18n.t('desktopShell.nativeLimit'), enabled: false },
+        { type: 'separator' },
+        { id: 'desktop-quit', label: i18n.t('desktopShell.quit'), click: () => app.quit() },
+      ]),
+    );
+  };
+  const fetcher: typeof fetch = (input, init) =>
+    browserSession.fetch(input instanceof URL ? input.href : input, init);
+  const notify = (alert: NativeAlert) => {
+    if (!enabled || !Notification.isSupported()) return;
+    let notification: Notification;
+    try {
+      notification = new Notification({
+        title: 'ORQST',
+        body: i18n.t(`desktopShell.alert.${alert.category}`),
+        silent: alert.silent,
+      });
+    } catch {
+      nativeFailed = true;
+      updateTray();
+      return;
+    }
+    if (activeNotifications.size >= 20) {
+      const oldest = activeNotifications.values().next().value;
+      oldest?.close();
+      if (oldest) activeNotifications.delete(oldest);
+    }
+    activeNotifications.add(notification);
+    notification.on('close', () => activeNotifications.delete(notification));
+    notification.on('failed', () => {
+      activeNotifications.delete(notification);
+      nativeFailed = true;
+      updateTray();
+    });
+    notification.on('click', () => {
+      // Validate against a fresh authenticated snapshot, never use notification text as identity.
+      void readMonitorSnapshot(fetcher, origin)
+        .then((snapshot) => {
+          if (
+            stopped ||
+            !snapshot.sessions.some(
+              (value) => value.id === alert.sessionId && value.adapter === 'codex',
+            )
+          )
+            return;
+          targetSession = alert.sessionId;
+          openWindow();
+        })
+        .catch(() => {});
+    });
+    try {
+      notification.show();
+    } catch {
+      activeNotifications.delete(notification);
+      nativeFailed = true;
+      updateTray();
+    }
+  };
+  let lastSnapshotAt = 0;
+  const poll = async () => {
+    try {
+      if (!connected) {
+        const response = await fetcher(`${origin}/api/bootstrap`, {
+          credentials: 'include',
+          redirect: 'error',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!response.ok) throw new Error('Bootstrap unavailable');
+        await response.body?.cancel();
+      }
+      const snapshot = await readMonitorSnapshot(fetcher, origin);
+      if (stopped) return;
+      if (Date.now() - lastSnapshotAt > 10000) monitor.disconnect();
+      lastSnapshotAt = Date.now();
+      const result = monitor.accept(snapshot);
+      connected = true;
+      pending = result.pending;
+      for (const alert of result.alerts) notify(alert);
+    } catch {
+      monitor.disconnect();
+      connected = false;
+    }
+    if (!stopped) {
+      updateTray();
+      timer = setTimeout(() => void poll(), 2000);
+    }
+  };
+  updateTray();
+  void poll();
+  app.on('before-quit', () => {
+    stopped = true;
+    clearTimeout(timer);
+    for (const notification of activeNotifications) notification.close();
+    activeNotifications.clear();
+    tray.destroy();
+  });
+  app.on('second-instance', () => {
+    targetSession = undefined;
+    openWindow();
+  });
+  app.on('activate', () => {
+    targetSession = undefined;
+    openWindow();
+  });
   openWindow();
 }
 
@@ -143,7 +326,9 @@ async function start(): Promise<void> {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
-void start().catch(() => {
-  console.error('ORQST Desktop startup failed');
-  app.exit(1);
-});
+if (!ownsInstance) app.quit();
+else
+  void start().catch(() => {
+    console.error('ORQST Desktop startup failed');
+    app.exit(1);
+  });

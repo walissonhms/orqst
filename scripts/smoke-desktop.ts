@@ -1,6 +1,8 @@
 // Explicit real Electron smoke. Uses only a disposable synthetic Bridge and profile.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, mkdir, writeFile, appendFile, rm, realpath } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -59,7 +61,44 @@ try {
   desktop.process().stderr?.on('data', (chunk: Buffer) => {
     electronDiagnostics = (electronDiagnostics + chunk.toString()).slice(-16000);
   });
+  assert.equal(
+    await desktop.evaluate(({ app }) => app.getPath('userData')),
+    await realpath(join(root, 'profile')),
+  );
   let page = await desktop.firstWindow();
+  // Test-only instrumentation in the main process; no shipped IPC/test endpoint.
+  // Capture the real Tray menu and Notification objects, suppress actual OS delivery.
+  await desktop.evaluate(({ Tray, Notification }) => {
+    const original = Tray.prototype.setContextMenu;
+    Tray.prototype.setContextMenu = function (menu) {
+      Reflect.set(globalThis, 'syntheticDesktopMenu', menu);
+      Reflect.set(globalThis, 'syntheticDesktopTray', this);
+      return original.call(this, menu);
+    };
+    Reflect.set(globalThis, 'syntheticDesktopAlerts', []);
+    Notification.prototype.show = function () {
+      const alerts = Reflect.get(globalThis, 'syntheticDesktopAlerts') as Electron.Notification[];
+      alerts.push(this);
+    };
+  });
+  await expect
+    .poll(() => desktop!.evaluate(() => Boolean(Reflect.get(globalThis, 'syntheticDesktopMenu'))))
+    .toBe(true);
+  await desktop.evaluate(() => {
+    const menu = Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu;
+    const item = menu.getMenuItemById('desktop-native')!;
+    item.checked = false;
+    item.click();
+  });
+  assert.equal(
+    await desktop.evaluate(
+      () =>
+        (Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu).getMenuItemById(
+          'desktop-native',
+        )!.checked,
+    ),
+    true,
+  );
   await expect(page.locator('.connection-connected')).toBeVisible();
   await expect(
     page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }),
@@ -90,15 +129,131 @@ try {
   assert.equal(cookie.sameSite, 'strict');
   assert.equal(await page.evaluate(() => document.cookie.includes('orqst_session')), false);
   await page.screenshot({ path: join(evidenceDir, 'online.png') });
+  const alertCount = () =>
+    desktop!.evaluate(
+      () => (Reflect.get(globalThis, 'syntheticDesktopAlerts') as Electron.Notification[]).length,
+    );
+  assert.equal(await alertCount(), 0, 'startup history never alerts');
+  await appendFile(
+    join(sessionsDir, 'synthetic.jsonl'),
+    record('event_msg', {
+      type: 'task_complete',
+      last_agent_message: 'PRIVATE synthetic content never in native alert',
+    }),
+  );
+  await expect.poll(alertCount).toBe(1);
+  const nativeContent = await desktop.evaluate(() => {
+    const alert = (
+      Reflect.get(globalThis, 'syntheticDesktopAlerts') as Electron.Notification[]
+    )[0]!;
+    return { title: alert.title, body: alert.body, silent: alert.silent };
+  });
+  assert.equal(nativeContent.title, 'ORQST');
+  assert.match(nativeContent.body, /Observed turn completed|Turno observado concluído/);
+  assert.equal(nativeContent.silent, true);
+  assert.equal(JSON.stringify(nativeContent).includes('PRIVATE'), false);
+  await expect
+    .poll(() =>
+      desktop!.evaluate(() =>
+        (Reflect.get(globalThis, 'syntheticDesktopTray') as Electron.Tray).getTitle(),
+      ),
+    )
+    .toBe('1');
+  // Main-process click handler revalidates identity and the renderer selects that session.
+  await desktop.evaluate(() => {
+    (Reflect.get(globalThis, 'syntheticDesktopAlerts') as Electron.Notification[])[0]!.emit(
+      'click',
+    );
+  });
+  await expect(
+    page.getByRole('region', { name: /Session details|Detalhes da sessão/ }),
+  ).toBeVisible();
+  // Exercise native failure reporting without claiming OS visual delivery.
+  await desktop.evaluate(() => {
+    (Reflect.get(globalThis, 'syntheticDesktopAlerts') as Electron.Notification[])[0]!.emit(
+      'failed',
+      {},
+      'synthetic failure',
+    );
+  });
+  assert.match(
+    await desktop.evaluate(
+      () =>
+        (Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu).getMenuItemById(
+          'desktop-native-status',
+        )!.label,
+    ),
+    /failed|falhou/,
+  );
+  await page.evaluate(async () => {
+    await fetch('/api/notifications/read', { method: 'POST' });
+  });
+  await expect
+    .poll(() =>
+      desktop!.evaluate(() =>
+        (Reflect.get(globalThis, 'syntheticDesktopTray') as Electron.Tray).getTitle(),
+      ),
+    )
+    .toBe('');
+  const secondLaunch = () =>
+    promisify(execFile)(
+      desktopRequire('electron') as string,
+      [resolve('apps/desktop'), `--user-data-dir=${join(root, 'profile')}`],
+      { env, timeout: 10000 },
+    );
+  // A second real process with the same disposable profile restores the first window.
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.minimize());
+  await secondLaunch();
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMinimized()),
+    )
+    .toBe(false);
+  assert.equal(desktop.windows().length, 1);
+  // Restore a minimized window through the tray.
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.minimize());
+  await desktop.evaluate(() => {
+    (Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu)
+      .getMenuItemById('desktop-open')!
+      .click();
+  });
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isMinimized()),
+    )
+    .toBe(false);
   // Close/reopen the native window while proving the independently owned Bridge lives.
   await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
   await expect
     .poll(() => desktop!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
     .toBe(0);
   assert.equal((await fetch(`${origin}/api/bootstrap`)).status, 200);
+  // The main-process monitor remains active with no renderer/window.
+  await appendFile(
+    join(sessionsDir, 'synthetic.jsonl'),
+    record('response_item', {
+      type: 'function_call',
+      name: 'request_user_input',
+      call_id: 'synthetic-input',
+      arguments: 'PRIVATE synthetic prompt',
+    }),
+  );
+  await expect.poll(alertCount).toBe(2);
   const reopened = desktop.waitForEvent('window');
-  await desktop.evaluate(({ app }) => app.emit('activate'));
+  await desktop.evaluate(() => {
+    (Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu)
+      .getMenuItemById('desktop-open')!
+      .click();
+  });
   page = await reopened;
+  await expect(page.locator('.connection-connected')).toBeVisible();
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
+  await expect
+    .poll(() => desktop!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length))
+    .toBe(0);
+  const singleInstanceReopened = desktop.waitForEvent('window');
+  await secondLaunch();
+  page = await singleInstanceReopened;
   await expect(page.locator('.connection-connected')).toBeVisible();
   await bridge.stop();
   await expect(page.locator('.connection-offline')).toBeVisible({ timeout: 15000 });
@@ -120,10 +275,30 @@ try {
   bridge = createBridge({ ...config, port });
   await bridge.start();
   await expect(page.locator('.connection-connected')).toBeVisible({ timeout: 20000 });
-  await desktop.close();
+  assert.equal(await alertCount(), 2, 'window reopen/reconnect does not repeat alerts');
+  const exit = new Promise<void>((resolve) => desktop!.process().once('exit', () => resolve()));
+  await desktop
+    .evaluate(() => {
+      (Reflect.get(globalThis, 'syntheticDesktopMenu') as Electron.Menu)
+        .getMenuItemById('desktop-quit')!
+        .click();
+    })
+    .catch(() => {});
+  await exit;
   desktop = undefined;
   assert.equal((await fetch(`${origin}/api/bootstrap`)).status, 200);
-  console.log(JSON.stringify({ result: 'passed', platform: process.platform, versions }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        result: 'passed',
+        platform: process.platform,
+        versions,
+        nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
+      },
+      null,
+      2,
+    ),
+  );
   console.log(`Window evidence: ${evidenceDir}`);
 } catch (error) {
   console.error(electronDiagnostics);

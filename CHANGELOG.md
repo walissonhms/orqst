@@ -7,6 +7,15 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- macOS menu-bar tray with open/restore, Bridge availability, bounded unread history
+  and quit-Desktop-only actions. A main-process authenticated snapshot consumer gates
+  native alerts on new persisted Codex notification/source/status evidence and existing
+  category/sound preferences. Startup, reconnect, replay and long-pause history are
+  baselined without alerts. Fixed translated native text excludes captured content;
+  clicks revalidate session identity before opening it. Native opt-in is per Desktop
+  run; renderer notifications remain denied, without preload/IPC. Mechanism tests are
+  separate from pending visual delivery acceptance under a signed macOS app identity.
+
 - Minimal macOS Electron observer client loading the existing Bridge-served React
   dashboard, with sandbox/context isolation, no preload/IPC or Node renderer access,
   bounded loopback URL policy, denied permissions/downloads/external windows and

@@ -223,3 +223,29 @@ restarted or migrated. No provider call, global installation, release or paid si
 was performed. Ingestion is unchanged; `validate:local` was not rerun for this slice.
 This does not validate a packaged/signed `.app`, other macOS versions/Intel,
 Windows/Linux, native notifications/tray, long-running soak or the complete Desktop MVP.
+
+## macOS tray/native alert mechanism
+
+The next 2026-11-02 increment adds `tests/desktop-monitor.test.ts` for baseline,
+reconnect/replay, category/source/status/identity gates, minimized notification content,
+strict snapshot projection, bounded HTTP input and validated session hashes.
+`tests/desktop-monitor-qa.test.ts` independently covers cursor rollback replay,
+burst limits and the single-instance guard. No installed data is used.
+
+The extended disposable Electron smoke captures actual Tray menus and Notification
+objects through test-only Playwright main-process instrumentation. It intercepts native
+`show`, so assertions cover the mechanism rather than real macOS banner delivery.
+It checks opt-in, unread updates/read history, silent minimal content, session click,
+fixed failure status, minimized restoration and monitoring with the window closed,
+plus the earlier isolation/authentication/reconnect/quit checks. Chromium adds a current
+versus missing session-hash case. Real visual delivery, signed ORQST identity,
+Notification Center and OS permission/Focus acceptance remain pending; see
+[Desktop limits](desktop.md#tray-and-native-alert-mechanism--2026-11-02).
+
+This increment passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (118 cases),
+`pnpm build`, `ORQST_BROWSER_PORT=4339 pnpm test:browser` (14 cases) and
+`pnpm test:desktop` on the same Electron45.2.1/arm64 runtime. The smoke also launches
+another real Electron process against the same canonical temporary profile, proving
+single-instance restore of a minimized window and reopen after window close. It
+never addresses the owner profile or installed Bridge. Ingestion remains unchanged;
+`pnpm validate:local` was not rerun. Visual OS delivery remains outside these results.

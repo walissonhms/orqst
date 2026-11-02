@@ -335,3 +335,12 @@ The versioned observed-session evidence and artifact-reference queries are Core
 library methods only. They add no route or message to this transport. Existing
 bootstrap authorization does not grant source dereferencing or process/task control.
 See [implemented local contracts](lifecycle-contracts.md#implemented-local-observation-slice-phase-1).
+
+## Desktop snapshot consumer
+
+The optional Electron main process consumes the existing bootstrap and snapshot GET
+routes with the same session cookie, without a new endpoint or privileged renderer
+method. It baselines notification history on attachment/recovery and joins new history
+rows to retained source evidence before attempting native alerts. Count and loss bounds,
+identity validation and macOS distribution limits are documented in
+[Desktop development](../development/desktop.md#tray-and-native-alert-mechanism--2026-11-02).

@@ -178,7 +178,7 @@ capability is introduced. Existing source-read-only protections, v1 transports a
 single-writer persistence are unchanged. Provider control and future dereferencing
 require their own evidence and security design.
 
-## Minimal Electron observer client review
+## Initial Electron observer client review (before tray increment)
 
 The macOS checkout client is a separate unprivileged HTTP consumer of the existing
 Bridge. It imports no Core/database and starts/stops no service or agent. Its renderer
@@ -192,10 +192,31 @@ text with `default-src 'none'`; it exposes no filesystem or privileged bridge.
 
 No cookie/header rewriting, CORS exception, authentication bypass or CSP relaxation is
 introduced. The same trusted-local-user limitation applies: bootstrap is not proof of
-server identity, encryption or authority for agent control. The client has no filesystem
-content API, shell opening, native notifications or execution. Closing/quitting it cannot
+server identity, encryption or authority for agent control. The initial window slice had no filesystem content API, shell opening, native
+notifications or execution. The later native alert boundary is reviewed below. Closing/quitting it cannot
 stop or preserve a crashed Bridge; observation belongs to that independent process.
 Electron has its own bundled runtime and no SQLite/native-addon ABI dependency here.
 Packaging, fuses/signing/notarization, updates and native permission flows require a
 separate distribution review; the checkout command is not a signed release. See
 [Desktop development](docs/development/desktop.md) for setup/version sources.
+
+## Tray/native notification review — 2026-11-02
+
+The Desktop main process now reads only the fixed bootstrap/snapshot routes through
+its existing in-memory Electron session and authentication cookie. No REST/WS shape,
+Host/Origin check, CSP, cookie policy, loopback allowlist or Core/SQLite ownership changes.
+Fetches reject redirects and have a five-second timeout and 8 MiB streamed-body limit.
+Validated bounded projections and identity/source/status joins gate supported Codex
+alerts; startup/reconnect/cursor reset/long pauses baseline without delivery. History
+and source records never become renderer-supplied native payloads. Main-process native
+text is fixed localized category text only. No OS errors/captured payloads are logged.
+
+No preload/IPC, generic native notification method, filesystem access, agent control,
+service management or new renderer permission is introduced. Clicks revalidate against
+a fresh authenticated session list; a bounded hash can select only a current dashboard
+session identity. Tray opt-in is process-local, while existing category/sound preferences
+remain Bridge-owned. Native errors are surfaced without claiming delivery; macOS signing,
+app identity, permission and Focus limitations remain explicit. OS delivery and packaging
+require separate acceptance. The existing trusted-local-listener limitation still applies;
+source shape validation does not re-open or authenticate a filesystem source. See
+[Desktop details](docs/development/desktop.md).

@@ -120,3 +120,12 @@ test('new external source records update the page and notification history witho
   await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   await expect(page.locator('.notification-item')).toHaveCount(1);
 });
+
+test('session links select only an identity in the current snapshot', async ({ page }) => {
+  await page.goto('/#session=synthetic-browser-session');
+  await expect(page.getByRole('region', { name: 'Session details' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).first().click();
+  await page.goto('/#session=missing-session');
+  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Session details' })).toHaveCount(0);
+});

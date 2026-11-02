@@ -204,6 +204,24 @@
   "desktopShell": {
     "unavailable": "Bridge local indisponível",
     "retry": "O ORQST tentará novamente em cinco segundos. Inicie o Bridge separadamente se estiver parado.",
-    "lifetime": "Fechar esta janela não encerra o serviço nem os agentes externos."
+    "lifetime": "Fechar esta janela não encerra o serviço nem os agentes externos.",
+    "open": "Abrir ORQST",
+    "connected": "Bridge conectado",
+    "offline": "Bridge indisponível",
+    "pending": "{{count}} não lidas (últimas 200)",
+    "pendingUnknown": "Contagem de não lidas indisponível",
+    "nativeToggle": "Alertas nativos nesta execução do Desktop",
+    "nativeEnabled": "Ativados; entrega pelo macOS não é garantida",
+    "nativeDisabled": "Alertas nativos desativados",
+    "nativeFailed": "Alerta nativo falhou; confira identidade do app e ajustes do macOS",
+    "nativeUnsupported": "Notificações nativas indisponíveis",
+    "nativeLimit": "App de desenvolvimento: exige assinatura e permissão no macOS",
+    "quit": "Sair apenas do Desktop",
+    "dashboardNotice": "Controle os alertas nativos no menu ORQST da barra do macOS nesta execução do Desktop. As categorias e o som abaixo se aplicam; ajustes do macOS e Foco podem impedir a entrega. O app de desenvolvimento precisa de identidade assinada válida. Alertas do navegador ficam desativados aqui.",
+    "alert": {
+      "completed": "Turno observado concluído",
+      "failed": "Falha observada na execução",
+      "intervention": "Sessão observada solicita sua resposta"
+    }
   }
 }

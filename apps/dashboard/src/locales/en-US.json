@@ -204,6 +204,24 @@
   "desktopShell": {
     "unavailable": "Local Bridge unavailable",
     "retry": "ORQST will retry in five seconds. Start the Bridge separately if it is stopped.",
-    "lifetime": "Closing this window does not stop the service or the external agents."
+    "lifetime": "Closing this window does not stop the service or the external agents.",
+    "open": "Open ORQST",
+    "connected": "Bridge connected",
+    "offline": "Bridge unavailable",
+    "pending": "{{count}} unread (latest 200)",
+    "pendingUnknown": "Unread count unavailable",
+    "nativeToggle": "Native alerts for this Desktop run",
+    "nativeEnabled": "Enabled; macOS delivery is not guaranteed",
+    "nativeDisabled": "Native alerts off",
+    "nativeFailed": "Native alert failed; check app identity and macOS settings",
+    "nativeUnsupported": "Native notifications unavailable",
+    "nativeLimit": "Development app: signing and macOS permissions required",
+    "quit": "Quit Desktop only",
+    "dashboardNotice": "Native alerts are controlled in the ORQST menu bar for this Desktop run. Categories and sound below apply; macOS settings and Focus can suppress delivery. The development app needs a valid signed identity. Browser alerts are disabled here.",
+    "alert": {
+      "completed": "Observed turn completed",
+      "failed": "Observed execution failed",
+      "intervention": "Observed session requests your input"
+    }
   }
 }

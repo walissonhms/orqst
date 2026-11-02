@@ -39,6 +39,7 @@ import type {
 import { api } from './api';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
+import { sessionFromHash } from './session-link';
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -387,6 +388,7 @@ export function App() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [selected, setSelected] = useState<string>();
+  const nativeDesktop = navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -430,6 +432,7 @@ export function App() {
   }, []);
   const onLive = useCallback(
     (event: StoredEvent) => {
+      if (nativeDesktop) return;
       const key =
         event.type === 'agent.completed'
           ? 'completed'
@@ -457,9 +460,21 @@ export function App() {
         }
       }
     },
-    [sound, t],
+    [nativeDesktop, sound, t],
   );
   const { snapshot, connection, error, refresh } = useObservatory(onLive);
+  useEffect(() => {
+    const selectLinkedSession = () => {
+      const id = sessionFromHash(location.hash, snapshot?.sessions.map((value) => value.id) ?? []);
+      if (!id) return;
+      setView('overview');
+      setSelected(id);
+      history.replaceState(null, '', location.pathname);
+    };
+    selectLinkedSession();
+    window.addEventListener('hashchange', selectLinkedSession);
+    return () => window.removeEventListener('hashchange', selectLinkedSession);
+  }, [snapshot]);
   useEffect(() => {
     if (snapshot && !prefsSaving) setLocalPrefs(snapshot.preferences);
   }, [snapshot, prefsSaving]);
@@ -1069,16 +1084,20 @@ export function App() {
                   <Volume2 size={14} />
                   {t('audioTest')}
                 </button>
-                <button
-                  className="button"
-                  onClick={() => {
-                    void desktop();
-                  }}
-                >
-                  <Bell size={14} />
-                  {t('desktop')}
-                </button>
-                <p className="fine-print">{t('notificationsPermission')}</p>
+                {!nativeDesktop && (
+                  <button
+                    className="button"
+                    onClick={() => {
+                      void desktop();
+                    }}
+                  >
+                    <Bell size={14} />
+                    {t('desktop')}
+                  </button>
+                )}
+                <p className="fine-print">
+                  {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
+                </p>
               </div>
             </div>
           </aside>

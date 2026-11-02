@@ -556,3 +556,26 @@ build-script policy. No Forge/builder dependency is necessary to run from a chec
 Packager, `.app` identity, signing/notarization, installers, updates and wider OS coverage
 remain deferred distribution decisions. A future release must recheck Electron support,
 carry binary third-party notices and separately validate packaging/permissions/lifetime.
+
+## ADR-031 — Source-gated Desktop tray and native alert consumer
+
+**Status:** Implemented mechanism; native visual delivery/distribution acceptance pending.
+
+**Context.** The Bridge already persists source-backed live notification history with
+category/sound preferences. Giving the renderer a native `notify(text)` capability
+would let untrusted captured content cross the privilege boundary. A new transport or
+Core inside Electron would duplicate existing ownership and authentication.
+
+**Decision.** Use a bounded sequential main-process consumer of the existing authenticated
+bootstrap/snapshot HTTP contract. Baseline startup/reconnect/cursor reset/long pauses;
+join only new notification rows to validated Codex event/source/status and session identity.
+Keep native strings fixed and localized, opt-in temporary in the tray, and renderer
+notifications/permissions denied. Revalidate identity on native click; a bounded dashboard
+hash selects an existing session. Reuse protocol/zod validation and i18next; add no IPC,
+preload, endpoint, persistence, source write, service lifecycle or agent operation.
+
+**Consequences.** A two-second polling delay and bounded 150-event/200-notification
+history may omit alerts; at most three attempts per cycle avoid bursts. Unread count
+is the bounded history, not inferred agent attention. API support is not OS delivery;
+signed app identity, permission/Focus and real native visual acceptance remain pending.
+See [Desktop details](../development/desktop.md) for exact evidence gates and limits.

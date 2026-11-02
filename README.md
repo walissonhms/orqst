@@ -29,7 +29,8 @@ prompts or write into observed sessions.
 | Local SQLite persistence, migrations, retention                              | Implemented                                      |
 | Loopback REST API and WebSocket streaming                                    | Implemented                                      |
 | React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                      |
-| macOS Electron window over the existing local Bridge                         | Implemented checkout client; no installer        |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer        |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending      |
 | Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending |
 | English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                      |
 | Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions      |
@@ -165,7 +166,14 @@ pnpm desktop
 reopen and quitting Desktop preserve the service/observer. If the service is unavailable,
 the client shows an honest offline state and retries. There is no preload/IPC, Node
 renderer access or agent control; permissions/external navigation are denied. This
-is a checkout client, without `.app` packaging, signing, updater or native notifications.
+The menu bar opens/restores the window and quits only Desktop. It displays Bridge
+availability and unread history (latest 200), with an opt-in native alert switch for
+this Desktop run. Categories/sound use the existing Bridge preferences. New confirmed
+Codex completion, failure and input requests can alert; history/reconnect cannot.
+Native text contains only a fixed category; clicking revalidates the session identity.
+The mechanism is implemented, but visual native delivery remains unaccepted: Electron's
+macOS API requires signing, a valid app identity and OS permission. Focus/settings can
+suppress alerts. This checkout has no `.app` packaging, signing pipeline or updater.
 See [Desktop setup, verified runtime and trust/lifetime](docs/development/desktop.md).
 
 ## Managed background service on macOS
@@ -342,6 +350,15 @@ Temporary synthetic sessions/storage/profile exercised window rendering, isolati
 cookies, initial offline/retry, loaded reconnect and close/reopen/quit lifetime.
 Installed storage/service, real-provider acceptance and packaging were not exercised.
 See [Desktop testing](docs/development/testing.md#minimal-macos-desktop-observer).
+
+The subsequent tray/native mechanism increment passed lint, typecheck, 118 Node
+cases (including three independent monitor QA cases), build, 14 Chromium cases on
+isolated port 4339 and disposable Electron45.2.1/arm64 smoke. The smoke validated
+menu/count/source gating, minimal silent content, session click, failure reporting,
+monitoring without a window and real second-process restore/reopen with one temporary
+profile. Native `show` was intercepted: real macOS banner/Notification Center delivery,
+signed ORQST app identity and OS permission/Focus acceptance remain pending. No
+installed service/database, owner window or native provider sessions were modified.
 
 Earlier observer baseline evidence follows; it is distinct from those increments.
 
