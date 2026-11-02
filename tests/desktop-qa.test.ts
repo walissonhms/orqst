@@ -85,9 +85,10 @@ test('main source enforces the Electron trust boundary and has no privileged run
     'allowRunningInsecureContent: false',
     'devTools: false',
     'navigateOnDragDrop: false',
+    "preload: join(__dirname, 'preload.cjs')",
   ])
     assert.ok(webPreferences.includes(required), required);
-  assert.equal(/preload\s*:/.test(webPreferences), false);
+  assert.equal((webPreferences.match(/preload\s*:/g) ?? []).length, 1);
   assert.equal(/nodeIntegration\s*:\s*true/.test(main), false);
   for (const required of [
     'app.enableSandbox()',
@@ -106,8 +107,14 @@ test('main source enforces the Electron trust boundary and has no privileged run
     'registerSchemesAsPrivileged',
     "default-src 'none'",
     'frame-ancestors',
+    "ipcMain.handle('orqst:save-markdown'",
+    'authorizedArtifactSender',
+    'dialog.showSaveDialog',
+    'shell.openPath',
   ])
     assert.ok(main.includes(required), required);
+  assert.equal((main.match(/ipcMain\.handle\(/g) ?? []).length, 1);
+  assert.equal(main.includes('ipcMain.on('), false);
   for (const forbidden of [
     'child_process',
     'spawn(',
@@ -116,12 +123,16 @@ test('main source enforces the Electron trust boundary and has no privileged run
     '@orqst/core',
     '@orqst/database',
     'shell.openExternal',
-    'ipcMain',
     'ipcRenderer',
     'contextBridge',
     'nodeIntegration: true',
   ])
     assert.equal(main.includes(forbidden), false, forbidden);
+  const preload = readFileSync(join(process.cwd(), 'apps/desktop/src/preload.ts'), 'utf8');
+  assert.ok(preload.includes('contextBridge.exposeInMainWorld'));
+  assert.ok(preload.includes("ipcRenderer.invoke('orqst:save-markdown'"));
+  for (const forbidden of ['readFileSync', 'writeFileSync', 'child_process', 'shell.', 'node:fs'])
+    assert.equal(preload.includes(forbidden), false, forbidden);
 });
 
 test('desktop package is a client-only Electron dependency with no Core/DB writer', () => {
