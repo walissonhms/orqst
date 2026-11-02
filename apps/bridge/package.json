@@ -1,0 +1,16 @@
+{
+  "name": "@orqst/bridge",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "@orqst/protocol": "workspace:*",
+    "@orqst/shared": "workspace:*",
+    "@orqst/database": "workspace:*",
+    "@orqst/adapter-codex": "workspace:*",
+    "@orqst/adapter-claude": "workspace:*",
+    "@orqst/adapter-opencode": "workspace:*",
+    "ws": "^8.22.1"
+  }
+}

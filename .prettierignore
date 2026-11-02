@@ -1,0 +1,8 @@
+node_modules
+dist
+pnpm-lock.yaml
+.overclock-app
+.codex
+.opencode
+playwright-report
+test-results

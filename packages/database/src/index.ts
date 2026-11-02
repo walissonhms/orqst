@@ -1,0 +1,431 @@
+import { DatabaseSync, type StatementSync, type SQLInputValue } from 'node:sqlite';
+import { chmodSync, mkdirSync, lstatSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import {
+  eventSchema,
+  emptyUsage,
+  preferencesSchema,
+  type AgentEvent,
+  type StoredEvent,
+  type Usage,
+  type SessionView,
+  type WorkspaceView,
+  type NotificationView,
+  type Preferences,
+} from '@orqst/protocol';
+import { stableId } from '@orqst/shared';
+
+type Row = Record<string, unknown>;
+export interface Checkpoint {
+  offset: number;
+  line: number;
+  identity: string;
+  anchor: string;
+  state: string;
+}
+const migrations = [
+  /* sql */ `
+CREATE TABLE machines (id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
+CREATE TABLE workspaces (id TEXT PRIMARY KEY, name TEXT NOT NULL, path TEXT NOT NULL);
+CREATE TABLE agents (id TEXT PRIMARY KEY, machine_id TEXT NOT NULL REFERENCES machines(id), name TEXT NOT NULL, adapter TEXT NOT NULL);
+CREATE TABLE sessions (
+ id TEXT PRIMARY KEY, agent_id TEXT NOT NULL REFERENCES agents(id), workspace_id TEXT NOT NULL REFERENCES workspaces(id), cwd TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'unknown', started_at TEXT NOT NULL, last_activity TEXT NOT NULL, state_at TEXT NOT NULL,
+ task TEXT, result TEXT, model TEXT, parent_session_id TEXT, manual_workspace INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL REFERENCES sessions(id), timestamp TEXT NOT NULL, type TEXT NOT NULL, envelope TEXT NOT NULL);
+CREATE INDEX events_session_sequence ON events(session_id, sequence);
+CREATE INDEX events_timestamp ON events(timestamp);
+CREATE TABLE messages (event_id TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE, session_id TEXT NOT NULL REFERENCES sessions(id), role TEXT NOT NULL, text TEXT NOT NULL);
+CREATE TABLE token_usage (session_id TEXT PRIMARY KEY REFERENCES sessions(id), input INTEGER NOT NULL DEFAULT 0, output INTEGER NOT NULL DEFAULT 0, cached INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, source_priority INTEGER NOT NULL DEFAULT 0, timestamp TEXT NOT NULL);
+CREATE TABLE notifications (id TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE, session_id TEXT NOT NULL REFERENCES sessions(id), type TEXT NOT NULL, timestamp TEXT NOT NULL, is_read INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE synchronization_state (source TEXT PRIMARY KEY, offset INTEGER NOT NULL, line INTEGER NOT NULL, identity TEXT NOT NULL, anchor TEXT NOT NULL, state TEXT NOT NULL);
+`,
+];
+
+export class Store {
+  private db: DatabaseSync;
+  private statements = new Map<string, StatementSync>();
+  readonly machineId: string;
+  readonly retentionDays: number;
+  constructor(file: string, retentionDays = 30) {
+    this.retentionDays = retentionDays;
+    if (file !== ':memory:') {
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+      if (lstatSync(dirname(file)).isSymbolicLink())
+        throw new Error('Data directory must not be a symlink');
+      chmodSync(dirname(file), 0o700);
+      try {
+        if (lstatSync(file).isSymbolicLink()) throw new Error('Database must not be a symlink');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    }
+    this.db = new DatabaseSync(file);
+    if (file !== ':memory:') chmodSync(file, 0o600);
+    this.db.exec(
+      'PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;',
+    );
+    const version = Number(this.get('PRAGMA user_version')?.user_version);
+    if (version > migrations.length)
+      throw new Error('Database schema is newer than this application');
+    for (let index = version; index < migrations.length; index++)
+      this.transaction(() => {
+        this.db.exec(migrations[index]!);
+        this.db.exec(`PRAGMA user_version=${index + 1}`);
+      });
+    this.machineId = this.setting<string>('machineId', randomUUID());
+    this.run(
+      'INSERT OR IGNORE INTO machines VALUES (?,?)',
+      this.machineId,
+      new Date().toISOString(),
+    );
+  }
+  private stmt(sql: string): StatementSync {
+    let statement = this.statements.get(sql);
+    if (!statement) {
+      statement = this.db.prepare(sql);
+      this.statements.set(sql, statement);
+    }
+    return statement;
+  }
+  private run(sql: string, ...params: SQLInputValue[]) {
+    return this.stmt(sql).run(...params);
+  }
+  private get(sql: string, ...params: SQLInputValue[]): Row | undefined {
+    return this.stmt(sql).get(...params);
+  }
+  private all(sql: string, ...params: SQLInputValue[]): Row[] {
+    return this.stmt(sql).all(...params);
+  }
+  transaction<T>(action: () => T): T {
+    if (this.db.isTransaction) return action();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const result = action();
+      this.db.exec('COMMIT');
+      return result;
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  setting<T>(key: string, fallback: T): T {
+    const row = this.get('SELECT value FROM settings WHERE key=?', key);
+    if (row) return JSON.parse(String(row.value)) as T;
+    this.setSetting(key, fallback);
+    return fallback;
+  }
+  setSetting(key: string, value: unknown): void {
+    this.run(
+      'INSERT INTO settings VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+      key,
+      JSON.stringify(value),
+    );
+  }
+  preferences(): Preferences {
+    return preferencesSchema.parse(
+      this.setting('notifications', {
+        sound: false,
+        completed: true,
+        failed: true,
+        intervention: true,
+      }),
+    );
+  }
+  checkpoint(source: string): Checkpoint | undefined {
+    return this.get(
+      'SELECT offset,line,identity,anchor,state FROM synchronization_state WHERE source=?',
+      source,
+    ) as unknown as Checkpoint | undefined;
+  }
+  saveCheckpoint(source: string, checkpoint: Checkpoint): void {
+    this.run(
+      'INSERT INTO synchronization_state VALUES (?,?,?,?,?,?) ON CONFLICT(source) DO UPDATE SET offset=excluded.offset,line=excluded.line,identity=excluded.identity,anchor=excluded.anchor,state=excluded.state',
+      source,
+      checkpoint.offset,
+      checkpoint.line,
+      checkpoint.identity,
+      checkpoint.anchor,
+      checkpoint.state,
+    );
+  }
+  workspace(path: string, name: string): string {
+    const id = stableId('workspace', path);
+    this.run('INSERT OR IGNORE INTO workspaces VALUES (?,?,?)', id, name, path);
+    return id;
+  }
+  ingest(input: AgentEvent, live = false): StoredEvent | undefined {
+    const event = eventSchema.parse(input);
+    return this.transaction(() => {
+      if (this.get('SELECT 1 FROM events WHERE id=?', event.id)) return undefined;
+      const p = event.payload;
+      this.run('INSERT OR IGNORE INTO machines VALUES (?,?)', event.machineId, event.timestamp);
+      this.run(
+        'INSERT OR IGNORE INTO workspaces VALUES (?,?,?)',
+        event.workspaceId,
+        p.cwd?.split(/[\\/]/).filter(Boolean).at(-1) ?? 'Unknown',
+        p.cwd ?? '',
+      );
+      this.run(
+        'INSERT OR IGNORE INTO agents VALUES (?,?,?,?)',
+        event.agentId,
+        event.machineId,
+        p.agentName ?? event.sessionId.slice(0, 8),
+        event.adapter,
+      );
+      this.run(
+        'INSERT OR IGNORE INTO sessions (id,agent_id,workspace_id,cwd,started_at,last_activity,state_at) VALUES (?,?,?,?,?,?,?)',
+        event.sessionId,
+        event.agentId,
+        event.workspaceId,
+        p.cwd ?? '',
+        event.timestamp,
+        event.timestamp,
+        event.timestamp,
+      );
+      const insert = this.run(
+        'INSERT INTO events(id,session_id,timestamp,type,envelope) VALUES (?,?,?,?,?)',
+        event.id,
+        event.sessionId,
+        event.timestamp,
+        event.type,
+        JSON.stringify(event),
+      );
+      this.run(
+        'UPDATE sessions SET last_activity=MAX(last_activity,?), started_at=MIN(started_at,?) WHERE id=?',
+        event.timestamp,
+        event.timestamp,
+        event.sessionId,
+      );
+      if (p.cwd)
+        this.run(
+          'UPDATE sessions SET cwd=?, workspace_id=CASE WHEN manual_workspace=0 THEN ? ELSE workspace_id END WHERE id=?',
+          p.cwd,
+          event.workspaceId,
+          event.sessionId,
+        );
+      if (p.parentSessionId)
+        this.run(
+          'UPDATE sessions SET parent_session_id=? WHERE id=?',
+          p.parentSessionId,
+          event.sessionId,
+        );
+      if (p.agentName) this.run('UPDATE agents SET name=? WHERE id=?', p.agentName, event.agentId);
+      if (p.model)
+        this.run(
+          'UPDATE sessions SET model=? WHERE id=? AND last_activity<=?',
+          p.model,
+          event.sessionId,
+          event.timestamp,
+        );
+      if (p.status)
+        this.run(
+          'UPDATE sessions SET status=?, state_at=? WHERE id=? AND state_at<=?',
+          p.status,
+          event.timestamp,
+          event.sessionId,
+          event.timestamp,
+        );
+      if (event.type === 'agent.message' && p.role && p.text) {
+        this.run(
+          'INSERT INTO messages VALUES (?,?,?,?)',
+          event.id,
+          event.sessionId,
+          p.role,
+          p.text,
+        );
+        if (p.role === 'user')
+          this.run(
+            'UPDATE sessions SET task=? WHERE id=? AND last_activity<=?',
+            p.text.slice(0, 2000),
+            event.sessionId,
+            event.timestamp,
+          );
+        if (p.role === 'assistant' && (p.phase === 'final_answer' || p.phase === 'final'))
+          this.run(
+            'UPDATE sessions SET result=? WHERE id=? AND last_activity<=?',
+            p.text,
+            event.sessionId,
+            event.timestamp,
+          );
+      }
+      if (p.result)
+        this.run(
+          'UPDATE sessions SET result=? WHERE id=? AND last_activity<=?',
+          p.result,
+          event.sessionId,
+          event.timestamp,
+        );
+      if (p.usage && p.usageKind === 'session_cumulative') {
+        const priority = event.source.recordType === 'token_usage_record' ? 2 : 1;
+        this.run(
+          `INSERT INTO token_usage VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET
+          input=excluded.input,output=excluded.output,cached=excluded.cached,total=excluded.total,source_priority=excluded.source_priority,timestamp=excluded.timestamp
+          WHERE excluded.timestamp>=token_usage.timestamp AND (excluded.total>token_usage.total OR (excluded.total=token_usage.total AND excluded.source_priority>=token_usage.source_priority))`,
+          event.sessionId,
+          p.usage.input,
+          p.usage.output,
+          p.usage.cached,
+          p.usage.total,
+          priority,
+          event.timestamp,
+        );
+      }
+      const preference =
+        event.type === 'agent.completed'
+          ? 'completed'
+          : event.type === 'agent.failed'
+            ? 'failed'
+            : event.type === 'agent.intervention.required'
+              ? 'intervention'
+              : undefined;
+      if (live && preference && this.preferences()[preference])
+        this.run(
+          'INSERT OR IGNORE INTO notifications VALUES (?,?,?,?,0)',
+          event.id,
+          event.sessionId,
+          event.type,
+          event.timestamp,
+        );
+      return { ...event, sequence: Number(insert.lastInsertRowid) };
+    });
+  }
+  cursor(): number {
+    return Number(
+      this.get("SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name='events'),0) AS cursor")
+        ?.cursor ?? 0,
+    );
+  }
+  events(after = 0, limit = 200, sessionId?: string): StoredEvent[] {
+    const rows = sessionId
+      ? this.all(
+          'SELECT sequence,envelope FROM events WHERE sequence>? AND session_id=? ORDER BY sequence LIMIT ?',
+          after,
+          sessionId,
+          limit,
+        )
+      : this.all(
+          'SELECT sequence,envelope FROM events WHERE sequence>? ORDER BY sequence LIMIT ?',
+          after,
+          limit,
+        );
+    return rows.map((row) => ({
+      ...(JSON.parse(String(row.envelope)) as AgentEvent),
+      sequence: Number(row.sequence),
+    }));
+  }
+  eventsBefore(before: number, limit: number, sessionId?: string): StoredEvent[] {
+    const rows = sessionId
+      ? this.all(
+          'SELECT sequence,envelope FROM events WHERE sequence<? AND session_id=? ORDER BY sequence DESC LIMIT ?',
+          before,
+          sessionId,
+          limit,
+        )
+      : this.all(
+          'SELECT sequence,envelope FROM events WHERE sequence<? ORDER BY sequence DESC LIMIT ?',
+          before,
+          limit,
+        );
+    return rows.reverse().map((row) => ({
+      ...(JSON.parse(String(row.envelope)) as AgentEvent),
+      sequence: Number(row.sequence),
+    }));
+  }
+  recentEvents(limit = 100, sessionId?: string): StoredEvent[] {
+    const rows = sessionId
+      ? this.all(
+          'SELECT sequence,envelope FROM events WHERE session_id=? ORDER BY sequence DESC LIMIT ?',
+          sessionId,
+          limit,
+        )
+      : this.all('SELECT sequence,envelope FROM events ORDER BY sequence DESC LIMIT ?', limit);
+    return rows.reverse().map((row) => ({
+      ...(JSON.parse(String(row.envelope)) as AgentEvent),
+      sequence: Number(row.sequence),
+    }));
+  }
+  sessions(): SessionView[] {
+    return this.all(
+      `SELECT s.*,a.name AS agent_name,a.adapter,t.input,t.output,t.cached,t.total FROM sessions s JOIN agents a ON a.id=s.agent_id LEFT JOIN token_usage t ON t.session_id=s.id ORDER BY last_activity DESC`,
+    ).map((row) => ({
+      id: String(row.id),
+      workspaceId: String(row.workspace_id),
+      cwd: String(row.cwd),
+      agentName: String(row.agent_name),
+      adapter: String(row.adapter),
+      status: row.status as SessionView['status'],
+      startedAt: String(row.started_at),
+      lastActivity: String(row.last_activity),
+      task: row.task as string | null,
+      result: row.result as string | null,
+      model: row.model as string | null,
+      parentSessionId: row.parent_session_id as string | null,
+      manualWorkspace: Boolean(row.manual_workspace),
+      usage: this.usage(row),
+    }));
+  }
+  private usage(row: Row): Usage {
+    return {
+      input: Number(row.input ?? 0),
+      output: Number(row.output ?? 0),
+      cached: Number(row.cached ?? 0),
+      total: Number(row.total ?? 0),
+    };
+  }
+  workspaces(): WorkspaceView[] {
+    return this.all(
+      `SELECT w.*,COUNT(s.id) AS sessions,SUM(t.input) AS input,SUM(t.output) AS output,SUM(t.cached) AS cached,SUM(t.total) AS total FROM workspaces w LEFT JOIN sessions s ON s.workspace_id=w.id LEFT JOIN token_usage t ON t.session_id=s.id GROUP BY w.id ORDER BY w.name`,
+    ).map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      path: String(row.path),
+      sessions: Number(row.sessions),
+      usage: this.usage(row),
+    }));
+  }
+  associate(sessionId: string, workspaceId: string | null): boolean {
+    const session = this.get('SELECT cwd FROM sessions WHERE id=?', sessionId);
+    if (!session) return false;
+    const target =
+      workspaceId ??
+      this.workspace(String(session.cwd), String(session.cwd).split(/[\\/]/).at(-1) ?? 'Unknown');
+    if (!this.get('SELECT 1 FROM workspaces WHERE id=?', target)) return false;
+    this.run(
+      'UPDATE sessions SET workspace_id=?,manual_workspace=? WHERE id=?',
+      target,
+      workspaceId ? 1 : 0,
+      sessionId,
+    );
+    return true;
+  }
+  notifications(): NotificationView[] {
+    return this.all('SELECT * FROM notifications ORDER BY timestamp DESC LIMIT 200').map((row) => ({
+      id: String(row.id),
+      sessionId: String(row.session_id),
+      type: String(row.type),
+      timestamp: String(row.timestamp),
+      read: Boolean(row.is_read),
+    }));
+  }
+  readNotifications(): void {
+    this.run('UPDATE notifications SET is_read=1');
+  }
+  retain(now = Date.now()): number {
+    const cutoff = new Date(now - this.retentionDays * 86400000).toISOString();
+    return Number(this.run('DELETE FROM events WHERE timestamp<?', cutoff).changes);
+  }
+  totals(): Usage {
+    return this.usage(
+      this.get(
+        'SELECT SUM(input) AS input,SUM(output) AS output,SUM(cached) AS cached,SUM(total) AS total FROM token_usage',
+      ) ?? emptyUsage(),
+    );
+  }
+  close(): void {
+    this.db.close();
+  }
+}

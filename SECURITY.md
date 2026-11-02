@@ -1,0 +1,119 @@
+# Security policy
+
+ORQST observes AI agent sessions that may contain source code, prompts, tool
+output, credentials accidentally pasted by a user, and other sensitive data.
+Security and privacy are therefore part of the product, not an afterthought.
+
+## Supported versions
+
+ORQST is pre-release. There is no supported release line yet.
+
+| Version               | Supported                         |
+| --------------------- | --------------------------------- |
+| `0.1.x` (development) | Best effort only; no security SLA |
+| Older                 | Not applicable                    |
+
+No version has been tagged as a stable release.
+
+## Reporting a vulnerability
+
+**Do not open a public issue for a security vulnerability.**
+
+Use one of these private channels:
+
+1. If the repository is hosted on GitHub, open a private security advisory in
+   the repository's **Security** tab.
+2. Otherwise, contact the repository owner through the private channel used to
+   share this repository.
+
+Include:
+
+- the affected version or commit,
+- the affected component (bridge, database, Codex adapter, dashboard),
+- reproduction steps or a minimal proof of concept,
+- the impact you believe is possible,
+- whether the issue requires local access, a malicious session file, or a
+  malicious web page.
+
+Do not include real credentials, real session content, or third-party personal
+data in the report. Redact evidence.
+
+There is no bug bounty and no response-time commitment at this stage. The owner
+will acknowledge a report when possible and coordinate disclosure after a fix.
+
+## Security model
+
+ORQST is designed for a **single trusted OS user on a local machine**.
+
+- The bridge binds `127.0.0.1` only. It has no public-listening mode.
+- A random per-process secret is issued as an `HttpOnly`, `SameSite=Strict`
+  session cookie by `GET /api/bootstrap`. All `/api/*` routes except bootstrap
+  and the `/ws` upgrade require that cookie.
+- Requests are rejected unless the `Host` header is a trusted loopback host,
+  and any present `Origin` or `Sec-Fetch-Site` header is consistent with a
+  same-origin request. This mitigates DNS rebinding and cross-site requests.
+- JSON bodies must use `Content-Type: application/json`, are limited to 8 KiB,
+  and are validated with zod.
+- The static dashboard server rejects dotfile paths and NUL bytes, resolves
+  files under the dashboard root, verifies the real path, and denies anything
+  outside it.
+- The Codex reader skips symlinks, opens files with `O_NOFOLLOW`, verifies the
+  canonical path stays inside the session root, and never writes to the source.
+- Responses set `Content-Security-Policy`, `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and
+  `Cache-Control: no-store`.
+- The process sets `umask(0o077)`. The data directory is `0700`, the database
+  is `0600`, and symlinked data paths are refused.
+- Captured content is treated as untrusted and rendered as plain text. It is
+  never executed or interpreted as HTML.
+- Text passes through a best-effort redaction filter for common secret shapes
+  before storage, and is truncated to 32,000 characters.
+- There is no telemetry, no analytics, and no automatic upload.
+
+Full detail: [docs/architecture/security-model.md](docs/architecture/security-model.md).
+
+## What ORQST does not protect against
+
+These are known boundaries, not hidden assumptions:
+
+- **Other processes running as the same OS user.** Any local process can call
+  `/api/bootstrap` and obtain its own session cookie. ORQST is not a multi-user
+  service and has no per-user authorization.
+- **A compromised browser profile or OS account.** The cookie is `HttpOnly` but
+  readable by a process with access to the profile or memory.
+- **Encryption at rest.** The SQLite database and WAL files are plaintext.
+  Filesystem permissions are the only access control.
+- **Perfect secret redaction.** Redaction is pattern-based and can miss unusual
+  formats, split secrets, or secrets embedded in binary data.
+- **Malicious content execution.** ORQST does not execute captured content, but
+  a future feature that renders Markdown or links would need a new review.
+- **Public exposure.** Running ORQST behind a reverse proxy, on `0.0.0.0`, in a
+  container with a published port, or on a shared host is unsupported and
+  unsafe without additional authentication and TLS.
+- **Supply-chain compromise** of dependencies, the Node runtime, or the OS.
+- **Denial of service by a local user** with access to the same machine.
+
+## Handling captured data
+
+- Session files are read-only inputs. ORQST never modifies them.
+- Raw logs, encrypted reasoning, account/identity blocks, and environment or
+  configuration payloads are not copied into the database.
+- Event details expire under the configured retention window. Session summaries
+  and token totals remain.
+- Deleting `~/.orqst` (or the configured data directory) removes local history.
+  Back up only if you understand that the database contains captured prompts and
+  tool output.
+
+## Dependency and release hygiene
+
+- Dependencies are pinned through `pnpm-lock.yaml`.
+- Do not add a dependency with an incompatible or unclear license.
+- Do not commit `.env` files, database files, session captures, or credentials.
+- Review any change to the HTTP server, WebSocket handshake, cookie logic,
+  static file serving, path handling, or redaction as security-sensitive.
+
+## Disclosure
+
+Please give the owner reasonable time to investigate and fix an issue before
+publishing details. The owner will credit reporters who want credit, unless
+doing so would expose user data.

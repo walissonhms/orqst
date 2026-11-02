@@ -1,0 +1,14 @@
+{
+  "name": "@orqst/adapter-codex",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@orqst/protocol": "workspace:*",
+    "@orqst/shared": "workspace:*",
+    "@orqst/database": "workspace:*",
+    "chokidar": "^6.0.0"
+  }
+}
