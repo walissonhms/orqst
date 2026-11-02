@@ -7,6 +7,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Browser aggregate Model Usage Analytics CSV/Markdown export with gesture-only
+  bounded runtime validation, explicit null/coverage/gap semantics, private filter
+  value omission, spreadsheet literals/large-integer preservation and inert Markdown.
+  Arbitrary model IDs remain potentially private metadata with a visible warning.
+  Export invalidates on stale/offline/error/reconnect; native Desktop Analytics save
+  remains pending and its Artifacts grant/download denial are unchanged.
+
 - Confirmed Live Metrics in session and manual Artifacts headers: normalized cumulative
   input/output/cache/total, metric occurrence time and compact provenance. A bounded
   authenticated read query validates canonical evidence without source access, new

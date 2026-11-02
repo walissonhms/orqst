@@ -443,3 +443,20 @@ It reads no source file or captured body, adds no writer/IPC/control capability 
 existing Host/Origin/cookie/CSP/no-store controls. Invalid proof returns sanitized
 unavailable reasons. Sensitive compact provenance stays local and inert in the UI.
 See [security review and fixed query budgets](../api/live-metrics.md#security-review-note).
+
+## Browser aggregate Analytics export review
+
+The browser export projects only a bounded, runtime-validated aggregate response
+associated with the current filters/cursor and connection generation. Actual response
+bytes are capped before decoding/parsing; file admission and output have separate
+limits and never truncate. Individual evidence and private query identities are
+excluded. Arbitrary model IDs can still contain private information or secrets; a
+visible warning precedes the gesture and no complete redaction guarantee is made.
+CSV literal prefixes/visible encoding and typed large integers address formula and
+rounding hazards; Markdown keeps dynamic text inside inert code spans with encoded
+structural characters. External reprocessing can change interpretation. Browser
+settings control destination/replacement and the UI does not claim disk-save success.
+
+No route/authentication/worker/database/source/IPC authority changes. Electron still
+denies downloads and has no Analytics export buttons; the Artifacts grant is unchanged.
+See [fields, exact encodings, limits and future native boundary](../api/analytics-export.md).

@@ -20,7 +20,7 @@ lifecycle transport and managed contracts remain planned. A first manual Artifac
 slice now provides bounded retained-message extraction and an integrated source/preview/
 memory-draft/copy panel. A subsequent narrow Desktop action saves UTF-8 Markdown via
 a native destination dialog, confirms replacement and optionally opens only the newly
-saved verified file in the system default application. Browser file export remains unavailable. There is no blanket “Phase 1 awaiting approval” gate.
+saved verified file in the system default application. Browser Artifacts file export remains unavailable. There is no blanket “Phase 1 awaiting approval” gate.
 Passing checks permits incremental progress within scope; product decisions,
 destructive actions, credentials, external costs and ungranted permissions still
 require a decision. Development authorization is not production activation.
@@ -33,6 +33,12 @@ The confirmed Live Metrics increment adds normalized session tokens and their ow
 metric occurrence time to session and manual Artifacts headers. Bounded compact proof,
 unavailable values and stale/offline readings are explicit. Terminal display, limits,
 verified pricing, Fast and animations remain planned. See [contract](docs/api/live-metrics.md).
+
+The browser Analytics export increment adds gesture-only CSV/Markdown of the current
+validated aggregate with explicit coverage/nulls and bounded privacy/syntax controls.
+Observed model IDs may contain private metadata; the warning is part of the flow.
+Desktop Analytics saving remains pending a separate narrow native grant; download
+denial and Artifacts authority are unchanged. See [export contract](docs/api/analytics-export.md).
 
 ## Mandatory quality and security criteria for each increment
 

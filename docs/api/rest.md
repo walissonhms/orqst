@@ -59,6 +59,9 @@ Returns `ModelAnalyticsSummary`, an aggregate projection identified by
 `contract: "orqst.model-analytics"`, `contractVersion: 1`. It requires the same
 trusted Host/Origin/fetch metadata and process cookie as other read endpoints.
 It grants no agent control and does not extend the v1 WebSocket stream.
+Browser CSV/Markdown export is a client-side allowlist projection of this response,
+not another endpoint. Query identities must not be copied into reports. See the
+[export contract and security review](analytics-export.md).
 
 | Parameter      | Meaning / validation                                                   |
 | -------------- | ---------------------------------------------------------------------- |

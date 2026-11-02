@@ -309,3 +309,26 @@ sharing, actual event updates, offline/stale/missing values, races, locales and 
 layout. Use a free `ORQST_BROWSER_PORT` and `--output` unique to the invocation. Checks
 prove synthetic behavior, not provider billing or arbitrary-archive latency. Installed
 service/Desktop/storage are never acceptance fixtures. See [metric limits](../api/live-metrics.md).
+
+## Browser aggregate Analytics export
+
+Use synthetic reports and disposable observer storage/profiles. The export QA suites
+cover private-field exclusion, reversible hostile text, literal formula guards,
+null/zero/unidentified versus literal model labels, strict caps, large integer digits,
+streamed byte admission, current-filter/cursor/connection eligibility and Desktop
+unavailability. The existing unmocked Analytics browser test also downloads a report
+from the real synthetic observer -> worker -> API path.
+
+```bash
+pnpm exec tsx --test tests/model-export-qa.test.ts
+# Confirm this example port is free first; use unique --output for each invocation.
+ORQST_BROWSER_PORT=49373 pnpm test:browser tests/browser/model-analytics.spec.ts tests/browser/model-export-qa.spec.ts --output=/tmp/orqst-export-example
+pnpm test:desktop
+```
+
+The Electron smoke uses its own temporary profile/storage and verifies that actual
+preload detection leaves Analytics without download buttons. Native Analytics save
+is unimplemented; the smoke is not native save acceptance. Serializer/browser checks
+do not establish real Excel/LibreOffice import or real-provider multi-model accounting.
+No ingestion changed, so this increment does not require `validate:local` or a live
+provider run. See [contract and privacy limits](../api/analytics-export.md).

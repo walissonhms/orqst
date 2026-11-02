@@ -4,7 +4,8 @@
 
 **Mandatory for the functional Desktop MVP.** A read-only local aggregation foundation
 and bounded summary API are implemented, along with a first browser ranking view.
-Desktop integration, time series, comparator and export remain incomplete. Real
+Native Desktop export, time series and comparator remain incomplete. Browser CSV/Markdown
+export is implemented within the separate [export contract](../api/analytics-export.md). Real
 multi-model acceptance is still pending. The implementation boundaries below describe
 current behavior; subsequent sections specify the broader product requirements.
 [Coverage](product-requirements.md) and the [roadmap](../../ROADMAP.md) distinguish
@@ -100,7 +101,7 @@ render as plain text. Both locales and mobile table navigation are supported.
 
 Integration passed lint/types, 64 Node tests, build and 11 Chromium tests, including
 one unmocked two-model synthetic observer-to-API-to-screen test. Real provider
-multi-model allocation, large-archive performance, temporal charts, exports,
+multi-model allocation, large-archive performance, temporal charts, native Desktop export,
 equivalent-task comparison and the full Desktop workflow remain unvalidated or
 unimplemented. No complete Analytics MVP acceptance is claimed.
 
@@ -206,18 +207,25 @@ interval, not total elapsed session time.
 
 ## Export and local security
 
-CSV and Markdown reports contain an explicit allowlist of aggregate fields,
-non-sensitive display identifiers, filters, source/quality summaries, denominators
-and coverage warnings. Exclude captured content, credentials, raw source references,
-private project paths and command arguments. Prefer local project aliases or explicit
-user-selected names over automatic path disclosure. Treat model/project labels as
-untrusted: escape Markdown and guard spreadsheet formula injection in CSV.
+Browser CSV/Markdown export is implemented as a strict projection of the current
+aggregate response. It preserves nulls, unidentified buckets, basis/unavailable and
+coverage/gaps; it excludes individual evidence and private filter values. Arbitrary
+model IDs remain potentially sensitive metadata: escaping is not redaction. The UI
+warns before export. Streaming input and output are each bounded to 2 MiB; export
+admission caps 5,000 buckets and model labels at 256 UTF-16 code units, without
+truncation. Export-only limits do not remove legitimate screen data.
 
-Export uses a destination picker and explicit overwrite confirmation; cancellation
-must not change a file. No remote upload or automatic report delivery. Maintain
-loopback cookie/Host/Origin/CSP controls for any future Analytics endpoint; observation
-access never grants managed-session control. Review API/security docs alongside the
-actual implementation before publishing endpoint shapes.
+CSV uses literal-prefixed text, visible control/punctuation encoding, rectangular
+quoted records and typed text for integers exceeding 15 digits. Markdown wraps the
+same reversible representation in code spans within fixed table structure. No new
+model attribution or metrics are computed. Refresh/filter/cursor/error/offline and
+reconnection block export until a fresh associated response arrives.
+
+Browser settings control destination and overwrite behavior; no native-save success
+is claimed. Electron continues denying downloads and exposes no Analytics export
+button. Native Desktop save requires its own contract, main-process refetch/validation
+and destination/overwrite grant; Artifacts Markdown permission is unchanged. See
+[precise fields, formats, limits and security review](../api/analytics-export.md).
 
 ## Integration acceptance
 

@@ -223,6 +223,17 @@
       "invalid_usage": "Invalid usage",
       "identity_conflict": "Source identity conflict",
       "non_monotonic_components": "Non-monotonic usage components"
+    },
+    "export": {
+      "title": "Export aggregate report",
+      "privacy": "Observed model IDs are arbitrary metadata and may contain private information or secrets. Review them before exporting or sharing. Agent and workspace filter values and individual evidence are omitted.",
+      "desktop": "Analytics export is not available in Desktop yet. Native CSV/Markdown save needs a separate permission review; Desktop downloads remain blocked.",
+      "csv": "Export CSV",
+      "markdown": "Export Markdown",
+      "download": "Downloads the current validated aggregate in the displayed ranking order. Your browser controls the destination and replacement behavior; ORQST cannot confirm that a file was saved.",
+      "blocked": "Export is blocked until a new current report is available while connected. Refresh, filter changes, errors and reconnection require a new response.",
+      "failed": "Export failed validation or exceeded its limits. No report was downloaded.",
+      "limits": "This report cannot be exported: export requires at most 5,000 model buckets, model IDs of 1–256 UTF-16 characters and consistent safe-integer aggregates. The displayed report is preserved."
     }
   },
   "desktopShell": {

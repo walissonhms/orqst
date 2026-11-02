@@ -235,3 +235,13 @@ Official references checked for this boundary: [dialog](https://www.electronjs.o
 [contextBridge](https://www.electronjs.org/docs/latest/api/context-bridge),
 [openPath](https://www.electronjs.org/docs/latest/api/shell#shellopenpathpath),
 [Node 24 filesystem flags](https://nodejs.org/docs/latest-v24.x/api/fs.html#file-system-flags).
+
+## Analytics export boundary
+
+The shared Analytics view displays an explicit Desktop-unavailable explanation and
+no CSV/Markdown export buttons. Downloads remain denied. Browser aggregate export
+does not extend `orqstArtifacts`, preload, main IPC or the Markdown file grant. A
+separate Analytics-only native contract, main-process aggregate refetch/validation
+and destination/overwrite review remain pending. The disposable Electron smoke
+checks the real preload/view boundary without opening the user's Desktop/profile.
+See [browser export and proposed native boundary](../api/analytics-export.md).

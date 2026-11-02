@@ -751,7 +751,12 @@ export function App() {
         </header>
         <main>
           {view === 'models' ? (
-            <ModelAnalytics workspaceId={workspaceId} snapshot={snapshot} />
+            <ModelAnalytics
+              workspaceId={workspaceId}
+              snapshot={snapshot}
+              connection={connection}
+              snapshotError={error}
+            />
           ) : (
             <>
               <div className="page-heading">

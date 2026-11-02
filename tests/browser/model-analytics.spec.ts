@@ -439,4 +439,17 @@ test('unmocked Analytics reconciles two models ingested through the disposable o
   await expect(rows.nth(1)).toContainText('synthetic-integration-alpha');
   await expect(rows.nth(1)).toContainText('37.5%');
   await expect(page.locator('.analytics-coverage')).toContainText('Incomplete coverage');
+  // Unmocked authenticated worker response -> bounded runtime admission -> gesture download.
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('orqst-model-usage.csv');
+  const text = await readFile((await download.path())!, 'utf8');
+  expect(text).toContain('synthetic-integration-beta');
+  expect(text).toContain('synthetic-integration-alpha');
+  expect(text).toContain(
+    '"\'totals","\'","\'","\'","\'","\'","\'null","2","640","160","320","800"',
+  );
+  expect(text).not.toContain('/synthetic/analytics-integration');
+  expect(text).not.toContain('synthetic-ranking-');
 });

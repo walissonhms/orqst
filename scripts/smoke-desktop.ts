@@ -293,6 +293,12 @@ try {
     )
     .toBe('function');
   await page.goto(origin + '/#models');
+  await expect(page.locator('.analytics-export')).toContainText(
+    /Analytics export is not available in Desktop yet|A exportação de Analytics ainda não está disponível no Desktop/,
+  );
+  await expect(page.locator('.analytics-export button, .analytics-export a[download]')).toHaveCount(
+    0,
+  );
   await page.goto(beforeRevocationURL);
   await expect(page.locator('.connection-connected')).toBeVisible();
   await desktop.evaluate(() => {

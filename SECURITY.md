@@ -269,3 +269,19 @@ controls and grants no source-file or agent authority. Indexed reads admit bound
 metadata bytes before transfer/parsing; strict provenance/identity validation fails
 unavailable without raw diagnostics. Compact IDs/paths remain sensitive local metadata.
 See [contract and security review](docs/api/live-metrics.md).
+
+## Browser Analytics report export
+
+CSV/Markdown export is an explicit browser gesture over the current validated,
+bounded aggregate. It excludes individual evidence, captured content and private
+filter values. Observed model IDs are arbitrary metadata and may contain secrets or
+identities; review before sharing. Encoding does not prove absence of secrets.
+CSV guards textual cells and preserves large integer digits with a typed literal;
+Markdown encodes structural characters inside code spans. Subsequent spreadsheet or
+Markdown reprocessing has its own trust boundary. Browser settings govern destination
+and replacement; ORQST cannot confirm a disk save.
+
+Offline/stale/failed reads cannot export; recovery needs a fresh response. No endpoint,
+authentication, database, source-file or native grant changes. Desktop downloads
+remain denied and Analytics save is pending, without repurposing Artifacts authority.
+See the [export contract and review](docs/api/analytics-export.md).

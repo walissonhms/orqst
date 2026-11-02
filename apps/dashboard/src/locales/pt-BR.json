@@ -223,6 +223,17 @@
       "invalid_usage": "Uso inválido",
       "identity_conflict": "Conflito de identidade da fonte",
       "non_monotonic_components": "Componentes de uso não monotônicos"
+    },
+    "export": {
+      "title": "Exportar relatório agregado",
+      "privacy": "IDs de modelo são metadados arbitrários e podem conter informações privadas ou segredos. Revise-os antes de exportar ou compartilhar. Valores dos filtros de agente e workspace e evidências individuais são omitidos.",
+      "desktop": "A exportação de Analytics ainda não está disponível no Desktop. Salvar CSV/Markdown nativo exige uma revisão de permissão separada; downloads no Desktop continuam bloqueados.",
+      "csv": "Exportar CSV",
+      "markdown": "Exportar Markdown",
+      "download": "Baixa o agregado atual validado na ordem do ranking exibido. O navegador controla o destino e a substituição; o ORQST não confirma que um arquivo foi salvo.",
+      "blocked": "A exportação fica bloqueada até um novo relatório atual estar disponível com conexão ativa. Atualização, mudanças de filtro, erros e reconexão exigem nova resposta.",
+      "failed": "A exportação falhou na validação ou excedeu os limites. Nenhum relatório foi baixado.",
+      "limits": "Este relatório não pode ser exportado: a exportação exige até 5.000 buckets de modelo, IDs de 1–256 caracteres UTF-16 e agregados consistentes com inteiros seguros. O relatório exibido é preservado."
     }
   },
   "desktopShell": {

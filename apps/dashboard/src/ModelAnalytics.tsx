@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, RefreshCw } from 'lucide-react';
-import type { ModelAnalyticsSummary, Snapshot } from '@orqst/protocol';
+import {
+  modelAnalyticsExportSourceSchema,
+  type ModelAnalyticsSummary,
+  type Snapshot,
+} from '@orqst/protocol';
+import {
+  analyticsRequestQuery,
+  downloadModelAnalytics,
+  rankModelAnalytics,
+  readAnalyticsJSON,
+  readModelAnalyticsResponse,
+  serializeModelAnalytics,
+  type AnalyticsExportFormat,
+} from './analytics-export';
 
 type Period = 'today' | 'week' | 'month' | 'custom' | 'all';
 
@@ -24,9 +37,13 @@ function calendarBounds(period: Period, start: string, end: string): Record<stri
 export function ModelAnalytics({
   workspaceId,
   snapshot,
+  connection,
+  snapshotError,
 }: {
   workspaceId: string;
   snapshot?: Snapshot;
+  connection: 'connecting' | 'connected' | 'offline';
+  snapshotError: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
@@ -41,6 +58,16 @@ export function ModelAnalytics({
   const [result, setResult] = useState<{ key: string; data: ModelAnalyticsSummary; at: Date }>();
   const [failure, setFailure] = useState<{ key: string; reason: string }>();
   const [loading, setLoading] = useState(true);
+  const [exportFailure, setExportFailure] = useState(false);
+  const [transport, setTransport] = useState({ connection, snapshotError, generation: 0 });
+  // Adjust during render so no committed button can use a pre-disconnection response.
+  // Recovery needs a new generation even if the cursor and query are unchanged.
+  if (transport.connection !== connection || transport.snapshotError !== snapshotError) {
+    setTransport({ connection, snapshotError, generation: transport.generation + 1 });
+  }
+  const available = connection === 'connected' && !snapshotError;
+  // UX detection only: older Desktop windows predate the Artifacts preload capability.
+  const desktop = !!window.orqstArtifacts || navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const cursor = snapshot?.cursor;
   const request = useMemo(() => {
     const bounds = calendarBounds(period, start, end);
@@ -54,13 +81,14 @@ export function ModelAnalytics({
     return `/api/analytics/models?${params}`;
     // Re-evaluate calendar bounds only on a query change, refresh or observed event.
   }, [period, start, end, workspaceId, agent, adapter, model, unidentified, revision, cursor]);
-  const key = `${request}:${revision}:${cursor}`;
+  const key = `${request}:${revision}:${cursor}:${transport.generation}`;
   useEffect(() => {
+    setExportFailure(false);
     if (!request) {
       setLoading(false);
       return;
     }
-    if (cursor === undefined) return;
+    if (cursor === undefined || !available) return;
     const controller = new AbortController();
     let active = true;
     setLoading(true);
@@ -69,7 +97,11 @@ export function ModelAnalytics({
       void fetch(request, { credentials: 'same-origin', signal: controller.signal })
         .then(async (response) => {
           if (!response.ok) {
-            const body = (await response.json()) as { error?: string };
+            const body = await readAnalyticsJSON(response);
+            const code =
+              body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
+                ? body.error
+                : '';
             const reasons: Record<string, string> = {
               analytics_capacity_exceeded: 'capacity',
               analytics_busy: 'busy',
@@ -77,11 +109,9 @@ export function ModelAnalytics({
               analytics_cancelled: 'workerUnavailable',
               analytics_unavailable: 'workerUnavailable',
             };
-            throw new Error(
-              response.status === 400 ? 'invalidQuery' : (reasons[body.error ?? ''] ?? 'error'),
-            );
+            throw new Error(response.status === 400 ? 'invalidQuery' : (reasons[code] ?? 'error'));
           }
-          const data = (await response.json()) as ModelAnalyticsSummary;
+          const data = await readModelAnalyticsResponse(response);
           if (active) setResult({ key, data, at: new Date() });
         })
         .catch((error: unknown) => {
@@ -106,31 +136,38 @@ export function ModelAnalytics({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [request, key, cursor]);
-  const data = request && result?.key === key && !failure ? result.data : undefined;
+  }, [request, key, cursor, available]);
+  const data =
+    request && result?.key === key && !failure && !loading && available ? result.data : undefined;
+  const exportable = useMemo(
+    () => !!data && modelAnalyticsExportSourceSchema.safeParse(data).success,
+    [data],
+  );
   const number = (value: number | undefined | null) =>
     value == null ? t('unknown') : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
-  const rows = useMemo(
-    () =>
-      [...(data?.models ?? [])].sort((a, b) => {
-        const left = ranking === 'tokens' ? a.usage?.total : a.sessions;
-        const right = ranking === 'tokens' ? b.usage?.total : b.sessions;
-        if (left == null) return right == null ? 0 : 1;
-        if (right == null) return -1;
-        return (
-          right - left ||
-          (a.model ?? '').localeCompare(b.model ?? '') ||
-          a.adapter.localeCompare(b.adapter)
-        );
-      }),
-    [data, ranking],
-  );
+  const rows = useMemo(() => (data ? rankModelAnalytics(data, ranking) : []), [data, ranking]);
   const lead = rows[0];
   const leader =
     lead && (ranking === 'sessions' || lead.usage !== null)
       ? (lead.model ?? t('analytics.unidentified'))
       : t('unknown');
   const adapters = snapshot?.adapters.filter((item) => item.implemented) ?? [];
+  const exportReport = (format: AnalyticsExportFormat) => {
+    if (desktop || !data || !exportable || !result || !request || !available || loading) return;
+    try {
+      downloadModelAnalytics(
+        serializeModelAnalytics(data, {
+          format,
+          ranking,
+          obtainedAt: result.at.toISOString(),
+          query: analyticsRequestQuery(request),
+        }),
+      );
+      setExportFailure(false);
+    } catch {
+      setExportFailure(true);
+    }
+  };
   return (
     <section className="analytics" aria-labelledby="analytics-title">
       <div className="page-heading">
@@ -231,6 +268,30 @@ export function ModelAnalytics({
         )}
       </div>
       <p className="notice analytics-coverage">{t('analytics.incomplete')}</p>
+      <section className="panel analytics-export" aria-label={t('analytics.export.title')}>
+        <h2>{t('analytics.export.title')}</h2>
+        <p className="fine-print">{t('analytics.export.privacy')}</p>
+        {desktop ? (
+          <p className="notice">{t('analytics.export.desktop')}</p>
+        ) : (
+          <>
+            <button className="button" disabled={!exportable} onClick={() => exportReport('csv')}>
+              {t('analytics.export.csv')}
+            </button>{' '}
+            <button
+              className="button"
+              disabled={!exportable}
+              onClick={() => exportReport('markdown')}
+            >
+              {t('analytics.export.markdown')}
+            </button>
+            <p className="fine-print">{t('analytics.export.download')}</p>
+            {!data && <p className="notice">{t('analytics.export.blocked')}</p>}
+            {data && !exportable && <p className="notice">{t('analytics.export.limits')}</p>}
+          </>
+        )}
+        {exportFailure && <p role="alert">{t('analytics.export.failed')}</p>}
+      </section>
       {failure?.key === key && (
         <div className="notice" role="alert">
           {t(`analytics.${failure.reason}`)}

@@ -59,6 +59,10 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
   CLI adapter. Unknown models, missing usage and incomplete coverage stay explicit.
+  Browser CSV/Markdown export now projects the current aggregate with bounded validation,
+  spreadsheet literals and inert Markdown. Model IDs may contain private metadata;
+  review before sharing. Native Desktop Analytics save remains pending. See the
+  [export contract](docs/api/analytics-export.md).
 - **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
   robust provider integrations, managed sessions, evidence-gated optimizer integration,
   and distribution. Desktop includes Terminal, Monitor/Notifications, Artifacts,
@@ -340,7 +344,7 @@ and [SECURITY.md](SECURITY.md).
   disconnect/shutdown cancel and await cleanup. Explicit errors show no partial sums.
   Native SQL cleanup can delay termination. Narrow workspace, agent or adapter scopes
   may help; a shorter period can need the same history.
-  Time series, export, task-qualified comparisons, verified costs and full Desktop delivery
+  Time series, native Desktop export, task-qualified comparisons, verified costs and full Desktop delivery
   remain pending. Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
@@ -350,6 +354,20 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The browser aggregate Analytics export increment passed lint, typecheck, 187 Node
+tests (including 18 independent export QA cases), full build and disposable
+Electron45.2.1/arm64 smoke with final `result: passed` and successful cleanup. The
+unmocked synthetic observer/worker/API test downloads a reconciled CSV. Independent
+QA passed the complete 36-case Chromium suite with isolated port/state/output,
+including current-query/connection gates and both older Desktop UA and current
+preload detection. Initial runs against evolving QA exposed encoded-text assertions
+and fixture timing assumptions; the corrected tests retain the negative checks.
+All export evidence is synthetic. Real-provider multi-model acceptance, native
+Desktop Analytics save and real spreadsheet-import acceptance remain pending.
+No ingestion changed, so `validate:local` and token-consuming live tests were not
+run for this increment. User Desktop/service/storage were preserved without restart.
+See [export fields, limits and privacy](docs/api/analytics-export.md).
 
 The confirmed Live Metrics increment passed lint, typecheck, 169 Node tests, full
 build, 27 Chromium cases and a disposable Electron smoke including absent-to-confirmed
