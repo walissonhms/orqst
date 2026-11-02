@@ -253,13 +253,33 @@
     "copyReadable": "Copiar texto legível do rascunho",
     "copied": "Copiado para a área de transferência.",
     "copyFailed": "A cópia falhou ou está indisponível. Nenhuma cópia foi confirmada.",
-    "pending": "Próxima fatia, pendente de revisão do contrato de arquivo: salvar .md com grant nativo de destino, confirmação explícita de sobrescrita e editor externo. Essas ações ainda não estão disponíveis.",
     "unavailable": {
       "event_not_retained": "Este evento não está mais retido. O conteúdo não será reconstruído a partir de resumos ou métricas.",
       "identity_mismatch": "A identidade ou versão da fonte do evento selecionado não corresponde. Selecione novamente uma mensagem retida.",
       "unsupported_adapter": "Artefatos não estão disponíveis para este adaptador.",
       "not_artifact_message": "Este evento não é uma mensagem retida de assistente/agente suportada.",
       "content_limit": "A mensagem retida excede 32 KiB UTF-8. A extração está indisponível; nenhum artefato truncado foi criado."
+    },
+    "nativeSave": "Salvar artefato Markdown",
+    "markdownFile": "Texto Markdown (.md)",
+    "nativeOverwrite": "Confirmar substituição",
+    "overwriteMessage": "Substituir este arquivo Markdown existente? Esta ação não pode ser desfeita.",
+    "cancel": "Cancelar",
+    "replace": "Substituir arquivo",
+    "saveOriginal": "Salvar Markdown original…",
+    "saveDraft": "Salvar Markdown do rascunho…",
+    "saveOpenOriginal": "Salvar original e abrir no aplicativo padrão…",
+    "saveOpenDraft": "Salvar rascunho e abrir no aplicativo padrão…",
+    "desktopOnly": "Salvar e abrir Markdown com seletor nativo exige o cliente ORQST Desktop. Este navegador não oferece controles de exportação de arquivo.",
+    "saving": "Aguardando destino nativo ou confirmação de substituição…",
+    "fileNote": "Somente o original retido selecionado ou o rascunho atual é salvo como .md UTF-8. “Salvar e abrir” abre apenas esse arquivo recém-salvo no aplicativo padrão do sistema. Nenhuma fonte ou caminho do histórico pode ser aberto aqui. Confira dados sensíveis no rascunho antes de exportar.",
+    "saveResult": {
+      "saved": "Arquivo Markdown salvo.",
+      "saved_opened": "Markdown salvo e encaminhado ao aplicativo padrão do sistema; a exibição no editor não foi verificada.",
+      "saved_open_failed": "O Markdown foi salvo, mas não foi possível confirmar a abertura. Não haverá nova tentativa automática.",
+      "cancelled": "Salvamento cancelado. Nenhum arquivo foi criado ou alterado.",
+      "failed": "O salvamento falhou ou o destino mudou. Nenhum arquivo foi escrito. Escolha um arquivo .md regular de até 32 KiB ou outro nome.",
+      "write_failed": "A escrita ou verificação falhou. O arquivo selecionado pode ter sido criado ou parcialmente alterado; confira antes de tentar novamente. Ele não foi aberto."
     }
   }
 }

@@ -196,8 +196,9 @@ A separate [strict extraction contract](../api/artifacts.md) reads one exact ret
 message through Core and the existing Store. The authenticated Bridge exposes only this
 bounded query; body and reference derive from the same event. The dashboard keeps an
 immutable retained original and an independent in-memory draft, with inert limited preview
-and explicit clipboard gestures. There is no new writer, cache, source reader or native
-file authority. Saving/overwrite grants and external editor integration remain pending.
+and explicit clipboard gestures. The extraction query adds no Store writer, cache,
+source reader or native file authority. The separate Desktop-only save action obtains its own native destination
+grant and replacement confirmation; see the [native save contract](../api/artifacts.md#native-desktop-save-contract).
 
 ### `apps/dashboard`
 
@@ -390,9 +391,24 @@ outcomes and repair coverage; costs require verified rates/billing basis. See th
 `apps/desktop` adds a separate macOS Electron client over the existing Bridge-served
 React bundle. It depends on Electron/i18next, imports no Core/Store and launches no
 Bridge or agent. Node24 remains the Bridge runtime; Electron45.2.1 has its own verified
-runtime. The main process owns only a sandboxed window and an in-memory browser session,
-with no preload/IPC. Browser and Electron clients share unchanged cookie-authenticated
+runtime. Main owns the sandboxed window, in-memory browser session and later native
+consumers. Exactly one isolated preload and `saveMarkdown` IPC channel implement the
+[native Artifacts save contract](../api/artifacts.md#native-desktop-save-contract),
+without generic filesystem/shell methods. Browser and Electron clients share unchanged cookie-authenticated
 REST/WS. Window close/quit does not stop observation; only an active independent Bridge
 can observe. A local script-free page retries initial load failure; loaded dashboards
 keep the existing reconnect behavior. See [Desktop development](../development/desktop.md)
 for URL/permission policy, dependency sources and the unimplemented distribution scope.
+
+## Native Artifacts save increment
+
+A later Desktop-only isolated preload exposes one bounded `saveMarkdown` action.
+Electron main validates sender/document/session, reextracts the retained message from
+the existing authenticated Bridge and obtains destination authority from a native
+save dialog plus concrete replacement confirmation. It writes only selected UTF-8
+`.md` text, with original/draft distinction and recorded provenance preserved in the
+panel. Optional opening is restricted to that gesture's newly saved verified file.
+There is no generic filesystem/shell/path method, new service, Core writer, database
+schema or source-session change. Browser clients explain that native file actions
+require Desktop. See [Artifacts contract](../api/artifacts.md) and
+[security review](security-model.md#native-markdown-destination-boundary--2026-11-02).

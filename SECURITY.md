@@ -180,6 +180,11 @@ require their own evidence and security design.
 
 ## Initial Electron observer client review (before tray increment)
 
+Historical scope: the statements below describe that increment before native file
+export. The subsequent [native Markdown boundary](docs/api/artifacts.md#native-desktop-save-contract)
+adds one isolated preload/save IPC channel and explicit destination authority; the
+earlier absence of those capabilities is not a claim about the current client.
+
 The macOS checkout client is a separate unprivileged HTTP consumer of the existing
 Bridge. It imports no Core/database and starts/stops no service or agent. Its renderer
 has sandbox/context isolation/webSecurity enabled, Node integration disabled and no
@@ -202,6 +207,11 @@ separate distribution review; the checkout command is not a signed release. See
 
 ## Tray/native notification review — 2026-11-02
 
+Historical scope: the statements below describe that increment before native file
+export. The subsequent [native Markdown boundary](docs/api/artifacts.md#native-desktop-save-contract)
+adds one isolated preload/save IPC channel and explicit destination authority; the
+earlier absence of those capabilities is not a claim about the current client.
+
 The Desktop main process now reads only the fixed bootstrap/snapshot routes through
 its existing in-memory Electron session and authentication cookie. No REST/WS shape,
 Host/Origin check, CSP, cookie policy, loopback allowlist or Core/SQLite ownership changes.
@@ -221,7 +231,11 @@ require separate acceptance. The existing trusted-local-listener limitation stil
 source shape validation does not re-open or authenticate a filesystem source. See
 [Desktop details](docs/development/desktop.md).
 
-## Manual Artifacts
+## Manual Artifacts — extraction-only historical review
+
+This section records the first extraction/copy slice. The later
+[native Markdown boundary](docs/api/artifacts.md#native-desktop-save-contract) adds reviewed save/overwrite and
+optional current-file opening; the earlier absence of file authority was scoped to that slice.
 
 Manual extraction reads only one authenticated, identity/source-matched retained
 assistant/agent message, capped at 32 KiB UTF-8. Missing evidence is not reconstructed.
@@ -230,3 +244,20 @@ The limited preview uses inert React text, without active HTML, links, images or
 loads. Clipboard writes require explicit gestures and report failures. No source-file,
 filesystem/shell, save/overwrite or external-editor authority is introduced. See the
 [boundary review and contract](docs/api/artifacts.md#security-review-note).
+
+## Native Markdown export
+
+Desktop's sole Artifacts preload/IPC action is a bounded, versioned Markdown save.
+Main validates sender/frame/session/document and reextracts original provenance;
+the renderer supplies no filesystem path, URL, executable or reusable file grant.
+Only a native destination chooser and concrete replacement confirmation authorize
+writes. Cancellation writes nothing. Existing destinations must be regular,
+nonexecutable, single-link `.md` files no larger than 32 KiB. Descriptor/parent/path
+and byte checks reject observed changes; new files use O_EXCL and no target opens
+with O_TRUNC. Save-and-open can hand only this operation's newly saved verified file
+to the system default application, without shell commands or open-history authority.
+
+Saves are in place, not atomic or crash-recoverable. Partial I/O failure is reported
+explicitly; checks cannot isolate a noncooperating same-user writer or make OS handoff
+atomic. There is no automatic retry/rollback. No text/path/OS error logs or broader
+clipboard permission are introduced. See [file contract and validation limits](docs/api/artifacts.md#native-desktop-save-contract).

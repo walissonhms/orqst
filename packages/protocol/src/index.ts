@@ -3,6 +3,7 @@ import { z } from 'zod';
 export * from './analytics.js';
 export * from './lifecycle.js';
 export * from './artifacts.js';
+export * from './desktop-artifacts.js';
 
 export const statusSchema = z.enum([
   'running',

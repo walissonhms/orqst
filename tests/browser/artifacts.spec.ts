@@ -91,7 +91,9 @@ test('clipboard failure, UTF-8 draft rejection and pt-BR controls are explicit',
   await expect(
     page.getByRole('button', { name: 'Copiar Markdown original', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(/Próxima fatia, pendente/)).toBeVisible();
+  const localizedPanel = page.getByRole('region', { name: 'Artefato manual', exact: true });
+  await expect(localizedPanel.getByText(/exige o cliente ORQST Desktop/)).toBeVisible();
+  await expect(localizedPanel.getByRole('button', { name: /Salvar|abrir/ })).toHaveCount(0);
 });
 
 test('expired selection and malformed response fail visibly without stale source or copy actions', async ({

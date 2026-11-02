@@ -54,7 +54,7 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   and artifact message references now have strict schemas and Core consumers; broader
   lifecycle transport remains planned. The first manual Artifacts slice adds bounded
   retained-message extraction, source/preview/draft editing and explicit copying; file
-  saving and external editor integration remain pending. This does not complete Phase 1.
+  saving and optional opening in the system default application are implemented for Desktop only. This does not complete Phase 1.
 - **Browser Analytics increment delivered:** open **Most used models** in the sidebar
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
@@ -102,7 +102,7 @@ The Core also exposes version-1 local queries for one retained observation or an
 explicit artifact message reference. They validate identity/source metadata at runtime,
 keep task/process and missing timestamps unavailable, and never return captured bodies
 or open source paths. Those metadata queries remain local-only. A separate bounded manual Artifacts query
-and session panel are now available, without a file writer or privileged Desktop capability.
+and session panel are now available, with a separate narrow Desktop Markdown save capability described below.
 See [lifecycle contracts](docs/api/lifecycle-contracts.md).
 
 There is one long-running process. Analytics queries use one disposable Node worker
@@ -128,9 +128,14 @@ source separate from a temporary editable draft, with a limited inert preview an
 explicit raw/readable clipboard actions. No automatic recognition or complete-source
 claim is made; expired evidence stays unavailable. Extraction/drafts are capped at
 32 KiB UTF-8. Copy failures are reported; Desktop permissions may deny copying.
-Saving `.md` with a native destination grant, overwrite confirmation and opening an
-external editor are pending the next file-contract review. No files or sessions are
-written. See [contract, behavior and limits](docs/api/artifacts.md).
+Desktop can save the selected original or draft as `.md` using a native destination
+dialog and explicit confirmation before replacing an existing file. A separate
+**Save and open** gesture optionally hands only that newly saved, verified file to
+the system default application. Cancel writes nothing. The browser explains that
+these native actions require Desktop. Existing destinations must be regular,
+nonexecutable, single-link files of at most 32 KiB; ambiguous or changed targets fail
+closed. Writes are not atomic or crash-recoverable; partial failures are reported.
+No agent session or source file is modified. See [contract, behavior and limits](docs/api/artifacts.md).
 
 ## Requirements
 
@@ -179,8 +184,10 @@ pnpm desktop
 
 `pnpm dev:desktop` rebuilds/opens the shell without starting a Bridge. Window close,
 reopen and quitting Desktop preserve the service/observer. If the service is unavailable,
-the client shows an honest offline state and retries. There is no preload/IPC, Node
-renderer access or agent control; permissions/external navigation are denied. This
+the client shows an honest offline state and retries. A single isolated preload and
+`saveMarkdown` IPC channel support the native [Artifacts save contract](docs/api/artifacts.md#native-desktop-save-contract);
+there is no generic filesystem/shell method, Node renderer access or agent control.
+Browser permissions and external navigation remain denied.
 The menu bar opens/restores the window and quits only Desktop. It displays Bridge
 availability and unread history (latest 200), with an opt-in native alert switch for
 this Desktop run. Categories/sound use the existing Bridge preferences. New confirmed
@@ -334,6 +341,16 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The native Markdown save increment passed lint, typecheck, 149 Node tests (including
+9 independent save QA cases), full build and 18 Chromium cases on isolated port 51390
+with separate output. Disposable Electron45.2.1/arm64 smoke exercised real preload/IPC,
+authenticated extraction, cancel/save/overwrite denied and accepted, hostile multibyte
+draft text, current-file-only opening and revocation during choose/confirm after
+navigation away and back. Native dialog answers and editor dispatch were intercepted;
+actual native visuals/editor launch remain unvalidated. Existing Desktop/Bridge PIDs,
+service/storage and source sessions were preserved. Saves are not transactional,
+atomic pathname CAS or guaranteed crash-recoverable; partial failures are reported.
 
 The larger-history Analytics worker increment passed lint, types, 80 Node tests,
 build and 13 Chromium tests, including a synthetic 310-session/approximately-57000-event

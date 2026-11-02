@@ -2,7 +2,16 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile, appendFile, rm, realpath } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  appendFile,
+  rm,
+  realpath,
+  readFile,
+  stat,
+} from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -120,7 +129,7 @@ try {
     })),
     { require: 'undefined', process: 'undefined' },
   );
-  // Exercise the real shared Artifacts UI without adding renderer permissions or native IPC.
+  // Exercise the real shared Artifacts UI; clipboard permission remains denied.
   await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
   await page
     .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
@@ -157,6 +166,169 @@ try {
     'Synthetic Desktop Artifact',
   );
   await expect(artifact.locator('pre.artifact-content')).not.toContainText('edited Desktop draft');
+  // Only this disposable main process is instrumented. Real IPC/preload, sender checks,
+  // authenticated reextraction and filesystem writes run; native UI/editor dispatch is intercepted.
+  const savedArtifact = join(await realpath(root), 'synthetic-artifact.md');
+  await desktop.evaluate(({ dialog, shell }, path) => {
+    Reflect.set(globalThis, 'syntheticSavePath', path);
+    Reflect.set(globalThis, 'syntheticSaveCancel', true);
+    Reflect.set(globalThis, 'syntheticOverwrite', false);
+    Reflect.set(globalThis, 'syntheticOpened', []);
+    Reflect.set(globalThis, 'syntheticSaveOptions', []);
+    dialog.showSaveDialog = async (
+      _window: Electron.BaseWindow | Electron.SaveDialogOptions,
+      options?: Electron.SaveDialogOptions,
+    ) => {
+      (Reflect.get(globalThis, 'syntheticSaveOptions') as unknown[]).push(options);
+      return {
+        canceled: Boolean(Reflect.get(globalThis, 'syntheticSaveCancel')),
+        filePath: Reflect.get(globalThis, 'syntheticSavePath') as string,
+      };
+    };
+    dialog.showMessageBox = async (
+      _window: Electron.BaseWindow | Electron.MessageBoxOptions,
+      options?: Electron.MessageBoxOptions,
+    ) => {
+      Reflect.set(globalThis, 'syntheticOverwriteDetail', options?.detail);
+      return {
+        response: Reflect.get(globalThis, 'syntheticOverwrite') ? 1 : 0,
+        checkboxChecked: false,
+      };
+    };
+    shell.openPath = async (value) => {
+      (Reflect.get(globalThis, 'syntheticOpened') as string[]).push(value);
+      return '';
+    };
+  }, savedArtifact);
+  const saveOriginal = artifact.getByRole('button', {
+    name: /Save original Markdown|Salvar Markdown original/,
+  });
+  await saveOriginal.click();
+  await expect(artifact.getByRole('status')).toContainText(/Save cancelled|Salvamento cancelado/);
+  assert.equal(
+    await stat(savedArtifact).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticSaveCancel', false));
+  await saveOriginal.click();
+  await expect(artifact.getByRole('status')).toContainText(
+    /Markdown file saved|Arquivo Markdown salvo/,
+  );
+  assert.equal(
+    await readFile(savedArtifact, 'utf8'),
+    await artifact.locator('pre.artifact-content').innerText(),
+  );
+  await writeFile(savedArtifact, 'Synthetic existing file');
+  await saveOriginal.click();
+  await expect(artifact.getByRole('status')).toContainText(/Save cancelled|Salvamento cancelado/);
+  assert.equal(await readFile(savedArtifact, 'utf8'), 'Synthetic existing file');
+  assert.equal(
+    await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticOverwriteDetail')),
+    savedArtifact,
+  );
+  await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticOverwrite', true));
+  await saveOriginal.click();
+  await expect(artifact.getByRole('status')).toContainText(
+    /Markdown file saved|Arquivo Markdown salvo/,
+  );
+  await artifact.getByRole('button', { name: /Edit draft|Editar rascunho/, exact: true }).click();
+  const savedDraft = '# Synthetic saved draft 😀\n<script>bad()</script>\n$(bad)';
+  await artifact.getByRole('textbox').fill(savedDraft);
+  await artifact
+    .getByRole('button', { name: /Save draft and open|Salvar rascunho e abrir/ })
+    .click();
+  await expect(artifact.getByRole('status')).toContainText(/handed to|encaminhado/);
+  assert.equal(await readFile(savedArtifact, 'utf8'), savedDraft);
+  assert.deepEqual(await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticOpened')), [
+    savedArtifact,
+  ]);
+  assert.equal(await page.evaluate(() => Reflect.get(window, 'orqstInjected')), undefined);
+  const nativeSaveOptions = await desktop.evaluate(() =>
+    Reflect.get(globalThis, 'syntheticSaveOptions'),
+  );
+  assert.match(JSON.stringify(nativeSaveOptions), /showOverwriteConfirmation/);
+  const beforeRevocationURL = page.url();
+  await artifact.getByRole('textbox').fill('Synthetic revoked overwrite must never be saved');
+  await desktop.evaluate(({ dialog }) => {
+    dialog.showMessageBox = async () =>
+      new Promise<Electron.MessageBoxReturnValue>((resolve) => {
+        Reflect.set(globalThis, 'syntheticPendingOverwrite', resolve);
+      });
+  });
+  await artifact
+    .getByRole('button', { name: /Save draft and open|Salvar rascunho e abrir/ })
+    .click();
+  await expect
+    .poll(() =>
+      desktop!.evaluate(() => typeof Reflect.get(globalThis, 'syntheticPendingOverwrite')),
+    )
+    .toBe('function');
+  await page.goto(origin + '/#models');
+  await page.goto(beforeRevocationURL);
+  await expect(page.locator('.connection-connected')).toBeVisible();
+  await desktop.evaluate(() => {
+    (
+      Reflect.get(globalThis, 'syntheticPendingOverwrite') as (
+        value: Electron.MessageBoxReturnValue,
+      ) => void
+    )({ response: 1, checkboxChecked: false });
+  });
+  // Later admission proves the revoked operation drained, rather than merely delaying effects.
+  await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
+  await page
+    .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
+    .click();
+  const revokedDestination = join(await realpath(root), 'revoked-destination.md');
+  await desktop.evaluate(({ dialog }) => {
+    dialog.showSaveDialog = async () =>
+      new Promise<Electron.SaveDialogReturnValue>((resolve) => {
+        Reflect.set(globalThis, 'syntheticPendingChoose', resolve);
+      });
+  });
+  await artifact
+    .getByRole('button', { name: /Save original Markdown|Salvar Markdown original/ })
+    .click();
+  await expect
+    .poll(() => desktop!.evaluate(() => typeof Reflect.get(globalThis, 'syntheticPendingChoose')))
+    .toBe('function');
+  assert.equal(await readFile(savedArtifact, 'utf8'), savedDraft);
+  assert.deepEqual(await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticOpened')), [
+    savedArtifact,
+  ]);
+  await page.goto(origin + '/#models');
+  await page.goto(beforeRevocationURL);
+  await expect(page.locator('.connection-connected')).toBeVisible();
+  await desktop.evaluate((_, path) => {
+    (
+      Reflect.get(globalThis, 'syntheticPendingChoose') as (
+        value: Electron.SaveDialogReturnValue,
+      ) => void
+    )({ canceled: false, filePath: path });
+  }, revokedDestination);
+  await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
+  await page
+    .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
+    .click();
+  await desktop.evaluate(({ dialog }) => {
+    dialog.showSaveDialog = async () => ({ canceled: true, filePath: '' });
+  });
+  await artifact
+    .getByRole('button', { name: /Save original Markdown|Salvar Markdown original/ })
+    .click();
+  await expect(artifact.getByRole('status')).toContainText(/Save cancelled|Salvamento cancelado/);
+  assert.equal(
+    await stat(revokedDestination).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  assert.deepEqual(await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticOpened')), [
+    savedArtifact,
+  ]);
   await artifact
     .getByRole('button', {
       name: /Close artifact and discard draft|Fechar artefato e descartar rascunho/,
@@ -347,6 +519,8 @@ try {
         versions,
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
+        artifactFiles:
+          'cancel/save/overwrite deny+accept/UTF8 hostile draft/current-file-only open/revocation during choose+confirm after navigation-return passed; dialogs/editor intercepted',
       },
       null,
       2,

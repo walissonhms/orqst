@@ -1,13 +1,19 @@
 import {
   app,
   BrowserWindow,
+  dialog,
+  ipcMain,
   Menu,
   nativeImage,
   Notification,
   protocol,
   session,
+  shell,
   Tray,
 } from 'electron';
+import { join } from 'node:path';
+import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
+import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
 import { createInstance } from 'i18next';
 import en from '../../dashboard/src/locales/en-US.json';
@@ -69,6 +75,54 @@ async function start(): Promise<void> {
     Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
   );
 
+  const saver = new ArtifactSaver();
+  let documentGeneration = 0;
+  let quitting = false;
+  ipcMain.handle('orqst:save-markdown', async (event, input: unknown) => {
+    const current = window;
+    const generation = documentGeneration;
+    const authorized = () =>
+      !quitting &&
+      !!current &&
+      window === current &&
+      !current.isDestroyed() &&
+      documentGeneration === generation &&
+      authorizedArtifactSender(event, current.webContents, browserSession, origin);
+    return saver.save(input, {
+      authorized,
+      original: (selection) =>
+        readSaveOriginal(
+          (url, init) => browserSession.fetch(url instanceof URL ? url.href : url, init),
+          origin,
+          selection,
+          authorized,
+        ),
+      choose: async () => {
+        const result = await dialog.showSaveDialog(current!, {
+          title: i18n.t('artifacts.nativeSave'),
+          defaultPath: 'artifact.md',
+          filters: [{ name: i18n.t('artifacts.markdownFile'), extensions: ['md'] }],
+          properties: ['showOverwriteConfirmation', 'dontAddToRecent'],
+        });
+        return result.canceled ? undefined : result.filePath;
+      },
+      confirm: async (path) => {
+        const result = await dialog.showMessageBox(current!, {
+          type: 'warning',
+          title: i18n.t('artifacts.nativeOverwrite'),
+          message: i18n.t('artifacts.overwriteMessage'),
+          detail: path,
+          buttons: [i18n.t('artifacts.cancel'), i18n.t('artifacts.replace')],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        return result.response === 1;
+      },
+      open: (path) => shell.openPath(path),
+    });
+  });
+
   let targetSession: string | undefined;
   function openWindow(): void {
     if (window && !window.isDestroyed()) {
@@ -88,6 +142,7 @@ async function start(): Promise<void> {
       minWidth: 800,
       minHeight: 600,
       webPreferences: {
+        preload: join(__dirname, 'preload.cjs'),
         session: browserSession,
         sandbox: true,
         contextIsolation: true,
@@ -102,6 +157,12 @@ async function start(): Promise<void> {
       },
     });
     window = current;
+    current.webContents.on('did-start-navigation', () => {
+      documentGeneration++;
+    });
+    current.webContents.on('destroyed', () => {
+      documentGeneration++;
+    });
     let retry: ReturnType<typeof setTimeout> | undefined;
     let showingOffline = false;
     const clearRetry = () => {
@@ -146,10 +207,12 @@ async function start(): Promise<void> {
       if (url.startsWith(origin) && status >= 400) void showOffline();
     });
     current.webContents.on('render-process-gone', () => {
+      documentGeneration++;
       showingOffline = false;
       void showOffline();
     });
     current.on('closed', () => {
+      documentGeneration++;
       clearRetry();
       if (window === current) window = undefined;
     });
@@ -305,6 +368,9 @@ async function start(): Promise<void> {
   updateTray();
   void poll();
   app.on('before-quit', () => {
+    quitting = true;
+    documentGeneration++;
+    ipcMain.removeHandler('orqst:save-markdown');
     stopped = true;
     clearTimeout(timer);
     for (const notification of activeNotifications) notification.close();

@@ -253,13 +253,33 @@
     "copyReadable": "Copy readable draft text",
     "copied": "Copied to clipboard.",
     "copyFailed": "Clipboard copy failed or is unavailable. Nothing was confirmed copied.",
-    "pending": "Next slice, pending file-contract review: save .md with a native destination grant, explicit overwrite confirmation, and external editor. These actions are not available yet.",
     "unavailable": {
       "event_not_retained": "This event is no longer retained. Content will not be reconstructed from summaries or metrics.",
       "identity_mismatch": "The selected event identity or source version does not match. Select a retained message again.",
       "unsupported_adapter": "Artifacts are not available for this adapter.",
       "not_artifact_message": "This event is not a supported retained assistant/agent message.",
       "content_limit": "Retained message exceeds 32 KiB UTF-8. Extraction is unavailable; no truncated artifact was created."
+    },
+    "nativeSave": "Save Markdown artifact",
+    "markdownFile": "Markdown text (.md)",
+    "nativeOverwrite": "Confirm replacement",
+    "overwriteMessage": "Replace this existing Markdown file? This cannot be undone.",
+    "cancel": "Cancel",
+    "replace": "Replace file",
+    "saveOriginal": "Save original Markdown…",
+    "saveDraft": "Save draft Markdown…",
+    "saveOpenOriginal": "Save original and open in default app…",
+    "saveOpenDraft": "Save draft and open in default app…",
+    "desktopOnly": "Native Markdown saving and opening require the ORQST Desktop client. This browser has no file export controls.",
+    "saving": "Waiting for native destination or replacement confirmation…",
+    "fileNote": "Only the selected retained original or current draft is saved as UTF-8 .md. “Save and open” opens only that newly saved file in the system default application. No source file or saved history can be opened here. Check the draft for sensitive content before exporting.",
+    "saveResult": {
+      "saved": "Markdown file saved.",
+      "saved_opened": "Markdown saved and handed to the system default application; editor display is not verified.",
+      "saved_open_failed": "Markdown was saved, but opening could not be confirmed. No automatic retry.",
+      "cancelled": "Save cancelled. No file was created or changed.",
+      "failed": "Save failed or the destination changed. No file was written. Choose a regular .md file of at most 32 KiB, or a new name.",
+      "write_failed": "Writing or verification failed. The selected file may have been created or partially changed; inspect it before retrying. It was not opened."
     }
   }
 }

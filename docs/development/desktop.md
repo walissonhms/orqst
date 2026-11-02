@@ -10,13 +10,13 @@ Closing a macOS window leaves the Desktop application available in the Dock; act
 it reopens the window. The menu-bar tray also opens/restores it. Quitting Desktop also preserves the independently running Bridge
 and observer. If the Bridge exits, Desktop cannot keep observation running.
 
-The renderer has sandbox and context isolation enabled, no Node integration, no
-preload, no IPC and no webview. Its browser session is in memory with cache disabled.
+The renderer has sandbox and context isolation enabled, no Node integration and no webview. The later Artifacts slice adds only the narrow
+isolated preload/IPC described below. Its browser session is in memory with cache disabled.
 Requests are restricted to the configured IPv4 loopback origin and its `/ws` socket;
 root/hash dashboard navigation is permitted. New windows, subframes, external navigation,
-downloads and permission requests are denied. Renderer notifications, media capture, external links and file export are denied.
-Native alerts originate only in the main-process monitor described below. No shell opening or
-arbitrary URL configuration is exposed. Dashboard content stays untrusted plain text.
+downloads and permission requests are denied. Renderer notifications, media capture, external links and downloads are denied.
+Markdown export is available only through the native Artifacts action described below.
+Native alerts originate only in the main-process monitor described below. No generic shell, filesystem, URL or path method is exposed. Dashboard content stays untrusted plain text.
 
 The existing bootstrap cookie, Host/Origin/fetch-metadata checks and CSP are unchanged;
 Electron does not inject headers, bypass authentication or proxy the API. This is the
@@ -185,3 +185,53 @@ window reopening, real second-process restore/reopen with the same disposable pr
 reconnect deduplication and quit lifetime. It does **not** assert OS
 visual delivery. No test/privileged channel is shipped to the renderer. The owner window,
 installed database and service are never addressed by that smoke.
+
+## Native Markdown Artifacts
+
+The shared Artifacts panel detects the version-1 `window.orqstArtifacts` capability.
+Its isolated CommonJS preload exposes only `saveMarkdown`; Electron, IPC events,
+filesystem handles, paths and reusable grants never cross into the page. The preload
+requires transient activation and admits one call at a time. This is defense in depth:
+main validates the DTO and live window/webContents/session/main-frame/document origin,
+then obtains authority exclusively from the native save dialog and overwrite prompt.
+Every navigation (including leaving and returning to the same URL), crash, destruction,
+window close and quit invalidates pending authority. Main admits one save at a time,
+without queueing. Each retry requires a new native grant. Closing the panel is disabled
+while a save is pending; closing/navigating the window revokes it.
+
+Main reextracts the exact selected retained message through the existing authenticated
+HTTP endpoint, using the in-memory Electron session, redirects denied, a five-second
+request/body timeout and 256 KiB response ceiling. The complete response contract and
+all request identities/source hash must match. Original saves use this verified retained
+text; draft saves use separate bounded page text and never claim it is retained original.
+The panel keeps recorded provenance and immutable original visible; saved files contain
+only the explicitly selected Markdown text, without fabricated metadata or versions.
+
+The save dialog suggests only `artifact.md`, filters `.md` and does not add recent items.
+Filters alone are not security: main checks the actual extension and canonical parent.
+Existing regular, nonexecutable single-link files must be at most 32768 bytes; symlinks,
+hardlinks, directories, aliases resolving to a different/nonregular target and large or
+ambiguous destinations fail closed. macOS aliases are not dereferenced by the writer;
+the descriptor always refers to the actual selected regular file. Replacement requires
+an additional native warning displaying the exact canonical path, defaulting to Cancel.
+Cancel writes nothing. See [the contract](../api/artifacts.md#native-desktop-save-contract)
+for descriptor checks, failures and concurrency limits.
+
+**Save and open** authorizes one `shell.openPath` call with only this operation's freshly
+saved, reverified `.md` path. No open-only method, source/history path, URL, executable,
+command line or reusable grant is accepted. The configured system file association is
+used; ORQST cannot guarantee it is an editor or that a window appeared. No shell command
+string, `openExternal`, renderer permission exception or clipboard workaround is added.
+Changing the default Markdown application remains an OS/user choice.
+
+The explicit disposable Electron smoke exercises real preload/IPC, reextraction and file
+writes, while intercepting native dialog choices/confirmation and editor dispatch in
+that temporary main process. It does not accept native dialog visuals or an actual
+external editor launch. The owner client and Bridge are preserved. Run `pnpm build`
+and `pnpm test:desktop` with the pinned toolchain; no real agent data is used.
+
+Official references checked for this boundary: [dialog](https://www.electronjs.org/docs/latest/api/dialog),
+[IPC sender validation](https://www.electronjs.org/docs/latest/tutorial/security#17-validate-the-sender-of-all-ipc-messages),
+[contextBridge](https://www.electronjs.org/docs/latest/api/context-bridge),
+[openPath](https://www.electronjs.org/docs/latest/api/shell#shellopenpathpath),
+[Node 24 filesystem flags](https://nodejs.org/docs/latest-v24.x/api/fs.html#file-system-flags).

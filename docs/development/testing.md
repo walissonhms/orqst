@@ -208,7 +208,10 @@ imports neither Core nor database.
 
 `tests/desktop-policy.test.ts` covers bounded port and URL containment;
 `tests/desktop-qa.test.ts` independently checks policy negatives, source hardening,
-no preload/IPC/control and dependency ownership. `scripts/smoke-desktop.ts` uses
+the single narrow Artifacts preload/IPC boundary, absence of generic filesystem/
+shell/control methods, and dependency ownership. This test evolved from the initial
+no-preload shell assertions when native saving was deliberately introduced; see the
+[native save contract](../api/artifacts.md#native-desktop-save-contract). `scripts/smoke-desktop.ts` uses
 Playwright `_electron` with real Chromium, a real Bridge and only disposable synthetic
 sessions/storage/profile on an ephemeral port. It verifies Node globals absent,
 denied new windows/notifications, native-session HttpOnly/Strict cookies, online UI,
@@ -278,6 +281,20 @@ copy is not claimed. Browser permission-granted clipboard success is tested sepa
 No privileged clipboard fallback is shipped. Smoke captures remain ignored generated output.
 
 This slice changes no ingestion reader or adapter; `pnpm validate:local` was not rerun.
-No installed service/database/user profile is part of these tests. Save destination grants,
-overwrite/cancel and external editor checks belong to the pending file-contract slice,
-not this panel delivery. See [Artifacts behavior and limits](../api/artifacts.md).
+No installed service/database/user profile is part of these tests. At this extraction-only
+stage, save destination grants, overwrite/cancel and external editor checks belonged to
+the pending file-contract slice (subsequently implemented/tested below), not this panel delivery. See [Artifacts behavior and limits](../api/artifacts.md).
+
+## Native Markdown save increment
+
+`pnpm test` includes disposable synthetic Desktop Artifacts tests for strict original/
+draft contracts, UTF-8 limits, hostile inert text, cancel/save, explicit replacement,
+symlinks/hardlinks, target/parent/content changes, replay, revocation, concurrency and
+sender/frame/session/origin checks. No real session files are used or modified.
+`pnpm test:desktop` exercises real sandboxed preload/IPC, authenticated extraction and
+file writes with a temporary Bridge/profile/destinations. Native chooser responses,
+replacement answers and editor dispatch are intercepted only in the temporary main
+process; native visuals and an actual external editor are not accepted by this smoke.
+It preserves the owner client, independent Bridge and installed service/storage.
+Browser fixtures must use a free `ORQST_BROWSER_PORT` and separate Playwright
+`--output` directory to avoid colliding with another local run.

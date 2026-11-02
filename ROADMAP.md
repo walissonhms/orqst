@@ -18,7 +18,9 @@ pre-upgrade gaps remain qualified. Local versioned observed-session evidence and
 artifact message references are implemented with runtime validation; broader
 lifecycle transport and managed contracts remain planned. A first manual Artifacts
 slice now provides bounded retained-message extraction and an integrated source/preview/
-memory-draft/copy panel; native file saving and external editor integration remain pending. There is no blanket “Phase 1 awaiting approval” gate.
+memory-draft/copy panel. A subsequent narrow Desktop action saves UTF-8 Markdown via
+a native destination dialog, confirms replacement and optionally opens only the newly
+saved verified file in the system default application. Browser file export remains unavailable. There is no blanket “Phase 1 awaiting approval” gate.
 Passing checks permits incremental progress within scope; product decisions,
 destructive actions, credentials, external costs and ungranted permissions still
 require a decision. Development authorization is not production activation.

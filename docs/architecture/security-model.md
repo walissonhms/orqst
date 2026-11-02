@@ -331,6 +331,11 @@ require their own evidence and security design.
 
 ## Initial Electron observer client review (before tray increment)
 
+Historical scope: the statements below describe that increment before native file
+export. The subsequent [native Markdown boundary](../api/artifacts.md#native-desktop-save-contract)
+adds one isolated preload/save IPC channel and explicit destination authority; the
+earlier absence of those capabilities is not a claim about the current client.
+
 The macOS checkout client is a separate unprivileged HTTP consumer of the existing
 Bridge. It imports no Core/database and starts/stops no service or agent. Its renderer
 has sandbox/context isolation/webSecurity enabled, Node integration disabled and no
@@ -353,6 +358,11 @@ separate distribution review; the checkout command is not a signed release. See
 
 ## Tray/native notification review — 2026-11-02
 
+Historical scope: the statements below describe that increment before native file
+export. The subsequent [native Markdown boundary](../api/artifacts.md#native-desktop-save-contract)
+adds one isolated preload/save IPC channel and explicit destination authority; the
+earlier absence of those capabilities is not a claim about the current client.
+
 The Desktop main process now reads only the fixed bootstrap/snapshot routes through
 its existing in-memory Electron session and authentication cookie. No REST/WS shape,
 Host/Origin check, CSP, cookie policy, loopback allowlist or Core/SQLite ownership changes.
@@ -374,6 +384,11 @@ source shape validation does not re-open or authenticate a filesystem source. Se
 
 ## Manual Artifacts boundary review — 2026-11-02
 
+Historical scope: this is the extraction/copy slice before native file export.
+The subsequent [native Markdown boundary](../api/artifacts.md#native-desktop-save-contract)
+adds the narrowly granted save/overwrite/open capability; pending language below
+records the state at this earlier review.
+
 The separate strict `orqst.artifacts` v1 contract adds a read-only authenticated POST
 for one exact retained message. Every requested identity and source hash must match
 the same validated event that supplies its reference and body. JSON/request limits,
@@ -387,3 +402,35 @@ Drafts remain in memory and cannot mutate retained originals or sessions. Clipbo
 writes require explicit gestures and failures are visible. No Desktop permission
 exception, preload or IPC is added. File save grants/overwrite/editor authority remain
 pending a separate review. See [contract and limits](../api/artifacts.md).
+
+## Native Markdown destination boundary — 2026-11-02
+
+The later Desktop Artifacts slice adds exactly one isolated preload method and one
+IPC handler, `saveMarkdown` / `orqst:save-markdown`. Renderer sandbox, context isolation,
+Node-off, CSP, network/cookie checks and deny-all browser permissions remain intact.
+Main accepts no path/URL/executable/grant, reextracts source-backed original through the
+fixed authenticated API, validates its full identity and bounds both UTF-8 text and
+HTTP response. Draft text is explicitly separate untrusted content, never original.
+Main validates live window/webContents/session/main-frame/origin/document identity;
+navigation, close, crash and quit revoke pending operations. Transient activation in
+the isolated preload is additional defense, not the authority. Only a native chooser
+and concrete default-Cancel replacement warning grant file effects. One operation is
+admitted without queueing or persisted/reusable grants. No Core/schema/service changes.
+
+Main accepts `.md` only, canonicalizes the selected parent, bounds existing files to
+32 KiB, rejects nonregular/executable/multiple-link/symlink targets and rechecks the
+same descriptor, pathname, parent, timestamps and bytes after confirmation. New files
+use `O_EXCL|O_NOFOLLOW`/0600; existing files are never opened with `O_TRUNC`. Cancellation
+writes nothing. The only external-open operation is the same explicit Save-and-open
+gesture, after verifying the freshly written file; its internal path alone is handed
+to `shell.openPath`. No open-history/source path, arbitrary URL, shell string or chosen
+executable exists. Files contain plain UTF-8 Markdown; content is not executed by ORQST.
+The default application remains an OS choice, not a verified editor launch.
+
+This is not atomic pathname CAS, atomic overwrite, crash recovery or isolation from a
+noncooperating same-user writer. Descriptor checks prevent following substituted
+symlink targets; observed changes fail closed. A local process can still race checks
+or the OS handoff. In-place I/O failure can leave partial content and is reported as
+`write_failed` without opening or automatic rollback. Main logs no file paths, payloads
+or OS diagnostics. Browser clients state that native export requires Desktop; clipboard
+denial remains unchanged. See [exact contract and limits](../api/artifacts.md#native-desktop-save-contract).

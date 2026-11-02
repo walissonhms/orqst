@@ -9,3 +9,12 @@ await build({
   external: ['electron'],
   sourcemap: true,
 });
+await build({
+  entryPoints: ['apps/desktop/src/preload.ts'],
+  outfile: 'apps/desktop/dist/preload.cjs',
+  bundle: true,
+  platform: 'node',
+  target: 'node24',
+  format: 'cjs',
+  external: ['electron'],
+});

@@ -5,6 +5,7 @@ import {
   artifactTextLimit,
   type ArtifactExtractionRequest,
   type ArtifactExtractionResult,
+  type ArtifactSaveResult,
 } from '@orqst/protocol';
 import { api } from './api';
 import { artifactBlocks, readableArtifact } from './artifact-preview';
@@ -24,6 +25,16 @@ export function ArtifactPanel({
   const [mode, setMode] = useState<'source' | 'preview' | 'edit'>('source');
   const [copyState, setCopyState] = useState<'copied' | 'copyFailed'>();
   const [limitError, setLimitError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveState, setSaveState] = useState<ArtifactSaveResult['status']>();
+  const desktop = window.orqstArtifacts?.contractVersion === 1 ? window.orqstArtifacts : undefined;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   useEffect(() => {
     heading.current?.focus();
     const controller = new AbortController();
@@ -67,6 +78,29 @@ export function ArtifactPanel({
       setCopyState('copyFailed');
     }
   }
+  async function save(openAfterSave: boolean) {
+    if (!desktop || saving) return;
+    setSaving(true);
+    setSaveState(undefined);
+    try {
+      const response = await desktop.saveMarkdown(
+        mode === 'source'
+          ? { contractVersion: 1, selection: request, representation: 'original', openAfterSave }
+          : {
+              contractVersion: 1,
+              selection: request,
+              representation: 'draft',
+              draft,
+              openAfterSave,
+            },
+      );
+      if (mounted.current) setSaveState(response.status);
+    } catch {
+      if (mounted.current) setSaveState('failed');
+    } finally {
+      if (mounted.current) setSaving(false);
+    }
+  }
   const artifact = result?.availability === 'available' ? result.value : undefined;
   const reference = artifact?.reference;
   return (
@@ -75,7 +109,7 @@ export function ArtifactPanel({
         <h3 id="artifact-heading" tabIndex={-1} ref={heading}>
           {t('artifacts.title')}
         </h3>
-        <button className="button" onClick={onClose}>
+        <button className="button" disabled={saving} onClick={onClose}>
           {t('artifacts.close')}
         </button>
       </div>
@@ -126,6 +160,7 @@ export function ArtifactPanel({
             {(['source', 'preview', 'edit'] as const).map((value) => (
               <button
                 className="button"
+                disabled={saving}
                 key={value}
                 aria-pressed={mode === value}
                 onClick={() => {
@@ -165,6 +200,7 @@ export function ArtifactPanel({
               <textarea
                 id="artifact-draft"
                 value={draft}
+                disabled={saving}
                 onChange={(event) => {
                   const value = event.target.value;
                   const tooLarge = new TextEncoder().encode(value).byteLength > artifactTextLimit;
@@ -179,6 +215,30 @@ export function ArtifactPanel({
           )}
           {limitError && <p role="alert">{t('artifacts.limit')}</p>}
           <p className="fine-print">{t('artifacts.draftNote')}</p>
+          {desktop ? (
+            <div className="artifact-actions">
+              <button className="button" disabled={saving} onClick={() => void save(false)}>
+                {t(mode === 'source' ? 'artifacts.saveOriginal' : 'artifacts.saveDraft')}
+              </button>
+              <button className="button" disabled={saving} onClick={() => void save(true)}>
+                {t(mode === 'source' ? 'artifacts.saveOpenOriginal' : 'artifacts.saveOpenDraft')}
+              </button>
+            </div>
+          ) : (
+            <p className="fine-print">{t('artifacts.desktopOnly')}</p>
+          )}
+          {saving && <p role="status">{t('artifacts.saving')}</p>}
+          {saveState && (
+            <p
+              role={
+                ['failed', 'write_failed', 'saved_open_failed'].includes(saveState)
+                  ? 'alert'
+                  : 'status'
+              }
+            >
+              {t(`artifacts.saveResult.${saveState}`)}
+            </p>
+          )}
           <div className="artifact-actions">
             <button
               className="button"
@@ -212,7 +272,7 @@ export function ArtifactPanel({
           )}
         </>
       )}
-      <p className="fine-print">{t('artifacts.pending')}</p>
+      <p className="fine-print">{t('artifacts.fileNote')}</p>
     </section>
   );
 }

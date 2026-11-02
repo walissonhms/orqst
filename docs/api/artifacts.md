@@ -1,4 +1,4 @@
-# Manual Artifacts — first slice
+# Manual Artifacts
 
 In a session's **Execution timeline**, choose **Extract artifact manually** on one retained
 Codex assistant/agent message. The separate panel stays within the session flow;
@@ -86,9 +86,9 @@ Each clipboard write requires a dedicated button gesture. Success appears only w
 Electron retains its permission-denial policy, so copying may be unavailable there;
 no privileged IPC or permission exception is added to bypass it.
 
-**Pending next slice after file-contract review:** save `.md` with a native destination
-grant, explicit overwrite confirmation, and external editor integration. There are no
-placeholder controls, filesystem/shell APIs, arbitrary source-file reads or hidden saves.
+Desktop now exposes the narrow save action below. Browser clients have no native
+save/export/open buttons and explain that Desktop is required. Clipboard remains an
+independent browser permission; this increment does not enable it on Desktop.
 
 ## Security review note
 
@@ -99,3 +99,93 @@ and redacted text can remain sensitive. UI drafts are not sent back to the Bridg
 CSP, cookies, loopback binding, source read-only protections and the single Store writer
 are unchanged. Existing v1 REST/WS payloads and lifecycle reference semantics remain
 compatible. See [security model](../architecture/security-model.md).
+
+## Native Desktop save contract
+
+This is a Desktop-only `window.orqstArtifacts` capability, not a REST endpoint.
+`contractVersion: 1` exposes only `saveMarkdown(request)`. The strict discriminated
+request is either:
+
+```ts
+{
+  contractVersion: 1,
+  selection: ArtifactExtractionRequest,
+  representation: 'original',
+  openAfterSave: boolean,
+}
+// or
+{
+  contractVersion: 1,
+  selection: ArtifactExtractionRequest,
+  representation: 'draft',
+  draft: string, // <=32768 UTF-8 bytes; empty allowed; no NUL/unpaired surrogates
+  openAfterSave: boolean,
+}
+```
+
+`original` forbids a draft/content field. Unknown fields, versions, paths, URLs,
+executables, file handles and grants are rejected. Main reextracts retained original
+through the fixed authenticated endpoint and checks the entire response contract,
+event ID/sequence, native session/machine/adapter, recorded workspace/agent and source
+hash against the validated selection. Unavailable/expired/mismatched evidence denies
+both representations. No source path is opened. The retained original remains exactly
+the retained/redacted representation with completeness unverified; draft edits have no
+new provenance or document-version claim. Files contain only the selected text.
+
+A dedicated **Save original/draft** or **Save original/draft and open** button is required.
+Sandbox/context isolation remain enabled and Node integration remains off. The isolated
+preload checks transient user activation; main does not treat that check as authority.
+Main validates the exact live window/webContents/session/main frame and fixed root
+origin/document, then requires a native save dialog to grant the destination. Navigation,
+crash, close and quit revoke in-flight authority even when the same URL returns. One
+operation is admitted at a time; no queue or reusable grant is returned or persisted.
+
+Only an absolute `.md` destination from the native chooser is accepted. Main canonicalizes
+its parent and keeps its identity. No directories are created. Existing targets must be
+regular nonexecutable single-link files no larger than 32768 bytes. Symlinks, hardlinks,
+nonregular targets, oversized/ambiguous destinations and observed target/parent changes
+are refused. The writer does not resolve macOS alias contents or follow them as paths.
+For a new file, `O_CREAT|O_EXCL|O_NOFOLLOW` and mode `0600` prevent silent replacement.
+An existing destination is opened with `O_NOFOLLOW` and without `O_TRUNC`; a native
+warning shows its exact canonical path with Cancel selected by default. After explicit
+replacement confirmation, main checks the same descriptor against path/parent identity,
+mode/link count, size, nanosecond modification/change times and bounded original bytes.
+It writes only that descriptor, truncates it only after all new bytes have been written,
+flushes and verifies the saved descriptor/path/content. It never unlinks or blindly
+renames over a target. Existing permissions are preserved; executable targets are denied.
+
+Results contain only `{ status }`, with no text, paths or OS diagnostics:
+
+| Status              | Meaning                                                                                                                       |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `saved`             | Markdown written, flushed and verified; no open requested.                                                                    |
+| `saved_opened`      | Saved and `openPath` accepted by the system; editor/window display is unverified.                                             |
+| `saved_open_failed` | Save succeeded; optional opening failed or could not be confirmed. No retry.                                                  |
+| `cancelled`         | Destination or overwrite cancelled; no file created/modified.                                                                 |
+| `failed`            | Rejected before writing, including invalid/stale input, changed destination or unsupported target.                            |
+| `write_failed`      | Creation/write/flush/verification failed after effects became possible; file may exist or be partially changed. Never opened. |
+
+Opening is part of the same explicit **Save and open** gesture. Immediately before
+`openPath`, main rechecks the newly saved descriptor, parent/path identity and exact
+bytes. The only argument is this operation's internal saved path; there is no open-only
+API, historical path, URL, renderer grant or chosen executable. The OS default Markdown
+application is used. This handoff is not proof of an external editor opening.
+
+### Race, failure and validation limits
+
+Descriptor identity protects against following a swapped symlink or truncating a newly
+substituted destination. Observed content/metadata/parent changes fail closed. These
+checks do **not** provide an atomic compare-and-swap of filesystem names, protection
+against a noncooperating same-user process modifying a file between checks/system
+handoff, atomic saves or guaranteed crash recovery. Overwrite is in place; I/O failure
+or a crash can leave partial content. No automatic rollback risks overwriting a later
+writer. A successful flush is not a general durability guarantee. These limits follow
+the existing trusted-single-user model and are surfaced honestly through results.
+
+Synthetic Node tests exercise cancel/save/overwrite, strict DTO/UTF-8/hostile content,
+link/target/parent races, bounded verification, revocation, concurrency, replay and
+sender/frame checks. Disposable real Electron checks run the actual isolated preload,
+main IPC, authenticated extraction and file writer; dialog responses and external open
+are intercepted only in that temporary test process. Native dialog visuals, real editor
+launch, other platforms and adversarial OS races remain unvalidated. Existing session
+files, Store/schema, Bridge/service and owner Desktop process are unchanged.
