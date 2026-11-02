@@ -16,11 +16,26 @@ import {
   type Preferences,
   type ModelAnalyticsQuery,
   type ModelAnalyticsReport,
+  type ModelAnalyticsSummary,
+  type AnalyticsGap,
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
 import { aggregateModelAnalytics, type AnalyticsSession } from './analytics.js';
 
 type Row = Record<string, unknown>;
+// Fixed synchronous HTTP budgets. Count every retained envelope inspected by SQLite's
+// JSON predicate, including message-only records and out-of-window baselines.
+export const MODEL_ANALYTICS_LIMITS = Object.freeze({
+  sessions: 100,
+  events: 1000,
+  evidenceBytes: 2 * 1024 * 1024,
+});
+export class AnalyticsCapacityError extends Error {
+  constructor() {
+    super('Analytics capacity exceeded');
+    this.name = 'AnalyticsCapacityError';
+  }
+}
 export interface Checkpoint {
   offset: number;
   line: number;
@@ -430,6 +445,41 @@ export class Store {
     );
   }
   modelAnalytics(input: ModelAnalyticsQuery = {}): ModelAnalyticsReport {
+    return this.readModelAnalytics(input, false);
+  }
+  modelAnalyticsSummary(input: ModelAnalyticsQuery = {}): ModelAnalyticsSummary {
+    // One snapshot covers budget admission and evidence reads, including when another
+    // local connection writes. No aggregate or source data is persisted here.
+    const report = this.transaction(() => this.readModelAnalytics(input, true));
+    const gaps = new Map<AnalyticsGap['reason'], number>();
+    for (const gap of report.coverage.gaps) gaps.set(gap.reason, (gaps.get(gap.reason) ?? 0) + 1);
+    return {
+      contract: report.contract,
+      contractVersion: report.contractVersion,
+      query: report.query,
+      basis: report.basis,
+      usage: report.usage,
+      sessions: report.sessions,
+      models: report.models.map(({ adapter, provider, model, sessions, usage }) => ({
+        adapter,
+        provider,
+        model,
+        sessions,
+        usage,
+      })),
+      coverage: {
+        scope: report.coverage.scope,
+        complete: report.coverage.complete,
+        reason: report.coverage.reason,
+        sessions: report.coverage.sessions,
+        sessionsWithCanonicalUsage: report.coverage.sessionsWithCanonicalUsage,
+        unidentifiedContributions: report.coverage.unidentifiedContributions,
+        gaps: [...gaps].map(([reason, count]) => ({ reason, count })),
+      },
+      unavailable: report.unavailable,
+    };
+  }
+  private readModelAnalytics(input: ModelAnalyticsQuery, bounded: boolean): ModelAnalyticsReport {
     const query = modelAnalyticsQuerySchema.parse(input);
     const conditions: string[] = [];
     const params: SQLInputValue[] = [];
@@ -460,12 +510,39 @@ export class Store {
         `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) OR (${window('t.timestamp')}))`,
       );
     }
-    const sessions: AnalyticsSession[] = this.all(
+    const sessionRows = this.all(
       `SELECT s.id,s.workspace_id,s.agent_id,a.machine_id,a.adapter,t.input,t.output,t.cached,t.total,t.timestamp,t.source_priority
        FROM sessions s JOIN agents a ON a.id=s.agent_id LEFT JOIN token_usage t ON t.session_id=s.id
-       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY s.id`,
+       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY s.id LIMIT ?`,
       ...params,
-    ).map((row) => ({
+      bounded ? MODEL_ANALYTICS_LIMITS.sessions + 1 : -1,
+    );
+    if (bounded) {
+      if (sessionRows.length > MODEL_ANALYTICS_LIMITS.sessions) throw new AnalyticsCapacityError();
+      let events = 0;
+      let bytes = 0;
+      // Admit ALL selected sessions before fetching any envelope or running json_type.
+      // LIMIT permits a single overflow probe, never materializing an unbounded history.
+      const budget = this.stmt(
+        `SELECT length(CAST(envelope AS BLOB)) AS bytes FROM events
+         WHERE session_id=? ORDER BY sequence LIMIT ?`,
+      );
+      for (const row of sessionRows) {
+        for (const event of budget.iterate(
+          String(row.id),
+          MODEL_ANALYTICS_LIMITS.events - events + 1,
+        )) {
+          events++;
+          bytes += Number(event.bytes);
+          if (
+            events > MODEL_ANALYTICS_LIMITS.events ||
+            bytes > MODEL_ANALYTICS_LIMITS.evidenceBytes
+          )
+            throw new AnalyticsCapacityError();
+        }
+      }
+    }
+    const sessions: AnalyticsSession[] = sessionRows.map((row) => ({
       id: String(row.id),
       machineId: String(row.machine_id),
       workspaceId: String(row.workspace_id),

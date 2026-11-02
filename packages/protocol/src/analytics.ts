@@ -106,3 +106,11 @@ export interface ModelAnalyticsReport {
     taskEquivalence: 'not_recorded';
   };
 }
+
+/** Aggregate transport projection; individual evidence stays inside the local library. */
+export type ModelAnalyticsSummary = Omit<ModelAnalyticsReport, 'models' | 'coverage'> & {
+  models: Omit<ModelAnalyticsRow, 'contributions'>[];
+  coverage: Omit<ModelAnalyticsReport['coverage'], 'gaps'> & {
+    gaps: Array<{ reason: AnalyticsGap['reason']; count: number }>;
+  };
+};

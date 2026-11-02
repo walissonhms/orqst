@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import {
   preferencesSchema,
+  modelAnalyticsQuerySchema,
   type Snapshot,
   type StoredEvent,
   type StreamMessage,
@@ -13,8 +14,26 @@ import {
 import { codexDescriptor } from '@orqst/adapter-codex';
 import { claudeDescriptor } from '@orqst/adapter-claude';
 import { opencodeDescriptor } from '@orqst/adapter-opencode';
-import type { Store } from '@orqst/database';
+import { AnalyticsCapacityError, type Store } from '@orqst/database';
 import type { Config } from './config.js';
+
+const modelAnalyticsHttpQuerySchema = z
+  .object({
+    from: z.string().max(64).optional(),
+    to: z.string().max(64).optional(),
+    workspaceId: z.string().min(1).max(200).optional(),
+    agentId: z.string().min(1).max(200).optional(),
+    adapter: modelAnalyticsQuerySchema.shape.adapter,
+    model: z.string().min(1).max(200).optional(),
+    unidentified: z.literal('true').optional(),
+  })
+  .strict()
+  .refine((query) => query.unidentified === undefined || query.model === undefined)
+  .transform(({ unidentified, ...query }) => ({
+    ...query,
+    ...(unidentified === 'true' ? { model: null } : {}),
+  }))
+  .pipe(modelAnalyticsQuerySchema);
 
 export function createLocalServer(
   store: Store,
@@ -114,6 +133,23 @@ export function createLocalServer(
         }
         if (url.pathname === '/api/snapshot' && request.method === 'GET') {
           reply(response, 200, snapshot());
+          return;
+        }
+        if (url.pathname === '/api/analytics/models' && request.method === 'GET') {
+          const keys = [...url.searchParams.keys()];
+          const parsed = modelAnalyticsHttpQuerySchema.safeParse(
+            Object.fromEntries(url.searchParams),
+          );
+          if (url.search.length > 2048 || new Set(keys).size !== keys.length || !parsed.success) {
+            reply(response, 400, { error: 'invalid_query' });
+            return;
+          }
+          try {
+            reply(response, 200, store.modelAnalyticsSummary(parsed.data));
+          } catch (error) {
+            if (!(error instanceof AnalyticsCapacityError)) throw error;
+            reply(response, 503, { error: 'analytics_capacity_exceeded' });
+          }
           return;
         }
         if (url.pathname === '/api/events' && request.method === 'GET') {
