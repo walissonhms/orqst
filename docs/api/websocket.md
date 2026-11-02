@@ -1,7 +1,7 @@
 # WebSocket API
 
-> **Current observation API.** Phase 0 changes documentation only. Routes, payloads,
-> authentication and behavior on this page are unchanged. The
+> **Current observation API baseline.** This roadmap update changes no routes,
+> payloads, authentication or behavior on this page. The
 > [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
 > not implemented control endpoints or new messages on the current stream.
 

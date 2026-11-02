@@ -8,7 +8,9 @@ ADRs 015–024 record the architecture direction approved on 2026-11-02 during
 Phase 0. **Accepted direction does not mean implemented or authorized for
 implementation in this phase.** Phase 0 changes documentation and contract design
 only. ADR-025 adds the authorized optimizer research/benchmark scope, without
-production activation. Phase 1 requires separate approval; see [ROADMAP](../../ROADMAP.md).
+production activation. The later incremental-development authorization and six-phase
+sequence are recorded in ADR-026 and [ROADMAP](../../ROADMAP.md). Historical Phase 0
+restrictions below describe that delivery's scope, not a current blanket approval gate.
 
 ADRs 001–014 describe the existing 0.1.0 runtime unless an explicit status note
 limits or supersedes their future applicability. Existing APIs, events, database
@@ -390,3 +392,40 @@ components retain their own terms. Cloud is not implemented or licensed here.
 **Decision.** Plan an independent optimizer domain component composed by the future Core, with Disabled, Economy and Intelligent modes and versioned request/plan/evidence interfaces. Preserve protected instructions, permission boundaries, source provenance, tool/result correlations and code required for the task. Optimize only context the adapter demonstrably exposes and ORQST is authorized to supply. External sessions remain unchanged unless explicitly authorized. Start with deterministic, traceable transformations; learned compression and summaries require separate quality, resource and licensing evidence.
 
 **Consequences.** No production dependency, runtime capability, endpoint or default changes in Phase 0. The intended managed-session default is safe Economy only after correctness and measurable net benefit are validated; until then optimization remains inactive. Intelligent must fall back when evidence, authority or relevance is uncertain. Router/orchestrator/adapters consume a plan, and observability records observed versus estimated usage, failed attempts, retries and optimizer overhead. See [Token Optimizer design](token-optimizer.md) and [benchmark methodology/results](../benchmarks/token-optimization.md). No published compression ratio from another project is an ORQST savings claim.
+
+---
+
+## ADR-026 — Six-phase Desktop delivery and mandatory local Analytics
+
+**Status:** Accepted product direction and incremental-development authorization on
+2026-11-02. Core/Bridge separation and the Analytics foundation are in progress;
+completion awaits integration. This record supersedes the earlier blanket Phase 1
+approval gate and roadmap numbering, not historical evidence or runtime contracts.
+
+**Context.** The functional desktop scope now includes Core/Bridge, Terminal,
+Monitor/Notifications, Artifacts, Model Manager, Live Metrics, mandatory Model Usage
+Analytics and an inactive Token Optimizer. The former eight-phase sequence placed
+qualified metrics too late and did not make model Analytics an MVP requirement.
+
+**Decision.** Use six phases: Core/contracts; Desktop MVP; robust provider integrations;
+managed sessions; evidence-gated optimizer validation/integration; distribution and
+polish. The [roadmap](../../ROADMAP.md) maps every former phase, dependencies, risks,
+tests and acceptance. Incremental authorized non-destructive work may proceed after
+checks. Stop for product decisions, destructive actions, credentials, external costs
+or permissions not granted. Managed operations still require reviewed authentication,
+scopes, provider evidence and ownership; external observation remains read-only.
+
+Analytics is local usage analysis, not tracking or uploads. Rank primarily by reported
+total tokens with source/model/provider/time provenance and coverage. Preserve
+unidentified models, unavailable values, cumulative deduplication and provider cache
+semantics. Compare efficiency only for equivalent tasks with explicit outcomes;
+non-equivalent comparisons are descriptive. Most used is distinct from lowest usage
+per successful task and best value, which requires verified prices and billing basis.
+See [Analytics design](model-usage-analytics.md) and [coverage](product-requirements.md).
+
+**Consequences.** Phase 2 terminal UI can progress independently, but its execution
+acceptance depends on Phase 4 authorization and Phase 3 evidence for each enabled
+provider operation. Other providers, costs, quotas and private context are never
+assumed available. No optimizer activation, remote telemetry, Cloud, API shape change,
+new runtime capability or release acceptance is created by this documentation.
+Historical ADRs, the original observer plan/audit and benchmark results are preserved.

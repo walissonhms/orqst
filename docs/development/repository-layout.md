@@ -171,8 +171,9 @@ Ignored by Git and not part of the source layout:
 
 ## Planned boundaries
 
-Phase 0 adds public architecture/contracts, ROADMAP.md and CHANGELOG.md only.
-There is no `apps/desktop`, extracted Core, PTY runtime, orchestrator or Cloud
-module in the current layout. New packages must follow the approved phase and
+The layout above describes the integrated observer baseline. Core/Bridge separation
+and the Analytics foundation are in progress; new files must not be described as
+accepted capabilities before integration. There is no accepted Desktop, PTY runtime,
+orchestrator or Cloud implementation. New packages must follow the approved phase and
 have concrete responsibilities; see [ROADMAP](../../ROADMAP.md) and
 [target architecture](../architecture/overview.md#target-module-responsibilities--planned).

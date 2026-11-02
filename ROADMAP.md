@@ -2,142 +2,117 @@
 
 ## Product direction and delivery status
 
-Intelligent agent observability is the primary product experience: activity,
-delivery, intervention, communication, usage, costs and uncertainty. Terminals
-and orchestration support that experience. Community remains Apache-2.0,
-local-first, self-hostable and independent of optional commercial connectivity.
+ORQST is a local-first, observability-first desktop platform in development.
+Community remains Apache-2.0 and independent of Cloud. Release metadata remains
+`0.1.0`; this roadmap does not announce a release or claim MVP acceptance.
+The integrated baseline is the read-only Codex observer in [README](README.md).
 
-Current release metadata is `0.1.0`, a development version; this document does
-not create a release or a 1.0 acceptance claim. The current runtime is the local
-Codex observer described in [README](README.md). Claude Code/OpenCode descriptors
-remain contracts, and no execution or Cloud feature is enabled.
+Incremental, non-destructive development is authorized. **Phase 1 Core/Bridge
+separation and the Analytics foundation are in progress**, with completion reserved
+for integration checks. There is no blanket “Phase 1 awaiting approval” gate.
+Passing checks permits incremental progress within scope; product decisions,
+destructive actions, credentials, external costs and ungranted permissions still
+require a decision. Development authorization is not production activation.
 
-Phase 0 records architecture and contract design. An approved addition permits
-standalone Token Optimizer research and synthetic benchmarks only; no production
-optimizer or managed execution is enabled. **Phase 1 is awaiting
-approval. No runtime implementation phase is active.** Later rows are planned,
-not delivery commitments or authorization to start. Preserve working components
-and data throughout; do not use a phase to rewrite the application.
+The [requirement matrix](docs/architecture/product-requirements.md) audits existing,
+partial and absent behavior. The [Analytics design](docs/architecture/model-usage-analytics.md)
+defines mandatory Desktop metrics without inventing provider data.
 
-Priorities: P0 establishes boundaries before control; P1 delivers local Desktop
-and managed capabilities; P2 adds capabilities that depend on reliable evidence.
-Effort is relative: S small, M medium, L large, XL very large. These are planning
-comparisons, not calendar estimates. Provider work is measured per adapter.
+## Phase numbering migration
 
-## Phases, dependencies and acceptance
+The six phases below supersede the earlier roadmap sequence. Previous ADRs and
+benchmark reports retain their historical Phase 0 wording and evidence.
 
-| Phase                                   | Status / priority / effort      | Scope and affected areas                                                                                                                    | Dependency                                                                                                        | Acceptance and tests                                                                                                                                                                 | Main risk                                                                |
-| --------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| 0 — Architecture contracts and research | Documentation baseline / P0 / M | ADRs, architecture/API design, public docs and isolated optimizer benchmarks                                                                | Architecture approval                                                                                             | Docs distinguish current and planned; v1 and runtime files unchanged; references, formatting and existing checks verified                                                            | Mistaking approved design for shipped functionality                      |
-| 1 — Independent observer Core           | Awaiting approval / P0 / M–L    | Extract existing composition responsibilities from `apps/bridge`; add `packages/core` only when needed; preserve adapters/database/protocol | Phase 0 review and explicit Phase 1 approval                                                                      | Same REST/WS behavior and data; one database writer; clean start/stop, replay and checkpoint recovery; existing unit/browser checks and focused lifecycle tests                      | Regressing observer shutdown, data integrity or service paths            |
-| 2 — Desktop observer                    | Planned / P1 / L                | Electron client, shared React UI, narrow preload and native notifications; macOS first                                                      | Stable Core boundary and separate approval                                                                        | Desktop and browser show the same observations; closing/reopening Desktop leaves Core running; IPC sender/argument validation; packaging smoke checks                                | Renderer privilege or accidentally coupling service lifetime to a window |
-| 3 — Managed Codex and terminals         | Planned / P1 / L                | Authorized runtime/process/PTY operations, native provider channel and persistent layout; dashboard keeps observability prominent           | Reviewed control authentication, grants, runtime/ABI and adapter protocol                                         | Start/observe/interrupt/approve within scopes; terminal resize and reconnect; window closure preserves work; unauthorized operations denied                                          | Arbitrary execution, stale approval or duplicate process creation        |
-| 4 — Recovery and additional adapters    | Planned / P1 / L per provider   | Codex recovery plus incremental Claude Code/OpenCode observation and managed operations                                                     | Version-specific evidence and recovery policy                                                                     | Distinguish Core crash from reboot; resume native context only when supported; malformed/reordered/missing events, missing sources and permissions tested                            | Claiming unsupported resume or replaying uncertain side effects          |
-| 5 — Structured local delegation         | Planned / P1 / L                | Orchestrator, durable task/request/result state and validated adapter delivery                                                              | Managed sessions and reviewed authority model                                                                     | Cross-agent result round trip; explicit parentage; duplicate/reordered delivery, cancellation, deadline, revocation, loop/depth/fan-out/concurrency/budget tests                     | Repeated external effects or runaway delegation                          |
-| 6 — Qualified metrics and budgets       | Planned / P1 / M–L              | Observed/estimated/unavailable metrics, time basis, rate provenance and per-agent/project aggregation                                       | Reliable provider usage and identity; may proceed independently of Phase 5 after approval                         | Missing is not zero; cumulative/cache accounting preserved; mixed-model/rate estimates reproducible; subscription mode qualified; unknown usage cannot imply a hard budget guarantee | Misstating spend, generation speed or coverage                           |
-| 7 — Forecasts and remote observability  | Planned / P2 / XL               | Remaining-work estimates with uncertainty; optional paired remote clients and content-private connectivity                                  | Sufficient comparable data for forecasts; reviewed encryption, pairing, revocation and metadata policy for remote | Forecasts validated against outcomes or marked unavailable; local use works with Cloud offline; no session content persisted in Cloud; revocation/disconnect/replay tests            | False precision or content leaking through relay/logging paths           |
+| Previous phase                              | New location and reason                                                                                                         |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 0 — Architecture contracts and research     | Historical baseline; contracts inform Phase 1, optimizer evidence informs Phase 5.                                              |
+| 1 — Independent observer Core               | Phase 1 — Core and contracts; retains bounded observer extraction.                                                              |
+| 2 — Desktop observer                        | Phase 2 — Desktop MVP; now includes Terminal, Artifacts, Model Manager, Live Metrics and mandatory Analytics.                   |
+| 3 — Managed Codex and terminals             | Terminal UI belongs to Phase 2; authorized process/session control belongs to Phase 4.                                          |
+| 4 — Recovery and additional adapters        | Phase 3 — Robust integrations; managed recovery also belongs to Phase 4.                                                        |
+| 5 — Structured local delegation             | Deferred extension after Phase 4, not a Desktop MVP requirement or an optimizer prerequisite.                                   |
+| 6 — Qualified metrics and budgets           | Metric contracts in Phase 1; Live Metrics, model Analytics and alert limits in Phase 2; enforceable controls depend on Phase 4. |
+| 7 — Forecasts and remote observability      | Deferred independent gates; neither is required for the six-phase local Desktop delivery.                                       |
+| Foundational optimizer research/integration | Historical research remains intact; production integration moves to Phase 5.                                                    |
 
-Phases 6 and the forecast part of 7 are not blocked on implementing every provider.
-Remote access and forecasts are separate implementation gates; one must not ship
-merely because the other is ready. Every phase requires its own scoped approval.
+## Backlog by phase
 
-## Phase 1 — Core extraction (awaiting approval)
+Each row is a reviewable outcome, not a claim of delivery. Tests listed here are
+acceptance requirements, not checks already run. P0 protects compatibility/data;
+P1 delivers the functional desktop; P2 completes evidence and distribution.
 
-### Purpose
+| Phase / priority / status                       | Deliverable                                                                                                                  | Dependencies                                                                                                        | Risks                                                                                         | Tests and acceptance                                                                                                                                                                                                              |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 / P0 / In progress                            | Extract UI-independent observer Core; Bridge retains transport/composition entry point.                                      | Existing adapters, store, v1 protocol; explicit lifecycle ownership.                                                | Two writers, shutdown races, service/asset path regressions.                                  | Lifecycle tests for readiness, bind failure, repeated stop and partial startup; preserve REST/WS, IDs, settings, checkpoints, retention and replay; one SQLite writer.                                                            |
+| 1 / P0 / In progress                            | Analytics foundation: source-backed metric/model/session contracts and durable time basis.                                   | Codex cumulative accounting and model event evidence; schema/compatibility review.                                  | Assigning history to latest model, duplicate cumulative totals, missing values becoming zero. | Mixed/unknown models, mirrors, replay, missing baselines, retention and safe migration tests; old data and v1 clients preserved; unsupported fields explicitly unavailable.                                                       |
+| 1 / P0 / Planned                                | Normalize lifecycle and artifact references without reinterpreting v1 statuses.                                              | Version negotiation and documented provider evidence.                                                               | Turn completion confused with task success or process exit.                                   | Unknown versions rejected, source references retained; started/running/completed/error/interrupted/waiting evidence tested; approval/quota only when exposed.                                                                     |
+| 2 / P1 / Planned                                | Electron shell, shared React UI, multiple project/session terminal tabs and live output.                                     | Phase 1; Electron/PTY versions, authentication and ownership decisions.                                             | Renderer privileges, terminal escape sequences, accidental process lifetime coupling.         | IPC sender/argument validation, reconnect/resize/output tests; macOS packaging smoke; closing UI does not stop independent work. Terminal input/interrupt requires Phase 4 control gate.                                          |
+| 2 / P1 / Planned                                | Monitor, native macOS notifications, tray, history, pending count, silence/preferences and click-to-session.                 | Source-confirmed events; active monitor; native permission policy.                                                  | Import alerts, false completion, notification content leakage.                                | Foreground/minimized tests; duplicate suppression; completion/error/attention/approval/interruption only with evidence; denied permissions honest; native delivery verified on device.                                            |
+| 2 / P1 / Planned                                | Artifacts extraction and independent source/preview/edit panel; copy raw/rendered text, save Markdown, external editor.      | Safe rendering, source/version provenance and file grant policy.                                                    | Untrusted HTML/links, ambiguous extraction, silent overwrite.                                 | Manual extraction fallback; hostile Markdown; preserve originals/history and project/session/agent/date; save dialog/cancel/overwrite tests; no file replaced without confirmation.                                               |
+| 2 / P1 / Planned                                | Model Manager in session header; project/agent defaults, session overrides and supported reasoning/speed controls.           | Version-specific capability discovery; Phase 4 for execution changes.                                               | Invented models, invalid combinations, hidden restart on model change.                        | Missing CLI/models and unsupported options rejected; model switch support and restart impact visible; terminal does not imply access to private context.                                                                          |
+| 2 / P1 / Planned                                | Live Metrics always visible in session/terminal/artifact headers, confirmed update time, alert limits and restrained motion. | Qualified Phase 1 measurements; metric/configuration policy.                                                        | Stale data shown as live, double cache accounting, inaccessible animations.                   | Input/output/cache/total reconciliation; last confirmed timestamp; session/project limits; verified-price-only cost; supported Fast indicator, threshold flame, state/mascot eye reactions and reduced-motion/performance checks. |
+| 2 / P1 / Foundation in progress; screen planned | **Mandatory Model Usage Analytics:** ranking, filters, charts, comparisons and content-free CSV/Markdown export.             | Phase 1 measurement provenance and coverage; [design](docs/architecture/model-usage-analytics.md).                  | Misleading superiority, absent data as zero, export leaks.                                    | Two or more model datasets reconcile to source totals; today/7d/30d/custom, project/agent/provider/model filters; unknown-model bucket; bars/trend/share/cards; equivalent-task guards, missing metrics and safe exports tested.  |
+| 3 / P1 / Planned                                | Validate Codex, Claude Code and OpenCode individually; fallbacks, compatibility and later Windows/Linux.                     | Version-pinned native evidence and authorized test access per provider.                                             | Assuming parity, unsupported resume/approval/quota, provider drift.                           | Discovery, malformed/missing/reordered records, permissions, recovery and usage semantics per adapter; real evidence separately from fixtures; capabilities remain false/unverified until proven.                                 |
+| 4 / P1 / Planned                                | Authorized managed start/stop/input/interrupt/resume with ownership, audit and recovery.                                     | Phase 1 contracts, Phase 3 capability for each enabled operation, reviewed principal/scopes and PTY lifecycle.      | Arbitrary execution, stale approval, external-session adoption, uncertain side effects.       | Deny unauthorized actions; constrain executable/args/cwd/environment; preserve external sessions; confirm destructive effects; reconcile crash/reboot before retry; window close differs from process stop.                       |
+| 5 / P2 / Research only; runtime inactive        | Gradual optimizer validation/integration; Disabled, Economy and Intelligent with opt-out, fallback and audit.                | Authorized real repositories, complete tasks, correctness/cost/cache baseline and Phase 4 supplied-context support. | Lost required context, repair overhead, cache regression or unverifiable savings.             | Reproducible complete-task quality tests including failures/repairs/overhead, measured net benefit and verified billing basis; no private prompt interception; activation requires evidence and explicit decision.                |
+| 6 / P2 / Planned                                | Packaging/installers/updates, performance, accessibility, local diagnostics and user docs.                                   | Integrated Desktop acceptance; packager/signing/update and platform decisions.                                      | Broken update/permissions, resource leaks, sensitive diagnostics.                             | Install/update/rollback smoke, long-running load, keyboard/screen reader/reduced motion, offline local use; diagnostics local and content-minimized, no automatic uploads.                                                        |
 
-Make the existing observation service reusable by future Desktop and browser
-clients while preserving observable behavior. This phase does not require Electron
-or a second daemon. The current macOS service remains the operational entry point.
+Phase 2 terminal execution is integrated with Phase 4 authorization and per-provider
+Phase 3 evidence; numbering is not permission to bypass those dependencies. Desktop
+observation/Analytics can be developed before managed execution, but the global MVP
+is incomplete until the authorized start/input/interrupt path works. No placeholder
+controls, providers or fabricated metrics count toward acceptance.
 
-### Planned implementation scope
+## Phase 1 compatibility and integration gate
 
-1. Extract observer composition/start/stop into a UI-independent lifecycle boundary.
-   Keep `apps/bridge` as the transport/composition entry point; introduce a Core
-   package only for the extracted responsibilities, not empty future modules.
-2. Define explicit initialization, readiness and shutdown ownership for the store,
-   observer and API. Preserve the existing SQLite single-writer model and cleanup
-   behavior; do not acquire ownership of native provider processes.
-3. Preserve current settings, machine/session/event IDs, checkpoints, notifications,
-   cumulative usage and all REST/WS v1 shapes. No schema migration is expected.
-4. Keep Node `>=24 <25`, pnpm workspaces, React, SQLite and existing dependencies.
-   Resolve source/build asset paths explicitly only if extraction requires it,
-   documenting any service-path impact before deployment.
-5. Add focused lifecycle and compatibility tests; run existing required checks and
-   browser regression tests. Test restart/replay with synthetic disposable data;
-   real-session acceptance remains separate and explicitly authorized.
+Core extraction is bounded: preserve Node `>=24 <25`, pnpm 10.x, SQLite, existing
+adapters and one writer. It does not activate Electron, PTY, execution, optimizer,
+Cloud, delegation or public binding. Extraction alone needs no schema migration;
+Analytics changes require separate additive migration design and recovery tests.
+Do not install/restart the owner's service as a side effect of a check.
 
-### Exclusions
+Integration must review the file/dependency map, ownership, start/stop behavior,
+asset/service paths, data preservation, actual commands and outcomes. Concurrent
+Core and Analytics work remains **in progress** until reviewed together. Existing
+observer validation is historical evidence, not proof of these changes.
 
-No Electron shell, PTY, agent execution, native-session resume, approval delivery,
-delegation queue, metric estimator, Cloud connection, paid-feature check or public
-bind. Do not transmit the planned lifecycle contract, change adapter capability
-flags, add speculative packages, change the database schema, modify native session
-files, or install/restart the owner's service as an incidental test.
+## Optimizer evidence and activation
 
-### Review evidence
+[Phase 0 research](docs/benchmarks/token-optimization.md) reports 42 selected,
+quality-qualified synthetic executions: Economy used 5.975% fewer reported tokens
+and the guarded Intelligent prototype 8.768% fewer. These are fixture-specific
+results, not production, monetary or cross-provider benefit. The report also retains
+invalid attempts and limitations; this roadmap does not replace it or rerun live calls.
 
-The Phase 1 delivery must include its file/dependency map, compatibility results,
-start/stop ownership, data-preservation checks, deployment implications and exact
-commands executed. A successful extraction is not authorization for Phase 2.
-
-## Foundational Token Optimizer
-
-Token optimization is a foundational Core capability alongside observability.
 [ADR-025](docs/architecture/decisions.md#adr-025--independent-token-optimizer-and-evidence-gated-activation)
-and [optimizer design](docs/architecture/token-optimizer.md) define Disabled,
-Economy and Intelligent modes, protected context, capability/permission boundaries
-and integration with future routing, orchestration, adapters, UI and analytics.
+and the [optimizer design](docs/architecture/token-optimizer.md) preserve protected
+context, native history and permission boundaries. Production optimization remains
+inactive throughout current Core/Analytics development.
 
-The [Phase 0 benchmark report](docs/benchmarks/token-optimization.md) records
-research, reproducible isolated experiments, quality limitations and actual versus
-unavailable measurements. These experiments are not imported by the application,
-run by automatic CI, or a start of Phase 1. No production dependencies are added.
+## Open decisions and explicit gates
 
-| Gate                           | Priority / effort | Deliverable and acceptance                                                                                                                                                | Dependency/risk                                                                                                    |
-| ------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Research and benchmark         | P0 / M            | Seven synthetic scenarios; fixed-model Disabled/Economy/guarded Intelligent comparison; actual usage when available; failures and quality checks retained                 | Synthetic context redundancy and limited validators do not prove production benefit                                |
-| Core contract integration      | P0 / M            | Preserve a UI/provider-independent optimizer request/plan/evidence boundary during future Core design; no active transformation in Phase 1                                | Requires separate implementation approval and stable source/permission boundaries                                  |
-| Managed Economy implementation | P1 / M–L          | Conservative transformations, native-capability checks, representative edit/build/test non-regression, net usage including repairs/overhead and cache-aware cost evidence | Depends on managed operations and authorization; unsafe relevance or changed prefixes can regress cost/correctness |
-| Intelligent adaptation         | P2 / L            | Task/capability/performance policy validated across workloads and providers, bounded overhead, fallbacks and user visibility                                              | Requires representative evidence; model-based compression/summary licensing and resources reviewed separately      |
+- Core API/ownership and service/asset path compatibility at Phase 1 integration.
+- Period baselines, model-change attribution, retention and local Analytics migration
+  policy before publishing reliable time-filtered totals.
+- Electron/PTY versions, packager, signing/update strategy and crash lifetime before
+  Desktop integration; no same-PTY survival guarantee across Core crash/reboot.
+- Control principal, grant storage, OS secret backend, executable/environment policy
+  and external-session adoption before any managed operation.
+- Provider/version capabilities, model discovery and model-switch support per adapter.
+- Task equivalence/outcome capture, active-time basis, verified price/billing sources
+  and coverage before comparative efficiency or value claims.
+- Artifact rendering/export/cache permissions and overwrite behavior before file writes.
+- Optimizer activation thresholds and real-task quality/net-benefit evidence before
+  production use; no token-consuming live benchmark without authorization.
+- Remote pairing/encryption/metadata retention, forecasts and bounded delegation remain
+  separate future decisions, outside the functional local Desktop MVP.
 
-The intended managed-session default is safe optimization only after correctness
-and measurable benefits are validated. Current production remains unchanged and
-inactive. Observed external sessions are unaffected without explicit authorization.
-Native provider histories, mandatory instructions and security constraints cannot
-be rewritten or dropped for a better compression ratio. Source references,
-quality/cost provenance and failed attempts remain visible in evidence.
+## Global Desktop MVP acceptance
 
-## Remaining technical decisions
-
-| Decision                                                                                                   | Gate                                                                    |
-| ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Exact Core API/package boundary and asset resolution                                                       | Phase 1 implementation review                                           |
-| Electron version, packager, signing and update strategy                                                    | Before Phase 2 implementation                                           |
-| Control principal authentication, grant storage and headless OS secret backend                             | Before any control operation                                            |
-| PTY library/runtime compatibility and lifecycle under Core failure                                         | Before Phase 3; preserving a live PTY across Core crash is not promised |
-| Provider versions and supported native start/resume/approval channels                                      | Per-adapter implementation review                                       |
-| New cache size/lifetime/purge policy and treatment of existing copies/backups                              | Before any history/cache migration                                      |
-| Task limits, cancellation and uncertain-result reconciliation policies                                     | Before Phase 5                                                          |
-| Price sources, billing modes, measurement coverage and estimator validation                                | Before Phase 6 and forecasts                                            |
-| End-to-end protocol, pairing, revocation, self-hosted remote topology and control-plane metadata retention | Before remote implementation                                            |
-
-Optimizer activation thresholds, representative workloads, provider controls,
-cache-aware cost policy and any learned-compressor/model dependency remain decisions
-before production implementation. Current fixture results do not resolve them.
-
-No decision here permits background execution or data deletion by default.
-Closing a UI, stopping Core, logging out and rebooting are distinct operations;
-their guarantees are in [ADR-019](docs/architecture/decisions.md#adr-019--recovery-guarantees-and-interrupted-work).
-
-## Contributor references
-
-- [Architecture decisions](docs/architecture/decisions.md)
-- [Current and target architecture](docs/architecture/overview.md)
-- [Planned lifecycle contracts](docs/api/lifecycle-contracts.md)
-- [Security boundaries](docs/architecture/security-model.md)
-- [Cloud privacy design](docs/commercial/cloud-architecture.md)
-- [Contributing](CONTRIBUTING.md) and [testing](docs/development/testing.md)
-
-Keep public product documentation in the repository. Local agent instructions,
-working plans, captured session content and internal acceptance reports remain
-excluded from version control.
+A user opens a project, selects a supported agent/model, starts an authorized session
+in a terminal, sees confirmed tokens throughout the session/terminal/artifact views,
+receives a native completion/attention notification, extracts and saves Markdown,
+and opens **Most Used Models** with source-reconciled data and working filters.
+Unavailable data stays explicit, observed external sessions stay read-only, and the
+Bridge has no regression. Record real-machine evidence and owner release acceptance
+before announcing 1.0. Follow the [delivery workflow](docs/development/testing.md#incremental-delivery-and-integration).

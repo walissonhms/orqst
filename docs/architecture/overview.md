@@ -7,7 +7,11 @@ bridge/dashboard remain operational and observation-only. The approved target is
 an observability-first open-source platform with an independent Core, Electron as
 primary desktop client, shared React UI, browser access and future managed agents.
 No target module, process control or Cloud connection is implemented by Phase 0.
-See [ROADMAP](../../ROADMAP.md) and [ADRs 015–024](decisions.md).
+Core/Bridge separation and the Analytics foundation are now in progress under
+incremental-development authorization; completion awaits integration. See the
+[six-phase roadmap](../../ROADMAP.md), [requirement coverage](product-requirements.md),
+[Analytics design](model-usage-analytics.md) and [ADR-026](decisions.md#adr-026--six-phase-desktop-delivery-and-mandatory-local-analytics).
+The diagrams below describe the integrated observer baseline, not unfinished work.
 
 ## Current purpose
 
@@ -236,9 +240,9 @@ Browser client -----+--> Local bridge --> Core --> Adapters
                                           +----> Qualified observability (future)
 ```
 
-The next implementation proposal is a bounded extraction of the existing observer
-Core. Keep the same Node runtime/service and API behavior; no extra daemon is
-required by that extraction. Electron, PTY and native provider protocol versions
+The current Core work is a bounded extraction of the existing observer
+Core, in progress pending integration. Keep the same Node runtime/service and API
+behavior; no extra daemon is required by that extraction. Electron, PTY and native provider protocol versions
 are not selected or installed in Phase 0.
 
 ## State, recovery and history — planned
@@ -273,8 +277,9 @@ without inventing parentage or task completion from prose.
 Keep local Community use independent of Cloud. Optional remote observability
 uses authorized endpoint connectivity, not central history or event ingestion.
 See [Cloud privacy](../commercial/cloud-architecture.md). All contracts/docs/code
-remain English; user-facing keys remain en-US and pt-BR. Phase 1 and later changes
-require separate approval and documentation/validation for their actual scope.
+remain English; user-facing keys remain en-US and pt-BR. Incremental authorized
+non-destructive work proceeds after checks; product decisions, destructive actions,
+credentials, external costs and ungranted permissions remain explicit gates.
 
 ## Foundational Token Optimizer — research and planned integration
 
@@ -296,3 +301,20 @@ net-benefit validation; no production optimizer or enabled mode exists today.
 Standalone synthetic benchmarks are explicitly authorized research outside the
 application runtime and automatic CI. Their evidence does not start Phase 1 or
 implement managed execution, routing, orchestration or adapters.
+
+## Desktop modules and mandatory Analytics
+
+The Phase 2 target adds Terminal, Monitor/Notifications, Artifacts, Model Manager,
+Live Metrics and Model Usage Analytics to the shared client experience. These are
+product responsibilities, not instructions to scaffold a package for every module.
+Core owns measurement/lifecycle policy independently of React/Electron; adapters
+own provider semantics; Database owns durable accounting; Bridge exposes reviewed
+local contracts. Client animation never manufactures usage. Terminal execution
+requires the Phase 4 control boundary and per-operation provider evidence.
+
+Analytics must retain model/provider/session/project/time/source/quality and show
+unidentified/unavailable data. The latest session model is not sufficient to assign
+all historical tokens. Time-filtered aggregation requires compatible baselines,
+deduplication and retention coverage. Comparisons require explicit task equivalence,
+outcomes and repair coverage; costs require verified rates/billing basis. See the
+[Analytics design](model-usage-analytics.md). The optimizer remains inactive.

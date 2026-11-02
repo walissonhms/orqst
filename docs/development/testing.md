@@ -15,7 +15,9 @@ pnpm validate:local --with-browser
 
 ## Automated suites
 
-`pnpm test` uses the built-in Node runner through `tsx`, with 25 cases:
+The previously validated observer baseline used the built-in Node runner through
+`tsx`, with 25 cases. Core/Analytics development may add cases; use current command
+output for current counts and results, rather than treating this baseline as a fresh run:
 
 | Suite           | Cases | Purpose                                                                                                                                    |
 | --------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -57,3 +59,35 @@ This does not test the complete session archive or prove every Codex release com
 See [Validation status](../../README.md#validation-status) for the public summary. Local acceptance reports and agent working documents are excluded from version control. GitHub Actions runs lint, types, tests, build and Chromium; hosted CI has not yet been observed.
 
 Not established by these checks: actual OS notification delivery, audible playback on the owner's device, real provider failure/input-request records, multi-gigabyte backfill latency, continuous soak behavior, other browsers, Linux/Windows/WSL. The follow-up managed-service check also verified browser reconnection without reload after a real service restart. Arbitrary network interruptions still need further testing.
+
+## Incremental delivery and integration
+
+1. Inspect the repository, applicable instructions, README, roadmap and ADRs before
+   each change. Maintain [requirement coverage](../architecture/product-requirements.md)
+   against implementation evidence; existing/partial/absent does not mean accepted.
+2. Select a bounded backlog outcome with dependencies, risks, tests and acceptance
+   from [ROADMAP](../../ROADMAP.md). Record product/security decisions as ADR additions;
+   preserve earlier plans, audits and benchmark evidence.
+3. Implement authorized non-destructive increments using current versions/patterns.
+   Run lint, typecheck, tests and build; fix regressions and report any failed or
+   skipped check. Ingestion changes also require `pnpm validate:local`; relevant UI
+   changes require browser checks. Keep fixtures synthetic and source data private.
+4. At integration, review Core/Bridge ownership and Analytics migration/accounting
+   together, v1 compatibility, replay, shutdown/startup, source preservation, retention,
+   model changes/unknown models, period baselines, unavailable data and export privacy.
+   Update actual API/schema docs only when implementations and tests establish them.
+5. Update public changelog/status and commit only the scoped product change after
+   relevant checks. Do not version local plans, agent reports, captured content or
+   generated output. List exact commands, outcomes and limitations in the delivery.
+
+Development is already authorized; repeating a blanket phase-approval gate is not
+required. Product decisions, destructive actions, credentials, external costs and
+ungranted permissions still need an explicit decision. Do not run token-consuming
+live acceptance/benchmarks or install/restart the owner's service as incidental
+validation. A synthetic green suite does not prove real-provider/Desktop acceptance.
+
+Core/Bridge separation and base Analytics remain in progress until integrated checks
+are reviewed. The [Analytics acceptance cases](../architecture/model-usage-analytics.md#integration-acceptance)
+are required before claiming the complete screen. The global Desktop MVP also needs
+real-machine terminal/model selection, native notification, Markdown save and filtered
+model usage evidence without Bridge regression. No 1.0 announcement before owner acceptance.

@@ -23,6 +23,15 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Changed
 
+- Superseded the earlier roadmap numbering with six Desktop delivery phases and an
+  explicit old-to-new mapping, dependencies, risks, tests and acceptance criteria.
+- Recorded authorized incremental development: Core/Bridge separation and the
+  Analytics foundation are in progress pending integration; removed the obsolete
+  blanket Phase 1 approval gate. Historical Phase 0 evidence below is preserved.
+- Made Model Usage Analytics mandatory for the functional Desktop MVP, with public
+  requirement coverage, provenance/unknown-model rules, qualified task comparisons
+  and private-content-free exports. No complete Analytics delivery is claimed.
+
 - Product direction emphasizes intelligent observability with a future Electron
   desktop client and React UI shared with browser access.
 - Public architecture, security, data-model and contributor documentation now
@@ -38,7 +47,9 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
   Codex monitoring, exported TypeScript contracts, v1 APIs/events, database schema,
   dependencies, package versions and Apache-2.0 licensing are unchanged.
 - No Electron, PTY, managed execution, delegation or Cloud implementation is
-  included. Phase 1 requires separate approval.
+  included in that historical Phase 0 change. The later authorization/status update
+  above and ADR-026 supersede its approval gate; this documentation-only update
+  does not certify concurrent runtime work or change API/schema behavior.
 
 ## Existing development baseline
 

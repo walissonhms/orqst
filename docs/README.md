@@ -5,7 +5,7 @@ runtime descriptions are distinct from approved future designs. Consult
 [Validation status](../README.md#validation-status) and [Testing](development/testing.md)
 for validation scope; an accepted ADR is not evidence of an implemented feature.
 
-- [Public roadmap and Phase 1 scope](../ROADMAP.md)
+- [Public six-phase roadmap and integration gate](../ROADMAP.md)
 - [Changelog](../CHANGELOG.md)
 
 ## Architecture
@@ -21,6 +21,11 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 - [Token Optimizer](architecture/token-optimizer.md) — planned Core boundary,
   modes, permissions, integration interfaces and evidence-gated activation.
+
+- [Product requirement coverage](architecture/product-requirements.md) — audited
+  existing/partial/absent behavior with source references and remaining gaps.
+- [Model Usage Analytics](architecture/model-usage-analytics.md) — mandatory Desktop
+  scope, provenance, unknown models, qualified comparison and content-free export.
 
 ## Research and benchmarks
 

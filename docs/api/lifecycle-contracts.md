@@ -268,6 +268,9 @@ missing evidence, unknown versions, duplicate/reordered delivery, permission
 revocation, timeouts, cancellation and uncertain results. Test provider contracts
 against explicitly authorized real sessions separately from fixtures and CI.
 
-Phase 1 is limited to extracting the existing observer Core and preserving its
-behavior. It does not implement this planned control protocol. See the
-[Phase 1 scope](../../ROADMAP.md#phase-1--core-extraction-awaiting-approval).
+The updated Phase 1 covers observer Core extraction and the qualified metric
+foundation, both in progress pending integration. This does not activate the planned
+control protocol. See the [integration gate](../../ROADMAP.md#phase-1-compatibility-and-integration-gate)
+and [Analytics design](../architecture/model-usage-analytics.md). The six-phase
+sequence and incremental-development authorization supersede the original phase
+gating; individual control operations still require scopes and provider evidence.

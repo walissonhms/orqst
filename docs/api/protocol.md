@@ -345,3 +345,14 @@ activity.
   }
 }
 ```
+
+## Planned model Analytics compatibility
+
+The Analytics foundation is in progress, not an accepted new v1 API. Current
+`Usage` numeric defaults and nullable `SessionView.model` do not establish metric
+coverage, a measured zero, task success or historical model allocation. A later
+qualified projection must retain source/time/basis, unavailable reasons and
+unidentified models without changing existing cumulative/cache semantics. No metric
+or lifecycle family may be silently inserted into the closed v1 stream.
+See [Analytics design](../architecture/model-usage-analytics.md); actual schemas and
+transport documentation must accompany integration, with v1 compatibility tests.

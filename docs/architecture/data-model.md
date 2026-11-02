@@ -265,7 +265,10 @@ Future implementation phases may add logical records for resource identities,
 process observations, terminal/layout attachments, tasks/attempts, durable
 inbox/outbox delivery, local grants, source references and qualified metrics.
 Exact table names, columns, indexes and migrations must be designed and reviewed
-when those phases are authorized. Phase 1 Core extraction does not require them.
+with compatibility/recovery review. Core extraction alone does not require them;
+the Phase 1 Analytics foundation may need additive metric storage and migrations,
+which remain in progress until integration. Do not interpret that work as a completed
+schema change on this page.
 
 Preserve one SQLite writer. Do not reinterpret existing v1 agent IDs (currently
 session-derived) as stable worker identities, or local path-derived workspace IDs
@@ -296,3 +299,18 @@ scope, timing, source, provider/model and estimator/rate provenance. Changing a
 session's model does not justify pricing its entire history at the latest rate.
 See [planned contracts](../api/lifecycle-contracts.md) and ADRs 017, 020 and 023 in
 [architecture decisions](decisions.md).
+
+## Planned Analytics accounting boundary
+
+The existing session summary keeps one cumulative total and the latest observed
+model. That is insufficient for period/model ranking after model changes or detail
+retention. Do not group all session usage by its latest model or sum cumulative
+event snapshots. New measurement storage must preserve source time, compatible
+baselines, model/provider evidence, reliability, session origin and coverage, with
+explicit unidentified/unattributed buckets and unavailable values. Existing numeric
+defaults are not evidence of reported zero. Task outcomes, attempts, equivalence,
+active time and verified prices need their own source-backed basis.
+
+See [Analytics design](model-usage-analytics.md) for required semantics. Publish
+actual tables/indexes and migration/replay/retention tests with the implementation;
+this design adds no SQL entity or migration and does not rewrite migration 1.

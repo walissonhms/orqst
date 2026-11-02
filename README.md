@@ -12,11 +12,11 @@ normalizes their activity, persists local observations in SQLite and streams the
 to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
 
-> **Project status:** pre-release. Phase 0 records the approved architecture and
-> planned contracts. Electron, integrated terminals, managed execution, delegation
-> and Cloud connectivity are not implemented. Phase 1 requires approval before
-> implementation. Community is licensed under [Apache-2.0](LICENSE) and operates
-> without Cloud.
+> **Project status:** pre-release. Incremental development is authorized. Core/Bridge
+> separation and the Analytics foundation are in progress; completion awaits integration
+> checks. Electron, integrated terminals, managed execution and Cloud connectivity are
+> not shipped. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
+> Community is licensed under [Apache-2.0](LICENSE) and operates without Cloud.
 
 ## What works today
 
@@ -36,19 +36,18 @@ prompts or write into observed sessions.
 | ORQST Cloud, accounts, billing                                               | Not implemented                             |
 | Multi-machine observability and remote connectivity                          | Planned, not implemented                    |
 
-This is version 0.1.0. Build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery have been checked on macOS. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
+This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
 ## Delivery status and roadmap
 
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
   dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
-- **In progress:** no runtime implementation phase is active. Phase 0 delivers
-  architecture decisions and contract documentation only.
-- **Planned:** an independent Core, Electron as the primary desktop client,
-  persistent managed sessions/terminals, incremental Claude Code/OpenCode support,
-  structured delegation, qualified costs/performance/forecasts, a Core Token Optimizer
-  and optional remote
-  connectivity. Browser access and external-session observation remain supported.
+- **In progress:** Phase 1 Core/Bridge separation and the base for model usage
+  Analytics. Neither is claimed complete before integration and validation.
+- **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
+  robust provider integrations, managed sessions, evidence-gated optimizer integration,
+  and distribution. Desktop includes Terminal, Monitor/Notifications, Artifacts,
+  Model Manager, Live Metrics and mandatory Model Usage Analytics.
 
 Observability remains the primary product experience. Terminals and orchestration
 support it. Native provider histories should be reused, with bounded, explicit
@@ -56,8 +55,11 @@ content caching. Future Cloud connectivity must not store code, conversations,
 terminal output or session content; local Community features remain independent.
 
 See [ROADMAP](ROADMAP.md) for phases, acceptance criteria, pending decisions and
-Phase 1 scope; [CHANGELOG](CHANGELOG.md) records changes. Approval of architectural
-direction does not activate a capability or authorize the next implementation phase.
+the migration from the previous phase numbering; [CHANGELOG](CHANGELOG.md) records
+changes. See the [requirement matrix](docs/architecture/product-requirements.md)
+and [Analytics design](docs/architecture/model-usage-analytics.md). Incremental,
+non-destructive development may continue after checks. Product decisions, destructive
+actions, credentials, external costs and ungranted permissions remain explicit gates.
 
 The [Token Optimizer research](docs/benchmarks/token-optimization.md) is an isolated
 Phase 0 experiment. Disabled/Economy/Intelligent are planned production modes;
@@ -81,7 +83,7 @@ no optimizer setting or automatic token reduction exists in the current runtime.
   (single process)                                           React + Vite + Tailwind + i18next
 ```
 
-There is one long-running process. The bridge owns discovery, normalization,
+The integrated baseline has one long-running process. The bridge owns discovery, normalization,
 persistence, the REST API, and the WebSocket server. The dashboard is a static
 bundle served by the bridge in production and by Vite in development.
 
@@ -237,7 +239,7 @@ and [SECURITY.md](SECURITY.md).
   approve a tool call, stop a run, or send a message to an agent. Intervention
   alerts tell the user to continue in the original terminal.
 - **Control is planned.** Managed execution, terminal input and delegation require
-  validated adapters, separate authorization and an approved implementation phase.
+  validated adapters, operation-specific authorization and a reviewed control boundary.
   No current API can deliver them.
 - **macOS-first.** Linux and Windows/WSL behavior is unvalidated.
 - **Node 24 only.** Older Node versions are rejected by `engine-strict`.
@@ -245,6 +247,11 @@ and [SECURITY.md](SECURITY.md).
   protected by a per-process session cookie and loopback binding, which assumes
   a single trusted OS user.
 - **Redaction is best-effort.** Secrets in unusual formats may survive.
+- **Analytics is in progress.** Model rankings, period filters, charts, comparisons
+  and exports are not yet accepted as a complete feature. Unknown models must remain
+  unidentified, absent metrics must remain unavailable, and imported history must show
+  its coverage. Most used, lowest usage per successful task and best value are distinct;
+  cost needs verified prices and billing mode. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
   report provider quota.
@@ -253,6 +260,9 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The following records the earlier observer baseline, not a new validation of Desktop,
+Core extraction or Analytics. Integration must record its own commands and results.
 
 On macOS, using isolated Node 24.22.2 and pnpm 10.34.9:
 
