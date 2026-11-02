@@ -24,7 +24,7 @@ test('manual source, inert preview and separate memory draft stay integrated wit
   const panel = await selectArtifact(page);
   await expect(panel.getByRole('heading', { name: 'Manual artifact' })).toBeFocused();
   const original = await panel.locator('pre.artifact-content').innerText();
-  await expect(panel.locator('dl')).toContainText('synthetic-browser-session');
+  await expect(panel.locator('dl.artifact-provenance')).toContainText('synthetic-browser-session');
   await expect(panel.getByText(/Source was not rechecked/)).toBeVisible();
   await panel.getByRole('button', { name: 'Copy original Markdown', exact: true }).click();
   await expect(panel.getByRole('status')).toHaveText('Copied to clipboard.');

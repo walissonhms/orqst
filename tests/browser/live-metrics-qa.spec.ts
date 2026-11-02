@@ -32,9 +32,23 @@ function counts(metrics: ApiMetrics): string[] {
 }
 
 function valueNodes(section: Locator): Locator {
-  return section.locator('.live-metric-values > *');
+  return section.locator('.live-metric-values > div');
 }
 
+/** Visual status only: the sr-only announcer repeats meaningful messages. */
+function visualStatus(section: Locator, text: string): Locator {
+  return section.locator('p.fine-print').filter({ hasText: text });
+}
+
+function liveRegion(page: Page): Locator {
+  return page.locator('.session-detail p.sr-only[aria-live="polite"]');
+}
+
+async function announcementText(page: Page): Promise<string> {
+  return (await liveRegion(page).textContent())?.replace(/\s+/g, ' ').trim() ?? '';
+}
+
+/** Each count is a description-list pair: <dt>label</dt><dd><strong>value</strong></dd>. */
 async function expectConfirmedValues(
   section: Locator,
   values: string[],
@@ -43,8 +57,8 @@ async function expectConfirmedValues(
   const entries = valueNodes(section);
   await expect(entries).toHaveCount(4);
   for (const [index, label] of labels.entries()) {
-    await expect(entries.nth(index).locator('dt, span').first()).toHaveText(label);
-    await expect(entries.nth(index).locator('dd, strong').first()).toHaveText(values[index]!);
+    await expect(entries.nth(index).locator('dt')).toHaveText(label);
+    await expect(entries.nth(index).locator('dd strong')).toHaveText(values[index]!);
   }
 }
 
@@ -64,8 +78,15 @@ async function openConfirmed(page: Page): Promise<{ header: Locator; metrics: Ap
   expect(metrics.availability, `baseline metrics: ${metrics.reason ?? 'unavailable'}`).toBe(
     'available',
   );
-  await expect(header.getByText(confirmedStatus)).toBeVisible();
+  await expect(visualStatus(header, confirmedStatus)).toBeVisible();
   await expectConfirmedValues(header, counts(metrics));
+
+  // Exactly one announcement source, and it carries the confirmed counts.
+  const live = liveRegion(page);
+  await expect(live).toHaveCount(1);
+  await expect(live).toHaveAttribute('aria-live', 'polite');
+  await expect(live).toHaveAttribute('aria-atomic', 'true');
+  for (const value of counts(metrics)) await expect(live).toContainText(value);
   return { header, metrics };
 }
 
@@ -114,6 +135,11 @@ test('header and artifact panel render the confirmed API reading with token time
   await expectConfirmedValues(panelMetrics, counts(metrics));
   await expect(panelMetrics.locator('time')).toHaveAttribute('datetime', value.evidence.occurredAt);
   expect(await panelMetrics.locator('img, script, iframe, object, embed').count()).toBe(0);
+  await expect(panelMetrics.locator('dl.live-metric-values')).toHaveCount(1);
+
+  // A single announcement source per session: the duplicated panel must stay silent.
+  await expect(page.locator('.session-detail [aria-live]')).toHaveCount(1);
+  await expect(page.locator('.artifact-panel [aria-live]')).toHaveCount(0);
 
   // One query per selected session: the artifact never triggers its own metrics read.
   expect(requested.length).toBeGreaterThan(0);
@@ -121,12 +147,14 @@ test('header and artifact panel render the confirmed API reading with token time
     expect(new URL(url).pathname).toBe(`/api/sessions/${sessionId}/metrics`);
 });
 
-test('the token values expose one labelled group of four ordered counts', async ({ page }) => {
+test('each count is a programmatically associated description-list pair', async ({ page }) => {
   const { header, metrics } = await openConfirmed(page);
-  const group = header.locator('.live-metric-values');
-  await expect(group).toHaveCount(1);
-  await expect(group).toHaveAttribute('role', 'group');
-  await expect(group).toHaveAttribute('aria-label', 'Token usage');
+  const list = header.locator('dl.live-metric-values');
+  await expect(list).toHaveCount(1);
+  await expect(list).toHaveAttribute('aria-label', 'Token usage');
+  await expect(list).toHaveAttribute('role', 'group');
+  await expect(list.locator('dt')).toHaveCount(4);
+  await expect(list.locator('dd')).toHaveCount(4);
   // Ordered input, output, cached, total: never reordered or merged.
   await expectConfirmedValues(header, counts(metrics));
   // One reading per session, scoped to the session header.
@@ -134,24 +162,56 @@ test('the token values expose one labelled group of four ordered counts', async 
   await expect(page.locator('.artifact-panel .live-metrics')).toHaveCount(0);
 });
 
-test('slow refresh keeps the last confirmed values and announces busy', async ({ page }) => {
+test('slow refresh keeps values and the prior announcement while the artifact is open', async ({
+  page,
+}) => {
   let slow = false;
   await page.route('**/api/sessions/*/metrics', async (route) => {
-    if (slow) await new Promise((resolve) => setTimeout(resolve, 3000));
+    if (slow) await new Promise((resolve) => setTimeout(resolve, 4000));
     await route.continue().catch(() => undefined);
   });
 
   const { header, metrics } = await openConfirmed(page);
   const expected = counts(metrics);
-  slow = true;
+  // Capture the meaningful announcement BEFORE any refresh so pending can be compared
+  // against a real baseline instead of against itself.
+  const announcement = await announcementText(page);
+  expect(announcement.length).toBeGreaterThan(0);
 
+  await page
+    .getByRole('region', { name: 'Session details' })
+    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .first()
+    .click();
+  const panelMetrics = page
+    .getByRole('region', { name: 'Manual artifact', exact: true })
+    .locator('.live-metrics');
+  await expect(panelMetrics).toBeVisible();
+  await expectConfirmedValues(panelMetrics, expected);
+  expect(await announcementText(page)).toBe(announcement);
+
+  slow = true;
   // The shared snapshot poll (5s) is the only refetch trigger: no extra metrics timer.
-  await expect(
-    header.getByText('Refreshing metrics; previous readings may be out of date.'),
-  ).toBeVisible({ timeout: 12000 });
+  const loading = 'Refreshing metrics; previous readings may be out of date.';
+  await expect(visualStatus(header, loading)).toBeVisible({ timeout: 12000 });
+  await expect(visualStatus(panelMetrics, loading)).toBeVisible();
   await expect(header).toHaveAttribute('aria-busy', 'true');
+  await expect(panelMetrics).toHaveAttribute('aria-busy', 'true');
+
+  // Periodic polling must not re-announce: one live region, and its text is unchanged.
+  await expect(page.locator('.session-detail [aria-live]')).toHaveCount(1);
+  await expect(page.locator('.artifact-panel [aria-live]')).toHaveCount(0);
+  const during = await announcementText(page);
+  expect(during).toBe(announcement);
+  expect(during).not.toContain('Refreshing metrics');
+
   await expectConfirmedValues(header, expected);
+  await expectConfirmedValues(panelMetrics, expected);
   await expect(header.locator('time')).toHaveAttribute(
+    'datetime',
+    metrics.value!.evidence.occurredAt,
+  );
+  await expect(panelMetrics.locator('time')).toHaveAttribute(
     'datetime',
     metrics.value!.evidence.occurredAt,
   );
@@ -168,12 +228,18 @@ test('failed refresh keeps the last confirmed values and reports failure', async
   });
 
   const { header, metrics } = await openConfirmed(page);
+  const live = liveRegion(page);
+  const before = await announcementText(page);
   failing = true;
   await expect(
-    header.getByText('Metrics could not be refreshed. Previous readings are out of date.'),
+    visualStatus(header, 'Metrics could not be refreshed. Previous readings are out of date.'),
   ).toBeVisible({ timeout: 12000 });
   await expect(header).toHaveAttribute('aria-busy', 'false');
   await expectConfirmedValues(header, counts(metrics));
+
+  // A meaningful state change still reaches assistive technology.
+  await expect(live).not.toHaveText(before);
+  expect((await announcementText(page)).length).toBeGreaterThan(0);
 });
 
 test('unavailable metrics after a confirmed reading stay labelled stale', async ({ page }) => {
@@ -189,10 +255,10 @@ test('unavailable metrics after a confirmed reading stay labelled stale', async 
   const { header, metrics } = await openConfirmed(page);
   unavailable = true;
   await expect(
-    header.getByText('Current metrics are unavailable. Previous readings are out of date.'),
+    visualStatus(header, 'Current metrics are unavailable. Previous readings are out of date.'),
   ).toBeVisible({ timeout: 12000 });
   await expect(
-    header.getByText('Metrics evidence conflicts with the observed session identity.'),
+    visualStatus(header, 'Metrics evidence conflicts with the observed session identity.'),
   ).toBeVisible();
   await expectConfirmedValues(header, counts(metrics));
 });
@@ -221,7 +287,7 @@ test('an out-of-order response is rejected instead of replacing the newer readin
   const { header, metrics } = await openConfirmed(page);
   older = true;
   await expect(
-    header.getByText('Metrics could not be refreshed. Previous readings are out of date.'),
+    visualStatus(header, 'Metrics could not be refreshed. Previous readings are out of date.'),
   ).toBeVisible({ timeout: 12000 });
   await expect(header.locator('time')).toHaveAttribute(
     'datetime',
@@ -252,13 +318,13 @@ test('offline keeps the last reading and reconnection restores the confirmed sta
   blocked = true;
   await socket!.close();
   await expect(
-    header.getByText('Bridge offline or reconnecting. Previous readings are out of date.'),
+    visualStatus(header, 'Bridge offline or reconnecting. Previous readings are out of date.'),
   ).toBeVisible({ timeout: 15000 });
   await expect(header).toHaveAttribute('aria-busy', 'false');
   await expectConfirmedValues(header, expected);
 
   blocked = false;
-  await expect(header.getByText(confirmedStatus)).toBeVisible({ timeout: 20000 });
+  await expect(visualStatus(header, confirmedStatus)).toBeVisible({ timeout: 20000 });
   await expectConfirmedValues(header, expected);
 });
 
@@ -267,9 +333,10 @@ test('pt-BR translation and narrow layout keep the reading accessible', async ({
   const expected = counts(metrics);
 
   await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-  await expect(header.getByText('Tokens confirmados da sessão')).toBeVisible();
+  await expect(header.locator('p.eyebrow')).toHaveText('Tokens confirmados da sessão');
   await expect(
-    header.getByText(
+    visualStatus(
+      header,
       'Última leitura confirmada. O consumo após o horário da métrica é desconhecido.',
     ),
   ).toBeVisible();
@@ -293,5 +360,5 @@ test('pt-BR translation and narrow layout keep the reading accessible', async ({
   expect(motion.transition).toBe('0s');
 
   await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
-  await expect(header.getByText(confirmedStatus)).toBeVisible();
+  await expect(visualStatus(header, confirmedStatus)).toBeVisible();
 });
