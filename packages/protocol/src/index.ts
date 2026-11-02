@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './analytics.js';
+
 export const statusSchema = z.enum([
   'running',
   'waiting_for_user',

@@ -6,6 +6,7 @@ import {
   eventSchema,
   emptyUsage,
   preferencesSchema,
+  modelAnalyticsQuerySchema,
   type AgentEvent,
   type StoredEvent,
   type Usage,
@@ -13,8 +14,11 @@ import {
   type WorkspaceView,
   type NotificationView,
   type Preferences,
+  type ModelAnalyticsQuery,
+  type ModelAnalyticsReport,
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
+import { aggregateModelAnalytics, type AnalyticsSession } from './analytics.js';
 
 type Row = Record<string, unknown>;
 export interface Checkpoint {
@@ -424,6 +428,70 @@ export class Store {
         'SELECT SUM(input) AS input,SUM(output) AS output,SUM(cached) AS cached,SUM(total) AS total FROM token_usage',
       ) ?? emptyUsage(),
     );
+  }
+  modelAnalytics(input: ModelAnalyticsQuery = {}): ModelAnalyticsReport {
+    const query = modelAnalyticsQuerySchema.parse(input);
+    const conditions: string[] = [];
+    const params: SQLInputValue[] = [];
+    for (const [column, value] of [
+      ['s.workspace_id', query.workspaceId],
+      ['s.agent_id', query.agentId],
+      ['a.adapter', query.adapter],
+    ] as const) {
+      if (value !== undefined) {
+        conditions.push(`${column}=?`);
+        params.push(value);
+      }
+    }
+    if (query.from || query.to) {
+      const window = (column: string) => {
+        const clauses: string[] = [];
+        if (query.from) {
+          clauses.push(`julianday(${column})>=julianday(?)`);
+          params.push(query.from);
+        }
+        if (query.to) {
+          clauses.push(`julianday(${column})<julianday(?)`);
+          params.push(query.to);
+        }
+        return clauses.join(' AND ');
+      };
+      conditions.push(
+        `(EXISTS (SELECT 1 FROM events e WHERE e.session_id=s.id AND ${window('e.timestamp')}) OR (${window('t.timestamp')}))`,
+      );
+    }
+    const sessions: AnalyticsSession[] = this.all(
+      `SELECT s.id,s.workspace_id,s.agent_id,a.machine_id,a.adapter,t.input,t.output,t.cached,t.total,t.timestamp,t.source_priority
+       FROM sessions s JOIN agents a ON a.id=s.agent_id LEFT JOIN token_usage t ON t.session_id=s.id
+       ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''} ORDER BY s.id`,
+      ...params,
+    ).map((row) => ({
+      id: String(row.id),
+      machineId: String(row.machine_id),
+      workspaceId: String(row.workspace_id),
+      agentId: String(row.agent_id),
+      adapter: row.adapter as AnalyticsSession['adapter'],
+      canonical:
+        row.timestamp === null
+          ? null
+          : {
+              usage: this.usage(row),
+              timestamp: String(row.timestamp),
+              priority: Number(row.source_priority),
+            },
+      // Read all retained model/usage evidence for baselines; apply the period only to deltas.
+      // The projection below never returns captured text, task/result content or cwd.
+      events: this.all(
+        `SELECT sequence,envelope FROM events WHERE session_id=? AND
+         (json_type(envelope,'$.payload.model') IS NOT NULL OR json_type(envelope,'$.payload.usage') IS NOT NULL)
+         ORDER BY sequence`,
+        String(row.id),
+      ).map((event) => ({
+        ...(JSON.parse(String(event.envelope)) as AgentEvent),
+        sequence: Number(event.sequence),
+      })),
+    }));
+    return aggregateModelAnalytics(sessions, query);
   }
   close(): void {
     this.db.close();
