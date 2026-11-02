@@ -434,3 +434,12 @@ or the OS handoff. In-place I/O failure can leave partial content and is reporte
 `write_failed` without opening or automatic rollback. Main logs no file paths, payloads
 or OS diagnostics. Browser clients state that native export requires Desktop; clipboard
 denial remains unchanged. See [exact contract and limits](../api/artifacts.md#native-desktop-save-contract).
+
+## Confirmed Live Metrics review
+
+The additive local authenticated session-metrics GET uses strict identity/output schemas,
+parameterized indexed reads, metadata admission before materialization and bounded output.
+It reads no source file or captured body, adds no writer/IPC/control capability and keeps
+existing Host/Origin/cookie/CSP/no-store controls. Invalid proof returns sanitized
+unavailable reasons. Sensitive compact provenance stays local and inert in the UI.
+See [security review and fixed query budgets](../api/live-metrics.md#security-review-note).

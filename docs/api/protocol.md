@@ -348,6 +348,13 @@ activity.
 }
 ```
 
+## Confirmed Live Metrics read contract
+
+Confirmed session Live Metrics uses a separate version-1 `orqst.live-metrics` read
+contract. It validates canonical normalized usage against compact source evidence;
+it does not add event fields, stream messages or provider field-presence claims.
+See [metric provenance, occurrence time and unavailable values](live-metrics.md).
+
 ## Local model Analytics contract
 
 `modelAnalyticsQuerySchema` and `ModelAnalyticsReport` are additive exports from

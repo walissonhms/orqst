@@ -39,6 +39,8 @@ import type {
 } from '@orqst/protocol';
 import { api } from './api';
 import { ArtifactPanel } from './ArtifactPanel';
+import { LiveMetrics } from './LiveMetrics';
+import { useSessionMetrics } from './use-session-metrics';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 import { sessionFromHash } from './session-link';
@@ -219,11 +221,15 @@ function Timeline({
 function SessionDetail({
   session,
   snapshot,
+  connection,
+  snapshotError,
   onClose,
   onSave,
 }: {
   session: SessionView;
   snapshot: Snapshot;
+  connection: 'connecting' | 'connected' | 'offline';
+  snapshotError: boolean;
   onClose: () => void;
   onSave: () => void;
 }) {
@@ -235,6 +241,7 @@ function SessionDetail({
   const [tab, setTab] = useState<'activity' | 'results' | 'usage'>('activity');
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
+  const metrics = useSessionMetrics(session, snapshot, connection, snapshotError);
   useEffect(() => {
     let active = true;
     setEvents([]);
@@ -315,6 +322,7 @@ function SessionDetail({
         <span>{session.model ?? t('unknown')}</span>
         <span>{f.duration(session)}</span>
       </div>
+      <LiveMetrics state={metrics} announce />
       {session.status === 'waiting_for_user' && <p className="notice">{t('interventionNote')}</p>}
       {error && (
         <p role="alert" className="notice">
@@ -393,6 +401,7 @@ function SessionDetail({
       {artifactRequest && (
         <ArtifactPanel
           request={artifactRequest}
+          metrics={metrics}
           onClose={() => {
             setArtifactRequest(undefined);
             requestAnimationFrame(() => {
@@ -412,7 +421,6 @@ function SessionDetail({
       )}
       {tab === 'usage' && (
         <div className="usage-content">
-          <TokenSummary usage={session.usage} />
           <h3>{t('tokenRecords')}</h3>
           <p className="fine-print">{t('noTurnTokens')}</p>
           <Timeline events={events.filter((event) => event.type === 'agent.tokens.updated')} />
@@ -946,6 +954,8 @@ export function App() {
                   key={selectedSession.id}
                   session={selectedSession}
                   snapshot={snapshot}
+                  connection={connection}
+                  snapshotError={error}
                   onClose={() => setSelected(undefined)}
                   onSave={() => {
                     void refresh();

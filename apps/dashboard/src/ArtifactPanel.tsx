@@ -9,12 +9,16 @@ import {
 } from '@orqst/protocol';
 import { api } from './api';
 import { artifactBlocks, readableArtifact } from './artifact-preview';
+import { LiveMetrics } from './LiveMetrics';
+import type { LiveMetricsState } from './use-session-metrics';
 
 export function ArtifactPanel({
   request,
+  metrics,
   onClose,
 }: {
   request: ArtifactExtractionRequest;
+  metrics: LiveMetricsState;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -113,6 +117,7 @@ export function ArtifactPanel({
           {t('artifacts.close')}
         </button>
       </div>
+      <LiveMetrics state={metrics} />
       <p className="fine-print">{t('artifacts.manualNote')}</p>
       {failed && <p role="alert">{t('artifacts.loadFailed')}</p>}
       {!failed && !result && <p role="status">{t('artifacts.loading')}</p>}

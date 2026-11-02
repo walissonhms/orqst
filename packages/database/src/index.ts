@@ -7,6 +7,8 @@ import {
   emptyUsage,
   preferencesSchema,
   modelAnalyticsQuerySchema,
+  sessionMetricsRequestSchema,
+  type SessionMetricsResult,
   type AgentEvent,
   type StoredEvent,
   type Usage,
@@ -19,6 +21,8 @@ import {
   type ModelAnalyticsSummary,
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
+import { readSessionMetrics } from './live-metrics.js';
+export { SESSION_METRICS_LIMITS } from './live-metrics.js';
 import {
   analyticsEvidenceMigration,
   analyticsEvidenceQueries,
@@ -418,6 +422,10 @@ export class Store {
       manualWorkspace: Boolean(row.manual_workspace),
       usage: this.usage(row),
     }));
+  }
+  sessionMetrics(sessionId: string): SessionMetricsResult {
+    sessionMetricsRequestSchema.parse({ sessionId });
+    return readSessionMetrics(this.db, sessionId);
   }
   private usage(row: Row): Usage {
     return {

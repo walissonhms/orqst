@@ -120,6 +120,15 @@ bundle served by the bridge in production and by Vite in development.
 - **No cloud dependency:** local operation requires no account, API key,
   telemetry, or upload.
 
+## Confirmed Live Metrics
+
+Session details and the Artifacts panel show **Confirmed session tokens** from one
+bounded evidence-backed query: input/output/cache/total and the metric's own occurrence
+time. Cache is included in input. Missing proof is unavailable; previous confirmed
+readings are explicitly out of date during refresh/failure/disconnection. These
+normalized session totals do not attribute consumption to the artifact or prove
+individual provider field presence. See [Live Metrics and limits](docs/api/live-metrics.md).
+
 ## Manual Artifacts
 
 Open a session's **Execution timeline** and choose **Extract artifact manually** on a retained
@@ -341,6 +350,19 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The confirmed Live Metrics increment passed lint, typecheck, 169 Node tests, full
+build, 27 Chromium cases and a disposable Electron smoke including absent-to-confirmed
+token updates in session/Artifacts. The initial combined browser run exposed eight
+fixture-order assumptions; the corrected full rerun passed without skips. A later
+accessibility refinement added description-list pairs and one quiet session announcement
+region. Dashboard rebuild, lint, typecheck, locale parity and the 13 affected Chromium
+cases passed again, including refresh with the artifact open. Independent QA also
+repeated the full 27-case browser suite and 169 Node tests after the refinement.
+Full build and Electron smoke preceded that UI refinement; the Electron smoke was
+not repeated for the markup/announcement change. Evidence is synthetic;
+provider billing, arbitrary-contention latency and manual screen-reader acceptance remain
+unvalidated. Installed service/Desktop/storage were preserved without restart.
 
 The native Markdown save increment passed lint, typecheck, 149 Node tests (including
 9 independent save QA cases), full build and 18 Chromium cases on isolated port 51390

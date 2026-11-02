@@ -131,10 +131,36 @@ try {
   );
   // Exercise the real shared Artifacts UI; clipboard permission remains denied.
   await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
+  const metrics = page.locator('.session-detail > .live-metrics');
+  await expect(metrics).toContainText(/No cumulative token snapshot|Nenhum snapshot cumulativo/);
+  await appendFile(
+    join(sessionsDir, 'synthetic.jsonl'),
+    record('token_usage_record', {
+      thread_id: 'synthetic-desktop-smoke',
+      thread_token_usage: {
+        input_tokens: 100,
+        output_tokens: 20,
+        cached_input_tokens: 40,
+        total_tokens: 120,
+      },
+    }),
+  );
+  await expect(metrics.locator('.live-metric-values strong')).toHaveText([
+    '100',
+    '20',
+    '40',
+    '120',
+  ]);
   await page
     .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
     .click();
   const artifact = page.locator('.artifact-panel');
+  await expect(artifact.locator('.live-metric-values strong')).toHaveText([
+    '100',
+    '20',
+    '40',
+    '120',
+  ]);
   await expect(artifact.locator('pre.artifact-content')).toContainText(
     'Synthetic Desktop Artifact',
   );

@@ -7,6 +7,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Confirmed Live Metrics in session and manual Artifacts headers: normalized cumulative
+  input/output/cache/total, metric occurrence time and compact provenance. A bounded
+  authenticated read query validates canonical evidence without source access, new
+  persistence or v1 transport changes. Missing proof is unavailable; refresh/offline
+  retain explicitly obsolete prior readings. Cache is a subset; provider field presence
+  is unpreserved. Limits, pricing, Fast, terminal and animations remain planned.
+
 - First manual Artifacts slice in session Execution timeline: explicit retained assistant/agent
   message extraction with strict versioned identity/source checks, immutable retained
   source/provenance, limited inert preview, separate memory-only draft and gesture-only

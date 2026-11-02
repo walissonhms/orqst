@@ -261,3 +261,11 @@ Saves are in place, not atomic or crash-recoverable. Partial I/O failure is repo
 explicitly; checks cannot isolate a noncooperating same-user writer or make OS handoff
 atomic. There is no automatic retry/rollback. No text/path/OS error logs or broader
 clipboard permission are introduced. See [file contract and validation limits](docs/api/artifacts.md#native-desktop-save-contract).
+
+## Confirmed Live Metrics
+
+The local authenticated session-metrics GET preserves Host/Origin/cookie/CSP/no-store
+controls and grants no source-file or agent authority. Indexed reads admit bounded
+metadata bytes before transfer/parsing; strict provenance/identity validation fails
+unavailable without raw diagnostics. Compact IDs/paths remain sensitive local metadata.
+See [contract and security review](docs/api/live-metrics.md).

@@ -38,6 +38,13 @@ A request with an untrusted `Host`, a mismatched `Origin`, or a cross-site
 
 ## Read endpoints
 
+### `GET /api/sessions/:sessionId/metrics`
+
+Strict version-1 `orqst.live-metrics` projection of the last proven normalized session
+snapshot, with compact provenance and its own occurrence time. No query parameters,
+source access, writes, aggregation or v1 shape changes. Bounded reads fail unavailable
+when proof is absent or invalid. See [contract and security review](live-metrics.md).
+
 ### `POST /api/artifacts/extract`
 
 Explicit read-only extraction of one exact retained assistant/agent message, using

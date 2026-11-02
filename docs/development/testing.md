@@ -298,3 +298,14 @@ process; native visuals and an actual external editor are not accepted by this s
 It preserves the owner client, independent Bridge and installed service/storage.
 Browser fixtures must use a free `ORQST_BROWSER_PORT` and separate Playwright
 `--output` directory to avoid colliding with another local run.
+
+## Confirmed Live Metrics
+
+Synthetic Store/API QA covers canonical evidence, normalized zero versus absence, metric
+time independent of other activity, mirror priority/ties, identity conflicts, historical
+workspace association, byte/window admission, retention and replay. Browser checks use
+isolated synthetic sessions and independent output directories, exercising header/Artifacts
+sharing, actual event updates, offline/stale/missing values, races, locales and mobile
+layout. Use a free `ORQST_BROWSER_PORT` and `--output` unique to the invocation. Checks
+prove synthetic behavior, not provider billing or arbitrary-archive latency. Installed
+service/Desktop/storage are never acceptance fixtures. See [metric limits](../api/live-metrics.md).

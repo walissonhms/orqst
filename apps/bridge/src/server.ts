@@ -8,6 +8,7 @@ import {
   preferencesSchema,
   artifactExtractionRequestSchema,
   modelAnalyticsQuerySchema,
+  sessionMetricsRequestSchema,
   type Snapshot,
   type StoredEvent,
   type StreamMessage,
@@ -137,6 +138,18 @@ export function createLocalServer(
         }
         if (url.pathname === '/api/snapshot' && request.method === 'GET') {
           reply(response, 200, snapshot());
+          return;
+        }
+        const metrics = /^\/api\/sessions\/([^/]+)\/metrics$/.exec(url.pathname);
+        if (metrics && request.method === 'GET') {
+          const parsed = sessionMetricsRequestSchema.safeParse({
+            sessionId: decodeURIComponent(metrics[1]!),
+          });
+          if (!parsed.success || url.search) {
+            reply(response, 400, { error: 'invalid_metrics_request' });
+            return;
+          }
+          reply(response, 200, store.sessionMetrics(parsed.data.sessionId));
           return;
         }
         if (url.pathname === '/api/analytics/models' && request.method === 'GET') {

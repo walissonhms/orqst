@@ -390,3 +390,12 @@ The dashboard's separate draft exists only in memory, with no draft history or s
 document revision. “Original” denotes retained redacted text of unverified completeness;
 the source hash identifies the original record, not a saved Markdown file. See
 [Artifacts](../api/artifacts.md).
+
+## Confirmed session metric projection
+
+Live Metrics reads existing canonical totals and durable compact evidence in one bounded
+read snapshot. It adds no schema, writer, persisted cache or source access. It preserves
+detail retention and replay deduplication. Historical source workspace differs from a
+manual current association; occurrence differs from observation time. Normalized cache/
+total defaults cannot be distinguished from explicit provider fields in schema 2.
+See [selection, provenance and unavailable semantics](../api/live-metrics.md).
