@@ -1,5 +1,10 @@
 # REST API
 
+> **Current observation API.** Phase 0 changes documentation only. Routes, payloads,
+> authentication and behavior on this page are unchanged. The
+> [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
+> not implemented control endpoints or new messages on the current stream.
+
 The bridge exposes a small JSON API on the loopback interface. It is intended
 for the bundled dashboard; it is not a public API and has no versioned path.
 

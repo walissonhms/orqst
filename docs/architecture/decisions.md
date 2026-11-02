@@ -2,9 +2,21 @@
 
 These records document the durable product and engineering decisions.
 
+## Decision status and implementation
+
+ADRs 015–024 record the architecture direction approved on 2026-11-02 during
+Phase 0. **Accepted direction does not mean implemented or authorized for
+implementation in this phase.** Phase 0 changes documentation and contract design
+only. Phase 1 requires a separate approval; see [ROADMAP](../../ROADMAP.md).
+
+ADRs 001–014 describe the existing 0.1.0 runtime unless an explicit status note
+limits or supersedes their future applicability. Existing APIs, events, database
+migration and capabilities remain unchanged. In particular, no execution,
+terminal, delegation or Cloud endpoint is introduced by these decisions.
+
 ## ADR-001 — One bridge process, no separate server app
 
-**Status:** Accepted
+**Status:** Accepted for the current runtime; future ownership is extended by ADR-016.
 
 **Context.** The repository needs ingestion, persistence, REST, WebSocket, and
 static dashboard delivery. Splitting these into services would add deployment
@@ -55,7 +67,7 @@ grows substantially, the decision can be revisited with measured need.
 
 ## ADR-004 — Observation only; no remote control
 
-**Status:** Accepted
+**Status:** Current runtime behavior retained. Superseded for future managed sessions by ADR-015; external observation remains read-only.
 
 **Context.** The product vision mentions browser-based intervention, but the
 MVP has no verified mechanism to write into an externally started agent session.
@@ -74,7 +86,7 @@ security review.
 
 ## ADR-005 — Cumulative session snapshots are canonical
 
-**Status:** Accepted
+**Status:** Accepted for current Codex accounting; future metrics extend this in ADR-023 without changing v1 totals.
 
 **Context.** Codex records expose thread-level cumulative usage, turn usage,
 response-level usage, and a `token_count` mirror. Summing them double counts.
@@ -93,7 +105,7 @@ budget, quota, and context-window estimates are out of scope.
 
 ## ADR-006 — Deterministic IDs and source references
 
-**Status:** Accepted
+**Status:** Accepted for v1; future source types and contract negotiation are covered by ADR-024.
 
 **Context.** Files can be re-read after restart, truncation, or rotation.
 Events must be idempotent and traceable.
@@ -129,7 +141,7 @@ adapter contract implies parity with Codex. See
 
 ## ADR-008 — Loopback cookie plus Host/Origin checks
 
-**Status:** Accepted
+**Status:** Accepted for the current observation API. Insufficient to authorize future execution; see ADR-018.
 
 **Context.** The local API exposes captured prompts and tool output. A browser
 page on another origin must not read it, and DNS rebinding must not reach it.
@@ -147,7 +159,7 @@ can obtain a cookie; this is accepted under the single-user model.
 
 ## ADR-009 — Retention deletes details, keeps summaries
 
-**Status:** Accepted
+**Status:** Current retention retained. Future history references and bounded caches are covered by ADR-020.
 
 **Context.** Captured messages and tool output are the most sensitive and
 fastest-growing data. Session and token summaries are small and useful.
@@ -245,3 +257,123 @@ required. See [licensing](../commercial/licensing-decision.md).
 **Consequences.** Commercial use and modified closed hosted forks are permitted.
 Redistribution must preserve applicable licenses and notices. Third-party
 components retain their own terms. Cloud is not implemented or licensed here.
+
+---
+
+## ADR-015 — Managed execution and external observation
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** Execution and orchestration are approved future capabilities, while users must continue observing agents launched outside ORQST.
+
+**Decision.** Introduce explicit `observed` and `managed` session modes. Observed sessions remain read-only. Managed sessions may be created or controlled only through a validated adapter, an authorized operation and a separately approved implementation phase. Adoption of an external session requires explicit ownership transfer and capability evidence; discovery alone never grants control.
+
+**Consequences.** Preserve Codex discovery and all current capability flags. Do not inject task text or approvals into arbitrary terminals. Structured provider channels carry managed operations; terminal input remains a distinct user-authorized surface.
+
+---
+
+## ADR-016 — Core lifecycle independence and Desktop clients
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** Closing the interface must not end managed work. The existing macOS bridge service already runs independently of the browser.
+
+**Decision.** Evolve the current bridge composition into a UI-independent Core, preserving Node 24, SQLite and one writer. Keep the bridge as a transport/composition entry point. Electron becomes the primary desktop client, React remains shared, and the browser remains a supported client. The initial desktop target is macOS. Add packages only when the approved extraction needs them.
+
+**Consequences.** No Electron process, runtime package or service change is added in Phase 0. An Electron main/utility process is not the sole owner of persistent agents. Package paths and the exact Electron version remain implementation decisions. Core startup and local features never depend on Cloud.
+
+---
+
+## ADR-017 — Separate agent, process, terminal, session, turn and task states
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The current session status represents observed turn activity; it cannot prove process liveness, task success or terminal attachment.
+
+**Decision.** Use separate identities and state machines for agent instances, OS process instances, terminal attachments, provider sessions, turns and application tasks. Keep existing v1 agent/session IDs and statuses unchanged. New contracts define explicit mappings rather than silently reinterpreting existing fields. Missing liveness evidence produces unknown state, not completion or failure.
+
+**Consequences.** A process exit does not prove task success. A completed turn does not prove that a process exited. UI disconnection does not stop execution. Provider session IDs are qualified by machine and provider; a PID is never a durable process identity.
+
+---
+
+## ADR-018 — Permissions and authorization boundaries
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The loopback bootstrap cookie protects the current observer against cross-origin reads, but local processes can acquire it. Adding command execution changes the impact of that boundary.
+
+**Decision.** Keep current read API authentication unchanged. Future control operations require a separately authenticated principal, explicit scope, resource bounds, expiry and adapter/provider permission enforcement at the Core. Deny execution by default. Observation access, terminal input, task delegation, approval responses and remote connectivity are separate grants. A payload naming a permission is not proof of authority.
+
+**Consequences.** No control endpoint may rely on the observation cookie alone. Validate IPC sender and arguments; constrain executable, argument vector, working directory, environment and allowed resources. Provider sandboxing and OS permissions still apply. Never store credentials in events or delegate authority from captured text. Select and review the control authentication and headless secret-storage mechanisms before execution is implemented.
+
+---
+
+## ADR-019 — Recovery guarantees and interrupted work
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** UI reconnection, Core failure and machine restart have different recovery properties. Native histories restore context, not an arbitrary live process image.
+
+**Decision.** Closing a client must leave the independent Core and its managed work running. Persist references and operational checkpoints locally. After a Core failure or reboot, reconcile process identity, native session availability, task acknowledgements and unknown effects before offering recovery. Native session resume requires a supported adapter and an authorized policy. No automatic replay of uncertain side effects.
+
+**Consequences.** An OS reboot ends previous processes and PTYs. Preserving the same PTY across a Core crash is not promised by this design; it would require a separate supervisor decision and tests. Launch-at-login is distinct from pre-login or logged-out execution. Restoring window layout does not prove resumed execution.
+
+---
+
+## ADR-020 — Native history references and bounded content caches
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The current database copies selected text into event envelopes, messages and summaries. Future functionality should reuse provider history and avoid unnecessary transcript duplication.
+
+**Decision.** Treat native histories as the source of conversation content. Persist operational identifiers, verifiable source references, checkpoints and metric aggregates. Read conversation details from authorized native sources when available. New transcript caches are disabled by default; enabling a cache requires an explicit size, lifetime, purge and permission policy. Apply the same rules to terminal buffers and task/result excerpts.
+
+**Consequences.** Phase 0 does not delete or migrate existing data and does not change current retention. Missing or changed sources must be shown honestly. References are sensitive local metadata. Any future migration requires backup, replay/integrity checks and a policy for existing text, summaries and backups. ORQST must never edit native history to implement its own retention.
+
+---
+
+## ADR-021 — Structured local task delegation
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** Multi-agent work needs traceable requests, results and limits without writing directly into other terminal inputs.
+
+**Decision.** Route delegation through a Core-owned orchestrator and documented adapter operations. Give every task, request, result and attempt an identity. Record origin, destination, workspace, correlation, scoped authorization, deadline and budget. Plan durable inbox/outbox delivery, acknowledgements, idempotency checks, cancellation and bounded retries. Use explicit parentage, depth/fan-out/concurrency limits and budget limits to stop runaway delegation.
+
+**Consequences.** At-least-once delivery does not guarantee exactly-once external effects. An uncertain execution must be reconciled before retry. Submission or transport acknowledgement is not task completion. Replies return through the same validated task protocol; task or agent text cannot grant itself new permissions.
+
+---
+
+## ADR-022 — Cloud privacy and optional remote connectivity
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The previous Cloud design proposed event ingestion and central history. The approved product boundary prohibits Cloud storage of source code, conversations, terminal output and session content.
+
+**Decision.** Replace content synchronization with an optional identity/device/connectivity control plane. Keep content and operational history on authorized user devices. Remote content transport must be end-to-end encrypted between paired endpoints; an optional relay handles transient ciphertext only. Do not persist content or relay payloads in databases, queues, logs, traces, crash reports, backups or analytics. Limit control-plane records to an explicit metadata allowlist.
+
+**Consequences.** No Cloud implementation or cryptographic protocol is introduced in Phase 0. Pairing, revocation, protocol choice and metadata retention require a security design before implementation. Cloud authentication does not itself authorize a local command. Disconnection or subscription state cannot disable local Community features. The earlier central-history/ingest roadmap is superseded.
+
+---
+
+## ADR-023 — Observability-first product and qualified metrics
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The primary product differentiator is understanding agent activity, delivery, usage and uncertainty across workspaces and, eventually, machines.
+
+**Decision.** Keep activity, results, intervention and usage as the primary experience; terminals and orchestration support that experience. Future metrics declare observed, estimated or unavailable quality, source, time window, scope and units. Never convert missing measurements to a measured zero in new contracts. Preserve current Codex cumulative accounting and qualify its coverage. Distinguish provider-reported monetary values, price-based estimates and actual billing reconciliation.
+
+**Consequences.** Cost requires model/rate/billing provenance and provider-specific cache semantics. Tokens per second require a known interval and token basis; elapsed session span is not active generation time. Forecasts require sufficient comparable data, an explicit remaining-work assumption and uncertainty; otherwise return unavailable. No prediction, cost calculation or dashboard change is implemented in Phase 0.
+
+---
+
+## ADR-024 — Additive versioned contract design
+
+**Status:** Accepted direction on 2026-11-02; implementation planned, not authorized by Phase 0.
+
+**Context.** The current zod v1 envelope has a closed event enum, file-shaped sources and existing clients that cannot safely consume new lifecycle event families.
+
+**Decision.** Preserve `schemaVersion: 1`, current enums, REST shapes, `/ws` behavior and database schema. Specify a separate future `orqst.lifecycle` contract with `contractVersion: 1`; it is not an extension silently sent through the v1 stream. Require explicit negotiation of supported contracts before a future client receives lifecycle events or sends commands. Capability discovery is versioned and defaults to unsupported until validated.
+
+**Consequences.** The contract design in docs/api/lifecycle-contracts.md is normative for planned semantics but is not exported TypeScript, a runtime schema or a registered endpoint. Unsupported required versions must fail before side effects. Wire paths, implemented schemas and migrations belong to later approved changes. Never silently upgrade a v1 observation cookie or event into control authority.

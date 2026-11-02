@@ -157,13 +157,22 @@ Ignored by Git and not part of the source layout:
   package would be empty abstraction.
 - **No `packages/config` or `packages/licensing`.** Configuration is one file;
   licensing is recorded in LICENSE and documentation.
-- **No Cloud backend.** The future Laravel/PostgreSQL service is documented,
-  not implemented.
+- **No Cloud backend.** Optional identity/device/connectivity is design only;
+  the future control-plane stack remains undecided.
 - **No Turborepo.** Two build targets, two scripts.
-- **No Docker or installer.** Local development and `pnpm start` only.
+- **No Docker or standalone installer.** Local development, `pnpm start` and
+  the macOS user-service helper are available; no cross-platform installer exists.
 
 ## Manifest notes
 
 - All packages are `private: true` and `"license": "Apache-2.0"`.
 - The workspace globs are `apps/*`, `packages/*`, and `packages/adapters/*`.
 - `apps/bridge` is a private executable composition root and has no package export. It runs via `src/main.ts` in development and the root bundled entry point in production.
+
+## Planned boundaries
+
+Phase 0 adds public architecture/contracts, ROADMAP.md and CHANGELOG.md only.
+There is no `apps/desktop`, extracted Core, PTY runtime, orchestrator or Cloud
+module in the current layout. New packages must follow the approved phase and
+have concrete responsibilities; see [ROADMAP](../../ROADMAP.md) and
+[target architecture](../architecture/overview.md#target-module-responsibilities--planned).

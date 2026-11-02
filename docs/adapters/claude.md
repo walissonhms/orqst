@@ -44,6 +44,15 @@ No Claude Code session files, hook payloads, or event streams have been
 inspected for this repository. Nothing in this document should be read as a
 claim that Claude Code exposes a particular field, file, or lifecycle event.
 
+## Approved future scope
+
+The requirements below describe external observation mode and remain read-only.
+Managed execution and structured delegation are approved future directions under
+[ADRs 015–024](../architecture/decisions.md), with separate ownership, permission
+and [lifecycle contracts](../api/lifecycle-contracts.md). These directions do not
+implement the adapter, validate a provider version or enable any capability.
+Provider-specific execution/resume support requires a separately approved phase.
+
 ## What an implementation must satisfy
 
 A future Claude adapter must:

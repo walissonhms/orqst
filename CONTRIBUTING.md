@@ -23,10 +23,32 @@ See [docs/commercial/licensing-decision.md](docs/commercial/licensing-decision.m
 
 1. Read [README.md](README.md) and
    [docs/architecture/overview.md](docs/architecture/overview.md).
-2. Check whether the change fits the product boundary: ORQST observes agents;
-   it does not run or control them.
+2. Read [ROADMAP.md](ROADMAP.md) and the architecture decisions. The current
+   runtime observes agents; managed execution is an approved future direction.
+   Phase 0 permits architecture and contract documentation only. Phase 1 and
+   every later implementation phase require explicit approval before work starts.
 3. For a nontrivial change, open a design note or issue first. Describe the
    problem, the proposed boundary, and what evidence will prove the change.
+
+## Architecture and compatibility
+
+- Preserve the operational Codex observer, bridge, dashboard and local data.
+- Keep observability as the primary product experience. Do not replace activity,
+  delivery and usage views with a terminal-first experience.
+- Distinguish implemented, in-progress and planned capabilities in every change.
+- Follow [planned lifecycle contracts](docs/api/lifecycle-contracts.md) for future
+  control designs; they are not current APIs or permission to implement them.
+- Keep current v1 REST/WebSocket contracts and database migrations compatible.
+  Publish a separate negotiation/migration plan before adding new contract families.
+- New protocol/domain modules must remain independent of Electron and Cloud.
+- Keep identifiers, comments, contracts and docs in English. New UI keys must be
+  provided in both en-US and pt-BR; captured content keeps its original language.
+- Update public architecture/API docs and the Unreleased changelog when their
+  contracts change. Keep local agent instructions, working notes and acceptance
+  reports out of version control.
+- Record security and compatibility evidence for a capability before enabling it.
+  Commit each completed feature/fix after its relevant checks; do not publish a
+  release or start the next phase merely because a design was approved.
 
 ## Development setup
 
@@ -99,8 +121,10 @@ Do not weaken a test or lint rule to make a failure disappear.
 
 ## Pull request checklist
 
-- [ ] The change stays inside the observer-only product boundary.
-- [ ] No agent session files are written or launched by ORQST.
+- [ ] The change stays inside its explicitly approved phase; current observation
+      behavior is preserved.
+- [ ] The current observer remains read-only; any future managed execution is
+      explicitly authorized for its phase and has separate permission boundaries.
 - [ ] Event schemas validate at runtime; source references are preserved.
 - [ ] Status and token rules are unchanged or the change is documented.
 - [ ] Security controls (loopback, origin checks, path containment, limits)

@@ -41,6 +41,31 @@ data in the report. Redact evidence.
 There is no bug bounty and no response-time commitment at this stage. The owner
 will acknowledge a report when possible and coordinate disclosure after a fix.
 
+## Architecture approval and future control
+
+The current runtime is an observation service. Phase 0 approves future managed
+execution, Electron, structured delegation and optional remote connectivity as
+architecture direction only. None is implemented or enabled by this approval.
+See [ROADMAP](ROADMAP.md), [ADRs 015–024](docs/architecture/decisions.md) and
+[planned lifecycle contracts](docs/api/lifecycle-contracts.md).
+
+Before introducing control operations, require a separate Core-authenticated
+principal and explicit resource/operation grants. The existing loopback bootstrap
+cookie must not authorize execution, terminal input, delegation, provider approval
+responses or remote access. Provider sandboxing, approvals and OS permissions
+remain in force. Observed external sessions do not become managed automatically.
+
+The Core must remain independent of Electron. A future renderer must not receive
+arbitrary filesystem, shell or IPC authority; validate sender and arguments and
+keep captured output untrusted. Secret storage must work when the interface is
+closed, without placing credentials in events, logs or the renderer.
+
+Future Cloud connectivity must not store source code, conversations, terminal
+output or session content, including in logs, traces, crash reports, queues and
+backups. Content transport requires end-to-end protection between authorized
+endpoints; control-plane metadata has a separate allowlist and retention policy.
+No Cloud service, remote transport or cryptographic protocol exists here yet.
+
 ## Security model
 
 ORQST is designed for a **single trusted OS user on a local machine**.

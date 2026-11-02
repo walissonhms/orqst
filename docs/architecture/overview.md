@@ -1,9 +1,18 @@
 # Architecture overview
 
-## Purpose
+## Current runtime and approved direction
+
+This page separates implemented 0.1.0 behavior from the Phase 0 target. The current
+bridge/dashboard remain operational and observation-only. The approved target is
+an observability-first open-source platform with an independent Core, Electron as
+primary desktop client, shared React UI, browser access and future managed agents.
+No target module, process control or Cloud connection is implemented by Phase 0.
+See [ROADMAP](../../ROADMAP.md) and [ADRs 015–024](decisions.md).
+
+## Current purpose
 
 ORQST gives a developer one place to observe AI coding agents that are running
-in other tools, terminals, IDEs, or machines. The MVP focuses on a single
+in other tools, terminals or IDEs. The current runtime supports a single
 machine and a single provider: OpenAI Codex CLI.
 
 The product boundary is deliberate:
@@ -175,9 +184,9 @@ The checkpoint is what makes restarts and duplicate scans safe. If a file is
 replaced, truncated, or its identity changes, the observer resets and re-reads;
 event IDs remain deterministic, so already-ingested records are ignored.
 
-## Boundaries and non-goals
+## Current runtime boundaries and unimplemented capabilities
 
-Deliberately out of scope for the MVP:
+The following are not implemented in the current runtime:
 
 - remote control, approval, or intervention delivery;
 - launching agents or building conversation context;
@@ -190,3 +199,79 @@ Deliberately out of scope for the MVP:
 - long-running load testing, other-browser/platform validation, and hosted CI execution evidence.
 
 These are documented as gaps rather than hidden behind placeholder features.
+
+## Target module responsibilities — planned
+
+The target preserves existing packages and introduces extracted modules only when
+an approved phase has concrete responsibilities for them. Do not scaffold empty
+packages or migrate to a different monorepo/build system.
+
+| Module                | Responsibility and allowed direction                                                                                  |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Protocol              | Pure versioned schemas/types; no Electron, filesystem, transport or Cloud imports                                     |
+| Shared                | Small provider-independent helpers                                                                                    |
+| Database              | SQLite migrations, transactions, checkpoints and operational read models                                              |
+| Adapters              | Provider discovery, normalization and separately authorized managed operations; declare version-specific capabilities |
+| Core                  | Compose lifecycle, local policy, store and adapters independently of UI/Cloud                                         |
+| Runtime               | Core-owned process/PTY lifetimes and authorized terminal attachments, introduced only with execution scope            |
+| Orchestrator          | Durable local task/delegation admission, delivery, limits, reconciliation and results                                 |
+| Observability         | Provenance, quality, aggregation, costs and forecasts when evidence permits                                           |
+| Bridge                | Local API/WS transport and compatibility projection; keep current entry point operational                             |
+| Desktop               | Electron client/main/preload, windows, menus and native integration                                                   |
+| Dashboard             | Shared React views for activity, delivery, attention and metrics; terminals are supporting views                      |
+| Optional connectivity | Paired remote transport, isolated from core feature availability and native history                                   |
+
+Domain modules depend on protocol/shared and explicit persistence/adapter
+interfaces. UI and transports consume Core operations; Core never imports Desktop,
+React or Cloud. Electron main/preload do not own the sole persistent execution
+runtime. The existing adapter dependency on database can remain during incremental
+extraction; interface changes require demonstrated need and compatibility tests.
+
+```text
+Electron client ----+                       +---- Native provider histories
+                    |                       |
+Browser client -----+--> Local bridge --> Core --> Adapters
+                                          |   --> Operational SQLite (one writer)
+                                          |   --> Runtime / Orchestrator (future)
+                                          +----> Qualified observability (future)
+```
+
+The next implementation proposal is a bounded extraction of the existing observer
+Core. Keep the same Node runtime/service and API behavior; no extra daemon is
+required by that extraction. Electron, PTY and native provider protocol versions
+are not selected or installed in Phase 0.
+
+## State, recovery and history — planned
+
+Agent availability, process lifetime, terminal attachment, provider session, turn
+and ORQST task have separate identities/states. Current v1 statuses are not
+silently redefined. Activity timestamps do not establish process liveness, task
+success, active generation time or remaining work. See the
+[lifecycle design](../api/lifecycle-contracts.md).
+
+Closing a client must not stop independent work. A Core crash requires
+reconciliation; a reboot ends existing processes and restores references/context
+only where the provider supports it. No guarantee of a live PTY surviving Core
+failure is implied. Resume or replay of uncertain effects requires an authorized
+policy. Window restoration, user login and pre-login/background execution have
+distinct guarantees; the existing macOS LaunchAgent is a user-login service.
+
+Native histories remain authoritative. Future storage favors verified references,
+operational events and aggregates, with new transcript caching disabled unless a
+bounded policy is approved. Current copied text and retention remain unchanged;
+any migration needs backup and explicit acceptance. Never delete native history
+as a cache-management operation.
+
+## Observability-first and privacy — planned
+
+Use observed/estimated/unavailable metric quality with scope, time basis, coverage
+and source. Preserve cumulative Codex accounting. Do not imply a subscription bill
+from API token rates, tokens-per-second from session lifespan, or a precise
+cost-to-completion from insufficient history. Correlate deliveries and delegations
+without inventing parentage or task completion from prose.
+
+Keep local Community use independent of Cloud. Optional remote observability
+uses authorized endpoint connectivity, not central history or event ingestion.
+See [Cloud privacy](../commercial/cloud-architecture.md). All contracts/docs/code
+remain English; user-facing keys remain en-US and pt-BR. Phase 1 and later changes
+require separate approval and documentation/validation for their actual scope.

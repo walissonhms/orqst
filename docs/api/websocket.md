@@ -1,5 +1,10 @@
 # WebSocket API
 
+> **Current observation API.** Phase 0 changes documentation only. Routes, payloads,
+> authentication and behavior on this page are unchanged. The
+> [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
+> not implemented control endpoints or new messages on the current stream.
+
 The bridge streams stored and live events to the dashboard over a single
 loopback WebSocket endpoint.
 

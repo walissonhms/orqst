@@ -2,18 +2,21 @@
 
 **One place. Every agent.**
 
-ORQST is a local-first, agent-agnostic observability platform for AI coding
-agents. It observes agent sessions that were started outside ORQST, normalizes
-their activity into a provider-independent event protocol, persists it in
-SQLite, and streams it to a browser dashboard in real time.
+ORQST is an open-source, local-first platform for intelligent AI agent
+observability, evolving toward managed execution and structured orchestration.
+Its primary experience is understanding agent activity, delivery, intervention,
+usage and cost uncertainty across workspaces and, eventually, machines.
 
-ORQST is not an agent runner. It does not launch, wrap, or modify the agents it
-observes, and it does not send prompts or keystrokes back into their sessions.
+**The current 0.1.0 runtime observes Codex sessions started outside ORQST.** It
+normalizes their activity, persists local observations in SQLite and streams them
+to a React browser dashboard. It does not launch agents, control processes, send
+prompts or write into observed sessions.
 
-> **Project status:** MVP v1.0 is under active development. The Codex CLI
-> adapter is the only implemented integration. Claude Code and OpenCode exist
-> only as documented adapter contracts. ORQST has no remote session control.
-> ORQST Community Edition is open source under [Apache-2.0](LICENSE).
+> **Project status:** pre-release. Phase 0 records the approved architecture and
+> planned contracts. Electron, integrated terminals, managed execution, delegation
+> and Cloud connectivity are not implemented. Phase 1 requires approval before
+> implementation. Community is licensed under [Apache-2.0](LICENSE) and operates
+> without Cloud.
 
 ## What works today
 
@@ -29,13 +32,33 @@ observes, and it does not send prompts or keystrokes back into their sessions.
 | Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions |
 | Claude Code adapter                                                          | Contract only, not implemented              |
 | OpenCode adapter                                                             | Contract only, not implemented              |
-| Remote control of agent sessions                                             | Not implemented, by design                  |
+| Managed execution and structured delegation                                  | Planned, not implemented                    |
 | ORQST Cloud, accounts, billing                                               | Not implemented                             |
-| Cross-machine synchronization                                                | Not implemented                             |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                    |
 
 This is version 0.1.0. Build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery have been checked on macOS. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
-## Architecture at a glance
+## Delivery status and roadmap
+
+- **Implemented:** the local Codex observer, SQLite store, loopback API, live React
+  dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
+- **In progress:** no runtime implementation phase is active. Phase 0 delivers
+  architecture decisions and contract documentation only.
+- **Planned:** an independent Core, Electron as the primary desktop client,
+  persistent managed sessions/terminals, incremental Claude Code/OpenCode support,
+  structured delegation, qualified costs/performance/forecasts and optional remote
+  connectivity. Browser access and external-session observation remain supported.
+
+Observability remains the primary product experience. Terminals and orchestration
+support it. Native provider histories should be reused, with bounded, explicit
+content caching. Future Cloud connectivity must not store code, conversations,
+terminal output or session content; local Community features remain independent.
+
+See [ROADMAP](ROADMAP.md) for phases, acceptance criteria, pending decisions and
+Phase 1 scope; [CHANGELOG](CHANGELOG.md) records changes. Approval of architectural
+direction does not activate a capability or authorize the next implementation phase.
+
+## Current architecture at a glance
 
 ```
   Codex CLI started outside ORQST
@@ -177,6 +200,10 @@ and [SECURITY.md](SECURITY.md).
 
 ## Documentation
 
+- [Public roadmap and Phase 1 scope](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Planned lifecycle contracts](docs/api/lifecycle-contracts.md)
+
 - [Documentation index](docs/README.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Data model](docs/architecture/data-model.md)
@@ -204,8 +231,9 @@ and [SECURITY.md](SECURITY.md).
 - **Observation, not orchestration.** ORQST cannot answer an intervention,
   approve a tool call, stop a run, or send a message to an agent. Intervention
   alerts tell the user to continue in the original terminal.
-- **No remote control.** This is a deliberate product boundary for v1.0, not a
-  missing toggle.
+- **Control is planned.** Managed execution, terminal input and delegation require
+  validated adapters, separate authorization and an approved implementation phase.
+  No current API can deliver them.
 - **macOS-first.** Linux and Windows/WSL behavior is unvalidated.
 - **Node 24 only.** Older Node versions are rejected by `engine-strict`.
 - **No encryption at rest** and no multi-user access control. The local API is

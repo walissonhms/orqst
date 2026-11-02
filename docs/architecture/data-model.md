@@ -6,6 +6,12 @@ ORQST persists normalized observations in a single local SQLite database,
 The implementation uses Node's built-in `node:sqlite` (`DatabaseSync`). There is
 no native addon and no external database server.
 
+## Current implementation and future design
+
+This document's tables describe the implemented SQLite schema. Phase 0 adds no
+migration, table, column or runtime retention change. Planned lifecycle records
+below are logical responsibilities only, not SQL entities that already exist.
+
 ## Schema version
 
 The schema is versioned with `PRAGMA user_version`. The repository currently
@@ -252,3 +258,41 @@ See [../deployment/operations.md](../deployment/operations.md). In short: stop
 the bridge before copying the database, or use a SQLite-aware backup that
 includes the WAL. Deleting the database loses local history; Codex sessions are
 re-read on the next scan because the source files are untouched.
+
+## Planned operational records and history references
+
+Future implementation phases may add logical records for resource identities,
+process observations, terminal/layout attachments, tasks/attempts, durable
+inbox/outbox delivery, local grants, source references and qualified metrics.
+Exact table names, columns, indexes and migrations must be designed and reviewed
+when those phases are authorized. Phase 1 Core extraction does not require them.
+
+Preserve one SQLite writer. Do not reinterpret existing v1 agent IDs (currently
+session-derived) as stable worker identities, or local path-derived workspace IDs
+as global project IDs. Qualify native session references by provider and machine.
+Local sequence numbers are not cross-machine clocks. Provider record IDs and
+operation/event IDs are different deduplication domains.
+
+Native history remains the source of conversation content. A future reference
+records an authorized source identity and verifiable record location/ID; missing
+or changed sources become unavailable. Read content only within granted roots and
+validated adapter boundaries. Avoid duplicating complete transcripts in event
+payloads, message tables, results and terminal buffers. Source paths, hashes and
+excerpts are sensitive local data, not Cloud metadata.
+
+New transcript caches default to disabled. Before enabling them, define byte and
+lifetime bounds, purge/eviction, source disappearance, permission revocation and
+backup handling. Summary/result text is also content and needs an explicit
+policy. Current retention keeps summaries after detail expiry; this design does
+not alter that behavior or erase existing copies.
+
+Any future migration must preserve original data, machine identity, IDs,
+checkpoints and aggregate accounting; back up and validate replay/integrity before
+changing content storage. Do not rewrite historical migration 1 or native agent
+history. A lost source is not silently reconstructed from Cloud.
+
+Qualified metrics must distinguish unavailable data from measured zero and retain
+scope, timing, source, provider/model and estimator/rate provenance. Changing a
+session's model does not justify pricing its entire history at the latest rate.
+See [planned contracts](../api/lifecycle-contracts.md) and ADRs 017, 020 and 023 in
+[architecture decisions](decisions.md).

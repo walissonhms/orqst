@@ -1,5 +1,15 @@
 # Adapter capability model
 
+## Current capabilities and future managed operations
+
+The matrix and booleans below describe the implemented observation adapters.
+Phase 0 does not enable any flag. Future managed execution is approved direction,
+with separate versioned [lifecycle/capability contracts](../api/lifecycle-contracts.md).
+Observation and managed modes remain distinct; discovery alone grants no control.
+Support, authorization and temporary availability must be represented separately.
+Provider documentation is design input, not evidence that ORQST implemented or
+validated the operation. Each implementation phase needs approval.
+
 ORQST uses a capability model so the dashboard and documentation never imply
 more than a provider integration actually provides. A capability is a claim
 about observed, validated behavior, not a wish or a roadmap item.

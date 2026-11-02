@@ -5,8 +5,9 @@ source code, prompts, tool output, file paths, and accidentally pasted secrets.
 The security model is therefore conservative: local-only, read-only, minimal
 data, and no implicit trust in captured content.
 
-This document describes the controls that exist in the code. It is not a
-certification and not a legal opinion.
+The sections through the initial review note describe controls in the current
+code. The final planned-controls section records Phase 0 design requirements,
+not implemented protections. This is not a security certification.
 
 ## Trust boundaries
 
@@ -49,7 +50,7 @@ in memory.
   cookies; the dashboard re-bootstraps and reconnects automatically.
 
 Bootstrap is intentionally unauthenticated because there is no user account.
-Any process running as the same OS user can request its own cookie. That is
+Local processes, including those of other OS users, can request a cookie. That is
 consistent with the single-user threat model and is called out as a residual
 risk.
 
@@ -225,3 +226,49 @@ vulnerability.
 The local trust boundary was checked for missing cookies, disallowed origins/fetch metadata, invalid query/body input, dotfile access and WebSocket authentication. The implementation uses byte-length checks before constant-time cookie comparison, contains static assets under the canonical build directory (including macOS `/tmp` canonicalization), rejects malformed upgrade URLs, handles WebSocket protocol errors and bounds buffered data. Browser checks confirmed captured markup is displayed as text.
 
 These are scoped checks, not a penetration-test certification. Loopback bootstrap can be called by any local process, including processes of other OS users; the app is intended for a trusted single-user machine. Redaction, browser permissions and plaintext SQLite limitations remain as documented.
+
+## Planned controls — Phase 0 design only
+
+See [ADRs 015–024](decisions.md), [lifecycle contracts](../api/lifecycle-contracts.md)
+and [ROADMAP](../../ROADMAP.md). No control API, Electron renderer, terminal,
+permission store, secret backend or remote transport is introduced in this phase.
+
+| Future boundary                      | Required control before implementation                                                                                                         |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Observation to managed execution     | Explicit managed ownership, supported operation and Core-authenticated principal; observation cookie alone is insufficient                     |
+| Client to Core                       | Validated versioned request, resource scope, expiry, revocation and idempotency; default deny for control                                      |
+| Electron renderer to privileged code | Isolated/sandboxed renderer, no Node integration, narrow preload methods, sender/argument validation, restricted navigation and external links |
+| Core to process/PTY                  | Authorized executable/arguments/cwd/environment and resource bounds; user privileges and provider sandbox/approval policies remain in force    |
+| Agent to agent                       | Structured task protocol, durable admission, scoped delegation, bounded depth/fan-out/concurrency/budget and uncertain-effect reconciliation   |
+| Session resume or reboot recovery    | Check native session availability, ownership and active process identity; do not blindly repeat uncertain commands                             |
+| Credentials                          | Headless-compatible OS secure storage; no secrets in renderer state, events, native-history copies, logs or delegated payloads                 |
+| Local content to remote client       | Explicit pairing and grants, end-to-end protection and revocation; no public exposure of the current observation bootstrap                     |
+| Relay/control plane to persistence   | Explicit metadata allowlist; no code, conversation, session/terminal content or payload-bearing diagnostics in Cloud stores/logs/backups       |
+
+Terminal output, model replies, task results, adapter events and native history
+remain untrusted data. Their contents cannot authorize commands, resolve provider
+approvals or expand grants. A terminal emulator is not a security sandbox and a
+validated request does not replace OS/provider enforcement. Never run a terminal
+service as root to bypass user permissions.
+
+Revocation must be checked on admission and execution. Undispatched operations
+must stop; active-work cancellation requires an explicit tested policy. Bind
+approval responses to the exact provider request, task/attempt and resource;
+transport acceptance is not proof that an approval or command was executed.
+
+A future Core must not require Electron to keep credentials usable when the UI
+closes. Select and test an OS backend for its actual headless/user-session
+context; reject insecure/unavailable secret-store fallbacks rather than silently
+storing plaintext. No backend or cryptographic protocol is selected here.
+
+Data minimization must cover summaries, task inputs/results, terminal buffers,
+source references and cached excerpts, not only complete transcripts. Any change
+to existing copies/retention requires an approved migration and backup policy.
+Redaction does not authorize a Cloud upload or satisfy the no-content-storage
+requirement. See [Cloud privacy](../commercial/cloud-architecture.md).
+
+Before release of any future control capability, test denied/expired/revoked
+scopes, stale approval IDs, invalid IPC origins, malformed/version-mismatched
+requests, duplicate/reordered delivery, unsafe source references, disconnection,
+process exit, recovery and uncertain results. Document scope and limitations;
+architecture approval is not evidence that these controls have passed.

@@ -4,6 +4,14 @@ The ORQST protocol is the provider-independent contract between adapters, the
 database, the bridge, and the dashboard. It is defined with zod in
 `packages/protocol/src/index.ts` and validated at runtime.
 
+## Phase 0 compatibility boundary
+
+This page describes the implemented observation protocol. Phase 0 does not change
+`packages/protocol`, `schemaVersion: 1`, existing event names/statuses, file source
+fields or REST/WebSocket behavior. Approved future lifecycle and control semantics
+are documented separately in [planned lifecycle contracts](lifecycle-contracts.md).
+They are not accepted by current schemas or emitted by the current bridge.
+
 ## Design rules
 
 - One normalized event describes one observed fact.

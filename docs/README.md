@@ -1,10 +1,12 @@
 # ORQST documentation
 
-This directory contains the technical and operational documentation for the
-ORQST MVP. The documentation describes the code as it exists in this
-repository. It does not claim that builds, tests, browser checks, or real-data
-validation have been run; see [Validation status](../README.md#validation-status)
-and [Testing](development/testing.md).
+This directory contains public technical and operational documentation. Current
+runtime descriptions are distinct from approved future designs. Consult
+[Validation status](../README.md#validation-status) and [Testing](development/testing.md)
+for validation scope; an accepted ADR is not evidence of an implemented feature.
+
+- [Public roadmap and Phase 1 scope](../ROADMAP.md)
+- [Changelog](../CHANGELOG.md)
 
 ## Architecture
 
@@ -30,8 +32,11 @@ and [Testing](development/testing.md).
 - [REST API](api/rest.md) — bootstrap, snapshot, history, preferences,
   notifications, workspaces.
 - [WebSocket API](api/websocket.md) — handshake, replay, resync, live delivery.
-- [Event protocol](api/protocol.md) — envelope, event types, payload, usage
-  semantics, source references, versioning.
+- [Event protocol](api/protocol.md) — implemented observation envelope, payload,
+  usage, provenance and versioning.
+- [Planned lifecycle contracts](api/lifecycle-contracts.md) — Phase 0 design for
+  resource states, tasks/delegation, capabilities, permissions and qualified metrics;
+  no runtime endpoints or schemas are added.
 
 ## Development
 
@@ -52,8 +57,8 @@ and [Testing](development/testing.md).
 
 - [Licensing decision](commercial/licensing-decision.md) — Apache-2.0 scope, contributions and
   third-party notice obligations.
-- [Future Cloud architecture](commercial/cloud-architecture.md) — boundaries,
-  entities, and what is deliberately not implemented.
+- [Future Cloud privacy and connectivity](commercial/cloud-architecture.md) —
+  optional control plane, endpoint content transport and no Cloud content storage.
 
 ## Reading order
 
