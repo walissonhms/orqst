@@ -164,7 +164,7 @@
     "identifiers": "Os filtros de agente e modelo aceitam identificadores exatos observados, não nomes ou aliases inferidos. As opções de adaptador descrevem apenas observação implementada.",
     "invalidCustom": "Escolha datas inicial e final válidas, com início anterior ou igual ao fim. Intervalo inválido não envia requisição.",
     "incomplete": "Cobertura incompleta · A cobertura das fontes não foi verificada. Evidências ausentes ou removidas pela retenção e intervalos que cruzam os limites do período podem excluir uso. Estes rankings não representam o histórico completo.",
-    "capacity": "Esta consulta excede a capacidade local de análise. Reduza o período, workspace, agente ou adaptador e tente novamente.",
+    "capacity": "Esta consulta excede a capacidade local de análise. Filtre por workspace, agente ou adaptador e tente novamente. Um período menor ainda pode exigir o mesmo histórico retido; filtros de modelo não reduzem o orçamento de evidências.",
     "invalidQuery": "O bridge rejeitou estes filtros. Confira o intervalo e os identificadores exatos e tente novamente.",
     "error": "Não foi possível carregar o uso dos modelos. Use Atualizar para tentar novamente.",
     "loading": "Carregando uso dos modelos…",

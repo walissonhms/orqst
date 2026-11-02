@@ -164,7 +164,7 @@
     "identifiers": "Agent and model filters accept exact observed identifiers, not names or inferred aliases. Available adapter options describe implemented observation only.",
     "invalidCustom": "Choose valid start and end dates, with the start on or before the end. No request is sent for an invalid interval.",
     "incomplete": "Incomplete coverage · Source coverage is unverified. Missing or retained-out evidence and intervals crossing period boundaries can exclude usage. These rankings are not complete history.",
-    "capacity": "This query exceeds local analytics capacity. Narrow the period, workspace, agent or adapter, then retry.",
+    "capacity": "This query exceeds local analytics capacity. Filter by workspace, agent or adapter, then retry. A shorter period can still require the same retained history; model filters do not reduce the evidence budget.",
     "invalidQuery": "The bridge rejected these filters. Check the interval and exact identifiers, then retry.",
     "error": "Could not load model usage. Try Refresh to retry.",
     "loading": "Loading model usage…",

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
-import { appendFile, readFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import type { ModelAnalyticsSummary, Usage } from '@orqst/protocol';
 
 // Explicitly synthetic aggregates; no captured session content or shared fixture changes.
@@ -337,4 +338,62 @@ test('analytics refresh follows observed source events, not snapshot polling or 
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
   await page.waitForTimeout(600);
   expect(queries).toHaveLength(count + 1);
+});
+
+test('unmocked Analytics reconciles two models ingested through the disposable observer', async ({
+  page,
+}) => {
+  const { file } = JSON.parse(await readFile(process.env.ORQST_BROWSER_STATE!, 'utf8')) as {
+    file: string;
+  };
+  // These files belong only to the disposable browser server, never native user history.
+  for (const [suffix, total] of [
+    ['alpha', 300],
+    ['beta', 500],
+  ] as const) {
+    const sessionId = `synthetic-ranking-${suffix}`;
+    const records = [
+      {
+        type: 'session_meta',
+        payload: { id: sessionId, cwd: '/synthetic/analytics-integration' },
+      },
+      { type: 'turn_context', payload: { model: `synthetic-integration-${suffix}` } },
+      ...[0, total].map((tokens) => ({
+        type: 'token_usage_record',
+        payload: {
+          thread_id: sessionId,
+          response_id: `synthetic-${suffix}-${tokens}`,
+          thread_token_usage: {
+            input_tokens: tokens * 0.8,
+            output_tokens: tokens * 0.2,
+            cached_input_tokens: tokens * 0.4,
+            total_tokens: tokens,
+          },
+        },
+      })),
+    ];
+    const now = Date.now() - 10000;
+    await writeFile(
+      join(dirname(file), `synthetic-ranking-${suffix}.jsonl`),
+      records
+        .map((record, index) =>
+          JSON.stringify({ ...record, timestamp: new Date(now + index).toISOString() }),
+        )
+        .join('\n') + '\n',
+    );
+  }
+  await page.goto('/#models');
+  await page
+    .getByRole('navigation', { name: 'Workspaces' })
+    .getByRole('button', { name: /analytics-integration/ })
+    .click();
+  await page.getByLabel('Period', { exact: true }).selectOption('all');
+  await expect(page.locator('.analytics-stats .stat').nth(1).locator('strong')).toHaveText('800');
+  await expect(page.locator('.analytics-stats .stat').nth(2).locator('strong')).toHaveText('2');
+  const rows = page.locator('.analytics-table tbody tr');
+  await expect(rows.nth(0)).toContainText('synthetic-integration-beta');
+  await expect(rows.nth(0)).toContainText('62.5%');
+  await expect(rows.nth(1)).toContainText('synthetic-integration-alpha');
+  await expect(rows.nth(1)).toContainText('37.5%');
+  await expect(page.locator('.analytics-coverage')).toContainText('Incomplete coverage');
 });
