@@ -1,7 +1,7 @@
 # REST API
 
-> **Current observation API baseline.** This roadmap update changes no routes,
-> payloads, authentication or behavior on this page. The
+> **Current observation API.** The aggregate Analytics route below is additive;
+> existing observation routes and WebSocket messages retain their shapes. The
 > [planned lifecycle contracts](lifecycle-contracts.md) define future semantics,
 > not implemented control endpoints or new messages on the current stream.
 
@@ -37,6 +37,52 @@ A request with an untrusted `Host`, a mismatched `Origin`, or a cross-site
 `Sec-Fetch-Site` returns `403 {"error":"forbidden_origin"}` before routing.
 
 ## Read endpoints
+
+### `GET /api/analytics/models`
+
+Returns `ModelAnalyticsSummary`, an aggregate projection identified by
+`contract: "orqst.model-analytics"`, `contractVersion: 1`. It requires the same
+trusted Host/Origin/fetch metadata and process cookie as other read endpoints.
+It grants no agent control and does not extend the v1 WebSocket stream.
+
+| Parameter      | Meaning / validation                                                   |
+| -------------- | ---------------------------------------------------------------------- |
+| `from`, `to`   | Optional ISO instants with offset; `from < to`; half-open window       |
+| `workspaceId`  | Current workspace assignment; exact nonempty ID, at most 200 chars     |
+| `agentId`      | Exact nonempty observed agent ID, at most 200 chars                    |
+| `adapter`      | `codex`, `claude`, `opencode` or `manual`; CLI identity, not vendor    |
+| `model`        | Nonempty observed model ID, at most 200 chars                          |
+| `unidentified` | Only `true`; selects unidentified attribution; incompatible with model |
+
+Omitting model filters includes all models. Unknown/duplicate keys, invalid values,
+conflicting filters and query strings longer than 2048 characters return
+`400 {"error":"invalid_query"}`. No calendar preset or inferred vendor filter is
+accepted; clients resolve calendar dates to explicit instants.
+
+The response includes query/basis, nullable aggregate usage, observed session count,
+model rows (`adapter`, nullable `provider`/`model`, sessions and nullable usage),
+coverage with gap counts, and explicit unavailable reasons. Session counts are
+non-additive across model rows. Coverage is unverified; a first lifetime snapshot
+does not establish historical model attribution, and retained intervals crossing
+the lower boundary are omitted with a gap. See [accounting semantics](../architecture/model-usage-analytics.md#implemented-local-foundation).
+
+The HTTP projection omits contribution details, event/session identifiers, source
+paths, hashes, messages and task/result content. Workspace/agent filter IDs and
+observed model labels remain metadata. This local response is not yet a user-facing
+CSV/Markdown export format.
+
+Synchronous admission is limited to **100 candidate sessions, 1000 retained event
+envelopes and 2 MiB of UTF-8 envelope bytes** across those sessions, including
+message-only events and out-of-window baselines. Budgets are checked before JSON
+inspection/materialization. Excess returns
+`503 {"error":"analytics_capacity_exceeded"}` with no partial sums. A narrower
+workspace/agent/adapter scope may help; a narrower period still needs retained
+baselines and a model filter does not reduce admission scope. These are evidence
+budgets, not a guarantee of fixed query latency or full-archive support.
+
+The library's unrestricted `modelAnalytics()` is not exposed through this route;
+`modelAnalyticsSummary()` uses one transaction for admission and evidence reads.
+No table, index or migration is added. The database remains schema version 1.
 
 ### `GET /api/snapshot`
 

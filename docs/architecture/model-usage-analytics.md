@@ -18,7 +18,11 @@ in an exported usage report. Redaction remains best-effort, not a privacy guaran
 ## Implemented local foundation
 
 `Store.modelAnalytics(query)` returns the separate `orqst.model-analytics` version 1
-projection. It adds no REST route, WebSocket message, table, index or migration.
+projection. It adds no WebSocket message, table, index or migration. The separate
+bounded `Store.modelAnalyticsSummary()` is exposed through authenticated
+[`GET /api/analytics/models`](../api/rest.md#get-apianalyticsmodels), with aggregate
+gap counts and no individual evidence or captured content. The complete local
+report described below remains a library-only inspection surface.
 Query filters support explicit offset-aware `from`/`to` instants, current workspace
 assignment, agent, adapter and model; `model: null` selects unidentified attribution.
 Calendar presets and provider filtering are not implemented. Adapter is the CLI,
@@ -44,8 +48,11 @@ model rows. Coverage is always qualified as unverified, with explicit gaps for m
 canonical evidence, invalid/non-monotonic usage, identity conflicts and period boundaries.
 Retention can remove the evidence needed for allocation even when v1 totals survive.
 Executions, active duration, outcomes, equivalence, reasoning, prices and costs remain
-unavailable. The query reads retained evidence synchronously; benchmark large archives
-and design bounded queries before exposing it through interactive transport.
+unavailable. The unrestricted library query reads retained evidence synchronously.
+HTTP admission limits are 100 sessions, 1000 retained envelopes and 2 MiB of evidence
+bytes; excess returns 503 without partial results. All selected session history counts,
+including message-only events and out-of-window baselines. Durable metric storage
+and large-archive performance remain future work.
 
 Fourteen synthetic Analytics tests cover contracts, cumulative accounting, model
 changes, windows, scopes, unavailable versus zero, retention, replay, schema preservation

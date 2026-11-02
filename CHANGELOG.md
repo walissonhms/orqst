@@ -7,6 +7,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Authenticated `GET /api/analytics/models` with aggregate-only model usage,
+  explicit unavailable metrics and counted coverage gaps. Strict query validation
+  rejects duplicates/unknowns; admission caps 100 sessions, 1000 retained envelopes
+  and 2 MiB of evidence, returning 503 instead of partial totals. Source references
+  and captured content are excluded; existing v1 routes/stream and schema 1 remain.
+
 - UI-independent `@orqst/core` observation lifecycle, composed by `createBridge()`
   with one store, explicit readiness, failure cleanup and shared idempotent shutdown.
   No second process or managed agent execution is introduced. Core/Analytics

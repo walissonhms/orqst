@@ -350,8 +350,12 @@ activity.
 
 `modelAnalyticsQuerySchema` and `ModelAnalyticsReport` are additive exports from
 `@orqst/protocol`, used by the local `Store.modelAnalytics()` library method. The report
-identifies itself as `orqst.model-analytics`, `contractVersion: 1`; it is not sent over
-the existing REST/WS protocol. See the [implemented foundation](../architecture/model-usage-analytics.md#implemented-local-foundation)
+identifies itself as `orqst.model-analytics`, `contractVersion: 1`; the full report
+stays local. `ModelAnalyticsSummary` is its aggregate transport projection for
+[`GET /api/analytics/models`](rest.md#get-apianalyticsmodels), omitting individual
+contributions and replacing evidence-bearing gaps with reason/count pairs. It does
+not change existing REST payloads or WebSocket messages.
+See the [implemented foundation](../architecture/model-usage-analytics.md#implemented-local-foundation)
 for filters, interval semantics, provenance and coverage limitations. Source references
 can contain private paths and require an export allowlist before external reporting.
 
@@ -360,5 +364,5 @@ coverage, a measured zero, task success or historical model allocation. Qualifie
 projections must retain source/time/basis, unavailable reasons and
 unidentified models without changing existing cumulative/cache semantics. No metric
 or lifecycle family may be silently inserted into the closed v1 stream.
-Transport documentation must accompany any future endpoint integration, with v1
-compatibility tests. No existing v1 event or message is extended by this projection.
+The new route has authentication, bounds, privacy and compatibility tests. No existing
+v1 event or message is extended by this projection.

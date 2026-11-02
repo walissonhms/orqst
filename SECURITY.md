@@ -68,6 +68,14 @@ No Cloud service, remote transport or cryptographic protocol exists here yet.
 
 ## Security model
 
+The aggregate Analytics read endpoint inherits the observation cookie, Host/Origin
+and fetch-metadata checks. Its explicit response projection excludes individual
+source references and captured content, but retains model labels and filter metadata.
+Admission bounds retained evidence and returns 503 on excess without partial sums;
+this does not provide fixed latency or multi-user isolation. The full local library
+report can contain source paths and must not be used directly as an export payload.
+See the [route contract](docs/api/rest.md#get-apianalyticsmodels).
+
 ORQST is designed for a **single trusted OS user on a local machine**.
 
 - The bridge binds `127.0.0.1` only. It has no public-listening mode.

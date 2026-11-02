@@ -11,6 +11,18 @@ not implemented protections. This is not a security certification.
 
 ## Trust boundaries
 
+The additive `GET /api/analytics/models` route uses the existing observation
+authentication/trust checks and no-store/CSP headers. Its allowlisted response
+excludes contribution evidence, source paths, event/session identifiers and captured
+messages/results; it retains aggregate model labels and query metadata. Strict
+query validation and fixed session/event/byte admission precede JSON inspection.
+Overflow returns 503 with no partial report. No control authority, public bind,
+telemetry or schema change is introduced. Evidence budgets do not bound total SQL
+latency, and the unrestricted local library report remains sensitive.
+See [route limits](../api/rest.md#get-apianalyticsmodels). Synthetic API tests cover
+authentication/origin, validation, admission boundaries and response-field privacy;
+they are not a certification or a large-archive performance assessment.
+
 | Boundary                      | Trust                                                                   |
 | ----------------------------- | ----------------------------------------------------------------------- |
 | Codex session files           | **Untrusted data.** Parsed defensively, never executed.                 |
