@@ -7,7 +7,8 @@ These records document the durable product and engineering decisions.
 ADRs 015–024 record the architecture direction approved on 2026-11-02 during
 Phase 0. **Accepted direction does not mean implemented or authorized for
 implementation in this phase.** Phase 0 changes documentation and contract design
-only. Phase 1 requires a separate approval; see [ROADMAP](../../ROADMAP.md).
+only. ADR-025 adds the authorized optimizer research/benchmark scope, without
+production activation. Phase 1 requires separate approval; see [ROADMAP](../../ROADMAP.md).
 
 ADRs 001–014 describe the existing 0.1.0 runtime unless an explicit status note
 limits or supersedes their future applicability. Existing APIs, events, database
@@ -377,3 +378,15 @@ components retain their own terms. Cloud is not implemented or licensed here.
 **Decision.** Preserve `schemaVersion: 1`, current enums, REST shapes, `/ws` behavior and database schema. Specify a separate future `orqst.lifecycle` contract with `contractVersion: 1`; it is not an extension silently sent through the v1 stream. Require explicit negotiation of supported contracts before a future client receives lifecycle events or sends commands. Capability discovery is versioned and defaults to unsupported until validated.
 
 **Consequences.** The contract design in docs/api/lifecycle-contracts.md is normative for planned semantics but is not exported TypeScript, a runtime schema or a registered endpoint. Unsupported required versions must fail before side effects. Wire paths, implemented schemas and migrations belong to later approved changes. Never silently upgrade a v1 observation cookie or event into control authority.
+
+---
+
+## ADR-025 — Independent Token Optimizer and evidence-gated activation
+
+**Status:** Accepted direction for Phase 0 research and isolated benchmarks; production implementation is not authorized.
+
+**Context.** Token optimization is a foundational differentiator alongside intelligent observability. Reducing prompt size alone does not demonstrate lower total usage, equivalent correctness or lower monetary cost. Native agents own parts of their context that ORQST may not safely intercept.
+
+**Decision.** Plan an independent optimizer domain component composed by the future Core, with Disabled, Economy and Intelligent modes and versioned request/plan/evidence interfaces. Preserve protected instructions, permission boundaries, source provenance, tool/result correlations and code required for the task. Optimize only context the adapter demonstrably exposes and ORQST is authorized to supply. External sessions remain unchanged unless explicitly authorized. Start with deterministic, traceable transformations; learned compression and summaries require separate quality, resource and licensing evidence.
+
+**Consequences.** No production dependency, runtime capability, endpoint or default changes in Phase 0. The intended managed-session default is safe Economy only after correctness and measurable net benefit are validated; until then optimization remains inactive. Intelligent must fall back when evidence, authority or relevance is uncertain. Router/orchestrator/adapters consume a plan, and observability records observed versus estimated usage, failed attempts, retries and optimizer overhead. See [Token Optimizer design](token-optimizer.md) and [benchmark methodology/results](../benchmarks/token-optimization.md). No published compression ratio from another project is an ORQST savings claim.

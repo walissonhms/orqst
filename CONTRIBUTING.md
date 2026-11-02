@@ -25,7 +25,8 @@ See [docs/commercial/licensing-decision.md](docs/commercial/licensing-decision.m
    [docs/architecture/overview.md](docs/architecture/overview.md).
 2. Read [ROADMAP.md](ROADMAP.md) and the architecture decisions. The current
    runtime observes agents; managed execution is an approved future direction.
-   Phase 0 permits architecture and contract documentation only. Phase 1 and
+   Phase 0 permits architecture/contract documentation and the explicitly authorized
+   standalone optimizer research benchmarks; no production optimization. Phase 1 and
    every later implementation phase require explicit approval before work starts.
 3. For a nontrivial change, open a design note or issue first. Describe the
    problem, the proposed boundary, and what evidence will prove the change.

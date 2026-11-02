@@ -46,7 +46,8 @@ This is version 0.1.0. Build, type checking, automated/browser tests, native Cod
   architecture decisions and contract documentation only.
 - **Planned:** an independent Core, Electron as the primary desktop client,
   persistent managed sessions/terminals, incremental Claude Code/OpenCode support,
-  structured delegation, qualified costs/performance/forecasts and optional remote
+  structured delegation, qualified costs/performance/forecasts, a Core Token Optimizer
+  and optional remote
   connectivity. Browser access and external-session observation remain supported.
 
 Observability remains the primary product experience. Terminals and orchestration
@@ -57,6 +58,10 @@ terminal output or session content; local Community features remain independent.
 See [ROADMAP](ROADMAP.md) for phases, acceptance criteria, pending decisions and
 Phase 1 scope; [CHANGELOG](CHANGELOG.md) records changes. Approval of architectural
 direction does not activate a capability or authorize the next implementation phase.
+
+The [Token Optimizer research](docs/benchmarks/token-optimization.md) is an isolated
+Phase 0 experiment. Disabled/Economy/Intelligent are planned production modes;
+no optimizer setting or automatic token reduction exists in the current runtime.
 
 ## Current architecture at a glance
 

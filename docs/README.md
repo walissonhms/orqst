@@ -19,6 +19,15 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Architecture decisions](architecture/decisions.md) — product and engineering
   decisions.
 
+- [Token Optimizer](architecture/token-optimizer.md) — planned Core boundary,
+  modes, permissions, integration interfaces and evidence-gated activation.
+
+## Research and benchmarks
+
+- [Token optimization](benchmarks/token-optimization.md) — licensed references,
+  isolated synthetic tasks, provider measurements, quality checks, limitations and
+  reproduction. This does not enable production optimization or start Phase 1.
+
 ## Adapters
 
 - [Capability model](adapters/capability-model.md) — capability definitions,

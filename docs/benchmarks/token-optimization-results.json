@@ -1,0 +1,3212 @@
+{
+  "schemaVersion": 1,
+  "kind": "synthetic-tasks-real-codex-usage",
+  "generatedAt": "2026-11-02T19:05:38.263Z",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "node": "v24.22.2",
+    "codex": "codex-cli 0.162.1",
+    "php": "PHP 7.4.33 (cli) (built: Dec 13 2023 21:52:05) ( NTS )",
+    "modelRequested": "gpt-6.1-sol",
+    "reasoningEffort": "low",
+    "userConfigIgnored": true,
+    "ephemeral": true,
+    "sandbox": "read-only",
+    "modelSnapshot": "not-exposed-by-exec-stream",
+    "billingMode": "not-inferred",
+    "optimizerVersion": "independent-experiment-v1",
+    "fixtureVersion": "synthetic-v1",
+    "fixtureDigest": "589cdc42ee623636b284ead48d1c9788b8c8af6728d5079f798704279c972e0f",
+    "scoring": "v1 for non-PHP (unchanged checks); v2 for repeated PHP"
+  },
+  "methodology": {
+    "repetitions": 2,
+    "selected": [
+      "php-laravel",
+      "react-typescript",
+      "bug-fixing",
+      "code-review",
+      "documentation",
+      "long-context",
+      "multi-step"
+    ],
+    "order": "sequential-rotating-modes-by-scenario-and-repetition",
+    "harnessRetries": 0,
+    "providerRetries": null,
+    "costUsd": null,
+    "costReason": "No validated model/billing rate mapping supplied; CLI subscription is not API billing.",
+    "maximumReportedTokens": 1500000,
+    "timeoutMs": 60000,
+    "byteCountsAreTokens": false,
+    "intelligentPrototype": "trusted-fixture-metadata-selection-with-high-risk-fallback-not-learned-adaptation",
+    "executionScope": "standalone-benchmark-outside-ORQST-runtime-and-CI"
+  },
+  "rows": [
+    {
+      "scenario": "php-laravel",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8657,
+      "promptHash": "d14b96c19ed5fcfdb445026946d8049821826edbcfc30a3c38b219f8cd5db022",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.104,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20223,
+        "output": 64,
+        "total": 20287,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 10056,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "db047a191f601d19eadf7073f22d56d21c60e2a57bafb51d55ce1aff482c72e9",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.272,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19979,
+        "output": 64,
+        "total": 20043,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 11637,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "c12bf5ce8120a9f4cf6261027583c5e075a9c1fde2797d67a9788ac7e45a2c35",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.083,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19979,
+        "output": 63,
+        "total": 20042,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 8768,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "afa3f32f4bed13cd3f28adb246b4dc603f56c95547ac978ddd827ddddf0295c0",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.124,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19979,
+        "output": 64,
+        "total": 20043,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 5241,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "c12bf5ce8120a9f4cf6261027583c5e075a9c1fde2797d67a9788ac7e45a2c35",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.083,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19979,
+        "output": 65,
+        "total": 20044,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 7770,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "137dd610750ba5870f675e8a206c6a677ee8fbb5471b8d2dad693ff3a3f832a0",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8657,
+      "promptHash": "d14b96c19ed5fcfdb445026946d8049821826edbcfc30a3c38b219f8cd5db022",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.087,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20223,
+        "output": 64,
+        "total": 20287,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "validatorVersion": 2,
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": true
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": true
+          },
+          {
+            "name": "php-syntax",
+            "passed": true
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 5207,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "db047a191f601d19eadf7073f22d56d21c60e2a57bafb51d55ce1aff482c72e9",
+      "batch": "php-scoring-v2"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7435,
+      "promptHash": "71b356c0110b87c912f11a02e5e4eb3c246da25cb5243b64a813ffe5c315f03c",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.142,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19955,
+        "output": 109,
+        "total": 20064,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7841,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "d9ac670685b63c9edfaa49f63db58850b8dc89d8aee5db80af92f66a2a97ab42",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 1396,
+      "promptHash": "80d0d6fc38ed517df8be47fe24543e12130fe394594798f1ebe99828fbf41cba",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.056,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18882,
+        "output": 137,
+        "total": 19019,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 23,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8299,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "801d943d9204dff4c957661bc0c17909de0991db03d96ee66935bd2b8cb2d7f0",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8421,
+      "promptHash": "134cd5f13addb8cdadd423802ac7b05b6057f8e516da6ce9511e28b7125c9a99",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.043,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20153,
+        "output": 117,
+        "total": 20270,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8489,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "80497144c980bd247a5796fc6c0be32758f3aa7da1f089bd551d43b0572052da",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 1448,
+      "promptHash": "5b4b2d6239d0a4c8a6f1ae623b301a2c02be94d78159517529739e92886aee8a",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.062,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18896,
+        "output": 225,
+        "total": 19121,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 21,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8591,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "f539f4d0da2cff6a246d6c31367edcb806f8587a8295432ed9a74e59b921bb47",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8507,
+      "promptHash": "49e1be749446b869b8beb86bde3b87b816302150cb26036b0528e2f1edf64792",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.049,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20197,
+        "output": 197,
+        "total": 20394,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 11872,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "5607f0c068460d85f341797924e9be7c962d9c6fab51a3c0c9c0def0acbc766b",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7487,
+      "promptHash": "b99373a49b10d0e7f86a2dd5cd965e964edb74215844b4114306c65a1e91b57a",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.062,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19969,
+        "output": 191,
+        "total": 20160,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6957,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "c515a9a549fcdd456352ea2b1064e6458411b5c27ef911ee88bfc53d82a8a731",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8261,
+      "promptHash": "f7ce91fa7d19848a183e7a26d800c40c65076c4bc8aec8cb7b52cc37256229a3",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.099,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20132,
+        "output": 170,
+        "total": 20302,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8394,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "65be52de06ebec8789366ad624d9022bd2f5d866b8b655dbfc5fbd3a6886a537",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7329,
+      "promptHash": "787a6db5e50a0d6b33e0336ae4110581bab36a95d81102da95fb542f6824119f",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.101,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19930,
+        "output": 156,
+        "total": 20086,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7218,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "24a903635fcf8653f08942bddf2586ff0d6a39a3ffd4096eadf00fe2be938f37",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 1290,
+      "promptHash": "073f93e14e0cd4ed0558a50304794a5cc9e375b3a9e69277429ddf9e6630af9d",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.058,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18857,
+        "output": 151,
+        "total": 19008,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6682,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "1187854ee12e45bb3c7f6511df18c3edac289e05b7b563a1a69c1f6fb98a149e",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7464,
+      "promptHash": "e13d266ff96c72ee064b91c642ffdf89141038f0e3a0b308021cf08f41afb0cd",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.091,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19964,
+        "output": 169,
+        "total": 20133,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7505,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "9d1febff2f8dfe90b580e6cb4e59db411b13fb7b802a4b5179b938a18bca9832",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 1425,
+      "promptHash": "acc3bd3bba250d78315e620241e2327a316b06a90498173d4f79dd984a850155",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.182,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18891,
+        "output": 169,
+        "total": 19060,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7121,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "4a30b95d7975dbb48365b94ee561c7628075de45fabd4b3dd295b38adc1c17d7",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8500,
+      "promptHash": "6617adbdb9ac85e915a00d0ab7b051478618c7108e80218ca84992b0382723ca",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.051,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20210,
+        "output": 181,
+        "total": 20391,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7019,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "e6ffb9a39356a0ac70f2bb14671f665f71708b43b8c2a99d0905f5b101e978bb",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 28418,
+      "promptHash": "5a70733db86af3e9990756fe6dabc29eba1267bfa0a530d479478b3ef3c3af9c",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.151,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 23726,
+        "output": 55,
+        "total": 23781,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 4757,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 71606,
+      "promptHash": "9265e069783c2f1fc714782eb00e9203751628dc99b972152d1b4368d710108d",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.231,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 31522,
+        "output": 55,
+        "total": 31577,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 5947,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 28418,
+      "promptHash": "5a70733db86af3e9990756fe6dabc29eba1267bfa0a530d479478b3ef3c3af9c",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.271,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 23726,
+        "output": 55,
+        "total": 23781,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 5009,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8654,
+      "promptHash": "8734dda74bde70875d547538af948c50fabc774367771c999001dcd068dbe008",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.071,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20213,
+        "output": 330,
+        "total": 20543,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 58,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 11388,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "432c6a23a6592178cbc835e16bdbc6f159a0a1862c5300f51625d56527bf9e11",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7566,
+      "promptHash": "9bcb9ab94731ba3dd6ec238cc9691f32830bcd1a2953e87e0ea6a0dadb9de46a",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.065,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19981,
+        "output": 338,
+        "total": 20319,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 43,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8785,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "d6826d921df5ac7cf13a8514682b4e6d836879458568372921149a442b11f1d5",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 7566,
+      "promptHash": "9bcb9ab94731ba3dd6ec238cc9691f32830bcd1a2953e87e0ea6a0dadb9de46a",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.069,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19981,
+        "output": 236,
+        "total": 20217,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7291,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "606113a1d3bed138ddc8f94e5b2e1492810ea3c79367b918e64301e71e4ee734",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 1396,
+      "promptHash": "80d0d6fc38ed517df8be47fe24543e12130fe394594798f1ebe99828fbf41cba",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.061,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18882,
+        "output": 112,
+        "total": 18994,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6431,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "d84f512da332d70f3d3c39cc90081470521c3532d4ee0cbbb66b8cd798a8851f",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8421,
+      "promptHash": "134cd5f13addb8cdadd423802ac7b05b6057f8e516da6ce9511e28b7125c9a99",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.028,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20153,
+        "output": 113,
+        "total": 20266,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 10810,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "02f9442971274622d6521699699acb27f30324f2902e94ae3974f89c39d26c37",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "react-typescript",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7435,
+      "promptHash": "71b356c0110b87c912f11a02e5e4eb3c246da25cb5243b64a813ffe5c315f03c",
+      "protectedHash": "6573c5df23d95a29af8ec5e360a2aed1c855bc8f7427fa5c30b2537ea2592372",
+      "optimizerMs": 0.045,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19955,
+        "output": 112,
+        "total": 20067,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8740,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "801d943d9204dff4c957661bc0c17909de0991db03d96ee66935bd2b8cb2d7f0",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8507,
+      "promptHash": "49e1be749446b869b8beb86bde3b87b816302150cb26036b0528e2f1edf64792",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.038,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20197,
+        "output": 186,
+        "total": 20383,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 8174,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "c5226a18ab9dd8f334cbeb69c53f38b11b97dae0b8218506a399ce72cc743a82",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7487,
+      "promptHash": "b99373a49b10d0e7f86a2dd5cd965e964edb74215844b4114306c65a1e91b57a",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.053,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19969,
+        "output": 186,
+        "total": 20155,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6338,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "c5226a18ab9dd8f334cbeb69c53f38b11b97dae0b8218506a399ce72cc743a82",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "bug-fixing",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 1448,
+      "promptHash": "5b4b2d6239d0a4c8a6f1ae623b301a2c02be94d78159517529739e92886aee8a",
+      "protectedHash": "a7981d3ac589a21228acd5f7a78613a49b59b7134efbeebe37c8eb871bc4e795",
+      "optimizerMs": 0.043,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18896,
+        "output": 213,
+        "total": 19109,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 23,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7652,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "af4a8af0e4c52ba5544933f355c088b2694d3d9b54a67700e52fbc4d060da15e",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7329,
+      "promptHash": "787a6db5e50a0d6b33e0336ae4110581bab36a95d81102da95fb542f6824119f",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.09,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19930,
+        "output": 165,
+        "total": 20095,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6405,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "cbbcdde5bace25598f2d97836b7b8f5e5da83776fdbbcbee132da48e1e08ce24",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 1290,
+      "promptHash": "073f93e14e0cd4ed0558a50304794a5cc9e375b3a9e69277429ddf9e6630af9d",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.08,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18857,
+        "output": 146,
+        "total": 19003,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6822,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "9150c219e47e1baa48df6c6a4c1d989c54df660fea986117a402284767ab92d8",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "code-review",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8261,
+      "promptHash": "f7ce91fa7d19848a183e7a26d800c40c65076c4bc8aec8cb7b52cc37256229a3",
+      "protectedHash": "70aa063a367e465e90f2df1b837fa9bb598ee1eb0e01bb90cf966a3445fc88b2",
+      "optimizerMs": 0.049,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20132,
+        "output": 170,
+        "total": 20302,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "known-findings-only",
+            "passed": true
+          },
+          {
+            "name": "actionable-findings",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7618,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "28556e5aac1de50a7d7ec29676ec6862eecb3058c049bf498cefbe1b1ad0c818",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 1425,
+      "promptHash": "acc3bd3bba250d78315e620241e2327a316b06a90498173d4f79dd984a850155",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.055,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "theme-inventory",
+          "reason": "fixture-declared-unrelated"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 18891,
+        "output": 183,
+        "total": 19074,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 10072,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "196f628fdbcb0c8a92a196cf86cc923709b5363bee87746b8650206bbed760bf",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8500,
+      "promptHash": "6617adbdb9ac85e915a00d0ab7b051478618c7108e80218ca84992b0382723ca",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.065,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20210,
+        "output": 171,
+        "total": 20381,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6762,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "2f48f191c9d28e8beeeecb74ef9289dbbb9ab8ade7c97ca21d6ba8aadc8c55c9",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "documentation",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7464,
+      "promptHash": "e13d266ff96c72ee064b91c642ffdf89141038f0e3a0b308021cf08f41afb0cd",
+      "protectedHash": "2d1498beb8d7c966169009217977df3883f0421a77ac00f6b48cc16b18538409",
+      "optimizerMs": 0.081,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19964,
+        "output": 170,
+        "total": 20134,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "exact-commands-and-runtime",
+            "passed": true
+          },
+          {
+            "name": "documented-boundaries",
+            "passed": true
+          },
+          {
+            "name": "no-invented-features",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7592,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "092411d8d20796662cd43b727250682ab05b79d1ad81c84461e13d33b3680eca",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 71606,
+      "promptHash": "9265e069783c2f1fc714782eb00e9203751628dc99b972152d1b4368d710108d",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.162,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 31522,
+        "output": 55,
+        "total": 31577,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 10128,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 28418,
+      "promptHash": "5a70733db86af3e9990756fe6dabc29eba1267bfa0a530d479478b3ef3c3af9c",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.185,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 23726,
+        "output": 55,
+        "total": 23781,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6218,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "long-context",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 28418,
+      "promptHash": "5a70733db86af3e9990756fe6dabc29eba1267bfa0a530d479478b3ef3c3af9c",
+      "protectedHash": "662b7fa541242b9dd21f7c9fa9efd2ee914f8099a2f8b3331be1eaedf0254474",
+      "optimizerMs": 0.182,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 23726,
+        "output": 55,
+        "total": 23781,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "retention-and-rare-exception",
+            "passed": true
+          },
+          {
+            "name": "security-and-native-history",
+            "passed": true
+          }
+        ],
+        "scope": "bounded-content-assertions-not-complete-semantic-equivalence",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 5560,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "8da42a7b1ca1a348c9171a6fbd33352482e8300672249c90b49f398f89f116ab",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7566,
+      "promptHash": "9bcb9ab94731ba3dd6ec238cc9691f32830bcd1a2953e87e0ea6a0dadb9de46a",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.106,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19981,
+        "output": 228,
+        "total": 20209,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 6536,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "01c6aea47de2743d430389230ca6c9a1371ed31a0c38aaa744a0441c556311ac",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 7566,
+      "promptHash": "9bcb9ab94731ba3dd6ec238cc9691f32830bcd1a2953e87e0ea6a0dadb9de46a",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.036,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19981,
+        "output": 250,
+        "total": 20231,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 7795,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "d4692d4e50c72a4c9b75dee2d1da2d3faf5f2c35fb75700c88e780d24878d9ca",
+      "batch": "initial-v1"
+    },
+    {
+      "scenario": "multi-step",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8654,
+      "promptHash": "8734dda74bde70875d547538af948c50fabc774367771c999001dcd068dbe008",
+      "protectedHash": "d9dd106af4b51a68cc8f8cc78acee957435be183c04e7dab413cd52fe449234b",
+      "optimizerMs": 0.048,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20213,
+        "output": 266,
+        "total": 20479,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": true,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": true
+          },
+          {
+            "name": "typescript-syntax",
+            "passed": true
+          },
+          {
+            "name": "functional-and-negative-cases",
+            "passed": true
+          }
+        ],
+        "scope": "transpilation-and-browser-functional-cases-not-full-framework",
+        "validatorVersion": 1
+      },
+      "elapsedMs": 11496,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "f74b830b93e942f6f7d074b332950f1e1564352d41bfb245ee6e779f89a162b9",
+      "batch": "initial-v1"
+    }
+  ],
+  "stoppedByTokenLimit": false,
+  "observedTotalIncludingFailedRows": 877005,
+  "rawResponsesPersisted": false,
+  "excludedScoringRows": [
+    {
+      "scenario": "php-laravel",
+      "mode": "disabled",
+      "repetition": 1,
+      "promptBytes": 8657,
+      "promptHash": "d14b96c19ed5fcfdb445026946d8049821826edbcfc30a3c38b219f8cd5db022",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.154,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20225,
+        "output": 63,
+        "total": 20288,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 9069,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "2250df2b6b166d5be81cb3e2a0ae615b57a49b7bcf10c1045629e1ce6811def9",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "economy",
+      "repetition": 1,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.136,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19981,
+        "output": 64,
+        "total": 20045,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 7536,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "db047a191f601d19eadf7073f22d56d21c60e2a57bafb51d55ce1aff482c72e9",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "intelligent",
+      "repetition": 1,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.078,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19981,
+        "output": 64,
+        "total": 20045,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 5202,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "db047a191f601d19eadf7073f22d56d21c60e2a57bafb51d55ce1aff482c72e9",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "economy",
+      "repetition": 2,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.057,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": null,
+      "usage": {
+        "input": 19981,
+        "output": 64,
+        "total": 20045,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 7642,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "91193d738d4fae8fd4272e451841ba245147d00bd7adc5f631fdab9dfa5e9455",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "intelligent",
+      "repetition": 2,
+      "promptBytes": 7517,
+      "promptHash": "96283c8b18f036df85d58cfe3fa2ea7442cdb9ad61f81bf9c828708a585cdee2",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.054,
+      "removed": [
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        },
+        {
+          "id": "source-a",
+          "reason": "identical-snapshot"
+        }
+      ],
+      "fallback": "economy-risk-guard",
+      "usage": {
+        "input": 19981,
+        "output": 65,
+        "total": 20046,
+        "cached": 0,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 7221,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "b7c220b929fb9f42ee6800b26778c0c3e4a2a70a2aa5e68a4f3e35b2db38d556",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    },
+    {
+      "scenario": "php-laravel",
+      "mode": "disabled",
+      "repetition": 2,
+      "promptBytes": 8657,
+      "promptHash": "d14b96c19ed5fcfdb445026946d8049821826edbcfc30a3c38b219f8cd5db022",
+      "protectedHash": "f5271007226cd4fb66483fb55a3c82ac1dc41a06957d186d1a1981ec46d7d557",
+      "optimizerMs": 0.06,
+      "removed": [],
+      "fallback": null,
+      "usage": {
+        "input": 20225,
+        "output": 64,
+        "total": 20289,
+        "cached": 17408,
+        "cacheWrite": 0,
+        "reasoningOutput": 0,
+        "quality": "observed",
+        "source": "codex-exec-turn.completed",
+        "cachedIsSubsetOfInput": true
+      },
+      "quality": {
+        "passed": false,
+        "checks": [
+          {
+            "name": "important-instructions",
+            "passed": false
+          },
+          {
+            "name": "bound-tenant-query-grammar",
+            "passed": false
+          },
+          {
+            "name": "query-reference-cases",
+            "passed": false
+          },
+          {
+            "name": "php-syntax",
+            "passed": false
+          }
+        ],
+        "scope": "restricted-query-grammar-and-php-lint-not-laravel-integration"
+      },
+      "elapsedMs": 12027,
+      "harnessRetries": 0,
+      "providerRetries": null,
+      "costUsd": null,
+      "toolCalls": 0,
+      "failure": null,
+      "stderrPresent": false,
+      "answerHash": "db047a191f601d19eadf7073f22d56d21c60e2a57bafb51d55ce1aff482c72e9",
+      "batch": "initial-v1",
+      "exclusion": "Validator wrongly required statement semicolon and exact fact labels; original candidate not retained for rescoring."
+    }
+  ],
+  "scoringCorrection": "PHP expressions may omit a statement terminator; fact labels may include a colon and explanation. Predicate/content checks remain strict. Only six PHP cells were rerun with unchanged prompts/model/configuration; failed scoring rows are retained separately.",
+  "additionalDiagnostics": {
+    "calls": 2,
+    "input": 38566,
+    "output": 67,
+    "total": 38633,
+    "cached": 29568,
+    "scope": "availability probe plus PHP scoring investigation; not comparative trials"
+  },
+  "experimentResourceUsage": {
+    "benchmarkCalls": 48,
+    "diagnosticCalls": 2,
+    "totalReportedTokens": 1036384
+  },
+  "summary": {
+    "kind": "synthetic-tasks-real-codex-usage",
+    "aggregates": [
+      {
+        "mode": "disabled",
+        "trials": 14,
+        "qualityPassed": 14,
+        "measured": 14,
+        "input": 305300,
+        "output": 2139,
+        "total": 307439,
+        "cached": 17408,
+        "elapsedMs": 123360,
+        "optimizerMs": 1.125,
+        "promptBytes": 245212
+      },
+      {
+        "mode": "economy",
+        "trials": 14,
+        "qualityPassed": 14,
+        "measured": 14,
+        "input": 287008,
+        "output": 2062,
+        "total": 289070,
+        "cached": 69632,
+        "elapsedMs": 102022,
+        "optimizerMs": 1.6880000000000002,
+        "promptBytes": 146432
+      },
+      {
+        "mode": "intelligent",
+        "trials": 14,
+        "qualityPassed": 14,
+        "measured": 14,
+        "input": 278424,
+        "output": 2060,
+        "total": 280484,
+        "cached": 69632,
+        "elapsedMs": 103611,
+        "optimizerMs": 1.201,
+        "promptBytes": 98120
+      }
+    ],
+    "results": [
+      {
+        "mode": "economy",
+        "pairs": 14,
+        "eligiblePairs": 14,
+        "excludedPairs": 0,
+        "regressions": 0,
+        "qualityQualifiedTotalReductionPct": 5.975,
+        "completeFixtureBenefit": true,
+        "productionBenefitVerified": false
+      },
+      {
+        "mode": "intelligent",
+        "pairs": 14,
+        "eligiblePairs": 14,
+        "excludedPairs": 0,
+        "regressions": 0,
+        "qualityQualifiedTotalReductionPct": 8.768,
+        "completeFixtureBenefit": true,
+        "productionBenefitVerified": false
+      }
+    ],
+    "comparisons": [
+      {
+        "scenario": "php-laravel",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20287,
+        "optimizedTotal": 20043,
+        "totalReductionPct": 1.203,
+        "exclusion": null
+      },
+      {
+        "scenario": "php-laravel",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20287,
+        "optimizedTotal": 20042,
+        "totalReductionPct": 1.208,
+        "exclusion": null
+      },
+      {
+        "scenario": "php-laravel",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20287,
+        "optimizedTotal": 20043,
+        "totalReductionPct": 1.203,
+        "exclusion": null
+      },
+      {
+        "scenario": "php-laravel",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20287,
+        "optimizedTotal": 20044,
+        "totalReductionPct": 1.198,
+        "exclusion": null
+      },
+      {
+        "scenario": "react-typescript",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20270,
+        "optimizedTotal": 20064,
+        "totalReductionPct": 1.016,
+        "exclusion": null
+      },
+      {
+        "scenario": "react-typescript",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20270,
+        "optimizedTotal": 19019,
+        "totalReductionPct": 6.172,
+        "exclusion": null
+      },
+      {
+        "scenario": "bug-fixing",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20394,
+        "optimizedTotal": 20160,
+        "totalReductionPct": 1.147,
+        "exclusion": null
+      },
+      {
+        "scenario": "bug-fixing",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20394,
+        "optimizedTotal": 19121,
+        "totalReductionPct": 6.242,
+        "exclusion": null
+      },
+      {
+        "scenario": "code-review",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20302,
+        "optimizedTotal": 20086,
+        "totalReductionPct": 1.064,
+        "exclusion": null
+      },
+      {
+        "scenario": "code-review",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20302,
+        "optimizedTotal": 19008,
+        "totalReductionPct": 6.374,
+        "exclusion": null
+      },
+      {
+        "scenario": "documentation",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20391,
+        "optimizedTotal": 20133,
+        "totalReductionPct": 1.265,
+        "exclusion": null
+      },
+      {
+        "scenario": "documentation",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20391,
+        "optimizedTotal": 19060,
+        "totalReductionPct": 6.527,
+        "exclusion": null
+      },
+      {
+        "scenario": "long-context",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 31577,
+        "optimizedTotal": 23781,
+        "totalReductionPct": 24.689,
+        "exclusion": null
+      },
+      {
+        "scenario": "long-context",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 31577,
+        "optimizedTotal": 23781,
+        "totalReductionPct": 24.689,
+        "exclusion": null
+      },
+      {
+        "scenario": "multi-step",
+        "repetition": 1,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20543,
+        "optimizedTotal": 20319,
+        "totalReductionPct": 1.09,
+        "exclusion": null
+      },
+      {
+        "scenario": "multi-step",
+        "repetition": 1,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20543,
+        "optimizedTotal": 20217,
+        "totalReductionPct": 1.587,
+        "exclusion": null
+      },
+      {
+        "scenario": "react-typescript",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20266,
+        "optimizedTotal": 20067,
+        "totalReductionPct": 0.982,
+        "exclusion": null
+      },
+      {
+        "scenario": "react-typescript",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20266,
+        "optimizedTotal": 18994,
+        "totalReductionPct": 6.277,
+        "exclusion": null
+      },
+      {
+        "scenario": "bug-fixing",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20383,
+        "optimizedTotal": 20155,
+        "totalReductionPct": 1.119,
+        "exclusion": null
+      },
+      {
+        "scenario": "bug-fixing",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20383,
+        "optimizedTotal": 19109,
+        "totalReductionPct": 6.25,
+        "exclusion": null
+      },
+      {
+        "scenario": "code-review",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20302,
+        "optimizedTotal": 20095,
+        "totalReductionPct": 1.02,
+        "exclusion": null
+      },
+      {
+        "scenario": "code-review",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20302,
+        "optimizedTotal": 19003,
+        "totalReductionPct": 6.398,
+        "exclusion": null
+      },
+      {
+        "scenario": "documentation",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20381,
+        "optimizedTotal": 20134,
+        "totalReductionPct": 1.212,
+        "exclusion": null
+      },
+      {
+        "scenario": "documentation",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20381,
+        "optimizedTotal": 19074,
+        "totalReductionPct": 6.413,
+        "exclusion": null
+      },
+      {
+        "scenario": "long-context",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 31577,
+        "optimizedTotal": 23781,
+        "totalReductionPct": 24.689,
+        "exclusion": null
+      },
+      {
+        "scenario": "long-context",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 31577,
+        "optimizedTotal": 23781,
+        "totalReductionPct": 24.689,
+        "exclusion": null
+      },
+      {
+        "scenario": "multi-step",
+        "repetition": 2,
+        "mode": "economy",
+        "valid": true,
+        "baselineTotal": 20479,
+        "optimizedTotal": 20209,
+        "totalReductionPct": 1.318,
+        "exclusion": null
+      },
+      {
+        "scenario": "multi-step",
+        "repetition": 2,
+        "mode": "intelligent",
+        "valid": true,
+        "baselineTotal": 20479,
+        "optimizedTotal": 20231,
+        "totalReductionPct": 1.211,
+        "exclusion": null
+      }
+    ],
+    "limitations": [
+      "Synthetic duplicated-context tasks; not representative production traces.",
+      "Quality checks are bounded; no full Laravel/React application integration.",
+      "Model snapshot, provider retries and monetary billing are not exposed/validated.",
+      "No calibrated confidence interval; cache state and provider variability are uncontrolled."
+    ]
+  }
+}

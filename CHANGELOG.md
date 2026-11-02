@@ -7,6 +7,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Foundational Token Optimizer architecture (ADR-025), Disabled/Economy/Intelligent
+  design and integration contracts for future Core, routing, adapters and analytics.
+- Standalone synthetic token-optimization benchmark with fixed-model provider
+  usage, bounded quality checks, offline context comparison and reproducible report.
+  No production dependency or optimizer is enabled.
+
 - Phase 0 ADRs 015–024 for future managed execution, independent Core lifecycle,
   resource states, permissions, recovery, native history references, structured
   delegation, Cloud privacy, observability quality and contract compatibility.
@@ -27,7 +33,8 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Compatibility
 
-- Phase 0 is architecture and documentation only. Bridge/dashboard behavior,
+- Phase 0 includes architecture/documentation and isolated optimizer experiments.
+  Bridge/dashboard behavior,
   Codex monitoring, exported TypeScript contracts, v1 APIs/events, database schema,
   dependencies, package versions and Apache-2.0 licensing are unchanged.
 - No Electron, PTY, managed execution, delegation or Cloud implementation is

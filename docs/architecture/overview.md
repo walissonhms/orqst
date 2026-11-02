@@ -275,3 +275,24 @@ uses authorized endpoint connectivity, not central history or event ingestion.
 See [Cloud privacy](../commercial/cloud-architecture.md). All contracts/docs/code
 remain English; user-facing keys remain en-US and pt-BR. Phase 1 and later changes
 require separate approval and documentation/validation for their actual scope.
+
+## Foundational Token Optimizer — research and planned integration
+
+Token optimization supports the observability-first product from the start. The
+future Core composes an independent, provider-aware optimizer domain boundary;
+it does not require Electron, Cloud or a particular model-compression library.
+See [ADR-025](decisions.md#adr-025--independent-token-optimizer-and-evidence-gated-activation),
+[contracts and safety gates](token-optimizer.md), and
+[research/benchmark evidence](../benchmarks/token-optimization.md).
+
+Disabled preserves supplied context. Economy permits conservative, traceable
+reductions. Intelligent adapts only with validated task/capability/performance
+evidence and falls back when uncertain. External observation sessions remain
+untouched without explicit authorization. Optimization cannot bypass permissions,
+rewrite native history or silently remove required instructions/code.
+
+The intended managed-session default is safe optimization after correctness and
+net-benefit validation; no production optimizer or enabled mode exists today.
+Standalone synthetic benchmarks are explicitly authorized research outside the
+application runtime and automatic CI. Their evidence does not start Phase 1 or
+implement managed execution, routing, orchestration or adapters.
