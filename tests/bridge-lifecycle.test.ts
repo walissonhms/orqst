@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 import { ObserverCore } from '@orqst/core';
+import { CodexObserver } from '@orqst/adapter-codex';
 import { Store } from '@orqst/database';
 import type { Snapshot, StreamMessage } from '@orqst/protocol';
 import { createBridge } from '../apps/bridge/src/app.js';
@@ -56,7 +57,7 @@ test('Bridge readiness includes initial import; v1 replay/live delivery survives
     const snapshot = (await snapshotResponse.json()) as Snapshot;
     assert.equal(snapshot.sessions.length, 1);
     assert.equal(snapshot.sessions[0]?.id, 'synthetic-session');
-    assert.equal(snapshot.diagnostics.scanning, false);
+    assert.equal(bridge.core.state, 'ready');
     assert.deepEqual(Object.keys(snapshot).sort(), [
       'adapters',
       'cursor',
@@ -137,6 +138,78 @@ test('Bridge readiness includes initial import; v1 replay/live delivery survives
     await assert.rejects(bridge.start(), /cannot be restarted/);
   } finally {
     socket?.terminate();
+    await bridge.stop();
+    await rm(ctx.dir, { recursive: true, force: true });
+  }
+});
+
+test('Bridge awaits the controlled first scan and stays ready during a later periodic scan', async (t) => {
+  const ctx = await setup();
+  const firstEntered = deferred();
+  const firstRelease = deferred();
+  const periodicEntered = deferred();
+  const periodicRelease = deferred();
+  const periodicDone = deferred();
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  let scans = 0;
+  const core = new ObserverCore(ctx.config, {
+    createObserver(options) {
+      const observer = new CodexObserver(options);
+      const scan = observer.scan.bind(observer);
+      t.mock.method(observer, 'scan', async () => {
+        const first = ++scans === 1;
+        observer.diagnostics.scanning = true;
+        (first ? firstEntered : periodicEntered).resolve();
+        await (first ? firstRelease : periodicRelease).promise;
+        await scan();
+        if (!first) periodicDone.resolve();
+      });
+      return observer;
+    },
+  });
+  const bridge = createBridge(ctx.config, core);
+  let settled = false;
+  try {
+    const starting = bridge.start();
+    void starting.then(() => {
+      settled = true;
+    });
+    await firstEntered.promise;
+    assert.equal(core.state, 'starting');
+    assert.equal(core.diagnostics.scanning, true);
+    assert.equal(core.store.cursor(), 0);
+    await Promise.resolve();
+    assert.equal(settled, false);
+    firstRelease.resolve();
+    const port = await starting;
+    assert.equal(settled, true);
+    assert.equal(core.state, 'ready');
+    assert.equal(core.diagnostics.scanning, false);
+    assert.equal(core.store.sessions()[0]?.id, 'synthetic-session');
+    assert.ok(core.store.cursor() > 0);
+
+    // Trigger the actual observer's interval without a sleep or a larger pollMs.
+    t.mock.timers.tick(ctx.config.pollMs);
+    await periodicEntered.promise;
+    assert.equal(core.diagnostics.scanning, true);
+    assert.equal(core.state, 'ready');
+    assert.equal(bridge.start(), starting);
+    assert.equal(await bridge.start(), port);
+    const base = `http://127.0.0.1:${port}`;
+    const bootstrap = await fetch(base + '/api/bootstrap');
+    const cookie = bootstrap.headers.get('set-cookie')!.split(';')[0]!;
+    const response = await fetch(base + '/api/snapshot', { headers: { Cookie: cookie } });
+    const snapshot = (await response.json()) as Snapshot;
+    assert.equal(snapshot.diagnostics.scanning, true);
+    assert.equal(snapshot.sessions[0]?.id, 'synthetic-session');
+    assert.equal(core.state, 'ready');
+    periodicRelease.resolve();
+    await periodicDone.promise;
+    assert.equal(core.diagnostics.scanning, false);
+    assert.equal(core.state, 'ready');
+  } finally {
+    firstRelease.resolve();
+    periodicRelease.resolve();
     await bridge.stop();
     await rm(ctx.dir, { recursive: true, force: true });
   }
