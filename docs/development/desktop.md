@@ -238,10 +238,24 @@ Official references checked for this boundary: [dialog](https://www.electronjs.o
 
 ## Analytics export boundary
 
-The shared Analytics view displays an explicit Desktop-unavailable explanation and
-no CSV/Markdown export buttons. Downloads remain denied. Browser aggregate export
-does not extend `orqstArtifacts`, preload, main IPC or the Markdown file grant. A
-separate Analytics-only native contract, main-process aggregate refetch/validation
-and destination/overwrite review remain pending. The disposable Electron smoke
-checks the real preload/view boundary without opening the user's Desktop/profile.
-See [browser export and proposed native boundary](../api/analytics-export.md).
+Supported clients offer native CSV/Markdown save through `orqstAnalytics` v1, separate
+from Artifacts. Native downloads remain denied; old clients without this capability
+show an unavailable explanation. Main reobtains the current validated aggregate,
+compares the confirmed reading's digest/query/cursor and checks live context after
+async work. Refresh/filter/ranking/connection/document changes revoke pending authority.
+One file operation runs at a time; cancelled/busy/consumed readings require Refresh.
+
+Only a native destination and explicit replacement confirmation authorize writing.
+CSV requires exactly `.csv`, Markdown `.md`; output and existing destinations are
+bounded to 2 MiB with the same descriptor policy as Artifacts. There is no external
+open. Two sequential revalidations each have a 15-second HTTP/body deadline and can
+fail busy without retry. This is not an atomic database-to-file snapshot or atomic
+replacement. See the [full native contract and review](../api/analytics-export.md).
+
+The disposable smoke covers real preload/IPC, authenticated aggregate retrieval,
+CSV/Markdown writes, cancel, overwrite denial/approval, extension refusal and context
+revocation. Native dialogs and external dispatch are intercepted; this does not prove
+native visual acceptance. The profile, Bridge, sessions and files are synthetic and
+disposable. `ORQST_DESKTOP_SMOKE_OUTPUT` optionally places screenshots in an exclusive
+output directory; by default they are discarded with the temporary profile. Never
+use the owner's profile or installed Bridge for this smoke.

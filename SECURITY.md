@@ -283,5 +283,23 @@ and replacement; ORQST cannot confirm a disk save.
 
 Offline/stale/failed reads cannot export; recovery needs a fresh response. No endpoint,
 authentication, database, source-file or native grant changes. Desktop downloads
-remain denied and Analytics save is pending, without repurposing Artifacts authority.
+remain denied. A separate native Analytics capability is described below.
 See the [export contract and review](docs/api/analytics-export.md).
+
+## Native aggregate Analytics export
+
+The strict Analytics-only IPC accepts a bounded reading/query/digest and format,
+never page content or a destination. Main checks the live sender/session/main-frame
+and document generation, consumes context, reobtains the authenticated aggregate
+and compares it to the confirmed reading before and after native dialogs. Fixed
+empty-event cursor checks avoid fetching session snapshots. Context updates revoke
+pending saves even while a dialog is open; old acknowledgments cannot reauthorize.
+One file operation is admitted across Analytics/Artifacts, without queued retries.
+
+A native chooser and concrete replacement confirmation grant only this operation's
+`.csv` or `.md` destination. The shared descriptor policy preserves Artifacts' 32 KiB
+Markdown limit and enforces Analytics' 2 MiB limit. There is no generic filesystem,
+shell or open capability. Partial failure/race and concurrent post-check source
+changes remain possible; no atomic database-to-file snapshot or rollback is claimed.
+Model identifiers can contain private metadata, and encoding is not redaction.
+See [contract and security review](docs/api/analytics-export.md).

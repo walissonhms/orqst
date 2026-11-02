@@ -37,8 +37,10 @@ verified pricing, Fast and animations remain planned. See [contract](docs/api/li
 The browser Analytics export increment adds gesture-only CSV/Markdown of the current
 validated aggregate with explicit coverage/nulls and bounded privacy/syntax controls.
 Observed model IDs may contain private metadata; the warning is part of the flow.
-Desktop Analytics saving remains pending a separate narrow native grant; download
-denial and Artifacts authority are unchanged. See [export contract](docs/api/analytics-export.md).
+Desktop Analytics now adds a separate narrow native save grant with exact-reading
+revalidation and native destination/overwrite dialogs. Download denial and the
+Artifacts contract are preserved; native visual acceptance remains pending. See
+[export contract](docs/api/analytics-export.md).
 
 ## Mandatory quality and security criteria for each increment
 

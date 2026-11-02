@@ -59,9 +59,11 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   or `/#models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
   CLI adapter. Unknown models, missing usage and incomplete coverage stay explicit.
-  Browser CSV/Markdown export now projects the current aggregate with bounded validation,
+  CSV/Markdown export now projects the current aggregate with bounded validation,
   spreadsheet literals and inert Markdown. Model IDs may contain private metadata;
-  review before sharing. Native Desktop Analytics save remains pending. See the
+  review before sharing. Desktop can save the same aggregate through a dedicated
+  native dialog and exact-reading revalidation; it never accepts page-supplied report
+  content or paths. See the
   [export contract](docs/api/analytics-export.md).
 - **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
   robust provider integrations, managed sessions, evidence-gated optimizer integration,
@@ -344,8 +346,9 @@ and [SECURITY.md](SECURITY.md).
   disconnect/shutdown cancel and await cleanup. Explicit errors show no partial sums.
   Native SQL cleanup can delay termination. Narrow workspace, agent or adapter scopes
   may help; a shorter period can need the same history.
-  Time series, native Desktop export, task-qualified comparisons, verified costs and full Desktop delivery
-  remain pending. Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
+  Time series, task-qualified comparisons, verified costs and full Desktop delivery
+  remain pending. Native aggregate CSV/Markdown save is implemented with the limits
+  in the [export contract](docs/api/analytics-export.md). Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
   report provider quota.
@@ -355,7 +358,20 @@ and [SECURITY.md](SECURITY.md).
 
 ## Validation status
 
-The browser aggregate Analytics export increment passed lint, typecheck, 187 Node
+The native aggregate Analytics export increment (2026-11-02) passed lint, typecheck,
+202 Node tests (including 15 independent native-export QA cases), full build and
+an Electron45.2.1/Node24.22.1/arm64 disposable smoke. The final affected browser checks
+passed 3/3; independent QA passed all 39 Chromium cases with exclusive port/state/output.
+The smoke uses real preload/IPC, authenticated refetch and synthetic file writes;
+native destination/overwrite dialogs and external dispatch are intercepted. It covers
+CSV/Markdown, cancel, overwrite denial/approval, extension refusal, live revocation and
+Artifacts regressions. Tests also cover consumed readings, delayed contexts, and
+query/ranking/cursor/connection/document changes during choose and confirmation.
+Native visual acceptance, real spreadsheet import, real-provider multi-model coverage
+and the full Desktop MVP remain unvalidated. No ingestion changed; `validate:local`
+was not run. The user's Desktop, installed Bridge, database and sessions were preserved.
+
+The earlier browser-only aggregate Analytics export increment (`a47f799`) passed lint, typecheck, 187 Node
 tests (including 18 independent export QA cases), full build and disposable
 Electron45.2.1/arm64 smoke with final `result: passed` and successful cleanup. The
 unmocked synthetic observer/worker/API test downloads a reconciled CSV. Independent
@@ -363,8 +379,9 @@ QA passed the complete 36-case Chromium suite with isolated port/state/output,
 including current-query/connection gates and both older Desktop UA and current
 preload detection. Initial runs against evolving QA exposed encoded-text assertions
 and fixture timing assumptions; the corrected tests retain the negative checks.
-All export evidence is synthetic. Real-provider multi-model acceptance, native
-Desktop Analytics save and real spreadsheet-import acceptance remain pending.
+That browser-stage export evidence is synthetic. At `a47f799`, native Desktop Analytics
+save was still pending; the native increment above now implements it. Real-provider
+multi-model and real spreadsheet-import acceptance remain pending.
 No ingestion changed, so `validate:local` and token-consuming live tests were not
 run for this increment. User Desktop/service/storage were preserved without restart.
 See [export fields, limits and privacy](docs/api/analytics-export.md).

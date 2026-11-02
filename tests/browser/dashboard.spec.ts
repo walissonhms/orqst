@@ -41,7 +41,7 @@ test('synthetic session renders, localization persists, results are escaped, wor
   await expect(page.getByLabel('Enable sound', { exact: true })).toBeChecked();
   await page.getByRole('button', { name: 'Close', exact: true }).last().click();
   expect(errors).toEqual([]);
-  await page.screenshot({ path: '/tmp/orqst-desktop.png', fullPage: true });
+  await page.screenshot({ path: test.info().outputPath('orqst-desktop.png'), fullPage: true });
 });
 test('mobile layout stays within the viewport and exposes workspace navigation', async ({
   page,
@@ -53,7 +53,7 @@ test('mobile layout stays within the viewport and exposes workspace navigation',
   await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
   await expect(page.getByRole('navigation', { name: 'Workspaces' })).toBeVisible();
   await page.getByRole('button', { name: 'All workspaces', exact: false }).click();
-  await page.screenshot({ path: '/tmp/orqst-mobile.png', fullPage: true });
+  await page.screenshot({ path: test.info().outputPath('orqst-mobile.png'), fullPage: true });
 });
 
 test('new external source records update the page and notification history without refresh', async ({

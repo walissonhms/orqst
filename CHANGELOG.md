@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased — native aggregate Analytics save
+
+- Desktop can save bounded Analytics CSV/Markdown with a separate strict capability,
+  authenticated exact-reading revalidation, live revocation and native destination/
+  replacement dialogs. Browser representation and Artifacts' save contract remain.
+- Shared serialization preserves aggregate privacy limits, inert text and safe-integer
+  precision. Model IDs may still contain private information. In-place writes and
+  source changes after final validation are not atomic; native visual acceptance,
+  real spreadsheet import and complete Desktop MVP acceptance remain pending.
+
 Changes are grouped by release using semantic versioning. `Unreleased` does not
 announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 

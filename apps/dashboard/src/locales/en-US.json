@@ -227,13 +227,32 @@
     "export": {
       "title": "Export aggregate report",
       "privacy": "Observed model IDs are arbitrary metadata and may contain private information or secrets. Review them before exporting or sharing. Agent and workspace filter values and individual evidence are omitted.",
-      "desktop": "Analytics export is not available in Desktop yet. Native CSV/Markdown save needs a separate permission review; Desktop downloads remain blocked.",
+      "desktop": "This Desktop client does not support native Analytics save. Update the client; downloads remain blocked.",
       "csv": "Export CSV",
       "markdown": "Export Markdown",
       "download": "Downloads the current validated aggregate in the displayed ranking order. Your browser controls the destination and replacement behavior; ORQST cannot confirm that a file was saved.",
       "blocked": "Export is blocked until a new current report is available while connected. Refresh, filter changes, errors and reconnection require a new response.",
       "failed": "Export failed validation or exceeded its limits. No report was downloaded.",
-      "limits": "This report cannot be exported: export requires at most 5,000 model buckets, model IDs of 1–256 UTF-16 characters and consistent safe-integer aggregates. The displayed report is preserved."
+      "limits": "This report cannot be exported: export requires at most 5,000 model buckets, model IDs of 1–256 UTF-16 characters and consistent safe-integer aggregates. The displayed report is preserved.",
+      "nativeTitle": "Save aggregate Analytics report",
+      "nativeOverwrite": "Replace Analytics report?",
+      "nativeReading": "{{format}} · {{ranking}} · Read {{at}} · {{sessions}} observed sessions · {{tokens}} reported tokens. UTC [{{from}}, {{to}}). {{filters}}. Filter values are omitted from the file. Model IDs may contain private information. Save this confirmed reading only.",
+      "nativeHelp": "Choose a native destination for this reading. CSV requires .csv and Markdown requires .md. Existing files require confirmation. No external application is opened.",
+      "nativePending": "Checking this reading and waiting for native permission. Concurrent queries can be busy; there is no queue or automatic retry.",
+      "nativeRefresh": "A new current reading is required before saving again. Use Refresh; changes or reconnection revoke the previous reading.",
+      "nativeResults": {
+        "saved": "Report saved. Refresh for another export.",
+        "cancelled": "Save cancelled. No report was written. Refresh before another attempt.",
+        "failed": "Save was refused before writing. Check the destination and refresh before another attempt.",
+        "write_failed": "Writing failed after the destination was touched. A partial or changed file may remain; inspect it before retrying.",
+        "stale": "The reading changed or permission was revoked. No report was written. Refresh and review the new reading.",
+        "unavailable": "Analytics is unavailable or failed bounded validation. No report was written. Refresh before retrying.",
+        "busy": "Another local query or file operation is busy. No report was written. Refresh after it finishes.",
+        "acknowledged": "Reading ready."
+      },
+      "unbounded": "unbounded",
+      "filterAll": "all",
+      "filterApplied": "applied (value omitted)"
     }
   },
   "desktopShell": {

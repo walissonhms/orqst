@@ -108,12 +108,18 @@ test('main source enforces the Electron trust boundary and has no privileged run
     "default-src 'none'",
     'frame-ancestors',
     "ipcMain.handle('orqst:save-markdown'",
+    "ipcMain.handle('orqst:analytics-export'",
+    "removeHandler('orqst:analytics-export')",
     'authorizedArtifactSender',
     'dialog.showSaveDialog',
     'shell.openPath',
   ])
     assert.ok(main.includes(required), required);
-  assert.equal((main.match(/ipcMain\.handle\(/g) ?? []).length, 1);
+  // Exactly two narrow channels: Artifacts save and Analytics export.
+  assert.deepEqual(
+    [...main.matchAll(/ipcMain\.handle\('([^']+)'/g)].map((match) => match[1]).sort(),
+    ['orqst:analytics-export', 'orqst:save-markdown'],
+  );
   assert.equal(main.includes('ipcMain.on('), false);
   for (const forbidden of [
     'child_process',

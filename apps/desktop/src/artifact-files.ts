@@ -25,18 +25,18 @@ function same(a: BigIntStats, b: BigIntStats): boolean {
     a.ctimeNs === b.ctimeNs
   );
 }
-function regular(stat: BigIntStats): void {
+function regular(stat: BigIntStats, limit: number): void {
   if (
     !stat.isFile() ||
     stat.nlink !== 1n ||
     (stat.mode & 0o111n) !== 0n ||
-    stat.size > BigInt(artifactTextLimit)
+    stat.size > BigInt(limit)
   )
     throw new Error('Unsafe destination');
 }
-function bytes(fd: number): Buffer {
+function bytes(fd: number, limit: number): Buffer {
   const stat = fstatSync(fd, { bigint: true });
-  regular(stat);
+  regular(stat, limit);
   const value = Buffer.alloc(Number(stat.size));
   let offset = 0;
   while (offset < value.length) {
@@ -49,7 +49,7 @@ function bytes(fd: number): Buffer {
 }
 
 /** A native-dialog destination, held only in main for this operation; never serialized. */
-export class MarkdownDestination {
+export class ReportDestination {
   readonly path: string;
   readonly exists: boolean;
   private readonly parent: string;
@@ -60,14 +60,18 @@ export class MarkdownDestination {
   private closed = false;
   touched = false;
 
-  constructor(selected: string) {
+  constructor(
+    selected: string,
+    private readonly extension: '.md' | '.csv',
+    private readonly limit: number,
+  ) {
     if (
       !isAbsolute(selected) ||
       Array.from(selected).some((character) => {
         const code = character.charCodeAt(0);
         return code < 32 || code === 127;
       }) ||
-      extname(selected) !== '.md'
+      extname(selected) !== this.extension
     )
       throw new Error('Invalid destination');
     this.parent = realpathSync(dirname(selected));
@@ -82,12 +86,12 @@ export class MarkdownDestination {
       this.exists = false;
       return;
     }
-    regular(stat);
+    regular(stat, this.limit);
     this.exists = true;
     const fd = openSync(this.path, constants.O_RDWR | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       if (!same(stat, fstatSync(fd, { bigint: true }))) throw new Error('Destination changed');
-      this.original = bytes(fd);
+      this.original = bytes(fd, this.limit);
       this.snapshot = fstatSync(fd, { bigint: true });
       this.fd = fd;
       this.check();
@@ -116,7 +120,7 @@ export class MarkdownDestination {
     if (
       !same(this.snapshot, lstatSync(this.path, { bigint: true })) ||
       !same(this.snapshot, fstatSync(this.fd, { bigint: true })) ||
-      !this.original.equals(bytes(this.fd))
+      !this.original.equals(bytes(this.fd, this.limit))
     )
       throw new Error('Destination changed');
   }
@@ -126,7 +130,7 @@ export class MarkdownDestination {
     if (
       Buffer.from(text, 'utf8').toString('utf8') !== text ||
       text.includes('\0') ||
-      Buffer.byteLength(text) > artifactTextLimit
+      Buffer.byteLength(text) > this.limit
     )
       throw new Error('Invalid Markdown');
     this.checkParent();
@@ -138,7 +142,7 @@ export class MarkdownDestination {
         0o600,
       );
       this.touched = true;
-      regular(fstatSync(this.fd, { bigint: true }));
+      regular(fstatSync(this.fd, { bigint: true }), this.limit);
       this.checkParent();
       if (!same(lstatSync(this.path, { bigint: true }), fstatSync(this.fd, { bigint: true })))
         throw new Error('Destination changed');
@@ -170,5 +174,12 @@ export class MarkdownDestination {
     if (this.fd !== undefined) closeSync(this.fd);
     this.fd = undefined;
     this.original = undefined;
+  }
+}
+
+/** Artifacts keeps its existing Markdown-only contract and byte ceiling. */
+export class MarkdownDestination extends ReportDestination {
+  constructor(selected: string) {
+    super(selected, '.md', artifactTextLimit);
   }
 }

@@ -217,7 +217,8 @@ sessions/storage/profile on an ephemeral port. It verifies Node globals absent,
 denied new windows/notifications, native-session HttpOnly/Strict cookies, online UI,
 Bridge restart and dashboard reconnect, native window close/reopen, initial Bridge
 offline fallback/retry and Bridge survival after quitting Desktop. Captures live in
-ignored `test-results/desktop-smoke/{online,offline}.png`. The app menu uses native
+a disposable output directory (or `ORQST_DESKTOP_SMOKE_OUTPUT` when explicitly set).
+The app menu uses native
 roles; fallback text follows OS locale, while the existing dashboard retains its own
 language preference. Setup and limits are in [Desktop development](desktop.md).
 
@@ -326,9 +327,43 @@ ORQST_BROWSER_PORT=49373 pnpm test:browser tests/browser/model-analytics.spec.ts
 pnpm test:desktop
 ```
 
-The Electron smoke uses its own temporary profile/storage and verifies that actual
-preload detection leaves Analytics without download buttons. Native Analytics save
-is unimplemented; the smoke is not native save acceptance. Serializer/browser checks
+The Electron smoke uses its own temporary Bridge/profile/storage and real preload/IPC
+for native Analytics save. It intercepts destination/replacement dialogs, exercises
+CSV/Markdown new writes, cancellation, overwrite refusal/approval, wrong-extension
+refusal and ranking revocation during a pending dialog. Artifacts checks remain in
+the same smoke. This establishes mechanisms and synthetic writes, not native visual
+acceptance. Set `ORQST_DESKTOP_SMOKE_OUTPUT` to an exclusive temporary output directory;
+otherwise screenshots are discarded with the temporary profile. Serializer/browser checks
 do not establish real Excel/LibreOffice import or real-provider multi-model accounting.
 No ingestion changed, so this increment does not require `validate:local` or a live
 provider run. See [contract and privacy limits](../api/analytics-export.md).
+
+## Native aggregate Analytics export
+
+Run `pnpm exec tsx --test tests/desktop-export-qa.test.ts` for independent synthetic
+privacy/injection, integrity/freshness, sender/file/overwrite and Artifacts regression
+checks. `pnpm test:desktop` adds the explicit disposable Electron mechanism smoke;
+never point it at the installed Bridge or the owner's profile. The browser capability
+integration is synthetic; it checks acknowledgment, consumed status, refresh and both
+locales without claiming IPC authority. Use a free exclusive `ORQST_BROWSER_PORT` and
+`--output` for browser checks. Browser screenshots now follow that output directory.
+No ingestion changes require real local session validation in this increment.
+
+### Recorded native increment checks — 2026-11-02
+
+The final implementation passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (202/202,
+including 15 independent native-export QA cases), and `pnpm build`. Before the last
+consumed-reading correction, the full Chromium suite passed 38/38. The final affected
+native capability/consumption/locale checks passed 3/3 against the rebuilt bundle;
+independent QA then confirmed the complete 39/39 Chromium suite on the final UI tree.
+All browser invocations used their own port/state/output.
+
+The final `pnpm test:desktop` smoke passed on macOS arm64 with Electron45.2.1,
+Chromium156.0.8078.75 and Node24.22.1. Real preload/IPC, session-authenticated aggregate
+revalidation and synthetic filesystem writes ran; destination/overwrite dialogs,
+notification delivery and external application dispatch were intercepted. This is
+mechanism evidence, not native visual or real Excel/LibreOffice import acceptance.
+QA includes context changes during choose and overwrite confirmation, consumed UUIDs,
+late context generations, sender/file integrity and critical Artifacts regressions.
+No installed service/client/profile/database/session was used or restarted. There
+were no ingestion changes, so `validate:local` and live provider tests were not run.

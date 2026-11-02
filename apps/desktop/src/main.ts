@@ -13,6 +13,8 @@ import {
 } from 'electron';
 import { join } from 'node:path';
 import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
+import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
+import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
 import { createInstance } from 'i18next';
@@ -76,6 +78,8 @@ async function start(): Promise<void> {
   );
 
   const saver = new ArtifactSaver();
+  const analyticsSaver = new AnalyticsSaver();
+  let nativeFileBusy = false;
   let documentGeneration = 0;
   let quitting = false;
   ipcMain.handle('orqst:save-markdown', async (event, input: unknown) => {
@@ -88,20 +92,102 @@ async function start(): Promise<void> {
       !current.isDestroyed() &&
       documentGeneration === generation &&
       authorizedArtifactSender(event, current.webContents, browserSession, origin);
-    return saver.save(input, {
+    if (nativeFileBusy || !authorized()) return { status: 'failed' };
+    nativeFileBusy = true;
+    try {
+      return await saver.save(input, {
+        authorized,
+        original: (selection) =>
+          readSaveOriginal(
+            (url, init) => browserSession.fetch(url instanceof URL ? url.href : url, init),
+            origin,
+            selection,
+            authorized,
+          ),
+        choose: async () => {
+          const result = await dialog.showSaveDialog(current!, {
+            title: i18n.t('artifacts.nativeSave'),
+            defaultPath: 'artifact.md',
+            filters: [{ name: i18n.t('artifacts.markdownFile'), extensions: ['md'] }],
+            properties: ['showOverwriteConfirmation', 'dontAddToRecent'],
+          });
+          return result.canceled ? undefined : result.filePath;
+        },
+        confirm: async (path) => {
+          const result = await dialog.showMessageBox(current!, {
+            type: 'warning',
+            title: i18n.t('artifacts.nativeOverwrite'),
+            message: i18n.t('artifacts.overwriteMessage'),
+            detail: path,
+            buttons: [i18n.t('artifacts.cancel'), i18n.t('artifacts.replace')],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          return result.response === 1;
+        },
+        open: (path) => shell.openPath(path),
+      });
+    } finally {
+      nativeFileBusy = false;
+    }
+  });
+
+  ipcMain.handle('orqst:analytics-export', async (event, input: unknown) => {
+    const current = window;
+    const generation = documentGeneration;
+    const authorized = () =>
+      !quitting &&
+      !!current &&
+      window === current &&
+      !current.isDestroyed() &&
+      documentGeneration === generation &&
+      authorizedArtifactSender(event, current.webContents, browserSession, origin);
+    if (!authorized()) return { status: 'failed' };
+    const parsed = analyticsNativeRequestSchema.safeParse(input);
+    if (!parsed.success) return { status: 'failed' };
+    // Invalidation must remain available while either file operation is busy.
+    if (parsed.data.action === 'context') return analyticsSaver.context(parsed.data, generation);
+    return analyticsSaver.save(parsed.data, {
+      document: generation,
       authorized,
-      original: (selection) =>
-        readSaveOriginal(
+      claim: () => {
+        if (nativeFileBusy) return undefined;
+        nativeFileBusy = true;
+        return () => {
+          nativeFileBusy = false;
+        };
+      },
+      read: (reading, active) =>
+        readNativeAnalytics(
           (url, init) => browserSession.fetch(url instanceof URL ? url.href : url, init),
           origin,
-          selection,
-          authorized,
+          reading,
+          active,
         ),
-      choose: async () => {
+      choose: async (request, report) => {
+        const csv = request.format === 'csv';
         const result = await dialog.showSaveDialog(current!, {
-          title: i18n.t('artifacts.nativeSave'),
-          defaultPath: 'artifact.md',
-          filters: [{ name: i18n.t('artifacts.markdownFile'), extensions: ['md'] }],
+          title: i18n.t('analytics.export.nativeTitle'),
+          message: i18n.t('analytics.export.nativeReading', {
+            format: csv ? 'CSV' : 'Markdown',
+            ranking: i18n.t(
+              request.reading.ranking === 'tokens' ? 'analytics.byTokens' : 'analytics.bySessions',
+            ),
+            at: request.reading.obtainedAt,
+            from: report.query.from ?? i18n.t('analytics.export.unbounded'),
+            to: report.query.to ?? i18n.t('analytics.export.unbounded'),
+            filters: (['workspaceId', 'agentId', 'adapter', 'model'] as const)
+              .map(
+                (key) =>
+                  `${i18n.t(key === 'workspaceId' ? 'workspaces' : `analytics.${key === 'agentId' ? 'agent' : key}`)}: ${i18n.t(report.query[key] === undefined ? 'analytics.export.filterAll' : 'analytics.export.filterApplied')}`,
+              )
+              .join('; '),
+            sessions: report.sessions,
+            tokens: report.usage?.total ?? i18n.t('unknown'),
+          }),
+          defaultPath: `orqst-model-usage.${csv ? 'csv' : 'md'}`,
+          filters: [{ name: csv ? 'CSV' : 'Markdown', extensions: [csv ? 'csv' : 'md'] }],
           properties: ['showOverwriteConfirmation', 'dontAddToRecent'],
         });
         return result.canceled ? undefined : result.filePath;
@@ -109,7 +195,7 @@ async function start(): Promise<void> {
       confirm: async (path) => {
         const result = await dialog.showMessageBox(current!, {
           type: 'warning',
-          title: i18n.t('artifacts.nativeOverwrite'),
+          title: i18n.t('analytics.export.nativeOverwrite'),
           message: i18n.t('artifacts.overwriteMessage'),
           detail: path,
           buttons: [i18n.t('artifacts.cancel'), i18n.t('artifacts.replace')],
@@ -119,7 +205,6 @@ async function start(): Promise<void> {
         });
         return result.response === 1;
       },
-      open: (path) => shell.openPath(path),
     });
   });
 
@@ -371,6 +456,7 @@ async function start(): Promise<void> {
     quitting = true;
     documentGeneration++;
     ipcMain.removeHandler('orqst:save-markdown');
+    ipcMain.removeHandler('orqst:analytics-export');
     stopped = true;
     clearTimeout(timer);
     for (const notification of activeNotifications) notification.close();

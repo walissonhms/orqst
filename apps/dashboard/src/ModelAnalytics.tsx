@@ -1,13 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import {
   modelAnalyticsExportSourceSchema,
+  analyticsReadingSchema,
+  type AnalyticsReading,
+  type AnalyticsNativeResult,
   type ModelAnalyticsSummary,
   type Snapshot,
 } from '@orqst/protocol';
 import {
   analyticsRequestQuery,
+  canonicalModelAnalytics,
   downloadModelAnalytics,
   rankModelAnalytics,
   readAnalyticsJSON,
@@ -55,10 +59,28 @@ export function ModelAnalytics({
   const [unidentified, setUnidentified] = useState(false);
   const [ranking, setRanking] = useState<'tokens' | 'sessions'>('tokens');
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ key: string; data: ModelAnalyticsSummary; at: Date }>();
+  const [result, setResult] = useState<{
+    key: string;
+    data: ModelAnalyticsSummary;
+    at: Date;
+    digest?: string;
+    readingId: string;
+  }>();
   const [failure, setFailure] = useState<{ key: string; reason: string }>();
   const [loading, setLoading] = useState(true);
   const [exportFailure, setExportFailure] = useState(false);
+  const [nativeContext, setNativeContext] = useState<{
+    reading: AnalyticsReading;
+    generation: number;
+  }>();
+  const [nativeBusy, setNativeBusy] = useState(false);
+  const [nativeStatus, setNativeStatus] = useState<{
+    key: string;
+    status: AnalyticsNativeResult['status'];
+  }>();
+  const currentNativeKey = useRef('');
+  const consumedNativeReading = useRef<string | undefined>(undefined);
+  const native = window.orqstAnalytics?.contractVersion === 1 ? window.orqstAnalytics : undefined;
   const [transport, setTransport] = useState({ connection, snapshotError, generation: 0 });
   // Adjust during render so no committed button can use a pre-disconnection response.
   // Recovery needs a new generation even if the cursor and query are unchanged.
@@ -112,7 +134,19 @@ export function ModelAnalytics({
             throw new Error(response.status === 400 ? 'invalidQuery' : (reasons[code] ?? 'error'));
           }
           const data = await readModelAnalyticsResponse(response);
-          if (active) setResult({ key, data, at: new Date() });
+          const at = new Date();
+          let digest: string | undefined;
+          // Export-only admission must never hide a structurally valid screen report.
+          if (native && modelAnalyticsExportSourceSchema.safeParse(data).success) {
+            const hash = await crypto.subtle.digest(
+              'SHA-256',
+              new TextEncoder().encode(canonicalModelAnalytics(data)),
+            );
+            digest = Array.from(new Uint8Array(hash), (byte) =>
+              byte.toString(16).padStart(2, '0'),
+            ).join('');
+          }
+          if (active) setResult({ key, data, at, digest, readingId: crypto.randomUUID() });
         })
         .catch((error: unknown) => {
           if (active)
@@ -136,13 +170,71 @@ export function ModelAnalytics({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [request, key, cursor, available]);
+  }, [request, key, cursor, available, native]);
   const data =
     request && result?.key === key && !failure && !loading && available ? result.data : undefined;
   const exportable = useMemo(
     () => !!data && modelAnalyticsExportSourceSchema.safeParse(data).success,
     [data],
   );
+  const reading = useMemo(() => {
+    if (
+      !native ||
+      !data ||
+      !result?.digest ||
+      !request ||
+      cursor === undefined ||
+      consumedNativeReading.current === result.readingId
+    )
+      return null;
+    const parsed = analyticsReadingSchema.safeParse({
+      query: analyticsRequestQuery(request),
+      ranking,
+      cursor,
+      obtainedAt: result.at.toISOString(),
+      readingId: result.readingId,
+      digest: result.digest,
+    });
+    return parsed.success ? parsed.data : null;
+  }, [native, data, result, request, cursor, ranking]);
+  const nativeKey = `${key}:${ranking}:${result?.readingId}`;
+  useLayoutEffect(() => {
+    currentNativeKey.current = nativeKey;
+    setNativeContext(undefined);
+    let active = true;
+    if (native)
+      void native.setReading(reading).then((reply) => {
+        if (active && reading && reply.status === 'acknowledged')
+          setNativeContext({ reading, generation: reply.generation });
+      });
+    return () => {
+      active = false;
+      currentNativeKey.current = '';
+      if (native) void native.setReading(null);
+    };
+  }, [native, reading, nativeKey]);
+  const saveNative = (format: AnalyticsExportFormat) => {
+    if (!native || !nativeContext || nativeBusy || !exportable) return;
+    const captured = nativeKey;
+    consumedNativeReading.current = nativeContext.reading.readingId;
+    const operation = native.save(format, nativeContext.generation, nativeContext.reading);
+    setNativeBusy(true);
+    setNativeContext(undefined);
+    setNativeStatus(undefined);
+    void operation
+      .then((reply) => {
+        if (currentNativeKey.current === captured)
+          setNativeStatus({ key: captured, status: reply.status });
+      })
+      .catch(() => {
+        if (currentNativeKey.current === captured)
+          setNativeStatus({ key: captured, status: 'failed' });
+      })
+      .finally(() => {
+        setNativeBusy(false);
+        if (currentNativeKey.current === captured) void native.setReading(null);
+      });
+  };
   const number = (value: number | undefined | null) =>
     value == null ? t('unknown') : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
   const rows = useMemo(() => (data ? rankModelAnalytics(data, ranking) : []), [data, ranking]);
@@ -271,21 +363,36 @@ export function ModelAnalytics({
       <section className="panel analytics-export" aria-label={t('analytics.export.title')}>
         <h2>{t('analytics.export.title')}</h2>
         <p className="fine-print">{t('analytics.export.privacy')}</p>
-        {desktop ? (
+        {desktop && !native ? (
           <p className="notice">{t('analytics.export.desktop')}</p>
         ) : (
           <>
-            <button className="button" disabled={!exportable} onClick={() => exportReport('csv')}>
+            <button
+              className="button"
+              disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
+              onClick={() => (native ? saveNative('csv') : exportReport('csv'))}
+            >
               {t('analytics.export.csv')}
             </button>{' '}
             <button
               className="button"
-              disabled={!exportable}
-              onClick={() => exportReport('markdown')}
+              disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
+              onClick={() => (native ? saveNative('markdown') : exportReport('markdown'))}
             >
               {t('analytics.export.markdown')}
             </button>
-            <p className="fine-print">{t('analytics.export.download')}</p>
+            <p className="fine-print">
+              {t(native ? 'analytics.export.nativeHelp' : 'analytics.export.download')}
+            </p>
+            {nativeBusy && <p role="status">{t('analytics.export.nativePending')}</p>}
+            {native && !nativeBusy && !nativeContext && (
+              <p className="notice">{t('analytics.export.nativeRefresh')}</p>
+            )}
+            {nativeStatus?.key === nativeKey && (
+              <p role={['saved', 'cancelled'].includes(nativeStatus.status) ? 'status' : 'alert'}>
+                {t(`analytics.export.nativeResults.${nativeStatus.status}`)}
+              </p>
+            )}
             {!data && <p className="notice">{t('analytics.export.blocked')}</p>}
             {data && !exportable && <p className="notice">{t('analytics.export.limits')}</p>}
           </>

@@ -107,7 +107,10 @@ test('synthetic multi-model ranking, explicit unknowns, shares, sessions, escapi
   await expect(page.getByText('Measurement crosses period boundary: 1')).toBeVisible();
   expect(await page.locator('.analytics img').count()).toBe(0);
   expect(await page.evaluate(() => Reflect.get(window, 'analyticsInjected'))).toBeUndefined();
-  await page.screenshot({ path: '/tmp/orqst-models-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: test.info().outputPath('orqst-models-desktop.png'),
+    fullPage: true,
+  });
   const count = queries.length;
   await page.getByLabel('Rank by').selectOption('sessions');
   await expect(rows.nth(0)).toContainText('synthetic-beta');
@@ -328,7 +331,10 @@ test('mobile dedicated navigation and Portuguese translation preserve plain mode
   await tableScroll.focus();
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => tableScroll.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-  await page.screenshot({ path: '/tmp/orqst-models-mobile.png', fullPage: true });
+  await page.screenshot({
+    path: test.info().outputPath('orqst-models-mobile.png'),
+    fullPage: true,
+  });
 });
 
 test('analytics refresh follows observed source events, not snapshot polling or rendering', async ({

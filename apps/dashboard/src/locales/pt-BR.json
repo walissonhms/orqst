@@ -227,13 +227,32 @@
     "export": {
       "title": "Exportar relatório agregado",
       "privacy": "IDs de modelo são metadados arbitrários e podem conter informações privadas ou segredos. Revise-os antes de exportar ou compartilhar. Valores dos filtros de agente e workspace e evidências individuais são omitidos.",
-      "desktop": "A exportação de Analytics ainda não está disponível no Desktop. Salvar CSV/Markdown nativo exige uma revisão de permissão separada; downloads no Desktop continuam bloqueados.",
+      "desktop": "Este cliente Desktop não oferece salvamento nativo de Analytics. Atualize o cliente; downloads continuam bloqueados.",
       "csv": "Exportar CSV",
       "markdown": "Exportar Markdown",
       "download": "Baixa o agregado atual validado na ordem do ranking exibido. O navegador controla o destino e a substituição; o ORQST não confirma que um arquivo foi salvo.",
       "blocked": "A exportação fica bloqueada até um novo relatório atual estar disponível com conexão ativa. Atualização, mudanças de filtro, erros e reconexão exigem nova resposta.",
       "failed": "A exportação falhou na validação ou excedeu os limites. Nenhum relatório foi baixado.",
-      "limits": "Este relatório não pode ser exportado: a exportação exige até 5.000 buckets de modelo, IDs de 1–256 caracteres UTF-16 e agregados consistentes com inteiros seguros. O relatório exibido é preservado."
+      "limits": "Este relatório não pode ser exportado: a exportação exige até 5.000 buckets de modelo, IDs de 1–256 caracteres UTF-16 e agregados consistentes com inteiros seguros. O relatório exibido é preservado.",
+      "nativeTitle": "Salvar relatório agregado de Analytics",
+      "nativeOverwrite": "Substituir relatório de Analytics?",
+      "nativeReading": "{{format}} · {{ranking}} · Leitura {{at}} · {{sessions}} sessões observadas · {{tokens}} tokens reportados. UTC [{{from}}, {{to}}). {{filters}}. Os valores dos filtros são omitidos do arquivo. IDs de modelos podem conter informações privadas. Salve apenas esta leitura confirmada.",
+      "nativeHelp": "Escolha um destino nativo para esta leitura. CSV exige .csv e Markdown exige .md. Arquivos existentes exigem confirmação. Nenhum aplicativo externo será aberto.",
+      "nativePending": "Conferindo esta leitura e aguardando permissão nativa. Consultas concorrentes podem estar ocupadas; não há fila nem tentativa automática.",
+      "nativeRefresh": "Uma nova leitura atual é necessária para salvar novamente. Use Atualizar; mudanças ou reconexão revogam a leitura anterior.",
+      "nativeResults": {
+        "saved": "Relatório salvo. Atualize para exportar novamente.",
+        "cancelled": "Salvamento cancelado. Nenhum relatório foi gravado. Atualize antes de tentar novamente.",
+        "failed": "Salvamento recusado antes da escrita. Confira o destino e atualize antes de tentar novamente.",
+        "write_failed": "A escrita falhou após tocar no destino. Um arquivo parcial ou alterado pode permanecer; confira antes de tentar novamente.",
+        "stale": "A leitura mudou ou a permissão foi revogada. Nenhum relatório foi gravado. Atualize e revise a nova leitura.",
+        "unavailable": "Analytics indisponível ou recusado pela validação limitada. Nenhum relatório foi gravado. Atualize antes de tentar novamente.",
+        "busy": "Outra consulta local ou operação de arquivo está ocupada. Nenhum relatório foi gravado. Atualize após a conclusão.",
+        "acknowledged": "Leitura pronta."
+      },
+      "unbounded": "sem limite",
+      "filterAll": "todos",
+      "filterApplied": "aplicado (valor omitido)"
     }
   },
   "desktopShell": {

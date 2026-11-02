@@ -58,7 +58,7 @@ const config = {
 let bridge = createBridge(config);
 let desktop: ElectronApplication | undefined;
 let electronDiagnostics = '';
-const evidenceDir = resolve('test-results/desktop-smoke');
+const evidenceDir = process.env.ORQST_DESKTOP_SMOKE_OUTPUT ?? join(root, 'evidence');
 await mkdir(evidenceDir, { recursive: true });
 try {
   const port = await bridge.start();
@@ -294,11 +294,10 @@ try {
     .toBe('function');
   await page.goto(origin + '/#models');
   await expect(page.locator('.analytics-export')).toContainText(
-    /Analytics export is not available in Desktop yet|A exportação de Analytics ainda não está disponível no Desktop/,
+    /Choose a native destination|Escolha um destino nativo/,
   );
-  await expect(page.locator('.analytics-export button, .analytics-export a[download]')).toHaveCount(
-    0,
-  );
+  await expect(page.locator('.analytics-export button')).toHaveCount(2);
+  await expect(page.locator('.analytics-export a[download]')).toHaveCount(0);
   await page.goto(beforeRevocationURL);
   await expect(page.locator('.connection-connected')).toBeVisible();
   await desktop.evaluate(() => {
@@ -366,6 +365,147 @@ try {
       name: /Close artifact and discard draft|Fechar artefato e descartar rascunho/,
     })
     .click();
+  // Native Analytics uses its own capability and the same real session/IPC path.
+  await page.goto(origin + '/#models');
+  const exports = page.locator('.analytics-export');
+  const csvButton = exports.getByRole('button', { name: /Export CSV|Exportar CSV/ });
+  const mdButton = exports.getByRole('button', { name: /Export Markdown|Exportar Markdown/ });
+  const refreshReport = async () => {
+    await page.getByRole('button', { name: /Refresh|Atualizar/, exact: true }).click();
+    await expect(csvButton).toBeEnabled();
+  };
+  const csvPath = join(await realpath(root), 'synthetic-analytics.csv');
+  const mdPath = join(await realpath(root), 'synthetic-analytics.md');
+  await desktop.evaluate(({ dialog }, path) => {
+    Reflect.set(globalThis, 'syntheticAnalyticsPath', path);
+    Reflect.set(globalThis, 'syntheticAnalyticsCancel', true);
+    Reflect.set(globalThis, 'syntheticAnalyticsOverwrite', false);
+    dialog.showSaveDialog = async (
+      _window: Electron.BaseWindow | Electron.SaveDialogOptions,
+      options?: Electron.SaveDialogOptions,
+    ) => {
+      Reflect.set(globalThis, 'syntheticAnalyticsOptions', options);
+      return {
+        canceled: Boolean(Reflect.get(globalThis, 'syntheticAnalyticsCancel')),
+        filePath: Reflect.get(globalThis, 'syntheticAnalyticsPath') as string,
+      };
+    };
+    dialog.showMessageBox = async (
+      _window: Electron.BaseWindow | Electron.MessageBoxOptions,
+      options?: Electron.MessageBoxOptions,
+    ) => {
+      Reflect.set(globalThis, 'syntheticAnalyticsDetail', options?.detail);
+      return {
+        response: Reflect.get(globalThis, 'syntheticAnalyticsOverwrite') ? 1 : 0,
+        checkboxChecked: false,
+      };
+    };
+  }, csvPath);
+  await expect(csvButton).toBeEnabled();
+  await csvButton.click();
+  await expect(exports.getByRole('status')).toContainText(/Save cancelled|Salvamento cancelado/);
+  await expect(csvButton).toBeDisabled();
+  assert.equal(
+    await stat(csvPath).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticAnalyticsCancel', false));
+  await refreshReport();
+  await csvButton.click();
+  await expect(exports.getByRole('status')).toContainText(/Report saved|Relatório salvo/);
+  const savedCSV = await readFile(csvPath, 'utf8');
+  assert.ok(savedCSV.startsWith(`"'section"`));
+  assert.ok(savedCSV.includes('orqst.model-usage-export.v1'));
+  assert.ok(!savedCSV.includes('synthetic-desktop-smoke'));
+  assert.ok(!savedCSV.includes('/synthetic/desktop-smoke'));
+  assert.ok(!savedCSV.includes('Synthetic Desktop Artifact'));
+  assert.deepEqual(
+    await desktop.evaluate(
+      () =>
+        (Reflect.get(globalThis, 'syntheticAnalyticsOptions') as Electron.SaveDialogOptions)
+          .filters,
+    ),
+    [{ name: 'CSV', extensions: ['csv'] }],
+  );
+  await writeFile(csvPath, 'Synthetic overwrite retained');
+  await refreshReport();
+  await csvButton.click();
+  await expect(exports.getByRole('status')).toContainText(/Save cancelled|Salvamento cancelado/);
+  assert.equal(await readFile(csvPath, 'utf8'), 'Synthetic overwrite retained');
+  assert.equal(
+    await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticAnalyticsDetail')),
+    csvPath,
+  );
+  await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticAnalyticsOverwrite', true));
+  await refreshReport();
+  await csvButton.click();
+  await expect(exports.getByRole('status')).toContainText(/Report saved|Relatório salvo/);
+  assert.ok((await readFile(csvPath, 'utf8')).startsWith(`"'section"`));
+  await desktop.evaluate(
+    (_, path) => Reflect.set(globalThis, 'syntheticAnalyticsPath', path),
+    mdPath,
+  );
+  await refreshReport();
+  await mdButton.click();
+  await expect(exports.getByRole('status')).toContainText(/Report saved|Relatório salvo/);
+  assert.ok((await readFile(mdPath, 'utf8')).startsWith('| `section`'));
+  // A wrong extension is never silently changed or written.
+  const wrongPath = join(await realpath(root), 'synthetic-analytics.txt');
+  await desktop.evaluate(
+    (_, path) => Reflect.set(globalThis, 'syntheticAnalyticsPath', path),
+    wrongPath,
+  );
+  await refreshReport();
+  await csvButton.click();
+  await expect(exports.getByRole('alert')).toContainText(
+    /refused before writing|recusado antes da escrita/,
+  );
+  assert.equal(
+    await stat(wrongPath).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  // A context update stays live during a pending native dialog.
+  await desktop.evaluate(({ dialog }) => {
+    dialog.showSaveDialog = async () =>
+      new Promise<Electron.SaveDialogReturnValue>((resolve) =>
+        Reflect.set(globalThis, 'syntheticAnalyticsPending', resolve),
+      );
+  });
+  await refreshReport();
+  await csvButton.click();
+  await expect
+    .poll(() =>
+      desktop!.evaluate(() => typeof Reflect.get(globalThis, 'syntheticAnalyticsPending')),
+    )
+    .toBe('function');
+  await page.getByLabel(/Rank by|Ordenar por/).selectOption('sessions');
+  const revokedCSV = join(await realpath(root), 'synthetic-analytics-revoked.csv');
+  await desktop.evaluate((_, path) => {
+    (
+      Reflect.get(globalThis, 'syntheticAnalyticsPending') as (
+        value: Electron.SaveDialogReturnValue,
+      ) => void
+    )({ canceled: false, filePath: path });
+  }, revokedCSV);
+  await expect(exports.getByText(/Checking this reading|Conferindo esta leitura/)).toHaveCount(0);
+  assert.equal(
+    await stat(revokedCSV).then(
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  assert.deepEqual(await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticOpened')), [
+    savedArtifact,
+  ]);
+  await page.goto(beforeRevocationURL);
+  await expect(page.locator('.connection-connected')).toBeVisible();
   const versions = await desktop.evaluate(() => ({
     electron: process.versions.electron,
     chrome: process.versions.chrome,
@@ -551,6 +691,8 @@ try {
         versions,
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
+        analyticsFiles:
+          'real IPC/session/aggregate reobtain and bounded shared serializer; CSV/Markdown new save, cancel, overwrite deny+accept, wrong extension, ranking revocation; dialogs intercepted',
         artifactFiles:
           'cancel/save/overwrite deny+accept/UTF8 hostile draft/current-file-only open/revocation during choose+confirm after navigation-return passed; dialogs/editor intercepted',
       },

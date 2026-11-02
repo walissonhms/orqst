@@ -457,6 +457,19 @@ rounding hazards; Markdown keeps dynamic text inside inert code spans with encod
 structural characters. External reprocessing can change interpretation. Browser
 settings control destination/replacement and the UI does not claim disk-save success.
 
-No route/authentication/worker/database/source/IPC authority changes. Electron still
-denies downloads and has no Analytics export buttons; the Artifacts grant is unchanged.
-See [fields, exact encodings, limits and future native boundary](../api/analytics-export.md).
+The later native increment adds one strict Analytics IPC and destination grant,
+keeping routes/authentication/worker/database/source contracts unchanged. Electron
+still denies downloads; its dedicated capability refetches/validates a bounded
+aggregate and compares digest/query/version/cursor to the displayed reading before
+and after native permission. Live context and document generations revoke pending
+operations; context updates bypass the file-operation gate. Late acknowledgments
+cannot revive an old reading. The fixed empty-events cursor query admits 4096 bytes
+without retrieving sessions or captured bodies. HTTP/body deadlines are finite.
+
+Only native dialog paths reach the shared destination writer, with exact format
+extension, single-link/nonexecutable/size checks, descriptor/parent/path identity,
+O_EXCL/O_NOFOLLOW and explicit concrete overwrite confirmation. Artifacts keeps its
+own DTO/channel and 32 KiB Markdown grant. One operation is admitted across both;
+Analytics has no external-open action or reusable grant. Filesystem writes and final
+source validation are not one atomic operation; partial I/O and races remain explicit.
+See [fields, exact encodings, native contract and review](../api/analytics-export.md).

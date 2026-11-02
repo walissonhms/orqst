@@ -307,6 +307,77 @@ test('a report above export limits stays visible while export is blocked', async
   expect(downloaded).toBeUndefined();
 });
 
+test('native capability shows ack-gated controls and calls the single save channel', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const calls: Array<[string, ...unknown[]]> = [];
+    (window as unknown as { __native: unknown }).__native = calls;
+    (window as unknown as { orqstAnalytics: unknown }).orqstAnalytics = {
+      contractVersion: 1,
+      setReading(reading: unknown) {
+        calls.push(['setReading', reading]);
+        return Promise.resolve({ generation: 3, status: 'acknowledged' });
+      },
+      save(format: string, generation: number, reading: unknown) {
+        calls.push(['save', format, generation, reading]);
+        return Promise.resolve({ status: 'saved' });
+      },
+    };
+  });
+  await openModels(page);
+  const section = exportSection(page);
+  const csv = section.getByRole('button', { name: 'Export CSV' });
+  await expect(csv).toBeEnabled();
+  await expect(section.getByText('Choose a native destination for this reading.')).toBeVisible();
+  await csv.click();
+  await expect(section.getByText('Report saved. Refresh for another export.')).toBeVisible();
+  // The consumed reading cannot be exported again before a new response.
+  await expect(csv).toBeDisabled();
+  const calls = (await page.evaluate(
+    () => (window as unknown as { __native: Array<[string, ...unknown[]]> }).__native,
+  )) as Array<[string, ...unknown[]]>;
+  const save = calls.find((entry) => entry[0] === 'save')!;
+  expect(save[1]).toBe('csv');
+  expect(save[2]).toBe(3);
+  const reading = save[3] as { digest: string; readingId: string; ranking: string };
+  expect(reading.digest).toMatch(/^[a-f0-9]{64}$/);
+  expect(reading.readingId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(reading.ranking).toBe('tokens');
+});
+
+test('native controls stay disabled until the current reading is acknowledged', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const pending: Array<() => void> = [];
+    (window as unknown as { __release: () => void }).__release = () => {
+      for (const release of pending.splice(0)) release();
+    };
+    (window as unknown as { orqstAnalytics: unknown }).orqstAnalytics = {
+      contractVersion: 1,
+      setReading() {
+        return new Promise((resolve) => {
+          pending.push(() => resolve({ generation: 1, status: 'acknowledged' }));
+        });
+      },
+      save() {
+        return Promise.resolve({ status: 'saved' });
+      },
+    };
+  });
+  await openModels(page);
+  const csv = exportSection(page).getByRole('button', { name: 'Export CSV' });
+  // No control is usable before the ack for the published reading.
+  await expect(csv).toBeDisabled();
+  await expect
+    .poll(async () => {
+      await page.evaluate(() => (window as unknown as { __release: () => void }).__release());
+      return csv.isEnabled();
+    })
+    .toBe(true);
+});
+
 test('desktop capability alone hides export controls in a normal browser', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(window, 'orqstArtifacts', {
@@ -316,7 +387,7 @@ test('desktop capability alone hides export controls in a normal browser', async
   await openModels(page);
   const section = exportSection(page);
   await expect(
-    section.getByText('Analytics export is not available in Desktop yet.'),
+    section.getByText('This Desktop client does not support native Analytics save.'),
   ).toBeVisible();
   await expect(section.getByRole('button')).toHaveCount(0);
   await expect(section.locator('a[download]')).toHaveCount(0);
@@ -329,7 +400,7 @@ test.describe('desktop surface', () => {
     await openModels(page);
     const section = exportSection(page);
     await expect(
-      section.getByText('Analytics export is not available in Desktop yet.'),
+      section.getByText('This Desktop client does not support native Analytics save.'),
     ).toBeVisible();
     await expect(section.getByRole('button')).toHaveCount(0);
     await expect(section.locator('a[download]')).toHaveCount(0);
@@ -345,7 +416,7 @@ test.describe('desktop surface', () => {
     await openModels(page);
     const section = exportSection(page);
     await expect(
-      section.getByText('Analytics export is not available in Desktop yet.'),
+      section.getByText('This Desktop client does not support native Analytics save.'),
     ).toBeVisible();
     await expect(section.getByRole('button')).toHaveCount(0);
     await expect(section.locator('a[download]')).toHaveCount(0);

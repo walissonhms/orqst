@@ -221,10 +221,12 @@ same reversible representation in code spans within fixed table structure. No ne
 model attribution or metrics are computed. Refresh/filter/cursor/error/offline and
 reconnection block export until a fresh associated response arrives.
 
-Browser settings control destination and overwrite behavior; no native-save success
-is claimed. Electron continues denying downloads and exposes no Analytics export
-button. Native Desktop save requires its own contract, main-process refetch/validation
-and destination/overwrite grant; Artifacts Markdown permission is unchanged. See
+Browser settings control destination and overwrite behavior; browser export does not
+claim disk-save success. Electron continues denying downloads. Its separate native
+Analytics capability validates and refetches the exact confirmed aggregate before
+and after destination/overwrite dialogs. Context changes revoke pending operations;
+no page content/path or external-open action is accepted. Artifacts keeps its own
+Markdown contract. Final source checking and in-place file writes are not atomic. See
 [precise fields, formats, limits and security review](../api/analytics-export.md).
 
 ## Integration acceptance
