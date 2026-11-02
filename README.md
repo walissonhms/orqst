@@ -12,9 +12,9 @@ normalizes their activity, persists local observations in SQLite and streams the
 to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
 
-> **Project status:** pre-release. Incremental development is authorized. Core/Bridge
-> separation and the Analytics foundation are in progress; completion awaits integration
-> checks. Electron, integrated terminals, managed execution and Cloud connectivity are
+> **Project status:** pre-release. Core/Bridge lifecycle separation and a local Analytics
+> aggregation library are implemented and integration-tested. Desktop Analytics remains
+> planned. Electron, integrated terminals, managed execution and Cloud connectivity are
 > not shipped. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
 > Community is licensed under [Apache-2.0](LICENSE) and operates without Cloud.
 
@@ -42,8 +42,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
   dashboard, en-US/pt-BR UI and macOS user-service helper listed above.
-- **In progress:** Phase 1 Core/Bridge separation and the base for model usage
-  Analytics. Neither is claimed complete before integration and validation.
+- **Phase 1 increment delivered:** UI-independent observer Core and evidence-backed
+  model Analytics library. Lifecycle/artifact contracts and durable historical
+  measurement coverage remain incomplete; this does not complete Phase 1.
 - **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
   robust provider integrations, managed sessions, evidence-gated optimizer integration,
   and distribution. Desktop includes Terminal, Monitor/Notifications, Artifacts,
@@ -83,8 +84,9 @@ no optimizer setting or automatic token reduction exists in the current runtime.
   (single process)                                           React + Vite + Tailwind + i18next
 ```
 
-The integrated baseline has one long-running process. The bridge owns discovery, normalization,
-persistence, the REST API, and the WebSocket server. The dashboard is a static
+There is one long-running process. The bridge composes `@orqst/core`, which owns
+the observer, single SQLite store and retention lifecycle; the bridge owns REST,
+WebSocket and signal handling. The dashboard is a static
 bundle served by the bridge in production and by Vite in development.
 
 - **Node.js 24.x** and **pnpm 10.x** are required.
@@ -261,8 +263,15 @@ and [SECURITY.md](SECURITY.md).
 
 ## Validation status
 
-The following records the earlier observer baseline, not a new validation of Desktop,
-Core extraction or Analytics. Integration must record its own commands and results.
+The Core/Analytics integration on 2026-11-02 passed `pnpm lint`, `pnpm typecheck`,
+`pnpm test` (57 cases), `pnpm build` and `pnpm test:browser` (3 Chromium cases).
+`pnpm validate:local --with-browser` checked disposable copies of 8 real sessions,
+with stable replay/restart, preserved cumulative totals and unchanged source prefixes.
+The installed service was not restarted. Analytics model attribution itself has
+synthetic acceptance only; Desktop, native notifications and real-provider ranking
+remain unvalidated. See [Core lifecycle](docs/architecture/overview.md#observer-core-lifecycle).
+
+Earlier observer baseline evidence follows; it is distinct from that integration.
 
 On macOS, using isolated Node 24.22.2 and pnpm 10.34.9:
 

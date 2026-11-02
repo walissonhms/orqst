@@ -429,3 +429,35 @@ provider operation. Other providers, costs, quotas and private context are never
 assumed available. No optimizer activation, remote telemetry, Cloud, API shape change,
 new runtime capability or release acceptance is created by this documentation.
 Historical ADRs, the original observer plan/audit and benchmark results are preserved.
+
+---
+
+## ADR-027 — Observer Core lifecycle and retained-evidence Analytics
+
+**Status:** Implemented and integration-tested on macOS on 2026-11-02. This is a
+bounded Phase 1 increment, not complete Phase 1 or Desktop acceptance.
+
+**Decision.** `ObserverCore` owns one SQLite store, the existing Codex observer and
+retention. Bridge remains the executable composition root and owns local transport
+and signals. Resource initialization precedes port binding; observation readiness
+follows the initial scan/start attempt. Cleanup closes transport before draining
+observation and closing the store. Operation promises share repeated starts/stops;
+restart uses a fresh Core against the same storage. Core imports no UI or transport.
+
+`Store.modelAnalytics()` adds a read-only projection over retained evidence, with
+an independent local contract and no SQL migration or v1 transport extension.
+Compatible cumulative deltas, source priority and explicit period boundaries govern
+accounting. Unknown or conflicting models remain unidentified, missing metrics remain
+unavailable, and coverage stays unverified. No vendor, task outcome, active duration
+or cost is inferred. Source references remain local and need an allowlist before export.
+
+**Consequences.** Node/service paths, one-process deployment, single-writer ownership,
+REST/WS v1 and observed session files are preserved. Browser detachment does not stop
+Core; service shutdown still stops it. No managed execution, optimizer, Electron,
+new adapter capability, telemetry or Cloud behavior is introduced. Durable historical
+metric storage and bounded interactive Analytics transport remain future work.
+
+Integrated lint/types, 57 automated cases, build, 3 Chromium cases and bounded
+real-source/built-Bridge/browser validation passed. The installed service was not
+restarted. Real-model Analytics attribution, full-archive load, reboot and Desktop
+acceptance remain unvalidated; see [testing](../development/testing.md#incremental-delivery-and-integration).

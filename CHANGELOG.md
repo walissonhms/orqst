@@ -7,6 +7,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- UI-independent `@orqst/core` observation lifecycle, composed by `createBridge()`
+  with one store, explicit readiness, failure cleanup and shared idempotent shutdown.
+  No second process or managed agent execution is introduced. Core/Analytics
+  integration passed lint, types, 57 automated tests, build, 3 Chromium tests and
+  bounded real-session/browser validation; the installed service was not restarted.
+
 - Evidence-backed local model Analytics projection through `Store.modelAnalytics()`
   and additive TypeScript/query contracts. It reconciles retained canonical snapshot
   deltas, keeps ambiguous model usage unidentified and reports unavailable metrics

@@ -7,11 +7,12 @@ bridge/dashboard remain operational and observation-only. The approved target is
 an observability-first open-source platform with an independent Core, Electron as
 primary desktop client, shared React UI, browser access and future managed agents.
 No target module, process control or Cloud connection is implemented by Phase 0.
-Core/Bridge separation and the Analytics foundation are now in progress under
-incremental-development authorization; completion awaits integration. See the
+The observer Core/Bridge lifecycle extraction and local Analytics aggregation
+foundation are implemented and integration-tested. Broader Phase 1 contracts,
+durable metric history and Desktop delivery remain incomplete. See the
 [six-phase roadmap](../../ROADMAP.md), [requirement coverage](product-requirements.md),
 [Analytics design](model-usage-analytics.md) and [ADR-026](decisions.md#adr-026--six-phase-desktop-delivery-and-mandatory-local-analytics).
-The diagrams below describe the integrated observer baseline, not unfinished work.
+The current-runtime sections describe the integrated observer; target sections remain planned.
 
 ## Current purpose
 
@@ -30,11 +31,11 @@ The product boundary is deliberate:
 
 ## Process model
 
-There is one long-running Node.js process: the bridge. It owns:
+There is one long-running Node.js process: the bridge. Responsibilities are:
 
 1. configuration loading,
-2. the SQLite store,
-3. the Codex observer (file discovery, watching, parsing, normalization),
+2. Core owns the single SQLite store and retention,
+3. Core owns the Codex observer (file discovery, watching, parsing, normalization),
 4. the loopback HTTP server,
 5. the WebSocket server,
 6. static delivery of the built dashboard.
@@ -43,7 +44,7 @@ There is one long-running Node.js process: the bridge. It owns:
 ┌─────────────────────────────────────────────────────────────────────┐
 │ bridge process (Node 24)                                            │
 │                                                                     │
-│  loadConfig() ──► Store (node:sqlite, WAL)                          │
+│  loadConfig() ──► ObserverCore ──► Store (node:sqlite, WAL)          │
 │       │                 ▲                                           │
 │       │                 │ ingest(event)                             │
 │       ▼                 │                                           │
@@ -130,12 +131,44 @@ events. See [../adapters/claude.md](../adapters/claude.md) and
 Composition root and runtime:
 
 - `config.ts` — environment parsing with strict numeric validation;
-- `main.ts` — startup, retention timer, signal handling;
+- `main.ts` — entry point, signal handling and process failure reporting;
+- `app.ts` — composes Core with local transports and coordinates startup/cleanup;
 - `server.ts` — HTTP routing, authentication, static files, WebSocket upgrade,
   replay, broadcast, heartbeat.
 
 See [../api/rest.md](../api/rest.md) and
 [../api/websocket.md](../api/websocket.md).
+
+### Observer Core lifecycle
+
+`packages/core` exports `ObserverCore`; its only local dependencies are database,
+Codex adapter and protocol. It has no HTTP, Electron or React dependency. One Core
+opens one store shared by ingestion and transport queries. `initialize()` acquires
+store/observer resources without scanning. Bridge reserves the existing loopback
+port, subscribes to events and awaits `start()`, including retention and the initial
+bounded observer scan/start attempt, before announcing readiness. Source availability
+remains separate: a missing session root does not mean the Core failed to initialize.
+
+Repeated start/stop calls share their operation promises. A stopped or failed instance
+cannot restart; create a new instance against the same data directory. Bridge stops
+accepting transport work before stopping observation, draining it and closing the
+store. Bind/partial-start failures release owned resources without stopping unrelated
+listeners. Periodic retention or subscriber failures notify the composition root and
+stop transports/Core; cleanup errors remain observable. These states are local
+lifecycle states, not new v1 provider statuses or managed-process claims.
+
+Detaching a browser or subscription leaves Core running. `SIGINT`/`SIGTERM` stop the
+composed service. There is no new daemon, process ownership, Electron window handler,
+PTY or execution feature. The bundle remains `dist/bridge.mjs`, with the same config,
+asset resolution and service paths. Deployment still requires an explicit service
+restart; integration tests do not install or restart the owner's service.
+
+Core/Bridge lifecycle tests cover initialization/readiness, partial failures, repeated
+shutdown, retained identity/settings/checkpoints/totals, replay and v1 transport behavior.
+Integration on macOS passed 57 automated cases, 3 Chromium cases and bounded built
+Bridge/browser validation with disposable real-source copies. This is not full-archive,
+reboot or continuous-soak acceptance. The read-only Analytics library is described
+in [its implementation boundary](model-usage-analytics.md#implemented-local-foundation).
 
 ### `apps/dashboard`
 
@@ -153,9 +186,10 @@ associations, but it cannot act on an agent session.
 
 ## Runtime data flow
 
-1. The bridge starts, opens the store, and loads configuration.
-2. `Store.retain()` runs once, then hourly.
-3. The HTTP server binds `127.0.0.1` on the configured port.
+1. The bridge loads configuration and initializes Core, opening the single store.
+2. The HTTP server binds `127.0.0.1` on the configured port.
+3. Core starts observation, running `Store.retain()` before the initial scan;
+   hourly retention begins after the observer starts.
 4. `CodexObserver.start()` performs an initial scan, then starts a chokidar
    watcher and a polling timer.
 5. For each changed file, the observer reads from the last committed checkpoint,
@@ -240,10 +274,10 @@ Browser client -----+--> Local bridge --> Core --> Adapters
                                           +----> Qualified observability (future)
 ```
 
-The current Core work is a bounded extraction of the existing observer
-Core, in progress pending integration. Keep the same Node runtime/service and API
-behavior; no extra daemon is required by that extraction. Electron, PTY and native provider protocol versions
-are not selected or installed in Phase 0.
+The observer Core extraction above is implemented with the same Node runtime/service
+and API behavior; it requires no extra daemon. The remaining target modules are not
+implemented by that extraction. Electron, PTY and managed native provider protocol
+versions remain undecided.
 
 ## State, recovery and history — planned
 

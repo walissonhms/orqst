@@ -5,6 +5,7 @@ orqst/
 ├── apps/
 │   ├── bridge/                 # composition root: config, HTTP, WS, runtime
 │   │   ├── src/config.ts
+│   │   ├── src/app.ts
 │   │   ├── src/main.ts
 │   │   └── src/server.ts
 │   └── dashboard/              # React SPA
@@ -14,6 +15,7 @@ orqst/
 │       ├── src/locales/{en-US,pt-BR}.json
 │       └── vite.config.ts
 ├── packages/
+│   ├── core/                   # observation lifecycle, store and observer ownership
 │   ├── protocol/               # zod schemas, event types, read models
 │   ├── shared/                 # stable IDs, redaction, safe text
 │   ├── database/               # node:sqlite store, migrations, retention
@@ -81,6 +83,13 @@ Owns persistence:
 - session/workspace/token/notification read models;
 - checkpoints and retention;
 - data-directory hardening.
+- read-only qualified model Analytics projection over retained evidence.
+
+### `packages/core`
+
+`ObserverCore` owns the store, Codex observer and retention lifecycle. It exposes
+initialization/readiness, event subscriptions, diagnostics, failure reporting and
+idempotent shutdown. It does not import transport, Electron or dashboard modules.
 
 ### `packages/adapters/codex`
 
@@ -97,10 +106,11 @@ Each exports a descriptor with `implemented: false` and all capabilities
 
 ### `apps/bridge`
 
-The only place where packages are composed:
+Executable composition and local transport:
 
 - `config.ts` — environment parsing;
-- `main.ts` — startup, retention interval, signal handling;
+- `main.ts` — startup, signal handling and process failure reporting;
+- `app.ts` — Core/transport composition and coordinated lifecycle;
 - `server.ts` — REST routes, authentication, static files, WebSocket upgrade,
   replay, broadcast, heartbeat.
 
@@ -121,7 +131,8 @@ shared      (leaf: crypto helpers, redaction, safe text)
 protocol    (leaf: zod schemas and shared types)
 database    ← protocol, shared
 adapters/*  ← protocol, shared, database
-bridge      ← protocol, shared, database, adapters
+core        ← protocol, database, adapter-codex
+bridge      ← core, protocol, shared, database, adapters
 dashboard   ← protocol
 ```
 
@@ -133,7 +144,8 @@ Rules:
 - `database` depends on `protocol` and `shared`.
 - Adapters depend on `protocol`, and the Codex adapter also on `shared` and
   `database` (for the store type).
-- The bridge depends on all runtime packages.
+- Core composes observation resources without transport/UI dependencies.
+- The bridge depends on Core and the packages needed for local transport.
 - The dashboard depends on `protocol` and browser libraries only.
 - No cycles. Adapters never import the bridge or the dashboard.
 
@@ -171,9 +183,9 @@ Ignored by Git and not part of the source layout:
 
 ## Planned boundaries
 
-The layout above describes the integrated observer baseline. Core/Bridge separation
-and the Analytics foundation are in progress; new files must not be described as
-accepted capabilities before integration. There is no accepted Desktop, PTY runtime,
+The layout above includes the integrated observer Core and Analytics library.
+Broader Phase 1 contracts and durable historical measurements remain incomplete.
+There is no accepted Desktop, PTY runtime,
 orchestrator or Cloud implementation. New packages must follow the approved phase and
 have concrete responsibilities; see [ROADMAP](../../ROADMAP.md) and
 [target architecture](../architecture/overview.md#target-module-responsibilities--planned).

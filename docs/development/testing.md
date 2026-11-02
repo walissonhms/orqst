@@ -86,8 +86,15 @@ ungranted permissions still need an explicit decision. Do not run token-consumin
 live acceptance/benchmarks or install/restart the owner's service as incidental
 validation. A synthetic green suite does not prove real-provider/Desktop acceptance.
 
-Core/Bridge separation and base Analytics remain in progress until integrated checks
-are reviewed. The [Analytics acceptance cases](../architecture/model-usage-analytics.md#integration-acceptance)
+The Core/Bridge extraction and Analytics library integration on 2026-11-02 passed
+`pnpm lint`, `pnpm typecheck`, `pnpm test` (57 cases including nested cases),
+`pnpm build`, `pnpm test:browser` (3 Chromium cases), and
+`pnpm validate:local --with-browser` (8 bounded real-session copies). Replay/restart,
+source prefixes and cumulative totals were preserved. No service restart or paid
+live benchmark was performed. Analytics model attribution has synthetic tests only;
+the real-source validation checks observer/built-Bridge compatibility.
+
+The [Analytics acceptance cases](../architecture/model-usage-analytics.md#integration-acceptance)
 are required before claiming the complete screen. The global Desktop MVP also needs
 real-machine terminal/model selection, native notification, Markdown save and filtered
 model usage evidence without Bridge regression. No 1.0 announcement before owner acceptance.
