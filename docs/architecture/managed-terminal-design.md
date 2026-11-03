@@ -5,6 +5,13 @@ to execute a provider. The current runtime remains an observer. The independent
 [synthetic PTY acceptance](../development/terminal-pty-acceptance.md) validates a
 small part of the mechanics without adding application execution authority.
 
+The subsequent [owned terminal engineering library](../development/terminal-owned-lab.md)
+implements in-memory signed operation grants, owned-handle lifecycle and bounded
+I/O, exercised through that opt-in fixture. It is not composed into the application;
+native gesture/enrollment, transport, persistence/recovery and provider gates below
+remain proposals. The budgets below describe the target design, not a claim that
+the experimental library enforces every one of them.
+
 ## Why retained history cannot become an interactive terminal
 
 Codex JSONL gives source-backed observations, not a process handle, PTY endpoint,

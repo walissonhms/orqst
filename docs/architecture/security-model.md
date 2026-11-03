@@ -1,5 +1,13 @@
 # Security model
 
+The experimental [owned terminal library](../development/terminal-owned-lab.md)
+is not composed into the application. Its signed one-use grants and leased,
+sequenced owned-handle I/O are tested with in-memory doubles and an explicit
+synthetic fixture. No native gesture/signing service, enrollment, IPC, execution
+endpoint, durable audit or recovery is implemented. Existing read authentication
+and observer behavior are unchanged; laboratory signatures cannot establish native
+consent or production execution safety.
+
 The [managed terminal design](managed-terminal-design.md) proposes a future separate
 native authorization and owned-process boundary; it is not an implemented execution
 API. The opt-in [synthetic PTY probe](../development/terminal-pty-acceptance.md) runs

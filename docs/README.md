@@ -73,6 +73,8 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
   and the remaining interactive terminal gates.
 - [Synthetic PTY acceptance](development/terminal-pty-acceptance.md) — explicit
   macOS/arm64 developer experiment, reproduction and validation limits.
+- [Owned terminal engineering library](development/terminal-owned-lab.md) — tested
+  operation grants, owned lifecycle and I/O; not composed into the application.
 - [Repository layout](development/repository-layout.md) — packages and
   responsibilities.
 

@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { spawn } from 'node-pty';
 import { probeSyntheticPty, requireSyntheticAuthorization } from './terminal/probe.js';
+import { probeOwnedSyntheticPty } from './terminal/owned-probe.js';
 
 requireSyntheticAuthorization(process.argv.slice(2));
 assert.match(process.version, /^v24\./);
@@ -42,7 +43,7 @@ try {
   const fixture = join(root, 'synthetic-fixture.mjs');
   await copyFile(fileURLToPath(new URL('./terminal/fixture.mjs', import.meta.url)), fixture);
   const node = await realpath(process.execPath);
-  // At most one active owned fixture, two starts, no shell/provider/descendants.
+  // At most one active owned fixture; two mechanics starts and one supervisor start.
   for (const mode of ['exit', 'signal'] as const) {
     const home = join(root, mode);
     await mkdir(home, { mode: 0o700 });
@@ -55,13 +56,16 @@ try {
     });
     checks.push(...(await probeSyntheticPty(pty, mode)));
   }
+  const ownedHome = join(root, 'owned-supervisor');
+  await mkdir(ownedHome, { mode: 0o700 });
+  checks.push(...(await probeOwnedSyntheticPty(backend.spawn, node, fixture, ownedHome)));
 } finally {
   await rm(root, { recursive: true, force: true });
 }
 console.log(
   JSON.stringify({
     result: 'passed',
-    scope: 'synthetic-pty-mechanics-only',
+    scope: 'synthetic-pty-mechanics-and-owned-supervisor',
     platform: process.platform,
     arch: process.arch,
     node: process.version,
