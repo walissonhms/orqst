@@ -354,7 +354,7 @@
     "discardTitle": "Discard artifact draft?",
     "discardWarning": "This draft differs from the retained original. Closing will discard the in-memory edits, even if you already copied or saved them. The original and saved files are unaffected.",
     "confirmDiscard": "Discard draft and close",
-    "draftNote": "Edits affect only this in-memory draft. Explicitly closing this artifact or its session details asks before discarding changed text. Changing session, leaving Overview or reloading still discards it without this confirmation. Preview supports headings, bullet lists and fenced code; other syntax, HTML, links and images stay literal and inactive.",
+    "draftNote": "Edits affect only this in-memory draft. Closing, switching sessions or workspaces, and leaving Overview ask before discarding changed text. Browser reload or exit may show a browser warning; Desktop window close/quit and crashes are not protected. Nothing is autosaved. Preview supports headings, bullet lists and fenced code; other syntax, HTML, links and images stay literal and inactive.",
     "limit": "Draft exceeds 32 KiB UTF-8. This edit was rejected; the previous draft remains.",
     "copyOriginal": "Copy original Markdown",
     "copyMarkdown": "Copy draft Markdown",
@@ -388,7 +388,10 @@
       "cancelled": "Save cancelled. No file was created or changed.",
       "failed": "Save failed or the destination changed. No file was written. Choose a regular .md file of at most 32 KiB, or a new name.",
       "write_failed": "Writing or verification failed. The selected file may have been created or partially changed; inspect it before retrying. It was not opened."
-    }
+    },
+    "navigationWarning": "This draft differs from the retained original. Continuing will discard these in-memory edits, even if you already copied or saved them. Cancel to keep editing. The original and saved files are unaffected.",
+    "confirmNavigation": "Discard draft and continue",
+    "navigationBlocked": "Finish or cancel the current save before leaving this artifact. Your draft remains open."
   },
   "modelObservation": {
     "identifier": "Observed model identifier",

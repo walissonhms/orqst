@@ -70,9 +70,10 @@ The panel exposes recorded project/session/agent/machine, adapter/role, event da
 event ID/sequence, contract/event versions and source record provenance as inert text.
 **Original source** never changes. **Draft preview** and **Edit draft** use a separate
 32-KiB UTF-8 memory-only draft initialized from that original. Oversized edits are
-rejected with a visible error. Closing the panel or session details, switching
-sessions, leaving Overview or reloading discards the draft. No artifact persistence,
-draft history or document versions exist.
+rejected with a visible error. Confirmed panel/session closing, session/workspace
+changes or leaving Overview discard the draft. Reload and document/window lifetime
+limits are described below. No artifact persistence, draft history or document
+versions exist.
 Close the current panel before extracting another message.
 
 Every view indicates whether the draft exactly matches the retained original, including
@@ -96,11 +97,32 @@ warning: comparison is against the retained original, not a saved-file revision.
 confirmation neither saves nor reextracts content. While a native save is pending,
 both explicit close actions leave the panel open without a discard prompt.
 
-This is a bounded protection for the two explicit close controls, not a global
-navigation or recovery guard. Selecting another session, leaving Overview, reloading,
-closing the browser/Desktop window or a process failure can still discard drafts
-without this confirmation. No unload handler, persistence or automatic saving is
-introduced. The modal grants no filesystem, IPC or agent authority.
+The same guard now covers session selection, workspace changes and leaving Overview
+through sidebar/header links, Search & commands, notification source links and
+same-document hash/history navigation. The URL, workspace, filters, selected session
+and view change only after confirmation. Cancel preserves exact text and context.
+If the initiating palette/notification button has unmounted, focus returns to the
+Artifact heading; otherwise it returns to that control. Same-view/session/workspace
+selection and inspector tabs preserve edits without prompting. The brand link uses
+same-document Overview navigation. A pending save blocks these transitions with
+explicit feedback; finishing/cancelling it does not replay a blocked request.
+Copying or saving still does not mark the original/draft comparison as unchanged.
+
+The browser installs `beforeunload` only while text differs or a save is pending,
+and removes it when restored/closed. Reload or window/tab exit may then show the
+browser's own warning; user activation and browser policy determine its delivery.
+The warning is not customizable, autosave or guaranteed recovery. The native
+ORQST Desktop user agent excludes this handler, preserving native window/quit policy.
+Desktop close/quit, native reloads/notification-driven document loads, process/OS
+failure and source disappearance remain outside this renderer protection. No native
+IPC/grant, filesystem authority or lifecycle behavior changes.
+
+Hash traversal has already changed the history entry before the renderer sees it.
+Cancellation restores the accepted URL in that entry without adding another entry;
+the exact prior history stack is not restored and may contain duplicate current-view
+entries. Accepted traversal applies its target in the traversed entry. Snapshot
+refreshes do not replay pending or cancelled navigation. Drafts are never written to
+local/session storage or sent to the Bridge; explicitly copy/save important edits.
 
 The React preview supports only heading lines, bullet lists and fenced code blocks.
 Other syntax, including inline Markdown, HTML, links, images and URLs, stays literal.

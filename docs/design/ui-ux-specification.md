@@ -56,6 +56,29 @@ contained focus and return to their trigger. Permission and save errors remain
 explicit. No quiet hours, per-workspace delivery preferences or new event categories
 are implemented by this increment.
 
+## Artifact drafts and safe navigation
+
+Changed manual Artifact drafts require confirmation before closing, selecting a
+new session or workspace, or leaving Overview. The sidebar, header Settings,
+Search & commands, notification source links and same-document hash/history
+navigation use the same guard. Same-view/session/workspace actions and inspector
+tabs preserve the draft without prompting. The brand link returns to Overview
+without reloading the document. Cancel and Escape preserve exact draft text, mode,
+provenance and feedback; the dialog contains focus and initially focuses Cancel.
+When a palette/notification trigger has disappeared, cancellation focuses the
+Artifact heading. Confirmation performs only the requested transition; it does not
+save or reextract. Native saves block these transitions until they finish or cancel,
+with explicit feedback and no queued navigation afterward.
+
+Browser reload/exit may show the browser's own warning while a changed draft or
+save is pending. Browser policy controls that warning; it is not durable recovery.
+Desktop close/quit/native reload, native notification-driven document loads and
+process/OS failures remain outside this renderer guard. Drafts stay in memory only,
+with no autosave, local storage, draft history or background export. A cancelled
+Back/Forward or external hash change restores the current URL in the already
+traversed entry, so exact browser-history restoration is not promised. See the
+[Artifacts contract](../api/artifacts.md#panel-preview-and-clipboard).
+
 ## Grouped Settings and reading comfort
 
 Settings is reachable from the sidebar, header, command palette and `/#settings`.
@@ -126,20 +149,20 @@ storage and Bridge notification preferences keep their separate lifetimes.
 
 The status describes this checkout, not full product acceptance.
 
-| Screen / capability            | Status      | Implemented files and verification                                                                                                                                 | Remaining dependency or limitation                                                                                                                                                    |
-| ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Navigation shell and search    | Implemented | `App.tsx`, `Modal.tsx`, `CommandPalette.tsx`, `shell-preferences.ts`, `shell.css`; `tests/shell-preferences.test.ts`, `tests/browser/shell-navigation.spec.ts`     | No workspace tabs, resizable splits or process/session restoration                                                                                                                    |
-| Overview / Observability       | Partial     | `App.tsx`, `LiveMetrics.tsx`, `SessionTokenBadge.tsx`, existing timeline/attention; dashboard, Live Metrics and shell browser tests                                | Rearrangeable widgets, broader performance metrics, verified costs and independent Observability screen remain planned; summary totals retain legacy limitations                      |
-| Workspaces                     | Partial     | `Workspaces.tsx`; shell browser cases cover scopes, search, sort, layout and reload                                                                                | No rename/archive, filesystem picker, pinning, multiple open project tabs or terminal layout                                                                                          |
-| Agents                         | Partial     | `Agents.tsx` projects actual adapter descriptors; shell cases cover matrix, unavailable state and locales                                                          | CLI path/version/auth/model discovery and managed profiles unavailable                                                                                                                |
-| Models & Analytics             | Partial     | Existing `ModelAnalytics.tsx`, `ModelComparison.tsx`, `ModelEvolution.tsx` and export components; dedicated existing browser suites                                | Observational comparisons only; real-provider comparative acceptance, task efficiency and verified cost remain pending                                                                |
-| Artifacts                      | Partial     | Existing `ArtifactPanel.tsx`, `artifact-preview.ts` and native save; artifact/draft/browser and native policy tests                                                | Manual extraction; inert limited Markdown, no standalone searchable artifact library or automatic extraction; draft persistence/navigation guards remain incomplete                   |
-| Notifications                  | Partial     | `App.tsx`, `Modal.tsx`, `shell.css`; shell source-navigation/filter cases and existing dashboard/Desktop suites                                                    | Native signed visual acceptance, quiet hours and broader preference scope pending                                                                                                     |
-| Settings                       | Partial     | `Settings.tsx`, `NotificationPreferences.tsx`, `appearance-preferences.ts`, shared shell; `tests/browser/settings.spec.ts`, `tests/appearance-preferences.test.ts` | Grouped settings, contrast/spacing/motion, reading sizes/fonts and scoped reset implemented; light theme, terminal fonts, quiet hours, provider and storage management remain planned |
-| Studio / interactive terminals | Blocked     | Existing `ObservedTools.tsx` is historical evidence only; observed-tools browser tests                                                                             | Managed ownership, operation authorization and validated PTY/provider runtime; no fake terminal or Start/Stop/Resume controls                                                         |
-| Orchestration / collaboration  | Blocked     | Explicit source-backed parent relationships remain visible in session details                                                                                      | No task/delegation execution contract; no agent-to-agent messages or inferred workflow                                                                                                |
-| Kanban                         | Planned     | No production board or placeholder cards                                                                                                                           | Requires explicit task entities, provenance and authorized transitions                                                                                                                |
-| Onboarding                     | Planned     | Existing empty/loading/offline states retained                                                                                                                     | Safe CLI discovery and a bounded first-run workflow                                                                                                                                   |
+| Screen / capability            | Status      | Implemented files and verification                                                                                                                                 | Remaining dependency or limitation                                                                                                                                                        |
+| ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation shell and search    | Implemented | `App.tsx`, `Modal.tsx`, `CommandPalette.tsx`, `shell-preferences.ts`, `shell.css`; `tests/shell-preferences.test.ts`, `tests/browser/shell-navigation.spec.ts`     | No workspace tabs, resizable splits or process/session restoration                                                                                                                        |
+| Overview / Observability       | Partial     | `App.tsx`, `LiveMetrics.tsx`, `SessionTokenBadge.tsx`, existing timeline/attention; dashboard, Live Metrics and shell browser tests                                | Rearrangeable widgets, broader performance metrics, verified costs and independent Observability screen remain planned; summary totals retain legacy limitations                          |
+| Workspaces                     | Partial     | `Workspaces.tsx`; shell browser cases cover scopes, search, sort, layout and reload                                                                                | No rename/archive, filesystem picker, pinning, multiple open project tabs or terminal layout                                                                                              |
+| Agents                         | Partial     | `Agents.tsx` projects actual adapter descriptors; shell cases cover matrix, unavailable state and locales                                                          | CLI path/version/auth/model discovery and managed profiles unavailable                                                                                                                    |
+| Models & Analytics             | Partial     | Existing `ModelAnalytics.tsx`, `ModelComparison.tsx`, `ModelEvolution.tsx` and export components; dedicated existing browser suites                                | Observational comparisons only; real-provider comparative acceptance, task efficiency and verified cost remain pending                                                                    |
+| Artifacts                      | Partial     | Existing `ArtifactPanel.tsx`, `artifact-preview.ts` and native save; artifact/draft/browser and native policy tests                                                | Manual extraction; inert limited Markdown, no standalone searchable artifact library or automatic extraction; draft persistence, Desktop close/quit and crash recovery remain unavailable |
+| Notifications                  | Partial     | `App.tsx`, `Modal.tsx`, `shell.css`; shell source-navigation/filter cases and existing dashboard/Desktop suites                                                    | Native signed visual acceptance, quiet hours and broader preference scope pending                                                                                                         |
+| Settings                       | Partial     | `Settings.tsx`, `NotificationPreferences.tsx`, `appearance-preferences.ts`, shared shell; `tests/browser/settings.spec.ts`, `tests/appearance-preferences.test.ts` | Grouped settings, contrast/spacing/motion, reading sizes/fonts and scoped reset implemented; light theme, terminal fonts, quiet hours, provider and storage management remain planned     |
+| Studio / interactive terminals | Blocked     | Existing `ObservedTools.tsx` is historical evidence only; observed-tools browser tests                                                                             | Managed ownership, operation authorization and validated PTY/provider runtime; no fake terminal or Start/Stop/Resume controls                                                             |
+| Orchestration / collaboration  | Blocked     | Explicit source-backed parent relationships remain visible in session details                                                                                      | No task/delegation execution contract; no agent-to-agent messages or inferred workflow                                                                                                    |
+| Kanban                         | Planned     | No production board or placeholder cards                                                                                                                           | Requires explicit task entities, provenance and authorized transitions                                                                                                                    |
+| Onboarding                     | Planned     | Existing empty/loading/offline states retained                                                                                                                     | Safe CLI discovery and a bounded first-run workflow                                                                                                                                       |
 
 A separate [synthetic PTY acceptance experiment](../development/terminal-pty-acceptance.md)
 validates fixed disposable Node processes only. It does not provide a runtime
@@ -162,6 +185,9 @@ screenshots at the same widths (including pt-BR mobile).
 font scaling, offline/storage denial, cross-tab sync, reset focus, exact clipboard
 text, inert preview and viewport containment at 1440/1280/390/320px with maximum
 reading sizes and comfortable spacing. Generated screenshots include pt-BR reset.
+`tests/browser/artifact-navigation.spec.ts` adds changed/unchanged navigation,
+modal handoff from Search/notifications, session/workspace/hash/history transitions,
+pending saves, browser reload cancellation and maximum-size pt-BR at 320px.
 The existing suites also cover Overview, Analytics, session details, Artifacts and
 notifications. Inspect the generated images for these criteria:
 

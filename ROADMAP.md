@@ -252,3 +252,15 @@ remain usable and reset includes the new settings. This addresses an available U
 backlog without new transport or provider capabilities. Light theme, terminal fonts,
 manual screen-reader/native visual acceptance and the broader Phase 2/6 gates remain
 pending. See the [interface specification](docs/design/ui-ux-specification.md).
+
+### Artifact navigation protection increment
+
+The existing memory-only Artifact workflow now guards changed text through session,
+workspace and view navigation, including Search & commands, notification source
+links and same-document session/history links. Cancel retains exact edits/context;
+confirmation performs the requested transition. Pending saves block navigation with
+feedback. Browser reload/exit warnings are best-effort and browser-controlled.
+This closes an available data-loss UX gap without adding persistence or provider
+capabilities. Desktop close/quit, native document loads, crash recovery, durable drafts
+and a searchable artifact library remain pending. See the
+[interface specification](docs/design/ui-ux-specification.md).

@@ -354,7 +354,7 @@
     "discardTitle": "Descartar rascunho do artefato?",
     "discardWarning": "Este rascunho difere do original retido. Fechar descartará as edições em memória, mesmo que você já as tenha copiado ou salvo. O original e os arquivos salvos não são afetados.",
     "confirmDiscard": "Descartar rascunho e fechar",
-    "draftNote": "As edições afetam apenas este rascunho em memória. Fechar explicitamente este artefato ou os detalhes da sessão pede confirmação antes de descartar texto alterado. Trocar de sessão, sair da Visão geral ou recarregar ainda descarta o rascunho sem esta confirmação. A prévia aceita títulos, listas e blocos de código; outras sintaxes, HTML, links e imagens ficam literais e inativos.",
+    "draftNote": "As edições afetam apenas este rascunho em memória. Fechar, trocar de sessão ou workspace e sair da Visão geral pedem confirmação antes de descartar texto alterado. Recarregar ou sair do navegador pode exibir um aviso do navegador; fechar/sair do Desktop e falhas não têm proteção. Nada é salvo automaticamente. A prévia aceita títulos, listas e blocos de código; outras sintaxes, HTML, links e imagens permanecem literais e inativos.",
     "limit": "O rascunho excede 32 KiB UTF-8. Esta edição foi rejeitada; o rascunho anterior permanece.",
     "copyOriginal": "Copiar Markdown original",
     "copyMarkdown": "Copiar Markdown do rascunho",
@@ -388,7 +388,10 @@
       "cancelled": "Salvamento cancelado. Nenhum arquivo foi criado ou alterado.",
       "failed": "O salvamento falhou ou o destino mudou. Nenhum arquivo foi escrito. Escolha um arquivo .md regular de até 32 KiB ou outro nome.",
       "write_failed": "A escrita ou verificação falhou. O arquivo selecionado pode ter sido criado ou parcialmente alterado; confira antes de tentar novamente. Ele não foi aberto."
-    }
+    },
+    "navigationWarning": "O rascunho difere do original retido. Continuar descartará estas edições em memória, mesmo que você já as tenha copiado ou salvo. Cancele para continuar editando. O original e os arquivos salvos não serão alterados.",
+    "confirmNavigation": "Descartar rascunho e continuar",
+    "navigationBlocked": "Conclua ou cancele o salvamento atual antes de sair deste artefato. Seu rascunho continua aberto."
   },
   "modelObservation": {
     "identifier": "Identificador de modelo observado",
