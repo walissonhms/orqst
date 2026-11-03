@@ -559,3 +559,19 @@ containment are unchanged. Automated negative cases cover unknown/nested/encoded
 paths, unauthenticated APIs and untrusted Host/Origin/fetch metadata. Native
 Desktop close/quit/reload and native notification loads still bypass renderer
 draft confirmation; no durable draft recovery is introduced.
+
+## Isolated native Terminal acceptance application — 2026-11-03
+
+Only the [explicit synthetic lab](../development/terminal-native-acceptance.md)
+registers the native Terminal IPC/preload contract. Production observer main,
+Bridge, API/WS/cookie/static-file controls, dashboard routes and external-session
+permissions remain unchanged. The lab has a private session, exact three-resource
+allowlist, restrictive CSP, no network and strict bounded request/reply validation.
+Native sender/document generation is rechecked after asynchronous work; navigation
+permanently revokes the broker and blur invalidates pending consent/input. Private
+keys/proofs/leases stay outside the renderer. A separate Node host executes only a
+fixed credential-free fixture; transport loss is uncertain ownership, never inferred
+exit. The fixture's lifetime bounds are not a production process sandbox/recovery
+policy. Real transport checks passed with intercepted dialogs; genuine human
+consent, immutable provider admission, independent authentication, containment and
+durable Core ownership remain gates before enabling Codex.

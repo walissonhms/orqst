@@ -3,8 +3,10 @@
 The experimental modules in `packages/core/src/terminal/` implement authorization,
 handle ownership and bounded I/O for a future managed terminal. They are **not
 exported by the Core package entry point or composed into ObserverCore, Bridge or
-Desktop**. There is no terminal execution endpoint, IPC handler or registered native dialog,
-renderer control, provider adapter or persistent execution record in this increment.
+normal Desktop startup**. That runtime has no terminal execution endpoint, IPC
+handler, native dialog, renderer control, provider adapter or persistent execution
+record. The later [native acceptance lab](terminal-native-acceptance.md) composes a
+separate disposable application only.
 The existing observer and observed sessions remain read-only.
 
 The only native backend is a fixed disposable Node fixture in the explicit
@@ -150,3 +152,12 @@ lab directory sequentially, with no provider configuration or credentials. Nativ
 confirmation is deliberately simulated there; the real Electron dialog, document,
 focus/accessibility behavior and independent IPC enrollment/transport remain pending.
 There is still no application terminal or provider control to enable.
+
+## Native transport integration lab — 2026-11-03
+
+The [explicit native acceptance application](terminal-native-acceptance.md) now
+composes the library with a dedicated Electron document/preload/IPC and a separate
+Node-host PTY for the fixed synthetic fixture. Normal application startup is
+unchanged. The additional `TerminalEvents.lost()` reports transport uncertainty,
+without claiming exit or authorizing retry. Real Electron transport is exercised
+with intercepted native dialogs; provider/human-consent/recovery gates remain.

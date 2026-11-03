@@ -604,5 +604,23 @@
     "done": "Concluir",
     "empty": "Os painéis opcionais da visão geral estão ocultos. Personalize o layout para exibi-los novamente.",
     "storageUnavailable": "O layout vale para esta visita. O armazenamento local está indisponível e as escolhas podem não permanecer após recarregar."
+  },
+  "terminalLab": {
+    "title": "Laboratório sintético do Terminal nativo",
+    "scope": "Aceitação de engenharia descartável. Não usa projeto do usuário, sessão externa, credencial ou provider real. O processo encerra após oito segundos.",
+    "provider": "Codex é o primeiro candidato; execução gerenciada está indisponível. Claude Code e OpenCode continuam sem validação.",
+    "start": "Iniciar processo de teste",
+    "attach": "Anexar saída",
+    "input": "Habilitar entrada",
+    "detach": "Desanexar",
+    "stop": "Parar processo de teste",
+    "paste": "Entrada exata do processo de teste (ping, size ou exit seguidos de uma quebra de linha)",
+    "send": "Confirmar colagem exata",
+    "denied": "Solicitação negada ou entrada revogada.",
+    "cancelled": "Confirmação nativa cancelada.",
+    "busy": "Outra solicitação está pendente.",
+    "ok": "Solicitação processada; saída exige evidência explícita.",
+    "idle": "Nenhum processo próprio foi iniciado.",
+    "output": "Saída inerte do processo sintético"
   }
 }
