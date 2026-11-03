@@ -11,8 +11,33 @@ its remaining dependencies without distributing private design briefs.
 ## Navigate real observations
 
 The sidebar exposes five working destinations: **Overview**, **Workspace directory**,
-**Agents & integrations**, **Most used models** and **Settings**. Direct links are `/#overview`,
-`/#workspaces`, `/#agents`, `/#models` and `/#settings`; browser Back/Forward remains supported.
+**Agents & integrations**, **Most used models** and **Settings**. Direct links are `/overview`,
+`/workspaces`, `/agents`, `/models` and `/settings`; browser Back/Forward remains supported.
+Direct entry and reload use the same view. The root `/` restores the last locally
+stored view; an explicit path takes precedence. Old `/#overview`, `/#workspaces`,
+`/#agents`, `/#models` and `/#settings` links are accepted and canonicalized with
+`replaceState`, without adding an alias entry. Legacy `/#session=<encoded-id>` links
+wait for the Bridge snapshot and select only a retained identity, then become
+`/overview/sessions/<encoded-id>`. The canonical session path supports reload and
+history navigation; unknown, malformed or oversized identities open no session.
+Only these exact view paths and the validated session-path shape are supported;
+trailing slashes and arbitrary nested paths are not dashboard routes. Session
+segments must decode/re-encode canonically, contain 1–200 code units and exclude
+separators, residual percent signs, controls and dot-only values. Source identities
+are not restricted to UUIDs: legacy IDs that cannot safely use a path retain
+`/overview#session=<encoded-id>` for exact compatibility. IDs over the existing
+200-code-unit link budget or containing unpaired UTF-16 surrogates remain viewable
+in memory but cannot produce a lossless supported session URL; reload cannot
+restore those identities. No truncated or replacement ID is emitted. Recognized legacy view
+and session hashes override the pathname to preserve old same-document navigation;
+other fragments do not override it. Malformed or missing identities never select
+a session. Session IDs were already visible in the inspector, browser history and
+API URLs. Clean session paths also send that ID on direct HTTP entry/reload. The
+Bridge has no request URL log, and `no-referrer` remains active; do not share local
+URLs as if their identifiers were anonymous. No task text, workspace path or
+captured content is added to URLs. Paths and session fragments never grant API or
+native capabilities.
+
 Collapse the desktop sidebar to retain icon navigation and accessible names.
 Narrow windows use the existing workspace menu.
 
@@ -76,13 +101,16 @@ save is pending. Browser policy controls that warning; it is not durable recover
 Desktop close/quit/native reload, native notification-driven document loads and
 process/OS failures remain outside this renderer guard. Drafts stay in memory only,
 with no autosave, local storage, draft history or background export. A cancelled
-Back/Forward or external hash change restores the current URL in the already
-traversed entry, so exact browser-history restoration is not promised. See the
+Back/Forward or same-document hash change restores the accepted history entry
+before asking the guard. Confirmation traverses once to the requested entry;
+cancellation leaves both directions intact. This applies to entries managed by
+this dashboard document, not external document loads or arbitrary script-written
+history state. See the
 [Artifacts contract](../api/artifacts.md#panel-preview-and-clipboard).
 
 ## Grouped Settings and reading comfort
 
-Settings is reachable from the sidebar, header, command palette and `/#settings`.
+Settings is reachable from the sidebar, header, command palette and `/settings`.
 Four groups expose only supported behavior:
 
 - **General:** interface language (en-US / pt-BR), using existing i18next storage;

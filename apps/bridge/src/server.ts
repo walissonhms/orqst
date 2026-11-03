@@ -5,6 +5,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import {
+  dashboardPathSchema,
   preferencesSchema,
   artifactExtractionRequestSchema,
   modelAnalyticsQuerySchema,
@@ -277,9 +278,11 @@ export function createLocalServer(
         reply(response, 405, { error: 'method_not_allowed' });
         return;
       }
+      const dashboardRoute = dashboardPathSchema.safeParse(url.pathname).success;
       let path: string;
       try {
-        path = decodeURIComponent(url.pathname);
+        // Session IDs identify a view; they never become a static filesystem path.
+        path = dashboardRoute ? '/' : decodeURIComponent(url.pathname);
       } catch {
         reply(response, 400, { error: 'invalid_path' });
         return;
@@ -294,7 +297,11 @@ export function createLocalServer(
         reply(response, 403, { error: 'invalid_path' });
         return;
       }
-      if (file === root || !extname(file)) file = resolve(root, 'index.html');
+      if (dashboardRoute) file = resolve(root, 'index.html');
+      else if (!extname(file)) {
+        reply(response, 404, { error: 'not_found' });
+        return;
+      }
       try {
         const canonical = await realpath(file);
         const canonicalRoot = await realpath(root);
