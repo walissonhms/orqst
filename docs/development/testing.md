@@ -694,7 +694,7 @@ deduplication/capacity and stable priority without mutating or fabricating recor
 Run the browser checks after `pnpm build`:
 
 ```bash
-pnpm test:browser tests/browser/workspace-pins.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/artifact-navigation.spec.ts
+pnpm test:browser tests/browser/workspace-pins.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/overview-layout.spec.ts
 ```
 
 The eight new synthetic Chromium cases passed on 2026-11-03. They cover keyboard
@@ -719,3 +719,10 @@ isolation, cancellation/start, attach/read, exact leased paste, blur revocation,
 confirmed stop/exit and permanent reload revocation. Dialog responses are
 intercepted; this does not accept a real human/modal gesture or provider behavior.
 See [reproduction, lifetime and remaining gates](terminal-native-acceptance.md).
+
+After incorporating the concurrent native Terminal changes through `8fbe7cd`, the
+combined tree passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (289 cases),
+`pnpm build` and the five-suite Chromium command above (43 cases). The existing
+Vite bundle-size warning remains. This validates compatibility of the shared
+renderer increment; it does not repeat native Terminal/provider acceptance or
+approve a release. No installed service was restarted and no push was performed.
