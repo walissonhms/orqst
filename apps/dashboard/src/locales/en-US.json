@@ -342,5 +342,26 @@
     "limits": "Model evidence limits",
     "historyNote": "Historical session summary. The model observation time is unavailable; this identifier may differ from the latest model in the source.",
     "availabilityNote": "Model discovery is not implemented. Availability, capabilities and selection have not been verified."
+  },
+  "modelHistory": {
+    "title": "Recent model observations",
+    "limits": "Partial coverage: at most the latest 32 compact evidence records, newest ingestion first. Repeated identifiers are not model changes. Availability, entitlement and selection are unverified.",
+    "timeNote": "Times belong to normalized events carrying an identifier that may have been inherited from earlier state. They do not prove the original declaration, effective use or current model. Source files have not been rechecked.",
+    "privacy": "Identifiers are original untrusted text and may contain private metadata. Source paths and captured messages are excluded.",
+    "offline": "History unavailable while disconnected.",
+    "failed": "History unavailable: the reading could not be validated.",
+    "loading": "Reading partial session evidence…",
+    "allUnrecorded": "No model identifier is recorded in this partial window. These records do not establish any model.",
+    "eventTime": "Normalized event time:",
+    "provenance": "Compact evidence #{{sequence}}; source record type and hash:",
+    "unavailable": {
+      "session_not_found": "Session not found.",
+      "unsupported_adapter": "History is unsupported for this adapter.",
+      "unsupported_schema": "Compact evidence storage is unavailable or its schema is unsupported.",
+      "evidence_missing": "No compact evidence is retained for this session.",
+      "evidence_limit": "History unavailable: evidence exceeds the reading limit.",
+      "invalid_evidence": "History unavailable: evidence could not be validated.",
+      "identity_conflict": "History unavailable: session evidence identity conflicts."
+    }
   }
 }

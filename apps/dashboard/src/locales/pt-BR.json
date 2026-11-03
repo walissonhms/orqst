@@ -342,5 +342,26 @@
     "limits": "Limites da evidência de modelo",
     "historyNote": "Resumo histórico da sessão. O horário da observação do modelo está indisponível; este identificador pode diferir do modelo mais recente na origem.",
     "availabilityNote": "A descoberta de modelos não está implementada. Disponibilidade, capacidades e seleção não foram verificadas."
+  },
+  "modelHistory": {
+    "title": "Observações recentes de modelo",
+    "limits": "Cobertura parcial: no máximo os últimos 32 registros compactos, por ordem decrescente de ingestão. Identificadores repetidos não são trocas de modelo. Disponibilidade, direito de acesso e seleção não foram verificados.",
+    "timeNote": "Os horários pertencem a eventos normalizados que carregam um identificador possivelmente herdado do estado anterior. Não comprovam declaração original, uso efetivo ou modelo atual. Os arquivos de origem não foram reverificados.",
+    "privacy": "Identificadores são texto original não confiável e podem conter metadados privados. Caminhos de origem e mensagens capturadas são excluídos.",
+    "offline": "Histórico indisponível enquanto desconectado.",
+    "failed": "Histórico indisponível: a leitura não pôde ser validada.",
+    "loading": "Lendo evidência parcial da sessão…",
+    "allUnrecorded": "Nenhum identificador de modelo está registrado nesta janela parcial. Estes registros não comprovam nenhum modelo.",
+    "eventTime": "Horário do evento normalizado:",
+    "provenance": "Evidência compacta #{{sequence}}; tipo e hash do registro de origem:",
+    "unavailable": {
+      "session_not_found": "Sessão não encontrada.",
+      "unsupported_adapter": "Histórico sem suporte para este adaptador.",
+      "unsupported_schema": "Armazenamento de evidência compacta indisponível ou schema sem suporte.",
+      "evidence_missing": "Nenhuma evidência compacta retida para esta sessão.",
+      "evidence_limit": "Histórico indisponível: evidência excede o limite de leitura.",
+      "invalid_evidence": "Histórico indisponível: a evidência não pôde ser validada.",
+      "identity_conflict": "Histórico indisponível: conflito de identidade na evidência da sessão."
+    }
   }
 }

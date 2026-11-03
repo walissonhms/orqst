@@ -473,3 +473,12 @@ own DTO/channel and 32 KiB Markdown grant. One operation is admitted across both
 Analytics has no external-open action or reusable grant. Filesystem writes and final
 source validation are not one atomic operation; partial I/O and races remain explicit.
 See [fields, exact encodings, native contract and review](../api/analytics-export.md).
+
+## Partial session model history review
+
+The authenticated additive GET reads only an indexed bounded compact-evidence window
+on the existing Store connection. All row identities and provenance are validated before
+any result; SQL size admission precedes metadata materialization. The output excludes
+source paths and captured bodies; actual HTTP bytes are bounded before client parsing.
+No cache/credential/source read, migration, new writer or process authority is added.
+See [admission, privacy and client cancellation](../api/model-history.md).

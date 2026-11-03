@@ -82,3 +82,57 @@ absence of selection controls or fabricated model time, and long-ID mobile layou
 Existing ingestion/accounting/security tests remain applicable. These checks do not
 validate catalog discovery, account access, native switching or provider capability.
 No actual user sessions, service, client or database are required for these tests.
+
+## Cache investigation — 2026-11-02
+
+The follow-up investigation does **not** implement cache discovery. Codex tag
+`rust-v0.162.1` resolves to commit `092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`.
+Its [cache definition](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/models-manager/src/cache.rs#L65-L87)
+stores fetch/revalidation time, optional ETag, client version, opaque provider/auth
+identity and model records. The [manager's cache admission](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/models-manager/src/manager.rs#L712-L764)
+requires the effective endpoint identity as well as compatible version and freshness;
+unscoped legacy entries do not establish compatibility. Its default TTL is five
+minutes, not an ORQST freshness guarantee.
+
+Bounded read-only structural inspection found a local envelope with the expected
+field types and a matching declared client version. No identity values, model names,
+configuration or source payload are published here. Matching package/cache metadata
+alone does not establish the effective provider, account, custom-build compatibility,
+configuration overrides or current session version. ORQST has no independently
+validated, nonsensitive endpoint-identity evidence. This is a **technical source-trust
+block**, not an empty catalog or a claim that the cache is incompatible.
+
+The [official catalog documentation](https://learn.chatgpt.com/docs/model-catalogs#match-the-clients-schema)
+requires the matching release schema and documents local catalog overrides. The
+[official app-server integration guidance](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
+distinguishes catalog membership from entitlement. Neither source permits inferring
+current access from a cached name. ORQST does not launch Codex/app-server, inspect
+credentials or call a provider to resolve this block.
+
+A subsequent cache design must first establish an authorized, nonsensitive trust
+basis independently of cache contents. Any projection must distinguish cached
+candidates from observed identifiers and executable choices, reject unknown revisions
+and return explicit unavailable reasons for absent/null, malformed, oversized,
+permission-denied, unsafe or unverified sources. It must accept no renderer path/URL,
+use a fixed startup root independently of a session-root override, reject symlinks,
+verify ownership/regular-file identity and recheck containment/descriptors with
+`O_NOFOLLOW` and budgets before materialization. Opaque identity, ETags, configuration,
+unknown payloads and cache content must never reach UI, persistence or logs. No such
+reader, endpoint, filesystem grant or cache contract is implemented by this slice.
+
+## Independent session history increment
+
+The session details now offer an expandable **Recent model observations** history,
+using existing compact SQLite evidence only. This does not resolve the cache block.
+The latest 32 compact records are ordered by ingestion sequence, retaining repetitions
+and null identifiers. They are not a list of model changes or proof of effective use.
+Every event's complete stored identity is checked against the canonical session before
+any entry is returned. Source paths and captured bodies are excluded.
+
+Coverage is always partial, including when every identifier is null. Null-only records
+explicitly establish no model; absent evidence and unsupported storage are unavailable.
+Times belong to normalized events carrying an identifier, possibly propagated through
+`state.model`; they are not proof of the original declaration, effective use, selection
+or current model. No inference is made about availability, entitlement or capabilities.
+See the [history contract and security review](../api/model-history.md) for budgets,
+provenance, unavailable reasons, refresh behavior and verification scope.

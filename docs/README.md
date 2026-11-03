@@ -90,3 +90,6 @@ For a new contributor:
 5. `docs/adapters/codex.md`
 6. `docs/development/setup.md`
 7. `docs/development/testing.md`
+
+- [Partial session model history](api/model-history.md) — normalized-event identifiers,
+  bounded compact evidence, unavailable states and source-trust limits.

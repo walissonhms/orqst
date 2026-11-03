@@ -40,6 +40,7 @@ import type {
 import { api } from './api';
 import { ArtifactPanel } from './ArtifactPanel';
 import { LiveMetrics } from './LiveMetrics';
+import { ModelHistory } from './ModelHistory';
 import { useSessionMetrics } from './use-session-metrics';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
@@ -331,6 +332,11 @@ function SessionDetail({
         </div>
       </div>
       <LiveMetrics state={metrics} announce />
+      <ModelHistory
+        session={session}
+        cursor={snapshot.cursor}
+        online={connection === 'connected' && !snapshotError}
+      />
       {session.status === 'waiting_for_user' && <p className="notice">{t('interventionNote')}</p>}
       {error && (
         <p role="alert" className="notice">

@@ -7,6 +7,7 @@ export * from './artifacts.js';
 export * from './desktop-artifacts.js';
 export * from './desktop-analytics.js';
 export * from './live-metrics.js';
+export * from './model-history.js';
 
 export const statusSchema = z.enum([
   'running',

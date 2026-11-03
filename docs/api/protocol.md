@@ -375,3 +375,11 @@ unidentified models without changing existing cumulative/cache semantics. No met
 or lifecycle family may be silently inserted into the closed v1 stream.
 The new route has authentication, bounds, privacy and compatibility tests. No existing
 v1 event or message is extended by this projection.
+
+## Partial session model history contract
+
+`orqst.session-model-history` version 1 is a separate strict local read projection.
+It carries nullable original identifiers, normalized-event times, compact sequence and
+source hash/type only; coverage is always partial. It adds no v1 event fields or stream
+messages and makes no model declaration/use/current-state claim. See the
+[contract](model-history.md).

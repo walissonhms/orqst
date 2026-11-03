@@ -134,6 +134,12 @@ unverified. Missing identifiers stay unrecorded. This first observational Model
 Manager increment adds no discovery, model picker or agent controls. See
 [Model Manager evidence and limits](docs/architecture/model-manager.md).
 
+The expandable **Recent model observations** history reads at most 32 compact session
+evidence records with partial coverage and explicit unavailable/null states. Its times
+are normalized-event times, not model declaration or effective-use times. Local cache
+discovery remains blocked on source trust; no credentials or provider calls resolve it.
+See the [history contract](docs/api/model-history.md).
+
 ## Confirmed Live Metrics
 
 Session details and the Artifacts panel show **Confirmed session tokens** from one

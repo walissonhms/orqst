@@ -9,6 +9,7 @@ import {
   artifactExtractionRequestSchema,
   modelAnalyticsQuerySchema,
   sessionMetricsRequestSchema,
+  sessionModelHistoryRequestSchema,
   type Snapshot,
   type StoredEvent,
   type StreamMessage,
@@ -141,6 +142,23 @@ export function createLocalServer(
           return;
         }
         const metrics = /^\/api\/sessions\/([^/]+)\/metrics$/.exec(url.pathname);
+        const modelHistory = /^\/api\/sessions\/([^/]+)\/model-history$/.exec(url.pathname);
+        if (modelHistory && request.method === 'GET') {
+          const parsed = sessionModelHistoryRequestSchema.safeParse({
+            sessionId: decodeURIComponent(modelHistory[1]!),
+          });
+          if (
+            !parsed.success ||
+            url.search ||
+            request.headers['transfer-encoding'] ||
+            (request.headers['content-length'] && request.headers['content-length'] !== '0')
+          ) {
+            reply(response, 400, { error: 'invalid_model_history_request' });
+            return;
+          }
+          reply(response, 200, store.sessionModelHistory(parsed.data.sessionId));
+          return;
+        }
         if (metrics && request.method === 'GET') {
           const parsed = sessionMetricsRequestSchema.safeParse({
             sessionId: decodeURIComponent(metrics[1]!),

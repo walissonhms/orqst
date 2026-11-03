@@ -1752,6 +1752,24 @@ th:nth-last-child(2) {
   border-radius: 8px;
   min-width: 0;
 }
+.model-history {
+  margin: 16px 20px;
+  padding: 14px;
+  border: 1px solid #2b3f4d;
+  border-radius: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-history summary {
+  cursor: pointer;
+}
+.model-history summary:focus-visible {
+  outline: 2px solid #77c7a5;
+  outline-offset: 2px;
+}
+.model-history li {
+  margin: 12px 0;
+}
 .artifact-panel .live-metrics {
   margin: 12px 0;
 }

@@ -303,3 +303,7 @@ shell or open capability. Partial failure/race and concurrent post-check source
 changes remain possible; no atomic database-to-file snapshot or rollback is claimed.
 Model identifiers can contain private metadata, and encoding is not redaction.
 See [contract and security review](docs/api/analytics-export.md).
+
+Partial session model history uses a separate bounded authenticated read of existing
+compact evidence, excluding source paths and captured bodies. It adds no cache or
+credential access. See the [security review](docs/api/model-history.md#client-behavior-and-security-review).

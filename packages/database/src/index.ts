@@ -8,6 +8,8 @@ import {
   preferencesSchema,
   modelAnalyticsQuerySchema,
   sessionMetricsRequestSchema,
+  sessionModelHistoryRequestSchema,
+  type SessionModelHistoryResult,
   type SessionMetricsResult,
   type AgentEvent,
   type StoredEvent,
@@ -22,6 +24,7 @@ import {
 } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
+import { readSessionModelHistory } from './model-history.js';
 export { SESSION_METRICS_LIMITS } from './live-metrics.js';
 import {
   analyticsEvidenceMigration,
@@ -426,6 +429,10 @@ export class Store {
   sessionMetrics(sessionId: string): SessionMetricsResult {
     sessionMetricsRequestSchema.parse({ sessionId });
     return readSessionMetrics(this.db, sessionId);
+  }
+  sessionModelHistory(sessionId: string): SessionModelHistoryResult {
+    sessionModelHistoryRequestSchema.parse({ sessionId });
+    return readSessionModelHistory(this.db, sessionId);
   }
   private usage(row: Row): Usage {
     return {

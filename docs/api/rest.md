@@ -362,3 +362,10 @@ method. It baselines notification history on attachment/recovery and joins new h
 rows to retained source evidence before attempting native alerts. Count and loss bounds,
 identity validation and macOS distribution limits are documented in
 [Desktop development](../development/desktop.md#tray-and-native-alert-mechanism--2026-11-02).
+
+## Partial session model history
+
+`GET /api/sessions/:sessionId/model-history` is an authenticated, bounded read of the
+latest 32 compact session records, with strict identity/provenance checks and partial
+coverage. It accepts no query/body or source authority. Null identifiers and unavailable
+storage/evidence stay explicit. See the [contract and security review](model-history.md).
