@@ -329,6 +329,8 @@ applicable. They exclude paths, entry names, thread IDs, metadata values, raw er
 and captured content. Retain these records with the private acceptance evidence;
 discarding stdout loses the diagnostic. The final cleanup record includes
 `sourcePreservation`: `failed`, `inconclusive`, `incomplete` or `verified`.
+Its bounded `sourceChecks` array repeats the original per-check records, including
+their safe reason/diagnostic, so retaining only the final record does not lose them.
 `sourcesVerified` is true only when baseline, pre-confirmation and cleanup all
 succeeded. An earlier error remains in the final result even if a later check
 passes; no rebaseline, retry, history-content inspection or writer attribution is

@@ -320,6 +320,7 @@ try {
       mcpServersStarted: 'unverified',
       descendantCleanup: 'not-verified',
       sourcePreservation,
+      sourceChecks,
       sourcesVerified,
       privateStateRetained: true,
       note: 'Do not delete or reuse uncertain state; no PID adoption or automatic retry.',
