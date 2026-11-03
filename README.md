@@ -97,7 +97,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   receipts plus both still-owned exits. Source checks emit bounded, payload-free
   diagnostics: shared-history changes report inconclusive preservation without
   attributing a writer, still block acceptance and remain unsuccessful in the final
-  report. The failed pane-620 check remains unexplained. Its labeled
+  report. Concurrent history drift no longer short-circuits the bounded test-thread
+  scan: stronger violations stay failed and partial coverage remains explicit. The
+  failed pane-620 check remains unexplained. Its labeled
   preparation result does not establish inference/model entitlement, delegation or
   descendant cleanup. See
   [preparation scope](docs/development/codex-two-agent-acceptance.md).

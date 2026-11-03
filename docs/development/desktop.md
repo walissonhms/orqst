@@ -85,6 +85,41 @@ pnpm build
 pnpm desktop
 ```
 
+### Checking which build is active without losing work
+
+The checkout has three independently loaded layers:
+
+- The Bridge serves `apps/dashboard/dist` from disk on each static request. Compare
+  a new loopback GET of `/` and its exact JS/CSS asset URLs with those files to
+  establish the bytes served now. Do not request session APIs or publish cookies
+  or captured content for this check.
+- An already loaded dashboard keeps its JavaScript and in-memory drafts. Disabled
+  cache does not hot-replace its document after a build. Fresh HTTP bytes do not
+  establish which bytes that existing renderer loaded.
+- Electron loads `apps/desktop/dist/main.cjs` at process startup and each isolated
+  preload/document when its window is created. Rebuilding the shell does not
+  replace the running main process. Starting another instance only activates the
+  existing single instance; it is not an update. Main-process startup predating a
+  changed bundle rules out loading that new main bundle at startup. A later
+  timestamp alone is not an attestation of exact loaded bytes.
+
+Keep the existing window and managed hosts alive during inspection. A dashboard
+reload must go through the existing draft guard after the owner saves, discards or
+cancels the draft; do not force navigation, clear storage, recreate the window or
+restart the Bridge to check freshness. Reloading an owned terminal can revoke its
+channel and is not a refresh strategy. Shell changes require a separately planned
+quit/relaunch once managed lifetime/ownership and drafts are reconciled; do not
+infer safe shutdown from a hidden window or an idle-looking pane.
+
+Validate new builds independently with `pnpm test:desktop`: its disposable profile,
+synthetic Bridge/database and separate port exercise the built Electron main,
+preloads and renderer without replacing the owner's instance. Synthetic native
+agent checks are separately explicit (`pnpm accept:managed-agents
+--authorize-synthetic-agents`). Neither check starts a real Codex provider or
+establishes real-account, active-window modal/focus or two-real-agent acceptance.
+No automatic update, hot reload, loaded-build attestation or owner-state migration
+is implemented by this workflow.
+
 Electron 45's npm package has no postinstall script. The binary downloads on first CLI
 use, or explicitly with `install-electron --no`, through Electron's official downloader
 and checksum verification. `onlyBuiltDependencies` remains limited to `esbuild`;

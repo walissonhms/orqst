@@ -79,6 +79,23 @@ test('history change is inconclusive, symlinks fail, and diagnostics retain no p
       phase: 'source-preservation',
       check: 'pre-confirmation',
       status: 'inconclusive',
+      inspection: {
+        historyHomesChecked: 1,
+        historyHomesTotal: 1,
+        changedHistories: [
+          {
+            homeIndex: 0,
+            fields: {
+              presence: false,
+              inode: false,
+              size: true,
+              mtime: record.diagnostic.historyChanges.mtime,
+              ctime: record.diagnostic.historyChanges.ctime,
+            },
+          },
+        ],
+        testThreadFiles: 'not-found',
+      },
       diagnostic: {
         reason: 'history_changed',
         source: 'history',
@@ -105,7 +122,7 @@ test('history change is inconclusive, symlinks fail, and diagnostics retain no p
     symlinkSync(history, join(root, 'sessions', 'SYNTHETIC-SECRET'));
     assert.throws(() => fresh(['synthetic-thread']), reason('unsafe_entry'));
     appendFileSync(history, 'x');
-    assert.throws(() => fresh(['synthetic-thread']), reason('history_changed'));
+    assert.throws(() => fresh(['synthetic-thread']), reason('unsafe_entry'));
     const unknownRecords: object[] = [];
     assert.throws(
       () =>
@@ -212,7 +229,19 @@ test('deduplicates directory aliases without increasing the global source entry 
     acceptanceSourceGuard([a, b])(['synthetic-thread']);
     mkdirSync(join(b, 'archived_sessions'));
     const extra = join(b, 'archived_sessions', 'extra');
+    const concurrent = acceptanceSourceGuard([a, b]);
+    writeFileSync(join(a, 'history.jsonl'), 'SYNTHETIC-CONCURRENT');
     linkSync(seed, extra);
+    assert.throws(
+      () => concurrent(['synthetic-thread']),
+      (error: unknown) => {
+        assert.ok(error instanceof SourceGuardError);
+        assert.equal(error.diagnostic.reason, 'budget_exceeded');
+        assert.equal(error.inspection?.testThreadFiles, 'incomplete');
+        assert.equal(error.inspection?.changedHistories.length, 1);
+        return true;
+      },
+    );
     assert.throws(
       () => acceptanceSourceGuard([a, b])(['synthetic-thread']),
       reason('budget_exceeded'),
@@ -272,6 +301,86 @@ test('checks every physical home alias again and rejects unsafe baseline paths',
     assert.throws(() => verify(['synthetic-thread']), reason('home_changed'));
     symlinkSync(join(root, 'absent'), join(home, 'history.jsonl'));
     assert.throws(() => acceptanceSourceGuard([home]), reason('unsafe_history'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('changed shared history never masks test threads or unsafe trees across homes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orqst-synthetic-concurrent-history-'));
+  try {
+    const homes = ['a', 'b'].map((name) => join(root, name));
+    for (const home of homes) {
+      mkdirSync(home);
+      writeFileSync(join(home, 'history.jsonl'), 'SYNTHETIC-PRIVATE');
+    }
+    const verify = acceptanceSourceGuard(homes);
+    // A separate writer is observed only through metadata. Its identity is never reported.
+    appendFileSync(join(homes[0]!, 'history.jsonl'), 'SYNTHETIC-APPEND');
+    appendFileSync(join(homes[1]!, 'history.jsonl'), 'SYNTHETIC-APPEND');
+    for (const source of ['sessions', 'archived_sessions']) {
+      const directory = join(homes[1]!, source);
+      mkdirSync(directory);
+      const file = join(directory, 'rollout-synthetic-thread.jsonl');
+      writeFileSync(file, 'SYNTHETIC-UNREADABLE', { mode: 0o000 });
+      const records: SourceCheckRecord[] = [];
+      assert.throws(
+        () =>
+          runSourceCheck(
+            'pre-confirmation',
+            () => verify(['synthetic-thread']),
+            (record) => records.push(record),
+          ),
+        reason('thread_materialized'),
+      );
+      assert.equal(records[0]?.status, 'failed');
+      assert.equal(records[0]?.inspection?.testThreadFiles, 'found');
+      assert.equal(records[0]?.inspection?.changedHistories.length, 2);
+      assert.equal(records[0]?.inspection?.historyHomesChecked, 2);
+      assert.equal(records[0]?.inspection?.historyHomesTotal, 2);
+      assert.ok(!JSON.stringify(records).includes(root));
+      assert.ok(!JSON.stringify(records).includes('synthetic-thread'));
+      assert.ok(!JSON.stringify(records).includes('SYNTHETIC'));
+      rmSync(file);
+      symlinkSync(root, join(directory, 'unsafe'));
+      assert.throws(() => verify(['synthetic-thread']), reason('unsafe_entry'));
+      rmSync(directory, { recursive: true });
+    }
+    const records: SourceCheckRecord[] = [];
+    assert.throws(
+      () =>
+        runSourceCheck(
+          'cleanup',
+          () => verify(['synthetic-thread']),
+          (record) => records.push(record),
+        ),
+      reason('history_changed'),
+    );
+    assert.equal(records[0]?.status, 'inconclusive');
+    assert.equal(records[0]?.inspection?.testThreadFiles, 'not-found');
+    assert.equal(records[0]?.inspection?.changedHistories.length, 2);
+    assert.equal(sourceCheckSummary(records), 'inconclusive');
+    // Deferred drift still fails at the global bound, not as a successful concurrency exception.
+    let deep = join(homes[0]!, 'sessions');
+    for (let i = 0; i < 10; i++) {
+      mkdirSync(deep);
+      deep = join(deep, 'deep');
+    }
+    const failed: SourceCheckRecord[] = [];
+    assert.throws(
+      () =>
+        runSourceCheck(
+          'cleanup',
+          () => verify(['synthetic-thread']),
+          (record) => failed.push(record),
+        ),
+      reason('depth_exceeded'),
+    );
+    assert.equal(failed[0]?.inspection?.testThreadFiles, 'incomplete');
+    assert.equal(failed[0]?.inspection?.historyHomesChecked, 1);
+    assert.equal(failed[0]?.inspection?.historyHomesTotal, 2);
+    assert.equal(failed[0]?.inspection?.changedHistories.length, 1);
+    assert.equal(sourceCheckSummary(failed), 'failed');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

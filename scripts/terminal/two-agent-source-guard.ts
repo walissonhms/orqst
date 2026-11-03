@@ -33,12 +33,22 @@ export type SourceDiagnostic = {
     ctime: boolean;
   } | null;
 };
+export type SourceInspection = {
+  historyHomesChecked: number;
+  historyHomesTotal: number;
+  changedHistories: Array<{
+    homeIndex: number;
+    fields: NonNullable<SourceDiagnostic['historyChanges']>;
+  }>;
+  testThreadFiles: 'not-found' | 'found' | 'incomplete';
+};
 type SourceCheck = 'baseline' | 'pre-confirmation' | 'cleanup';
 export type SourceCheckRecord = {
   phase: 'source-preservation';
   check: SourceCheck;
   status: 'captured' | 'verified' | 'inconclusive' | 'failed';
   diagnostic: SourceDiagnostic | null;
+  inspection?: SourceInspection;
 };
 
 /** Later success cannot erase an earlier failure or missing required check. */
@@ -57,7 +67,10 @@ export function sourceCheckSummary(records: readonly SourceCheckRecord[]) {
 }
 
 export class SourceGuardError extends Error {
-  constructor(readonly diagnostic: SourceDiagnostic) {
+  constructor(
+    readonly diagnostic: SourceDiagnostic,
+    readonly inspection?: SourceInspection,
+  ) {
     super(`Source preservation: ${diagnostic.reason}`);
     this.name = 'SourceGuardError';
   }
@@ -119,8 +132,14 @@ export function runSourceCheck<T>(
       check,
       status: diagnostic.reason === 'history_changed' ? 'inconclusive' : 'failed',
       diagnostic,
+      ...(error instanceof SourceGuardError && error.inspection
+        ? { inspection: error.inspection }
+        : {}),
     });
-    throw new SourceGuardError(diagnostic);
+    throw new SourceGuardError(
+      diagnostic,
+      error instanceof SourceGuardError ? error.inspection : undefined,
+    );
   }
 }
 
@@ -172,62 +191,87 @@ export function acceptanceSourceGuard(codexHomes: readonly string[]) {
     if (!threadIds.length || !threadIds.every((id) => /^[a-zA-Z0-9_-]+$/.test(id)))
       failure('invalid_input', 'input', null);
     let entries = 0;
-    for (const home of homes) {
-      for (const alias of home.aliases) {
-        let info;
-        try {
-          info = lstatSync(alias.path, { bigint: true });
-        } catch {
-          failure('inspection_error', 'home', alias.index);
+    const inspection: SourceInspection = {
+      historyHomesChecked: 0,
+      historyHomesTotal: homes.length,
+      changedHistories: [],
+      testThreadFiles: 'incomplete',
+    };
+    try {
+      for (const home of homes) {
+        for (const alias of home.aliases) {
+          let info;
+          try {
+            info = lstatSync(alias.path, { bigint: true });
+          } catch {
+            failure('inspection_error', 'home', alias.index);
+          }
+          if (!info.isDirectory() || info.isSymbolicLink())
+            failure('unsafe_home', 'home', alias.index);
+          if (`${info.dev}:${info.ino}` !== home.identity)
+            failure('home_changed', 'home', alias.index);
         }
-        if (!info.isDirectory() || info.isSymbolicLink())
-          failure('unsafe_home', 'home', alias.index);
-        if (`${info.dev}:${info.ino}` !== home.identity)
-          failure('home_changed', 'home', alias.index);
+        const current = metadata(join(home.path, 'history.jsonl'), home.index);
+        const previous = home.history;
+        const changes = {
+          presence: (current === null) !== (previous === null),
+          inode: current !== null && previous !== null && current.inode !== previous.inode,
+          size: current !== null && previous !== null && current.size !== previous.size,
+          mtime: current !== null && previous !== null && current.mtime !== previous.mtime,
+          ctime: current !== null && previous !== null && current.ctime !== previous.ctime,
+        };
+        inspection.historyHomesChecked++;
+        if (Object.values(changes).some(Boolean))
+          inspection.changedHistories.push({ homeIndex: home.index, fields: changes });
+        // Shared history drift must not mask unsafe paths or a materialized test thread.
+        const inspect = (
+          directory: string,
+          source: 'sessions' | 'archived_sessions',
+          depth: number,
+        ) => {
+          if (depth > depthLimit) failure('depth_exceeded', source, home.index, entries, depth);
+          let info;
+          try {
+            info = lstatSync(directory);
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT' && depth === 0) return;
+            failure('inspection_error', source, home.index, entries, depth);
+          }
+          if (!info.isDirectory() || info.isSymbolicLink())
+            failure('unsafe_directory', source, home.index, entries, depth);
+          let children;
+          try {
+            children = readdirSync(directory, { withFileTypes: true });
+          } catch {
+            failure('inspection_error', source, home.index, entries, depth);
+          }
+          for (const entry of children) {
+            if (++entries > entryLimit)
+              failure('budget_exceeded', source, home.index, entries, depth);
+            if (entry.isSymbolicLink()) failure('unsafe_entry', source, home.index, entries, depth);
+            if (threadIds.some((id) => entry.name.includes(id)))
+              failure('thread_materialized', source, home.index, entries, depth);
+            if (entry.isDirectory()) inspect(join(directory, entry.name), source, depth + 1);
+          }
+        };
+        inspect(join(home.path, 'sessions'), 'sessions', 0);
+        inspect(join(home.path, 'archived_sessions'), 'archived_sessions', 0);
       }
-      const current = metadata(join(home.path, 'history.jsonl'), home.index);
-      const previous = home.history;
-      const changes = {
-        presence: (current === null) !== (previous === null),
-        inode: current !== null && previous !== null && current.inode !== previous.inode,
-        size: current !== null && previous !== null && current.size !== previous.size,
-        mtime: current !== null && previous !== null && current.mtime !== previous.mtime,
-        ctime: current !== null && previous !== null && current.ctime !== previous.ctime,
-      };
-      if (Object.values(changes).some(Boolean))
-        failure('history_changed', 'history', home.index, 0, null, changes);
-      const inspect = (
-        directory: string,
-        source: 'sessions' | 'archived_sessions',
-        depth: number,
-      ) => {
-        if (depth > depthLimit) failure('depth_exceeded', source, home.index, entries, depth);
-        let info;
-        try {
-          info = lstatSync(directory);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT' && depth === 0) return;
-          failure('inspection_error', source, home.index, entries, depth);
-        }
-        if (!info.isDirectory() || info.isSymbolicLink())
-          failure('unsafe_directory', source, home.index, entries, depth);
-        let children;
-        try {
-          children = readdirSync(directory, { withFileTypes: true });
-        } catch {
-          failure('inspection_error', source, home.index, entries, depth);
-        }
-        for (const entry of children) {
-          if (++entries > entryLimit)
-            failure('budget_exceeded', source, home.index, entries, depth);
-          if (entry.isSymbolicLink()) failure('unsafe_entry', source, home.index, entries, depth);
-          if (threadIds.some((id) => entry.name.includes(id)))
-            failure('thread_materialized', source, home.index, entries, depth);
-          if (entry.isDirectory()) inspect(join(directory, entry.name), source, depth + 1);
-        }
-      };
-      inspect(join(home.path, 'sessions'), 'sessions', 0);
-      inspect(join(home.path, 'archived_sessions'), 'archived_sessions', 0);
+      inspection.testThreadFiles = 'not-found';
+      const firstChanged = inspection.changedHistories[0];
+      if (firstChanged)
+        failure(
+          'history_changed',
+          'history',
+          firstChanged.homeIndex,
+          entries,
+          null,
+          firstChanged.fields,
+        );
+    } catch (error) {
+      const diagnostic = sourceDiagnostic(error);
+      if (diagnostic.reason === 'thread_materialized') inspection.testThreadFiles = 'found';
+      throw new SourceGuardError(diagnostic, inspection);
     }
   };
 }

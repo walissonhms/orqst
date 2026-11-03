@@ -337,6 +337,36 @@ passes; no rebaseline, retry, history-content inspection or writer attribution i
 introduced. These diagnostics cannot establish
 the writer or reconstruct a previous run's discarded error.
 
+### Shared-history concurrency and independent inspection
+
+History drift is deferred until the bounded scan of both active/archive trees and
+all distinct homes completes. It cannot hide a materialized test thread, unsafe
+path, changed home, inspection error or exhausted budget: those still report
+`failed`, even if shared history also changed. The original baseline, two-home
+limit, alias revalidation, global 100,000-entry budget and depth eight are retained.
+
+Verification errors now include optional, payload-free `inspection` evidence in
+the per-check record (and therefore in the final `sourceChecks` array):
+
+- `historyHomesChecked` and `historyHomesTotal` count distinct homes whose history
+  metadata was compared and the total required homes.
+- `changedHistories` contains at most two home indices and boolean metadata change
+  flags. It retains observed history drift alongside a stronger failure.
+- `testThreadFiles` is `not-found` only after every required tree was scanned within
+  bounds, `found` on an explicit test-thread filename match, or `incomplete` when
+  another failure interrupted the scan. `not-found` is bounded filename evidence,
+  never proof of complete source integrity or writer identity.
+
+A history-only change still throws `history_changed`, reports `inconclusive`,
+blocks admission and makes acceptance unsuccessful. Directory scan completion does
+not excuse shared-history writes. Growth is not proof of append-only preservation;
+metadata cannot distinguish legitimate concurrent activity from a test write,
+replacement or in-place alteration. No history content is read or hashed, source
+locks are taken, external sessions paused, sources rebaselined or retries added.
+These observations do not reconstruct earlier runs or authorize real execution.
+A future concurrency-tolerant acceptance policy needs separately reviewed evidence
+of isolation or write prevention; passing fixture checks cannot supply that proof.
+
 These labels exist only in the developer command's stdout. Desktop and the observer
 dashboard do not consume this acceptance report. See the
 [synthetic client path and composition limits](desktop.md#synthetic-client-testing-and-structured-runtime-boundary).
