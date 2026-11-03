@@ -347,7 +347,8 @@ Module._load = load;
     Reflect.get(globalThis, 'syntheticSaveOptions'),
   );
   assert.match(JSON.stringify(nativeSaveOptions), /showOverwriteConfirmation/);
-  const beforeRevocationURL = page.url();
+  // A hashless URL restores the persisted view, which becomes Analytics below.
+  const beforeRevocationURL = origin + '/#overview';
   await artifact.getByRole('textbox').fill('Synthetic revoked overwrite must never be saved');
   await desktop.evaluate(({ dialog }) => {
     dialog.showMessageBox = async () =>
