@@ -66,6 +66,57 @@
 .shell-dialog::backdrop {
   background: var(--orqst-backdrop);
 }
+.observation-guide {
+  width: 720px;
+  max-width: calc(100% - 32px);
+  margin: auto;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.observation-guide .panel-heading {
+  align-items: flex-start;
+  gap: var(--orqst-space-3);
+}
+.observation-guide .panel-heading h2 {
+  flex-wrap: wrap;
+}
+.observation-guide .panel-heading .icon-button {
+  flex-shrink: 0;
+}
+.observation-guide-body {
+  padding: var(--orqst-space-5);
+}
+.observation-guide-body p {
+  margin: var(--orqst-space-3) 0;
+  line-height: 1.7;
+}
+.observation-guide-steps {
+  list-style: decimal;
+  padding-left: var(--orqst-space-5);
+  margin: var(--orqst-space-5) 0;
+}
+.observation-guide-steps > li {
+  padding: var(--orqst-space-4) 0;
+  border-top: 1px solid var(--orqst-border);
+}
+.observation-guide-facts {
+  display: grid;
+  gap: var(--orqst-space-3);
+  margin: var(--orqst-space-4) 0;
+}
+.observation-guide-facts > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--orqst-space-2) var(--orqst-space-4);
+}
+.observation-guide-facts dt {
+  color: var(--orqst-muted);
+}
+.observation-guide-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
 .overview-heading {
   flex-wrap: wrap;
   gap: var(--orqst-space-4);
@@ -738,4 +789,52 @@
 }
 .workspace-pin-recovery {
   margin: 0 var(--orqst-space-5) var(--orqst-space-4);
+}
+
+.artifact-library-filters,
+.artifact-library-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 20px 0;
+}
+.artifact-library-filters > label {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.artifact-library-filters select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+}
+.artifact-library-summary {
+  justify-content: space-between;
+}
+.artifact-source-list {
+  display: grid;
+  gap: 16px;
+}
+.artifact-source-card {
+  min-width: 0;
+  padding: 20px;
+  overflow-wrap: anywhere;
+}
+.artifact-source-card .panel-heading {
+  padding: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.artifact-source-card time {
+  color: var(--orqst-muted);
+  font-size: 0.75rem;
+}
+.artifact-source-excerpt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 16px 0;
+}
+.artifact-source-card .source-detail {
+  margin-bottom: 16px;
 }

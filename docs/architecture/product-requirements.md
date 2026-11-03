@@ -68,17 +68,17 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 ### Artifacts and Model Manager
 
-| Requirement                                                         | Coverage | Evidence and remaining work                                                                                                          | Phase |
-| ------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----- |
-| Structured Markdown recognition; manual extraction when ambiguous   | Absent   | U shows captured responses as plain text; no artifact extraction.                                                                    | 2     |
-| Independent artifact panel with safe source/preview/edit            | Partial  | Manual source/preview/draft, restore and explicit-close confirmation implemented; draft/version persistence absent.                  | 2     |
-| Copy raw Markdown/rendered text; save .md; external editor          | Absent   | No artifact clipboard/save-dialog/editor workflow.                                                                                   | 2     |
-| Artifact project/session/agent/date provenance and original/history | Partial  | P/Core provide versioned references to retained message evidence without bodies or extraction; no artifact document/version history. | 1, 2  |
-| Confirm overwrite; never silently replace files                     | Absent   | No artifact file writer exists; confirmation is required before adding one.                                                          | 2     |
-| Project/agent/model selectors always accessible in session          | Partial  | U selects workspace/session and displays model; no agent/model execution selector.                                                   | 2     |
-| Agent/project model defaults and session override                   | Absent   | No configuration path in B/U.                                                                                                        | 2, 4  |
-| Supported models/capabilities, valid combinations, reasoning/Fast   | Absent   | I/P have observation flags, not validated model discovery/configuration.                                                             | 2, 3  |
-| Model changes only when supported, restart/impact explicit          | Absent   | Observing model changes in C does not implement changing them.                                                                       | 3, 4  |
+| Requirement                                                         | Coverage | Evidence and remaining work                                                                                                                   | Phase |
+| ------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Structured Markdown recognition; manual extraction when ambiguous   | Partial  | B/Core/U support bounded manual retained-message extraction; automatic recognition remains absent.                                            | 2     |
+| Independent artifact panel with safe source/preview/edit            | Partial  | Manual source/preview/draft, restore and navigation/close confirmation implemented; durable drafts and version history absent.                | 2     |
+| Copy raw Markdown/rendered text; save .md; external editor          | Partial  | U copies original/draft/readable text; Desktop native .md save/open mechanism implemented, broader native visual acceptance pending.          | 2     |
+| Artifact project/session/agent/date provenance and original/history | Partial  | P/Core retain versioned source identity and immutable redacted text; U shows provenance and bounded source search. No saved-document history. | 1, 2  |
+| Confirm overwrite; never silently replace files                     | Partial  | Desktop uses a bounded descriptor-verified writer and concrete native overwrite confirmation; native visual acceptance pending.               | 2     |
+| Project/agent/model selectors always accessible in session          | Partial  | U selects workspace/session and displays model; no agent/model execution selector.                                                            | 2     |
+| Agent/project model defaults and session override                   | Absent   | No configuration path in B/U.                                                                                                                 | 2, 4  |
+| Supported models/capabilities, valid combinations, reasoning/Fast   | Absent   | I/P have observation flags, not validated model discovery/configuration.                                                                      | 2, 3  |
+| Model changes only when supported, restart/impact explicit          | Absent   | Observing model changes in C does not implement changing them.                                                                                | 3, 4  |
 
 ### Live Metrics
 

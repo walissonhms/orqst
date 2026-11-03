@@ -10,6 +10,7 @@ const views = [
   ['agents', 'Agents & integrations'],
   ['models', 'Most used models'],
   ['settings', 'Settings'],
+  ['artifacts', 'Artifact library'],
 ] as const;
 
 async function editDraft(page: Page) {
@@ -74,7 +75,7 @@ test('root restores preferences, explicit routes win and SPA Back/Forward keeps 
     await page.getByRole('link', { name: label, exact: true }).click();
     await expect(page).toHaveURL(`/${view}`);
   }
-  await page.evaluate(() => history.go(-3));
+  await page.evaluate(() => history.go(-4));
   await expect(page).toHaveURL('/workspaces');
   await page.evaluate(() => history.go(2));
   await expect(page).toHaveURL('/models');

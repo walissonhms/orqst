@@ -154,6 +154,42 @@ CSP, cookies, loopback binding, source read-only protections and the single Stor
 are unchanged. Existing v1 REST/WS payloads and lifecycle reference semantics remain
 compatible. See [security model](../architecture/security-model.md).
 
+## Searchable source library
+
+The renderer-only `/artifacts` screen reads the existing authenticated `GET /api/events`
+with `before`, `limit=200` and an optional exact `sessionId`. No new extraction/list API,
+request body, database index, file catalog or automatic extraction is added. Search is
+in memory over loaded retained message text and snapshot context. General pages are
+global; workspace filtering follows current session association, while the extraction
+request always preserves the event's original workspace/agent/machine/hash identity.
+Text search is never sent in URLs, persisted or copied into reports.
+
+Each reading stops at 2,000 observations or 200 valid nonempty Codex assistant/agent
+sources within 32 KiB UTF-8. Non-source events count toward the observation budget;
+end-of-page and capacity are distinct from full historical coverage. Pages validate
+event shape, safe positive strictly increasing sequence values below the requested
+cursor, unique IDs and exact session scope. Newest sources are displayed first. New
+snapshots announce newer observations; explicit refresh or reconnection begins a fresh
+reading. Offline/failure prevents opening potentially stale sources; aborted or late
+responses are ignored. Search and loaded candidates disappear on view/workspace changes.
+
+Opening navigates to the existing source session and manual Artifact panel. It reuses
+`POST /api/artifacts/extract`, which rechecks retained identity/content independently;
+retention can make a visible source unavailable. No draft or saved-file history is
+reconstructed and no source path is opened. See the [interface contract](../design/ui-ux-specification.md#search-artifact-sources).
+
+### Source-library security review — 2026-11-03
+
+The exact `/artifacts` document joins the shared dashboard route allowlist and legacy
+fragment navigation. Nested/arbitrary paths remain outside the document allowlist.
+Desktop still rejects document queries and other origins; Bridge retains its existing
+Host/Origin checks and ignores static document queries. The library reads no document
+query parameters. It carries no search, content or event
+selection in the URL and issues no API cookie or file capability. Existing authentication,
+Host/Origin/fetch checks, CSP, read-only source access and native grant revocation are
+unchanged. Captured excerpts/paths are untrusted plain text; no markup, links or remote
+media are activated. Local retained content remains sensitive and redaction is best-effort.
+
 ## Native Desktop save contract
 
 This is a Desktop-only `window.orqstArtifacts` capability, not a REST endpoint.

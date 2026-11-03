@@ -14,12 +14,14 @@ export function Settings({
   storageUnavailable,
   systemReducedMotion,
   notifications,
+  onGuide,
 }: {
   appearance: AppearancePreferences;
   onAppearance: (value: AppearancePreferences) => void;
   storageUnavailable: boolean;
   systemReducedMotion: boolean;
   notifications: ReactNode;
+  onGuide: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const [resetOpen, setResetOpen] = useState(false);
@@ -49,6 +51,9 @@ export function Settings({
             </select>
           </label>
           <p className="fine-print">{t('settings.languageHelp')}</p>
+          <button className="button" onClick={onGuide}>
+            {t('observationGuide.title')}
+          </button>
         </section>
         <section className="panel settings-group" aria-labelledby="settings-appearance">
           <h2 id="settings-appearance">{t('settings.appearance')}</h2>

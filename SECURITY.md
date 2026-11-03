@@ -120,7 +120,7 @@ ORQST is designed for a **single trusted OS user on a local machine**.
 - The static dashboard server rejects dotfile paths and NUL bytes, resolves
   files under the dashboard root, verifies the real path, and denies anything
   outside it. HTML fallback is limited to `/`, `/overview`, `/workspaces`,
-  `/agents`, `/models`, `/settings` and strictly validated
+  `/agents`, `/models`, `/artifacts`, `/settings` and strictly validated
   `/overview/sessions/<encoded-id>`; unknown extensionless paths return 404.
   Electron main-frame navigation and IPC sender authorization use the same fixed
   route schemas at the configured IPv4 loopback origin, without query strings or
@@ -408,3 +408,12 @@ They do not close native executable/cwd races, supply a resource sandbox, enroll
 production client or validate managed Codex. Same-user malware, storage failure and
 native-provider survival/descendants remain outside this evidence. Normal observer
 permissions and read-only external sessions remain intact.
+
+## Artifact source library
+
+The exact `/artifacts` route uses the existing dashboard document policy. It grants no
+new API, native file operation or source-file access. Search over a bounded loaded window
+of retained Codex messages stays in renderer memory, with explicit coverage and stale/
+retention/limit states. Excerpts and source references are inert plain text. Opening a
+message reuses exact-identity manual extraction; saved files and drafts are not indexed.
+See the [security review](docs/api/artifacts.md#source-library-security-review--2026-11-03).

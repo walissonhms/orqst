@@ -187,7 +187,7 @@ The bridge serves the built dashboard from `apps/dashboard/dist`.
 - Any asset path segment beginning with `.` is rejected, as are NUL bytes.
 - The canonical path is resolved with `realpath` and must remain under the root.
 - The target must be a regular file.
-- Only exact `/`, `/overview`, `/workspaces`, `/agents`, `/models` and `/settings`
+- Only exact `/`, `/overview`, `/workspaces`, `/agents`, `/models`, `/artifacts` and `/settings`
   paths and `/overview/sessions/<encoded-id>` validated by the shared protocol
   schema fall back to `index.html`. Session segments must be canonical, bounded
   and free of separators, residual percent signs, controls and dot-only values.
@@ -586,7 +586,7 @@ without signaling, retrying or claiming process exit.
 
 The dashboard uses the existing History API, without a router dependency or new
 API/IPC operation. Electron main-frame navigation and live sender authorization
-admit only the configured IPv4 loopback origin, root, five exact view paths and
+admit only the configured IPv4 loopback origin, root, six exact view paths and
 strict session-path schema listed above; query strings, credentials, other
 ports/hosts and arbitrary paths remain denied. Legacy fragments carry no authority. Session selection still requires an
 identity present in the authenticated Bridge snapshot. IPC continues checking the
@@ -646,3 +646,15 @@ Revoking/destroying the native Terminal document also disconnects the dedicated
 Core channel. Core then revokes its enrolled public key and closes its journal;
 revocation is not confined to Electron's local signer. A normal view hide only
 revokes input, preserving that live document/Core. Proposed xterm APIs are disabled.
+
+## Artifact source-library review — 2026-11-03
+
+The shared route allowlist adds exactly `/artifacts`, with no arbitrary subpaths or query
+parameters. Bridge serves the same static bundle; Desktop retains exact origin/frame,
+sender/document and lifecycle revocation checks. No API/WS/authentication or native grant
+is added. The library uses existing bounded event reads, validates each page and offers
+only valid retained Codex message selections within extraction limits. Search/content stay
+in renderer memory; excerpts and provenance stay inert plain text. Opening a source uses
+the existing session navigation and independently identity-checked extraction contract.
+Capacity, partial coverage, stale/offline/error data and retention remain explicit. See the
+[contract review](../api/artifacts.md#source-library-security-review--2026-11-03).

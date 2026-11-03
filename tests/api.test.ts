@@ -118,6 +118,7 @@ test('dashboard fallback serves only exact public routes and preserves request s
       '/agents',
       '/models',
       '/settings',
+      '/artifacts',
       '/overview/sessions/synthetic-id',
       '/overview/sessions/synthetic%20%3F%23%20sess%C3%A3o',
     ]) {
@@ -160,6 +161,8 @@ test('dashboard fallback serves only exact public routes and preserves request s
       '/arbitrary',
       '/overview/',
       '/settings/nested',
+      '/artifacts/',
+      '/artifacts/nested',
       '/%73ettings',
       '/overview/sessions',
       '/overview/sessions/',

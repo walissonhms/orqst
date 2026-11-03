@@ -57,6 +57,24 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Observation guide:** Settings, Search & commands and the empty-session welcome
+  open a three-step guide using the existing Bridge snapshot: connection, source
+  reading diagnostics and retained sessions across all workspaces. Missing snapshots
+  stay unavailable; loaded evidence is qualified when stale. Existing capability and
+  workspace routes keep their navigation/draft guards. This is read-only orientation,
+  not CLI discovery, an installation test or a saved onboarding checklist. See the
+  [interface guide](docs/design/ui-ux-specification.md#first-observation-guide).
+
+- **Searchable Artifact sources:** `/artifacts` adds a read-only library of retained
+  Codex assistant/agent messages, with search over loaded text/agent/session/workspace,
+  current-workspace and exact-session filtering, provenance and explicit older-page
+  loading. Opening a source selects its session and reuses the manual source/preview/
+  draft/copy/Desktop-save panel and draft navigation guard. A reading stops at 2,000
+  observations or 200 sources; search is not a full archive index. Refresh and new-data,
+  empty, limit, error and offline states explain coverage. Saved files and drafts are
+  not indexed; automatic document detection and durable recovery remain unavailable.
+  See the [interface guide](docs/design/ui-ux-specification.md#search-artifact-sources).
+
 - **Pinned workspaces:** pin/unpin recorded workspaces in the directory, filter to
   pinned projects and find them first in both directory and sidebar. The selected
   recent/name ordering applies within directory groups. Pins persist locally and
@@ -76,17 +94,17 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   behavior. No new metrics, data deletion, drag-and-drop or panel resizing is added.
   See the [interface guide](docs/design/ui-ux-specification.md#customize-overview-panels).
 
-- **Clean dashboard routes:** use `/overview`, `/workspaces`, `/agents`, `/models`
-  and `/settings`, including direct entry and reload. `/` restores the last view;
+- **Clean dashboard routes:** use `/overview`, `/workspaces`, `/agents`, `/models`,
+  `/artifacts` and `/settings`, including direct entry and reload. `/` restores the last view;
   explicit routes take precedence over that preference. Legacy `/#overview` (and
-  the other four view hashes) still work and replace the current URL without an
+  the other five view hashes) still work and replace the current URL without an
   extra history entry. Legacy `/#session=<encoded-id>` opens a session only after
   validation against the Bridge snapshot and becomes `/overview/sessions/<encoded-id>`.
   Safe session paths use one canonical encoded segment; IDs containing separators,
   residual percent escapes, controls or dot-only segments retain their historical
   hash representation. Session links remain reloadable. Browser Back/Forward and
   same-document hash links share draft confirmation; cancellation preserves both history directions.
-  Desktop permits only the root, these five exact paths and the strictly validated
+  Desktop permits only the root, these six exact paths and the strictly validated
   session-path shape at its configured loopback origin. Unknown extensionless
   Bridge paths return 404. See
   [navigation and limits](docs/design/ui-ux-specification.md#navigate-real-observations).
@@ -331,6 +349,12 @@ readings never trigger the cue. See [Live Metrics and limits](docs/api/live-metr
 
 ## Manual Artifacts
 
+The sidebar and Search & commands expose **Artifact library** (`/artifacts`). This
+library searches a bounded, explicitly loaded window of retained message sources and
+opens the manual panel below. It is not a catalog of saved Markdown files or drafts.
+Select an exact session to explore history beyond the general reading budget. See
+[coverage and limitations](docs/api/artifacts.md#searchable-source-library).
+
 Open a session's **Execution timeline** and choose **Extract artifact manually** on a retained
 assistant/agent response. Its panel keeps recorded provenance and immutable retained
 source separate from a temporary editable draft, with a limited inert preview and
@@ -556,6 +580,24 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The observation-guide increment after `f4ed5f6` passed lint, typecheck, all 303 Node
+tests, full build and 45 focused Chromium cases on isolated port 4613. Coverage
+includes the guide's real snapshot evidence, unavailable/stale states, keyboard and
+focus, exact draft/navigation guards and neighboring Settings/routes/brand behavior.
+Synthetic dark/light images at desktop and 320px pt-BR were inspected with maximum
+reading sizes. The existing bundle-size advisory remains. Real-source/live-provider,
+native Desktop, other-browser and manual screen-reader checks were not repeated;
+ingestion and native contracts are unchanged. No installed service, user history or
+source session was changed. See the [test record](docs/development/testing.md#first-observation-guide--2026-11-03).
+
+The 2026-11-03 Artifact source-library increment, combined with concurrent Terminal
+recovery, passed lint, typecheck, all 303 Node cases, build and 40 focused Chromium
+cases for the library, manual Artifacts, draft guards, shell and six view routes.
+Dark/light screenshots cover 1440/1280/390/320px at maximum reading sizes. This is
+synthetic checkout evidence, not full-archive, native Desktop or screen-reader
+acceptance. Ingestion was unchanged; `validate:local` was not rerun. See
+[commands and limits](docs/development/testing.md#artifact-source-library-validation--2026-11-03).
 
 The configurable Overview increment started after `39eaf4d` and preserves the
 concurrent brand, native-boundary and clean-route work through `f0ef4eb`. Final combined

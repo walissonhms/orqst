@@ -384,6 +384,7 @@ test('sender must be the live main frame, expected webContents, session and exac
     '/agents',
     '/models',
     '/settings',
+    '/artifacts',
     '/overview#session=synthetic',
     '/overview/sessions/synthetic',
     '/overview/sessions/synthetic%20%3F%23%20sess%C3%A3o',
