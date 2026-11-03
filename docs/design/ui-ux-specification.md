@@ -62,6 +62,32 @@ scan or authentication check. Codex is implemented; Claude Code and OpenCode rem
 planned. Unsupported input requests and session control stay unavailable. No
 installation, model catalog, model-switch or execution action is presented.
 
+## Pin workspaces
+
+The workspace directory offers a named **Pin workspace** toggle on each recorded
+workspace. Pressed state exposes whether it is pinned; the same button unpins it.
+Pinned records appear first in the directory, using the selected recent/name sort
+within each group. The sidebar also puts pinned records first, preserving its
+existing order within each group, with an icon and an accessible pinned label.
+Pinning never changes the active workspace, view, status filters or session/draft.
+
+**Pinned only** combines with name/path search in grid and list layouts. An empty
+result explains the filter and offers **All workspaces**, which clears both that
+filter and search. Unpinning a visible filtered record moves focus to the persistent
+filter button before the card disappears. Pin changes announce their outcome.
+The filter and search last only while the directory is mounted; they are not stored.
+
+Pins apply across workspaces in this browser/Desktop origin/profile. They work
+without a Bridge write and synchronize between same-origin tabs. Storage failure
+shows a visit-only notice, retaining edits through in-document view changes. A pin
+for an identity absent from the current snapshot is retained but creates no card or
+sidebar entry; it can reappear if that exact identity returns. There is no identity
+matching by path/name, filesystem operation, workspace archive or tab restoration.
+The local preference supports at most 100 identities; unpin one before adding more.
+**Unpin all workspaces** immediately clears only this profile preference, including
+absent identities, so missing records cannot permanently consume the pin limit.
+Other-browser, manual screen-reader and native visual acceptance remain pending.
+
 ## Session context, metrics and attention
 
 An open Overview session has a persistent context strip under the sticky top bar:
@@ -215,6 +241,16 @@ read the latest stored choice rather than replaying an older value. Storage deni
 visit with a notice in the editor. Clearing site data removes the layout preference.
 It contains no workspace/session IDs, search text, metric values or captured content.
 
+`orqst.workspace-pins.v1` stores only a list of exact workspace IDs: at most 100,
+nonempty, at most 200 code units per ID, excluding ASCII controls. Parsing rejects
+malformed/non-list/oversized storage, drops invalid/duplicate entries and preserves
+valid order. Pin priority never creates workspaces or changes snapshot records.
+Receiving storage updates/removal/clear reads the latest choice without writing it
+back. A pin action reads the latest stored list to avoid overwriting an already
+stored other-tab edit; simultaneous writes remain last-write-wins. Names, paths,
+searches, observations and content are not copied into this key. IDs are local
+metadata, not anonymous; clearing site data removes pins.
+
 Search terms, session selection, captured content and artifact drafts are not stored.
 There is no process restoration, tab/split persistence, account, upload or database
 migration. Clear site data to remove these UI preferences. Existing i18next language
@@ -228,7 +264,7 @@ The status describes this checkout, not full product acceptance.
 | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Navigation shell and search    | Implemented | `App.tsx`, `Modal.tsx`, `CommandPalette.tsx`, `shell-preferences.ts`, `shell.css`; `tests/shell-preferences.test.ts`, `tests/browser/shell-navigation.spec.ts`     | No workspace tabs, resizable splits or process/session restoration                                                                                                                        |
 | Overview / Observability       | Partial     | `App.tsx`, `OverviewLayout.tsx`, `overview-preferences.ts`, Live Metrics and existing timeline/attention; overview-layout Node/browser and existing suites         | Local panel order/visibility implemented; resizing, broader metrics, verified costs and separate Observability remain planned; summary totals retain legacy limitations                   |
-| Workspaces                     | Partial     | `Workspaces.tsx`; shell browser cases cover scopes, search, sort, layout and reload                                                                                | No rename/archive, filesystem picker, pinning, multiple open project tabs or terminal layout                                                                                              |
+| Workspaces                     | Partial     | `Workspaces.tsx`; shell and workspace-pins browser cases cover scope, search, sort, layouts, pinning and reload                                                    | No rename/archive, filesystem picker, multiple open project tabs or terminal layout                                                                                                       |
 | Agents                         | Partial     | `Agents.tsx` projects actual adapter descriptors; shell cases cover matrix, unavailable state and locales                                                          | CLI path/version/auth/model discovery and managed profiles unavailable                                                                                                                    |
 | Models & Analytics             | Partial     | Existing `ModelAnalytics.tsx`, `ModelComparison.tsx`, `ModelEvolution.tsx` and export components; dedicated existing browser suites                                | Observational comparisons only; real-provider comparative acceptance, task efficiency and verified cost remain pending                                                                    |
 | Artifacts                      | Partial     | Existing `ArtifactPanel.tsx`, `artifact-preview.ts` and native save; artifact/draft/browser and native policy tests                                                | Manual extraction; inert limited Markdown, no standalone searchable artifact library or automatic extraction; draft persistence, Desktop close/quit and crash recovery remain unavailable |

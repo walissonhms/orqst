@@ -475,7 +475,19 @@
       "open": "Abrir sessões",
       "noMatches": "Nenhum workspace corresponde à busca.",
       "empty": "Nenhum workspace registrado. Use o Codex fora do ORQST ou adicione um rótulo local de workspace.",
-      "localNote": "Os caminhos são rótulos e diretórios de trabalho observados. Abrir um workspace filtra observações; não abre arquivos, inicia um CLI ou retoma um processo."
+      "localNote": "Os caminhos são rótulos e diretórios de trabalho observados. Abrir um workspace filtra observações; não abre arquivos, inicia um CLI ou retoma um processo.",
+      "pin": "Fixar workspace {{name}}",
+      "pinnedName": "{{name}} (fixado)",
+      "pinnedOnly": "Somente fixados",
+      "pinned": "{{name}} fixado. Workspaces fixados aparecem primeiro.",
+      "unpinned": "{{name}} desafixado.",
+      "pinScope": "As fixações são locais a este perfil do navegador/Desktop. Os fixados aparecem primeiro, com a ordenação escolhida em cada grupo. Fixar não muda o workspace ativo.",
+      "pinStorageUnavailable": "As fixações valem nesta visita. O armazenamento local está indisponível; as alterações podem ser perdidas ao sair.",
+      "pinLimit": "É possível fixar até {{count}} workspaces. Desafixe um para adicionar outro.",
+      "noPinnedMatches": "Nenhum workspace fixado corresponde. Mostre todos os workspaces para encontrar e fixar um projeto.",
+      "clearPins": "Desafixar todos os workspaces",
+      "clearedPins": "Todas as fixações foram removidas. Somente esta preferência do perfil mudou.",
+      "unpin": "Desafixar workspace {{name}}"
     },
     "agents": {
       "description": "Consulte as capacidades declaradas pelos adaptadores locais de observação.",
