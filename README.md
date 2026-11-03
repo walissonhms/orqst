@@ -45,6 +45,14 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Terminal mechanics increment:** an opt-in developer command now checks a real
+  PTY using only fixed disposable synthetic Node processes, private temporary
+  directories and bounded output/lifetime. The macOS/arm64 Node-host check passed;
+  no agent is launched and no application control is exposed. Read the
+  [reproduction guide](docs/development/terminal-pty-acceptance.md) and
+  [proposed managed terminal design](docs/architecture/managed-terminal-design.md).
+  Provider, authorization, isolation and packaging acceptance remain pending.
+
 - **Observed tools increment:** session details group uniquely correlated retained
   Codex invocation/return records, with inert bounded text and per-record sources.
   This is partial historical tool evidence, not a terminal connection; interactive

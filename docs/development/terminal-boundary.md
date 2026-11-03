@@ -9,12 +9,22 @@ inspecting tool I/O without interleaving other activity. It is **not** an integr
 terminal, a PTY transcript, an execution grant, or proof of a process's current state.
 Phases 2–4 terminal acceptance remains incomplete.
 
+A subsequent [developer-only PTY experiment](terminal-pty-acceptance.md) now validates
+fixed synthetic Node-child mechanics on macOS/arm64. It introduces a root development
+dependency only, never a runtime import or control. The
+[managed terminal design](../architecture/managed-terminal-design.md) makes proposed
+authorization, process budgets, persistence and external-session isolation concrete;
+those controls remain unimplemented. The decisions below describe the application
+delivery gates, which this mechanics experiment does not bypass.
+
 The repository uses Node `>=24 <25`, pnpm `10.34.9`, Electron `45.2.1`, React
 `^19.3.1`, TypeScript `~6.0.3` and zod `^4.6.7`. The current Codex adapter normalizes
 `response_item:function_call`, `custom_tool_call` and their output records into
 `agent.tool.started`/`agent.tool.completed`. Both input and output text are retained
 in `payload.text`. The output event's compatibility `status: running` is not
-process evidence. No shell, PTY or terminal-emulator dependency was added.
+process evidence. No shell, PTY or terminal-emulator dependency was added to that
+evidence increment. The later opt-in experiment adds `node-pty@1.1.0` only to root
+development dependencies.
 
 ## Ownership and capability boundary
 
@@ -71,7 +81,7 @@ must resolve the following before code can expose any control:
 
 The concrete blockers are the missing managed-execution product boundary,
 principal/grant design, owned-process lifecycle and validated provider/PTY stack.
-No external CLI, provider or process was probed to bypass those blockers. The
+No external provider or user process was probed to bypass those blockers. The
 independent evidence view requires none of those permissions.
 
 ## Projection semantics and limits

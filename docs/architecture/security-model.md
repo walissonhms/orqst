@@ -1,5 +1,11 @@
 # Security model
 
+The [managed terminal design](managed-terminal-design.md) proposes a future separate
+native authorization and owned-process boundary; it is not an implemented execution
+API. The opt-in [synthetic PTY probe](../development/terminal-pty-acceptance.md) runs
+fixed disposable fixtures outside the runtime. It grants no control over observed
+sessions and adds no API, IPC, credential, database or renderer capability.
+
 ORQST runs on a developer machine and reads agent sessions that may contain
 source code, prompts, tool output, file paths, and accidentally pasted secrets.
 The security model is therefore conservative: local-only, read-only, minimal
