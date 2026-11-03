@@ -879,3 +879,32 @@ retain capacity. Protocol/permission loss can leave the live process under its
 previously authorized 30-minute lifetime. Cost allowance is advisory, without an
 enforced spending cap. These limits and the separate owner-authorized acceptance
 are described in [the developer contract](codex-two-agent-acceptance.md).
+
+## Two-agent acceptance preparation follow-up — 2026-11-03
+
+The explicit developer script now independently checks the actual scoped worker
+marker as well as A's final receipt. A already knows the marker; a correct root
+answer after a wrong B answer must not pass. Synthetic tests cover missing, wrong
+and duplicate worker results, a wrong root result and bounded prompt expansion.
+The authorization regression removes each of the three required flags in turn and
+verifies refusal before accessing a nonexistent synthetic path or launching Codex.
+
+Offline inspection of a native Codex CLI 0.162.1 used only version/help and
+`app-server generate-ts --experimental` in new empty private homes. Its emitted
+types agree with the narrow dynamic-tool declarations/call/response/completion and
+thread/model fields used here. This is static declaration evidence, not a live
+handshake, account entitlement or A-to-B-to-A acceptance. Generated declarations,
+binary paths/hashes and new slot manifests remain local and are not published.
+No login, credential inspection, app-server listener, provider or inference was run.
+
+The public acceptance guide now distinguishes API price arithmetic from subscription
+usage, advisory spending allowance from enforced caps, and prompt restrictions from
+native same-user isolation. Actual billing, model/account availability and runtime
+compatibility still require separately authorized verification. Ingestion is
+unchanged; real-source validation, browser/native UI and provider acceptance are not
+part of this preparation.
+
+Validation for this change used Node 24.22.2/pnpm 10.34.9: lint, typecheck,
+369 Node tests (including 38 focused acceptance/runtime cases) and build passed.
+The build retains the existing Vite chunk-size advisory. `validate:local`, browser
+tests, Desktop smoke and the real acceptance command were not run.

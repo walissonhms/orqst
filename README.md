@@ -96,6 +96,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   external session is converted or adopted. See the
   [runtime contract](docs/development/codex-structured-runtime.md) and
   [prepared, unexecuted two-agent acceptance](docs/development/codex-two-agent-acceptance.md).
+  The acceptance guide includes offline binary/protocol checks, exact disposable
+  prompt templates and separate login/inference authorization. Its cost allowance
+  is advisory; it has no enforced spending cap.
 
 - **Observation guide:** Settings, Search & commands and the empty-session welcome
   open a three-step guide using the existing Bridge snapshot: connection, source

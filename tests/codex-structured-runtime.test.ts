@@ -953,26 +953,34 @@ test('a signed process start does not authorize a root inference or a root proof
 });
 
 test('the real acceptance command refuses missing authorization before reading a path or launching a provider', () => {
-  const result = spawnSync(
-    process.execPath,
-    [
-      '--import',
-      'tsx',
-      resolve('scripts/accept-codex-two-agent.ts'),
-      '--acceptance-root',
-      '/SYNTHETIC-PATH-MUST-NOT-BE-READ',
-      '--model',
-      'SYNTHETIC',
-    ],
-    {
-      cwd: resolve('.'),
-      encoding: 'utf8',
-      timeout: 20000,
-    },
-  );
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /Requires explicit --authorize-real-codex/);
-  assert.doesNotMatch(result.stdout, /native-thread-ready|native-delegation-confirmed/);
+  const flags = [
+    '--authorize-real-codex',
+    '--acknowledge-advisory-cost-only',
+    '--cleanup-owned-processes',
+  ];
+  for (const missing of flags) {
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        'tsx',
+        resolve('scripts/accept-codex-two-agent.ts'),
+        ...flags.filter((flag) => flag !== missing),
+        '--acceptance-root',
+        '/SYNTHETIC-PATH-MUST-NOT-BE-READ',
+        '--model',
+        'SYNTHETIC',
+      ],
+      {
+        cwd: resolve('.'),
+        encoding: 'utf8',
+        timeout: 20000,
+      },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Requires explicit --authorize-real-codex/);
+    assert.doesNotMatch(result.stdout, /native-thread-ready|native-delegation-confirmed/);
+  }
 });
 
 test('JSON expansion of a bounded worker result returns a tool failure without losing the owned instance', async () => {
