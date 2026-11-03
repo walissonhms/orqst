@@ -25,6 +25,8 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
   residual risks.
 - [Architecture decisions](architecture/decisions.md) — product and engineering
   decisions.
+- [Managed terminal design](architecture/managed-terminal-design.md) — proposed
+  authorization and owned-process boundary; no runtime execution is implemented.
 
 - [Token Optimizer](architecture/token-optimizer.md) — planned Core boundary,
   modes, permissions, integration interfaces and evidence-gated activation.
@@ -67,6 +69,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Setup](development/setup.md) — prerequisites, install, run, build.
 - [Testing](development/testing.md) — suites, coverage, synthetic data policy,
   real-data validation.
+- [Terminal boundary](development/terminal-boundary.md) — retained tool evidence
+  and the remaining interactive terminal gates.
+- [Synthetic PTY acceptance](development/terminal-pty-acceptance.md) — explicit
+  macOS/arm64 developer experiment, reproduction and validation limits.
 - [Repository layout](development/repository-layout.md) — packages and
   responsibilities.
 
