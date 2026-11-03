@@ -1815,6 +1815,28 @@ th:nth-last-child(2) {
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
 }
+.live-metric-updated {
+  outline: 1px solid #77c7a5;
+  outline-offset: 3px;
+  border-radius: 2px;
+  background: #27483e;
+  animation: live-metric-confirmed-update 1.6s ease-out;
+}
+.live-metric-update-label {
+  display: block;
+  min-height: 2lh;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #b2daca;
+}
+@keyframes live-metric-confirmed-update {
+  from {
+    background: #27483e;
+  }
+  to {
+    background: transparent;
+  }
+}
 .live-metric-provenance summary {
   cursor: pointer;
   font-size: 12px;

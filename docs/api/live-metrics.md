@@ -84,8 +84,18 @@ defaults. Opening another session does not carry metrics across sessions. Text l
 description-list label/value pairs, keyboard-accessible details, locale formatting and
 wrapping mobile layout support accessibility. One polite live region in the session
 header announces meaningful availability/failure/count changes; polling refresh remains
-visual only and the Artifacts panel does not duplicate announcements. This increment
-introduces no animation.
+visual only and the Artifacts panel does not duplicate announcements.
+
+After a baseline reading, a greater confirmed evidence sequence with changed counts
+briefly outlines only the changed fields and labels them "Confirmed value updated".
+The 1.6-second cue uses exact final values, never interpolated counts, rates, elapsed
+time or an inferred measurement timestamp. Its background fades once; reduced-motion
+preferences disable that animation while preserving the static outline and text.
+Identical polling, first load (including a newly opened Artifacts panel), equal-sequence
+replays and recovery of the same reading do not trigger the cue. Pending/stale, failed,
+offline and unavailable states suppress and clear it without replacing confirmed values
+or time. The bounded UI timeout is cleaned up on replacement/unmount; it does not poll
+or fetch data. No extra live region or focus movement is introduced.
 
 ## Security review note
 

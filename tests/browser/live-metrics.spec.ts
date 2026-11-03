@@ -58,6 +58,8 @@ test('real synthetic token events update one shared session/artifact reading wit
   ]);
   await expect(header.locator('time')).toHaveAttribute('datetime', time);
   await expect(artifact.locator('.live-metrics time')).toHaveAttribute('datetime', time);
+  // The first available snapshot is a baseline in both already open views.
+  await expect(session.locator('.live-metric-updated')).toHaveCount(0);
   await header.screenshot({ path: test.info().outputPath('confirmed-metrics.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -71,4 +73,23 @@ test('real synthetic token events update one shared session/artifact reading wit
   expect(response.status()).toBe(200);
   const result = (await response.json()) as { value: { usage: { total: number } } };
   expect(result.value.usage.total).toBe(230);
+
+  // A second real synthetic source record changes input/total only, at the same source time.
+  await appendFile(
+    source,
+    line('token_usage_record', {
+      thread_id: id,
+      response_id: 'synthetic-live-response-2',
+      thread_token_usage: {
+        input_tokens: 210,
+        output_tokens: 30,
+        cached_input_tokens: 50,
+        total_tokens: 240,
+      },
+    }),
+  );
+  await expect(header.locator('.live-metric-updated')).toHaveText(['210', '240']);
+  await expect(artifact.locator('.live-metric-updated')).toHaveText(['210', '240']);
+  await expect(header.locator('time')).toHaveAttribute('datetime', time);
+  await expect(artifact.locator('[aria-live]')).toHaveCount(0);
 });

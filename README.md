@@ -152,7 +152,9 @@ bounded evidence-backed query: input/output/cache/total and the metric's own occ
 time. Cache is included in input. Missing proof is unavailable; previous confirmed
 readings are explicitly out of date during refresh/failure/disconnection. These
 normalized session totals do not attribute consumption to the artifact or prove
-individual provider field presence. See [Live Metrics and limits](docs/api/live-metrics.md).
+individual provider field presence. Changes between confirmed readings receive a brief
+text/outline cue; reduced-motion preferences keep it static. Initial, repeated and stale
+readings never trigger the cue. See [Live Metrics and limits](docs/api/live-metrics.md).
 
 ## Manual Artifacts
 

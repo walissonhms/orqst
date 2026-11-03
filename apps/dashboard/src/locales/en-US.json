@@ -26,6 +26,7 @@
     "failed": "Metrics could not be refreshed. Previous readings are out of date.",
     "stale": "Current metrics are unavailable. Previous readings are out of date.",
     "updated": "Last confirmed metric time:",
+    "valueUpdated": "Confirmed value updated",
     "noConfirmed": "Unavailable — no confirmed session snapshot loaded.",
     "snapshotNote": "Normalized cumulative session snapshot, not artifact usage. Cached input is included in input; total = input + output.",
     "provenance": "Metric provenance",

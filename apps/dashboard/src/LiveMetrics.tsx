@@ -1,5 +1,8 @@
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LiveMetricsState } from './use-session-metrics';
+
+const usageKeys = ['input', 'output', 'cached', 'total'] as const;
 
 export function LiveMetrics({
   state,
@@ -10,6 +13,30 @@ export function LiveMetrics({
 }) {
   const { t, i18n } = useTranslation();
   const metric = state.confirmed;
+  const previous = useRef(metric);
+  const [update, setUpdate] = useState<{
+    sequence: number;
+    fields: (typeof usageKeys)[number][];
+  }>();
+  const eligible = !state.stale && state.result?.availability === 'available';
+  useEffect(() => {
+    const prior = previous.current;
+    previous.current = metric;
+    if (!eligible) {
+      setUpdate(undefined);
+      return;
+    }
+    // The first reading (including a newly opened artifact) is a baseline, not an update.
+    // Equal reads/reconnection never restart the cue; time and counts are never inferred.
+    if (!metric || !prior || metric.evidence.sequence <= prior.evidence.sequence) return;
+    const fields = usageKeys.filter((key) => metric.usage[key] !== prior.usage[key]);
+    setUpdate(fields.length ? { sequence: metric.evidence.sequence, fields } : undefined);
+  }, [metric, eligible]);
+  useEffect(() => {
+    if (!update) return;
+    const timeout = setTimeout(() => setUpdate(undefined), 1600);
+    return () => clearTimeout(timeout);
+  }, [update]);
   const locale = i18n.resolvedLanguage ?? 'en-US';
   const number = new Intl.NumberFormat(locale);
   // Pending is visual only. Repeated snapshot reconciliation keeps this text stable;
@@ -57,14 +84,28 @@ export function LiveMetrics({
       {metric ? (
         <>
           <dl className="live-metric-values" role="group" aria-label={t('usage')}>
-            {(['input', 'output', 'cached', 'total'] as const).map((key) => (
-              <div key={key}>
-                <dt>{t(key === 'total' ? 'tokens' : key)}</dt>
-                <dd>
-                  <strong>{number.format(metric.usage[key])}</strong>
-                </dd>
-              </div>
-            ))}
+            {usageKeys.map((key) => {
+              const updated =
+                eligible &&
+                update?.sequence === metric.evidence.sequence &&
+                update.fields.includes(key);
+              return (
+                <div key={key}>
+                  <dt>{t(key === 'total' ? 'tokens' : key)}</dt>
+                  <dd>
+                    <strong
+                      key={updated ? update.sequence : 'settled'}
+                      className={updated ? 'live-metric-updated' : undefined}
+                    >
+                      {number.format(metric.usage[key])}
+                    </strong>
+                    <span className="live-metric-update-label">
+                      {updated && t('liveMetrics.valueUpdated')}
+                    </span>
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
           <p className="fine-print">
             {t('liveMetrics.updated')}{' '}

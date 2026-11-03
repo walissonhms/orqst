@@ -31,8 +31,10 @@ defines mandatory Desktop metrics without inventing provider data.
 
 The confirmed Live Metrics increment adds normalized session tokens and their own
 metric occurrence time to session and manual Artifacts headers. Bounded compact proof,
-unavailable values and stale/offline readings are explicit. Terminal display, limits,
-verified pricing, Fast and animations remain planned. See [contract](docs/api/live-metrics.md).
+unavailable values and stale/offline readings are explicit. A brief accessible cue now
+highlights fields changed by newer confirmed evidence, with static reduced-motion support;
+it never interpolates counts or times. Terminal display, limits, verified pricing, Fast
+and mascot reactions remain planned. See [contract](docs/api/live-metrics.md).
 
 The browser Analytics export increment adds gesture-only CSV/Markdown of the current
 validated aggregate with explicit coverage/nulls and bounded privacy/syntax controls.

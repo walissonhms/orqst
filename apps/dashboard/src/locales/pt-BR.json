@@ -26,6 +26,7 @@
     "failed": "Não foi possível atualizar as métricas. Leituras anteriores estão obsoletas.",
     "stale": "Métricas atuais indisponíveis. Leituras anteriores estão obsoletas.",
     "updated": "Horário da última métrica confirmada:",
+    "valueUpdated": "Valor confirmado atualizado",
     "noConfirmed": "Indisponível — nenhum snapshot confirmado da sessão foi carregado.",
     "snapshotNote": "Snapshot cumulativo normalizado da sessão, não do artefato. Cache já integra a entrada; total = entrada + saída.",
     "provenance": "Proveniência da métrica",

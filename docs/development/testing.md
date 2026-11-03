@@ -311,6 +311,15 @@ layout. Use a free `ORQST_BROWSER_PORT` and `--output` unique to the invocation.
 prove synthetic behavior, not provider billing or arbitrary-archive latency. Installed
 service/Desktop/storage are never acceptance fixtures. See [metric limits](../api/live-metrics.md).
 
+The confirmed-update cue suite (`tests/browser/live-metrics-updates.spec.ts`) controls
+synthetic metric responses and the browser clock to check baseline/replay/unchanged
+reads, exact changed fields, cue expiry, unavailable recovery, pt-BR, reduced motion
+and a newly opened silent Artifacts panel. The unmocked `live-metrics.spec.ts` appends
+a second synthetic token record to verify that both already open views highlight only
+the changed fields while retaining source occurrence time. These checks do not establish
+native screen-reader delivery or real-provider billing. Ingestion is unchanged; no
+`validate:local`, live provider run or installed-service restart is needed for this UI slice.
+
 ## Browser aggregate Analytics export
 
 Use synthetic reports and disposable observer storage/profiles. The export QA suites
