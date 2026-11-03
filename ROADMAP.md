@@ -64,6 +64,12 @@ macOS/arm64 Node-host mechanics are validated; native grants, provider integrati
 isolation/recovery, emulator and distribution remain unimplemented or unvalidated.
 The observer remains read-only; this does not complete Phase 2 or Phase 4.
 
+The next [owned terminal library](docs/development/terminal-owned-lab.md) implements
+signed one-use operation grants, separate instance/attachment/input-lease identities,
+owned lifecycle and bounded inert I/O, exercised by the same opt-in synthetic PTY
+command. It remains outside the application graph: native gesture/enrollment,
+transport, durable audit/recovery, isolation and provider acceptance are still gates.
+
 Apply the public [contribution policy](CONTRIBUTING.md), [security policy](SECURITY.md),
 [security model](docs/architecture/security-model.md) and
 [verification guidance](docs/development/testing.md) to every delivery:

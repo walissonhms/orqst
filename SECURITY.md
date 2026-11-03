@@ -324,6 +324,15 @@ input to an agent. Interactive terminals remain gated by the
 
 ## Synthetic PTY experiment review
 
+The subsequent [owned terminal library](docs/development/terminal-owned-lab.md)
+adds experimental signed one-use operation grants, revocable input leases and
+owned-handle I/O. It is not exported/composed into the runtime and adds no API,
+IPC, native signer or execution credential. Automatic tests use in-memory handles;
+the opt-in fixture uses ephemeral test-only signing keys. This proves signature
+binding/replay and synthetic lifecycle behavior, not native user consent, secure
+enrollment, executable binding, isolation or crash recovery. No real provider is
+authorized or launched; these gaps block production composition.
+
 The opt-in [PTY acceptance command](docs/development/terminal-pty-acceptance.md)
 starts only fixed disposable Node fixtures outside the application runtime. Its
 locked `node-pty` dependency is development-only; no API, IPC, renderer, database

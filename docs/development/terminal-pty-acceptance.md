@@ -4,7 +4,9 @@ ORQST has a repeatable developer check for native PTY mechanics. **It does not a
 an interactive terminal to the application.** The observer, external agent
 sessions, Desktop IPC and API remain unchanged. See the
 [managed terminal design](../architecture/managed-terminal-design.md) for the
-proposed authorization, ownership, isolation and persistence boundary.
+proposed authorization, ownership, isolation and persistence boundary. The next
+[owned terminal library](terminal-owned-lab.md) is now included in this explicit
+lab; it remains outside the application import graph.
 
 ## Run deliberately
 
@@ -19,7 +21,7 @@ The exact flag authorizes only this fixed synthetic experiment. No executable,
 project, provider, environment, user text or session parameter is accepted. Without
 the flag, the script refuses before staging files or creating a PTY. It is excluded
 from `test`, `build`, application startup and CI. Automatic unit tests exercise only
-an in-memory backend and authorization/output-budget helpers.
+in-memory backends, signed authorization/lifecycle and output-budget helpers.
 
 The script stages the locked `node-pty@1.1.0` JS, MIT license and macOS/arm64 native
 files into a new private temporary directory. The published helper is not executable
@@ -30,7 +32,7 @@ privileged install, service restart or provider command is involved.
 
 ## What it checks
 
-Two sequential starts, with at most one active child, run the current absolute Node
+Three sequential starts, with at most one active child, run the current absolute Node
 binary and a fixed synthetic fixture through a real PTY. Each gets a fresh private
 cwd, HOME, CODEX_HOME and TMPDIR, a small explicit locale/terminal environment and
 no inherited loader options or credentials. The fixture validates its TTY, directory
@@ -41,6 +43,14 @@ The check exercises input, initial size and resize, raw Ctrl+C bytes, pause/resu
 during a finite output burst, a bounded tail, normal exit and SIGTERM through the
 owned handle. Ctrl+C is deliberately only a byte in raw mode; the signal case is
 separate. It does not use PID lookup or signal arbitrary processes.
+
+The third start goes through the experimental supervisor. A test-only ephemeral
+Ed25519 key signs exact prepared operations. It checks unsigned/replayed start
+denial, backend readiness evidence, input lease/sequence, resize, Ctrl+C, pending
+grant revocation on blur, detach without stop, fresh attachment/lease, exact paste
+binding, separately scoped stop and exit evidence. The executable and fixture
+hashes are rechecked; this does not close path replacement races. Signing in this
+explicit test is not native user-gesture acceptance. No private key is persisted.
 
 Each probe has a five-second deadline, a 256 KiB cumulative received-output budget
 and a 4096-code-unit retained tail. Failure attempts SIGKILL only through its created
@@ -62,7 +72,7 @@ The opt-in probe passed on macOS/arm64 with Node `24.22.2` and `node-pty` `1.1.0
 The increment also passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (238 tests,
 including four new synthetic unit cases) and `pnpm build`. The build retains the
 existing dashboard chunk-size warning; no bundling/runtime dependency changed.
-This establishes checkout-only Node-host mechanics, not Electron ABI compatibility,
+This earlier evidence establishes checkout-only Node-host mechanics, not Electron ABI compatibility,
 signed packaging, emulator behavior, arbitrary load, descendant cleanup, crash/reboot
 recovery, native authorization or real-provider acceptance. The terminal runtime is
 intended to live alongside Core under Node; Electron native loading is not needed
@@ -72,3 +82,16 @@ No real provider, API key, native user session, installed Bridge, observer datab
 or external process is used. `validate:local`, browser tests and native Desktop smoke
 are unnecessary for this script-only increment and were not run. Phase 2/4 terminal
 acceptance remains incomplete; there are no new controls to enable in the UI.
+
+### Owned supervisor increment
+
+The subsequent library increment passed `pnpm lint`, `pnpm typecheck`, `pnpm test`
+(250 tests, including 12 new in-memory terminal cases), `pnpm build` and the expanded
+opt-in native probe on the same macOS/arm64 Node `24.22.2` / `node-pty` `1.1.0`
+toolchain. The build still reports the existing dashboard chunk-size warning.
+The native probe now includes the third supervisor-driven fixture described above.
+
+No real provider, session data, installed service or database was accessed.
+`validate:local`, browser tests and native Desktop smoke were not run because the
+observer, API, IPC and renderer did not change. Native gesture/enrollment,
+provider/PTY integration and durable audit/recovery acceptance remain incomplete.
