@@ -6,6 +6,8 @@ The official identity is **Minimal Dark + Developer Studio**: default dark layer
 precise typography, restrained purple accents and source-backed status feedback.
 The ORQST logo and mascot are the visual references. Preserve approved artwork;
 do not recolor or replace native menu-bar assets through dashboard CSS.
+The approved static [brand assets](brand-assets.md) are used in navigation and the
+empty-session welcome; the mascot does not indicate agent status.
 
 This is a Desktop MVP requirement, shared by the browser and Electron dashboard.
 The current implementation remains an observation-only React client. The

@@ -164,35 +164,18 @@ input {
   z-index: 20;
 }
 .brand {
-  font-size: 1.5rem;
-  letter-spacing: 3px;
-  font-weight: 700;
-  display: flex;
-  gap: 13px;
-  align-items: center;
-  padding: 0 12px;
-}
-.brand-mark {
   display: flex;
   align-items: center;
-  gap: 3px;
-  height: 27px;
-  transform: skew(-12deg);
+  width: 180px;
+  max-width: 100%;
+  padding: 0 6px;
+  border-radius: var(--orqst-radius-control);
+  background: var(--orqst-on-primary);
 }
-.brand-mark i {
-  width: 4px;
-  background: var(--orqst-neon);
-  border-radius: 2px;
-  height: 15px;
-}
-.brand-mark i:nth-child(2) {
-  height: 24px;
-}
-.brand-mark i:nth-child(3) {
-  height: 20px;
-}
-.brand-mark i:nth-child(4) {
-  height: 11px;
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 .brand-tagline {
   font-size: 0.625rem;
@@ -932,15 +915,11 @@ th:nth-last-child(2) {
   flex-direction: column;
   padding: 46px 22px 52px;
 }
-.empty-icon {
-  width: 58px;
-  height: 58px;
-  border: 1px solid var(--orqst-border);
-  border-radius: 15px;
-  display: grid;
-  place-items: center;
-  background: var(--orqst-accent-soft);
-  color: var(--orqst-lavender);
+.empty-mascot {
+  display: block;
+  width: 144px;
+  max-width: 100%;
+  height: auto;
   margin-bottom: var(--orqst-space-5);
 }
 .empty-state h3 {
@@ -1336,9 +1315,6 @@ th:nth-last-child(2) {
   }
   .main-shell {
     margin-left: 195px;
-  }
-  .brand {
-    font-size: 1.375rem;
   }
   .topbar {
     padding: 0 24px;
