@@ -50,6 +50,12 @@ revalidation and native destination/overwrite dialogs. Download denial and the
 Artifacts contract are preserved; native visual acceptance remains pending. See
 [export contract](docs/api/analytics-export.md).
 
+The observed usage evolution increment adds a filtered interval-end bar/table view,
+with at most 64 adaptive UTC windows and separate undistributed lifetime totals.
+It reuses cumulative admission and preserves aggregate/export contracts. This is
+qualified observation timing rather than measured daily consumption; real-provider
+multi-model temporal acceptance remains pending. See [contract](docs/api/analytics-evolution.md).
+
 ## Mandatory quality and security criteria for each increment
 
 Apply the public [contribution policy](CONTRIBUTING.md), [security policy](SECURITY.md),

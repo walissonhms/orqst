@@ -482,3 +482,12 @@ any result; SQL size admission precedes metadata materialization. The output exc
 source paths and captured bodies; actual HTTP bytes are bounded before client parsing.
 No cache/credential/source read, migration, new writer or process authority is added.
 See [admission, privacy and client cancellation](../api/model-history.md).
+
+## Observed usage evolution review
+
+The additive `/api/analytics/models/evolution` read inherits aggregate authentication,
+Host/Origin/fetch controls, one-worker deadline/admission limits and no-store headers.
+It adds no writer, source-file reader, schema migration or Desktop grant. Runtime
+schemas bound and reconcile at most 64 windows; individual evidence stays worker-local.
+Aggregate query/model metadata keeps the existing privacy limits. See the
+[contract and detailed security review](../api/analytics-evolution.md).

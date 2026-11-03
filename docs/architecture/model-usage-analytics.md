@@ -4,7 +4,8 @@
 
 **Mandatory for the functional Desktop MVP.** A read-only local aggregation foundation
 and bounded summary API are implemented, along with a first browser ranking view.
-Native Desktop export, time series and comparator remain incomplete. Browser CSV/Markdown
+Native Desktop aggregate export, descriptive comparison and bounded interval-end
+evolution are implemented; qualified task comparison remains incomplete. Browser CSV/Markdown
 export is implemented within the separate [export contract](../api/analytics-export.md). Real
 multi-model acceptance is still pending. The implementation boundaries below describe
 current behavior; subsequent sections specify the broader product requirements.
@@ -276,3 +277,14 @@ alternatives. Run lint, types, tests, build and relevant browser checks; ingesti
 changes also require bounded local validation. Never rerun live token-consuming
 benchmarks merely to populate Analytics. Report unobserved real-provider cases as
 unvalidated; foundation tests alone do not complete Desktop Analytics acceptance.
+
+## Observed usage evolution increment
+
+The separate [evolution contract](../api/analytics-evolution.md) reuses the aggregate
+reader and canonical contributions in one read-only WAL snapshot. The dashboard
+requests it explicitly with current filters and requires the returned summary to
+match its ranking reading. At most 64 adaptive UTC windows group known intervals
+by their final measurement, with null windows and separate undistributed first
+snapshots. This does not measure daily consumption or complete source coverage.
+Aggregate exports and ingestion remain unchanged; real-provider temporal acceptance
+is still pending.

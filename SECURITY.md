@@ -307,3 +307,12 @@ See [contract and security review](docs/api/analytics-export.md).
 Partial session model history uses a separate bounded authenticated read of existing
 compact evidence, excluding source paths and captured bodies. It adds no cache or
 credential access. See the [security review](docs/api/model-history.md#client-behavior-and-security-review).
+
+## Observed usage evolution review
+
+The additive `/api/analytics/models/evolution` read inherits aggregate authentication,
+Host/Origin/fetch controls, one-worker deadline/admission limits and no-store headers.
+It adds no writer, source-file reader, schema migration or Desktop grant. Runtime
+schemas bound and reconcile at most 64 windows; individual evidence stays worker-local.
+Aggregate query/model metadata keeps the existing privacy limits. See the
+[contract and detailed security review](docs/api/analytics-evolution.md).

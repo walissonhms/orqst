@@ -39,6 +39,7 @@ import {
 } from './analytics.js';
 export {
   readModelAnalyticsSummary,
+  readModelAnalyticsEvolution,
   ANALYTICS_READ_LIMITS,
   AnalyticsReadCapacityError,
 } from './analytics-reader.js';

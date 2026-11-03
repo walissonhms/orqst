@@ -45,6 +45,12 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Observed usage evolution:** **Most used models** can request a bounded chronological
+  chart/table with the current filters, confirmed aggregate reconciliation, explicit
+  zero/missing windows and separate lifetime totals without known time distribution.
+  UTC windows group interval-end measurements; they do not invent daily consumption.
+  Ranking/export contracts remain unchanged. See [contract](docs/api/analytics-evolution.md).
+
 - **Artifact close protection increment:** explicitly closing the panel or session
   details asks before discarding a draft that differs from the retained original.
   Cancel/Escape preserve the draft; copying/saving does not bypass confirmation.
@@ -387,8 +393,8 @@ and [SECURITY.md](SECURITY.md).
   disconnect/shutdown cancel and await cleanup. Explicit errors show no partial sums.
   Native SQL cleanup can delay termination. Narrow workspace, agent or adapter scopes
   may help; a shorter period can need the same history.
-  Time series, task-qualified comparisons, verified costs and full Desktop delivery
-  remain pending. Native aggregate CSV/Markdown save is implemented with the limits
+  Bounded interval-end evolution is implemented; daily consumption, task-qualified
+  comparisons, verified costs and full Desktop delivery remain unavailable. Native aggregate CSV/Markdown save is implemented with the limits
   in the [export contract](docs/api/analytics-export.md). Real multi-model ranking is unvalidated. See the [design](docs/architecture/model-usage-analytics.md).
 - **Token data is only as good as the source.** ORQST records observed
   cumulative session usage; it does not estimate cost, enforce budgets, or
@@ -398,6 +404,20 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The observed usage evolution increment passed lint, typecheck, 225 Node tests,
+full build and a compiled-worker smoke with disposable synthetic storage. Both new
+Chromium cases passed after fixture-only corrections, covering actual observer/API
+reconciliation, filters, missing/zero windows, locales/mobile and revoked readings.
+The first full browser run was **85/89**, not green: one new fixture assertion was
+corrected; three existing threshold cases expected 120 tokens after an earlier
+Analytics test advanced shared synthetic usage to 190. The mutating test now uses
+a dedicated synthetic source/session. A focused regression run passed that test
+followed by all three affected threshold cases (4/4), retaining their exact assertions.
+No successful full browser rerun is claimed. Build reports a bundle-size warning.
+Ingestion is unchanged: local-source/live acceptance and native Desktop smoke were
+not repeated. Installed client, services, storage and source sessions were preserved;
+real-provider temporal coverage and full Desktop acceptance remain pending.
 
 The descriptive Analytics comparison increment passed lint, typecheck, 222 Node
 tests, full build and all 62 Chromium cases, including five independent comparison

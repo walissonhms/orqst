@@ -162,3 +162,4 @@ export type StreamMessage =
   | { type: 'ready'; cursor: number }
   | { type: 'resync'; cursor: number };
 export const emptyUsage = (): Usage => ({ input: 0, output: 0, cached: 0, total: 0 });
+export * from './analytics-evolution.js';

@@ -17,6 +17,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Bounded observed usage evolution integrated into Most used models: chronological
+  bars and accessible UTC-window table, existing filters, cumulative reconciliation,
+  explicit missing/zero readings and separate undistributed lifetime totals. A strict
+  additive read endpoint shares the existing bounded read-only Analytics worker;
+  stale/mismatched readings are rejected. No daily consumption, new model attribution,
+  schema migration or aggregate export change is implied.
+
 - Confirm changed Artifacts drafts before explicitly closing the panel or its session
   details. A shared localized modal focuses Cancel, contains keyboard focus and accepts
   Escape. Unchanged/restored text closes immediately; copy/save feedback never marks

@@ -450,3 +450,35 @@ These use a disposable synthetic observer/API/dashboard; no real session, databa
 service or native dialog is required. Browser window close, reload, session/view
 navigation and crash recovery are outside this bounded guard. Native Electron visual
 acceptance is not established by Chromium or the mocked save capability.
+
+## Observed usage evolution
+
+`tests/analytics-evolution.test.ts` covers worker/library reconciliation, mixed models,
+unidentified/unbounded contributions, measured zero versus null, half-open periods,
+scopes, replay, compact retention and deterministic coarsening across long gaps.
+`tests/analytics-api.test.ts` additionally checks the new route's authentication,
+strict query, unchanged aggregate shape and content-minimized projection.
+`tests/browser/model-evolution.spec.ts` uses the disposable source/observer/API path
+for filtered bars/table, both locales and mobile layout; it also rejects mismatched
+and late readings. Run after building, on an isolated `ORQST_BROWSER_PORT` as usual.
+These are synthetic checks; real-provider temporal attribution, arbitrary-history
+latency and native visual acceptance remain pending. Ingestion is unchanged, so this
+increment does not require another local-source or token-consuming live validation.
+
+The evolution delivery's first full Chromium run was 85/89. After fixing the new
+scenario's fixture expectations/authenticated request context, both new cases passed
+in focused runs. In that full run, three existing threshold assertions expected the
+harness's original 120 tokens after `model-analytics.spec.ts` had appended a 190-token
+snapshot. All three passed when selected together in an isolated harness.
+The mutating Analytics refresh test now writes a dedicated synthetic source/session,
+preserving the baseline's 120-token reading. A regression run selected that test and
+all three affected cases in the same harness, passing 4/4 with their exact assertions
+unchanged. Reproduce the interaction check with:
+
+```bash
+ORQST_BROWSER_PORT=4387 pnpm test:browser tests/browser/model-analytics.spec.ts tests/browser/token-threshold.spec.ts tests/browser/token-threshold-qa.spec.ts --grep 'analytics refresh follows|explicit integer validation|threshold is memory-only|offline and stale'
+```
+
+The complete suite was not rerun; its earlier 85/89 result is retained above.
+Previously valid Node/build/lint checks and focused evolution cases were reused;
+only the fixture correction and the affected sequence needed additional validation.

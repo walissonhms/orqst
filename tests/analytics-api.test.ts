@@ -417,3 +417,31 @@ test('Analytics byte budgets admit larger messages and reject oversized records 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('evolution route preserves aggregate v1, authentication, strict query and privacy boundaries', async () => {
+  const ctx = await setup();
+  try {
+    seed(ctx.store);
+    for (const [headers, status] of [
+      [{ Cookie: '' }, 401],
+      [{ Origin: 'https://untrusted.invalid' }, 403],
+    ] as const)
+      assert.equal((await ctx.get('/evolution', headers)).status, status);
+    for (const query of ['?model=a&model=b', '?provider=private', '?unidentified=true&model=a'])
+      assert.equal((await ctx.get('/evolution' + query)).status, 400);
+    const response = await ctx.get('/evolution');
+    assert.equal(response.status, 200);
+    const report = await response.json();
+    assert.deepEqual(report.summary, await summary(await ctx.get()));
+    assert.equal(report.buckets[0].usage.total, 30);
+    assert.equal(report.undistributedUsage.total, 0);
+    assert.equal(JSON.stringify(report).includes('SYNTHETIC_PRIVATE'), false);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('access-control-allow-origin'), null);
+    const filtered = await ctx.get('/evolution?model=synthetic-model');
+    assert.equal(filtered.status, 200);
+    assert.equal((await filtered.json()).summary.usage.total, 30);
+  } finally {
+    await ctx.close();
+  }
+});

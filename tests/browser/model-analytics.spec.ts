@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { appendFile, readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ModelAnalyticsSummary, Usage } from '@orqst/protocol';
 
@@ -357,9 +357,17 @@ test('analytics refresh follows observed source events, not snapshot polling or 
     file: string;
   };
   const timestamp = new Date().toISOString();
-  await appendFile(
-    file,
+  // Keep cumulative changes in a dedicated source; later tests need the baseline fixture.
+  await writeFile(
+    join(dirname(file), 'synthetic-analytics-refresh.jsonl'),
     [
+      {
+        type: 'session_meta',
+        payload: {
+          id: 'synthetic-analytics-refresh-session',
+          cwd: '/synthetic/analytics-refresh',
+        },
+      },
       {
         type: 'event_msg',
         payload: { type: 'task_started', turn_id: 'synthetic-analytics-refresh-turn' },
@@ -367,7 +375,7 @@ test('analytics refresh follows observed source events, not snapshot polling or 
       {
         type: 'token_usage_record',
         payload: {
-          thread_id: 'synthetic-browser-session',
+          thread_id: 'synthetic-analytics-refresh-session',
           response_id: 'synthetic-analytics-refresh',
           thread_token_usage: {
             input_tokens: 160,

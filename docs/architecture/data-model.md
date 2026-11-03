@@ -399,3 +399,12 @@ detail retention and replay deduplication. Historical source workspace differs f
 manual current association; occurrence differs from observation time. Normalized cache/
 total defaults cannot be distinguished from explicit provider fields in schema 2.
 See [selection, provenance and unavailable semantics](../api/live-metrics.md).
+
+## Observed usage evolution projection
+
+The additive [evolution read](../api/analytics-evolution.md) folds the same canonical
+contributions into up to 64 adaptive UTC windows by interval end. Unbounded first
+snapshots remain separately undistributed; null windows never imply zero. The four
+usage components reconcile to the accompanying aggregate from the same WAL snapshot.
+This projection changes no table, migration, checkpoint, retention or token admission
+rule. Window timing is not a measured daily consumption distribution.

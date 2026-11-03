@@ -282,6 +282,23 @@
       "unbounded": "sem limite",
       "filterAll": "todos",
       "filterApplied": "aplicado (valor omitido)"
+    },
+    "evolution": {
+      "title": "Evolução do uso",
+      "show": "Mostrar evolução",
+      "retry": "Atualizar evolução",
+      "basis": "Deltas cumulativos cobertos agrupados pela janela UTC da medição final. Estas barras não medem consumo dentro de cada dia; intervalos podem atravessar janelas. Sem interpolação ou previsão.",
+      "filters": "Usa os filtros atuais do ranking. Selecione acima um modelo exato ou o grupo não identificado para ver sua evolução. A exportação continua contendo apenas o ranking agregado.",
+      "failed": "A evolução está indisponível ou não corresponde mais a esta leitura do ranking. Atualize o ranking e tente novamente.",
+      "windows": "Janelas UTC de {{days}} dia(s), alinhadas à época Unix; no máximo 64 janelas. Janelas vazias permanecem indisponíveis. A cobertura é incompleta.",
+      "coveredTotal": "Total reportado coberto",
+      "undistributed": "Uso reportado com distribuição temporal desconhecida",
+      "reconciliation": "Janelas medidas mais qualquer uso reportado sem distribuição temporal conhecida conciliam com o total coberto acima. Desconhecido não é zero. Totais iniciais acumulados nunca são atribuídos a uma janela.",
+      "empty": "Nenhum intervalo coberto com início conhecido. Um total acumulado reportado ainda pode estar disponível acima.",
+      "caption": "Observações cronológicas de fim de intervalo e detalhamento de tokens",
+      "from": "Início da janela (UTC, inclusivo)",
+      "to": "Fim da janela (UTC, exclusivo)",
+      "missing": "Janelas indisponíveis não têm intervalo admitido terminando nelas. Elas não comprovam inatividade ou consumo zero. O cache já está incluído na entrada."
     }
   },
   "desktopShell": {

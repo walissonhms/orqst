@@ -1,10 +1,21 @@
 import { parentPort, workerData } from 'node:worker_threads';
-import { AnalyticsReadCapacityError, readModelAnalyticsSummary } from '@orqst/database';
+import {
+  AnalyticsReadCapacityError,
+  readModelAnalyticsSummary,
+  readModelAnalyticsEvolution,
+} from '@orqst/database';
 import type { ModelAnalyticsQuery } from '@orqst/protocol';
 
-const { file, query } = workerData as { file: string; query: ModelAnalyticsQuery };
+const { file, query, projection } = workerData as {
+  file: string;
+  query: ModelAnalyticsQuery;
+  projection?: 'summary' | 'evolution';
+};
 try {
-  const report = readModelAnalyticsSummary(file, query);
+  const report =
+    projection === 'evolution'
+      ? readModelAnalyticsEvolution(file, query)
+      : readModelAnalyticsSummary(file, query);
   parentPort!.postMessage({ report });
 } catch (error) {
   // Never expose SQLite diagnostics, paths or captured evidence to the observer/API.

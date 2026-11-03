@@ -1,5 +1,9 @@
 import { Worker, type WorkerOptions } from 'node:worker_threads';
-import type { ModelAnalyticsQuery, ModelAnalyticsSummary } from '@orqst/protocol';
+import type {
+  ModelAnalyticsQuery,
+  ModelAnalyticsSummary,
+  ModelAnalyticsEvolution,
+} from '@orqst/protocol';
 
 export const ANALYTICS_WORKER_LIMITS = Object.freeze({ concurrency: 1, timeoutMs: 10000 });
 export type AnalyticsErrorCode =
@@ -13,8 +17,9 @@ export class AnalyticsQueryError extends Error {
     super(code);
   }
 }
+type AnalyticsResult = ModelAnalyticsSummary | ModelAnalyticsEvolution;
 interface WorkerReply {
-  report?: ModelAnalyticsSummary;
+  report?: AnalyticsResult;
   error?: string;
 }
 /** Small worker seam for deterministic lifecycle tests, never supplied by runtime configuration. */
@@ -39,6 +44,18 @@ export class AnalyticsQueries {
   ) {}
 
   query(query: ModelAnalyticsQuery, signal?: AbortSignal): Promise<ModelAnalyticsSummary> {
+    return this.run(query, signal, 'summary') as Promise<ModelAnalyticsSummary>;
+  }
+
+  evolution(query: ModelAnalyticsQuery, signal?: AbortSignal): Promise<ModelAnalyticsEvolution> {
+    return this.run(query, signal, 'evolution') as Promise<ModelAnalyticsEvolution>;
+  }
+
+  private run(
+    query: ModelAnalyticsQuery,
+    signal: AbortSignal | undefined,
+    projection: 'summary' | 'evolution',
+  ): Promise<AnalyticsResult> {
     // The deadline includes synchronous setup, worker startup, reading and cleanup.
     const deadline =
       performance.now() + (this.options.timeoutMs ?? ANALYTICS_WORKER_LIMITS.timeoutMs);
@@ -63,7 +80,7 @@ export class AnalyticsQueries {
       worker = (this.options.workerFactory ?? ((entry, options) => new Worker(entry, options)))(
         entry,
         {
-          workerData: { file: this.file, query },
+          workerData: { file: this.file, query, projection },
           execArgv: [],
           resourceLimits: { maxOldGenerationSizeMb: 256, maxYoungGenerationSizeMb: 16 },
         },
@@ -78,13 +95,13 @@ export class AnalyticsQueries {
     let cleaned = false;
     let terminating = false;
     let settled = false;
-    let report: ModelAnalyticsSummary | undefined;
+    let report: AnalyticsResult | undefined;
     let cancel = () => {};
     let release = () => {};
     const cleanup = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const result = new Promise<ModelAnalyticsSummary>((resolve, reject) => {
+    const result = new Promise<AnalyticsResult>((resolve, reject) => {
       const fail = (code: AnalyticsErrorCode) => {
         if (!settled) {
           settled = true;

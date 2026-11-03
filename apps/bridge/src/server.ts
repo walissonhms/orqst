@@ -170,7 +170,10 @@ export function createLocalServer(
           reply(response, 200, store.sessionMetrics(parsed.data.sessionId));
           return;
         }
-        if (url.pathname === '/api/analytics/models' && request.method === 'GET') {
+        if (
+          ['/api/analytics/models', '/api/analytics/models/evolution'].includes(url.pathname) &&
+          request.method === 'GET'
+        ) {
           const keys = [...url.searchParams.keys()];
           const parsed = modelAnalyticsHttpQuerySchema.safeParse(
             Object.fromEntries(url.searchParams),
@@ -183,7 +186,9 @@ export function createLocalServer(
           const cancel = () => controller.abort();
           response.once('close', cancel);
           try {
-            const report = await analytics.query(parsed.data, controller.signal);
+            const report = url.pathname.endsWith('/evolution')
+              ? await analytics.evolution(parsed.data, controller.signal)
+              : await analytics.query(parsed.data, controller.signal);
             if (!response.destroyed) reply(response, 200, report);
           } catch (error) {
             if (!(error instanceof AnalyticsQueryError)) throw error;

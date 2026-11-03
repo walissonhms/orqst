@@ -3,11 +3,14 @@ import { lstatSync, realpathSync } from 'node:fs';
 import { analyticsEvidenceQueries } from './analytics-evidence.js';
 import {
   modelAnalyticsQuerySchema,
+  modelAnalyticsEvolutionSchema,
   type ModelAnalyticsQuery,
   type ModelAnalyticsSummary,
+  type ModelAnalyticsEvolution,
 } from '@orqst/protocol';
 import {
   aggregateModelAnalyticsSummary,
+  aggregateModelAnalyticsEvolution,
   type AnalyticsSession,
   type AnalyticsEvent,
 } from './analytics.js';
@@ -23,12 +26,33 @@ export const ANALYTICS_READ_LIMITS = Object.freeze({
 });
 export class AnalyticsReadCapacityError extends Error {}
 
+export function readModelAnalyticsEvolution(
+  file: string,
+  input: ModelAnalyticsQuery = {},
+): ModelAnalyticsEvolution {
+  return readModelAnalytics(
+    file,
+    input,
+    ANALYTICS_READ_LIMITS,
+    'evolution',
+  ) as ModelAnalyticsEvolution;
+}
+
 /** A separate read-only connection: never construct Store, migrate, or reserve a write lock. */
 export function readModelAnalyticsSummary(
   file: string,
   input: ModelAnalyticsQuery = {},
   limits: Readonly<typeof ANALYTICS_READ_LIMITS> = ANALYTICS_READ_LIMITS,
 ): ModelAnalyticsSummary {
+  return readModelAnalytics(file, input, limits, 'summary') as ModelAnalyticsSummary;
+}
+
+function readModelAnalytics(
+  file: string,
+  input: ModelAnalyticsQuery,
+  limits: Readonly<typeof ANALYTICS_READ_LIMITS>,
+  projectionKind: 'summary' | 'evolution',
+): ModelAnalyticsSummary | ModelAnalyticsEvolution {
   const query = modelAnalyticsQuerySchema.parse(input);
   if (lstatSync(file).isSymbolicLink() || realpathSync(file) !== file)
     throw new Error('Analytics database path must be canonical');
@@ -134,11 +158,14 @@ export function readModelAnalyticsSummary(
         };
       }
     }
-    const report = aggregateModelAnalyticsSummary(sessions(), query);
+    const report =
+      projectionKind === 'evolution'
+        ? aggregateModelAnalyticsEvolution(sessions(), query)
+        : aggregateModelAnalyticsSummary(sessions(), query);
     // Bound structured clone and JSON serialization on the observer thread as well.
     if (Buffer.byteLength(JSON.stringify(report)) > limits.summaryBytes)
       throw new AnalyticsReadCapacityError();
-    return report;
+    return projectionKind === 'evolution' ? modelAnalyticsEvolutionSchema.parse(report) : report;
   } finally {
     // close rolls back the read transaction and releases its bounded WAL snapshot.
     db.close();

@@ -138,6 +138,16 @@ errors. The unrestricted synchronous library `modelAnalytics()` and legacy bound
 Schema 2 adds durable compact evidence through the sole Store writer; the route
 and worker do not migrate or write. See [data lifecycle](../architecture/data-model.md).
 
+### `GET /api/analytics/models/evolution`
+
+Additive bounded interval-end time series under the same filters, authentication,
+worker slot, admission/response budgets and errors as the aggregate route above.
+The strict version-1 response includes its aggregate summary, up to 64 adaptive UTC
+windows and separate lifetime usage with unknown time distribution. Empty windows
+remain unavailable; zero requires a measurement. See [accounting, dashboard behavior
+and security review](analytics-evolution.md). Existing aggregate/export shapes stay
+unchanged.
+
 ### `GET /api/snapshot`
 
 Returns the current read model used to render the dashboard.

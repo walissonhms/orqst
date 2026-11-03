@@ -282,6 +282,23 @@
       "unbounded": "unbounded",
       "filterAll": "all",
       "filterApplied": "applied (value omitted)"
+    },
+    "evolution": {
+      "title": "Usage evolution",
+      "show": "Show evolution",
+      "retry": "Refresh evolution",
+      "basis": "Covered cumulative deltas grouped by the UTC window containing their final measurement. These bars do not measure consumption within each day; intervals can cross windows. No interpolation or forecast.",
+      "filters": "Uses the current ranking filters. Choose an exact model or the unidentified bucket above to inspect its evolution. Export continues to contain only the aggregate ranking.",
+      "failed": "Evolution is unavailable or no longer matches this ranking reading. Refresh the ranking, then try again.",
+      "windows": "UTC windows of {{days}} day(s), aligned to the Unix epoch; at most 64 windows. Empty windows remain unavailable. Coverage is incomplete.",
+      "coveredTotal": "Covered reported total",
+      "undistributed": "Reported usage with unknown time distribution",
+      "reconciliation": "Measured windows plus any reported usage with unknown time distribution reconcile to the covered total above. Unknown is not zero. Initial lifetime snapshots are never assigned to a window.",
+      "empty": "No covered interval with a known start. A reported lifetime total may still be available above.",
+      "caption": "Chronological interval-end observations and token breakdown",
+      "from": "Window start (UTC, inclusive)",
+      "to": "Window end (UTC, exclusive)",
+      "missing": "Unavailable windows have no admitted interval ending there. They do not prove inactivity or zero consumption. Cached input is already included in input."
     }
   },
   "desktopShell": {

@@ -5,6 +5,7 @@ import {
   type ModelAnalyticsQuery,
   type ModelAnalyticsReport,
   type ModelAnalyticsSummary,
+  type ModelAnalyticsEvolution,
   type ModelAnalyticsRow,
   type ModelUsageContribution,
   type StoredEvent,
@@ -332,12 +333,15 @@ export function summarizeModelAnalytics(report: ModelAnalyticsReport): ModelAnal
 export function aggregateModelAnalyticsSummary(
   sessions: Iterable<AnalyticsSession>,
   query: ModelAnalyticsQuery,
+  observe?: (report: ModelAnalyticsReport) => void,
 ): ModelAnalyticsSummary {
   const result = summarizeModelAnalytics(aggregateModelAnalytics([], query));
   const rows = new Map<string, ModelAnalyticsSummary['models'][number]>();
   const gaps = new Map<AnalyticsGap['reason'], number>();
   for (const session of sessions) {
-    const next = summarizeModelAnalytics(aggregateModelAnalytics([session], query));
+    const report = aggregateModelAnalytics([session], query);
+    observe?.(report);
+    const next = summarizeModelAnalytics(report);
     if (next.usage) result.usage = add(result.usage ?? emptyUsage(), next.usage);
     result.sessions += next.sessions;
     result.coverage.sessions += next.coverage.sessions;
@@ -364,4 +368,63 @@ export function aggregateModelAnalyticsSummary(
   );
   result.coverage.gaps = [...gaps].map(([reason, count]) => ({ reason, count }));
   return result;
+}
+
+/** Interval-end observations, never interpolated daily consumption. At most 64 UTC bins. */
+export function aggregateModelAnalyticsEvolution(
+  sessions: Iterable<AnalyticsSession>,
+  query: ModelAnalyticsQuery,
+): ModelAnalyticsEvolution {
+  const dayMs = 86400000;
+  let bucketDays = 1;
+  let buckets = new Map<number, Usage>();
+  let undistributedUsage: Usage | null = null;
+  let first = Infinity;
+  let last = -Infinity;
+  const summary = aggregateModelAnalyticsSummary(sessions, query, (report) => {
+    for (const row of report.models) {
+      for (const contribution of row.contributions) {
+        if (contribution.interval.from === null) {
+          undistributedUsage = add(undistributedUsage ?? emptyUsage(), contribution.usage);
+          continue;
+        }
+        const day = Math.floor(Date.parse(contribution.interval.to) / dayMs);
+        first = Math.min(first, day);
+        last = Math.max(last, day);
+        while (Math.floor(last / bucketDays) - Math.floor(first / bucketDays) >= 64) {
+          bucketDays *= 2;
+          const merged = new Map<number, Usage>();
+          for (const [start, usage] of buckets) {
+            const key = Math.floor(start / bucketDays) * bucketDays;
+            merged.set(key, add(merged.get(key) ?? emptyUsage(), usage));
+          }
+          buckets = merged;
+        }
+        const key = Math.floor(day / bucketDays) * bucketDays;
+        buckets.set(key, add(buckets.get(key) ?? emptyUsage(), contribution.usage));
+      }
+    }
+  });
+  const series: ModelAnalyticsEvolution['buckets'] = [];
+  if (Number.isFinite(first)) {
+    for (
+      let start = Math.floor(first / bucketDays) * bucketDays;
+      start <= last;
+      start += bucketDays
+    ) {
+      series.push({
+        from: new Date(start * dayMs).toISOString(),
+        to: new Date((start + bucketDays) * dayMs).toISOString(),
+        usage: buckets.get(start) ?? null,
+      });
+    }
+  }
+  return {
+    contract: 'orqst.model-analytics-evolution',
+    contractVersion: 1,
+    summary,
+    bucketDays,
+    buckets: series,
+    undistributedUsage,
+  };
 }
