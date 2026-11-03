@@ -145,6 +145,26 @@ try {
   await page.waitForTimeout(100);
   await page.locator('#detach').click();
   await expect(page.locator('#status')).toHaveAttribute('data-state', 'exited');
+  const firstId = await page.locator('#status').getAttribute('data-instance-id');
+  await page.locator('#start').click();
+  await expect(page.locator('#status')).not.toHaveAttribute('data-instance-id', firstId!);
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const instanceId = document.querySelector<HTMLElement>('#status')!.dataset.instanceId!;
+        const client = (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal;
+        const reply = await client.request({ version: 1, action: 'snapshot', instanceId });
+        return reply.status === 'ok' ? reply.snapshot?.state : reply.status;
+      }),
+    )
+    .toBe('running');
+  await page.locator('#attach').click();
+  await expect(page.locator('#output')).toContainText('SYNTHETIC:READY:80x24');
+  await expect(page.locator('#output')).not.toContainText('SYNTHETIC:PONG');
+  await page.locator('#stop').click();
+  await page.waitForTimeout(100);
+  await page.locator('#detach').click();
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'exited');
   await page.reload();
   await page.locator('#start').click();
   await expect(page.locator('#status')).toContainText(/denied|negada/);
@@ -167,6 +187,7 @@ try {
         'blur-revokes-input',
         'stop-confirmed-exit',
         'reload-permanent-revocation',
+        'fresh-instance-output-reset',
       ],
       nativeConfirmation: 'intercepted; real human/modal/layout/accessibility acceptance pending',
       providers: 'Codex not enabled or executed; Claude/OpenCode unvalidated',
