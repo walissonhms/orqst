@@ -370,3 +370,21 @@ revocation protect the lab path. Host loss retains ownership uncertainty. Accept
 intercepts native dialogs and starts only a watchdog-bounded credential-free fixture.
 It proves neither a human native grant nor immutable provider admission, containment,
 durable recovery or Codex execution; those gates continue blocking activation.
+
+## Opt-in terminal journal review — 2026-11-03
+
+The [durable recovery library](docs/development/terminal-recovery.md) adds private
+metadata-only SQLite persistence through the existing Store, outside normal startup
+and the native lab. It exposes no API/WS/IPC, cookie authority, source reader or
+provider capability. One-use grants still authorize effects; durable epochs fence
+old owners. Admission commits before backend execution, and synchronous effects
+hold the owner transaction lock. Foreign outer transactions are denied. Recovery
+and shutdown preserve uncertainty without PID adoption, signals or automatic retry.
+Lost ownership is never pruned or converted to an exit to free capacity. No prompts,
+output, argv, environment, credentials or grant material enter the journal.
+
+Synthetic SQLite/restart/abrupt-writer-exit tests establish metadata semantics only.
+They do not close native executable/cwd races, supply a resource sandbox, enroll a
+production client or validate managed Codex. Same-user malware, storage failure and
+native-provider survival/descendants remain outside this evidence. Normal observer
+permissions and read-only external sessions remain intact.

@@ -1,5 +1,11 @@
 # Managed terminal: proposed execution boundary
 
+Implementation update (2026-11-03): the optional
+[metadata journal and epoch recovery](../development/terminal-recovery.md) now
+implement conservative persistence/admission in the experimental library. The
+remaining production/provider gates in this design still apply; normal runtime
+and the native lab do not open that journal.
+
 This is an engineering design, not an implemented control contract or permission
 to execute a provider. The current runtime remains an observer. The independent
 [synthetic PTY acceptance](../development/terminal-pty-acceptance.md) validates a
@@ -182,6 +188,6 @@ proofs/leases, document/focus revalidation, lifecycle revocation and conservativ
 supervisor shutdown. Electron helpers exist but are not registered in the runtime.
 The broker is tested with doubles and the fixed synthetic PTY, not a genuine native
 gesture or real provider. Production enrollment, isolated transport, immutable
-admission, lifetime/containment and durable recovery gates above remain unresolved.
+admission, lifetime/containment and production recovery gates above remain unresolved.
 [Current primary-source provider research](../adapters/managed-terminal-research.md)
 does not change adapter capabilities or authorize adopting external sessions.

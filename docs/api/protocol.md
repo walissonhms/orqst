@@ -383,3 +383,15 @@ It carries nullable original identifiers, normalized-event times, compact sequen
 source hash/type only; coverage is always partial. It adds no v1 event fields or stream
 messages and makes no model declaration/use/current-state claim. See the
 [contract](model-history.md).
+
+## Private owned-terminal journal metadata — 2026-11-03
+
+`terminalAttemptSchema` and `terminalStateSchema` define strict experimental library
+metadata, separate from `eventSchema` and observed agent statuses. Instance/epoch
+are random UUIDs; client/project references are bounded; the manifest is represented
+only by its SHA-256 digest. States are prepared, starting, running, exited,
+start_failed and ownership_lost. Exit metadata is allowed and required only for
+exited records; timestamps describe journal facts, never inferred provider events.
+`TerminalJournal` is a private synchronous writer interface, not a network/IPC API.
+No existing wire field or observation capability changes. See
+[durable recovery](../development/terminal-recovery.md).

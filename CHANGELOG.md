@@ -17,6 +17,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Optional experimental Terminal metadata journal through the existing SQLite Store:
+  commit-before-start admission, explicit epoch fencing, conservative recovery and
+  retained lost-ownership capacity. Synthetic abrupt-writer-exit tests verify WAL
+  persistence without launching providers. Normal observer/native-lab startup is
+  unchanged; managed Codex, immutable admission and isolated authentication remain
+  unavailable. See [recovery boundaries](docs/development/terminal-recovery.md).
+
 - Experimental strict native-terminal broker with private proofs/leases, exact
   native-confirmation binding, focus/document revalidation, lifecycle revocation
   and explicit conservative supervisor teardown. Electron sender/dialog/lifecycle
@@ -44,7 +51,7 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
   separate attachment/input leases, conservative owned-handle lifecycle and bounded
   inert I/O. It is exercised by in-memory tests and the explicit synthetic PTY lab,
   without Core exports or application composition. Native consent/enrollment,
-  provider terminals, durable recovery and production controls remain unavailable.
+  provider terminals, production recovery and production controls remain unavailable.
 
 - Explicit developer-only synthetic PTY acceptance on macOS/arm64 with locked
   `node-pty@1.1.0`, a fixed Node fixture, private staging, minimal environment,

@@ -113,7 +113,9 @@ previous processes exited and is not a safe recovery mechanism. The maximum ring
 storage within one instance is 128 MiB, plus bounded event/read copies and metadata.
 A backend event larger than 64 Ki code units
 fails closed; the library does not impose a native CPU/memory/output-rate sandbox.
-There is no attempt erasure, persistent journal, crash reconciliation, grant extension,
+The optional [durable recovery increment](terminal-recovery.md) now supplies a
+metadata journal and conservative epoch reconciliation through the existing Store;
+this PTY lab continues using the in-memory mode. There is no attempt erasure, grant extension,
 lifetime stop timer, proven process-survival shutdown policy or process-tree
 containment. Explicit library teardown now conservatively marks live work
 ownership_lost without signaling; see below.
