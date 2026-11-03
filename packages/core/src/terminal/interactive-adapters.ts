@@ -17,6 +17,10 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
     existingLoginPty:
       provider === 'codex' ? ('explicit_opt_in_unvalidated' as const) : ('blocked' as const),
     perInstanceMcp: 'synthetic_transport_only' as const,
+    mcpConfiguration:
+      provider === 'codex'
+        ? ('desktop_opt_in_synthetic_only' as const)
+        : ('version_scoped_builder_only' as const),
     installedVersionCompatibility: 'unvalidated' as const,
     automaticTaskDelivery: 'unvalidated' as const,
     providerAcceptance: 'not_run' as const,

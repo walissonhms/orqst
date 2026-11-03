@@ -5,6 +5,13 @@ their existing native authentication when available. It must not require duplica
 installation or login by default. This is product direction, not a claim that all
 three managed adapters or credential reuse are implemented.
 
+The managed-integration preflight now separately reports version-scoped MCP
+configuration builders for the passively inspected Claude 2.1.178/OpenCode 2.2.5
+binary hashes. These pure Core helpers return blocked execution and do not compose
+or launch either provider. All [per-provider gates](interactive-cli-mcp.md#claudeopencode-configuration-builders--2026-11-03)
+remain mandatory. No installed-version compatibility, login or observation
+capability is inferred from discovery or a generated configuration document.
+
 ## Implemented passive preflight
 
 With the repository's Node 24/pnpm 10 toolchain, run:

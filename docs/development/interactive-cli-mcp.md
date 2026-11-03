@@ -216,3 +216,35 @@ tests and `pnpm build` on Node24.22.2/pnpm10.34.9. Independent critical QA passe
 29 focused tests and found no security blocker. The existing dashboard chunk-size
 warning remains. Native Electron/focus acceptance, full Chromium and
 `validate:local` were not run for this slice; observer ingestion did not change.
+
+### Claude/OpenCode configuration builders — 2026-11-03
+
+Core's `terminal/provider-mcp-config.ts` now produces reviewable, non-executable
+configuration candidates for the exact passively inspected local binary hashes
+of [Claude 2.1.178](../adapters/claude.md#version-scoped-interactive-mcp-configuration--2026-11-03)
+and [OpenCode 2.2.5](../adapters/opencode.md#version-scoped-interactive-mcp-configuration--2026-11-03).
+Both return blocked execution/not-run acceptance; the interactive factory still
+rejects them and observation descriptors stay false. Discovery reports the existence
+of a configuration builder separately from installed-version compatibility, which
+remains unvalidated. It does not execute either provider or infer its version.
+
+Claude's candidate uses embedded-help-evidenced strict inline MCP and session UUID
+flags; its native identity selectors are untouched. OpenCode's candidate uses only
+a runtime inline environment document, preserving native HOME/XDG selection and
+documenting configuration merges. No initial worker task, tool approval, native
+configuration write, new login, inherited secret environment or automatic retry is
+added. Exact-version gates and synthetic negative tests reject version/hash drift,
+credential/identity/argv injection and unexpected launch descriptor fields.
+
+An input version/hash is a caller claim, not a fresh executable measurement or
+execution grant. Native composition must revalidate it at dispatch, bind owned
+instances and explicit shared-state acknowledgments, then validate actual
+authentication, permissions, protocol, timeout and tool behavior. Those gates
+remain open; no new terminal setup command or real-provider support is advertised.
+
+The configuration-builder increment passed `pnpm lint`, `pnpm typecheck`, all
+471 Node tests and `pnpm build` on Node24.22.2/pnpm10.34.9. Independent critical QA
+approved the pure builders with the strict-MCP/session-ID/launch-gate disclosures
+above. No provider, native login/inference, quarantine or existing reservation was
+used or changed. Native focus acceptance, full Chromium and `validate:local` were
+not run; the unchanged dashboard build retains its existing chunk-size warning.

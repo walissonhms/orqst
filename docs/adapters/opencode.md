@@ -157,3 +157,44 @@ secrets. A future adapter must:
 release metadata and documented TUI/structured interfaces. This is not a real
 provider run, implemented managed adapter or capability validation. The existing
 observation descriptor remains unchanged; external sessions stay read-only.
+
+## Version-scoped interactive MCP configuration — 2026-11-03
+
+The separate managed integration now has a pure configuration builder,
+`opencodeInteractiveMcpConfiguration`, in Core's `terminal/provider-mcp-config.ts`.
+It is **not** a launch factory or observer client. The descriptor above and every
+observation capability remain false; no server is started, scanned or attached.
+
+Passive canonical-path/hash inspection found multiple local launch paths with the
+same native binary bytes. Installed package metadata labels the binary `2.2.5`:
+`abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
+Embedded strings contain `OPENCODE_CONFIG_CONTENT` and local-MCP configuration
+descriptions for command, environment, enablement and request timeout. The installed
+description gives **5000 ms** as the default, while the current
+[official MCP documentation](https://opencode.ai/docs/mcp-servers/) gives 30000 ms
+for connection/tool discovery. These are distinct evidence sources; no runtime
+timeout was measured. The candidate explicitly sets 125000 ms and keeps its actual
+behavior unvalidated. Embedded tool-exposure descriptions also mention Code Mode;
+direct tool availability/parity with Codex is not assumed.
+
+The [official configuration reference](https://opencode.ai/docs/config/) describes
+merged inline `OPENCODE_CONFIG_CONTENT` overrides, including native/project/managed
+sources. The builder generates that document with a randomly named local MCP server,
+`command: [node, relay]`, endpoint-path environment and explicit timeout. It adds no
+CLI configuration flag, initial prompt, server mode, resume/session attachment or
+automatic approval. Native MCPs/plugins/hooks and managed policy are not disabled.
+
+Strict input pins the reviewed version/hash label and rejects extra environment,
+credentials, commands and identity fields. It supplies no HOME/XDG overrides:
+moving the native data root could also move provider authentication and sessions.
+A future environment composition must preserve explicitly validated identity
+selectors without inheriting arbitrary secret variables. No credential file,
+provider list, Keychain, `.env` or external session was read for this work.
+
+Every result remains `execution: "blocked"`, `providerAcceptance: "not_run"`.
+The builder cannot verify the caller's binary hash, native login or effective
+merged configuration. Per-instance session/data separation, permissions, auth
+refresh, exact protocol/timeout/tool exposure, focus and idle-worker delivery remain
+acceptance gates. No OpenCode Desktop launch profile or provisioning command exists.
+Every listed blocker is mandatory for any future launch composition; generating
+a configuration document cannot bypass those gates.

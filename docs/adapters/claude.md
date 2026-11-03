@@ -154,3 +154,47 @@ and secrets. A future adapter must follow the same rules as Codex:
 release metadata and documented TUI/structured interfaces. This is not a real
 provider run, implemented managed adapter or capability validation. The existing
 observation descriptor remains unchanged; external sessions stay read-only.
+
+## Version-scoped interactive MCP configuration — 2026-11-03
+
+The separate managed integration now has a pure configuration builder,
+`claudeInteractiveMcpConfiguration`, in Core's `terminal/provider-mcp-config.ts`.
+It is **not** a launch factory, observer adapter, native-login test or permission
+grant. The descriptor above and every observation capability remain false.
+
+Passive inspection resolved the local native installation labeled `2.1.178` and
+hashed its canonical executable:
+`473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309`.
+Embedded CLI help strings confirm `--mcp-config` accepts inline JSON,
+`--strict-mcp-config` selects supplied MCP configuration, and `--session-id` accepts
+a UUID. The binary also contains `MCP_TIMEOUT`/`MCP_TOOL_TIMEOUT` names. This is
+offline interface evidence, not output from executing `--help`/`--version`, a
+handshake or evidence of runtime timeout semantics.
+
+The [official CLI reference](https://code.claude.com/docs/en/cli-reference) and
+[MCP reference](https://code.claude.com/docs/en/mcp) support that configuration
+shape. The current MCP reference also documents a project-approval startup issue
+before 2.1.246 even with strict configuration. The installed 2.1.178 cannot inherit
+that later fix or newer client-runtime behavior by assumption. The builder keeps
+this explicit blocker; preview channels/tasks/reconnection are not selected.
+Unlike the Codex merge, strict selection intentionally excludes the user's other
+MCP definitions. A future native launch must disclose and obtain acknowledgment
+of that change; it must not silently call this behavior equivalent to native MCP
+reuse. Strict selection does not isolate native hooks, plugins or managed policy.
+
+The strict input requires the exact reviewed version/hash label, a fresh caller
+session UUID and a bounded relay/endpoint descriptor. Unknown versions/hashes,
+extra credentials, argv and identity fields are rejected. It generates only the
+reviewed MCP/session argv and timeout override candidates. It neither substitutes
+HOME/CLAUDE_CONFIG_DIR nor selects another Keychain/login identity, reads auth,
+writes native config, grants tools, supplies a prompt or resumes a session.
+
+Every result remains `execution: "blocked"`, `providerAcceptance: "not_run"`.
+The builder cannot establish that a supplied UUID is new, rehash a binary at
+dispatch or prove login preservation; a future native composition must do those
+checks. Reusing an existing `--session-id` has not been validated; collision and
+resume behavior must be checked before a launch is admitted. Every listed blocker
+is a future launch gate, not advisory metadata that a composition may ignore.
+Native configuration/hooks/plugins, shared session writes, approval UI,
+relay protocol revision and idle-worker delivery still require acceptance. There
+is no Claude Desktop launch profile or provisioning command in this delivery.

@@ -29,7 +29,8 @@ Managed agents; each slot has independent ownership and metadata-only lifecycle
 receipts. The explicit separate-login fixture path has earlier two-window transport evidence;
 final native-focus acceptance remains pending.
 An explicit Codex existing-login PTY opt-in now requires separate acknowledgment
-of shared native session writes; it has synthetic evidence only. Claude/OpenCode remain blocked. See
+of shared native session writes; it has synthetic evidence only. Claude/OpenCode
+now have version/hash-scoped MCP configuration builders; managed launch remains blocked. See
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
 A native-signed MCP stdio/Unix-socket library now completes synthetic
 A-to-B-to-A transport without PTY task injection. An explicit Desktop Codex 0.162.1
