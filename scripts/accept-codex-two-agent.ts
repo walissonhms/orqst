@@ -1,7 +1,7 @@
 // Explicit developer acceptance ONLY. No provider runs without both human authorization flags.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -27,9 +27,14 @@ import {
 } from '../packages/core/src/terminal/codex-profile.js';
 import {
   assertTwoAgentAcceptanceResults,
+  twoAgentCleanupConfirmed,
   twoAgentAcceptancePrompts,
 } from './terminal/two-agent-acceptance.js';
 import { acceptanceSourceGuard } from './terminal/two-agent-source-guard.js';
+import {
+  readLifecycleReceipt,
+  type LifecycleBinding,
+} from '../packages/core/src/managed-codex/lifecycle-receipt.js';
 
 const { values } = parseArgs({
   options: {
@@ -123,6 +128,7 @@ const runtime = new CodexStructuredRuntime(
   read,
 );
 const instances: string[] = [];
+const lifecycle = new Map<string, { state: string; binding: LifecycleBinding }>();
 const threadIds: string[] = [];
 let passed = false;
 try {
@@ -136,6 +142,20 @@ try {
       dynamicTools: index === 0,
     });
     instances.push(prepared.instanceId);
+    const binding = {
+      instanceId: prepared.instanceId,
+      epoch: prepared.challenge.epoch,
+      manifestDigest: prepared.challenge.digest,
+      configDigest: prepared.manifest.configDigest,
+    };
+    // Retain expected identity BEFORE launch, independently of the receipt being inspected.
+    writeFileSync(
+      join(configs[index]!.state, 'start-identity.json'),
+      JSON.stringify({ binding, requestedModel: values.model }) + '\n',
+      { flag: 'wx', mode: 0o600, flush: true },
+    );
+    lifecycle.set(prepared.instanceId, { state: configs[index]!.state, binding });
+    console.log(JSON.stringify({ phase: 'native-start-authorized', binding }));
     panes.push(await runtime.launch(prepared.instanceId, proof(prepared.challenge)));
     threadIds.push(runtime.snapshot(prepared.instanceId).nativeThreadId!);
     console.log(
@@ -157,6 +177,8 @@ try {
   );
   verifySources(threadIds);
   if (values['prepare-only']) {
+    assert.deepEqual(readdirSync(project), []);
+    passed = true;
     console.log(
       JSON.stringify({
         phase: 'native-preparation-confirmed',
@@ -217,6 +239,9 @@ try {
   const cleanup: Array<{
     instanceId: string;
     confirmedExit: boolean;
+    state: string;
+    nativeExit: ReturnType<CodexStructuredRuntime['snapshot']>['nativeExit'];
+    receipt: ReturnType<typeof readLifecycleReceipt>;
     diagnostic: Pick<
       ReturnType<CodexStructuredRuntime['snapshot']>,
       'launchFailure' | 'startupPhase' | 'channelDiagnostic'
@@ -236,9 +261,16 @@ try {
       /* Transport loss is uncertainty; never signal a stored PID. */
     }
     const snapshot = runtime.snapshot(id);
+    const expected = lifecycle.get(id);
+    const receipt = expected
+      ? readLifecycleReceipt(expected.state, expected.binding)
+      : { status: 'missing' as const };
     cleanup.push({
       instanceId: id,
-      confirmedExit: snapshot.nativeExit !== null,
+      confirmedExit: twoAgentCleanupConfirmed(snapshot, receipt),
+      state: snapshot.state,
+      nativeExit: snapshot.nativeExit,
+      receipt,
       diagnostic: {
         launchFailure: snapshot.launchFailure,
         startupPhase: snapshot.startupPhase,
@@ -258,10 +290,16 @@ try {
   } catch {
     process.exitCode = 1;
   }
+  const accepted =
+    passed &&
+    sourcesVerified &&
+    cleanup.length === 2 &&
+    cleanup.every((entry) => entry.confirmedExit);
   console.log(
     JSON.stringify({
       phase: 'cleanup',
-      passed: passed && sourcesVerified && cleanup.every((entry) => entry.confirmedExit),
+      mode: values['prepare-only'] ? 'prepare-only' : 'delegation',
+      passed: accepted,
       cleanup,
       nativeConfigStarted: instances.length > 0,
       mcpServersStarted: 'unverified',
@@ -271,5 +309,5 @@ try {
       note: 'Do not delete or reuse uncertain state; no PID adoption or automatic retry.',
     }),
   );
-  if (cleanup.some((entry) => !entry.confirmedExit)) process.exitCode = 1;
+  if (!accepted) process.exitCode = 1;
 }

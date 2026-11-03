@@ -38,6 +38,18 @@ Unsupported native shapes, login or model stop the test without fallback or logi
 The normal 30-minute host deadline remains if initialization/ownership is lost;
 cleanup is not guaranteed under transport loss and no external PID is signaled.
 
+The command retains a private `start-identity.json` in each new slot before its
+launch, binding instance, original epoch, manifest digest and config digest. Cleanup
+inspects only that slot's receipt against this independently retained identity and
+requires an exact match with the still-owned native exit and `exited` journal state.
+A receipt after ownership loss cannot pass cleanup or release capacity. The final
+record labels `mode: "prepare-only"`; `passed: true` in that mode means two ready
+identities, source guards and both owned durable exits passed, **not** inference or
+delegation acceptance. Missing/mismatched receipts fail with a nonzero command exit.
+An exact `thread/start` model echo is configuration evidence, not proof of model
+entitlement, inference capability or billing. Dynamic tools remain requested until
+an actual native tool call is observed; preparation cannot verify their operation.
+
 **Implemented:** an opt-in app-server dynamic function, two independently identified
 Core panes, a separately signed root request, exact A-to-B delegation, durable
 communication and native tool-result return into A. Tests use synthetic transports;

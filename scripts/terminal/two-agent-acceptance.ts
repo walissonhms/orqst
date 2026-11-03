@@ -1,4 +1,25 @@
 import assert from 'node:assert/strict';
+import type { readLifecycleReceipt } from '../../packages/core/src/managed-codex/lifecycle-receipt.js';
+import type { CodexStructuredRuntime } from '../../packages/core/src/managed-codex/runtime.js';
+
+/** A receipt after ownership loss is evidence, never an owned cleanup confirmation. */
+export function twoAgentCleanupConfirmed(
+  snapshot: Pick<ReturnType<CodexStructuredRuntime['snapshot']>, 'state' | 'nativeExit'>,
+  receipt: ReturnType<typeof readLifecycleReceipt>,
+): boolean {
+  if (
+    snapshot.state !== 'exited' ||
+    snapshot.nativeExit === null ||
+    receipt.status !== 'recorded_exit'
+  )
+    return false;
+  const exit = receipt.records.at(-1);
+  return (
+    exit?.type === 'exit' &&
+    exit.code === snapshot.nativeExit.code &&
+    exit.signal === snapshot.nativeExit.signal
+  );
+}
 
 // Disposable developer acceptance only; no provider or filesystem access.
 export function twoAgentAcceptancePrompts(targetPaneId: string, marker: string) {
