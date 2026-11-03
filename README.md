@@ -103,7 +103,13 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   confirmation, existing login, exact model confirmation, separately authorized
   A-to-B-to-A delegation and correlated results. Opening the view starts no provider.
   Existing journals are rejected, external sessions are not adopted, and uncertain
-  outcomes are not retried. The browser/Bridge stay observation-only. Real-provider
+  outcomes are not retried. Lifetime indicators now remain visible in the view,
+  native menu and tray; hide/quit explicitly disclose that processes can continue.
+  Signed retirement frees process capacity only after all dispatched processes exit
+  (or proof none was dispatched) and valid ownership, archiving metadata while preserving uncertain outcomes and journals.
+  Lost ownership/post-crash and earlier markers still require owner reconciliation;
+  no reset or evidence deletion is offered. The browser/Bridge stay observation-only.
+  Real-provider
   acceptance is still blocked; shared `history_changed` remains inconclusive. See
   [setup, usable path and limits](docs/development/managed-agents-client.md).
 

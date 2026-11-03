@@ -128,7 +128,8 @@ export async function createManagedTerminal(
       window.hide();
     }
   });
-  app.once('before-quit', () => {
+  app.on('before-quit', (event) => {
+    if (event.defaultPrevented) return;
     quitting = true;
     dispose();
     core.close();

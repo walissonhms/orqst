@@ -1,10 +1,20 @@
 // SYNTHETIC fixtures only: no provider executable, account or external source access.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { managedAgentsRequestSchema } from '@orqst/protocol';
 import { DesktopManagedAgents } from '../packages/core/src/managed-codex/desktop.js';
 import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
@@ -103,7 +113,9 @@ class SyntheticDesktopTransport implements CodexTransport {
   detach() {}
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture() {
+function fixture(
+  wrapAdmission = (admission: ReturnType<typeof desktopAgentsAdmission>) => admission,
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-desktop-agents-')));
   const project = join(root, 'project');
   mkdirSync(project, { mode: 0o700 });
@@ -150,7 +162,7 @@ function fixture() {
         return transport;
       },
     },
-    desktopAgentsAdmission(admissionDirectory),
+    wrapAdmission(desktopAgentsAdmission(admissionDirectory)),
   );
   const proof = (challenge: TerminalChallenge) => ({
     challengeId: challenge.challengeId,
@@ -256,7 +268,13 @@ test('Desktop source loss blocks uncertain task retries; reopening cannot migrat
               throw new Error('Never execute');
             },
           },
-          { claim() {}, release() {} },
+          {
+            claim() {},
+            assertOwner() {},
+            prepareRelease() {
+              return () => {};
+            },
+          },
         ),
       /Fresh private slots/,
     );
@@ -271,7 +289,7 @@ test('Desktop source loss blocks uncertain task retries; reopening cannot migrat
   }
 });
 
-test('cross-restart admission releases only after confirmed native exits with no uncertain task', async () => {
+test('cross-restart admission requires signed retirement after confirmed native exits', async () => {
   const f = fixture();
   try {
     const a = f.service.prepareStart(0, 'synthetic-model');
@@ -281,6 +299,10 @@ test('cross-restart admission releases only after confirmed native exits with no
     assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
     f.exits[0]!(0, null);
     assert.equal(f.service.snapshot().slots[0]!.state, 'exited');
+    assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+    const retirement = f.service.prepareRetire();
+    f.service.retire(f.proof(retirement.challenge));
+    assert.equal(f.service.snapshot().admission, 'retired');
     assert.doesNotThrow(() => desktopAgentsAdmission(f.admissionDirectory));
   } finally {
     f.close();
@@ -298,7 +320,200 @@ test('public Desktop requests cannot choose paths, proofs, target identities or 
       task: 'synthetic',
       targetPaneId: randomUUID(),
     },
+    { version: 1, action: 'retire', owner: randomUUID() },
+    { version: 1, action: 'retire', proof: {} },
     { version: 1, action: 'approve' },
   ])
     assert.equal(managedAgentsRequestSchema.safeParse(request).success, false);
+});
+
+test('uncertain task retirement preserves outcomes and evidence, requires every owned exit and fences old starts', async () => {
+  const f = fixture();
+  try {
+    for (const slot of [0, 1]) {
+      const start = f.service.prepareStart(slot, 'synthetic-model');
+      await f.service.launch(slot, f.proof(start.challenge));
+    }
+    const task = f.service.prepareTask('SYNTHETIC', 'SYNTHETIC');
+    f.service.runTask(task.plan.taskId, task.plan.correlationId, f.proof(task.challenge));
+    await tick();
+    f.transports[0]!.complete('SYNTHETIC without verified delegation');
+    await tick();
+    assert.equal(f.service.snapshot().root!.state, 'outcome_unknown');
+    assert.equal(f.service.snapshot().canRetire, false);
+    assert.throws(() => f.service.prepareRetire(), /exit/);
+    f.exits[0]!(0, null);
+    assert.equal(f.service.snapshot().canRetire, false); // The other process is still live.
+    f.exits[1]!(null, 'SIGTERM');
+    assert.equal(f.service.snapshot().canRetire, true);
+    const before = f.service.snapshot();
+    const prepared = f.service.prepareRetire();
+    assert.throws(() => f.service.retire({}), /proof/);
+    assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+    f.service.retire(f.proof(prepared.challenge));
+    const after = f.service.snapshot();
+    assert.deepEqual(after.root, before.root);
+    assert.deepEqual(after.messages, before.messages);
+    assert.equal(after.admission, 'retired');
+    assert.equal(after.canRetire, false);
+    assert.throws(() => f.service.prepareStart(0, 'synthetic-model'), /retired/);
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', 'SYNTHETIC'), /uncertain/);
+    assert.throws(() => f.service.retire(f.proof(prepared.challenge)), /retirable/);
+    assert.deepEqual(
+      f.transports.flatMap((t) => t.signals),
+      [],
+    );
+    const archive = readdirSync(f.admissionDirectory).find((name) => name.startsWith('retired-'))!;
+    const evidence = readFileSync(join(f.admissionDirectory, archive), 'utf8');
+    assert.match(evidence, /outcome_unknown/);
+    assert.match(evidence, /SIGTERM/);
+    assert.equal(evidence.includes('without verified delegation'), false);
+    assert.doesNotThrow(() => desktopAgentsAdmission(f.admissionDirectory));
+  } finally {
+    f.close();
+  }
+});
+
+test('lost ownership cannot retire capacity even after late exit; admission owner replacement stays blocked', async () => {
+  const f = fixture();
+  try {
+    const start = f.service.prepareStart(0, 'synthetic-model');
+    await f.service.launch(0, f.proof(start.challenge));
+    f.transports[0]!.lost();
+    f.exits[0]!(0, null);
+    assert.equal(f.service.snapshot().slots[0]!.state, 'ownership_lost');
+    assert.equal(f.service.snapshot().canRetire, false);
+    assert.throws(() => f.service.prepareRetire(), /exit/);
+    assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    f.close();
+  }
+});
+
+test('changed admission owner cannot archive or release capacity', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-admission-')));
+  try {
+    const admission = desktopAgentsAdmission(root);
+    admission.claim();
+    const file = join(root, 'active-pair.json');
+    writeFileSync(file, 'SYNTHETIC replacement', { mode: 0o600 });
+    assert.throws(() => admission.claim(), /owner changed/);
+    assert.throws(() => admission.prepareRelease(null), /owner changed/);
+    assert.equal(readFileSync(file, 'utf8'), 'SYNTHETIC replacement');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const journal of ['terminal', 'communication'] as const) {
+  test(`retirement refuses ${journal} owner fencing after native exits and after preparation`, async () => {
+    const f = fixture();
+    try {
+      const start = f.service.prepareStart(0, 'synthetic-model');
+      await f.service.launch(0, f.proof(start.challenge));
+      f.exits[0]!(0, null);
+      const prepared = f.service.prepareRetire();
+      const database = new DatabaseSync(
+        join(
+          f.service.project,
+          '..',
+          'a',
+          journal === 'terminal' ? 'terminal.sqlite' : 'desktop-communication.sqlite',
+        ),
+      );
+      try {
+        database.prepare(`UPDATE ${journal}_owner SET epoch=?`).run(randomUUID());
+      } finally {
+        database.close();
+      }
+      assert.throws(() => f.service.retire(f.proof(prepared.challenge)), /owner/i);
+      assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+      assert.deepEqual(f.transports[0]!.signals, []);
+      assert.equal(
+        readdirSync(f.admissionDirectory).some((name) => name.startsWith('retired-')),
+        false,
+      );
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('archive I/O failure preserves live ownership and permits a new signed retirement review', async () => {
+  const f = fixture();
+  try {
+    const start = f.service.prepareStart(0, 'synthetic-model');
+    await f.service.launch(0, f.proof(start.challenge));
+    f.exits[0]!(0, null);
+    const prepared = f.service.prepareRetire();
+    chmodSync(f.admissionDirectory, 0o500);
+    assert.throws(() => f.service.retire(f.proof(prepared.challenge)), /EACCES|EPERM/);
+    assert.equal(f.service.snapshot().admission, 'reserved');
+    assert.equal(f.service.snapshot().canRetire, true);
+    assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+    chmodSync(f.admissionDirectory, 0o700);
+    const next = f.service.prepareRetire();
+    f.service.retire(f.proof(next.challenge));
+    assert.equal(f.service.snapshot().admission, 'retired');
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    chmodSync(f.admissionDirectory, 0o700);
+    f.close();
+  }
+});
+
+test('a reserved pair with no dispatched process can retire without fabricating an exit', async () => {
+  const f = fixture();
+  try {
+    assert.equal(f.service.snapshot().admission, 'unclaimed');
+    assert.equal(f.service.snapshot().canRetire, false);
+    f.service.prepareStart(0, 'synthetic-model');
+    await assert.rejects(f.service.launch(0, {}), /proof/);
+    assert.equal(f.transports.length, 0);
+    assert.equal(f.service.snapshot().canRetire, true);
+    const prepared = f.service.prepareRetire();
+    assert.deepEqual(prepared.evidence.processes, []);
+    f.service.retire(f.proof(prepared.challenge));
+    assert.equal(f.service.snapshot().admission, 'retired');
+    assert.doesNotThrow(() => desktopAgentsAdmission(f.admissionDirectory));
+  } finally {
+    f.close();
+  }
+});
+
+test('failed marker finalization can be reviewed again after fencing without retrying provider work', async () => {
+  let attempts = 0;
+  const f = fixture((admission) => ({
+    ...admission,
+    prepareRelease(evidence: unknown) {
+      const finish = admission.prepareRelease(evidence);
+      return () => {
+        if (++attempts === 1) throw new Error('SYNTHETIC transient marker I/O failure');
+        finish();
+      };
+    },
+  }));
+  try {
+    const start = f.service.prepareStart(0, 'synthetic-model');
+    await f.service.launch(0, f.proof(start.challenge));
+    f.exits[0]!(0, null);
+    const prepared = f.service.prepareRetire();
+    assert.throws(() => f.service.retire(f.proof(prepared.challenge)), /transient/);
+    assert.equal(f.service.snapshot().admission, 'reserved');
+    assert.equal(f.service.snapshot().canRetire, true);
+    assert.throws(() => f.service.prepareStart(1, 'synthetic-model'), /retired/);
+    assert.throws(() => desktopAgentsAdmission(f.admissionDirectory), /reconciliation/);
+    const next = f.service.prepareRetire();
+    f.service.retire(f.proof(next.challenge));
+    assert.equal(f.service.snapshot().admission, 'retired');
+    assert.equal(f.transports.length, 1);
+    assert.deepEqual(f.transports[0]!.signals, []);
+    assert.equal(
+      readdirSync(f.admissionDirectory).filter((name) => name.startsWith('retired-')).length,
+      1,
+    );
+  } finally {
+    f.close();
+  }
 });

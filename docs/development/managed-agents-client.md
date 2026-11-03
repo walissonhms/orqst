@@ -53,6 +53,19 @@ the client or view.
 6. **Stop owned process** requires separate native confirmation and sends SIGTERM
    only through the current owned handle. It does not prove process exit or
    descendant cleanup. No stored PID is used for signaling.
+7. After **every admitted process** has a confirmed native exit and the journal
+   owners remain valid, **Review safe retirement of this reservation** becomes
+   available. A reserved start that dispatched no process also qualifies, without
+   fabricating an exit. Native review binds the exact process IDs/exits and task/message
+   states to a one-use signature. The review shows every process/exit, the root,
+   message count/states and the SHA-256 of the archived message metadata.
+   Retirement archives admission metadata first, then fences the old runtime
+   before freeing process capacity. An archive I/O failure leaves ownership intact
+   for a new native review. A failed marker finalization can be reviewed again
+   using the preserved archive after fencing; it never retries provider work. Unknown task outcomes
+   stay unknown; no task is retried, canceled or marked complete by retirement.
+   Start then selects a new pair with fresh manifests/journals. Old journals are
+   still rejected and must be preserved.
 
 These are structured task terminals with inert text/evidence, not interactive PTY
 emulators. The existing separate-login xterm path remains available independently
@@ -77,14 +90,35 @@ through `--terminal-config`; reuse manifests cannot enter that legacy path.
   metadata only; prompts and results have bounded, exact-scope memory storage.
 - A private `managed-agents/active-pair.json` admission marker in Desktop user data
   is flushed before launch. Another client lifetime cannot bypass unresolved work
-  by selecting fresh manifests. It has no TTL or PID takeover and is released only
-  after native-confirmed exits and known task outcomes are observed. A stale marker
-  requires separate evidence-backed reconciliation; the client has no reset button.
-- Closing hides the same live view. Reopening it does not launch another process.
+  by selecting fresh manifests. It has no TTL or PID takeover. Explicit signed
+  retirement requires native-confirmed exits for all dispatched processes (or
+  proof that none was dispatched) and valid
+  terminal/communication journal ownership, independently of task outcome. The
+  private `retired-<owner>-<attempt>.json` archive retains original admission identity,
+  process exit evidence and task/message states, without prompt/result content.
+  Archives record preparation, not proof of completed marker removal; failed or
+  partial archive attempts are retained. File and directory sync precede fencing
+  and marker removal. An archive failure leaves the live owner intact; after
+  fencing, only the same marker/unchanged archive can finalize retirement. A
+  changed owner or invalid archive cannot authorize replacement.
+- The sticky lifetime indicator separates admitted/running, reserved, uncertain and
+  retired states from task completion. Native menu/tray state continues to refresh
+  while the view is hidden; the tray can reopen it. Closing offers stay/hide with
+  an explicit continue-running notice. Quit defaults to cancel; confirmed quit
+  acknowledges disconnect without stop. Cancel preserves handlers and the runtime.
+  Reopening the same live view does not launch another process.
   Reload, navigation, renderer loss and application quit disconnect without an
   implicit signal, preserve uncertainty and cannot adopt/retry work. Provider hosts
-  retain the existing 30-minute TERM/KILL lifetime policy. Dirty journals require
-  separate evidence-backed reconciliation; do not delete them to bypass capacity.
+  retain the existing 30-minute lifetime, then TERM and KILL after 5 seconds;
+  this is no guarantee of exit or descendant cleanup.
+- **Recovery limitation:** ownership loss, connection loss, crash and markers from
+  previous client lifetimes cannot use live retirement. The client does not have
+  enough trustworthy owner/instance evidence to release them safely. Elapsed time,
+  an absent PID or acknowledging uncertainty is insufficient. This may block new
+  pairs until owner-led evidence reconciliation exists. Do not delete the marker,
+  reset journals or select fresh manifests to bypass capacity. The limitation is
+  also shown in the view and quit notice. Existing evidence is left unchanged;
+  this increment does not decide whether to discard/reconcile uncertain history.
 - The dedicated document has a separate memory-only session, sandboxed preload,
   no Node integration, no network, no navigation/download/window permissions, and
   strict bounded IPC. Only native file selection supplies manifests. Renderer
@@ -99,9 +133,21 @@ Synthetic integration tests cover separate signatures, canceled preparations,
 distinct identities/threads, the complete A-to-B-to-A return, result correlation,
 acceptance without invented delivery, exact public schemas, source loss and refusal
 to reopen existing journals. The explicit Electron smoke opens the shipped view and
-checks isolation/empty controls without selecting manifests or launching a provider.
-Fixtures do not prove installed CLI login, model access, native modal acceptance or
+checks isolation/lifetime indicators and empty controls without selecting manifests
+or launching a provider. It uses the existing native menu opener, which grants no
+process authority. Native OS focus could not be obtained for automated active
+mutations; those requests were refused rather than bypassing the gate. Active
+hide/quit dialogs and retirement in Electron remain unvalidated; Core synthetic
+cases cover ownership, archive failures, no-dispatch retirement and uncertain
+outcomes. Fixtures do not prove installed CLI login, model access, native modal acceptance or
 real delegation. No provider execution is part of tests, build or normal startup.
+
+The lifetime/retirement correction on 2026-11-03 passed lint, typecheck, build,
+441 synthetic Node cases and the disposable Electron 45.2.1/arm64 smoke described
+above. Independent critical QA reran the twelve focal ownership/retirement cases
+and approved the code after archive-failure and no-dispatch recovery corrections.
+These results do not establish active native-modal/focus acceptance or real-provider
+execution. No installed database migration or resident service restart was used.
 
 The historical real startup failure and real two-agent acceptance remain unresolved.
 This delivery wires the usable client path; it does not claim the two-real-agent

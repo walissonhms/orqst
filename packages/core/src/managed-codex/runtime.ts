@@ -707,6 +707,21 @@ export class CodexStructuredRuntime {
       throw new Error('Codex stop outcome uncertain');
     }
   }
+  /** Process capacity only: task outcomes remain unchanged. No PID probe or ownership recovery. */
+  retirementEvidence() {
+    if (this.closed) throw new Error('Runtime closed');
+    const evidence = [...this.attempts.values()]
+      .filter((a) => a.state !== 'prepared')
+      .map((a) => {
+        if (!['prepared', 'start_failed', 'exited'].includes(a.state))
+          throw new Error('Native exit evidence required');
+        a.journal?.assertOwner();
+        if (a.state === 'exited' && !a.nativeExit) throw new Error('Native exit unavailable');
+        return { instanceId: a.id, state: a.state, nativeExit: a.nativeExit ?? null };
+      });
+    return evidence;
+  }
+
   /** Disconnect clients and preserve uncertainty. No signal, resume, PID adoption or retry. */
   shutdown(): void {
     if (this.closed) return;

@@ -722,7 +722,7 @@
     "instructions": "Instructions for A (no tool use except the exact delegation)",
     "task": "Exact task authorized for B (read-only; no tools)",
     "send": "Review and authorize delegation",
-    "limits": "One delegation per task; 120-second deadline; no provider approvals or automatic retry. Cost limits are advisory only. Closing hides this view; quitting disconnects with uncertainty and does not signal processes. A new view cannot adopt old processes.",
+    "limits": "One delegation per task; 120-second deadline; no provider approvals or automatic retry. Cost limits are advisory only. Process exit does not resolve an uncertain task outcome.",
     "communication": "Correlated delivery and task evidence",
     "choose": "Select two fresh existing-login terminal.json manifests: A then B",
     "confirm_start": "Start this new Codex process using native authentication? Review the complete executable, state, shared configuration, model and permission manifest. No task is submitted by startup.",
@@ -733,6 +733,20 @@
     "busy": "Another native action is in progress.",
     "denied": "Action denied or confirmation expired. No automatic retry.",
     "unavailable": "Operation unavailable or uncertain. Check manifests, fresh state, native login and confirmed lifecycle below; never retry uncertain work.",
-    "working": "Native authorization or startup in progress…"
+    "working": "Native authorization or startup in progress…",
+    "lifetime": "Closing hides this view and keeps owned processes running. Quit disconnects without sending a stop signal. The host enforces a 30-minute lifetime, then SIGTERM and SIGKILL after 5 seconds; descendants are not contained and exit still needs evidence.",
+    "lifetime_idle": "No process admitted in this view. An earlier unresolved reservation may still block startup.",
+    "lifetime_active": "Owned processes admitted or running — hiding or quitting does not stop them.",
+    "lifetime_uncertain": "Process state uncertain — no retry, adoption or capacity reset. Evidence-backed reconciliation required.",
+    "lifetime_reserved": "Pair reserved — inspect confirmed exits and task outcomes before retirement.",
+    "lifetime_retired": "Pair retired after confirmed exits. Uncertain task outcomes and journals are preserved. Start selects a fresh pair.",
+    "recoveryLimit": "Retirement requires confirmed native exits for every dispatched process, or proof that none was dispatched, with valid ownership. After connection loss, crash or ownership loss, safe client recovery is unavailable; an owner must reconcile the evidence. Never delete the marker or journals to bypass this block.",
+    "retire": "Review safe retirement of this reservation",
+    "confirm_retire": "Retire this reservation using the reviewed process evidence? Every dispatched process must have a confirmed native exit. Unknown task outcomes remain unknown. No task retry, journal reset, process adoption or descendant cleanup is implied. A new pair requires fresh manifests.",
+    "quitNotice": "Disconnect and quit: owned processes may continue. Quit sends no stop signal. Use Stop owned process and wait for confirmed exits before quitting when possible.",
+    "disconnectQuit": "Acknowledge and disconnect",
+    "hideNotice": "Hide this view while owned processes may continue? This does not stop tasks or spending. Reopen Managed agents from the tray to review states and explicitly stop an owned process.",
+    "stay": "Keep view open",
+    "hideContinue": "Hide and continue"
   }
 }

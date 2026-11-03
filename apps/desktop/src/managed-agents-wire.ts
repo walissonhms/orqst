@@ -6,6 +6,8 @@ const proof = z.strictObject({
 });
 export const agentsHostRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({ id: z.uuid(), operation: z.literal('snapshot') }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('prepareRetire') }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('retire'), proof }),
   z.strictObject({
     id: z.uuid(),
     operation: z.literal('prepareStart'),

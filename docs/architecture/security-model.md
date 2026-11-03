@@ -18,12 +18,29 @@ handles. Existing journals are rejected before Store opens; no observer DB is
 opened/migrated. Results use exact-scope bounded memory and inert text. Closing
 happens without reclaiming uncertain process capacity: a flushed private admission
 marker in Desktop user data blocks another pair across app lifetimes until
-native-confirmed exits and known tasks release it. There is no TTL/PID takeover or
-reset. Closing
+explicit signed retirement verifies every dispatched native exit (or proves no
+process was dispatched) and valid terminal
+and communication owners. This is distinct from task outcome: unknown remains
+unknown. Original admission/process/task metadata is flushed to an exclusive
+retirement preparation archive before fencing, then the runtime is fenced before
+process capacity is released;
+results/prompts remain memory-only. Archive and directory sync precede removal of
+the active marker. Archive failure leaves ownership intact for another native
+review; failed finalization can only reuse the same verified archive and marker
+after fencing, never retrying provider work. Failed/partial archive attempts are
+preserved; archive preparation alone never proves completed release. A changed
+owner or invalid archive cannot authorize a new process. Previous-lifetime markers, crash and ownership loss have no automatic or
+manual client reset; owner evidence reconciliation is still required. There is no
+TTL/PID takeover. Closing
 hides the live view; document/transport loss disconnects with uncertainty and no
 implicit signal. No resume, retry, PID adoption or journal reset exists. Native
 shared auth/config/MCP effects, advisory cost limits and lack of hard containment
-are disclosed in the client and guide. No HTTP, WebSocket, cookie or static-serving
+are disclosed in the client and guide. A sticky lifetime indicator and native
+menu/tray status remain available while hidden; hide explicitly offers stay or
+continue, and quit acknowledges that disconnect does not stop providers. Native
+retirement review uses the same activation/frame/session/focus/signature gates as
+other structured actions; the legacy PTY broker rejects retirement challenges.
+No HTTP, WebSocket, cookie or static-serving
 security control changes. Real startup/delegation and external-source preservation
 remain unaccepted; shared `history_changed` remains inconclusive.
 

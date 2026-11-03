@@ -1,7 +1,7 @@
 // Native Terminal authority; only explicit trusted composition enrolls a client.
 import { createHash, randomUUID, verify, type KeyObject } from 'node:crypto';
 
-export type TerminalOperation = 'start' | 'attach' | 'input' | 'paste' | 'stop';
+export type TerminalOperation = 'start' | 'attach' | 'input' | 'paste' | 'stop' | 'retire';
 export interface TerminalBinding {
   operation: TerminalOperation;
   target: string;
@@ -72,7 +72,7 @@ export class TerminalAuthority {
   prepare(clientId: string, binding: TerminalBinding): Readonly<TerminalChallenge> {
     if (!this.isEnrolled(clientId)) throw new Error('Terminal client is not enrolled');
     if (
-      !['start', 'attach', 'input', 'paste', 'stop'].includes(binding.operation) ||
+      !['start', 'attach', 'input', 'paste', 'stop', 'retire'].includes(binding.operation) ||
       !binding.target ||
       binding.target.length > 128 ||
       !/^[a-f0-9]{64}$/.test(binding.digest)

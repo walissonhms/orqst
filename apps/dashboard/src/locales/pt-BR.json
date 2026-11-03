@@ -722,7 +722,7 @@
     "instructions": "Instruções para A (sem ferramentas além da delegação exata)",
     "task": "Tarefa exata autorizada para B (somente leitura; sem ferramentas)",
     "send": "Revisar e autorizar delegação",
-    "limits": "Uma delegação por tarefa; prazo de 120 segundos; sem aprovações do provider ou repetição automática. Limites de custo são apenas consultivos. Fechar oculta esta tela; sair desconecta com incerteza e não sinaliza processos. Uma nova tela não pode adotar processos antigos.",
+    "limits": "Uma delegação por tarefa; prazo de 120 segundos; sem aprovações do provider ou repetição automática. Limites de custo são apenas consultivos. Saída do processo não resolve resultado incerto de tarefa.",
     "communication": "Evidências correlacionadas de entrega e tarefa",
     "choose": "Selecione dois manifests terminal.json novos com login existente: A e depois B",
     "confirm_start": "Iniciar este novo processo Codex com autenticação nativa? Revise executável, estado, configuração compartilhada, modelo e permissões no manifesto completo. O início não submete tarefa.",
@@ -733,6 +733,20 @@
     "busy": "Outra ação nativa está em andamento.",
     "denied": "Ação negada ou confirmação expirada. Sem repetição automática.",
     "unavailable": "Operação indisponível ou incerta. Confira manifests, estado novo, login nativo e ciclo de vida abaixo; nunca repita trabalho incerto.",
-    "working": "Autorização nativa ou inicialização em andamento…"
+    "working": "Autorização nativa ou inicialização em andamento…",
+    "lifetime": "Fechar oculta esta tela e mantém processos próprios em execução. Sair desconecta sem enviar sinal de parada. O host impõe limite de 30 minutos, depois SIGTERM e SIGKILL após 5 segundos; descendentes não são contidos e a saída ainda exige evidência.",
+    "lifetime_idle": "Nenhum processo admitido nesta tela. Uma reserva anterior não resolvida ainda pode bloquear o início.",
+    "lifetime_active": "Processos próprios admitidos ou em execução — ocultar ou sair não os encerra.",
+    "lifetime_uncertain": "Estado do processo incerto — sem repetição, adoção ou reset de capacidade. Exige reconciliação com evidências.",
+    "lifetime_reserved": "Dupla reservada — confira saídas comprovadas e resultados antes de encerrar a reserva.",
+    "lifetime_retired": "Reserva encerrada após saídas comprovadas. Resultados incertos e journals preservados. Iniciar seleciona uma dupla nova.",
+    "recoveryLimit": "Encerrar a reserva exige saída nativa comprovada de cada processo iniciado, ou prova de que nenhum foi iniciado, com ownership válido. Após perda de conexão, crash ou perda de ownership, a recuperação segura pelo cliente fica indisponível; o dono precisa reconciliar as evidências. Nunca apague marker ou journals para contornar o bloqueio.",
+    "retire": "Revisar encerramento seguro desta reserva",
+    "confirm_retire": "Encerrar esta reserva usando as evidências de processo revisadas? Cada processo iniciado deve ter saída nativa comprovada. Resultados incertos continuam desconhecidos. Não implica repetição, reset de journal, adoção ou limpeza de descendentes. Uma nova dupla exige manifests novos.",
+    "quitNotice": "Desconectar e sair: processos próprios podem continuar. Sair não envia sinal de parada. Quando possível, use Parar processo próprio e aguarde saídas comprovadas antes de sair.",
+    "disconnectQuit": "Ciente, desconectar",
+    "hideNotice": "Ocultar esta tela enquanto processos próprios podem continuar? Isso não encerra tarefas nem gastos. Reabra Agentes gerenciados pela bandeja para conferir estados e parar explicitamente um processo próprio.",
+    "stay": "Manter tela aberta",
+    "hideContinue": "Ocultar e continuar"
   }
 }

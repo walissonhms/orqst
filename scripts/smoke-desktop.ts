@@ -209,11 +209,23 @@ Module._load = load;
   );
   await page.screenshot({ path: join(evidenceDir, 'synthetic-observer.png') });
   // Open the shipped structured surface without configuring or executing any provider.
+  // Use the shipped native menu opener; opening an empty view grants no process authority.
+  // This fixture does not claim the OS focus acceptance required for signed mutations.
   const agentsWindow = desktop.waitForEvent('window');
-  await page.getByRole('button', { name: /Managed agents|Agentes gerenciados/ }).click();
+  await desktop.evaluate(({ Menu }) => {
+    Menu.getApplicationMenu()!.getMenuItemById('managed-agents-open')!.click();
+  });
   const agents = await agentsWindow;
   await expect(agents.locator('.pane')).toHaveCount(2);
   await expect(agents.locator('#delegate')).toBeDisabled();
+  await expect(agents.locator('#retire')).toBeDisabled();
+  await expect(agents.locator('#lifetime')).toContainText(
+    /No process admitted|Nenhum processo admitido/,
+  );
+  assert.equal(
+    await agents.locator('.lifetime').evaluate((element) => getComputedStyle(element).position),
+    'sticky',
+  );
   await expect(agents.locator('#stop-0')).toBeDisabled();
   assert.deepEqual(
     await agents.evaluate(() => ({
@@ -244,17 +256,24 @@ Module._load = load;
   );
   await agents.screenshot({ path: join(evidenceDir, 'synthetic-managed-agents-empty.png') });
   assert.equal(
-    await desktop.evaluate(({ BrowserWindow }) => {
+    await desktop.evaluate(({ BrowserWindow, Menu }) => {
       const managed = BrowserWindow.getAllWindows().find(
         (w) => w.webContents.getURL() === 'orqst-terminal://local/index.html',
       );
       managed!.close(); // Hides only; no provider/host was started.
       const hidden = !managed!.isVisible();
+      const item = Menu.getApplicationMenu()!.getMenuItemById('managed-agents-open')!;
+      item.click();
+      const sameVisible =
+        managed!.isVisible() &&
+        BrowserWindow.getAllWindows().filter(
+          (w) => w.webContents.getURL() === 'orqst-terminal://local/index.html',
+        ).length === 1;
       managed!.destroy(); // Test-only renderer-loss cleanup restores the observer-only smoke baseline.
       BrowserWindow.getAllWindows()
         .find((w) => w.webContents.getURL().startsWith('http:'))!
         .focus();
-      return hidden;
+      return hidden && sameVisible;
     }),
     true,
   );
@@ -834,7 +853,9 @@ Module._load = load;
         platform: process.platform,
         versions,
         observerComposition:
-          'synthetic Bridge on ephemeral loopback; observer has view-only managed opener and no terminal authority; shipped two-terminal empty view opened/isolation checked; no manifests, provider, login or inference',
+          'synthetic Bridge on ephemeral loopback; observer has view-only managed opener and no terminal authority; shipped two-terminal empty view opened/isolation, sticky lifetime, retirement disabled and same-view hide/reopen checked; no manifests, provider, login or inference',
+        managedAgentsNativeFocus:
+          'native menu opener exercised; header/native-focus active mutations remain unvalidated',
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
         analyticsFiles:

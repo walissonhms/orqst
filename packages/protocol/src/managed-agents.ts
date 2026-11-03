@@ -4,6 +4,7 @@ import { communicationMessageSchema, communicationPaneSchema } from './pane-comm
 const slot = z.number().int().min(0).max(1);
 export const managedAgentsRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot'), version: z.literal(1) }),
+  z.strictObject({ action: z.literal('retire'), version: z.literal(1) }),
   z.strictObject({
     action: z.literal('start'),
     version: z.literal(1),
@@ -21,6 +22,8 @@ export const managedAgentsRequestSchema = z.discriminatedUnion('action', [
 export type ManagedAgentsRequest = z.infer<typeof managedAgentsRequestSchema>;
 export const managedAgentsSnapshotSchema = z.strictObject({
   project: z.string().max(2048),
+  admission: z.enum(['unclaimed', 'reserved', 'retired']),
+  canRetire: z.boolean(),
   slots: z
     .array(
       z
@@ -72,6 +75,7 @@ export type ManagedAgentsSnapshot = z.infer<typeof managedAgentsSnapshotSchema>;
 export const managedAgentsReplySchema = z.strictObject({
   status: z.enum(['ok', 'cancelled', 'busy', 'denied', 'unavailable']),
   snapshot: managedAgentsSnapshotSchema.optional(),
+  empty: z.boolean().optional(),
 });
 export type ManagedAgentsReply = z.infer<typeof managedAgentsReplySchema>;
 export interface DesktopManagedAgents {

@@ -11,6 +11,12 @@ import { CodexStructuredRuntime, type CodexRuntimeBackend } from './runtime.js';
 /** Trusted Desktop composition. No observer database, session adoption or renderer-selected paths. */
 export class DesktopManagedAgents {
   private store: Store;
+  private authority: TerminalAuthority;
+  private retired = false;
+  private fenced = false;
+  private reserved = false;
+  private retirementMetadata?: ReturnType<DesktopManagedAgents['collectRetirementEvidence']>;
+  private finishRetirement?: () => void;
   private journal;
   private communication: PaneCommunication;
   private runtime: CodexStructuredRuntime;
@@ -25,7 +31,11 @@ export class DesktopManagedAgents {
     private files: [string, string],
     publicKey: KeyObject,
     backend: CodexRuntimeBackend,
-    private admission: { claim(): void; release(): void },
+    private admission: {
+      claim(): void;
+      assertOwner(): void;
+      prepareRelease(evidence: unknown): () => void;
+    },
   ) {
     const configs = files.map(readManagedCodexConfig);
     const [a, b] = configs;
@@ -45,7 +55,10 @@ export class DesktopManagedAgents {
       for (const file of ['terminal.sqlite', 'desktop-communication.sqlite'])
         if (existsSync(join(config.state, file))) throw new Error('Fresh private slots required');
     this.project = a.project;
-    const authority = new TerminalAuthority(new Map([['desktop-agents', publicKey]]), Date.now);
+    const authority = (this.authority = new TerminalAuthority(
+      new Map([['desktop-agents', publicKey]]),
+      Date.now,
+    ));
     this.store = new Store(join(a.state, 'desktop-communication.sqlite'));
     this.journal = this.store.communicationJournal(authority.epoch, { recover: false });
     const scopeKey = (scope: Readonly<CommunicationContentScope>) =>
@@ -77,6 +90,7 @@ export class DesktopManagedAgents {
   }
 
   prepareStart(slot: number, model: string) {
+    if (this.fenced) throw new Error('Pair retired; fresh private slots required');
     if (slot !== 0 && slot !== 1) throw new Error('Invalid slot');
     const previous = this.ids[slot];
     if (previous && this.runtime.snapshot(previous).state !== 'prepared')
@@ -92,11 +106,14 @@ export class DesktopManagedAgents {
     return result;
   }
   launch(slot: number, proof: unknown) {
+    if (this.fenced) throw new Error('Pair retired');
     this.admission.claim();
+    this.reserved = true;
     return this.runtime.launch(this.id(slot), proof);
   }
   prepareTask(text: string, task: string) {
     if (
+      this.fenced ||
       this.root?.state === 'running' ||
       this.root?.state === 'outcome_unknown' ||
       this.rootCount >= 16
@@ -120,6 +137,7 @@ export class DesktopManagedAgents {
     if (
       this.preparedRoot?.taskId !== taskId ||
       this.preparedRoot.correlationId !== correlationId ||
+      this.fenced ||
       this.root?.state === 'running' ||
       this.root?.state === 'outcome_unknown' ||
       this.rootCount >= 16
@@ -182,19 +200,83 @@ export class DesktopManagedAgents {
           resultText: m.result ? this.text(m.result.id) : null,
         })),
       root: this.root,
+      admission: this.retired ? 'retired' : this.reserved ? 'reserved' : 'unclaimed',
+      canRetire: this.canRetire(),
     });
-    // Only native exits and fully known tasks can release cross-restart admission.
-    // Prepared/never-started slots do not represent a process; ownership loss never qualifies.
-    if (
-      snapshot.slots.some((s) => s?.state === 'exited') &&
-      snapshot.slots.every((s) => !s || ['exited', 'prepared', 'start_failed'].includes(s.state)) &&
-      (!snapshot.root || snapshot.root.state === 'completed') &&
-      snapshot.messages.every((m) => ['completed', 'failed', 'cancelled'].includes(m.taskState))
-    )
-      this.admission.release();
     return snapshot;
   }
+  private retirementEvidence() {
+    if (this.retired) throw new Error('Pair not retirable');
+    this.admission.assertOwner();
+    return this.retirementMetadata ?? this.collectRetirementEvidence();
+  }
+  private collectRetirementEvidence() {
+    if (!this.reserved) throw new Error('No reserved pair');
+    if (this.fenced || this.root?.state === 'running') throw new Error('Pair not retirable');
+    const processes = this.runtime.retirementEvidence();
+    // Reading the journal also verifies the communication owner's epoch.
+    const messages = this.journal
+      .transaction((tx) => tx.messages())
+      .map((m) => ({
+        messageId: m.messageId,
+        taskId: m.taskId,
+        correlationId: m.correlationId,
+        deliveryState: m.deliveryState,
+        taskState: m.taskState,
+      }));
+    const root = this.root
+      ? { taskId: this.root.taskId, correlationId: this.root.correlationId, state: this.root.state }
+      : null;
+    return { processes, root, messages };
+  }
+  private canRetire() {
+    try {
+      this.retirementEvidence();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  prepareRetire() {
+    const evidence = this.retirementEvidence();
+    const challenge = this.authority.prepare('desktop-agents', {
+      operation: 'retire',
+      target: this.authority.epoch,
+      digest: terminalDigest(JSON.stringify(evidence)),
+    });
+    return {
+      challenge,
+      evidence: {
+        processes: evidence.processes,
+        root: evidence.root,
+        messageCount: evidence.messages.length,
+        messageStates: evidence.messages.map((m) => m.taskState),
+        messagesSha256: terminalDigest(JSON.stringify(evidence.messages)),
+      },
+    };
+  }
+  retire(proof: unknown) {
+    const evidence = this.retirementEvidence();
+    this.authority.consume(proof, {
+      operation: 'retire',
+      target: this.authority.epoch,
+      digest: terminalDigest(JSON.stringify(evidence)),
+    });
+    if (!this.finishRetirement) {
+      // Archive first: an I/O failure leaves live ownership and retirement review available.
+      const finish = this.admission.prepareRelease(evidence);
+      this.retirementMetadata = evidence;
+      this.finishRetirement = finish;
+      // Fence before removing admission. No provider operation can be retried from this point.
+      this.fenced = true;
+      this.runtime.shutdown();
+    }
+    // A failed marker finalization can be reviewed again using the same preserved evidence.
+    this.finishRetirement();
+    this.retired = true;
+  }
   close() {
+    this.fenced = true;
     this.runtime.shutdown();
     this.content.clear();
     this.store.close();

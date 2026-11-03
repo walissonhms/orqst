@@ -484,3 +484,10 @@ and extra fields; malformed diagnostics cannot revoke or restore authority.
 Counters are sampled, saturating and frozen at startup outcome, not durable proof
 of native parsing or cleanup. No public API, observer access or ownership policy
 changes. Historical timeouts remain unproven. See [the counter contract](docs/development/codex-startup-diagnostics.md).
+
+Structured Desktop retirement requires signed native review, confirmed exits for
+all dispatched processes (or proof none was dispatched) and valid journal ownership.
+It archives admission/task metadata, then fences the old runtime before releasing
+capacity, and preserves uncertain outcomes and journals.
+It cannot recover older/post-crash/lost-owner markers or prove descendant cleanup;
+never delete evidence to bypass admission. See [client limits](docs/development/managed-agents-client.md).

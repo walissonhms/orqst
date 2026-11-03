@@ -35,6 +35,12 @@ process.on('message', async (raw: unknown) => {
       case 'snapshot':
         value = service.snapshot();
         break;
+      case 'prepareRetire':
+        value = service.prepareRetire();
+        break;
+      case 'retire':
+        service.retire(r.proof);
+        break;
       case 'prepareStart':
         value = service.prepareStart(r.slot, r.model);
         break;

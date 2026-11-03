@@ -88,7 +88,18 @@ async function start(): Promise<void> {
   const openTerminal = terminalConfig
     ? await createManagedTerminal(terminalConfig, (key) => i18n.t(key))
     : undefined;
-  const openManagedAgents = await createManagedAgents((key) => i18n.t(key));
+  let managedLifetime = 'idle';
+  let refreshManagedTray: () => void = () => undefined;
+  const openManagedAgents = await createManagedAgents(
+    (key) => i18n.t(key),
+    (state) => {
+      managedLifetime = state;
+      const item = Menu.getApplicationMenu()?.getMenuItemById('managed-agents-open');
+      if (item)
+        item.label = `${i18n.t('managedAgents.title')} — ${i18n.t(`managedAgents.lifetime_${state}`)}`;
+      refreshManagedTray?.();
+    },
+  );
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { role: 'appMenu' },
@@ -390,7 +401,9 @@ async function start(): Promise<void> {
   const updateTray = () => {
     if (stopped || tray.isDestroyed()) return;
     const state = i18n.t(`desktopShell.${connected ? 'connected' : 'offline'}`);
-    tray.setToolTip(`ORQST — ${state}`);
+    tray.setToolTip(
+      `ORQST — ${state}${managedLifetime === 'idle' ? '' : ` — ${i18n.t(`managedAgents.lifetime_${managedLifetime}`)}`}`,
+    );
     tray.setTitle(connected && pending ? String(pending) : '');
     tray.setContextMenu(
       Menu.buildFromTemplate([
@@ -432,10 +445,21 @@ async function start(): Promise<void> {
         },
         { label: i18n.t('desktopShell.nativeLimit'), enabled: false },
         { type: 'separator' },
+        {
+          id: 'managed-agents-lifetime',
+          label: i18n.t(`managedAgents.lifetime_${managedLifetime}`),
+          enabled: false,
+        },
+        {
+          id: 'desktop-managed-agents-open',
+          label: i18n.t('managedAgents.title'),
+          click: openManagedAgents,
+        },
         { id: 'desktop-quit', label: i18n.t('desktopShell.quit'), click: () => app.quit() },
       ]),
     );
   };
+  refreshManagedTray = updateTray;
   const fetcher: typeof fetch = (input, init) =>
     browserSession.fetch(input instanceof URL ? input.href : input, init);
   const notify = (alert: NativeAlert) => {
@@ -519,7 +543,11 @@ async function start(): Promise<void> {
   };
   updateTray();
   void poll();
-  app.on('before-quit', () => {
+  app.prependListener('before-quit', (event) => {
+    if (!openManagedAgents.confirmQuit()) {
+      event.preventDefault();
+      return;
+    }
     quitting = true;
     documentGeneration++;
     ipcMain.removeHandler('orqst:save-markdown');

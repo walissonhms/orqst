@@ -74,3 +74,16 @@ pre {
     grid-template-columns: 1fr;
   }
 }
+
+.lifetime {
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border: 2px solid #788398;
+  padding: 12px;
+  background: light-dark(#f6f7fa, #12151d);
+}
+#lifetime {
+  font-weight: 700;
+}

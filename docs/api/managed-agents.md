@@ -17,12 +17,13 @@ The native menu offers the same view without granting a provider start.
 The separate sandboxed preload exposes only frozen
 `orqstManagedAgentsClient.request(request)`. Requests are strict version-1 objects:
 
-| action     | Additional fields                                                        | Effect                                                                                            |
-| ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `snapshot` | none                                                                     | Read current owned-pair facts; no provider command                                                |
-| `start`    | `slot`: 0 or 1; `model`: nonempty trimmed string, at most 128 characters | Native file selection on first start, complete manifest confirmation, signed new process/thread   |
-| `delegate` | `text`: 1–2048 characters; `task`: 1–1024 characters                     | Separate native review of exact generated root prompt, B task, identities and 120-second deadline |
-| `stop`     | `slot`: 0 or 1                                                           | Separate native confirmation of SIGTERM through the live owned handle                             |
+| action     | Additional fields                                                        | Effect                                                                                                                           |
+| ---------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `retire`   | none                                                                     | Separate native confirmation to fence and archive an exited pair; requires all admitted native exits and valid journal ownership |
+| `snapshot` | none                                                                     | Read current owned-pair facts; no provider command                                                                               |
+| `start`    | `slot`: 0 or 1; `model`: nonempty trimmed string, at most 128 characters | Native file selection on first start, complete manifest confirmation, signed new process/thread                                  |
+| `delegate` | `text`: 1–2048 characters; `task`: 1–1024 characters                     | Separate native review of exact generated root prompt, B task, identities and 120-second deadline                                |
+| `stop`     | `slot`: 0 or 1                                                           | Separate native confirmation of SIGTERM through the live owned handle                                                            |
 
 All mutations require transient activation and native document/focus checks before
 and after the dialog. Complete native confirmation text is capped at 4096 characters;
@@ -33,12 +34,15 @@ exists. A chooses only the exact B task/target authorized by the native plan; ag
 content cannot issue native confirmations or enlarge its grant.
 
 Replies have `status` (`ok`, `cancelled`, `busy`, `denied`, `unavailable`) and an
-optional strictly validated `snapshot`. `ok` reports completion of the client
+optional strictly validated `snapshot`. `empty:true` is supplied only when main
+knows no pair host exists; missing snapshots never authorize new starts. `ok` reports
+completion of the client
 operation, never inferred completion of a provider task. A task submission returns
 promptly; snapshots carry its later verified/unknown outcome.
 
 Snapshots include project, two nullable slots, up to sixteen worker message facts,
-and the latest root. Slots carry immutable instance/pane identity, lifecycle,
+and the latest root, plus `admission` (`unclaimed`, `reserved` or `retired`) and `canRetire`.
+Slots carry immutable instance/pane identity, lifecycle,
 startup phase/failure, new native thread, reported model and availability. Messages
 keep message/task/correlation/source/target IDs, independent delivery/task states
 and nullable verified result text. Root state is `running`, `completed` or
@@ -51,14 +55,23 @@ payload is exposed. Results are untrusted inert text, never HTML or instructions
 Electron main alone selects manifests and holds the ephemeral signing key. Its
 pinned Node helper receives the public key over inherited local parent/child IPC;
 there is no listener or token exchange. Strict bounded private messages expose
-only preparation, signed launch/task/stop and snapshots. Startup/transport errors
-reject without retry. Private metadata journals are new; existing databases are
+only preparation, signed launch/task/stop/retirement and snapshots. Startup/transport
+errors reject without retry. Private metadata journals are new; existing databases are
 rejected before Store opens. Exact-scope prompt/result content remains bounded in
 memory and is never copied to the observer database or audit records.
 
 A flushed owner-only admission marker in Desktop user data blocks replacement
-across client lifetimes until known native exits and task outcomes permit release.
-It has no timeout/PID takeover. Loss preserves uncertainty and never signals an
-external process. Real-provider acceptance remains pending; no fixture or client
+across client lifetimes. A distinct signed `retire` operation binds the exact native
+exit/task/message metadata and requires every dispatched process exited (or none
+dispatched) plus valid terminal/communication ownership. It durably archives that
+metadata before fencing the runtime and removing the marker. Archive failures can
+be reviewed again with ownership intact; failed marker finalization only reuses the
+same archive/marker after fencing, with no provider work. Archive records describe
+preparation rather than claiming completed release; unknown task outcomes never
+become completed or canceled. Old journals remain rejected. There is no timeout/PID takeover. Loss
+preserves uncertainty and never signals an external process. Earlier markers and
+post-crash/lost-owner work cannot be retired by this client; owner reconciliation
+with sufficient source-backed evidence remains unimplemented. Real-provider
+acceptance remains pending; no fixture or client
 snapshot proves shared source preservation. See the
 [security review](../architecture/security-model.md#structured-desktop-composition-review--2026-11-03).

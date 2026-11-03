@@ -18,21 +18,36 @@ const inert = (text: string) =>
     c === '\n' || c === '\t' ? c : `\\u{${c.codePointAt(0)!.toString(16)}}`,
   );
 function render(s: ManagedAgentsSnapshot) {
+  const retired = s.admission === 'retired';
+  const lifetime = document.querySelector<HTMLElement>('#lifetime')!;
+  const state =
+    s.admission === 'unclaimed'
+      ? 'idle'
+      : retired
+        ? 'retired'
+        : s.slots.some((p) => p?.state === 'ownership_lost')
+          ? 'uncertain'
+          : s.slots.some((p) => p && ['starting', 'running'].includes(p.state))
+            ? 'active'
+            : 'reserved';
+  lifetime.textContent = lifetime.dataset[state] ?? '';
+  button('retire').disabled = busy || !s.canRetire || retired;
   document.querySelector('#project')!.textContent = inert(s.project);
   for (const slot of [0, 1]) {
     const pane = s.slots[slot];
     document.querySelector(`#identity-${slot}`)!.textContent = pane
       ? inert(JSON.stringify(pane, null, 2))
       : '';
-    const admitted = !!pane && pane.state !== 'prepared';
+    const admitted = !retired && !!pane && pane.state !== 'prepared';
     button(`start-${slot}`).disabled = busy || admitted;
     field(`model-${slot}`).disabled = busy || admitted;
-    button(`stop-${slot}`).disabled = busy || pane?.state !== 'running';
+    button(`stop-${slot}`).disabled = busy || retired || pane?.state !== 'running';
     const text = slot === 0 ? s.root?.resultText : s.messages.at(-1)?.resultText;
     document.querySelector(`#output-${slot}`)!.textContent = inert(text ?? '');
   }
   button('delegate').disabled =
     busy ||
+    retired ||
     !s.slots.every((p) => p?.available && p.pane?.state === 'ready') ||
     s.root?.state === 'running' ||
     s.root?.state === 'outcome_unknown';
@@ -53,7 +68,16 @@ async function request(r: ManagedAgentsRequest) {
       status.textContent = status.dataset[reply.status] ?? '';
     if (r.action !== 'snapshot') busy = false;
     if (reply.snapshot) render(reply.snapshot);
-    else if (!busy) for (const slot of [0, 1]) button(`start-${slot}`).disabled = false;
+    else if (!busy && reply.empty) {
+      for (const slot of [0, 1]) button(`start-${slot}`).disabled = false;
+      const lifetime = document.querySelector<HTMLElement>('#lifetime')!;
+      lifetime.textContent = lifetime.dataset.idle ?? '';
+    } else if (!busy) {
+      // No snapshot is not evidence of an empty pair. Revoke stale mutation controls.
+      document.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.disabled = true));
+      const lifetime = document.querySelector<HTMLElement>('#lifetime')!;
+      lifetime.textContent = lifetime.dataset.uncertain ?? '';
+    }
   } finally {
     if (r.action !== 'snapshot') busy = false;
   }
@@ -63,6 +87,7 @@ for (const slot of [0, 1]) {
     void request({ version: 1, action: 'start', slot, model: field(`model-${slot}`).value });
   button(`stop-${slot}`).onclick = () => void request({ version: 1, action: 'stop', slot });
 }
+button('retire').onclick = () => void request({ version: 1, action: 'retire' });
 button('delegate').onclick = () =>
   void request({
     version: 1,
@@ -70,6 +95,7 @@ button('delegate').onclick = () =>
     text: field('instructions').value,
     task: field('task').value,
   });
+void request({ version: 1, action: 'snapshot' });
 let polling = false;
 const timer = setInterval(() => {
   if (polling || document.hidden) return;
