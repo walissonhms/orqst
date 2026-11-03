@@ -1,4 +1,4 @@
-// Experimental native-client boundary. Not imported by Bridge, Desktop or dashboard startup.
+// Native-client boundary; never exposed by the observer Bridge or dashboard startup.
 import { sign, type KeyObject } from 'node:crypto';
 import { terminalNativeRequestSchema, type TerminalNativeConfirmation } from '@orqst/protocol';
 import {
@@ -23,6 +23,30 @@ export type TerminalNativeReply =
       snapshot?: ReturnType<TerminalSupervisor['snapshot']>;
       output?: { bytes: Uint8Array; nextCursor: number; gap: boolean };
     };
+export type TerminalNativeSupervisor = {
+  [
+    Method in
+      | 'prepare'
+      | 'launch'
+      | 'snapshot'
+      | 'requestAttach'
+      | 'attach'
+      | 'requestInput'
+      | 'enableInput'
+      | 'requestPaste'
+      | 'paste'
+      | 'requestStop'
+      | 'stop'
+      | 'write'
+      | 'resize'
+      | 'read'
+      | 'detach'
+      | 'revokeInput'
+  ]: (
+    ...args: Parameters<TerminalSupervisor[Method]>
+  ) => ReturnType<TerminalSupervisor[Method]> | Promise<ReturnType<TerminalSupervisor[Method]>>;
+};
+
 interface View {
   profile: Readonly<TerminalProfile>;
   attachment?: string;
@@ -38,7 +62,7 @@ export class TerminalNativeBroker<Document extends object> {
 
   constructor(
     private readonly authority: TerminalAuthority,
-    private readonly supervisor: TerminalSupervisor,
+    private readonly supervisor: TerminalNativeSupervisor,
     private readonly clientId: string,
     private readonly privateKey: KeyObject,
     private readonly document: Document,
@@ -62,14 +86,17 @@ export class TerminalNativeBroker<Document extends object> {
     const generation = this.generation;
     try {
       if (request.action === 'start') {
-        const prepared = this.supervisor.prepare(this.clientId, request.profileId);
+        const prepared = await this.supervisor.prepare(this.clientId, request.profileId);
         const view: View = { profile: prepared.profile };
         // Also retain denied preparations within the supervisor's fixed attempt cap.
         this.views.set(prepared.attemptId, view);
         const result = await this.confirm(document, generation, prepared.challenge, view);
         if (result !== 'confirmed') return { status: result };
-        this.supervisor.launch(prepared.attemptId, this.proof(prepared.challenge, generation));
-        return this.result(prepared.attemptId);
+        await this.supervisor.launch(
+          prepared.attemptId,
+          this.proof(prepared.challenge, generation),
+        );
+        return await this.result(prepared.attemptId);
       }
       const id = request.instanceId;
       const view = this.views.get(id);
@@ -77,27 +104,37 @@ export class TerminalNativeBroker<Document extends object> {
       switch (request.action) {
         case 'attach': {
           if (view.attachment) return { status: 'denied' };
-          const challenge = this.supervisor.requestAttach(this.clientId, id);
+          const challenge = await this.supervisor.requestAttach(this.clientId, id);
           const result = await this.confirm(document, generation, challenge, view);
           if (result !== 'confirmed') return { status: result };
-          view.attachment = this.supervisor.attach(id, this.proof(challenge, generation));
+          const attachment = await this.supervisor.attach(id, this.proof(challenge, generation));
+          if (generation !== this.generation || !this.current(document, true)) {
+            await this.supervisor.detach(id, attachment);
+            return { status: 'denied' };
+          }
+          view.attachment = attachment;
           break;
         }
         case 'input': {
           if (!view.attachment) return { status: 'denied' };
-          const challenge = this.supervisor.requestInput(id, view.attachment);
+          const challenge = await this.supervisor.requestInput(id, view.attachment);
           const result = await this.confirm(document, generation, challenge, view);
           if (result !== 'confirmed') return { status: result };
-          view.lease = this.supervisor.enableInput(
+          const lease = await this.supervisor.enableInput(
             id,
             view.attachment,
             this.proof(challenge, generation),
           );
+          if (generation !== this.generation || !this.current(document, true)) {
+            await this.supervisor.revokeInput(id, view.attachment);
+            return { status: 'denied' };
+          }
+          view.lease = lease;
           break;
         }
         case 'paste': {
           if (!view.attachment || !view.lease) return { status: 'denied' };
-          const challenge = this.supervisor.requestPaste(
+          const challenge = await this.supervisor.requestPaste(
             id,
             view.attachment,
             view.lease,
@@ -108,7 +145,7 @@ export class TerminalNativeBroker<Document extends object> {
             paste: request.text,
           });
           if (result !== 'confirmed') return { status: result };
-          this.supervisor.paste(
+          await this.supervisor.paste(
             id,
             view.attachment,
             view.lease,
@@ -119,40 +156,46 @@ export class TerminalNativeBroker<Document extends object> {
           break;
         }
         case 'stop': {
-          const challenge = this.supervisor.requestStop(this.clientId, id, request.signal);
+          const challenge = await this.supervisor.requestStop(this.clientId, id, request.signal);
           const result = await this.confirm(document, generation, challenge, view, {
             signal: request.signal,
           });
           if (result !== 'confirmed') return { status: result };
-          this.supervisor.stop(id, request.signal, this.proof(challenge, generation));
+          await this.supervisor.stop(id, request.signal, this.proof(challenge, generation));
           break;
         }
         case 'write':
           if (!this.current(document, true) || !view.attachment || !view.lease)
             return { status: 'denied' };
-          this.supervisor.write(id, view.attachment, view.lease, request.sequence, request.text);
+          await this.supervisor.write(
+            id,
+            view.attachment,
+            view.lease,
+            request.sequence,
+            request.text,
+          );
           break;
         case 'resize':
           if (!view.attachment) return { status: 'denied' };
-          this.supervisor.resize(id, view.attachment, request.columns, request.rows);
+          await this.supervisor.resize(id, view.attachment, request.columns, request.rows);
           break;
         case 'read':
           if (!view.attachment) return { status: 'denied' };
           return {
             status: 'ok',
             instanceId: id,
-            output: this.supervisor.read(id, view.attachment, request.cursor),
+            output: await this.supervisor.read(id, view.attachment, request.cursor),
           };
         case 'detach':
           if (!view.attachment) return { status: 'denied' };
-          this.supervisor.detach(id, view.attachment);
+          await this.supervisor.detach(id, view.attachment);
           view.attachment = undefined;
           view.lease = undefined;
           break;
         case 'snapshot':
           break;
       }
-      return this.result(id);
+      return await this.result(id);
     } catch {
       // Never expose backend diagnostics, private paths or input in an IPC error.
       return { status: 'denied' };
@@ -168,7 +211,7 @@ export class TerminalNativeBroker<Document extends object> {
       view.lease = undefined;
       if (!view.attachment) continue;
       try {
-        this.supervisor.revokeInput(id, view.attachment);
+        void Promise.resolve(this.supervisor.revokeInput(id, view.attachment)).catch(() => {});
       } catch {
         /* Already unavailable. */
       }
@@ -181,7 +224,7 @@ export class TerminalNativeBroker<Document extends object> {
     for (const [id, view] of this.views) {
       if (!view.attachment) continue;
       try {
-        this.supervisor.detach(id, view.attachment);
+        void Promise.resolve(this.supervisor.detach(id, view.attachment)).catch(() => {});
       } catch {
         /* Already unavailable. */
       }
@@ -211,7 +254,7 @@ export class TerminalNativeBroker<Document extends object> {
     view: View,
     detail: Pick<TerminalConfirmation, 'signal' | 'paste'> = {},
   ): Promise<'confirmed' | 'denied' | 'cancelled'> {
-    if (!this.current(document, true)) return 'denied';
+    if (generation !== this.generation || !this.current(document, true)) return 'denied';
     const accepted = await this.host.confirm(
       document,
       Object.freeze({
@@ -248,7 +291,7 @@ export class TerminalNativeBroker<Document extends object> {
     };
   }
 
-  private result(instanceId: string): TerminalNativeReply {
-    return { status: 'ok', instanceId, snapshot: this.supervisor.snapshot(instanceId) };
+  private async result(instanceId: string): Promise<TerminalNativeReply> {
+    return { status: 'ok', instanceId, snapshot: await this.supervisor.snapshot(instanceId) };
   }
 }

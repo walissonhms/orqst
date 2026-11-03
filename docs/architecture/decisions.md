@@ -579,3 +579,59 @@ history may omit alerts; at most three attempts per cycle avoid bursts. Unread c
 is the bounded history, not inferred agent attention. API support is not OS delivery;
 signed app identity, permission/Focus and real native visual acceptance remain pending.
 See [Desktop details](../development/desktop.md) for exact evidence gates and limits.
+
+## ADR-032 — Opt-in embedded Terminal with a native trusted Core host
+
+**Status:** Owner-authorized incremental implementation, 2026-11-03. Real provider
+and genuine human-dialog acceptance are pending. This does not complete Agentic Mode.
+
+**Context.** The owner requires an interactive Terminal inside ORQST and the future
+Codex/Claude Code/OpenCode direction, rather than another laboratory or external
+terminal. Existing signed grants, owned lifecycle and metadata recovery can be
+composed without changing the read-only observer. The earlier immutable-binding and
+hard-containment gate exceeded the selected trusted personal-machine threat model.
+The subsequently supplied Agentic Mode specification makes two identified agents,
+an explicit delegated task and an automatic result inside ORQST the first useful
+Agentic Mode milestone; terminal mechanics alone cannot establish that result.
+
+**Decision.** Add an explicit configured Desktop menu/window with xterm.js 6.0.0 and
+fit addon 0.11.0 (MIT), a separate sandboxed document/session/preload and existing
+strict native contract. Node 24 owns the supervisor, grants, private metadata Store
+and pinned node-pty 1.1.0 hosts; Electron remains a database client. Use bounded JSON
+over inherited IPC: Electron/Node V8 binary serialization is not ABI-compatible.
+Ephemeral native signing keys never enter the renderer or metadata. No observer
+API, WebSocket, cookie, sessions, source root or dashboard IPC acquires authority.
+
+Choose native trusted/same-user execution explicitly. Canonical paths, private
+ownership/modes, fixed profiles, pinned executable hashes and last-boundary
+revalidation detect drift. They do not claim immutable kernel binding against
+same-user attacks. Container/VM isolation remains a distinct future backend, not an
+unnecessary blocker for this authorized native mode. Provision only new separate
+homes/config/history; device login is a separate fixed provider operation with
+native confirmation, file credentials and no inherited secrets/keyring access.
+Read-only/on-request are startup defaults that the provider UI may change, not an
+ORQST enforcement claim. OS user privileges, no hard CPU/RSS/descendant containment
+and the start-authorized 30-minute owned-process deadline are explicit.
+
+**Identity and next milestone.** Keep immutable random instance UUID, project
+reference, Core epoch, client and attachment separate. Display the instance UUID
+now; a persistent nonreused `T-NNN` registry, names, task/model/session correlations
+and structured task/result routing are pending. The current one-live-instance per
+project admission rule intentionally remains: merely increasing it while sharing
+one managed home would not deliver independent agents. The next multi-agent slice
+must add separate per-terminal state/ownership, workspace-scoped visible identity,
+reviewed concurrency admission and individually authorized starts. Then test two
+same-workspace agents and a versioned task/result channel independently of PTY
+bytes. Never infer delegation or grant permissions from agent-generated prose.
+
+**Consequences.** View close hides/detaches without terminating work. Quit/transport
+loss revokes controls and journals uncertainty; no stored-PID signaling, adoption,
+retry/resume or lost-slot reconciliation is added. The independent PTY host retains
+the disclosed deadline. Output is bounded and parsed before the next read; gaps
+stop reconstruction/input. OSC clipboard/title/link effects, automatic emulator
+responses, remote resources and navigation are denied. Only this document permits
+dynamic inline CSS for xterm. Synthetic real Electron/PTY acceptance proves the
+composed path, not Codex authentication, readiness, model access, sandbox behavior,
+human consent or provider approval semantics. Existing observer/Analytics/Artifacts
+behavior and historical roadmap/ADR evidence remain intact. See
+[operation and limits](../development/managed-codex-terminal.md).

@@ -1,4 +1,4 @@
-// Not composed into ObserverCore/Bridge/Desktop. The only backend is a developer fixture.
+// Owned Terminal library; the observer runtime never constructs this component.
 import { randomUUID } from 'node:crypto';
 import type { TerminalJournal, TerminalState } from '@orqst/protocol';
 export type { TerminalState } from '@orqst/protocol';

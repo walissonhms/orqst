@@ -16,34 +16,42 @@ normalizes their activity, persists local observations in SQLite and streams the
 to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
 
+An explicit checkout-only **Managed Terminal** opt-in adds a real xterm.js
+window inside ORQST Desktop for a new owned Codex process, with separate login,
+private state and native confirmations. It uses the selected native trusted/same-user
+contract; it is not hard containment. The real provider has not been executed for
+acceptance. Normal startup and external sessions remain observation-only. See
+[setup, interaction and limits](docs/development/managed-codex-terminal.md).
+
 > **Project status:** pre-release. Core/Bridge lifecycle separation and a local Analytics
 > aggregation API and first browser ranking screen are implemented and integration-tested.
 > Full Desktop Analytics remains incomplete. A minimal macOS Electron observer client
-> runs from the checkout; integrated terminals, managed execution and Cloud connectivity are
-> not shipped. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
+> runs from the checkout; an opt-in embedded managed Codex Terminal is implemented,
+> while real-provider acceptance, multi-agent delegation, distribution and Cloud remain pending. **Model Usage Analytics is mandatory for the functional Desktop MVP.**
 > Community is licensed under [Apache-2.0](LICENSE) and operates without Cloud.
 
 ## What works today
 
-| Area                                                                         | State                                             |
-| ---------------------------------------------------------------------------- | ------------------------------------------------- |
-| Codex CLI session discovery (read-only)                                      | Implemented                                       |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                       |
-| Normalized event protocol with runtime validation                            | Implemented                                       |
-| Local SQLite persistence, migrations, retention                              | Implemented                                       |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                       |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                       |
-| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer         |
-| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending       |
-| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending  |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                       |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions       |
-| Claude Code adapter                                                          | Contract only, not implemented                    |
-| OpenCode adapter                                                             | Contract only, not implemented                    |
-| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added |
-| Managed execution and structured delegation                                  | Planned, not implemented                          |
-| ORQST Cloud, accounts, billing                                               | Not implemented                                   |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                          |
+| Area                                                                         | State                                                |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------- |
+| Codex CLI session discovery (read-only)                                      | Implemented                                          |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                          |
+| Normalized event protocol with runtime validation                            | Implemented                                          |
+| Local SQLite persistence, migrations, retention                              | Implemented                                          |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                          |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                          |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer            |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending          |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending     |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                          |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions          |
+| Claude Code adapter                                                          | Contract only, not implemented                       |
+| OpenCode adapter                                                             | Contract only, not implemented                       |
+| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added    |
+| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending |
+| Structured delegation and automatic task results                             | Planned, not implemented                             |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                      |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                             |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 

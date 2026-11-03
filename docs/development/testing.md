@@ -726,3 +726,13 @@ combined tree passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (289 cases),
 Vite bundle-size warning remains. This validates compatibility of the shared
 renderer increment; it does not repeat native Terminal/provider acceptance or
 approve a release. No installed service was restarted and no push was performed.
+
+## Embedded managed Terminal
+
+See [setup and limits](managed-codex-terminal.md). The explicit opt-in command
+`pnpm accept:managed-terminal --authorize-synthetic-pty` compiles a disposable native
+fixture and exercises the real ORQST Desktop/xterm, isolated preload, independent
+Node Core/journal and PTY. It uses an empty disposable observer and fake authentication;
+it never launches Codex or reads real credentials, configuration or sessions. Native
+confirmations are intercepted, so this is not genuine human-modal/accessibility or
+provider acceptance. Normal test/CI commands do not run this native acceptance.

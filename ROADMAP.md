@@ -1,5 +1,25 @@
 # ORQST roadmap
 
+## Embedded Terminal increment — 2026-11-03
+
+The opt-in [managed Codex Terminal](docs/development/managed-codex-terminal.md)
+now composes a real xterm.js window inside ORQST Desktop, native confirmations,
+an independent Node Core supervisor/journal and owned PTYs. Separate device login
+uses newly provisioned private state; observed sessions/credentials are never adopted.
+Native trusted/same-user execution is the selected incremental contract: hash/path
+drift checks apply, but immutable kernel binding and container/VM isolation are not
+claimed or required by this mode. This supersedes the blanket production gate in
+the historical terminal engineering notes below, without changing their evidence.
+
+The path is implemented for one configured project/selected instance, with explicit
+30-minute lifetime and conservative lost-ownership recovery. Real Codex acceptance
+and genuine native human-dialog/accessibility checks remain pending authorization.
+Claude Code/OpenCode, structured delegation, automatic results and concurrent
+multi-agent UI are not implemented. The intended next functional milestone is two
+identified owned agents, an explicit delegated task and an automatic result inside
+ORQST; transcript prose cannot establish that protocol. This increment is a terminal
+foundation, not completion of that milestone, Phase 2/4 or the Desktop MVP.
+
 ## Product direction and delivery status
 
 ORQST is a local-first, observability-first desktop platform in development.
