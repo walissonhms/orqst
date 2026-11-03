@@ -26,6 +26,8 @@ test('the guide exposes actual snapshot evidence, contains keyboard focus and ma
   await page.route('**/api/snapshot', async (route) => {
     const response = await route.fetch();
     const snapshot = (await response.json()) as Snapshot;
+    // Other suites may retain additional synthetic sessions in the shared Bridge.
+    snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
     snapshot.diagnostics = {
       files: 4,
       malformed: 2,
@@ -141,6 +143,7 @@ test('a scoped empty workspace does not hide global retained-session evidence or
   await page.route('**/api/snapshot', async (route) => {
     const response = await route.fetch();
     const snapshot = (await response.json()) as Snapshot;
+    snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
     snapshot.workspaces.push({
       ...snapshot.workspaces[0]!,
       id: 'synthetic-empty-workspace',
@@ -191,6 +194,7 @@ test('loaded diagnostics update in place and become explicitly stale on snapshot
     if (fail) return route.abort();
     const response = await route.fetch();
     const snapshot = (await response.json()) as Snapshot;
+    snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
     snapshot.diagnostics.files = files;
     await route.fulfill({ response, json: snapshot });
   });
@@ -250,6 +254,12 @@ test('palette handoff preserves exact drafts and guide navigation shares the exi
 test('localized guide fits dark and light layouts at maximum reading sizes with reduced motion', async ({
   page,
 }) => {
+  await page.route('**/api/snapshot', async (route) => {
+    const response = await route.fetch();
+    const snapshot = (await response.json()) as Snapshot;
+    snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
+    await route.fulfill({ response, json: snapshot });
+  });
   await page.addInitScript(() => {
     localStorage.setItem(
       'orqst.appearance.v1',
