@@ -2,7 +2,11 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Settings2 } from 'lucide-react';
 import { Modal } from './Modal';
-import { defaultAppearancePreferences, type AppearancePreferences } from './appearance-preferences';
+import {
+  defaultAppearancePreferences,
+  readingSize,
+  type AppearancePreferences,
+} from './appearance-preferences';
 
 export function Settings({
   appearance,
@@ -98,6 +102,56 @@ export function Settings({
           <p className="fine-print">
             {t(systemReducedMotion ? 'settings.osReduced' : 'settings.osStandard')}
           </p>
+          {(['textSize', 'contentSize'] as const).map((field) => (
+            <label className="settings-field" key={field}>
+              <span>{t(`settings.${field}`)}</span>
+              <select
+                value={appearance[field]}
+                aria-describedby={`settings-${field}-help`}
+                onChange={(event) =>
+                  onAppearance({ ...appearance, [field]: readingSize(event.target.value) })
+                }
+              >
+                <option value="standard">{t('settings.sizeStandard')}</option>
+                <option value="large">{t('settings.sizeLarge')}</option>
+                <option value="extra-large">{t('settings.sizeExtraLarge')}</option>
+              </select>
+            </label>
+          ))}
+          <p className="fine-print" id="settings-textSize-help">
+            {t('settings.textSizeHelp')}
+          </p>
+          <p className="fine-print" id="settings-contentSize-help">
+            {t('settings.contentSizeHelp')}
+          </p>
+          <label className="settings-field">
+            <span>{t('settings.contentFont')}</span>
+            <select
+              value={appearance.contentFont}
+              aria-describedby="settings-contentFont-help"
+              onChange={(event) =>
+                onAppearance({
+                  ...appearance,
+                  contentFont:
+                    event.target.value === 'mono' || event.target.value === 'sans'
+                      ? event.target.value
+                      : 'default',
+                })
+              }
+            >
+              <option value="default">{t('settings.fontDefault')}</option>
+              <option value="mono">{t('settings.fontMono')}</option>
+              <option value="sans">{t('settings.fontSans')}</option>
+            </select>
+          </label>
+          <p className="fine-print" id="settings-contentFont-help">
+            {t('settings.contentFontHelp')}
+          </p>
+          <figure className="reading-preview" aria-labelledby="settings-preview-heading">
+            <figcaption id="settings-preview-heading">{t('settings.readingPreview')}</figcaption>
+            <p>{t('settings.interfaceSample')}</p>
+            <pre className="reading-content">{t('settings.contentSample')}</pre>
+          </figure>
           <p className="fine-print">{t('settings.zoomHelp')}</p>
           <p className={storageUnavailable ? 'notice' : 'fine-print'} role="status">
             {t(storageUnavailable ? 'settings.storageUnavailable' : 'settings.localScope')}

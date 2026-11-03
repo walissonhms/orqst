@@ -3,12 +3,22 @@ import { useTranslation } from 'react-i18next';
 import type { StoredEvent } from '@orqst/protocol';
 import { observedToolLimits, observedTools, toolDisplayText } from './observed-tools';
 
-function EvidenceText({ value, limit }: { value: string; limit?: number }) {
+function EvidenceText({
+  value,
+  limit,
+  reading = false,
+}: {
+  value: string;
+  limit?: number;
+  reading?: boolean;
+}) {
   const { t } = useTranslation();
   const display = toolDisplayText(value, limit);
   return (
     <>
-      <pre dir="ltr">{display.text}</pre>
+      <pre dir="ltr" className={reading ? 'reading-content' : undefined}>
+        {display.text}
+      </pre>
       {display.truncated && <p className="fine-print">{t('observedTools.truncated')}</p>}
     </>
   );
@@ -61,7 +71,7 @@ export function ObservedTools({
               {!event.payload.text ? (
                 <p>{t('observedTools.noText')}</p>
               ) : (
-                <EvidenceText value={event.payload.text} />
+                <EvidenceText value={event.payload.text} reading />
               )}
               <details className="source-detail">
                 <summary>{t('source')}</summary>

@@ -4,12 +4,18 @@ export interface AppearancePreferences {
   contrast: 'standard' | 'high';
   density: 'compact' | 'comfortable';
   motion: 'system' | 'reduced';
+  textSize: 'standard' | 'large' | 'extra-large';
+  contentSize: 'standard' | 'large' | 'extra-large';
+  contentFont: 'default' | 'mono' | 'sans';
 }
 export const appearanceStorageKey = 'orqst.appearance.v1';
 export const defaultAppearancePreferences: AppearancePreferences = {
   contrast: 'standard',
   density: 'compact',
   motion: 'system',
+  textSize: 'standard',
+  contentSize: 'standard',
+  contentFont: 'default',
 };
 export function parseAppearancePreferences(value: string | null): AppearancePreferences {
   try {
@@ -21,10 +27,19 @@ export function parseAppearancePreferences(value: string | null): AppearancePref
       contrast: record.contrast === 'high' ? 'high' : 'standard',
       density: record.density === 'comfortable' ? 'comfortable' : 'compact',
       motion: record.motion === 'reduced' ? 'reduced' : 'system',
+      textSize: readingSize(record.textSize),
+      contentSize: readingSize(record.contentSize),
+      contentFont:
+        record.contentFont === 'mono' || record.contentFont === 'sans'
+          ? record.contentFont
+          : 'default',
     };
   } catch {
     return defaultAppearancePreferences;
   }
+}
+export function readingSize(value: unknown): AppearancePreferences['textSize'] {
+  return value === 'large' || value === 'extra-large' ? value : 'standard';
 }
 function readAppearancePreferences(): AppearancePreferences {
   try {
@@ -44,6 +59,9 @@ export function useAppearancePreferences() {
     root.dataset.contrast = appearance.contrast;
     root.dataset.density = appearance.density;
     root.dataset.motion = appearance.motion;
+    root.dataset.textSize = appearance.textSize;
+    root.dataset.contentSize = appearance.contentSize;
+    root.dataset.contentFont = appearance.contentFont;
     try {
       localStorage.setItem(appearanceStorageKey, JSON.stringify(appearance));
       setStorageUnavailable(false);

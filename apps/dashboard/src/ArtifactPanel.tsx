@@ -269,9 +269,11 @@ export function ArtifactPanel({
               </button>
             ))}
           </div>
-          {mode === 'source' && <pre className="artifact-content">{artifact.original.text}</pre>}
+          {mode === 'source' && (
+            <pre className="artifact-content reading-content">{artifact.original.text}</pre>
+          )}
           {mode === 'preview' && (
-            <div className="artifact-content" aria-label={t('artifacts.preview')}>
+            <div className="artifact-content reading-content" aria-label={t('artifacts.preview')}>
               {artifactBlocks(draft).map((block, index) =>
                 block.kind === 'heading' ? (
                   <h4 key={index}>{block.text}</h4>
@@ -296,6 +298,7 @@ export function ArtifactPanel({
               <label htmlFor="artifact-draft">{t('artifacts.draft')}</label>
               <textarea
                 id="artifact-draft"
+                className="reading-content"
                 value={draft}
                 disabled={saving || restoring}
                 onChange={(event) => {

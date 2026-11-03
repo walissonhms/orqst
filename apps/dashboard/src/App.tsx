@@ -188,7 +188,7 @@ function Timeline({
             {(event.payload.text || event.payload.result) && (
               <details className="event-content">
                 <summary>{(event.payload.text ?? event.payload.result)?.slice(0, 180)}</summary>
-                <pre>{event.payload.text ?? event.payload.result}</pre>
+                <pre className="reading-content">{event.payload.text ?? event.payload.result}</pre>
               </details>
             )}
             {onExtract &&
@@ -389,7 +389,7 @@ function SessionDetail({
           {t('savedError')}
         </p>
       )}
-      <p className="session-task">{session.task ?? t('noTask')}</p>
+      <p className="session-task reading-content">{session.task ?? t('noTask')}</p>
       <div className="association">
         <label>
           {t('association')}
