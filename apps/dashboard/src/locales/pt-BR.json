@@ -437,5 +437,81 @@
     "truncated": "Exibição abreviada. Este não é o campo retido completo.",
     "sourceNote": "Evento retido {{sequence}}. A fonte não foi verificada novamente; este registro não comprova atividade, saída, sucesso do processo ou posse do terminal.",
     "position": "Linha de origem {{line}} · posição em bytes {{offset}}"
+  },
+  "shell": {
+    "views": {
+      "overview": "Visão geral",
+      "workspaces": "Diretório de workspaces",
+      "agents": "Agentes e integrações",
+      "models": "Modelos mais usados"
+    },
+    "skip": "Ir para o conteúdo principal",
+    "collapse": "Recolher navegação",
+    "expand": "Expandir navegação",
+    "loading": "Carregando observações locais…",
+    "palette": {
+      "title": "Busca e comandos",
+      "shortLabel": "Buscar",
+      "search": "Buscar telas, workspaces, agentes, modelos ou IDs de sessão",
+      "help": "Busca no retrato local carregado. ↑ / ↓ para mover, Enter para abrir, Escape para fechar. Nenhum comando é enviado aos agentes.",
+      "navigation": "Navegação",
+      "actions": "Ações locais",
+      "empty": "Nenhuma tela, workspace ou sessão corresponde à busca.",
+      "count": "Mostrando {{shown}} de {{count}} resultados",
+      "shortcut": "⌘ / Ctrl K"
+    },
+    "workspaces": {
+      "description": "Explore projetos observados e suas sessões, com um contexto separado para cada workspace.",
+      "search": "Buscar nomes ou caminhos de workspaces",
+      "sort": "Ordenar por",
+      "recent": "Atividade recente",
+      "layout": "Layout de workspaces",
+      "grid": "Visualização em grade",
+      "list": "Visualização em lista",
+      "open": "Abrir sessões",
+      "noMatches": "Nenhum workspace corresponde à busca.",
+      "empty": "Nenhum workspace registrado. Use o Codex fora do ORQST ou adicione um rótulo local de workspace.",
+      "localNote": "Os caminhos são rótulos e diretórios de trabalho observados. Abrir um workspace filtra observações; não abre arquivos, inicia um CLI ou retoma um processo."
+    },
+    "agents": {
+      "description": "Consulte as capacidades declaradas pelos adaptadores locais de observação.",
+      "matrix": "Matriz de capacidades de observação",
+      "discoveryNote": "Este é um inventário de adaptadores, não uma busca de instalações na máquina. Caminhos de executáveis, versões instaladas, autenticação e modelos disponíveis atualmente não são detectados.",
+      "capability": "Capacidade",
+      "mode": "Modo",
+      "supported": "Suportado",
+      "unavailable": "Indisponível",
+      "limits": "As capacidades descrevem suporte à observação comprovado na origem. Um turno registrado como em execução não comprova que o processo está ativo. Execução gerenciada, entrada no terminal e troca de modelo estão indisponíveis.",
+      "evidence": "Evidências e limites dos adaptadores",
+      "evidenceNote": "As descrições de evidência são fornecidas pelos adaptadores e mantidas no idioma original."
+    },
+    "adapters": {
+      "codex": "Codex CLI",
+      "claude": "Claude Code",
+      "opencode": "OpenCode"
+    },
+    "capabilities": {
+      "sessionDiscovery": "Descoberta de sessões externas",
+      "realtimeEvents": "Observação de novos eventos",
+      "messages": "Mensagens capturadas",
+      "toolCalls": "Entrada/saída registrada de ferramentas",
+      "subagents": "Relações explícitas de parentesco",
+      "tokenUsage": "Leituras cumulativas de tokens",
+      "taskResults": "Resultados finais capturados",
+      "userIntervention": "Pedidos de entrada verificados",
+      "remoteControl": "Controle de sessão"
+    },
+    "notifications": {
+      "filter": "Filtrar notificações",
+      "all": "Todas as notificações",
+      "unread": "Somente não lidas",
+      "noMatches": "Nenhuma notificação corresponde ao filtro.",
+      "sourceMissing": "A sessão de origem não está mais disponível."
+    },
+    "metrics": {
+      "context": "Sessão observada selecionada",
+      "confirmed": "Última confirmação",
+      "outdated": "Desatualizado"
+    }
   }
 }
