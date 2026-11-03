@@ -23,6 +23,16 @@ const artifacts: DesktopArtifacts = {
   },
 };
 contextBridge.exposeInMainWorld('orqstArtifacts', Object.freeze(artifacts));
+contextBridge.exposeInMainWorld(
+  'orqstManagedAgents',
+  Object.freeze({
+    contractVersion: 1,
+    async open(): Promise<void> {
+      if (navigator.userActivation.isActive)
+        await ipcRenderer.invoke('orqst:managed-agents-open').catch(() => {});
+    },
+  }),
+);
 
 let generation = 0;
 const analytics: DesktopAnalytics = {

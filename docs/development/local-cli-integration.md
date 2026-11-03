@@ -97,7 +97,8 @@ shared-state consequence into the inspectable signed manifest; it must not be
 presented as an isolated credential store.
 
 Reuse manifests are rejected by the legacy PTY profile builder. They are only for
-the explicit structured developer path, never normal Desktop/Bridge startup.
+the explicit structured path (including the native-confirmed
+[Desktop client](managed-agents-client.md)), never automatic Desktop/Bridge startup.
 `--authentication separate-login` keeps the earlier opt-in experiment unchanged;
 it is not the default requirement. No pending login state is replaced or deleted.
 
@@ -123,7 +124,8 @@ real login, model access and A-to-B-to-A acceptance remain blocked. See the
    and owned cleanup. No status/login/provider call is authorized by discovery.
 4. Verify two process/thread identities, scoped A-to-B dispatch, B completion and
    correlated automatic return to A; verify exit/uncertainty and preservation of
-   external processes/sessions. Desktop concurrent panes require separate UI work.
+   external processes/sessions. The Desktop two-terminal composition now exists;
+   real-provider acceptance of that surface remains pending.
 
 The tests cover synthetic filesystem lookup, aliases, duplicates, incomplete scans,
 ambiguous candidates, inaccessible synthetic credentials, no CLI execution and the

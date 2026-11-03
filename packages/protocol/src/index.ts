@@ -167,3 +167,4 @@ export const emptyUsage = (): Usage => ({ input: 0, output: 0, cached: 0, total:
 export * from './analytics-evolution.js';
 export * from './terminal-journal.js';
 export * from './pane-communication.js';
+export * from './managed-agents.js';

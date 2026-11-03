@@ -6,8 +6,10 @@ The Desktop client is an Electron window loading the existing React dashboard
 from `http://127.0.0.1:4317/`. The Bridge remains the independent Node 24 composition
 root and sole SQLite writer. The default observer path never starts/stops a Bridge
 or agent. The separately opted-in legacy Managed Terminal imports Core authorization
-helpers and connects to its own Node host; that exception is not the observer or
-the structured existing-login runtime. Browser clients continue working.
+helpers and connects to its own Node host. The explicit
+[Managed agents surface](managed-agents-client.md) now composes the structured
+existing-login runtime in a separate native document and Node host. Neither path
+grants the observer dashboard control over external sessions. Browser clients continue working.
 Closing a macOS window leaves the Desktop application available in the Dock; activating
 it reopens the window. The menu-bar tray also opens/restores it. Quitting Desktop also preserves the independently running Bridge
 and observer. If the Bridge exits, Desktop cannot keep observation running.
@@ -147,15 +149,15 @@ The existing `accept:terminal-native --authorize-synthetic-pty` command is a
 separate synthetic Electron/Node/PTY lab with real fixture I/O. It does not compose
 the structured Codex A-to-B-to-A runtime into this dashboard. `--terminal-config`
 opens the legacy separate-login Managed Terminal and rejects existing-login reuse;
-it is not a shortcut to the structured path. No two-agent launch, delegation inbox
-or source-preservation report is exposed in the client. Acceptance stdout cannot
-be presented as a visible client result.
+it is not a shortcut to the structured path. The separate **Managed agents** button
+now exposes signed starts and structured delegation/results for two fresh private
+slots. No source-preservation report is inferred from those client facts. Acceptance
+stdout cannot be presented as a visible client result.
 
-Real two-agent client acceptance remains blocked by that missing composition and
-by unresolved native lifecycle/source-preservation acceptance. The next implementation
-requires a separately reviewed structured Desktop contract (ownership, explicit
-authorization, report provenance and lifecycle) and a fixture-backed client test
-before any newly authorized provider run. Existing quarantines remain intact;
+Real two-agent client acceptance remains blocked by unresolved native startup,
+lifecycle/source-preservation acceptance. The structured Desktop contract and
+fixture-backed client tests are described in [the client guide](managed-agents-client.md).
+Existing quarantines remain intact;
 synthetic UI evidence cannot reconcile them or authorize a retry.
 
 This is a runnable development checkout client, not a distributable signed application.

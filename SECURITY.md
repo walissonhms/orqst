@@ -43,6 +43,15 @@ will acknowledge a report when possible and coordinate disclosure after a fix.
 
 ## Current managed Terminal opt-in
 
+The [structured Desktop client](docs/development/managed-agents-client.md) now
+composes two explicitly native-confirmed Codex starts and exact A-to-B-to-A task
+authority in a separate sandboxed document. The observer preload only opens the
+view; it receives no signing/start/delegation capability. Private journals must be
+new; existing observer/terminal databases are never migrated by this path. Native
+authentication/configuration/MCP remain shared and cost limits advisory. Real
+provider acceptance and shared-source preservation are not established by fixture
+success. See the [composition review](docs/architecture/security-model.md#structured-desktop-composition-review--2026-11-03).
+
 The [passive CLI preflight](docs/development/local-cli-integration.md) discovers
 executable metadata without executing providers or inspecting credentials. Existing
 authentication reuse remains blocked until a provider-specific isolation contract

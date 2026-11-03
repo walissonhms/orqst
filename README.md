@@ -21,7 +21,8 @@ CLIs with their native authentication when available, without duplicate installa
 or login by default. `pnpm terminal:discover` now provides a passive local preflight;
 discovery leaves authentication unknown. An explicit structured Codex path can now
 reuse native authentication with new ephemeral threads and private SQLite/log state;
-native auth/config remain shared; one authorized native acceptance attempt failed
+native auth/config remain shared. The Desktop **Managed agents** surface now connects
+two explicitly signed structured terminals and scoped delegation; one authorized native acceptance attempt failed
 before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
@@ -40,28 +41,28 @@ acceptance. Normal startup and external sessions remain observation-only. See
 
 ## What works today
 
-| Area                                                                         | State                                                   |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Codex CLI session discovery (read-only)                                      | Implemented                                             |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                             |
-| Normalized event protocol with runtime validation                            | Implemented                                             |
-| Local SQLite persistence, migrations, retention                              | Implemented                                             |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                             |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                             |
-| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer               |
-| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending             |
-| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending        |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                             |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions             |
-| Claude Code adapter                                                          | Contract only, not implemented                          |
-| OpenCode adapter                                                             | Contract only, not implemented                          |
-| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added       |
-| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending    |
-| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence       |
-| Codex structured runtime                                                     | Opt-in library; synthetic protocol tests only           |
-| Scoped native A-to-B-to-A delegation facade                                  | Opt-in library; synthetic only; real acceptance pending |
-| ORQST Cloud, accounts, billing                                               | Not implemented                                         |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                                |
+| Area                                                                         | State                                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Codex CLI session discovery (read-only)                                      | Implemented                                            |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                            |
+| Normalized event protocol with runtime validation                            | Implemented                                            |
+| Local SQLite persistence, migrations, retention                              | Implemented                                            |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                            |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                            |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer              |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending            |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending       |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                            |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions            |
+| Claude Code adapter                                                          | Contract only, not implemented                         |
+| OpenCode adapter                                                             | Contract only, not implemented                         |
+| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added      |
+| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending   |
+| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence      |
+| Codex structured runtime                                                     | Explicit Desktop surface; synthetic protocol tests     |
+| Scoped native A-to-B-to-A delegation facade                                  | Desktop-wired; synthetic only; real acceptance pending |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                        |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                               |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
@@ -97,11 +98,14 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   descendant cleanup. See
   [preparation scope](docs/development/codex-two-agent-acceptance.md).
 
-- **Client testing boundary:** the normal Desktop/localhost dashboard observes
-  sessions; structured two-agent execution is not composed into its UI. A disposable
-  real Electron/Bridge smoke exercises only labeled synthetic sessions, preserves
-  owner storage and asserts that terminal authority is absent. See the
-  [visual test command and remaining blockers](docs/development/desktop.md#synthetic-client-testing-and-structured-runtime-boundary).
+- **Structured client composition:** Desktop now opens **Managed agents** from its
+  existing header/menu: two identified structured terminals, native manifest/start
+  confirmation, existing login, exact model confirmation, separately authorized
+  A-to-B-to-A delegation and correlated results. Opening the view starts no provider.
+  Existing journals are rejected, external sessions are not adopted, and uncertain
+  outcomes are not retried. The browser/Bridge stay observation-only. Real-provider
+  acceptance is still blocked; shared `history_changed` remains inconclusive. See
+  [setup, usable path and limits](docs/development/managed-agents-client.md).
 
 - **Codex existing-login implementation (2026-11-03):** explicit structured setup can
   retain native HOME/CODEX_HOME without copying credentials or initiating login.
@@ -146,10 +150,11 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   grants, durable FIFO admission, independent delivery/task evidence and a result
   inbox/subscriptions to a Core client. Queue admission is not provider acceptance;
   a Core notification is not a result delivered inside an agent CLI. There is no
-  public communication endpoint, Communication Inspector or verified two-agent
+  public communication endpoint or real-provider-verified two-agent
   workflow. Unknown outcomes retain capacity and are never retried automatically;
   four unresolved outcomes block all dispatch even after restart. No capacity
-  reclamation exists, so normal-runtime provider dispatch remains gated.
+  reclamation exists. The new explicit Desktop path requires fresh private slots
+  and cannot reopen existing journals or bypass unresolved work.
   The dated Terminal engineering entries below record earlier stages; current
   setup and native trust limits are in the
   [managed Terminal guide](docs/development/managed-codex-terminal.md).
@@ -164,7 +169,8 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   now returns B's verified result into A's pending RPC under a separate signed,
   exact-target/task root grant and one-call budget. Synthetic tests cover that
   return and its native receipt. Requested capability stays distinct from observed
-  support. MCP, multi-agent UI and real-provider acceptance remain pending.
+  support. A Desktop two-terminal surface now composes this path explicitly;
+  general MCP access and real-provider acceptance remain pending.
   This is separate from the interactive xterm Terminal; no existing process or
   external session is converted or adopted. See the
   [runtime contract](docs/development/codex-structured-runtime.md) and

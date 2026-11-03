@@ -23,6 +23,10 @@ await build({
 });
 await cp('apps/desktop/resources/icons', 'apps/desktop/dist/icons', { recursive: true });
 for (const [entry, outfile, platform] of [
+  ['apps/desktop/src/managed-agents-preload.ts', 'managed-agents-preload.cjs', 'node'],
+  ['apps/desktop/src/managed-agents-host.ts', 'managed-agents-host.cjs', 'node'],
+  ['packages/core/src/managed-codex/native-host.ts', 'codex-structured-host.cjs', 'node'],
+  ['apps/desktop/src/managed-agents-client.ts', 'managed-agents-client.js', 'browser'],
   ['apps/desktop/src/terminal-preload.ts', 'terminal-preload.cjs', 'node'],
   ['packages/core/src/terminal/host.ts', 'managed-terminal-core.cjs', 'node'],
   ['packages/core/src/terminal/pty-host.ts', 'managed-terminal-host.cjs', 'node'],
@@ -43,6 +47,7 @@ await build({
   outfile: 'apps/desktop/dist/managed-terminal.css',
   bundle: true,
 });
+await cp('apps/desktop/src/managed-agents.css', 'apps/desktop/dist/managed-agents.css');
 const desktopRequire = createRequire(new URL('../apps/desktop/package.json', import.meta.url));
 await mkdir('apps/desktop/dist/licenses', { recursive: true });
 for (const dependency of ['@xterm/xterm', '@xterm/addon-fit']) {

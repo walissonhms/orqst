@@ -706,5 +706,33 @@
     "ownership_lost": "Ownership perdido; sem controle ou repetição seguros",
     "keyboard": "Entrada de teclado do Terminal próprio",
     "tooMuch": "Saída excessiva no terminal. Leia o restante da saída visualmente."
+  },
+  "managedAgents": {
+    "title": "Agentes gerenciados",
+    "terminal": "Terminal",
+    "model": "ID exato do modelo",
+    "start": "Iniciar novo Codex",
+    "stop": "Parar processo próprio",
+    "notStarted": "Não iniciado",
+    "output": "Resultado comprovado da tarefa",
+    "scope": "Dois terminais Codex estruturados neste cliente. Sessões externas observadas continuam somente leitura. Abrir esta tela não inicia provider.",
+    "setup": "Prepare dois manifests privados novos com login existente usando terminal:setup. No primeiro início, selecione os dois arquivos terminal.json na ordem A, B. Cada início exige confirmação nativa própria.",
+    "risk": "Login e configuração nativos continuam compartilhados: Codex pode renovar credenciais ou iniciar servidores MCP configurados. É um processo confiável do mesmo usuário, sem contenção forte. O aceite com provider real está pendente.",
+    "delegation": "A → B → A",
+    "instructions": "Instruções para A (sem ferramentas além da delegação exata)",
+    "task": "Tarefa exata autorizada para B (somente leitura; sem ferramentas)",
+    "send": "Revisar e autorizar delegação",
+    "limits": "Uma delegação por tarefa; prazo de 120 segundos; sem aprovações do provider ou repetição automática. Limites de custo são apenas consultivos. Fechar oculta esta tela; sair desconecta com incerteza e não sinaliza processos. Uma nova tela não pode adotar processos antigos.",
+    "communication": "Evidências correlacionadas de entrega e tarefa",
+    "choose": "Selecione dois manifests terminal.json novos com login existente: A e depois B",
+    "confirm_start": "Iniciar este novo processo Codex com autenticação nativa? Revise executável, estado, configuração compartilhada, modelo e permissões no manifesto completo. O início não submete tarefa.",
+    "confirm_delegate": "Autorizar estas instruções exatas de A, tarefa de B, identidades e prazo? Pode gerar custo no provider; não há limite imposto de tokens ou gasto.",
+    "confirm_stop": "Enviar SIGTERM apenas a este processo próprio vivo? Isso não comprova encerramento de descendentes.",
+    "ok": "Operação aceita; confira os estados confirmados abaixo.",
+    "cancelled": "Cancelado. Nenhuma autorização nativa foi assinada. Uma preparação ainda não iniciada pode ser revisada novamente.",
+    "busy": "Outra ação nativa está em andamento.",
+    "denied": "Ação negada ou confirmação expirada. Sem repetição automática.",
+    "unavailable": "Operação indisponível ou incerta. Confira manifests, estado novo, login nativo e ciclo de vida abaixo; nunca repita trabalho incerto.",
+    "working": "Autorização nativa ou inicialização em andamento…"
   }
 }

@@ -208,6 +208,56 @@ Module._load = load;
     false,
   );
   await page.screenshot({ path: join(evidenceDir, 'synthetic-observer.png') });
+  // Open the shipped structured surface without configuring or executing any provider.
+  const agentsWindow = desktop.waitForEvent('window');
+  await page.getByRole('button', { name: /Managed agents|Agentes gerenciados/ }).click();
+  const agents = await agentsWindow;
+  await expect(agents.locator('.pane')).toHaveCount(2);
+  await expect(agents.locator('#delegate')).toBeDisabled();
+  await expect(agents.locator('#stop-0')).toBeDisabled();
+  assert.deepEqual(
+    await agents.evaluate(() => ({
+      require: typeof Reflect.get(window, 'require'),
+      process: typeof Reflect.get(window, 'process'),
+      terminal: typeof Reflect.get(window, 'orqstTerminal'),
+      observer: typeof Reflect.get(window, 'orqstArtifacts'),
+    })),
+    { require: 'undefined', process: 'undefined', terminal: 'undefined', observer: 'undefined' },
+  );
+  // Public preload rejects forged authority/path fields before native dialogs or host creation.
+  assert.equal(
+    await agents.evaluate(async () => {
+      const client = Reflect.get(window, 'orqstManagedAgentsClient') as {
+        request(request: unknown): Promise<{ status: string }>;
+      };
+      return (
+        await client.request({
+          version: 1,
+          action: 'start',
+          slot: 0,
+          model: 'synthetic',
+          file: '/untrusted',
+        })
+      ).status;
+    }),
+    'denied',
+  );
+  await agents.screenshot({ path: join(evidenceDir, 'synthetic-managed-agents-empty.png') });
+  assert.equal(
+    await desktop.evaluate(({ BrowserWindow }) => {
+      const managed = BrowserWindow.getAllWindows().find(
+        (w) => w.webContents.getURL() === 'orqst-terminal://local/index.html',
+      );
+      managed!.close(); // Hides only; no provider/host was started.
+      const hidden = !managed!.isVisible();
+      managed!.destroy(); // Test-only renderer-loss cleanup restores the observer-only smoke baseline.
+      BrowserWindow.getAllWindows()
+        .find((w) => w.webContents.getURL().startsWith('http:'))!
+        .focus();
+      return hidden;
+    }),
+    true,
+  );
   // Exact clean routes must pass real Electron navigation, reload and sender policy.
   for (const route of ['overview', 'workspaces', 'agents', 'models', 'settings']) {
     await page.goto(`${origin}/${route}`);
@@ -784,7 +834,7 @@ Module._load = load;
         platform: process.platform,
         versions,
         observerComposition:
-          'synthetic Bridge on ephemeral loopback; terminal menu disabled; no terminal preload, provider, login or structured two-agent UI',
+          'synthetic Bridge on ephemeral loopback; observer has view-only managed opener and no terminal authority; shipped two-terminal empty view opened/isolation checked; no manifests, provider, login or inference',
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
         analyticsFiles:

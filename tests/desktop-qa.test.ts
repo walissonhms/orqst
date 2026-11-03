@@ -115,10 +115,10 @@ test('main source enforces the Electron trust boundary and has no privileged run
     'shell.openPath',
   ])
     assert.ok(main.includes(required), required);
-  // Exactly two narrow channels: Artifacts save and Analytics export.
+  // File capabilities and a view-only opener; no agent execution reaches the observer preload.
   assert.deepEqual(
     [...main.matchAll(/ipcMain\.handle\('([^']+)'/g)].map((match) => match[1]).sort(),
-    ['orqst:analytics-export', 'orqst:save-markdown'],
+    ['orqst:analytics-export', 'orqst:managed-agents-open', 'orqst:save-markdown'],
   );
   assert.equal(main.includes('ipcMain.on('), false);
   for (const forbidden of [

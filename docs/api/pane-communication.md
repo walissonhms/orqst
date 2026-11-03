@@ -1,8 +1,11 @@
 # Experimental pane communication v1
 
-This is an opt-in Core library, not a public REST, WebSocket, Electron IPC or MCP
-endpoint. ObserverCore and normal application startup do not construct it. There
-is no real provider transport, PTY injection, planner or Communication Inspector.
+This is an opt-in Core library, not a public REST, WebSocket or MCP endpoint.
+The explicit [Desktop client](../development/managed-agents-client.md) now composes
+it behind a dedicated native document and bounded IPC; no communication grant is
+given to the observer renderer. ObserverCore never constructs it. The structured
+Codex transport exists; real-provider acceptance remains pending. There is no PTY
+injection or planner.
 The first real two-agent delegation milestone remains **incomplete**.
 
 ## Capability inventory and boundaries

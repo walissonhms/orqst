@@ -706,5 +706,33 @@
     "ownership_lost": "Ownership lost; no safe control or retry",
     "keyboard": "Owned Terminal keyboard input",
     "tooMuch": "Too much terminal output. Read the remaining output visually."
+  },
+  "managedAgents": {
+    "title": "Managed agents",
+    "terminal": "Terminal",
+    "model": "Exact model ID",
+    "start": "Start new Codex",
+    "stop": "Stop owned process",
+    "notStarted": "Not started",
+    "output": "Verified task result",
+    "scope": "Two structured Codex terminals in this client. External observed sessions remain read-only. Opening this view starts no provider.",
+    "setup": "Prepare two fresh private existing-login manifests with terminal:setup. On the first start, select both terminal.json files in order A, B. Each start requires its own native confirmation.",
+    "risk": "Native login/configuration stay shared: Codex may refresh its credentials or start configured MCP servers. This is a trusted same-user process, not hard containment. Real-provider acceptance is pending.",
+    "delegation": "A → B → A",
+    "instructions": "Instructions for A (no tool use except the exact delegation)",
+    "task": "Exact task authorized for B (read-only; no tools)",
+    "send": "Review and authorize delegation",
+    "limits": "One delegation per task; 120-second deadline; no provider approvals or automatic retry. Cost limits are advisory only. Closing hides this view; quitting disconnects with uncertainty and does not signal processes. A new view cannot adopt old processes.",
+    "communication": "Correlated delivery and task evidence",
+    "choose": "Select two fresh existing-login terminal.json manifests: A then B",
+    "confirm_start": "Start this new Codex process using native authentication? Review the complete executable, state, shared configuration, model and permission manifest. No task is submitted by startup.",
+    "confirm_delegate": "Authorize these exact A instructions, B task, identities and deadline? This can incur provider costs; no enforced token or spending cap.",
+    "confirm_stop": "Send SIGTERM only to this live owned process? This does not prove descendant cleanup.",
+    "ok": "Operation accepted; inspect the confirmed states below.",
+    "cancelled": "Cancelled. No native grant was signed. An unlaunched preparation can be reviewed again.",
+    "busy": "Another native action is in progress.",
+    "denied": "Action denied or confirmation expired. No automatic retry.",
+    "unavailable": "Operation unavailable or uncertain. Check manifests, fresh state, native login and confirmed lifecycle below; never retry uncertain work.",
+    "working": "Native authorization or startup in progress…"
   }
 }

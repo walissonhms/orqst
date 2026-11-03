@@ -1018,6 +1018,12 @@ export function App() {
             <strong>{t(`shell.views.${view}`)}</strong>
           </div>
           <div className="topbar-actions">
+            {window.orqstManagedAgents?.contractVersion === 1 && (
+              <button className="button" onClick={() => void window.orqstManagedAgents?.open()}>
+                <Terminal size={15} />
+                {t('managedAgents.title')}
+              </button>
+            )}
             <button
               className="button command-trigger"
               aria-label={t('shell.palette.title')}

@@ -1,8 +1,10 @@
 # Experimental native Codex structured runtime
 
 This is an **opt-in Core library**, separate from the embedded xterm/PTY Terminal.
-Normal ObserverCore, Bridge and Desktop startup do not import or construct it. It
-has no dashboard control, Electron IPC, MCP server, planner or provider approval UI.
+The [Managed agents Desktop surface](managed-agents-client.md) now composes it
+behind explicit native starts and task confirmations. Opening that surface starts
+no provider; ObserverCore and Bridge never construct it. It has no public dashboard
+control API, MCP server, planner or provider approval UI.
 An optional narrow dynamic tool now supports a separately authorized fixed A-to-B-to-A
 flow; see [developer acceptance and remaining gates](codex-two-agent-acceptance.md).
 It does not inject into an interactive PTY or an externally observed session. The first milestone of two real Codex agents delegating and receiving results
@@ -119,7 +121,8 @@ Result references flow to the existing post-commit Core subscription and durable
 inbox. A separately authorized root turn can now invoke the optional dynamic facade and
 receive B's verified result in its pending native tool response. The return is
 confirmed by the corresponding native dynamicToolCall completion before root success.
-This path has synthetic acceptance only, no MCP or interactive Desktop composition;
+This path has synthetic acceptance only; the separate structured Desktop composition
+does not establish real-provider acceptance. There is no general MCP endpoint;
 the required real agent-to-agent milestone remains pending.
 
 A native permission/input request, except the one granted dynamic delegation tool,
@@ -208,7 +211,9 @@ unvalidated. See [the current acceptance result](codex-two-agent-acceptance.md#c
 Real acceptance still requires specific authorization for the exact native binary,
 two new private states, the chosen native-authentication/provider path, requested models and bounded
 read-only tasks/cost, then actual A-to-B-to-A verification using the explicit developer command below.
-Interactive Desktop/Studio/MCP composition remains a distinct pending step. Until that evidence exists, report **implemented library; synthetic
+The structured Desktop surface is now implemented; interactive PTY/Studio/general
+MCP composition and real-provider acceptance remain distinct pending steps. Until
+that real evidence exists, report **implemented client/library; synthetic
 protocol tests; real-provider milestone pending**. No installed service, source
 session, user database or existing Desktop process needs to change for development.
 

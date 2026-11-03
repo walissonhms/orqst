@@ -411,13 +411,13 @@ test('aggregate divergence fails closed on the first and on the last read', asyn
   }
 });
 
-test('native IPC and preload keep two narrow channels and no generic filesystem', async () => {
+test('native IPC and preload keep narrow file/export/view channels and no generic filesystem', async () => {
   const { readFile } = await import('node:fs/promises');
   const main = await readFile('apps/desktop/src/main.ts', 'utf8');
   const preload = await readFile('apps/desktop/src/preload.ts', 'utf8');
   assert.deepEqual(
     [...main.matchAll(/ipcMain\.handle\('([^']+)'/g)].map((match) => match[1]).sort(),
-    ['orqst:analytics-export', 'orqst:save-markdown'],
+    ['orqst:analytics-export', 'orqst:managed-agents-open', 'orqst:save-markdown'],
   );
   const handler = main.slice(
     main.indexOf("ipcMain.handle('orqst:analytics-export'"),

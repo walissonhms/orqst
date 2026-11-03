@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
 import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
 import { createManagedTerminal } from './managed-terminal.js';
+import { createManagedAgents } from './managed-agents.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
@@ -87,6 +88,7 @@ async function start(): Promise<void> {
   const openTerminal = terminalConfig
     ? await createManagedTerminal(terminalConfig, (key) => i18n.t(key))
     : undefined;
+  const openManagedAgents = await createManagedAgents((key) => i18n.t(key));
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { role: 'appMenu' },
@@ -94,6 +96,11 @@ async function start(): Promise<void> {
       {
         label: i18n.t('managedTerminal.title'),
         submenu: [
+          {
+            id: 'managed-agents-open',
+            label: i18n.t('managedAgents.title'),
+            click: openManagedAgents,
+          },
           {
             id: 'managed-terminal-open',
             label: i18n.t('managedTerminal.open'),
@@ -111,6 +118,17 @@ async function start(): Promise<void> {
   let nativeFileBusy = false;
   let documentGeneration = 0;
   let quitting = false;
+  ipcMain.handle('orqst:managed-agents-open', (event) => {
+    if (
+      quitting ||
+      !window ||
+      !window.isFocused() ||
+      !window.webContents.isFocused() ||
+      !authorizedArtifactSender(event, window.webContents, browserSession, origin)
+    )
+      return;
+    openManagedAgents();
+  });
   ipcMain.handle('orqst:save-markdown', async (event, input: unknown) => {
     const current = window;
     const generation = documentGeneration;
@@ -506,6 +524,7 @@ async function start(): Promise<void> {
     documentGeneration++;
     ipcMain.removeHandler('orqst:save-markdown');
     ipcMain.removeHandler('orqst:analytics-export');
+    ipcMain.removeHandler('orqst:managed-agents-open');
     stopped = true;
     clearTimeout(timer);
     for (const notification of activeNotifications) notification.close();

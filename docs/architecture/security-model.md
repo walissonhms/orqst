@@ -1,5 +1,32 @@
 # Security model
 
+## Structured Desktop composition review — 2026-11-03
+
+The [Managed agents client](../development/managed-agents-client.md) adds an explicit
+native document over the existing signed runtime/communication contracts. The
+dashboard preload can only open that view after transient user activation; main
+requires the exact live observer main frame/session and native focus. It cannot
+start a provider or grant agent authority. The dedicated sandboxed document has its
+own memory-only session, no Node/network/navigation/window/download permission,
+strict versioned request/reply schemas, and a separate preload. Mutations require
+transient activation, exact current frame/generation/session and native focus both
+before and after a complete native confirmation. Native-selected manifests never
+arrive from page fields. Main alone signs short-lived one-use Ed25519 challenges.
+
+A pinned Node helper owns new private SQLite metadata and the existing process
+handles. Existing journals are rejected before Store opens; no observer DB is
+opened/migrated. Results use exact-scope bounded memory and inert text. Closing
+happens without reclaiming uncertain process capacity: a flushed private admission
+marker in Desktop user data blocks another pair across app lifetimes until
+native-confirmed exits and known tasks release it. There is no TTL/PID takeover or
+reset. Closing
+hides the live view; document/transport loss disconnects with uncertainty and no
+implicit signal. No resume, retry, PID adoption or journal reset exists. Native
+shared auth/config/MCP effects, advisory cost limits and lack of hard containment
+are disclosed in the client and guide. No HTTP, WebSocket, cookie or static-serving
+security control changes. Real startup/delegation and external-source preservation
+remain unaccepted; shared `history_changed` remains inconclusive.
+
 ## Passive CLI preflight — 2026-11-03
 
 The developer-only [local CLI preflight](../development/local-cli-integration.md)
