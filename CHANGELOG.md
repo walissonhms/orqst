@@ -17,6 +17,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Dark/light/system themes in grouped Settings, with the original dark default,
+  live system following, shared semantic colors and native form color-scheme.
+  Light mode supports higher contrast, reading sizes, comfortable spacing and
+  reduced motion. The same allowlisted local preferences synchronize between tabs,
+  remain usable offline and reset to dark after confirmation. Native OS surfaces
+  and menu-bar artwork retain their own policy; native visual acceptance is pending.
+
 - Grouped Settings reachable from navigation, header and command palette, with
   existing language/Bridge notification controls and clear local privacy/storage
   explanations. Notification choices disable without a current Bridge connection.

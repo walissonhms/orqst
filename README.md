@@ -45,6 +45,17 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Light and system theme increment:** Settings now offers dark, light and
+  follow-system themes across the shared dashboard. Dark remains the default;
+  older appearance choices keep their values. Light mode includes semantic status
+  colors, native form controls, readable source/draft panels, higher contrast and
+  visible focus. System mode follows OS appearance changes; explicit choices stay
+  fixed. Themes work offline, persist/synchronize through the same local appearance
+  key and reset to dark only after confirmation. Native menus, file dialogs, alerts
+  and menu-bar artwork retain their platform policy. Chromium checks cover contrast,
+  keyboard and 320–1440px layouts; native visual and screen-reader acceptance remain
+  pending. See the [design system](docs/design/design-system.md#light-theme).
+
 - **Artifact navigation protection:** changed memory-only drafts now require a
   decision before switching sessions/workspaces or leaving Overview, including
   Search & commands, notification source links and same-document session links.
@@ -57,16 +68,16 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Settings and accessibility increment:** open **Settings** in navigation, the
   header or Cmd/Ctrl+K (`/#settings`). General, Appearance & accessibility,
   Notifications and Privacy & storage group working controls and explain their
-  scope. Choose standard/higher dark contrast, compact/comfortable spacing and
+  scope. Choose standard/higher contrast, compact/comfortable spacing and
   system/reduced motion. Appearance persists in this browser/Desktop profile;
   storage denial keeps changes for the visit with an explicit notice. System
   reduced motion always wins. Reset appearance asks for confirmation and changes
-  only these three choices. Language and reading comfort work offline; notification
+  only appearance choices. Language and reading comfort work offline; notification
   categories/sound reuse the Bridge store and disable without a current connection.
   Reading controls now scale interface text (100/112.5/125%) and captured text
   (an additional 0/15/30%), with original/monospace/system sans-serif reading fonts
   and a labeled example. Old preferences migrate safely; copied/saved text stays exact.
-  Light theme, terminal font controls, retention/deletion UI, quiet hours and provider
+  Terminal font controls, retention/deletion UI, quiet hours and provider
   configuration remain pending. See the [interface guide](docs/design/ui-ux-specification.md).
 
 - **Terminal mechanics increment:** an opt-in developer command now checks a real

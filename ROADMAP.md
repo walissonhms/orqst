@@ -56,6 +56,14 @@ It reuses cumulative admission and preserves aggregate/export contracts. This is
 qualified observation timing rather than measured daily consumption; real-provider
 multi-model temporal acceptance remains pending. See [contract](docs/api/analytics-evolution.md).
 
+The Settings/accessibility increment now includes optional light and system themes,
+with the original dark default, shared semantic/focus tokens, higher contrast,
+offline operation, local persistence and confirmed scoped reset. This is shared
+renderer presentation; it does not theme native menus/dialogs or menu-bar artwork.
+Automated Chromium contrast/responsiveness checks are scoped evidence, not native
+Desktop or manual assistive-technology acceptance. See the
+[interface guide](docs/design/ui-ux-specification.md#grouped-settings-and-reading-comfort).
+
 ## Mandatory quality and security criteria for each increment
 
 The terminal engineering increment provides an explicit developer-only synthetic PTY
@@ -224,7 +232,7 @@ and reading comfort work offline; delivery preferences reuse the existing Bridge
 contract. This does not implement provider configuration or storage management.
 
 Remaining frontend work includes configurable Overview panels, project tabs/splits,
-a searchable artifact library, light theme/terminal fonts, broader Settings and
+a searchable artifact library, terminal fonts, broader Settings and
 onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
 require real Core/provider and
 authorization contracts; no visual placeholder counts as delivered functionality.
@@ -249,7 +257,7 @@ Expanded messages, session tasks, tool payloads and Artifact source/preview/edit
 share the reading choice; provenance and metrics keep distinct typography. Preview
 code stays monospace. Old appearance preferences remain compatible, offline changes
 remain usable and reset includes the new settings. This addresses an available UX
-backlog without new transport or provider capabilities. Light theme, terminal fonts,
+backlog without new transport or provider capabilities. Terminal fonts,
 manual screen-reader/native visual acceptance and the broader Phase 2/6 gates remain
 pending. See the [interface specification](docs/design/ui-ux-specification.md).
 

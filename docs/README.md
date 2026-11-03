@@ -12,7 +12,7 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## Design
 
-- [Official design system](design/design-system.md) — shared palette, typography,
+- [Official design system](design/design-system.md) — shared dark/light palettes, typography,
   spacing, components, evidence-backed motion and planned mascot states.
 
 - [Interface guide and screen matrix](design/ui-ux-specification.md) — navigation,

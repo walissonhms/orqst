@@ -465,7 +465,7 @@
   outline-offset: -3px;
 }
 
-/* Local appearance choices preserve the official dark palette and semantic states. */
+/* Higher contrast uses the active palette; semantic states retain text and icons. */
 :root[data-contrast='high'] {
   --orqst-muted: var(--orqst-lavender);
   --orqst-border: color-mix(in srgb, var(--orqst-lavender) 60%, var(--orqst-surface));

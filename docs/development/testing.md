@@ -580,3 +580,47 @@ final modal centering and save-status consolidation; those refinements passed th
 19-case draft/navigation rerun on port 44978 against the rebuilt final bundle.
 Both use exclusive output/state and synthetic data. The full browser suite was not
 repeated again after those scoped refinements.
+
+## Dashboard light and system themes
+
+`tests/browser/theme-preferences.spec.ts` exercises the real shared renderer with
+isolated synthetic observations. It covers dark-default migration, explicit themes,
+live system appearance changes without rewriting the stored selection, reload and
+cross-tab synchronization, malformed/removed storage, offline storage denial and
+localized controls. Keyboard checks cover select traversal, visible focus and
+Cancel-first reset/discard dialogs. Native select choice automation uses Playwright's
+portable `selectOption`; manual OS keyboard-menu acceptance remains separate.
+
+The suite resolves actual CSS tokens, including `color-mix`, to check the light
+palette at both contrast levels: normal/semantic text at least 4.5:1 on the three
+opaque layers and used soft fills; focus/control boundaries at least 3:1; primary
+labels on default/hover fills. This is bounded palette evidence, not a complete
+WCAG audit. Layout checks cover all five views at 1440/1280/390/320px with maximum
+reading sizes and comfortable spacing, plus an extracted source/draft/discard
+workflow at 320px. Synthetic screenshots include standard-light Overview,
+higher-contrast Analytics/Settings and the 320px draft-discard modal; inspect them
+before integration.
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+ORQST_BROWSER_PORT=4575 pnpm exec playwright test --output=/tmp/orqst-theme-check
+```
+
+Use an exclusive nonproduction port/output; the browser fixture owns disposable
+sources/database/profile state. No installed services, real sessions or Desktop
+profiles are changed. Ingestion, APIs, WebSocket/IPC and native grants are unchanged;
+`validate:local`, provider acceptance and Electron smoke were not run for this
+presentation-only increment. Native menus, file dialogs, alerts and menu-bar artwork
+retain their existing policy. Native visual, other-browser and manual screen-reader
+acceptance remain pending.
+
+This increment passed lint, typecheck, all 255 Node cases, build and the full
+125-case Chromium suite on isolated port 4575 with Node 24.22.2/pnpm 10.34.9.
+The final light-mode screenshots were inspected. Early test iterations corrected
+native-select automation and ambiguous/exact-label selectors; the final run retains
+cross-tab, focus, exact draft text, real Analytics readiness and containment checks.
+The existing Vite chunk-size warning remains; no native visual or release acceptance
+is implied.

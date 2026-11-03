@@ -2,7 +2,7 @@
 
 ## Direction and scope
 
-The official identity is **Minimal Dark + Developer Studio**: quiet dark layers,
+The official identity is **Minimal Dark + Developer Studio**: default dark layers,
 precise typography, restrained purple accents and source-backed status feedback.
 The ORQST logo and mascot are the visual references. Preserve approved artwork;
 do not recolor or replace native menu-bar assets through dashboard CSS.
@@ -17,7 +17,8 @@ specification does not enable terminals, agent execution or orchestration.
 ## Shared colors
 
 The source of truth for implemented tokens is `apps/dashboard/src/styles.css`.
-Use CSS custom properties rather than component-specific color literals.
+Use CSS custom properties rather than component-specific color literals. The table
+below describes the default dark palette; light overrides follow below.
 
 | CSS custom property  | Approved value | Role                                                        |
 | -------------------- | -------------- | ----------------------------------------------------------- |
@@ -27,7 +28,8 @@ Use CSS custom properties rather than component-specific color literals.
 | `--orqst-primary`    | `#8424E8`      | Primary action fill                                         |
 | `--orqst-neon`       | `#B45CFF`      | Focus rings, selection indicators and confirmed update cues |
 | `--orqst-lavender`   | `#D9C9FF`      | Secondary accents and selected labels                       |
-| `--orqst-text`       | `#F5F3FF`      | Primary text, including primary action labels               |
+| `--orqst-text`       | `#F5F3FF`      | Primary interface text                                      |
+| `--orqst-on-primary` | `#F5F3FF`      | Primary action labels in both palettes                      |
 | `--orqst-muted`      | `#9994B2`      | Secondary text, timestamps and provenance                   |
 | `--orqst-success`    | `#53D6A0`      | Confirmed completion and connected transport                |
 | `--orqst-warning`    | `#F5B95E`      | Attention, offline state and reached token threshold        |
@@ -49,6 +51,42 @@ Use semantic text/icons with color; color alone must not convey status. Running
 uses neon, completed uses success, waiting uses warning, failed uses danger,
 interrupted uses lavender and unknown uses muted. Connected describes the Bridge
 transport, not proof of an agent process running.
+
+## Light theme
+
+Settings offers **Dark**, **Light** and **Follow system**. Dark remains the default
+and migration fallback. System selection follows `prefers-color-scheme` changes;
+explicit selections ignore them. `data-theme` on the root contains the resolved
+palette and `color-scheme` supplies matching native form controls. Native menus,
+file dialogs, alerts and menu-bar assets are outside dashboard CSS.
+
+The light palette in `styles.css` overrides the same shared tokens:
+
+| Token suffix | Light value |
+| ------------ | ----------- |
+| `background` | `#F7F5FC`   |
+| `surface`    | `#FFFFFF`   |
+| `elevated`   | `#EEE9F6`   |
+| `text`       | `#211A35`   |
+| `muted`      | `#60556F`   |
+| `neon`       | `#7020B8`   |
+| `lavender`   | `#583080`   |
+| `success`    | `#176B47`   |
+| `warning`    | `#845100`   |
+| `danger`     | `#AF2345`   |
+
+Primary fill remains purple; `--orqst-on-primary` remains `#F5F3FF` in both themes,
+so changing general text color never puts dark labels on purple actions. Soft fills,
+borders, charts, captured-content areas and focus cues derive from active tokens.
+Light backdrop/shadow use translucent `#211A35` at 40%/16%. Higher contrast uses the
+active lavender for muted text and stronger borders in both palettes; status
+labels/icons remain explicit. This is a functional alternate palette, not a claim
+of new approved brand artwork or native Desktop visual acceptance.
+
+Light normal text, secondary accents and semantic colors must meet 4.5:1 against
+the three opaque layers and their used soft fills; focus and control boundaries
+must meet 3:1. `theme-preferences.spec.ts` computes these ratios from actual resolved
+CSS, including derived colors. This bounded check is not a full accessibility audit.
 
 ## Typography and layout
 
@@ -91,7 +129,7 @@ This table is a visual requirement, not a declaration that a module is shipped.
 | Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                                              |
 | Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                                          |
 | Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                                               |
-| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                                            |
+| Artifacts                              | Inert source/preview/editor using active layers, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                             |
 | Settings and onboarding                | Current notification preferences/workspace form follow shared controls; grouped Settings adds contrast/spacing/motion, reading sizes/fonts and scoped reset; onboarding remains planned |
 | Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                                           |
 | Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                                      |
@@ -134,7 +172,7 @@ Never derive reactions from prose, elapsed time or inactivity. Decorative artwor
 must be hidden from assistive technology; meaningful state needs adjacent localized
 text. Avoid flashing, perpetual bouncing and animation that hides source content.
 
-Settings offers standard/higher dark contrast and compact/comfortable spacing.
+Settings offers standard/higher contrast in both themes and compact/comfortable spacing.
 Higher contrast derives muted text and borders from lavender without changing
 semantic state colors. Comfortable spacing increases control targets (40px), table
 rows, workspace cards and activity entries. Interface sizes use `rem` with the existing
@@ -145,8 +183,8 @@ reading baseline with an additional 0%, 15% or 30% increase. Source/edit keep th
 existing font defaults; optional local monospace/sans-serif reading choices never
 alter text. Inert Markdown code blocks always retain monospace. Identifiers, provenance
 and metric values follow interface scaling only. Keep long text wrappable and bound
-scrolling inside panels. Browser zoom remains available. No light palette or terminal
-font control is implemented.
+scrolling inside panels. Browser zoom remains available. Terminal font controls remain
+unimplemented.
 
 The local Reduce motion choice and existing `prefers-reduced-motion: reduce` rule
 disable animations, transitions and smooth scrolling. Keep the exact numbers, static outline, state

@@ -54,6 +54,29 @@ export function Settings({
           <h2 id="settings-appearance">{t('settings.appearance')}</h2>
           <p className="fine-print">{t('settings.appearanceHelp')}</p>
           <label className="settings-field">
+            <span>{t('settings.theme')}</span>
+            <select
+              value={appearance.theme}
+              aria-describedby="settings-theme-help"
+              onChange={(event) =>
+                onAppearance({
+                  ...appearance,
+                  theme:
+                    event.target.value === 'light' || event.target.value === 'system'
+                      ? event.target.value
+                      : 'dark',
+                })
+              }
+            >
+              <option value="dark">{t('settings.darkTheme')}</option>
+              <option value="light">{t('settings.lightTheme')}</option>
+              <option value="system">{t('settings.systemTheme')}</option>
+            </select>
+          </label>
+          <p className="fine-print" id="settings-theme-help">
+            {t('settings.themeHelp')}
+          </p>
+          <label className="settings-field">
             <span>{t('settings.contrast')}</span>
             <select
               value={appearance.contrast}
