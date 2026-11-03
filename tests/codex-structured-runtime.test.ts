@@ -1,5 +1,7 @@
 // SYNTHETIC native-protocol fixtures only. Never launch Codex or inspect user credentials/history.
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { resolve } from 'node:path';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -37,6 +39,10 @@ class SyntheticTransport implements CodexTransport {
   data: (bytes: Uint8Array) => void = () => {};
   lost: () => void = () => {};
   requests: Array<{ method: string; params: Record<string, unknown> }> = [];
+  toolReplies: Array<{
+    id: string | number;
+    result: { success: boolean; contentItems: Array<{ type: string; text: string }> };
+  }> = [];
   signals: string[] = [];
   detached = false;
   threadId = randomUUID();
@@ -61,6 +67,10 @@ class SyntheticTransport implements CodexTransport {
       method: string;
       params: Record<string, unknown>;
     };
+    if (!request.method) {
+      this.toolReplies.push(JSON.parse(line));
+      return;
+    }
     this.requests.push(request);
     queueMicrotask(() => {
       if (request.method === 'initialize')
@@ -92,6 +102,37 @@ class SyntheticTransport implements CodexTransport {
     });
     this.event('turn/completed', 'completed');
   }
+  requestTool(targetPaneId: string, task: string, callId = randomUUID(), threadId = this.threadId) {
+    this.emit({
+      id: randomUUID(),
+      method: 'item/tool/call',
+      params: {
+        threadId,
+        turnId: this.turnId,
+        callId,
+        namespace: null,
+        tool: 'orqst_delegate_task',
+        arguments: { targetPaneId, task },
+      },
+    });
+    return callId;
+  }
+  toolReceipt(callId: string) {
+    this.emit({
+      method: 'item/completed',
+      params: {
+        threadId: this.threadId,
+        turnId: this.turnId,
+        item: {
+          id: callId,
+          type: 'dynamicToolCall',
+          tool: 'orqst_delegate_task',
+          status: 'completed',
+          success: true,
+        },
+      },
+    });
+  }
   signal(signal: 'SIGTERM' | 'SIGKILL') {
     this.signals.push(signal);
   }
@@ -100,7 +141,7 @@ class SyntheticTransport implements CodexTransport {
   }
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture() {
+function fixture(options: { tamperRootResult?: boolean } = {}) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-structured-')));
   const project = join(root, 'project');
   mkdirSync(project, { mode: 0o700 });
@@ -111,14 +152,21 @@ function fixture() {
   );
   const store = new Store(join(root, 'communication.sqlite'));
   const contents = new Map<string, { scope: CommunicationContentScope; bytes: Uint8Array }>();
+  const read = (scope: Readonly<CommunicationContentScope>, id: string): Uint8Array => {
+    const record = contents.get(id);
+    assert.ok(record);
+    assert.deepEqual(scope, record.scope);
+    if (
+      options.tamperRootResult &&
+      scope.purpose === 'result' &&
+      scope.sourcePaneId === scope.targetPaneId
+    )
+      return Buffer.from('SYNTHETIC ROOT RESULT DRIFT');
+    return record.bytes;
+  };
   const communication = new PaneCommunication(
     store.communicationJournal(randomUUID(), { recover: false }),
-    (scope, id) => {
-      const record = contents.get(id);
-      assert.ok(record);
-      assert.deepEqual(scope, record.scope);
-      return record.bytes;
-    },
+    read,
   );
   const write = (scope: CommunicationContentScope, bytes: Uint8Array): CommunicationContent => {
     const id = randomUUID();
@@ -136,10 +184,10 @@ function fixture() {
       return transport;
     },
   };
-  const runtime = new CodexStructuredRuntime(authority, communication, write, backend);
-  const executable = realpathSync(process.execPath);
+  const runtime = new CodexStructuredRuntime(authority, communication, write, backend, read);
+  const executable = realpathSync('/usr/bin/true'); // Tiny native fixture: never executed as a provider.
   const binary = { path: executable, sha256: terminalExecutableSha256(executable) };
-  const config = (name: string) => {
+  const config = (name: string, nativeNode = false) => {
     const state = join(root, name);
     mkdirSync(state, { mode: 0o700 });
     for (const directory of ['home', 'codex', 'tmp'])
@@ -149,7 +197,12 @@ function fixture() {
       trust: 'native-same-user',
       executable: binary,
       executableVersion: 'SYNTHETIC-NOT-CODEX',
-      node: binary,
+      node: nativeNode
+        ? {
+            path: realpathSync(process.execPath),
+            sha256: terminalExecutableSha256(realpathSync(process.execPath)),
+          }
+        : binary,
       project,
       state,
     };
@@ -162,15 +215,21 @@ function fixture() {
     challengeId: challenge.challengeId,
     signature: sign(null, terminalChallengeBytes(challenge), keys.privateKey).toString('base64url'),
   });
-  const prepare = (file: string, name: string, model: string | null = 'synthetic-model') =>
+  const prepare = (
+    file: string,
+    name: string,
+    model: string | null = 'synthetic-model',
+    dynamicTools = false,
+  ) =>
     runtime.prepare('synthetic-native', file, {
       workspaceId: 'synthetic-workspace',
       name,
       ownerId: 'synthetic-owner',
       model,
+      dynamicTools,
     });
-  const launch = async (file: string, name: string) => {
-    const prepared = prepare(file, name);
+  const launch = async (file: string, name: string, dynamicTools = false) => {
+    const prepared = prepare(file, name, 'synthetic-model', dynamicTools);
     return { pane: await runtime.launch(prepared.instanceId, proof(prepared.challenge)), prepared };
   };
   const client = (source: CommunicationPane, target: CommunicationPane) =>
@@ -209,6 +268,7 @@ function fixture() {
     root,
     config,
     authority,
+    read,
     communication,
     runtime,
     transports,
@@ -260,7 +320,7 @@ test('two independently authorized structured Codex fixtures delegate and return
     assert.ok(completed.result);
     assert.equal(caller.inbox()[0]!.taskId, request.taskId);
     assert.ok(updates.includes('completed'));
-    assert.equal((await f.communication.dispatchNext(b.pane.paneId))!.taskState, 'running');
+    assert.equal(caller.status(second.messageId).taskState, 'running');
     f.transports[1]!.complete('SYNTHETIC SECOND RESULT');
     assert.equal(caller.inbox().length, 2);
     const turn = f.transports[1]!.requests.find((request) => request.method === 'turn/start')!;
@@ -576,7 +636,7 @@ test('private native transport uses isolated Node IPC and distinguishes host los
   const f = fixture();
   let transport: CodexTransport | undefined;
   try {
-    const slot = f.config('native-ipc');
+    const slot = f.config('native-ipc', true);
     const host = join(f.root, 'SYNTHETIC-ipc-host.cjs');
     writeFileSync(
       host,
@@ -631,7 +691,7 @@ test('a native host exit without an owned-provider exit report does not invent p
   const f = fixture();
   let transport: CodexTransport | undefined;
   try {
-    const slot = f.config('native-host-loss');
+    const slot = f.config('native-host-loss', true);
     const host = join(f.root, 'SYNTHETIC-lost-host.cjs');
     writeFileSync(host, "process.send({type:'started'}, () => process.exit(0));", { mode: 0o600 });
     let exits = 0;
@@ -707,6 +767,260 @@ test('legacy explicit journal recovery fences structured control but does not pe
     assert.deepEqual(f.transports[0]!.signals, []);
   } finally {
     legacy?.close();
+    f.close();
+  }
+});
+
+async function dynamicRoot(f: ReturnType<typeof fixture>) {
+  const a = await f.launch(f.config('dynamic-a').file, 'Initiator', true);
+  const b = await f.launch(f.config('dynamic-b').file, 'Worker');
+  const task = 'SYNTHETIC: Reply with WORKER_MARKER only. Do not read files or call tools.';
+  const prepared = f.runtime.prepareRootTask('synthetic-native', a.prepared.instanceId, {
+    targetPaneId: b.pane.paneId,
+    delegatedTask: task,
+    text: 'SYNTHETIC root delegates the exact granted task.',
+    deadline: Date.now() + 60000,
+  });
+  const running = f.runtime.runRootTask(prepared.plan.taskId, f.proof(prepared.challenge));
+  void running.catch(() => {});
+  await tick();
+  return { a, b, task, prepared, running, source: f.transports[0]!, worker: f.transports[1]! };
+}
+
+test('a native A dynamic call delegates exactly once through ORQST and returns the worker result into A', async () => {
+  const f = fixture();
+  try {
+    const r = await dynamicRoot(f);
+    assert.equal(f.runtime.snapshot(r.a.prepared.instanceId).dynamicTools, 'requested');
+    const declaration = r.source.requests.find((m) => m.method === 'thread/start')!.params
+      .dynamicTools;
+    assert.ok(Array.isArray(declaration));
+    const callId = r.source.requestTool(r.b.pane.paneId, r.task);
+    await tick();
+    assert.equal(r.source.toolReplies.length, 0); // Acceptance/start do not return a completed tool result.
+    assert.equal(r.worker.requests.filter((m) => m.method === 'turn/start').length, 1);
+    r.worker.complete('WORKER_MARKER');
+    await tick();
+    assert.equal(r.source.toolReplies.length, 1);
+    const response = r.source.toolReplies[0]!.result;
+    assert.equal(response.success, true);
+    const returned = JSON.parse(response.contentItems[0]!.text) as {
+      taskState: string;
+      untrustedWorkerResult: string;
+    };
+    assert.equal(returned.taskState, 'completed');
+    assert.equal(returned.untrustedWorkerResult, 'WORKER_MARKER');
+    r.source.toolReceipt(callId);
+    r.source.complete('SYNTHETIC A received WORKER_MARKER');
+    const result = await r.running;
+    assert.equal(result.correlationId, r.prepared.plan.correlationId);
+    assert.equal(f.runtime.snapshot(r.a.prepared.instanceId).dynamicTools, 'observed');
+    assert.equal(f.runtime.snapshot(r.a.prepared.instanceId).delegationReturned, true);
+    const bytes = f.read(
+      {
+        workspaceId: r.a.pane.workspaceId,
+        actorId: r.a.pane.ownerId,
+        sourcePaneId: r.a.pane.paneId,
+        targetPaneId: r.a.pane.paneId,
+        purpose: 'result',
+      },
+      result.result.id,
+    );
+    assert.match(Buffer.from(bytes).toString(), /WORKER_MARKER/);
+    await assert.rejects(
+      f.runtime.runRootTask(result.taskId, f.proof(r.prepared.challenge)),
+      /unavailable/,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+for (const failure of [
+  'wrong-target',
+  'changed-task',
+  'wrong-native-thread',
+  'no-native-call',
+  'missing-tool-receipt',
+  'duplicate-native-call',
+] as const) {
+  test(`dynamic ${failure} cannot grant authority, duplicate dispatch or claim A-to-B-to-A success`, async () => {
+    const f = fixture();
+    try {
+      const r = await dynamicRoot(f);
+      if (failure === 'no-native-call')
+        r.source.complete('No actual dynamic API support demonstrated');
+      else {
+        const callId = r.source.requestTool(
+          failure === 'wrong-target' ? randomUUID() : r.b.pane.paneId,
+          failure === 'changed-task' ? 'UNAUTHORIZED SYNTHETIC TASK' : r.task,
+          randomUUID(),
+          failure === 'wrong-native-thread' ? randomUUID() : r.source.threadId,
+        );
+        await tick();
+        if (failure === 'duplicate-native-call')
+          r.source.requestTool(r.b.pane.paneId, r.task, callId);
+        else if (failure === 'missing-tool-receipt') {
+          r.worker.complete();
+          await tick();
+          r.source.complete();
+        } else if (failure !== 'wrong-native-thread') r.source.complete();
+      }
+      await assert.rejects(r.running, /unavailable|not confirmed/);
+      const requests = r.worker.requests.filter((m) => m.method === 'turn/start');
+      assert.ok(requests.length <= 1);
+      if (
+        ['wrong-target', 'changed-task', 'wrong-native-thread', 'no-native-call'].includes(failure)
+      )
+        assert.equal(requests.length, 0);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('root delegation requires separate signed native consent and a dynamic-enabled source', async () => {
+  const f = fixture();
+  try {
+    const a = await f.launch(f.config('root-a').file, 'A');
+    const b = await f.launch(f.config('root-b').file, 'B');
+    assert.throws(
+      () =>
+        f.runtime.prepareRootTask('synthetic-native', a.prepared.instanceId, {
+          targetPaneId: b.pane.paneId,
+          delegatedTask: 'SYNTHETIC',
+          text: 'SYNTHETIC',
+          deadline: Date.now() + 60000,
+        }),
+      /unavailable|policy/,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('editing the returned root plan cannot expand its signed target or task', async () => {
+  const f = fixture();
+  try {
+    const a = await f.launch(f.config('mutation-a').file, 'A', true);
+    const b = await f.launch(f.config('mutation-b').file, 'B');
+    const prepared = f.runtime.prepareRootTask('synthetic-native', a.prepared.instanceId, {
+      targetPaneId: b.pane.paneId,
+      delegatedTask: 'SYNTHETIC ORIGINAL',
+      text: 'SYNTHETIC root',
+      deadline: Date.now() + 60000,
+    });
+    prepared.plan.input.delegatedTask = 'SYNTHETIC UNAUTHORIZED MUTATION';
+    const running = f.runtime.runRootTask(prepared.plan.taskId, f.proof(prepared.challenge));
+    void running.catch(() => {});
+    await tick();
+    f.transports[0]!.requestTool(b.pane.paneId, prepared.plan.input.delegatedTask);
+    await tick();
+    assert.equal(f.transports[0]!.toolReplies[0]!.result.success, false);
+    assert.equal(
+      f.transports[1]!.requests.some((m) => m.method === 'turn/start'),
+      false,
+    );
+    f.transports[0]!.complete();
+    await assert.rejects(running, /not confirmed/);
+  } finally {
+    f.close();
+  }
+});
+
+test('a signed process start does not authorize a root inference or a root proof replay', async () => {
+  const f = fixture();
+  try {
+    const a = await f.launch(f.config('grant-a').file, 'A', true);
+    const b = await f.launch(f.config('grant-b').file, 'B');
+    const prepared = f.runtime.prepareRootTask('synthetic-native', a.prepared.instanceId, {
+      targetPaneId: b.pane.paneId,
+      delegatedTask: 'SYNTHETIC',
+      text: 'SYNTHETIC root',
+      deadline: Date.now() + 60000,
+    });
+    await assert.rejects(
+      f.runtime.runRootTask(prepared.plan.taskId, f.proof(a.prepared.challenge)),
+      /authorization/,
+    );
+    assert.equal(
+      f.transports[0]!.requests.some((m) => m.method === 'turn/start'),
+      false,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('the real acceptance command refuses missing authorization before reading a path or launching a provider', () => {
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      resolve('scripts/accept-codex-two-agent.ts'),
+      '--acceptance-root',
+      '/SYNTHETIC-PATH-MUST-NOT-BE-READ',
+      '--model',
+      'SYNTHETIC',
+    ],
+    {
+      cwd: resolve('.'),
+      encoding: 'utf8',
+      timeout: 20000,
+    },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Requires explicit --authorize-real-codex/);
+  assert.doesNotMatch(result.stdout, /native-thread-ready|native-delegation-confirmed/);
+});
+
+test('JSON expansion of a bounded worker result returns a tool failure without losing the owned instance', async () => {
+  const f = fixture();
+  try {
+    const r = await dynamicRoot(f);
+    const callId = r.source.requestTool(r.b.pane.paneId, r.task);
+    await tick();
+    r.worker.complete('\u0001'.repeat(8192));
+    await tick();
+    const reply = r.source.toolReplies[0]!.result;
+    assert.equal(reply.success, false);
+    assert.ok(Buffer.byteLength(reply.contentItems[0]!.text) < 16384);
+    r.source.emit({
+      method: 'item/completed',
+      params: {
+        threadId: r.source.threadId,
+        turnId: r.source.turnId,
+        item: {
+          id: callId,
+          type: 'dynamicToolCall',
+          tool: 'orqst_delegate_task',
+          status: 'completed',
+          success: false,
+        },
+      },
+    });
+    r.source.complete('SYNTHETIC bounded tool failure');
+    await assert.rejects(r.running, /not confirmed/);
+    assert.equal(f.runtime.snapshot(r.a.prepared.instanceId).state, 'running');
+    assert.equal(f.runtime.snapshot(r.a.prepared.instanceId).available, true);
+  } finally {
+    f.close();
+  }
+});
+
+test('a changed local root result cannot pass a native delegation completion', async () => {
+  const f = fixture({ tamperRootResult: true });
+  try {
+    const r = await dynamicRoot(f);
+    const callId = r.source.requestTool(r.b.pane.paneId, r.task);
+    await tick();
+    r.worker.complete('SYNTHETIC VALID WORKER');
+    await tick();
+    r.source.toolReceipt(callId);
+    r.source.complete('SYNTHETIC VALID ROOT');
+    await assert.rejects(r.running, /Root result reference unavailable/);
+  } finally {
     f.close();
   }
 });

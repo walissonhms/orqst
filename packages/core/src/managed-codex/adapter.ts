@@ -9,6 +9,12 @@ import {
 } from '@orqst/protocol';
 import type { CommunicationAdapter, CommunicationContentScope } from '../communication/service.js';
 import { CodexChannel, type CodexNotification } from './channel.js';
+import {
+  delegationTool,
+  dynamicCallSchema,
+  type NativeToolContext,
+  type NativeToolHandler,
+} from './dynamic-tools.js';
 
 const nativeId = z.string().min(1).max(200);
 const turnSchema = z.object({
@@ -24,6 +30,9 @@ const itemSchema = z.object({
     id: nativeId,
     text: z.string().optional(),
     phase: z.string().nullable().optional(),
+    success: z.boolean().optional(),
+    status: z.string().optional(),
+    tool: z.string().optional(),
   }),
 });
 const threadResponseSchema = z.object({
@@ -34,9 +43,15 @@ export type CodexResultWriter = (
   scope: Readonly<CommunicationContentScope>,
   bytes: Uint8Array,
 ) => CommunicationContent;
+export type NativeTaskEvent = PaneProviderEvidence['event'] | 'outcome_unknown';
 interface Active {
-  message: Readonly<CommunicationMessage>;
-  report(event: PaneProviderEvidence): void;
+  scope: CommunicationContentScope;
+  context: NativeToolContext;
+  emit(event: NativeTaskEvent, result?: CommunicationContent): void;
+  tool?: NativeToolHandler;
+  toolPending: boolean;
+  toolResponseSent: boolean;
+  calls: Set<string>;
   turnId?: string;
   accepted: boolean;
   started: boolean;
@@ -52,6 +67,8 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   private active?: Active;
   private closed = false;
   private observedModel: string | null = null;
+  private toolsObserved = false;
+  private toolReturned = false;
 
   constructor(
     private channel: CodexChannel,
@@ -59,6 +76,9 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     private writeResult: CodexResultWriter,
     private unavailable: () => void,
     private owns: () => boolean,
+    private dynamicTools = false,
+    private readyAgain: () => void = () => {},
+    private began: () => void = () => {},
     private now: () => number = Date.now,
   ) {
     channel.onNotification((event) => this.event(event));
@@ -69,6 +89,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     if (!this.owns()) throw new Error('Codex owner is not confirmed');
     await this.channel.request('initialize', {
       clientInfo: { name: 'orqst', title: 'ORQST', version: '0.1.0' },
+      ...(this.dynamicTools ? { capabilities: { experimentalApi: true } } : {}),
     });
     if (!this.owns()) throw new Error('Codex owner was revoked during initialization');
     this.channel.initialized();
@@ -77,6 +98,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
         cwd,
         sandbox: 'read-only',
         approvalPolicy: 'on-request',
+        ...(this.dynamicTools ? { dynamicTools: [delegationTool] } : {}),
         ...(requestedModel === null ? {} : { model: requestedModel }),
       }),
     );
@@ -88,6 +110,12 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   }
   snapshot() {
     return {
+      delegationReturned: this.toolReturned,
+      dynamicTools: this.dynamicTools
+        ? this.toolsObserved
+          ? 'observed'
+          : 'requested'
+        : 'disabled',
       nativeThreadId: this.threadId ?? null,
       reportedModel: this.observedModel,
       activeTurnId: this.active?.turnId ?? null,
@@ -123,19 +151,87 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
       message.deadline <= this.now()
     )
       throw new Error('Codex task admission denied');
-    const text = new TextDecoder('utf8', { fatal: true }).decode(content);
+    const scope: CommunicationContentScope = {
+      workspaceId: message.workspaceId,
+      actorId: message.actorId,
+      sourcePaneId: message.sourcePaneId,
+      targetPaneId: message.targetPaneId,
+      purpose: 'result',
+    };
+    await this.startTurn(
+      new TextDecoder('utf8', { fatal: true }).decode(content),
+      scope,
+      { taskId: message.taskId, correlationId: message.correlationId, deadline: message.deadline },
+      (event, result) => {
+        if (event === 'outcome_unknown') return; // Pane unavailable records uncertainty through Core.
+        report({
+          messageId: message.messageId,
+          taskId: message.taskId,
+          correlationId: message.correlationId,
+          targetPaneId: this.pane.paneId,
+          attemptId: message.attemptId!,
+          instanceId: this.pane.binding!.instanceId,
+          terminalEpoch: this.pane.binding!.terminalEpoch,
+          evidenceId: randomUUID(),
+          event,
+          ...(result === undefined ? {} : { result }),
+        });
+      },
+    );
+  }
+  async startRoot(
+    text: string,
+    context: NativeToolContext,
+    emit: Active['emit'],
+    tool: NativeToolHandler,
+  ): Promise<void> {
+    if (!this.dynamicTools)
+      throw new Error('Dynamic tools were not requested for this native thread');
+    return this.startTurn(
+      text,
+      {
+        workspaceId: this.pane.workspaceId,
+        actorId: this.pane.ownerId,
+        sourcePaneId: this.pane.paneId,
+        targetPaneId: this.pane.paneId,
+        purpose: 'result',
+      },
+      context,
+      emit,
+      tool,
+    );
+  }
+  private async startTurn(
+    text: string,
+    scope: CommunicationContentScope,
+    context: NativeToolContext,
+    emit: Active['emit'],
+    tool?: NativeToolHandler,
+  ): Promise<void> {
+    if (
+      !this.ready(this.pane) ||
+      Buffer.byteLength(text) > communicationLimits.payloadBytes ||
+      context.deadline <= this.now()
+    )
+      throw new Error('Native turn unavailable');
     const active: Active = {
-      message,
-      report,
+      scope,
+      context,
+      emit,
+      tool,
+      toolPending: false,
+      toolResponseSent: false,
+      calls: new Set(),
       accepted: false,
       started: false,
       waiting: false,
       early: [],
       timer: setTimeout(
         () => this.lose(),
-        Math.min(message.deadline - this.now(), communicationLimits.lifetimeMs),
+        Math.min(context.deadline - this.now(), communicationLimits.lifetimeMs),
       ),
     };
+    this.toolReturned = false;
     this.active = active;
     try {
       const reply = z.object({ turn: turnSchema }).parse(
@@ -179,6 +275,40 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   }
   private process(active: Active, event: CodexNotification): void {
     if (this.active !== active || this.closed) return;
+    if (event.requestId !== undefined && event.method === 'item/tool/call') {
+      const call = dynamicCallSchema.parse(event.params);
+      this.correlate(call.threadId, call.turnId, active);
+      if (
+        !this.dynamicTools ||
+        !active.started ||
+        active.toolPending ||
+        active.calls.has(call.callId) ||
+        active.calls.size >= 1
+      )
+        throw new Error('Native dynamic tool budget/correlation denied');
+      this.toolsObserved = true;
+      active.calls.add(call.callId);
+      active.toolPending = true;
+      const requestId = event.requestId;
+      const reply = active.tool
+        ? active.tool(call, active.context)
+        : Promise.resolve({ success: false, text: 'No user delegation grant.' });
+      void reply
+        .then((result) => {
+          if (
+            this.closed ||
+            this.active !== active ||
+            !this.owns() ||
+            this.now() >= active.context.deadline
+          )
+            return;
+          active.toolPending = false;
+          active.toolResponseSent = true;
+          this.channel.replyDynamic(requestId, result);
+        })
+        .catch(() => this.lose());
+      return;
+    }
     if (event.requestId !== undefined) {
       const params = z.object({ threadId: nativeId, turnId: nativeId }).parse(event.params);
       this.correlate(params.threadId, params.turnId, active);
@@ -198,9 +328,10 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
           throw new Error('Invalid native start');
         this.report(active, 'started');
         active.started = true;
+        this.began();
         return;
       }
-      if (!active.started || active.waiting)
+      if (!active.started || active.waiting || active.toolPending)
         throw new Error('Native completion lacks task start or approval resolution');
       if (params.turn.status === 'inProgress' || params.turn.status === 'interrupted')
         throw new Error('Task outcome unconfirmed');
@@ -208,23 +339,26 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
       else {
         if (!active.result) throw new Error('Native result unavailable');
         const bytes = Buffer.from(active.result);
-        const result = this.writeResult(
-          Object.freeze({
-            workspaceId: active.message.workspaceId,
-            actorId: active.message.actorId,
-            sourcePaneId: active.message.sourcePaneId,
-            targetPaneId: active.message.targetPaneId,
-            purpose: 'result',
-          }),
-          bytes,
-        );
+        const result = this.writeResult(Object.freeze(active.scope), bytes);
         this.report(active, 'completed', result);
       }
       clearTimeout(active.timer);
       this.active = undefined;
+      this.readyAgain();
     } else if (event.method === 'item/completed') {
       const params = itemSchema.parse(event.params);
       this.correlate(params.threadId, params.turnId, active);
+      if (params.item.type === 'dynamicToolCall') {
+        if (
+          !active.toolResponseSent ||
+          !active.calls.has(params.item.id) ||
+          params.item.tool !== 'orqst_delegate_task' ||
+          !['completed', 'failed'].includes(params.item.status ?? '') ||
+          params.item.success === undefined
+        )
+          throw new Error('Native dynamic result receipt unavailable');
+        this.toolReturned = params.item.status === 'completed' && params.item.success === true;
+      }
       if (
         params.item.type === 'agentMessage' &&
         (params.item.phase == null || params.item.phase === 'final_answer')
@@ -246,24 +380,20 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     result?: CommunicationContent,
   ): void {
     if (!this.owns()) throw new Error('Codex runtime ownership unavailable');
-    const binding = this.pane.binding!;
-    active.report({
-      messageId: active.message.messageId,
-      taskId: active.message.taskId,
-      correlationId: active.message.correlationId,
-      targetPaneId: this.pane.paneId,
-      attemptId: active.message.attemptId!,
-      instanceId: binding.instanceId,
-      terminalEpoch: binding.terminalEpoch,
-      evidenceId: randomUUID(),
-      event,
-      ...(result === undefined ? {} : { result }),
-    });
+    active.emit(event, result);
   }
+
   private lose(): void {
     if (this.closed) return;
     this.closed = true;
-    if (this.active) clearTimeout(this.active.timer);
+    if (this.active) {
+      clearTimeout(this.active.timer);
+      try {
+        this.active.emit('outcome_unknown');
+      } catch {
+        /* A failed owner cannot restore facts. */
+      }
+    }
     this.active = undefined;
     this.unavailable();
   }
