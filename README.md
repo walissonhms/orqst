@@ -50,6 +50,7 @@ acceptance. Normal startup and external sessions remain observation-only. See
 | Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added    |
 | Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending |
 | Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence    |
+| Codex structured runtime                                                     | Opt-in library; synthetic protocol tests only        |
 | Agent-to-agent delegation and automatic return inside a CLI                  | Not delivered or validated                           |
 | ORQST Cloud, accounts, billing                                               | Not implemented                                      |
 | Multi-machine observability and remote connectivity                          | Planned, not implemented                             |
@@ -71,6 +72,18 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   The dated Terminal engineering entries below record earlier stages; current
   setup and native trust limits are in the
   [managed Terminal guide](docs/development/managed-codex-terminal.md).
+
+- **Structured Codex runtime library:** an additional opt-in Core path joins signed
+  native start authority, independent managed homes/journals and the pane registry
+  to a bounded app-server channel. Readiness requires initialization and a new
+  native thread; acceptance, turn start and matching result remain separate.
+  Synthetic transports exercise two identities and correlated Core results. Normal
+  Desktop/Bridge startup does not construct this path, and its compiled native host
+  has not been exercised against real Codex. There is no agent-facing facade, MCP,
+  automatic return into a sender CLI, multi-agent UI or provider acceptance claim.
+  This is separate from the interactive xterm Terminal; no existing process or
+  external session is converted or adopted. See the
+  [runtime contract and remaining acceptance](docs/development/codex-structured-runtime.md).
 
 - **Observation guide:** Settings, Search & commands and the empty-session welcome
   open a three-step guide using the existing Bridge snapshot: connection, source
@@ -602,6 +615,16 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The Terminal/communication baseline at `eecf345` passed lint, typecheck, 330 Node
+cases and full build using Node 24.22.2/pnpm 10.34.9. The runtime contributor then
+validated the identical `c7187ab` source tree with all 353 Node cases, lint, types
+and build before integration. The integrator repeated the 46 communication/runtime
+cases after fast-forward and checked the global documentation separately. These
+are code/build and synthetic-test results, not real managed-provider or
+agent-to-agent acceptance.
+The installed service, Desktop and user data were preserved. See the
+[integration record and skipped checks](docs/development/testing.md#terminal-and-communication-integration--2026-11-03).
 
 The observation-guide increment after `f4ed5f6` passed lint, typecheck, all 303 Node
 tests, full build and 45 focused Chromium cases on isolated port 4613. Coverage

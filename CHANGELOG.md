@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-03 — Structured Codex runtime library
+
+- Add a separate opt-in signed native-start/app-server path with per-slot private
+  state, exact pane bindings, initialization-gated readiness and bounded structured
+  acceptance/start/result correlation. Preserve the interactive xterm/PTY path.
+- Build an inert standalone native host; normal observer/Bridge/Desktop startup
+  never constructs the library. Synthetic transports validate Core queue/result
+  integration without launching Codex or reading real credentials or sessions.
+- Keep real-provider acceptance, native consent composition, MCP/agent tools and
+  automatic return inside the sender CLI pending. Two synthetic runtime identities
+  do not complete the real agent-to-agent milestone or enable other providers.
+
 ## 2026-11-03 — Pane communication foundation
 
 - Add an opt-in Core registry with immutable pane IDs, workspace display IDs and

@@ -798,3 +798,31 @@ browsers, manual screen-reader and native visual acceptance remain pending. Ther
 was no installed service restart, push, user database/source change or provider
 execution. CLI discovery, authentication/installation checks, saved onboarding
 progress and the broader first-run workflow remain outside this delivery.
+
+## Terminal and communication integration — 2026-11-03
+
+The integrated observer/embedded Terminal/communication tree at `eecf345`, including
+communication QA fix `7d48643` and the separate global documentation commit, passed
+`pnpm lint`, `pnpm typecheck`, all 330 Node cases and `pnpm build` with Node 24.22.2
+and pnpm 10.34.9. The communication subset also passed independently (23 cases).
+The existing Vite chunk-size advisory remains.
+
+The structured runtime feature `517dd63` and pre-dispatch fix `c7187ab` were then
+reviewed and approved by independent QA before fast-forward integration. The runtime
+contributor ran lint, typecheck, all 353 Node cases and full build on that exact
+source tree. The integrator repeated only the 46 communication/runtime cases after
+integration, all passing, plus global documentation formatting, local links and
+`git diff --check`. The already-valid global suites were not repeated on identical
+source. Runtime evidence includes synthetic structured transports and two disposable
+Node IPC hosts; the real provider-owning host was build-checked, not executed.
+
+An initial local typecheck failed because the checkout lacked the two xterm package
+links already declared in the lockfile. `pnpm install --frozen-lockfile --ignore-scripts`
+restored them; the repeated check passed without source changes or lockfile edits.
+No real source/provider validation, native consent, Electron smoke or browser suite
+was repeated for this library/documentation integration. Ingestion is unchanged;
+`validate:local` was not run under the instruction to avoid real data. Installed
+services, Desktop processes, observer storage and external sessions were preserved;
+there was no restart or credential/provider access. Publication follows the owner
+authorization and a separate audit of every pending commit; it does not activate
+managed providers or update the installed application.

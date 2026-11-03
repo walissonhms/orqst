@@ -73,6 +73,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## Development
 
+- [Structured Codex runtime](development/codex-structured-runtime.md) — opt-in signed
+  native ownership, separate slots and app-server/queue integration; synthetic
+  transports only, without normal-runtime or real agent-to-agent acceptance.
+
 - [Embedded managed Codex Terminal](development/managed-codex-terminal.md) — explicit
   checkout setup, separate state/login, native trust, owned lifecycle and synthetic
   acceptance; real Codex acceptance remains pending.

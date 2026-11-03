@@ -14,11 +14,32 @@ the historical terminal engineering notes below, without changing their evidence
 The path is implemented for one configured project/selected instance, with explicit
 30-minute lifetime and conservative lost-ownership recovery. Real Codex acceptance
 and genuine native human-dialog/accessibility checks remain pending authorization.
-Claude Code/OpenCode, structured delegation, automatic results and concurrent
-multi-agent UI are not implemented. The intended next functional milestone is two
+Claude Code/OpenCode and concurrent multi-agent UI are not implemented. Real
+structured delegation and automatic return inside a sender CLI remain unvalidated;
+the library increments below do not complete that workflow. The intended next functional milestone is two
 identified owned agents, an explicit delegated task and an automatic result inside
 ORQST; transcript prose cannot establish that protocol. This increment is a terminal
 foundation, not completion of that milestone, Phase 2/4 or the Desktop MVP.
+
+## Structured Codex runtime library increment — 2026-11-03
+
+The [structured runtime library](docs/development/codex-structured-runtime.md) now
+joins signed native start authority, separate per-slot state and exact pane bindings
+to a bounded Codex app-server channel. Two concurrent slots may use the same project
+with distinct homes; this does not provide write-isolated worktrees. Readiness waits
+for initialization and a new native thread. Native acceptance, task start, completion
+and Core result notification remain independent facts, exercised with synthetic
+transports. The existing interactive xterm path is preserved.
+
+The native host is compiled by the build but never started by default. Normal
+ObserverCore/Bridge/Desktop do not compose the library. Actual provider IPC/flags,
+authentication, model access and human consent remain unvalidated. The two-slot cap
+is per runtime owner, not machine-wide containment; unresolved ownership and task
+outcomes retain separate durable capacity. The registry retains 128 historical pane
+identities, including closed panes, without pruning or reclamation. MCP/agent tools, sender-CLI result
+consumption, scheduling/Inspector UI, worktree allocation and evidence-backed
+reconciliation remain missing. The real A-to-B-to-A milestone remains incomplete.
+No Phase 2/4, additional-provider or release acceptance is implied.
 
 ## Product direction and delivery status
 
@@ -391,10 +412,10 @@ evidence-backed reconciliation is required before normal-runtime provider dispat
 The first useful Agentic Mode milestone remains two real managed CLIs in separate
 stable identified panes: A delegates a bounded task to B, acceptance remains separate
 from completion and a verified correlated result returns automatically into A.
-Dependencies: persistent identity joined to native ownership admission, independent
-per-terminal managed state/concurrency, trusted authorization, one verified structured
-provider interface, narrow authenticated MCP/response transport and explicit task
-budgets. Subsequent work includes Inspector/notifications, native queue/result UX,
+The opt-in structured runtime above implements the identity/admission and
+separate-state join at library level with synthetic protocol evidence. Remaining
+dependencies include a verified provider version, native consent composition, narrow
+authenticated MCP/response transport, approved task budgets and reconciliation. Subsequent work includes Inspector/notifications, native queue/result UX,
 CLI/model discovery, typed intent planning, safe worktree allocation and opt-in cleanup.
 No observed external session is controllable and no PTY input channel is exposed.
 See [implemented vs missing capabilities](docs/api/pane-communication.md).
