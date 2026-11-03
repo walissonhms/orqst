@@ -15,7 +15,9 @@ key, authority, supervisor, immutable native document identity and host. The hos
 must validate the actual current document and native focus, and invoke the native
 confirmation helper. A renderer-provided click, cookie, origin or focus flag never
 substitutes for those checks. This is not persistent enrollment or a production
-cross-process authenticated transport.
+cross-process authenticated transport. Use a unique enrolled client ID for every
+broker/document: `close()` revokes that ID globally in its authority, so sharing
+an ID would revoke other clients.
 
 | Action     | Accepted request fields beyond version/action | Authority/effect                                                             |
 | ---------- | --------------------------------------------- | ---------------------------------------------------------------------------- |
@@ -72,8 +74,11 @@ native authorization evidence. Translations exist in en-US and pt-BR.
 
 `bindTerminalNativeLifecycle` wires blur to input revocation and main navigation,
 renderer loss, WebContents destruction or window closure to permanent client close.
-Disposal closes the client and removes listeners. Modal-focus behavior needs native
-acceptance; a focus loss fails closed, including while a confirmation is pending.
+Every main-frame navigation, including same-document navigation, revokes the client;
+the fixed terminal document has no in-page navigation. Disposal closes the client
+and removes listeners. Modal-focus behavior needs native acceptance on every target
+platform: if the modal does not restore native focus, a legitimate confirmation may
+be denied. A focus loss fails closed, including while confirmation is pending.
 Transport loss remains the composition owner's explicit revocation responsibility.
 None of these helpers is installed on the observer window.
 
