@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { cp } from 'node:fs/promises';
 await build({
   entryPoints: ['apps/desktop/src/main.ts'],
   outfile: 'apps/desktop/dist/main.cjs',
@@ -18,3 +19,4 @@ await build({
   format: 'cjs',
   external: ['electron'],
 });
+await cp('apps/desktop/resources/icons', 'apps/desktop/dist/icons', { recursive: true });

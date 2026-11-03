@@ -58,6 +58,14 @@ Recheck support/security patches before distribution; the pin is not an automati
 
 ## Commands
 
+The owner-supplied application icons are stored in `apps/desktop/resources/icons/`
+and copied beside the built main process. The running macOS Dock uses the supplied
+PNG, the tray uses a Retina template silhouette, and the shared dashboard has an ICO
+favicon. Windows window/tray ICO and Linux PNG selection are implemented but have
+not been accepted on those operating systems. The supplied ICNS is retained for future
+packaging; this does not create an installer or change Electron's installed app bundle.
+See [asset provenance and usage](../../apps/desktop/resources/README.md).
+
 From the checkout root, using the private toolchain:
 
 ```bash

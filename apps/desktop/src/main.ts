@@ -40,6 +40,12 @@ const ownsInstance = app.requestSingleInstanceLock();
 
 async function start(): Promise<void> {
   await app.whenReady();
+  const iconsDirectory = join(__dirname, 'icons');
+  const applicationIcon = nativeImage.createFromPath(
+    join(iconsDirectory, process.platform === 'win32' ? 'orqst.ico' : 'orqst-512.png'),
+  );
+  if (applicationIcon.isEmpty()) throw new Error('Missing ORQST application icon');
+  app.dock?.setIcon(applicationIcon);
   const i18n = createInstance();
   await i18n.init({
     lng: app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US',
@@ -222,6 +228,7 @@ async function start(): Promise<void> {
     }
     const current = new BrowserWindow({
       title: 'ORQST',
+      icon: applicationIcon,
       width: 1280,
       height: 860,
       minWidth: 800,
@@ -311,15 +318,18 @@ async function start(): Promise<void> {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const activeNotifications = new Set<Notification>();
-  // Owned monochrome 16x16 template icon, generated from a fixed pixel pattern.
-  const pixels = Buffer.alloc(16 * 16 * 4);
-  for (let y = 2; y < 14; y++)
-    for (let x = 2; x < 14; x++) {
-      if (x < 5 || x > 10 || y < 5 || y > 10) pixels[(y * 16 + x) * 4 + 3] = 255;
-    }
-  const icon = nativeImage.createFromBitmap(pixels, { width: 16, height: 16, scaleFactor: 1 });
-  icon.setTemplateImage(true);
-  const tray = new Tray(icon);
+  const trayIcon = nativeImage.createFromPath(
+    join(iconsDirectory, process.platform === 'win32' ? 'orqst.ico' : 'orqst-16.png'),
+  );
+  if (trayIcon.isEmpty()) throw new Error('Missing ORQST tray icon');
+  if (process.platform !== 'win32') {
+    trayIcon.addRepresentation({
+      scaleFactor: 2,
+      buffer: nativeImage.createFromPath(join(iconsDirectory, 'orqst-32.png')).toPNG(),
+    });
+  }
+  if (process.platform === 'darwin') trayIcon.setTemplateImage(true);
+  const tray = new Tray(trayIcon);
   const updateTray = () => {
     if (stopped || tray.isDestroyed()) return;
     const state = i18n.t(`desktopShell.${connected ? 'connected' : 'offline'}`);
