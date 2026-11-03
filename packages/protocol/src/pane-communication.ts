@@ -15,10 +15,12 @@ export const communicationLimits = Object.freeze({
   dispatchMs: 10000,
 });
 export const paneCapabilitiesSchema = z.strictObject({
+  /** Required for the source to originate work and for the target adapter to accept submission. */
   canSend: z.boolean(),
   canQueueWhileBusy: z.boolean(),
   canAcknowledge: z.boolean(),
   canReportTaskCompletion: z.boolean(),
+  /** Source may cancel its own never-dispatched queue items. No provider cancellation exists yet. */
   canCancel: z.boolean(),
 });
 export type PaneCapabilities = z.infer<typeof paneCapabilitiesSchema>;
