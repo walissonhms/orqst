@@ -26,6 +26,7 @@ import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
 import { openTerminalJournal } from './terminal-journal.js';
+import { openCommunicationJournal } from './pane-communication.js';
 export { TERMINAL_JOURNAL_LIMITS } from './terminal-journal.js';
 export { SESSION_METRICS_LIMITS } from './live-metrics.js';
 import {
@@ -189,6 +190,15 @@ export class Store {
   /** Experimental owned-terminal composition only. Never exposed by Bridge. */
   terminalJournal(epoch: string, options: { recover: boolean }) {
     return openTerminalJournal(
+      this.db,
+      (action) => this.transaction(action),
+      epoch,
+      options.recover,
+    );
+  }
+  /** Private opt-in communication library. Absent from observer startup and read APIs. */
+  communicationJournal(epoch: string, options: { recover: boolean }) {
+    return openCommunicationJournal(
       this.db,
       (action) => this.transaction(action),
       epoch,

@@ -287,3 +287,13 @@ The initial `0.1.0` development baseline includes read-only Codex observation,
 incremental recovery, local SQLite, loopback REST/WebSocket, a bilingual React
 dashboard, notification preferences, a macOS service helper and automated checks.
 This is a baseline description, not a previously published release entry.
+
+### Structured communication foundation — 2026-11-03
+
+- Add opt-in Core pane identity, scoped clients, durable metadata queue/audit,
+  idempotency, explicit provider/task correlation and sender result inbox/subscriptions.
+- Separate delivery from execution; preserve ambiguous attempts without automatic
+  retry and fence previous writers on explicitly requested recovery.
+- Validate with synthetic transports and disposable SQLite; no real provider,
+  PTY injection, MCP/HTTP endpoint, planner or Inspector is enabled. Two-real-agent
+  acceptance remains pending. See `docs/api/pane-communication.md` and ADR-033.

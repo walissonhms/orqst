@@ -425,3 +425,19 @@ the old epoch, fails unstarted preparations and retains started/live work as
 one-per-project admission budget. Only exited/start-failed rows older than 30 days
 can be pruned on preparation; at 10,000 attempts preparation fails. Existing
 supervisor memory bounds remain. See [contract, tests and limitations](../development/terminal-recovery.md).
+
+## Optional pane communication metadata
+
+`Store.communicationJournal` explicitly opens separately versioned
+`communication_schema`, `communication_owner`, `communication_panes`,
+`communication_messages` and `communication_audit` tables on the existing writer.
+They are absent from normal observer initialization and never contain observed
+events or source content. Pane/display IDs are retained without recycling; messages
+hold scoped immutable envelopes, content hashes/byte counts/references, independent
+states and correlation/evidence references. Audit is ordered metadata only. No full
+prompts, results, terminal output, credentials, PID or control grant is persisted.
+
+Epoch fencing and explicit recovery preserve unknown outcomes, invalidate in-memory
+authority and prevent blind retries. Hard history caps reject further writes rather
+than silently evicting records; automatic retention/deletion is not implemented.
+See [contracts, limits and recovery](../api/pane-communication.md).

@@ -397,3 +397,10 @@ of retained Codex messages stays in renderer memory, with explicit coverage and 
 retention/limit states. Excerpts and source references are inert plain text. Opening a
 message reuses exact-identity manual extraction; saved files and drafts are not indexed.
 See the [security review](docs/api/artifacts.md#source-library-security-review--2026-11-03).
+
+The experimental Core pane communication library is opt-in and has no public
+transport. Its native enrollment/admin functions must never be exposed as agent
+MCP tools or authorized by captured text. Scoped clients and content resolvers require
+independently verified workspace/actor/target authority. It cannot control observed
+sessions or write to a PTY. Real provider communication is not enabled; see
+[the communication contract](docs/api/pane-communication.md) for limits and recovery.
