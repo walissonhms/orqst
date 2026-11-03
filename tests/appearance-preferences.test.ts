@@ -70,3 +70,18 @@ test('reading choices migrate old preferences and reject arbitrary font names an
     );
   }
 });
+
+test('theme choices preserve existing preferences and reject unsupported themes', () => {
+  for (const theme of ['dark', 'light', 'system']) {
+    assert.deepEqual(
+      parseAppearancePreferences(JSON.stringify({ theme, contrast: 'high', contentFont: 'mono' })),
+      { ...defaultAppearancePreferences, theme, contrast: 'high', contentFont: 'mono' },
+    );
+  }
+  for (const theme of ['auto', 'LIGHT', null, {}, ['light'], 'url(https://example.invalid)']) {
+    assert.deepEqual(parseAppearancePreferences(JSON.stringify({ theme, textSize: 'large' })), {
+      ...defaultAppearancePreferences,
+      textSize: 'large',
+    });
+  }
+});

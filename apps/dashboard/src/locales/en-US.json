@@ -525,9 +525,9 @@
     "english": "English (US)",
     "portuguese": "Português (Brasil)",
     "languageHelp": "Language applies to the interface. Captured agent content stays in its original language.",
-    "appearanceHelp": "The official dark palette remains the foundation. Changes apply immediately to this dashboard.",
+    "appearanceHelp": "Choose a dashboard theme and reading comfort. Changes apply immediately across views.",
     "contrast": "Contrast",
-    "standard": "Standard dark",
+    "standard": "Standard",
     "high": "Higher contrast",
     "density": "Spacing",
     "compact": "Compact",
@@ -542,7 +542,7 @@
     "localScope": "Appearance is saved in this browser or Desktop profile, separately from workspace and notification preferences.",
     "storageUnavailable": "Appearance applies for this visit. Local storage is unavailable, so it may reset after reload.",
     "reset": "Reset appearance",
-    "resetHelp": "Restore standard dark contrast, compact spacing, system motion, standard text sizes and original reading typography? Language, workspace selection, notification preferences, captured history and artifact drafts are unchanged.",
+    "resetHelp": "Restore dark theme, standard contrast, compact spacing, system motion, standard text sizes and original reading typography? Language, workspace selection, notification preferences, captured history and artifact drafts are unchanged.",
     "resetConfirm": "Restore appearance defaults",
     "notificationScope": "Categories and sound are saved by the local Bridge and shared by connected dashboards. Browser permission is managed by the browser; audio may need activation again after reload.",
     "notificationsUnavailable": "Notification preferences require a current Bridge connection. Reading comfort and language remain available.",
@@ -563,6 +563,11 @@
     "contentFontHelp": "Change the reading font of captured text and Artifact drafts. Original typography keeps the existing fonts; code blocks in the Markdown preview always remain monospace. Source references and metric values keep their typography.",
     "readingPreview": "Reading preview — interface example",
     "interfaceSample": "Observed activity stays available while you adjust reading comfort.",
-    "contentSample": "Example text only — no captured session content.\nconst total = input + output;"
+    "contentSample": "Example text only — no captured session content.\nconst total = input + output;",
+    "theme": "Theme",
+    "darkTheme": "Dark",
+    "lightTheme": "Light",
+    "systemTheme": "Follow system",
+    "themeHelp": "Follow system updates the dashboard when your system appearance changes. This choice does not theme native menus, dialogs or the menu-bar icon."
   }
 }

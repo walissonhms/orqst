@@ -10,6 +10,7 @@
   --orqst-neon: #b45cff;
   --orqst-lavender: #d9c9ff;
   --orqst-text: #f5f3ff;
+  --orqst-on-primary: #f5f3ff;
   --orqst-muted: #9994b2;
   --orqst-success: #53d6a0;
   --orqst-warning: #f5b95e;
@@ -40,6 +41,22 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   color-scheme: dark;
+}
+/* The shared light palette also supplies native form controls through color-scheme. */
+:root[data-theme='light'] {
+  --orqst-background: #f7f5fc;
+  --orqst-surface: #ffffff;
+  --orqst-elevated: #eee9f6;
+  --orqst-neon: #7020b8;
+  --orqst-lavender: #583080;
+  --orqst-text: #211a35;
+  --orqst-muted: #60556f;
+  --orqst-success: #176b47;
+  --orqst-warning: #845100;
+  --orqst-danger: #af2345;
+  --orqst-backdrop: rgb(33 26 53 / 40%);
+  --orqst-shadow: rgb(33 26 53 / 16%);
+  color-scheme: light;
 }
 * {
   box-sizing: border-box;
@@ -1117,7 +1134,7 @@ th:nth-last-child(2) {
 }
 .primary {
   background: var(--orqst-primary);
-  color: var(--orqst-text);
+  color: var(--orqst-on-primary);
   border-color: var(--orqst-primary);
 }
 .primary:hover {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export interface AppearancePreferences {
+  theme: 'dark' | 'light' | 'system';
   contrast: 'standard' | 'high';
   density: 'compact' | 'comfortable';
   motion: 'system' | 'reduced';
@@ -10,6 +11,7 @@ export interface AppearancePreferences {
 }
 export const appearanceStorageKey = 'orqst.appearance.v1';
 export const defaultAppearancePreferences: AppearancePreferences = {
+  theme: 'dark',
   contrast: 'standard',
   density: 'compact',
   motion: 'system',
@@ -24,6 +26,7 @@ export function parseAppearancePreferences(value: string | null): AppearancePref
       return defaultAppearancePreferences;
     const record = data as Record<string, unknown>;
     return {
+      theme: record.theme === 'light' || record.theme === 'system' ? record.theme : 'dark',
       contrast: record.contrast === 'high' ? 'high' : 'standard',
       density: record.density === 'comfortable' ? 'comfortable' : 'compact',
       motion: record.motion === 'reduced' ? 'reduced' : 'system',
@@ -54,14 +57,21 @@ export function useAppearancePreferences() {
   const [systemReducedMotion, setSystemReducedMotion] = useState(
     () => matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
+  const [systemLightTheme, setSystemLightTheme] = useState(
+    () => matchMedia('(prefers-color-scheme: light)').matches,
+  );
   useEffect(() => {
     const root = document.documentElement;
+    root.dataset.theme =
+      appearance.theme === 'system' ? (systemLightTheme ? 'light' : 'dark') : appearance.theme;
     root.dataset.contrast = appearance.contrast;
     root.dataset.density = appearance.density;
     root.dataset.motion = appearance.motion;
     root.dataset.textSize = appearance.textSize;
     root.dataset.contentSize = appearance.contentSize;
     root.dataset.contentFont = appearance.contentFont;
+  }, [appearance, systemLightTheme]);
+  useEffect(() => {
     try {
       localStorage.setItem(appearanceStorageKey, JSON.stringify(appearance));
       setStorageUnavailable(false);
@@ -73,6 +83,9 @@ export function useAppearancePreferences() {
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const onChange = () => setSystemReducedMotion(media.matches);
     media.addEventListener('change', onChange);
+    const themeMedia = matchMedia('(prefers-color-scheme: light)');
+    const onThemeChange = () => setSystemLightTheme(themeMedia.matches);
+    themeMedia.addEventListener('change', onThemeChange);
     const onStorage = (event: StorageEvent) => {
       if (
         event.storageArea === localStorage &&
@@ -83,6 +96,7 @@ export function useAppearancePreferences() {
     window.addEventListener('storage', onStorage);
     return () => {
       media.removeEventListener('change', onChange);
+      themeMedia.removeEventListener('change', onThemeChange);
       window.removeEventListener('storage', onStorage);
     };
   }, []);

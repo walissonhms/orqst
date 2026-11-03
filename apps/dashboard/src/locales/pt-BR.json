@@ -525,9 +525,9 @@
     "english": "English (US)",
     "portuguese": "Português (Brasil)",
     "languageHelp": "O idioma se aplica à interface. O conteúdo capturado dos agentes permanece no idioma original.",
-    "appearanceHelp": "A paleta escura oficial permanece como base. As alterações se aplicam imediatamente a este painel.",
+    "appearanceHelp": "Escolha o tema do painel e o conforto de leitura. As alterações se aplicam imediatamente a todas as telas.",
     "contrast": "Contraste",
-    "standard": "Escuro padrão",
+    "standard": "Padrão",
     "high": "Contraste reforçado",
     "density": "Espaçamento",
     "compact": "Compacto",
@@ -542,7 +542,7 @@
     "localScope": "A aparência é salva neste navegador ou perfil do Desktop, separadamente das preferências de workspace e notificações.",
     "storageUnavailable": "A aparência se aplica nesta visita. O armazenamento local está indisponível e ela pode ser redefinida após recarregar.",
     "reset": "Redefinir aparência",
-    "resetHelp": "Restaurar contraste escuro padrão, espaçamento compacto, movimento do sistema, tamanhos de texto padrão e tipografia de leitura original? Idioma, workspace selecionado, preferências de notificação, histórico capturado e rascunhos de artefatos permanecem iguais.",
+    "resetHelp": "Restaurar tema escuro, contraste padrão, espaçamento compacto, movimento do sistema, tamanhos de texto padrão e tipografia de leitura original? Idioma, workspace selecionado, preferências de notificação, histórico capturado e rascunhos de artefatos permanecem iguais.",
     "resetConfirm": "Restaurar aparência padrão",
     "notificationScope": "Categorias e som são salvos pelo Bridge local e compartilhados pelos painéis conectados. A permissão é gerenciada pelo navegador; o áudio pode exigir nova ativação após recarregar.",
     "notificationsUnavailable": "As preferências de notificações exigem uma conexão atual com o Bridge. O conforto de leitura e o idioma continuam disponíveis.",
@@ -563,6 +563,11 @@
     "contentFontHelp": "Altere a fonte de leitura do texto capturado e dos rascunhos de Artefatos. A tipografia original mantém as fontes existentes; blocos de código na prévia Markdown continuam monoespaçados. Referências de origem e métricas mantêm sua tipografia.",
     "readingPreview": "Prévia de leitura — exemplo da interface",
     "interfaceSample": "A atividade observada continua disponível enquanto você ajusta o conforto de leitura.",
-    "contentSample": "Texto de exemplo — sem conteúdo de sessões capturadas.\nconst total = input + output;"
+    "contentSample": "Texto de exemplo — sem conteúdo de sessões capturadas.\nconst total = input + output;",
+    "theme": "Tema",
+    "darkTheme": "Escuro",
+    "lightTheme": "Claro",
+    "systemTheme": "Seguir o sistema",
+    "themeHelp": "Seguir o sistema atualiza o painel quando a aparência do sistema muda. Esta escolha não altera menus nativos, diálogos ou o ícone da barra de menus."
   }
 }
