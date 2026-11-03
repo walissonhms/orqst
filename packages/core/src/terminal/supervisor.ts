@@ -83,6 +83,7 @@ interface Attempt {
 export class TerminalSupervisor {
   private profiles = new Map<string, Readonly<TerminalProfile>>();
   private attempts = new Map<string, Attempt>();
+  private closed = false;
 
   constructor(
     private readonly authority: TerminalAuthority,
@@ -110,6 +111,7 @@ export class TerminalSupervisor {
   }
 
   prepare(clientId: string, profileId: string) {
+    if (this.closed) throw new Error('Terminal supervisor is closed');
     const profile = this.profiles.get(profileId);
     if (!profile || !this.validProfile(profile)) throw new Error('Terminal profile unavailable');
     // Metadata remains bounded; no unreviewed persistence/retention migration.
@@ -142,6 +144,7 @@ export class TerminalSupervisor {
   }
 
   launch(id: string, proof: unknown): void {
+    if (this.closed) throw new Error('Terminal supervisor is closed');
     const attempt = this.get(id);
     if (attempt.state !== 'prepared') throw new Error('Terminal attempt already used');
     const active = [...this.attempts.values()].filter((value) =>
@@ -202,6 +205,7 @@ export class TerminalSupervisor {
   }
 
   requestAttach(clientId: string, id: string) {
+    if (this.closed) throw new Error('Terminal supervisor is closed');
     const attempt = this.get(id);
     if (!['running', 'exited'].includes(attempt.state)) throw new Error('Terminal unavailable');
     return this.authority.prepare(
@@ -211,6 +215,7 @@ export class TerminalSupervisor {
   }
 
   attach(id: string, proof: unknown): string {
+    if (this.closed) throw new Error('Terminal supervisor is closed');
     const attempt = this.get(id);
     if (!['running', 'exited'].includes(attempt.state)) throw new Error('Terminal unavailable');
     if (attempt.attachment && this.authority.isEnrolled(attempt.attachment.clientId))
@@ -346,6 +351,17 @@ export class TerminalSupervisor {
     this.authority.consume(proof, this.binding('stop', attempt, signal));
     // A successful signal call is not exit evidence. Escalation needs another grant.
     this.effect(attempt, () => attempt.handle!.signal(signal));
+  }
+
+  /** Explicit Core teardown: revoke controls, retain uncertainty, never signal or retry. */
+  shutdown(): void {
+    if (this.closed) return;
+    this.closed = true;
+    for (const attempt of this.attempts.values()) {
+      attempt.attachment = undefined;
+      if (attempt.state === 'prepared') attempt.state = 'start_failed';
+      else if (['starting', 'running'].includes(attempt.state)) this.lose(attempt);
+    }
   }
 
   private validProfile(profile: Readonly<TerminalProfile>): boolean {

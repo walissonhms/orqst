@@ -15,6 +15,7 @@ import {
   type TerminalProfile,
 } from '../../packages/core/src/terminal/supervisor.js';
 import { OUTPUT_LIMIT, TAIL_LIMIT } from './probe.js';
+import { TerminalNativeBroker } from '../../packages/core/src/terminal/native-broker.js';
 
 /** Called only after accept-terminal-pty's exact synthetic authorization gate. */
 export async function probeOwnedSyntheticPty(
@@ -56,6 +57,9 @@ export async function probeOwnedSyntheticPty(
         terminalDigest(readFileSync(node)) === executableSha256 &&
         terminalDigest(readFileSync(fixture)) === fixtureSha256,
       start: (_profile, events) => {
+        exited = false;
+        exitCode = undefined;
+        disposeExit?.();
         const child = spawnPty(node, [fixture], {
           name: 'xterm-256color',
           cols: 80,
@@ -168,7 +172,67 @@ export async function probeOwnedSyntheticPty(
     assert.equal(supervisor.snapshot(id).exit?.exitCode, 0);
     assert.equal(exited, true);
     assert.equal(exitCode, 0);
+    // A second sequential owned start exercises the native broker boundary. The host
+    // confirmation is deliberately synthetic; this is not real native gesture evidence.
+    const document = {};
+    const broker = new TerminalNativeBroker(
+      authority,
+      supervisor,
+      'synthetic-native-client',
+      keys.privateKey,
+      document,
+      {
+        current: () => true,
+        confirm: async (_document, details) => {
+          assert.equal(details.profile.executableSha256, executableSha256);
+          assert.equal(details.profile.cwd, home);
+          assert.equal(Object.isFrozen(details), true);
+          return true;
+        },
+      },
+    );
+    const send = (action: string, fields = {}) =>
+      broker.dispatch(document, { version: 1, action, ...fields });
+    const nativeStart = await send('start', { profileId: profile.id });
+    assert.equal(nativeStart.status, 'ok');
+    if (nativeStart.status !== 'ok') throw new Error('Native broker start unavailable');
+    const nativeId = nativeStart.instanceId;
+    await waitFor(() => supervisor.snapshot(nativeId).state === 'running');
+    assert.equal((await send('attach', { instanceId: nativeId })).status, 'ok');
+    assert.equal((await send('input', { instanceId: nativeId })).status, 'ok');
+    assert.equal(
+      (await send('write', { instanceId: nativeId, sequence: 0, text: 'ping\n' })).status,
+      'ok',
+    );
+    let nativeCursor = 0;
+    let nativeTail = '';
+    while (!nativeTail.includes('SYNTHETIC:PONG')) {
+      assert.ok(Date.now() < deadline, 'Native broker output deadline exceeded');
+      const result = await send('read', { instanceId: nativeId, cursor: nativeCursor });
+      assert.equal(result.status, 'ok');
+      if (result.status !== 'ok' || !result.output)
+        throw new Error('Native broker output unavailable');
+      assert.equal(result.output.gap, false);
+      nativeCursor = result.output.nextCursor;
+      assert.ok(nativeCursor <= OUTPUT_LIMIT);
+      nativeTail = (nativeTail + Buffer.from(result.output.bytes).toString()).slice(-TAIL_LIMIT);
+      await delay(10);
+    }
+    broker.revokeInput();
+    assert.equal(
+      (await send('write', { instanceId: nativeId, sequence: 1, text: 'ping\n' })).status,
+      'denied',
+    );
+    assert.equal((await send('stop', { instanceId: nativeId, signal: 'SIGTERM' })).status, 'ok');
+    await waitFor(() => supervisor.snapshot(nativeId).state === 'exited');
+    assert.equal(supervisor.snapshot(nativeId).exit?.exitCode, 0);
+    broker.close();
+    supervisor.shutdown();
     return [
+      'native-broker-private-proof',
+      'native-broker-exact-consent-manifest',
+      'native-broker-leased-pty-input-and-read',
+      'native-broker-blur-revokes-input',
       'signed-start-before-spawn',
       'start-replay-denied',
       'owned-lifecycle',

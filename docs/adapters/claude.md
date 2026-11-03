@@ -147,3 +147,10 @@ and secrets. A future adapter must follow the same rules as Codex:
 - sending answers or approvals;
 - remote control;
 - claiming a capability from documentation alone.
+
+## Managed-terminal research update — 2026-11-03
+
+[Primary-source CLI research](managed-terminal-research.md) now records public
+release metadata and documented TUI/structured interfaces. This is not a real
+provider run, implemented managed adapter or capability validation. The existing
+observation descriptor remains unchanged; external sessions stay read-only.

@@ -342,3 +342,14 @@ deadlines constrain this experiment; they are not an OS sandbox. Parent terminat
 can bypass temporary-file cleanup, and native/event-loop failure is not contained.
 Provider, native authorization, descendant cleanup, emulator and packaging remain
 unvalidated. See the [proposed design](docs/architecture/managed-terminal-design.md).
+
+## Experimental native terminal boundary — 2026-11-03
+
+The [native terminal broker](docs/api/terminal-native.md) and Electron helpers are implemented but
+uncomposed. No application IPC/API/control surface, observer permission or provider
+capability is enabled. Strict requests, private exact-action signatures, native
+sender/document/focus checks and lifecycle revocation have synthetic coverage;
+actual native gesture, independent enrollment/transport, immutable admission,
+containment and durable recovery remain acceptance gates. External sessions are
+never adopted. Explicit supervisor teardown retains uncertain live ownership
+without signaling, retrying or claiming process exit.

@@ -272,3 +272,20 @@ This closes an available data-loss UX gap without adding persistence or provider
 capabilities. Desktop close/quit, native document loads, crash recovery, durable drafts
 and a searchable artifact library remain pending. See the
 [interface specification](docs/design/ui-ux-specification.md).
+
+### Terminal native-boundary increment — 2026-11-03
+
+The experimental native broker now validates strict requests, binds exact native
+confirmations, retains private signatures/leases outside IPC and revokes pending
+consent/input on native lifecycle changes. The explicit synthetic PTY lab exercises
+this path; Electron helpers are implemented with double-based tests, without runtime
+registration. Core teardown now preserves uncertain process ownership without
+implicit signals. See the [contract](docs/api/terminal-native.md).
+
+This does not complete Terminal or the Codex/Claude/OpenCode integrations. The
+[primary-source inventory](docs/adapters/managed-terminal-research.md) distinguishes
+public release/documentation evidence from validated ORQST capabilities. Next gates
+are native gesture/restricted-document acceptance, independently authenticated
+transport/enrollment, immutable executable/cwd admission, containment/lifetime and
+durable ownership recovery, followed by disposable per-provider acceptance. No
+external-session adoption or production activation is authorized by library tests.

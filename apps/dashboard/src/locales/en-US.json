@@ -569,5 +569,15 @@
     "lightTheme": "Light",
     "systemTheme": "Follow system",
     "themeHelp": "Follow system updates the dashboard when your system appearance changes. This choice does not theme native menus, dialogs or the menu-bar icon."
+  },
+  "terminalNative": {
+    "title": "Authorize an owned terminal action",
+    "start": "Start this exact ORQST-owned process?",
+    "attach": "Attach a read-only view to this owned process?",
+    "input": "Enable keyboard input for this owned process for up to two minutes?",
+    "paste": "Send this exact quoted text to this owned process?",
+    "stop": "Send this exact signal to this owned process? Exit is not guaranteed.",
+    "cancel": "Cancel",
+    "confirm": "Authorize once"
   }
 }

@@ -150,3 +150,10 @@ secrets. A future adapter must:
 - assuming an API exists because a newer version has one;
 - claiming a capability from documentation alone;
 - remote control.
+
+## Managed-terminal research update — 2026-11-03
+
+[Primary-source CLI research](managed-terminal-research.md) now records public
+release metadata and documented TUI/structured interfaces. This is not a real
+provider run, implemented managed adapter or capability validation. The existing
+observation descriptor remains unchanged; external sessions stay read-only.

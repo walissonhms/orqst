@@ -80,6 +80,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   Terminal font controls, retention/deletion UI, quiet hours and provider
   configuration remain pending. See the [interface guide](docs/design/ui-ux-specification.md).
 
+- **Terminal native-boundary increment (2026-11-03):** a strict native-client
+  broker now connects fixed profiles, private signed consent, input leases and
+  owned lifecycle in the explicit synthetic PTY lab. Electron sender, native
+  confirmation and lifecycle helpers are implemented and unit-tested but remain
+  uncomposed; no terminal control or provider is enabled in the application.
+  Codex is still the only implemented observer; Claude Code and OpenCode remain
+  contracts. Read the [native contract](docs/api/terminal-native.md) and
+  [dated primary-source CLI research](docs/adapters/managed-terminal-research.md).
+
 - **Terminal mechanics increment:** an opt-in developer command now checks a real
   PTY using only fixed disposable synthetic Node processes, private temporary
   directories and bounded output/lifetime. The macOS/arm64 Node-host check passed;

@@ -569,5 +569,15 @@
     "lightTheme": "Claro",
     "systemTheme": "Seguir o sistema",
     "themeHelp": "Seguir o sistema atualiza o painel quando a aparência do sistema muda. Esta escolha não altera menus nativos, diálogos ou o ícone da barra de menus."
+  },
+  "terminalNative": {
+    "title": "Autorizar ação em terminal próprio",
+    "start": "Iniciar este processo próprio do ORQST com estes parâmetros?",
+    "attach": "Conectar uma visualização somente de leitura a este processo próprio?",
+    "input": "Habilitar entrada de teclado neste processo próprio por até dois minutos?",
+    "paste": "Enviar exatamente este texto entre aspas a este processo próprio?",
+    "stop": "Enviar este sinal a este processo próprio? O encerramento não é garantido.",
+    "cancel": "Cancelar",
+    "confirm": "Autorizar uma vez"
   }
 }

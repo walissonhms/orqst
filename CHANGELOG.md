@@ -17,6 +17,14 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Experimental strict native-terminal broker with private proofs/leases, exact
+  native-confirmation binding, focus/document revalidation, lifecycle revocation
+  and explicit conservative supervisor teardown. Electron sender/dialog/lifecycle
+  helpers remain uncomposed. The opt-in fixed synthetic PTY lab exercises broker
+  input/output and stop; actual native gestures and all provider terminals remain
+  unvalidated. Dated primary-source research records Codex/Claude/OpenCode releases
+  without executing providers or changing observer capabilities.
+
 - Dark/light/system themes in grouped Settings, with the original dark default,
   live system following, shared semantic colors and native form color-scheme.
   Light mode supports higher contrast, reading sizes, comfortable spacing and

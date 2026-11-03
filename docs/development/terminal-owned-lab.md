@@ -3,7 +3,7 @@
 The experimental modules in `packages/core/src/terminal/` implement authorization,
 handle ownership and bounded I/O for a future managed terminal. They are **not
 exported by the Core package entry point or composed into ObserverCore, Bridge or
-Desktop**. There is no terminal execution endpoint, IPC handler, native dialog,
+Desktop**. There is no terminal execution endpoint, IPC handler or registered native dialog,
 renderer control, provider adapter or persistent execution record in this increment.
 The existing observer and observed sessions remain read-only.
 
@@ -42,7 +42,9 @@ The fixture's ephemeral private key signs only inside the deliberately invoked
 test. **A test signature is not evidence of a native user gesture.** Production
 still needs independently enrolled native credentials, native confirmation of the
 exact action, sender/document/focus validation, secure storage/revocation and a
-separate restricted terminal document. None is implemented by this library.
+separate restricted terminal document. The subsequent experimental broker implements
+exact confirmation and sender/lifecycle helpers as described below; production
+composition and enrollment remain absent.
 
 ## Process and attachment behavior
 
@@ -71,7 +73,8 @@ separate signed lease lasting at most two minutes, its random lease ID, the exac
 attachment and the next sequence number on every write. A new lease never accepts
 an old lease ID. Blur/navigation/transport loss must call `revokeInput` through the
 future trusted broker; that operation also invalidates pending input challenges.
-This library has no focus observer or network connection to perform those calls.
+The subsequent Electron lifecycle helper can wire native revocation, but no
+application or transport installs it.
 
 Typed input permits 4 KiB per write. Paste requires a separate one-use signature
 bound to the exact UTF-8 text, sequence, lease and attachment, up to 16 KiB; text is
@@ -109,7 +112,9 @@ storage within one instance is 128 MiB, plus bounded event/read copies and metad
 A backend event larger than 64 Ki code units
 fails closed; the library does not impose a native CPU/memory/output-rate sandbox.
 There is no attempt erasure, persistent journal, crash reconciliation, grant extension,
-lifetime stop timer, graceful Core shutdown policy or process-tree containment.
+lifetime stop timer, proven process-survival shutdown policy or process-tree
+containment. Explicit library teardown now conservatively marks live work
+ownership_lost without signaling; see below.
 Destroying a library object is not proven process exit or recovery. These gaps
 prevent production composition; the app cannot safely infer/relaunch surviving work.
 
@@ -129,3 +134,19 @@ shutdown/recovery policy. Before a provider trial, choose trusted native executi
 versus container/VM isolation and obtain explicit disposable-provider authorization.
 Do not enable UI controls from library test results alone. See the
 [managed terminal design](../architecture/managed-terminal-design.md).
+
+## Native broker increment — 2026-11-03
+
+The [native-client contract](../api/terminal-native.md) now has a strict request
+schema, one-request-at-a-time broker, native confirmation helper and exact
+sender/document-generation/focus validation. Keys, proofs and lease identities stay
+inside trusted composition. Native blur/navigation/loss revokes input/pending
+confirmation; close detaches without stop. Explicit supervisor shutdown rejects new
+starts/attachments and retains live processes as ownership_lost without signaling.
+
+The explicit lab now makes four sequential fixed synthetic starts: two mechanics,
+one direct supervisor and one broker-driven start. The last two reuse their private
+lab directory sequentially, with no provider configuration or credentials. Native
+confirmation is deliberately simulated there; the real Electron dialog, document,
+focus/accessibility behavior and independent IPC enrollment/transport remain pending.
+There is still no application terminal or provider control to enable.
