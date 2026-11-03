@@ -726,3 +726,34 @@ combined tree passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (289 cases),
 Vite bundle-size warning remains. This validates compatibility of the shared
 renderer increment; it does not repeat native Terminal/provider acceptance or
 approve a release. No installed service was restarted and no push was performed.
+
+## Artifact source-library validation — 2026-11-03
+
+The source-library increment was rebased onto the concurrent Terminal recovery baseline
+(`1a66514`), preserving its implementation and public records. On Node 24.22.2/pnpm
+10.34.9, the combined checkout passed `pnpm lint`, `pnpm typecheck`, `pnpm test`
+(303 cases), `pnpm build` and the following focused Chromium run on isolated port 4601
+(40 cases):
+
+```bash
+ORQST_BROWSER_PORT=4601 pnpm test:browser tests/browser/artifact-library.spec.ts tests/browser/artifacts.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/shell-navigation.spec.ts
+```
+
+Coverage includes real extraction from the synthetic retained-message fixture, exact
+selection/retention failures, loaded-text search, older pages, observation/source caps,
+current workspace and exact session scope, obsolete requests, malformed responses,
+offline recovery, draft confirmation, six direct/legacy routes and Back/Forward.
+Dark/light pt-BR screenshots cover 1440/1280/390/320px with maximum reading sizes and
+comfortable spacing; desktop and narrow images were visually inspected. The build
+retains the existing chunk-size advisory above 500 kB; no bundling policy was weakened.
+
+An initial static Node assertion still expected the admission predicate in `App.tsx`;
+it now checks the shared helper used there, with additional runtime negative cases.
+Initial browser cases also exposed mismatched test labels and a fragile lookup of the
+wrapped session selector; it now has an explicit localized accessible label.
+No ingestion code changed, so `pnpm validate:local` was not run. The complete Chromium
+suite, native Desktop/assistive-technology acceptance, other browsers and real-provider
+history were not revalidated by this increment. No installed service, user database,
+provider process or source session was changed, and no push/restart was performed.
+Full-archive search, saved-file/draft indexing, automatic extraction and durable draft
+recovery remain outside this delivery.
