@@ -681,7 +681,7 @@
   "managedTerminal": {
     "title": "Managed Terminal",
     "open": "Open Codex Terminal",
-    "scope": "Opt-in native execution with your macOS user privileges; not a container. Separate login and read-only/on-request startup defaults. Provider UI may change permissions. Closing this view hides it; the process has a 30-minute lifetime. Codex provider acceptance is pending; Claude Code and OpenCode are not enabled.",
+    "scope": "Legacy separate-login opt-in with your macOS user privileges; not a container. Existing native login reuse is not implemented. Read-only/on-request startup defaults; provider UI may change permissions. Closing hides this view; process lifetime is 30 minutes. Real Codex acceptance is pending; Claude Code and OpenCode are not enabled.",
     "login": "Separate Codex login",
     "start": "Start Codex",
     "attach": "Attach output",
@@ -689,7 +689,7 @@
     "detach": "Detach view",
     "stop": "Stop (TERM)",
     "kill": "Force stop (KILL)",
-    "idle": "No owned process started. Login separately before starting Codex.",
+    "idle": "No owned process started. This optional profile uses a separate login; existing login reuse is unavailable.",
     "denied": "Denied, input expired, or configuration/authentication changed. Enable input again if needed.",
     "cancelled": "Native confirmation cancelled.",
     "busy": "Another request is pending.",

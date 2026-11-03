@@ -15,6 +15,15 @@ pnpm validate:local --with-browser
 
 ## Automated suites
 
+`tests/local-cli-discovery.test.ts` covers passive PATH lookup, canonical aliases,
+duplicates, non-executable/missing files, symlink loops, bounded/ambiguous discovery,
+unknown authentication, and default setup refusal before writes. CLI fixtures and
+credential sentinels are synthetic; provider descriptors retain their prior capabilities.
+The optional separate-login provisioning fixture never executes a provider. Use
+`pnpm terminal:discover` for metadata-only local preflight; real authentication and
+two-agent execution remain outside these checks. See
+[existing CLI integration](local-cli-integration.md).
+
 The previously validated observer baseline used the built-in Node runner through
 `tsx`, with 25 cases. Core/Analytics development may add cases; use current command
 output for current counts and results, rather than treating this baseline as a fresh run:

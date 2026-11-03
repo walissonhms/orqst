@@ -681,7 +681,7 @@
   "managedTerminal": {
     "title": "Terminal gerenciado",
     "open": "Abrir Terminal Codex",
-    "scope": "Execução nativa opcional com privilégios do seu usuário macOS; não é um container. Login separado e início em read-only/on-request. A UI do provider pode alterar permissões. Fechar esta janela apenas a oculta; o processo tem duração de 30 minutos. Aceite real Codex pendente; Claude Code e OpenCode não estão habilitados.",
+    "scope": "Opção legada de login separado com privilégios do seu usuário macOS; não é um container. Reuso do login nativo existente não implementado. Início em read-only/on-request; a UI do provider pode alterar permissões. Fechar oculta esta janela; duração de 30 minutos. Aceite real Codex pendente; Claude Code e OpenCode não estão habilitados.",
     "login": "Login Codex separado",
     "start": "Iniciar Codex",
     "attach": "Conectar saída",
@@ -689,7 +689,7 @@
     "detach": "Desconectar visualização",
     "stop": "Parar (TERM)",
     "kill": "Forçar parada (KILL)",
-    "idle": "Nenhum processo próprio iniciado. Faça o login separado antes de iniciar Codex.",
+    "idle": "Nenhum processo próprio iniciado. Este perfil opcional usa login separado; reuso do login existente indisponível.",
     "denied": "Negado, entrada expirada ou configuração/autenticação alterada. Habilite a entrada novamente se necessário.",
     "cancelled": "Confirmação nativa cancelada.",
     "busy": "Outra solicitação está pendente.",

@@ -37,6 +37,7 @@ const { values } = parseArgs({
     'cleanup-owned-processes': { type: 'boolean' },
     'acceptance-root': { type: 'string' },
     model: { type: 'string' },
+    authentication: { type: 'string' },
   },
 });
 // Gate before filesystem/authentication/config access or any native launch.
@@ -45,8 +46,9 @@ assert.ok(
     values['acknowledge-advisory-cost-only'] &&
     values['cleanup-owned-processes'] &&
     values['acceptance-root'] &&
-    values.model,
-  'Requires explicit --authorize-real-codex --acknowledge-advisory-cost-only --cleanup-owned-processes --acceptance-root NEW_PRIVATE_ROOT --model EXACT_MODEL. Read docs/development/codex-two-agent-acceptance.md first.',
+    values.model &&
+    values.authentication === 'separate-login',
+  'Requires explicit --authorize-real-codex --acknowledge-advisory-cost-only --cleanup-owned-processes --authentication separate-login --acceptance-root NEW_PRIVATE_ROOT --model EXACT_MODEL. Existing-auth reuse is not implemented. Read docs/development/codex-two-agent-acceptance.md first.',
 );
 assert.match(process.version, /^v24\./);
 assert.equal(process.platform, 'darwin');

@@ -40,6 +40,8 @@ try {
     '--import',
     'tsx',
     resolve('scripts/setup-managed-terminal.ts'),
+    '--authentication',
+    'separate-login',
     '--executable',
     fake,
     '--executable-version',

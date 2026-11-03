@@ -966,6 +966,8 @@ test('the real acceptance command refuses missing authorization before reading a
         'tsx',
         resolve('scripts/accept-codex-two-agent.ts'),
         ...flags.filter((flag) => flag !== missing),
+        '--authentication',
+        'separate-login',
         '--acceptance-root',
         '/SYNTHETIC-PATH-MUST-NOT-BE-READ',
         '--model',

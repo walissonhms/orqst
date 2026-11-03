@@ -43,6 +43,12 @@ will acknowledge a report when possible and coordinate disclosure after a fix.
 
 ## Current managed Terminal opt-in
 
+The [passive CLI preflight](docs/development/local-cli-integration.md) discovers
+executable metadata without executing providers or inspecting credentials. Existing
+authentication reuse remains blocked until a provider-specific isolation contract
+is validated. Setup creates no state by default; the legacy separate-login profile
+requires an explicit choice. Candidate discovery never grants execution authority.
+
 The [managed Terminal opt-in](docs/development/managed-codex-terminal.md) implements
 a separate native trusted/same-user path in the checkout. Electron is a client;
 an independent Node component owns private metadata, grants and PTY handles.

@@ -10,6 +10,7 @@ import {
   terminalExecutableSha256,
   validateManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
+import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 
 process.umask(0o077);
 const { values } = parseArgs({
@@ -18,13 +19,23 @@ const { values } = parseArgs({
     'executable-version': { type: 'string' },
     project: { type: 'string' },
     state: { type: 'string' },
+    authentication: { type: 'string', default: 'reuse-existing' },
   },
 });
-if (!values.executable || !values['executable-version'] || !values.project || !values.state)
+// Default policy must not silently create a new authentication identity.
+if (values.authentication !== 'separate-login')
   throw new Error(
-    'Required: --executable ABSOLUTE_NATIVE_BINARY --executable-version VERSION --project PROJECT --state NEW_PRIVATE_DIRECTORY',
+    'Existing authentication reuse is not yet safely supported with isolated Codex state. No state created. Run pnpm terminal:discover for passive preflight. The legacy profile requires explicit --authentication separate-login; do not copy or link credentials.',
   );
-const executable = realpathSync(values.executable);
+if (!values['executable-version'] || !values.project || !values.state)
+  throw new Error(
+    'Required: --authentication separate-login --executable-version VERSION --project PROJECT --state NEW_PRIVATE_DIRECTORY; --executable ABSOLUTE_NATIVE_BINARY is optional only for a unique PATH candidate',
+  );
+const discovery = values.executable ? undefined : discoverLocalClis(process.env.PATH ?? '')[0]!;
+const candidates = discovery?.candidates ?? [];
+if (!values.executable && (discovery?.inspection !== 'complete' || candidates.length !== 1))
+  throw new Error('Select an explicit --executable; PATH has no unique Codex candidate');
+const executable = realpathSync(values.executable ?? candidates[0]!.canonical);
 const node = realpathSync(process.execPath);
 const project = realpathSync(values.project);
 terminalDirectory(project);

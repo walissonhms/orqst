@@ -16,7 +16,13 @@ normalizes their activity, persists local observations in SQLite and streams the
 to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
 
-An explicit checkout-only **Managed Terminal** opt-in adds a real xterm.js
+The intended integration uses already installed Codex, Claude Code and OpenCode
+CLIs with their native authentication when available, without duplicate installation
+or login by default. `pnpm terminal:discover` now provides a passive local preflight;
+authentication remains unknown and isolated existing-auth execution is not yet
+implemented. See [existing CLI integration](docs/development/local-cli-integration.md).
+
+An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
 window inside ORQST Desktop for a new owned Codex process, with separate login,
 private state and native confirmations. It uses the selected native trusted/same-user
 contract; it is not hard containment. The real provider has not been executed for
@@ -58,6 +64,20 @@ acceptance. Normal startup and external sessions remain observation-only. See
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
 ## Delivery status and roadmap
+
+- **Existing CLI direction (2026-11-03):** bounded PATH/realpath discovery and
+  provider-specific blocked reuse plans are implemented without executing providers
+  or reading credentials. `terminal:setup` now creates no state by default; the
+  earlier separate-home/login path requires `--authentication separate-login`.
+  Two new homes/logins are suspended as the default acceptance route. Claude Code
+  and OpenCode observation/managed capabilities are not promoted by discovery;
+  isolated credential reuse and the real two-agent milestone remain incomplete.
+  This increment passed lint, typecheck, 374 Node tests and full build. Passive
+  metadata inspection found all three providers, with multiple OpenCode candidates.
+  The synthetic Electron/PTY acceptance passed on an unchanged retry after an
+  initial timeout waiting for `SYNTHETIC:PONG`; that instability is unresolved.
+  No real provider/authentication was invoked; ingestion and `validate:local` were
+  not exercised by this increment.
 
 - **Dashboard visual refinement:** the logo now follows the resolved light/dark
   theme without a white CSS backing, with the original artwork retained and a

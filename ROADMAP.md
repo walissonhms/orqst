@@ -1,5 +1,32 @@
 # ORQST roadmap
 
+## Existing CLI and authentication direction — 2026-11-03
+
+Use installed Codex, Claude Code and OpenCode CLIs and their existing native
+authentication where available; do not require duplicate installs/logins by default.
+The [passive local preflight](docs/development/local-cli-integration.md) is now
+implemented with bounded PATH metadata/realpath discovery, unknown auth/version,
+and provider-specific blocked reuse plans. It executes no CLI or auth/status query,
+reads no credentials and grants no capability. Missing/ambiguous/incomplete discovery
+is explicit. The setup default fails before state creation; the previous separate
+login path is available only through `--authentication separate-login`.
+
+This supersedes the separate-home/device-login default in the engineering entries
+below. Existing acceptance homes and pending logins must not be repeated, completed
+or removed as part of discovery. No safe isolated existing-auth backend has been
+validated: Codex couples auth and sessions under its home; Claude config identity
+also affects Keychain credentials; OpenCode's installed data/auth separation is
+unverified. No provider parity, readiness, model access or two-agent acceptance is
+claimed. Next: exact installed-binary compatibility review, provider-specific
+shared-auth/owned-session contract, fixtures, then separately approved real start
+and scoped A-to-B-to-A acceptance. Concurrent Desktop UI remains missing.
+
+Validation for this increment: lint, typecheck, 374 Node tests and full build passed;
+the local metadata-only preflight found the three providers and multiple OpenCode
+candidates. Synthetic Electron/PTY acceptance passed on an unchanged second run;
+the first timed out waiting for `SYNTHETIC:PONG`, an unresolved harness/interaction
+instability. No real auth/provider, ingestion or `validate:local` acceptance ran.
+
 ## Embedded Terminal increment — 2026-11-03
 
 The opt-in [managed Codex Terminal](docs/development/managed-codex-terminal.md)

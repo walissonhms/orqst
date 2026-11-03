@@ -1,5 +1,14 @@
 # Two-agent native delegation: reviewable acceptance
 
+**Suspended as the default route (2026-11-03):** the owner selected existing
+installed CLIs/native authentication rather than mandatory new homes/logins.
+The recipe below is preserved as an optional separate-login experiment; do not
+repeat or complete pending logins to advance it. See
+[existing CLI integration](local-cli-integration.md) for the implemented passive
+preflight and unresolved isolation contract. Both setup and this real-run command
+now require explicit `--authentication separate-login`; neither supports safe
+existing-auth dispatch yet. All real operations still require concrete approval.
+
 **Implemented:** an opt-in app-server dynamic function, two independently identified
 Core panes, a separately signed root request, exact A-to-B delegation, durable
 communication and native tool-result return into A. Tests use synthetic transports;
@@ -162,10 +171,10 @@ ORQST_CODEX_NATIVE=/absolute/owner-reviewed/native/codex
 ORQST_CODEX_VERSION=OWNER_REVIEWED_VERSION
 mkdir -m 700 "$ORQST_ACCEPT_ROOT"
 mkdir -m 700 "$ORQST_ACCEPT_ROOT/project"
-pnpm terminal:setup --executable "$ORQST_CODEX_NATIVE" \
+pnpm terminal:setup --authentication separate-login --executable "$ORQST_CODEX_NATIVE" \
   --executable-version "$ORQST_CODEX_VERSION" \
   --project "$ORQST_ACCEPT_ROOT/project" --state "$ORQST_ACCEPT_ROOT/slot-a"
-pnpm terminal:setup --executable "$ORQST_CODEX_NATIVE" \
+pnpm terminal:setup --authentication separate-login --executable "$ORQST_CODEX_NATIVE" \
   --executable-version "$ORQST_CODEX_VERSION" \
   --project "$ORQST_ACCEPT_ROOT/project" --state "$ORQST_ACCEPT_ROOT/slot-b"
 pnpm build
@@ -191,6 +200,7 @@ owned-process cleanup, invoke:
 
 ```bash
 pnpm exec tsx scripts/accept-codex-two-agent.ts \
+  --authentication separate-login \
   --authorize-real-codex --acknowledge-advisory-cost-only \
   --cleanup-owned-processes --acceptance-root "$ORQST_ACCEPT_ROOT" \
   --model gpt-6.1-sol

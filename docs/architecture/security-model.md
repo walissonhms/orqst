@@ -1,5 +1,17 @@
 # Security model
 
+## Passive CLI preflight — 2026-11-03
+
+The developer-only [local CLI preflight](../development/local-cli-integration.md)
+uses bounded PATH metadata and canonical executable paths, never provider commands,
+credential/config/session content, Keychain lookup or inherited token injection.
+Symlink launchers are discovery evidence only; later native admission still uses
+the existing no-follow/hash/owner checks. A candidate is not authorization or proof
+of identity, readiness, authentication or provider capability. The setup defaults
+to no writes while isolated existing-auth reuse is unavailable. Legacy separate-login
+provisioning/real acceptance require an explicit authentication choice. No observer
+API, WebSocket, cookie, filesystem-serving or renderer authority changes.
+
 ## Current embedded Terminal exception — 2026-11-03
 
 The [managed Codex Terminal](../development/managed-codex-terminal.md) is an explicit

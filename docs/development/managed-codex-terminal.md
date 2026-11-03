@@ -1,5 +1,12 @@
 # Embedded managed Codex Terminal
 
+**Current direction:** reuse installed CLIs/native authentication by default. This
+guide describes the earlier optional separate-login profile; it does not implement
+credential reuse. `terminal:setup` now fails without an explicit separate-login
+choice and creates no default state. Start with the
+[passive existing-CLI preflight](local-cli-integration.md). Do not create two new
+homes/logins as the default next acceptance step.
+
 This opt-in checkout feature adds a real xterm.js terminal in a dedicated ORQST
 Desktop window, opened from the **Managed Terminal** menu. It is not an external
 terminal window or an inert transcript. Normal observer startup still launches no
@@ -23,7 +30,8 @@ provider behavior was validated. Setup hashes the executable and current Node
 without running either provider commands or authentication queries:
 
 ```bash
-pnpm terminal:setup --executable /absolute/path/to/native/codex \
+pnpm terminal:setup --authentication separate-login \
+  --executable /absolute/path/to/native/codex \
   --executable-version YOUR_REVIEWED_VERSION \
   --project /absolute/path/to/project --state /absolute/path/to/NEW-private-state
 pnpm build
