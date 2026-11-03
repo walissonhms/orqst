@@ -15,8 +15,20 @@ retains its existing window; it is not an interactive terminal.
 
 Use the native **Managed Terminal → Open … A / B** actions after reviewing the
 existing manifests, or launch with the existing `--terminal-config` flags. Opening
-a pane starts no provider. Opening both shows A on the left and B on the right;
-one visible pane fills the content area. Native window resize resizes the panes,
+a pane starts no provider. Opening both initially shows A on the left and B on the right;
+one visible pane fills the content area. Each panel includes trusted **T-001 / T-002**
+navigation buttons labeled with the manifest provider. Selecting one shows only that
+live document. **Side by side** and **Stack vertically** show both documents;
+**Pane A size** adjusts the split between 25% and 75% by dragging its range control
+or using arrow keys. It is a toolbar slider, not a draggable boundary between native
+views. **Maximize pane** shows only the current pane; **Restore split** restores both
+with the retained orientation/proportion. **Focus other pane** opens/focuses its
+existing sibling. A one-manifest selection disables pair-only controls.
+The active, focused panel controls the layout of the pair; this grants no authority
+over the sibling process. Layout preferences belong to the pair and remain in memory.
+Native focus stays on the layout control after resizing; enable keyboard input explicitly before
+typing into xterm again. These actions never start, attach, stop, rename or retire a
+process, and do not send tasks. No terminal keystroke shortcut is intercepted. Native window resize resizes the panes,
 and xterm fits/updates its existing bounded PTY dimensions. IDs A/B, T-001/T-002,
 provider and immutable terminal/instance identities remain trusted native chrome,
 separate from untrusted process output. **Session details** expands project/version
@@ -43,14 +55,14 @@ a functional subset, not complete Studio acceptance.
 | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Real integrated terminal rendering / Core / PTY                      | Implemented: A/B sibling native panels in the one main window, real xterm/PTY input/output, synthetic Electron acceptance                                                                             |
 | Simultaneous terminals with clear identity                           | Implemented: fixed A/B pair, T-001/T-002 labels, provider, immutable Core/instance IDs and observed owned-process lifecycle                                                                           |
-| Split layout / resize                                                | Partial: fixed side-by-side two-pane layout follows native window resize; hiding one gives the other full space. Drag handles, vertical stacking and arbitrary splits remain pending                  |
+| Split layout / resize                                                | Partial: both split orientations, toolbar proportion slider and native window resize. Boundary drag handles and arbitrary splits remain pending                                                       |
 | Keyboard, paste, selection, scrollback                               | Existing trusted keyboard and separately native-confirmed paste preserved; xterm selection/scrollback retained. IME, mouse reporting, manual accessibility and OS clipboard acceptance remain pending |
-| Terminal tabs, unread/attention indicators, rename, reordering       | Pending; native menu open/focus and hide actions are implemented, without pretending they are tabs or terminal closure                                                                                |
-| Search, clear, explicit maximize/focus-mode controls                 | Pending; a single visible pane fills the area                                                                                                                                                         |
+| Terminal tabs, unread/attention indicators, rename, reordering       | Partial: fixed A/B tab navigation with trusted provider labels; unread/attention indicators, rename, close and reordering remain pending                                                              |
+| Search, clear, explicit maximize/focus-mode controls                 | Partial: explicit maximize/restore and sibling focus; search and clear remain pending                                                                                                                 |
 | Compact toolbar with model/reasoning/Fast/tokens/cost/approval badge | Partial: provider/project/identity/owned state and real existing controls only. No new model/usage/cost/approval capability is fabricated                                                             |
 | Activity/Tasks/Metrics/Artifacts/Approvals inspector                 | Existing observer dashboard remains available and unchanged; an integrated terminal inspector is pending                                                                                              |
 | Notification-to-terminal/task/event navigation                       | Existing observed-session navigation preserved; owned-terminal/task notification targeting remains pending                                                                                            |
-| Persist terminal layout/session references                           | Pending; view switching and managed window hide retain this live document only. Crash/reboot/session restoration is not implemented                                                                   |
+| Persist terminal layout/session references                           | Partial: orientation/proportion retained in memory across view switching; durable layout, crash/reboot/session restoration remain pending                                                             |
 | External-session control boundary                                    | Preserved: observed sessions are never adopted or controlled                                                                                                                                          |
 
 ## Security and unchanged runtime
@@ -66,8 +78,11 @@ window's observer WebContents and never a page-supplied slot. Mutations require
 both parent-window and visible-pane native focus. View/window blur and window
 hide revoke pending grants/input; view reload, navigation, crash and destruction
 close only that slot's authority. Refocus/reopen never renews an input lease.
-Layout-only IPC validates sender/frame/session and activation, accepts only hide
-or dashboard, and cannot dispatch process operations. Native dialogs stay parented
+Layout-only IPC validates sender/frame/session and activation, accepts only a fixed navigation/layout allowlist and an exact bounded integer percentage;
+unknown fields, strings, coercions and process actions are refused. The source slot
+is bound natively. Layout notifications expose only orientation, ratio, visible slots
+and count. They carry no process operation capability. Layout changes revoke input
+leases for both panes; refocus, tab selection and restoring a split never renew them. Native dialogs stay parented
 to the main window and remain Cancel by default. A modal focus refusal fails closed.
 
 No Core, PTY, provider environment/argv, login, MCP task transport, journal,
@@ -106,13 +121,36 @@ structured client. Independent critical QA approved the sender/focus/lifecycle
 boundaries. The existing dashboard chunk-size advisory remains. Full Chromium,
 real-source `validate:local`, human-modal and real-provider acceptance were not run.
 
-This slice is a fixed two-pane layout, not the entire Studio/Agentic Mode spec.
-Drag resizing/reordering, durable layout/session restoration, arbitrary terminal
+This slice is a fixed two-terminal Studio, not the entire Studio/Agentic Mode spec.
+Boundary drag handles/reordering, durable layout/session restoration, arbitrary terminal
 counts, terminal model switching and full keyboard/accessibility acceptance remain
-pending. The independent structured Managed agents window is unchanged. Real
+pending. Provider integration continues through the existing version/hash-scoped
+Codex/Claude/OpenCode manifests and native grants. The selection still accepts one
+provider at a time; mixed-provider simultaneous use is not implemented. No installed
+CLI, login, model availability or inference has been checked by these layout tests. The independent structured Managed agents window is unchanged. Real
 provider TUI/login, native human dialogs and the real two-agent MCP milestone are
 not validated by synthetic processes. No provider, inference or credential access
 is authorized for these checks. Rebuilding cannot hot-upgrade a running Electron
 main/preload; a live client is preserved when restart would endanger its drafts or
 owned processes. Observer ingestion is unchanged; local-data validation is not
 required for this layout correction.
+
+## Studio layout increment — 2026-11-03
+
+The follow-up layout acceptance extends the existing disposable real Electron/PTY
+pair check with both split axes, proportion changes, maximize, A/B tabs, restore,
+sibling focus, unchanged instance UUIDs, refusal from a hidden document and stale
+input-lease rejection after resizing. It also checks that layout creates no new
+native confirmation and preserves the original observer Artifact draft. Native dialog
+responses remain intercepted, so this is transport/UI evidence with synthetic
+processes rather than human-dialog or real-provider acceptance.
+
+Finalization validation passed lint, typecheck, all 498 Node tests, full build and
+the explicit synthetic Electron pair acceptance. Critical QA approved the closed
+layout allowlist, sender/focus/visibility checks and input revocation without a
+process grant. The implementation's first Electron attempt missed the initial
+synthetic output after attachment; its repeat and the finalization run passed.
+That earlier intermittent failure remains unexplained, not fixed by a retry.
+Full Chromium, real-source validation, human dialogs and real providers were not
+run for this layout increment. The existing localhost Bridge serves the rebuilt
+dashboard assets without a restart; a loaded Desktop main/preload remains unchanged.

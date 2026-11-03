@@ -260,7 +260,7 @@ export async function createManagedTerminals(
       if (request.url === terminalDocumentURL) {
         const button = (id: string) =>
           `<button id="${id}"${id === 'login' && config.authentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
-        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main data-start-profile="${startProfile}"><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</h1><details><summary>${text('details')}</summary><p>${text(provider === 'opencode' ? 'opencodeScope' : provider === 'claude' ? 'claudeScope' : config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p></details><nav><button id="dashboard">${text('dashboard')}</button><button id="hide-pane">${text('hidePane')}</button></nav><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main data-start-profile="${startProfile}"><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</h1><details><summary>${text('details')}</summary><p>${text(provider === 'opencode' ? 'opencodeScope' : provider === 'claude' ? 'claudeScope' : config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p></details><nav aria-label="${text('navigation')}"><button id="dashboard">${text('dashboard')}</button><button id="hide-pane">${text('hidePane')}</button><button id="tab-a" aria-pressed="${slot === 0}">T-001 · ${escapeHTML(translate(`shell.adapters.${interactiveProvider(selection[0]!.config)}`))}</button>${files.length === 2 ? `<button id="tab-b" aria-pressed="${slot === 1}">T-002 · ${escapeHTML(translate(`shell.adapters.${interactiveProvider(selection[1]!.config)}`))}</button>` : ''}</nav><nav aria-label="${text('layout')}">${['split-columns', 'split-rows', 'maximize', 'restore', 'focus-other'].map((action) => `<button id="${action}"${files.length === 1 && action !== 'maximize' ? ' disabled' : ''}>${text(action)}</button>`).join('')}<label class="split-size">${text('splitSize')}<input id="split-size" type="range" min="25" max="75" step="1" value="50"${files.length === 1 ? ' disabled' : ''}><output id="split-value">50%</output></label></nav><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
         contentType = 'text/html; charset=utf-8';
       } else if (request.url === terminalScriptURL) {
         body = readFileSync(join(__dirname, 'managed-terminal-client.js'), 'utf8');
@@ -327,10 +327,7 @@ export async function createManagedTerminals(
               )
             )
               return false;
-            if (action === 'dashboard') panels.showDashboard();
-            else if (action === 'hide') panels.hide(slot);
-            else return false;
-            return true;
+            return panels.act(slot, action);
           });
           const broker = new TerminalNativeBroker(
             authority,
@@ -374,10 +371,7 @@ export async function createManagedTerminals(
             )
           )
             return false;
-          if (action === 'dashboard') panels.showDashboard();
-          else if (action === 'hide') panels.hide(slot);
-          else return false;
-          return true;
+          return panels.act(slot, action);
         });
       });
     }

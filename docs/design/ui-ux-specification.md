@@ -429,9 +429,10 @@ See [testing](../development/testing.md) for commands and actual validation scop
 The owner's original Master UI/UX specification section 3.2 requires integrated
 terminals as the highest-priority Studio experience. The opt-in Desktop now hosts
 interactive A/B terminals as isolated native sibling panels in the main window,
-with a fixed side-by-side split, window-driven resize, real PTY keyboard/output and
+with A/B tab navigation, side-by-side/stacked splits, a toolbar proportion slider,
+maximize/restore, sibling focus, window-driven resize, real PTY keyboard/output and
 native-confirmed paste. Returning to the dashboard preserves its loaded document
 and unsaved drafts. External top-level terminal windows are not accepted as this
-requirement. This is a subset: tabs, drag handles/reordering, search/clear, dynamic
+requirement. This is a subset: boundary drag handles, tab rename/reordering, search/clear, dynamic
 model controls, terminal inspectors, notifications and durable layout restoration
 remain pending. See [item-by-item coverage](../development/embedded-terminal-panels.md#original-specification-coverage).

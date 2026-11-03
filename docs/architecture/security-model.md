@@ -941,3 +941,14 @@ view reload/crash/destruction closes that broker. The layout-only IPC accepts no
 process operation or authority. Observation cookies and the dashboard preload
 remain ineligible for execution. Core/PTY/native authentication and MCP policies
 are unchanged. See [review and limits](../development/embedded-terminal-panels.md).
+
+### Studio layout boundary (2026-11-03)
+
+Terminal A/B navigation, orientation, maximize/restore, focus and proportional resizing
+use the same dedicated terminal sender validation. Main accepts a fixed action
+allowlist or an exact 25–75 integer percentage, binds the source slot natively and
+requires the current reserved frame/session/generation plus visible native focus.
+The observer preload and public HTTP/WebSocket remain unchanged. Layout notifications
+contain only orientation/proportion/visible slots/count. Layout actions revoke input
+leases and never grant execution, start a provider, restore a process, stop a task
+or rewrite session data. Tab labels come from reviewed manifests, not provider output.

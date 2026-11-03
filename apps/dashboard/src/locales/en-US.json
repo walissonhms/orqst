@@ -679,6 +679,15 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
+    "navigation": "Terminal navigation",
+    "layout": "Terminal layout",
+    "split-columns": "Side by side",
+    "split-rows": "Stack vertically",
+    "maximize": "Maximize pane",
+    "restore": "Restore split",
+    "focus-other": "Focus other pane",
+    "splitSize": "Pane A size",
+
     "dashboard": "Show dashboard",
     "hidePane": "Hide pane",
     "details": "Session details",

@@ -659,3 +659,21 @@ The library notifies the initiating Core client after a committed result and ret
 an inbox, but this does not prove delivery into a real initiating agent. No runtime,
 provider, MCP, planner, UI Inspector or two-agent acceptance is claimed. See the
 [versioned contract and integration gates](../api/pane-communication.md).
+
+## ADR-034 — Native Studio layout without additional execution authority
+
+**Status:** Implemented incremental layout, 2026-11-03; real-provider acceptance pending.
+
+Keep the two existing sandboxed terminal WebContentsViews as siblings of the loaded
+observer view in one BrowserWindow. Main owns visibility, orientation, ratio and focus;
+the terminal preload accepts only fixed layout actions and an exact integer ratio
+between 25 and 75. Sender/frame/session/generation/native focus checks remain required.
+Layout notifications carry layout metadata only; the observer receives no capability.
+
+A/B navigation, split changes and maximize/restore retain the same live documents,
+Core identities and PTYs. Revoke input before changing layout; view restoration never
+restores a lease. Labels come from reviewed manifests, not process output. Keep only
+in-memory layout preferences and the existing bounded two-slot/provider selection;
+no provider startup, schema migration, durable restoration, model capability or
+additional ownership is implied. A toolbar range control supplies mouse/keyboard
+resizing; draggable native boundaries and full multi-tab Studio remain future work.

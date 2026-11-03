@@ -679,6 +679,15 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
+    "navigation": "Navegação dos terminais",
+    "layout": "Layout dos terminais",
+    "split-columns": "Lado a lado",
+    "split-rows": "Empilhar verticalmente",
+    "maximize": "Maximizar painel",
+    "restore": "Restaurar divisão",
+    "focus-other": "Focar outro painel",
+    "splitSize": "Tamanho do painel A",
+
     "dashboard": "Mostrar painel de observação",
     "hidePane": "Ocultar painel",
     "details": "Detalhes da sessão",

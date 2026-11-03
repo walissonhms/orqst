@@ -24,7 +24,9 @@ reuse native authentication with new ephemeral threads and private SQLite/log st
 native auth/config remain shared. The Desktop **Managed agents** surface now connects
 two explicitly signed structured terminals and scoped delegation; one authorized native acceptance attempt failed
 before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
-Two interactive xterm/PTY panels in the main Desktop window now share one Node Core and sticky capacity with
+Two interactive xterm/PTY panels in the main Desktop window now provide A/B tab navigation,
+side-by-side or stacked splits, a draggable/keyboard split-size slider (25–75%),
+maximize/restore and focus switching, while sharing one Node Core and sticky capacity with
 Managed agents; each slot has independent ownership and metadata-only lifecycle
 receipts. The explicit separate-login fixture path has earlier two-window transport evidence;
 human native-modal acceptance remains pending.
@@ -35,7 +37,8 @@ review manifest; explicit native startup, migration/activity acknowledgment and 
 Desktop confirmation are required. See [OpenCode setup and effects](docs/development/opencode-desktop-terminal.md). See [Claude setup and provider limits](docs/development/claude-interactive-terminal.md) and
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
 The updated Desktop native menu can select/review existing manifests in memory,
-then open its fixed Terminal pair without restarting. It accepts one provider per
+then open its fixed Terminal pair without restarting. Layout preferences survive
+view switching in memory; they do not restore processes or layouts after restart. It accepts one provider per
 live selection and preserves existing reservations; review starts no provider or
 Core. An older loaded shell is not hot-upgraded by rebuilding. Strict inference-free
 OpenCode startup remains blocked by the [documented enforcement gap](docs/development/opencode-startup-safety.md).

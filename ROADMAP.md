@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Studio layout controls — 2026-11-03
+
+The existing native A/B documents now support provider-labeled tab navigation,
+side-by-side/stacked splits, a bounded toolbar ratio slider, maximize/restore and
+sibling focus. These are real view operations and preserve live PTY identity;
+layout changes revoke input rather than renewing authorization. Preferences remain
+memory-only. Mixed-provider selection, boundary drag handles, rename/reordering,
+durable layout/session restoration, arbitrary pane counts and real-provider
+acceptance remain pending. See [scope and validation](docs/development/embedded-terminal-panels.md).
+
 ## Same-window interactive Terminal correction — 2026-11-03
 
 A/B now occupy native panels in the primary Desktop window, with independent

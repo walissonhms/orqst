@@ -1,4 +1,9 @@
 import { View, type BrowserWindow, type WebContentsView } from 'electron';
+import {
+  parseTerminalViewAction,
+  terminalPaneBounds,
+  type TerminalLayoutState,
+} from './terminal-layout.js';
 
 /** Native sibling documents share one window, never an iframe or the observer preload. */
 export class TerminalPanels {
@@ -7,6 +12,8 @@ export class TerminalPanels {
   private readonly panes: Array<{ view: WebContentsView; revoke(): void }> = [];
   private readonly shown = new Set<number>();
   private closed = false;
+  private axis: TerminalLayoutState['axis'] = 'columns';
+  private percent = 50;
 
   constructor(private readonly window: BrowserWindow) {
     this.dashboard = window.contentView;
@@ -41,8 +48,49 @@ export class TerminalPanels {
     pane.view.webContents.focus();
   }
 
+  /** Sender/activation checks belong to the dedicated native document binding. */
+  act(slot: number, raw: unknown): boolean {
+    const action = parseTerminalViewAction(raw);
+    if (!action || this.closed || !this.shown.has(slot)) return false;
+    const paired = this.panes.length === 2;
+    if (action === 'dashboard') this.showDashboard();
+    else if (action === 'hide') this.hide(slot);
+    else if (action === 'tab-a' || action === 'tab-b') {
+      const target = action === 'tab-a' ? 0 : 1;
+      if (!this.panes[target]) return false;
+      this.revokeAll();
+      this.shown.clear();
+      this.open(target);
+    } else if (action === 'maximize') {
+      this.revokeAll();
+      this.shown.clear();
+      this.open(slot);
+    } else {
+      if (!paired) return false;
+      if (action === 'focus-other') {
+        this.revokeAll();
+        this.open(slot === 0 ? 1 : 0);
+      } else {
+        this.revokeAll();
+        if (typeof action === 'object') this.percent = action.percent;
+        else {
+          if (action === 'split-columns') this.axis = 'columns';
+          if (action === 'split-rows') this.axis = 'rows';
+          this.shown.add(0);
+          this.shown.add(1);
+        }
+        this.layout();
+      }
+    }
+    return true;
+  }
+
+  private revokeAll(): void {
+    for (const pane of this.panes) pane.revoke();
+  }
+
   hide(slot: number): void {
-    this.panes[slot]?.revoke();
+    this.revokeAll();
     this.shown.delete(slot);
     this.layout();
     const next = this.shown.values().next().value;
@@ -51,7 +99,7 @@ export class TerminalPanels {
   }
 
   showDashboard(): void {
-    for (const pane of this.panes) pane.revoke();
+    this.revokeAll();
     this.shown.clear();
     this.layout();
     this.window.webContents.focus();
@@ -64,13 +112,21 @@ export class TerminalPanels {
     this.dashboard.setBounds({ x: 0, y: 0, width, height });
     this.dashboard.setVisible(this.shown.size === 0);
     const visible = [...this.shown].sort();
+    const state: TerminalLayoutState = {
+      axis: this.axis,
+      percent: this.percent,
+      visible,
+      count: this.panes.length,
+    };
     for (const [slot, { view }] of this.panes.entries()) {
       const position = visible.indexOf(slot);
+      if (view.webContents.isDestroyed()) continue;
       view.setVisible(position !== -1);
+      view.webContents.send('orqst:terminal-layout', state);
       if (position === -1) continue;
-      const left = Math.floor((position * width) / visible.length);
-      const right = Math.floor(((position + 1) * width) / visible.length);
-      view.setBounds({ x: left, y: 0, width: right - left, height });
+      view.setBounds(
+        terminalPaneBounds(width, height, position, visible.length, this.axis, this.percent),
+      );
     }
   };
 

@@ -212,3 +212,16 @@ retains separate task authorization. TUI receipt exit is not descendant-server e
 `prepareRetire` and `retire` refuse selections containing OpenCode and leave sticky
 capacity reserved. See [setup, side effects and authorization](../development/opencode-desktop-terminal.md).
 Real startup/login/DB/migration/descendant/MCP/inference acceptance was not run.
+
+### Native Studio layout messages
+
+The dedicated terminal preload's separate `orqstTerminalPane.show` capability now
+accepts `dashboard`, `hide`, `tab-a`, `tab-b`, `split-columns`, `split-rows`,
+`maximize`, `restore`, `focus-other`, or exactly `{ percent: integer }` (25–75).
+It still requires transient user activation. Main binds the sender slot and rechecks
+the exact reserved document, frame, session, generation, visibility and native focus;
+there is no arbitrary target identity, executable, path or task field. Invalid shapes
+return false. No public API/WebSocket or observer preload capability is added.
+`onLayout` receives only axis, percentage, visible slot indices and configured count.
+Layout mutations revoke input, never grant it, and preserve the existing PTY/process.
+Pair-only actions are disabled with one manifest. Preferences are memory-only.

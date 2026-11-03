@@ -278,7 +278,114 @@ try {
     }),
     { count: 1, visible: [true, true], adjacent: true, sameHeight: true },
   );
+  // Native layout controls operate on the same live documents and never start a process.
+  const geometry = () =>
+    desktop!.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0]!;
+      return {
+        size: w.getContentSize(),
+        panes: w.contentView.children
+          .filter(
+            (v) =>
+              'webContents' in v &&
+              (v as Electron.WebContentsView).webContents.getURL().startsWith('orqst-terminal:'),
+          )
+          .map((v) => ({ visible: v.getVisible(), bounds: v.getBounds() })),
+      };
+    });
   await focus(0);
+  await terminals[0]!.locator('#split-rows').click();
+  await expect
+    .poll(async () => {
+      const { size, panes } = await geometry();
+      return (
+        panes[0]!.bounds.y === 0 &&
+        panes[0]!.bounds.height === panes[1]!.bounds.y &&
+        panes[1]!.bounds.y + panes[1]!.bounds.height === size[1] &&
+        panes.every((p) => p.visible && p.bounds.width === size[0])
+      );
+    })
+    .toBe(true);
+  await terminals[0]!.locator('#input').click();
+  const confirmationsBeforeLayout = await desktop.evaluate(() =>
+    Reflect.get(globalThis, 'syntheticConfirmCount'),
+  );
+  await terminals[0]!.locator('#split-size').focus();
+  await terminals[0]!.locator('#split-size').press('ArrowRight');
+  await expect(terminals[0]!.locator('#split-value')).toHaveText('51%');
+  await expect
+    .poll(async () => {
+      const { size, panes } = await geometry();
+      return panes[0]!.bounds.height === Math.floor(size[1]! * 0.51);
+    })
+    .toBe(true);
+  // Changing layout revokes a still-focused terminal's previous keyboard lease.
+  const revoked = await terminals[0]!.evaluate(
+    async (id) =>
+      (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal.request({
+        version: 1,
+        action: 'write',
+        instanceId: id,
+        sequence: 0,
+        text: 'SYNTHETIC-REFUSED',
+      }),
+    ids[0]!,
+  );
+  assert.equal(revoked.status, 'denied');
+  await terminals[0]!.locator('#maximize').click();
+  await expect
+    .poll(async () => (await geometry()).panes.map((p) => p.visible))
+    .toEqual([true, false]);
+  await terminals[0]!.locator('#tab-b').click();
+  await expect
+    .poll(async () => (await geometry()).panes.map((p) => p.visible))
+    .toEqual([false, true]);
+  const hidden = await terminals[0]!.evaluate(async () =>
+    (
+      window as unknown as { orqstTerminalPane: { show(action: string): Promise<boolean> } }
+    ).orqstTerminalPane.show('restore'),
+  );
+  assert.equal(hidden, false);
+  await terminals[1]!.locator('#restore').click();
+  await expect
+    .poll(async () => (await geometry()).panes.map((p) => p.visible))
+    .toEqual([true, true]);
+  await terminals[1]!.locator('#split-columns').click();
+  await expect
+    .poll(async () => {
+      const { size, panes } = await geometry();
+      return (
+        panes[0]!.bounds.width === Math.floor(size[0]! * 0.51) &&
+        panes[0]!.bounds.x + panes[0]!.bounds.width === panes[1]!.bounds.x
+      );
+    })
+    .toBe(true);
+  await terminals[1]!.locator('#focus-other').click();
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) => {
+        const w = BrowserWindow.getAllWindows()[0]!;
+        return w.contentView.children.some(
+          (v) =>
+            'webContents' in v &&
+            (v as Electron.WebContentsView).webContents.getTitle().includes('T-001') &&
+            (v as Electron.WebContentsView).webContents.isFocused(),
+        );
+      }),
+    )
+    .toBe(true);
+  assert.deepEqual(
+    await Promise.all(terminals.map((p) => p.locator('#instance').innerText())),
+    ids,
+  );
+  assert.equal(
+    await desktop.evaluate(() => Reflect.get(globalThis, 'syntheticConfirmCount')),
+    confirmationsBeforeLayout,
+  );
+  assert.equal(
+    await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
+    1,
+  );
   await terminals[0]!.locator('#dashboard').click();
   await expect(draft).toHaveValue(draftText);
   assert.equal(
@@ -383,6 +490,8 @@ try {
         'keyboard-both-slots',
         'exact-unsaved-artifact-draft-preserved',
         'one-window-native-adjacent-panels',
+        'tabs-both-split-axes-proportion-maximize-restore-focus',
+        'layout-revokes-input-without-provider-start-or-new-identity',
         'isolated-cross-instance-denial',
         'sticky-admission-until-signed-retirement',
         'durable-owned-exit-receipts',

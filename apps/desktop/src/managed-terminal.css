@@ -61,3 +61,22 @@ nav button {
   font-size: 12px;
   padding: 6px;
 }
+
+nav button[aria-pressed='true'] {
+  background: #8424e8;
+  border-color: #d9c9ff;
+}
+.split-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  margin: 4px;
+}
+.split-size input {
+  width: 100px;
+  accent-color: #b45cff;
+}
+.split-size output {
+  min-width: 3ch;
+}

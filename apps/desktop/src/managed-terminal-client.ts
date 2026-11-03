@@ -1,5 +1,6 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import type { TerminalLayoutState, TerminalViewAction } from './terminal-layout.js';
 import type {
   DesktopTerminal,
   TerminalNativeRequest,
@@ -242,7 +243,42 @@ fit.fit();
 updateButtons();
 
 const pane = (
-  window as unknown as { orqstTerminalPane: { show(action: string): Promise<boolean> } }
+  window as unknown as {
+    orqstTerminalPane: {
+      show(action: TerminalViewAction): Promise<boolean>;
+      onLayout(listener: (state: TerminalLayoutState) => void): () => void;
+    };
+  }
 ).orqstTerminalPane;
-document.getElementById('dashboard')!.addEventListener('click', () => void pane.show('dashboard'));
-document.getElementById('hide-pane')!.addEventListener('click', () => void pane.show('hide'));
+const layoutActions = [
+  ['dashboard', 'dashboard'],
+  ['hide-pane', 'hide'],
+  ['tab-a', 'tab-a'],
+  ['tab-b', 'tab-b'],
+  ['split-columns', 'split-columns'],
+  ['split-rows', 'split-rows'],
+  ['maximize', 'maximize'],
+  ['restore', 'restore'],
+  ['focus-other', 'focus-other'],
+] as const;
+const changeLayout = (action: TerminalViewAction) => {
+  revoke();
+  void pane.show(action);
+};
+for (const [id, action] of layoutActions)
+  document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
+const splitSize = document.getElementById('split-size') as HTMLInputElement;
+splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
+const unsubscribeLayout = pane.onLayout((state) => {
+  splitSize.value = String(state.percent);
+  splitSize.disabled = state.visible.length !== 2;
+  document.getElementById('split-value')!.textContent = `${state.percent}%`;
+  for (const axis of ['columns', 'rows'])
+    document
+      .getElementById(`split-${axis}`)!
+      .setAttribute('aria-pressed', String(state.visible.length === 2 && state.axis === axis));
+  (document.getElementById('maximize') as HTMLButtonElement).disabled = state.visible.length === 1;
+  (document.getElementById('restore') as HTMLButtonElement).disabled =
+    state.count !== 2 || state.visible.length === 2;
+});
+window.addEventListener('pagehide', unsubscribeLayout, { once: true });

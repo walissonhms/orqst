@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-03 — Studio terminal layout controls
+
+- Add provider-labeled A/B tab navigation, side-by-side/stacked native splits,
+  a draggable/keyboard ratio slider, maximize/restore and sibling focus.
+- Preserve the existing terminal documents, PTY instances and dashboard drafts;
+  layout changes revoke keyboard leases without creating process authorization.
+- Retain orientation/proportion in memory only; no durable restoration or mixed-provider
+  selection is claimed. Extend disposable Electron/PTY acceptance without real CLIs.
+
 ## 2026-11-03 — Interactive terminals in the main window
 
 - Replaced per-terminal native windows with isolated A/B WebContentsView panels
