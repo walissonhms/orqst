@@ -62,6 +62,43 @@ scan or authentication check. Codex is implemented; Claude Code and OpenCode rem
 planned. Unsupported input requests and session control stay unavailable. No
 installation, model catalog, model-switch or execution action is presented.
 
+## First observation guide
+
+**Observation guide** opens from Settings / General, Search & commands and the
+Overview empty-session welcome. It is optional, never opens automatically and
+does not create a route, completion flag or local preference. Three visible,
+ordered steps explain the existing observation path:
+
+1. **Connection:** the current Bridge transport state and snapshot-load error.
+   Transport connectivity alone does not prove successful ingestion or a running
+   agent process. The existing transport owns automatic retry; the guide does not
+   add polling, reconnect or scan commands.
+2. **Source reading:** the loaded snapshot's scan-in-progress flag, last reported
+   scan time, last discovered JSONL file count and malformed/oversized/skipped/error
+   counters. Missing diagnostics remain unavailable rather than zero. Counters
+   accumulate during the observer lifetime; they neither diagnose the current
+   scan nor prove complete coverage. The actual configured root and permissions
+   are not supplied by this API. Missing-history guidance identifies the existing
+   `ORQST_CODEX_SESSIONS` setting for an operator to check outside the dashboard.
+   **View observation capabilities** opens the existing descriptor-based Agents view.
+3. **Retained observations:** the actual loaded session count across all workspaces,
+   independent of selected scope/search/status. Empty history explains source and
+   retention limits. **Browse recorded workspaces** opens the existing directory;
+   it does not select a workspace or session. Both navigation actions disable until
+   a snapshot exists; a last loaded snapshot can still support history navigation.
+
+Snapshot updates refresh the facts in place without resetting focus. A disconnected
+transport or snapshot-refresh error marks loaded source diagnostics and counts as
+potentially stale; no snapshot means unavailable history. Native modal containment,
+Escape, close and return focus reuse the shared modal. Search hands focus to the
+guide; navigating releases it before the existing Artifact guard can ask for a
+decision. Cancel keeps exact draft text and context; accepted guide navigation
+focuses the destination's main content. Opening/closing the guide
+preserves routes, active scope and filters. It writes no progress or session data
+and requests no permissions. No CLI discovery, installation/authentication test,
+provider execution, automatic completion inference or service configuration is added.
+The broader onboarding/provider workflow remains pending.
+
 ## Pin workspaces
 
 The workspace directory offers a named **Pin workspace** toggle on each recorded
@@ -319,7 +356,7 @@ The status describes this checkout, not full product acceptance.
 | Studio / interactive terminals | Blocked     | Existing `ObservedTools.tsx` is historical evidence only; observed-tools browser tests                                                                             | Managed ownership, operation authorization and validated PTY/provider runtime; no fake terminal or Start/Stop/Resume controls                                                                                  |
 | Orchestration / collaboration  | Blocked     | Explicit source-backed parent relationships remain visible in session details                                                                                      | No task/delegation execution contract; no agent-to-agent messages or inferred workflow                                                                                                                         |
 | Kanban                         | Planned     | No production board or placeholder cards                                                                                                                           | Requires explicit task entities, provenance and authorized transitions                                                                                                                                         |
-| Onboarding                     | Planned     | Existing empty/loading/offline states retained                                                                                                                     | Safe CLI discovery and a bounded first-run workflow                                                                                                                                                            |
+| Onboarding                     | Partial     | `ObservationGuide.tsx`; `tests/browser/observation-guide.spec.ts` covers evidence, focus, guards and layouts                                                       | Optional read-only orientation only; safe CLI discovery, installation/auth checks and broader first-run workflow remain unavailable                                                                            |
 
 A separate [synthetic PTY acceptance experiment](../development/terminal-pty-acceptance.md)
 validates fixed disposable Node processes only. It does not provide a runtime
@@ -330,6 +367,13 @@ explicitly synthetic data and disposable storage. Existing ingestion, API shapes
 WebSocket handshake and security controls are unchanged.
 
 ## Visual acceptance checklist
+
+`tests/browser/observation-guide.spec.ts` covers actual snapshot counters/time,
+unknown versus zero, empty/global scope, live refresh and stale evidence, offline
+access, no mutation requests, modal focus/keyboard, existing route/history and exact
+draft guards. Synthetic dark/light screenshots check 1440/1280/390/320px containment
+with maximum reading sizes, comfortable spacing and reduced motion, plus pt-BR at
+320px. This does not establish native visual or manual screen-reader acceptance.
 
 `tests/browser/shell-navigation.spec.ts` captures synthetic Workspace/Agents views
 at 1440px, 1280px and 390px with reduced motion, and checks viewport containment.

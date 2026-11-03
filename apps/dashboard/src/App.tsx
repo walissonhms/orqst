@@ -61,6 +61,7 @@ import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
+import { ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
 import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
@@ -520,6 +521,14 @@ export function App() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  function closeGuide() {
+    setGuideOpen(false);
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body)
+        document.getElementById('main-content')?.focus();
+    });
+  }
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const navigation = useRef<DashboardHistory | null>(null);
@@ -720,9 +729,13 @@ export function App() {
     navigation.current?.push(viewPath(page, sessionId));
     setMenuOpen(false);
   }
-  function navigate(page: AppView) {
+  function navigate(page: AppView, focusContent = false) {
     if (page === view) return;
-    requestNavigation(() => applyView(page));
+    requestNavigation(() => {
+      applyView(page);
+      if (focusContent)
+        requestAnimationFrame(() => document.getElementById('main-content')?.focus());
+    });
   }
   function openWorkspace(id: string, page: AppView = view) {
     if (id === workspaceId && page === view) return;
@@ -1082,6 +1095,7 @@ export function App() {
               storageUnavailable={appearance.storageUnavailable}
               systemReducedMotion={appearance.systemReducedMotion}
               notifications={notificationPreferences}
+              onGuide={() => setGuideOpen(true)}
             />
           ) : view === 'models' ? (
             <ModelAnalytics
@@ -1236,6 +1250,9 @@ export function App() {
                     />
                     <h3>{t('emptyTitle')}</h3>
                     <p>{t('emptyBody')}</p>
+                    <button className="button" onClick={() => setGuideOpen(true)}>
+                      {t('observationGuide.title')}
+                    </button>
                     {snapshot?.diagnostics.scanning && (
                       <span className="connection">{t('syncing')}</span>
                     )}
@@ -1447,7 +1464,17 @@ export function App() {
           onSession={openSession}
           onNotifications={() => setNotificationOpen(true)}
           onCreate={() => setWorkspaceOpen(true)}
+          onGuide={() => setGuideOpen(true)}
           onClose={() => setPaletteOpen(false)}
+        />
+      )}
+      {guideOpen && (
+        <ObservationGuide
+          snapshot={snapshot}
+          connection={connection}
+          snapshotError={error}
+          onNavigate={(page) => navigate(page, true)}
+          onClose={closeGuide}
         />
       )}
       {notificationOpen && (

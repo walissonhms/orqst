@@ -124,18 +124,18 @@ part of the component contract.
 All planned frontend modules inherit this system when they become supported.
 This table is a visual requirement, not a declaration that a module is shipped.
 
-| Area                                   | Application and current boundary                                                                                                                                                        |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; four secondary panels support local visibility/order and keyboard controls                            |
-| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                                           |
-| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                                              |
-| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                                          |
-| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                                               |
-| Artifacts                              | Inert source/preview/editor using active layers, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                             |
-| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; grouped Settings adds contrast/spacing/motion, reading sizes/fonts and scoped reset; onboarding remains planned |
-| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                                           |
-| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                                      |
-| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                                                                           |
+| Area                                   | Application and current boundary                                                                                                                                                                |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; four secondary panels support local visibility/order and keyboard controls                                    |
+| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                                                   |
+| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                                                      |
+| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                                                  |
+| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                                                       |
+| Artifacts                              | Inert source/preview/editor using active layers, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                                     |
+| Settings and onboarding                | Grouped Settings uses shared controls; optional Observation guide uses the native modal, ordered steps, diagnostic definition lists and existing navigation. Broader onboarding remains planned |
+| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                                                   |
+| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                                              |
+| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                                                                                   |
 
 Electron's native menu-bar artwork, menus, OS dialogs and alerts have their own
 platform constraints. The shared dashboard stylesheet does not theme native OS

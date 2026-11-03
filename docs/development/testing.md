@@ -757,3 +757,34 @@ history were not revalidated by this increment. No installed service, user datab
 provider process or source session was changed, and no push/restart was performed.
 Full-archive search, saved-file/draft indexing, automatic extraction and durable draft
 recovery remain outside this delivery.
+
+## First observation guide — 2026-11-03
+
+This UI-only increment starts after `f4ed5f6` and preserves the separate experimental
+Terminal work. With isolated Node 24.22.2/pnpm 10.34.9 it passed `pnpm lint`,
+`pnpm typecheck`, `pnpm test` (303 cases), `pnpm build` and 45 Chromium cases on
+isolated port 4613, using the selection in the
+[browser guide](browser-tests.md#first-observation-guide-coverage).
+
+The seven new synthetic cases cover snapshot diagnostic values/time, unavailable
+versus zero, global history in an empty selected workspace, automatic fact updates,
+stale snapshot failures/recovery, offline entry, no mutation requests/progress
+storage, modal keyboard/focus, palette handoff, canonical routes/history and exact
+Artifact draft cancellation/confirmed navigation. Neighboring Settings, shell,
+Artifact guards, routes and brand checks also pass. Dark/light screenshots cover
+1440/1280/390/320px at maximum reading sizes, comfortable spacing and reduced motion;
+desktop and pt-BR/light 320px images were visually inspected.
+
+Initial guide tests exposed native Tab boundary behavior, which is now explicitly
+contained. Palette return focus correctly restores its original field; a test also
+needed an exact language label. An intermediate repeat coincided with a rebuild
+removing served assets and returned `dashboard_not_built` in an existing Settings
+case. The final 45-case run used the completed, unchanged build and passed without
+retries. The existing Vite chunk-size advisory remains; no check was weakened.
+
+No ingestion, API, native contract or dependency changed, so `pnpm validate:local`,
+live-provider and Desktop smoke checks were not repeated. Full Chromium, other
+browsers, manual screen-reader and native visual acceptance remain pending. There
+was no installed service restart, push, user database/source change or provider
+execution. CLI discovery, authentication/installation checks, saved onboarding
+progress and the broader first-run workflow remain outside this delivery.
