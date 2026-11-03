@@ -1,15 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { LiveMetricsState } from './use-session-metrics';
+import { TokenThresholdControl } from './TokenThresholdControl';
 
 const usageKeys = ['input', 'output', 'cached', 'total'] as const;
 
 export function LiveMetrics({
   state,
   announce = false,
+  threshold,
+  onThresholdChange,
 }: {
   state: LiveMetricsState;
   announce?: boolean;
+  threshold?: number;
+  onThresholdChange?: (value: number | undefined) => void;
 }) {
   const { t, i18n } = useTranslation();
   const metric = state.confirmed;
@@ -39,6 +44,18 @@ export function LiveMetrics({
   }, [update]);
   const locale = i18n.resolvedLanguage ?? 'en-US';
   const number = new Intl.NumberFormat(locale);
+  const thresholdStatus = (available: boolean) =>
+    threshold === undefined
+      ? ''
+      : t('liveMetrics.threshold.value', { value: number.format(threshold) }) +
+        ' ' +
+        t(
+          !available || !metric
+            ? 'liveMetrics.threshold.unavailable'
+            : metric.usage.total >= threshold
+              ? 'liveMetrics.threshold.reached'
+              : 'liveMetrics.threshold.below',
+        );
   // Pending is visual only. Repeated snapshot reconciliation keeps this text stable;
   // only the session header announces meaningful state/count changes.
   const announcement = state.offline
@@ -64,7 +81,10 @@ export function LiveMetrics({
       <p className="eyebrow">{t('liveMetrics.title')}</p>
       {announce && (
         <p className="sr-only" aria-live="polite" aria-atomic="true">
-          {announcement}
+          {announcement}{' '}
+          {thresholdStatus(
+            !state.offline && !state.failed && state.result?.availability === 'available',
+          )}
         </p>
       )}
       <p className="fine-print">
@@ -81,6 +101,14 @@ export function LiveMetrics({
       {state.result?.availability === 'unavailable' && (
         <p className="fine-print">{t(`liveMetrics.unavailable.${state.result.reason}`)}</p>
       )}
+      {threshold !== undefined && (
+        <p
+          className={`fine-print live-token-threshold${eligible && metric && metric.usage.total >= threshold ? ' live-token-threshold-reached' : ''}`}
+        >
+          {thresholdStatus(eligible)}
+        </p>
+      )}
+      {onThresholdChange && <TokenThresholdControl onChange={onThresholdChange} />}
       {metric ? (
         <>
           <dl className="live-metric-values" role="group" aria-label={t('usage')}>

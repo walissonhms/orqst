@@ -40,7 +40,19 @@
       "invalid_evidence": "Metrics evidence could not be validated.",
       "identity_conflict": "Metrics evidence conflicts with the observed session identity."
     },
-    "normalizationNote": "Normalized cumulative session snapshot, not artifact usage. Cached input is included in input; total = input + output. Missing source cache normalizes to 0 and missing total to input + output; original field presence is not preserved."
+    "normalizationNote": "Normalized cumulative session snapshot, not artifact usage. Cached input is included in input; total = input + output. Missing source cache normalizes to 0 and missing total to input + output; original field presence is not preserved.",
+    "threshold": {
+      "configure": "Session token alert",
+      "help": "Visual alert for this open session only. It uses normalized cumulative total tokens (input + output, including cached input once). It is not a provider quota or spending cap and never stops execution. Nothing is saved; closing these session details or reloading clears the threshold. No system notification or sound is sent.",
+      "label": "Total-token threshold",
+      "apply": "Apply threshold",
+      "clear": "Clear threshold",
+      "invalid": "Enter a whole number from 1 to 9007199254740991, using digits only.",
+      "value": "Session alert threshold: {{value}} tokens.",
+      "reached": "The last confirmed total is at or above the threshold.",
+      "below": "The last confirmed total is below the threshold. Usage after the metric time is unknown.",
+      "unavailable": "Threshold comparison is unavailable until metrics are confirmed again."
+    }
   },
   "agents": "Agents & sessions",
   "activity": "Execution timeline",

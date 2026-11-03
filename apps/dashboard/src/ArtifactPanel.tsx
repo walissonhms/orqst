@@ -15,10 +15,12 @@ import type { LiveMetricsState } from './use-session-metrics';
 export function ArtifactPanel({
   request,
   metrics,
+  tokenThreshold,
   onClose,
 }: {
   request: ArtifactExtractionRequest;
   metrics: LiveMetricsState;
+  tokenThreshold?: number;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -117,7 +119,7 @@ export function ArtifactPanel({
           {t('artifacts.close')}
         </button>
       </div>
-      <LiveMetrics state={metrics} />
+      <LiveMetrics state={metrics} threshold={tokenThreshold} />
       <p className="fine-print">{t('artifacts.manualNote')}</p>
       {failed && <p role="alert">{t('artifacts.loadFailed')}</p>}
       {!failed && !result && <p role="status">{t('artifacts.loading')}</p>}

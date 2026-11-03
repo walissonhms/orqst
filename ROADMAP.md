@@ -33,8 +33,12 @@ The confirmed Live Metrics increment adds normalized session tokens and their ow
 metric occurrence time to session and manual Artifacts headers. Bounded compact proof,
 unavailable values and stale/offline readings are explicit. A brief accessible cue now
 highlights fields changed by newer confirmed evidence, with static reduced-motion support;
-it never interpolates counts or times. Terminal display, limits, verified pricing, Fast
-and mascot reactions remain planned. See [contract](docs/api/live-metrics.md).
+it never interpolates counts or times. A temporary session token threshold now adds
+a visual advisory in both headers, using only confirmed cumulative totals. Closing
+session details clears it; stale readings cannot claim to be below or above it. This
+is not a provider quota, spending cap or execution limit. Terminal display, project/
+persistent limits, verified pricing, Fast and mascot reactions remain planned. See
+[contract](docs/api/live-metrics.md).
 
 The browser Analytics export increment adds gesture-only CSV/Markdown of the current
 validated aggregate with explicit coverage/nulls and bounded privacy/syntax controls.

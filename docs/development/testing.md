@@ -320,6 +320,17 @@ the changed fields while retaining source occurrence time. These checks do not e
 native screen-reader delivery or real-provider billing. Ingestion is unchanged; no
 `validate:local`, live provider run or installed-service restart is needed for this UI slice.
 
+The temporary session alert suite (`tests/browser/token-threshold.spec.ts`) exercises
+an unmocked synthetic observer-to-header/Artifacts threshold crossing (cache is not
+added), exact equality, safe integer validation, explicit apply/clear, unchanged
+captured totals/time, unavailable/pending/failure recovery, stable announcement,
+memory cleanup, pt-BR, keyboard and reduced-motion mobile layout. It uses disposable
+sessions/storage only, without provider calls or installed service/client changes.
+Independent `token-threshold-qa.spec.ts` checks explicit safe-integer admission,
+session reset, offline recovery and the single settled header announcement.
+Run it with the same isolated browser port/output policy above. These are automated
+browser checks, not native screen-reader or complete Desktop acceptance.
+
 ## Browser aggregate Analytics export
 
 Use synthetic reports and disposable observer storage/profiles. The export QA suites

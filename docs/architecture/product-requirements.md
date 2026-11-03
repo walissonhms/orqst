@@ -82,14 +82,14 @@ a product capability. All required acceptance checks remain in the roadmap.
 
 ### Live Metrics
 
-| Requirement                                                               | Coverage | Evidence and remaining work                                                                                     | Phase |
-| ------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- | ----- |
-| Permanent token header in session, terminal and artifacts                 | Partial  | U session table/usage view has totals; no permanent shared header or terminal/artifact views.                   | 2     |
-| Input/output/cache/total without duplicate subsets                        | Existing | C/D enforce Codex cumulative semantics and mirror priority; tests cover replay/cache. Provider parity unproven. | 1, 3  |
-| Animate only real updates; last confirmed value and update time           | Partial  | U refreshes observed totals; no qualified stale/update-time header or count animation.                          | 2     |
-| Supported Fast lightning, configurable high-use flame and state reactions | Absent   | No supported-mode/threshold animation system.                                                                   | 2     |
-| Mascot eye/context motion, reduced motion and performance                 | Absent   | No required mascot reaction system.                                                                             | 2, 6  |
-| Session/project limits; verified-price-only cost                          | Absent   | D retains tokens only; no alert limits, verified price feed or billing reconciliation.                          | 2, 4  |
+| Requirement                                                               | Coverage | Evidence and remaining work                                                                                                                  | Phase |
+| ------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| Permanent token header in session, terminal and artifacts                 | Partial  | U session table/usage view has totals; no permanent shared header or terminal/artifact views.                                                | 2     |
+| Input/output/cache/total without duplicate subsets                        | Existing | C/D enforce Codex cumulative semantics and mirror priority; tests cover replay/cache. Provider parity unproven.                              | 1, 3  |
+| Animate only real updates; last confirmed value and update time           | Partial  | U refreshes observed totals; no qualified stale/update-time header or count animation.                                                       | 2     |
+| Supported Fast lightning, configurable high-use flame and state reactions | Absent   | No supported-mode/threshold animation system.                                                                                                | 2     |
+| Mascot eye/context motion, reduced motion and performance                 | Absent   | No required mascot reaction system.                                                                                                          | 2, 6  |
+| Session/project limits; verified-price-only cost                          | Partial  | U offers a temporary session visual threshold on confirmed totals; persistent/project limits, verified prices and enforcement remain absent. | 2, 4  |
 
 ### Mandatory Model Usage Analytics
 

@@ -1798,6 +1798,30 @@ th:nth-last-child(2) {
   gap: 12px;
   margin: 12px 0;
 }
+.live-token-threshold-reached {
+  border-inline-start: 3px solid #e9b972;
+  padding-inline-start: 10px;
+  color: #f0ce9b;
+}
+.live-token-threshold-control summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.live-token-threshold-control summary:focus-visible {
+  outline: 2px solid #77c7a5;
+  outline-offset: 2px;
+}
+.live-token-threshold-control form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.live-token-threshold-control input {
+  width: 180px;
+  max-width: 100%;
+}
 .live-metric-values > div {
   display: flex;
   flex-direction: column;

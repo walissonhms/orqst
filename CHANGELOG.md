@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Temporary session total-token threshold with an explicit Apply/Clear flow and a
+  shared session/Artifacts visual advisory. Only current confirmed normalized totals
+  are compared; stale/pending/error/offline readings remain unavailable. English and
+  Portuguese text, integer validation and the existing single polite announcer are
+  preserved. No persistence, system notification or process control is added.
+
 - Descriptive comparison of two or three current observed Analytics rows, with
   input/output/cache/total and non-additive session counts. English/Portuguese
   disclosures preserve incomplete coverage, unavailable task/price measurements

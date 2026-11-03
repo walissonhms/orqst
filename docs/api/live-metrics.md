@@ -2,8 +2,9 @@
 
 The session header and manual Artifacts panel show normalized cumulative **session**
 tokens, in browser and Desktop. These are never tokens attributed to an artifact,
-model, task outcome or price. Terminal metrics, configurable limits, verified prices,
-Fast indicators and number/mascot animations remain planned, without placeholder controls.
+model, task outcome or price. A temporary visual session threshold is described below.
+Terminal metrics, persistent/project limits, verified prices, Fast indicators and
+number/mascot animations remain planned, without placeholder controls.
 
 ## Query and contract
 
@@ -96,6 +97,32 @@ replays and recovery of the same reading do not trigger the cue. Pending/stale, 
 offline and unavailable states suppress and clear it without replacing confirmed values
 or time. The bounded UI timeout is cleaned up on replacement/unmount; it does not poll
 or fetch data. No extra live region or focus movement is introduced.
+
+## Temporary session token alert
+
+The session header offers an optional visual threshold, applied explicitly as a
+positive safe integer (1 through 9007199254740991, digits only). Editing its draft
+does not change an applied threshold; invalid input preserves the previous setting.
+Clear removes it. One memory-only value belongs to the open session details and is
+shared with its manual Artifacts header. Closing details, changing the selected
+session or reloading clears it. Opening/closing Artifacts does not reset it.
+
+Comparison uses only the confirmed normalized cumulative `usage.total`: input plus
+output, with cached input included once. Equality counts as reached. This threshold
+includes historical session usage, not usage since applying it, project totals,
+artifact usage or money. The source metric time and normalization disclosures stay
+visible. Usage after that time is unknown even below the threshold. Reached/below
+states require an available, non-stale reading; pending, failed, unavailable and
+offline readings show comparison unavailable while retaining the threshold and last
+confirmed counts. Recovery reevaluates the confirmed reading without predicting use.
+
+The warning uses static text and a border/color cue; it never relies on color alone
+or adds motion, sound, OS notifications or a new live region. The existing session
+announcer includes the last settled comparison and stays stable through polling's
+transient pending state; Artifacts remains silent. This advisory neither enforces
+a provider quota/spending limit nor stops or changes execution. Nothing is persisted,
+sent to the Bridge, added to an export or written to observed sessions. Persistent/
+project limits, native alert policy and enforceable budgets require separate work.
 
 ## Security review note
 

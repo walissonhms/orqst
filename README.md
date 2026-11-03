@@ -45,6 +45,12 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Session token alert increment:** configure a temporary total-token threshold in
+  the confirmed metrics header. The session and manual Artifacts views compare only
+  a current confirmed cumulative reading; stale/pending/error/offline readings leave
+  comparison unavailable. The threshold clears when session details close or reload.
+  This is a visual advisory, without persistence, system alerts or execution control.
+
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
   dashboard, en-US/pt-BR UI, macOS user-service helper and minimal Electron observer
   client listed above.

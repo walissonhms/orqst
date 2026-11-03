@@ -241,6 +241,7 @@ function SessionDetail({
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<'activity' | 'results' | 'usage'>('activity');
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
+  const [tokenThreshold, setTokenThreshold] = useState<number>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
   const metrics = useSessionMetrics(session, snapshot, connection, snapshotError);
   useEffect(() => {
@@ -331,7 +332,12 @@ function SessionDetail({
           </details>
         </div>
       </div>
-      <LiveMetrics state={metrics} announce />
+      <LiveMetrics
+        state={metrics}
+        announce
+        threshold={tokenThreshold}
+        onThresholdChange={setTokenThreshold}
+      />
       <ModelHistory
         session={session}
         cursor={snapshot.cursor}
@@ -416,6 +422,7 @@ function SessionDetail({
         <ArtifactPanel
           request={artifactRequest}
           metrics={metrics}
+          tokenThreshold={tokenThreshold}
           onClose={() => {
             setArtifactRequest(undefined);
             requestAnimationFrame(() => {

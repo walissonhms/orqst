@@ -40,7 +40,19 @@
       "invalid_evidence": "Não foi possível validar a evidência das métricas.",
       "identity_conflict": "A evidência das métricas conflita com a identidade observada da sessão."
     },
-    "normalizationNote": "Snapshot cumulativo normalizado da sessão, não do artefato. Cache já integra a entrada; total = entrada + saída. Cache ausente na fonte vira 0 e total ausente vira entrada + saída; a presença original dos campos não é preservada."
+    "normalizationNote": "Snapshot cumulativo normalizado da sessão, não do artefato. Cache já integra a entrada; total = entrada + saída. Cache ausente na fonte vira 0 e total ausente vira entrada + saída; a presença original dos campos não é preservada.",
+    "threshold": {
+      "configure": "Alerta de tokens da sessão",
+      "help": "Alerta visual somente para esta sessão aberta. Usa o total cumulativo normalizado de tokens (entrada + saída, contando a entrada em cache uma vez). Não é cota do provedor nem teto de gastos e nunca interrompe a execução. Nada é salvo; fechar estes detalhes ou recarregar limpa o limiar. Nenhuma notificação do sistema ou som é enviado.",
+      "label": "Limiar do total de tokens",
+      "apply": "Aplicar limiar",
+      "clear": "Limpar limiar",
+      "invalid": "Informe um número inteiro de 1 a 9007199254740991, usando somente dígitos.",
+      "value": "Limiar de alerta da sessão: {{value}} tokens.",
+      "reached": "O último total confirmado atingiu ou ultrapassou o limiar.",
+      "below": "O último total confirmado está abaixo do limiar. O uso após o horário da métrica é desconhecido.",
+      "unavailable": "A comparação com o limiar está indisponível até nova confirmação das métricas."
+    }
   },
   "agents": "Agentes e sessões",
   "activity": "Linha do tempo",
