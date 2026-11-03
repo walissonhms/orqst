@@ -71,6 +71,119 @@ These are structured task terminals with inert text/evidence, not interactive PT
 emulators. The existing separate-login xterm path remains available independently
 through `--terminal-config`; reuse manifests cannot enter that legacy path.
 
+## Human acceptance procedure for two real agents
+
+This procedure requires a new, explicit authorization for real execution. Preparation,
+offline declarations, tests and build do not authorize a provider start. Use the
+existing CLI/login through `reuse-existing`; do not repeat device login or copy
+credentials. Keep machine-specific paths, hashes, reservation evidence and results
+in a private local report outside Git.
+
+Before requesting authorization, the contributor must:
+
+1. Record the reviewed commit, Node/pnpm/Electron versions, native Codex path/version
+   and executable hashes. Compare the locally generated experimental declarations
+   with `adapter.ts`, `channel.ts` and `dynamic-tools.ts`: function discriminator,
+   `namespace:null`, object arguments, `inputText` response, and matching call
+   ID/status/success receipt. Static agreement does not prove live compatibility.
+2. Check process metadata and the actual Desktop user-data admission directory
+   without reading credentials, session text or arbitrary process arguments.
+   Absence of a process or marker is only a snapshot, never proof of historical
+   exit or permission to bypass quarantined work. Resolve the previous attempt's
+   capacity policy using the [reconciliation rules](codex-two-agent-acceptance.md#reconciling-the-blocked-attempt-before-another-real-run).
+   Preserve every uncertain journal and marker unchanged. Do not create fresh
+   slots or a different Desktop profile to bypass a previous reservation.
+3. Verify the resident Desktop separately from files on disk. A successful build
+   replaces disk assets but cannot replace the main process already loaded in
+   memory; newly opened documents can also read newer assets. Source maps and
+   modification times alone do not identify the resident build. If its version
+   cannot be established, postpone acceptance until a human-authorized safe
+   relaunch. Never reload an active managed document to obtain newer code.
+
+For a safe relaunch, the human first checks all owned managed work in the live
+client. If a pair exists, stop each owned process with its separate native consent,
+wait for confirmed native exits, then review and complete signed retirement while
+the original owner is still connected. A completed task, hidden window or absent
+PID does not make quitting safe. A lost owner or a previous-lifetime marker blocks
+this path; preserve it and reconcile evidence instead. Only after these checks and
+explicit relaunch authorization may the human quit and reopen the checkout Desktop
+with `pnpm desktop`. Leave the observer Bridge/service and external sessions running.
+The single-instance lock means a second launch is not evidence of a new bundle.
+
+After the capacity and loaded-build checks are satisfied:
+
+1. Provision a new private empty project and two new private state directories
+   outside the repository, using the two setup commands above with
+   `--authentication reuse-existing --acknowledge-shared-native-config`. Setup
+   executes no provider. Revalidate both manifests, hashes, empty project and
+   absence of existing slot journals before human review. Do not reuse headless
+   acceptance slots. No observer database migration is needed.
+2. Ask for approval of the exact binary/hash/version, both manifests, the exact
+   model `gpt-6.1-sol` for A and B, two native task submissions (A and B), A's one
+   tool continuation, and cleanup of these owned processes. No fallback is allowed.
+   Model echo at startup is configuration evidence; entitlement and real model
+   execution remain unverified until the authorized run.
+3. Explicitly disclose **no enforced token or monetary ceiling**. The 120-second
+   task deadline, single delegation, byte budgets and 30-minute process lifetime
+   do not bound internal provider retries, reasoning, tokens or charges. Actual
+   cost and billing path are unknown; no dollar allowance, zero-cost claim or
+   price estimate replaces this consent. Native shared authentication/configuration
+   may refresh credentials or start configured MCP servers. Read-only/on-request
+   and prompt restrictions do not provide hard containment.
+4. The human activates the real native window, opens **Managed agents**, enters
+   the exact model in both slots, and selects the two reviewed manifests on A's
+   first start. Verify the selection order in each complete native manifest review:
+   first is A, second is B. Confirm A and B separately. A refusal, expired challenge
+   or startup failure is not permission to retry. Do not bypass focus/signature
+   checks. Review is capped at 4096 characters and challenges expire after 30 seconds.
+5. Record both distinct instance/pane/thread identities, workspace `T-NNN` names,
+   exact reported model, `running` lifecycle and available/`ready` panes. These are
+   structured terminals; keyboard-driven Codex TUIs and free-form PTY interaction
+   are outside this acceptance surface.
+6. Choose a fresh nonsecret marker, such as `ORQST_CLIENT_B_<UUID>`. Put this exact
+   worker task in the B-task field:
+
+   ```text
+   Disposable ORQST acceptance. Reply with exactly ORQST_CLIENT_B_<UUID>. Do not read files, run commands, modify data, call tools or request permissions.
+   ```
+
+   Put this instruction in A's field:
+
+   ```text
+   Disposable ORQST acceptance. After the worker result returns, reply with exactly A_RECEIVED:ORQST_CLIENT_B_<UUID>. Do not read files, run commands, modify data or request permissions.
+   ```
+
+   Substitute the same marker everywhere. The client
+   appends the exact B target/task and single-tool instruction; the human reviews
+   that complete generated prompt and correlation/deadline in a separate native
+   delegation confirmation before sending it once.
+
+7. Require one B message with the exact marker, explicit delivered/completed states,
+   matching A/B pane IDs and root/message correlation, followed by root completion
+   and the exact `A_RECEIVED:` response in A. The runtime requires the matching
+   native dynamic-tool success receipt before returning root success. A's prose
+   alone, task admission, silence or matching marker alone cannot establish the
+   chain. Missing evidence, provider approval requests, observed unexpected tool activity,
+   timeout, transport loss or wrong identities stop acceptance without retry.
+   The view is not a complete native-tool audit and does not prove that no other
+   tool ran. Do not infer that guarantee from a successful marker round trip.
+8. Keep the original owner connected. Use **Stop owned process** for A and B with
+   separate native confirmations, wait for both native-confirmed exits, then
+   review signed retirement. Preserve the archive and original journals, including
+   unknown task outcomes. Stop refusal or missing exit blocks cleanup acceptance;
+   never signal a discovered PID or delete a marker. Quit/reload disconnects and
+   does not stop processes. Do not delete private evidence automatically; removal
+   after confirmed cleanup is separate owner-authorized work.
+
+Human actions are limited to explicit run/relaunch authorization where needed,
+native activation, manifest selection/review, task review and owned stop/retirement
+consents. There is no need to choose a new architecture, provider, login mechanism
+or alternate model. Record pass/fail/inconclusive separately for client interaction,
+two-agent execution, delegation, cleanup and source preservation. The global
+`history_changed` guard exists only in the headless script; concurrent normal Codex
+activity can make it inconclusive. Do not relax it, attribute its writer or treat
+using the Desktop path as proof that external sources were preserved.
+
 ## Boundaries and limits
 
 - The selected native HOME/CODEX_HOME remain shared. The CLI alone checks native
