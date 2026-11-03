@@ -277,3 +277,14 @@ The shared session details now provide a bounded **Observed tools** evidence vie
 It does not attach to a process or expose input/interrupt controls. See the
 [terminal boundary](terminal-boundary.md) for supported semantics and the concrete
 managed-execution decisions required before an interactive terminal can ship.
+
+## Separate native Terminal acceptance application — 2026-11-03
+
+The [explicit synthetic native lab](terminal-native-acceptance.md) composes its own
+restricted document, session, preload and native IPC runtime with an owned Node-host
+PTY. It is built only by `pnpm accept:terminal-native --authorize-synthetic-pty`,
+never by normal Desktop startup/build or automatic tests. The regular observer
+main/preload, shared route allowlist and sender policy keep their boundaries. No
+Desktop terminal menu, provider execution or external-session authority is enabled.
+Real transport acceptance uses intercepted native dialogs; native human/modal and
+Codex-specific acceptance remain pending.

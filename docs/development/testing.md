@@ -624,3 +624,14 @@ native-select automation and ambiguous/exact-label selectors; the final run reta
 cross-tab, focus, exact draft text, real Analytics readiness and containment checks.
 The existing Vite chunk-size warning remains; no native visual or release acceptance
 is implied.
+
+## Explicit native Terminal transport acceptance
+
+`pnpm accept:terminal-native --authorize-synthetic-pty` builds and opens an isolated
+Electron application with a disposable profile and a separate Node 24 host for the
+fixed synthetic PTY. It is excluded from automatic test/build/CI and executes no
+provider or credential. The macOS/arm64 path checks real preload/IPC/session/network
+isolation, cancellation/start, attach/read, exact leased paste, blur revocation,
+confirmed stop/exit and permanent reload revocation. Dialog responses are
+intercepted; this does not accept a real human/modal gesture or provider behavior.
+See [reproduction, lifetime and remaining gates](terminal-native-acceptance.md).

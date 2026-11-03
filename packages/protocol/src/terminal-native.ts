@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// Experimental native-only contract. No Bridge route or preload exposes it.
+// Experimental native-only contract. Never exposed by the observer Bridge or preload.
 const instance = { instanceId: z.string().uuid() };
 const sequence = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const action = <Name extends string, T extends z.ZodRawShape>(name: Name, fields: T) =>
@@ -30,6 +30,46 @@ export const terminalNativeRequestSchema = z.discriminatedUnion('action', [
   action('stop', { ...instance, signal: z.enum(['SIGTERM', 'SIGKILL']) }),
 ]);
 export type TerminalNativeRequest = z.infer<typeof terminalNativeRequestSchema>;
+
+export const terminalNativeReplySchema = z.union([
+  z.strictObject({ status: z.enum(['denied', 'cancelled', 'busy']) }),
+  z.strictObject({
+    status: z.literal('ok'),
+    instanceId: z.string().uuid(),
+    snapshot: z
+      .strictObject({
+        instanceId: z.string().uuid(),
+        epoch: z.string().uuid(),
+        state: z.enum([
+          'prepared',
+          'starting',
+          'running',
+          'exited',
+          'start_failed',
+          'ownership_lost',
+        ]),
+        exit: z
+          .strictObject({
+            exitCode: z.number().int().safe(),
+            signal: z.number().int().safe().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+    output: z
+      .strictObject({
+        bytes: z.array(z.number().int().min(0).max(255)).max(64 * 1024),
+        nextCursor: sequence,
+        gap: z.boolean(),
+      })
+      .optional(),
+  }),
+]);
+export type TerminalNativeWireReply = z.infer<typeof terminalNativeReplySchema>;
+export interface DesktopTerminal {
+  readonly contractVersion: 1;
+  request(request: TerminalNativeRequest): Promise<TerminalNativeWireReply>;
+}
 
 /** Trusted native-only presentation data, never accepted from a renderer. */
 export interface TerminalNativeConfirmation {
