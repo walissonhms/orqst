@@ -14,6 +14,12 @@ pane identity, durable FIFO, grants, separate delivery/task evidence and Core re
 subscriptions/inbox with synthetic transport tests. It is not a public endpoint or
 an agent-to-agent workflow. No real two-Codex delegation/automatic CLI return,
 Communication Inspector, planner or Claude Code/OpenCode communication is delivered.
+The separate [structured Codex runtime](../development/codex-structured-runtime.md)
+now joins native admission, distinct slot homes and exact pane bindings to an
+app-server adapter at library level. Synthetic transports cover two identities and
+correlated Core results. Normal Desktop/Bridge startup, real-provider protocol/
+authentication/model acceptance, native consent composition and sender-CLI consumption
+remain pending. The shared-project slots do not supply isolated write worktrees.
 These partial increments do not complete Phase 2/4 or the Desktop MVP.
 
 ## Audit basis — 2026-11-02

@@ -31,6 +31,15 @@ public agent transport. A Core result subscription does not prove return inside
 an initiating CLI. Claude Code/OpenCode and the real two-agent milestone remain
 unvalidated; no observer cookie gains execution or delegation authority.
 
+A separate [structured Codex runtime library](../development/codex-structured-runtime.md)
+now joins signed native admission, per-slot private homes/journals and exact pane
+bindings to an app-server adapter. Its native host is compiled as an inert build
+artifact; normal startup never constructs it. Two independent identities and Core
+results have synthetic protocol evidence only. Native provider execution, human
+consent, agent-facing MCP/tools and result consumption inside a sender CLI remain
+unvalidated or unimplemented. This library does not convert the xterm process into
+a structured endpoint or change external observation.
+
 ## Current purpose
 
 ORQST gives a developer one place to observe AI coding agents that are running
