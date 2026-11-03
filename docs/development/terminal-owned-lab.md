@@ -3,8 +3,10 @@
 The experimental modules in `packages/core/src/terminal/` implement authorization,
 handle ownership and bounded I/O for a future managed terminal. They are **not
 exported by the Core package entry point or composed into ObserverCore, Bridge or
-Desktop**. There is no terminal execution endpoint, IPC handler or registered native dialog,
-renderer control, provider adapter or persistent execution record in this increment.
+normal Desktop startup**. That runtime has no terminal execution endpoint, IPC
+handler, native dialog, renderer control, provider adapter or persistent execution
+record. The later [native acceptance lab](terminal-native-acceptance.md) composes a
+separate disposable application only.
 The existing observer and observed sessions remain read-only.
 
 The only native backend is a fixed disposable Node fixture in the explicit
