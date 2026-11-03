@@ -84,18 +84,18 @@ part of the component contract.
 All planned frontend modules inherit this system when they become supported.
 This table is a visual requirement, not a declaration that a module is shipped.
 
-| Area                                   | Application and current boundary                                                                                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                              |
-| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                              |
-| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers |
-| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact             |
-| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                  |
-| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved               |
-| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; broader settings/onboarding remain planned                         |
-| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                              |
-| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                         |
-| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                              |
+| Area                                   | Application and current boundary                                                                                                                                   |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                                                      |
+| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                      |
+| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                         |
+| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                     |
+| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                          |
+| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                       |
+| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; grouped Settings adds contrast/spacing/motion and scoped reset; onboarding remains planned |
+| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                      |
+| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                 |
+| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                                                      |
 
 Electron's native menu-bar artwork, menus, OS dialogs and alerts have their own
 platform constraints. The shared dashboard stylesheet does not theme native OS
@@ -134,10 +134,19 @@ Never derive reactions from prose, elapsed time or inactivity. Decorative artwor
 must be hidden from assistive technology; meaningful state needs adjacent localized
 text. Avoid flashing, perpetual bouncing and animation that hides source content.
 
-The existing `prefers-reduced-motion: reduce` rule disables animations,
-transitions and smooth scrolling. Keep the exact numbers, static outline, state
+Settings offers standard/higher dark contrast and compact/comfortable spacing.
+Higher contrast derives muted text and borders from lavender without changing
+semantic state colors. Comfortable spacing increases control targets (40px), table
+rows, workspace cards and activity entries. Font size retains the existing scale;
+browser zoom remains available. No light palette or terminal font control
+is implemented.
+
+The local Reduce motion choice and existing `prefers-reduced-motion: reduce` rule
+disable animations, transitions and smooth scrolling. Keep the exact numbers, static outline, state
 labels, flame and all actions available. Future mascot, panel and Fast effects
-must honor the same preference without losing information.
+must honor the same preference without losing information. The OS request always
+wins; Follow system never forces animation against it. See the
+[local preference contract](ui-ux-specification.md#local-preference-contract).
 
 ## Development and acceptance
 

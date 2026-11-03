@@ -464,3 +464,106 @@
   outline: 2px solid var(--orqst-neon);
   outline-offset: -3px;
 }
+
+/* Local appearance choices preserve the official dark palette and semantic states. */
+:root[data-contrast='high'] {
+  --orqst-muted: var(--orqst-lavender);
+  --orqst-border: color-mix(in srgb, var(--orqst-lavender) 60%, var(--orqst-surface));
+  --orqst-border-strong: var(--orqst-lavender);
+}
+:root[data-density='comfortable'] :is(button, .button, select, input:not([type='checkbox'])) {
+  min-height: 40px;
+}
+:root[data-density='comfortable'] input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+}
+:root[data-density='comfortable'] :is(td, th) {
+  padding-block: 18px;
+}
+:root[data-density='comfortable'] .workspace-link {
+  padding-block: 15px;
+}
+:root[data-density='comfortable'] .workspace-card {
+  padding: var(--orqst-space-6);
+}
+:root[data-density='comfortable'] .timeline-event {
+  padding-block: 24px;
+}
+:root[data-density='comfortable'] .preference {
+  padding-block: 12px;
+}
+:root[data-motion='reduced'] *,
+:root[data-motion='reduced'] *::before,
+:root[data-motion='reduced'] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+.settings-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--orqst-space-5);
+}
+.settings-group {
+  padding: var(--orqst-space-5);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-group h2 {
+  margin: 0 0 var(--orqst-space-4);
+  font-size: 16px;
+}
+.settings-group p {
+  line-height: 1.65;
+  margin-block: var(--orqst-space-3);
+}
+.settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--orqst-space-4);
+  margin-block: var(--orqst-space-4);
+}
+.settings-field select {
+  max-width: 65%;
+  min-height: 36px;
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: var(--orqst-radius-control);
+  padding: var(--orqst-space-2);
+}
+.settings-group .preferences {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.settings-reset {
+  width: 450px;
+  max-width: calc(100% - 32px);
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--orqst-space-3);
+  margin-top: var(--orqst-space-5);
+}
+@media (max-width: 1000px) {
+  .settings-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.settings-page h1 {
+  display: flex;
+  align-items: center;
+  gap: var(--orqst-space-3);
+}
+.settings-group .fine-print {
+  font-size: 12px;
+}
+.settings-group .preference {
+  font-size: 13px;
+}

@@ -443,7 +443,8 @@
       "overview": "Overview",
       "workspaces": "Workspace directory",
       "agents": "Agents & integrations",
-      "models": "Most used models"
+      "models": "Most used models",
+      "settings": "Settings"
     },
     "skip": "Skip to main content",
     "collapse": "Collapse sidebar",
@@ -513,5 +514,37 @@
       "confirmed": "Last confirmed",
       "outdated": "Out of date"
     }
+  },
+  "settings": {
+    "description": "Language, reading comfort and notification delivery, with clear local storage boundaries.",
+    "general": "General",
+    "appearance": "Appearance & accessibility",
+    "english": "English (US)",
+    "portuguese": "Português (Brasil)",
+    "languageHelp": "Language applies to the interface. Captured agent content stays in its original language.",
+    "appearanceHelp": "The official dark palette remains the foundation. Changes apply immediately to this dashboard.",
+    "contrast": "Contrast",
+    "standard": "Standard dark",
+    "high": "Higher contrast",
+    "density": "Spacing",
+    "compact": "Compact",
+    "comfortable": "Comfortable",
+    "densityHelp": "Comfortable spacing enlarges controls, table rows, workspace cards and activity entries.",
+    "motion": "Motion",
+    "systemMotion": "Follow system",
+    "reducedMotion": "Reduce motion",
+    "osReduced": "Your system requests reduced motion. Animations and transitions remain disabled in either option.",
+    "osStandard": "Your system allows motion. Choose Reduce motion to disable animations and transitions here.",
+    "zoomHelp": "For larger text in the browser, use browser zoom. Dashboard font-size controls are not available yet.",
+    "localScope": "Appearance is saved in this browser or Desktop profile, separately from workspace and notification preferences.",
+    "storageUnavailable": "Appearance applies for this visit. Local storage is unavailable, so it may reset after reload.",
+    "reset": "Reset appearance",
+    "resetHelp": "Restore standard dark contrast, compact spacing and system motion? Language, workspace selection, notification preferences, captured history and artifact drafts are unchanged.",
+    "resetConfirm": "Restore appearance defaults",
+    "notificationScope": "Categories and sound are saved by the local Bridge and shared by connected dashboards. Browser permission is managed by the browser; audio may need activation again after reload.",
+    "notificationsUnavailable": "Notification preferences require a current Bridge connection. Reading comfort and language remain available.",
+    "privacy": "Privacy & storage",
+    "privacyHelp": "Observation history is stored in the local Bridge SQLite database. Interface preferences stay in this browser or Desktop profile. Captured text is untrusted and redaction is best-effort.",
+    "privacyLimit": "Appearance reset changes only appearance preferences. This screen does not delete history, change retention, access provider credentials or modify native agent sessions."
   }
 }

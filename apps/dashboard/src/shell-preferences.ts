@@ -1,4 +1,4 @@
-export const appViews = ['overview', 'workspaces', 'agents', 'models'] as const;
+export const appViews = ['overview', 'workspaces', 'agents', 'models', 'settings'] as const;
 export type AppView = (typeof appViews)[number];
 export interface ShellPreferences {
   view: AppView;

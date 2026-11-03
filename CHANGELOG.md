@@ -17,6 +17,14 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Grouped Settings reachable from navigation, header and command palette, with
+  existing language/Bridge notification controls and clear local privacy/storage
+  explanations. Notification choices disable without a current Bridge connection.
+- Local dark contrast, comfortable spacing and reduced-motion preferences with
+  strict parsing, reload/cross-tab persistence, storage-denial feedback and a
+  confirmed appearance-only reset. OS reduced motion remains authoritative;
+  original captured content, delivery contracts and agent sessions are unchanged.
+
 - Experimental owned-terminal engineering library with signed one-use grants,
   separate attachment/input leases, conservative owned-handle lifecycle and bounded
   inert I/O. It is exercised by in-memory tests and the explicit synthetic PTY lab,

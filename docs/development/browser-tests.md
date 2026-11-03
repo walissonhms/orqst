@@ -20,3 +20,21 @@ before the fixture opens its port or storage.
 Each invocation generates a unique temporary fixture-state path and disposable
 source/database directories. Do not override `ORQST_BROWSER_STATE` to a shared path
 when running concurrently. Production port configuration is unchanged.
+
+## Settings and accessibility coverage
+
+After `pnpm build`, run the focused shared-dashboard checks with:
+
+```bash
+pnpm test:browser tests/browser/settings.spec.ts tests/browser/shell-navigation.spec.ts
+```
+
+The synthetic Settings suite covers navigation, local preference restoration and
+cross-tab updates, denied/malformed storage, offline controls, notification save
+rollback, locale switching, reset confirmation/focus, OS and explicit reduced
+motion, comfortable target sizes and viewport containment. It captures higher
+contrast/comfortable layouts at 1440px, 1280px and 390px, including pt-BR mobile.
+Images stay in generated test output. Inspect them for wrapping, control visibility
+and focus; the automated checks do not establish manual screen-reader acceptance
+or native Desktop/OS notification delivery. Ingestion and real session sources are
+not changed by these UI preferences.

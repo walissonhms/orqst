@@ -27,7 +27,6 @@ import {
   ShieldCheck,
   Sparkles,
   Terminal,
-  Volume2,
   X,
   Zap,
 } from 'lucide-react';
@@ -54,6 +53,9 @@ import { Agents } from './Agents';
 import { Workspaces } from './Workspaces';
 import { CommandPalette } from './CommandPalette';
 import { Modal } from './Modal';
+import { Settings } from './Settings';
+import { NotificationPreferences } from './NotificationPreferences';
+import { useAppearancePreferences } from './appearance-preferences';
 import {
   appViews,
   readShellPreferences,
@@ -512,6 +514,7 @@ function SessionDetail({
 export function App() {
   const { t, i18n } = useTranslation();
   const f = useFormatting();
+  const appearance = useAppearancePreferences();
   const [shell, setShell] = useState(readShellPreferences);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
   const [view, setView] = useState<AppView>(
@@ -756,6 +759,29 @@ export function App() {
       setNotice('desktopBlocked');
     }
   }
+  const notificationPreferences = (
+    <>
+      {(!snapshot || error || connection !== 'connected') && (
+        <p className="notice" role="status">
+          {t('settings.notificationsUnavailable')}
+        </p>
+      )}
+      <NotificationPreferences
+        value={localPrefs}
+        disabled={prefsSaving || !snapshot || error || connection !== 'connected'}
+        nativeDesktop={nativeDesktop}
+        onChange={(next) => {
+          void preferences(next);
+        }}
+        onTestSound={() => {
+          void sound(true);
+        }}
+        onPermission={() => {
+          void desktop();
+        }}
+      />
+    </>
+  );
   return (
     <div className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}`}>
       <a
@@ -800,7 +826,9 @@ export function App() {
                 navigate(page);
               }}
             >
-              {page === 'models' ? (
+              {page === 'settings' ? (
+                <Settings2 size={16} />
+              ) : page === 'models' ? (
                 <BarChart3 size={16} />
               ) : page === 'workspaces' ? (
                 <Folder size={16} />
@@ -900,6 +928,13 @@ export function App() {
               <span className="tiny-dot" />
               {t(connection)}
             </span>
+            <button
+              className="icon-button"
+              aria-label={t('shell.views.settings')}
+              onClick={() => navigate('settings')}
+            >
+              <Settings2 size={17} />
+            </button>
             <label className="language-select">
               <Globe2 size={14} />
               <select
@@ -950,7 +985,7 @@ export function App() {
               {t(saveError ? 'savedError' : 'error')}
             </p>
           )}
-          {!snapshot && !error && view !== 'models' && (
+          {!snapshot && !error && view !== 'models' && view !== 'settings' && (
             <p className="notice" role="status">
               {t('shell.loading')}
             </p>
@@ -964,7 +999,15 @@ export function App() {
             </div>
           )}
 
-          {view === 'models' ? (
+          {view === 'settings' ? (
+            <Settings
+              appearance={appearance.appearance}
+              onAppearance={appearance.setAppearance}
+              storageUnavailable={appearance.storageUnavailable}
+              systemReducedMotion={appearance.systemReducedMotion}
+              notifications={notificationPreferences}
+            />
+          ) : view === 'models' ? (
             <ModelAnalytics
               workspaceId={workspaceId}
               snapshot={snapshot}
@@ -1409,58 +1452,7 @@ export function App() {
                 )}
               </p>
             )}
-            <div className="preferences">
-              <h3>{t('preferences')}</h3>
-              {(['completed', 'failed', 'intervention', 'sound'] as const).map((key) => (
-                <label className="preference" key={key}>
-                  <span>
-                    {t(
-                      key === 'completed'
-                        ? 'notificationCompleted'
-                        : key === 'failed'
-                          ? 'notificationFailed'
-                          : key === 'intervention'
-                            ? 'notificationIntervention'
-                            : 'sound',
-                    )}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={localPrefs[key]}
-                    disabled={prefsSaving}
-                    onChange={(event) => {
-                      if (snapshot) {
-                        void preferences({ ...localPrefs, [key]: event.target.checked });
-                        if (key === 'sound' && event.target.checked) void sound(true);
-                      }
-                    }}
-                  />
-                </label>
-              ))}
-              <button
-                className="button"
-                onClick={() => {
-                  void sound(true);
-                }}
-              >
-                <Volume2 size={14} />
-                {t('audioTest')}
-              </button>
-              {!nativeDesktop && (
-                <button
-                  className="button"
-                  onClick={() => {
-                    void desktop();
-                  }}
-                >
-                  <Bell size={14} />
-                  {t('desktop')}
-                </button>
-              )}
-              <p className="fine-print">
-                {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
-              </p>
-            </div>
+            {notificationPreferences}
           </div>
         </Modal>
       )}

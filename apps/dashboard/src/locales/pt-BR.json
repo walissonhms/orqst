@@ -443,7 +443,8 @@
       "overview": "Visão geral",
       "workspaces": "Diretório de workspaces",
       "agents": "Agentes e integrações",
-      "models": "Modelos mais usados"
+      "models": "Modelos mais usados",
+      "settings": "Configurações"
     },
     "skip": "Ir para o conteúdo principal",
     "collapse": "Recolher navegação",
@@ -513,5 +514,37 @@
       "confirmed": "Última confirmação",
       "outdated": "Desatualizado"
     }
+  },
+  "settings": {
+    "description": "Idioma, conforto de leitura e entrega de notificações, com limites claros de armazenamento local.",
+    "general": "Geral",
+    "appearance": "Aparência e acessibilidade",
+    "english": "English (US)",
+    "portuguese": "Português (Brasil)",
+    "languageHelp": "O idioma se aplica à interface. O conteúdo capturado dos agentes permanece no idioma original.",
+    "appearanceHelp": "A paleta escura oficial permanece como base. As alterações se aplicam imediatamente a este painel.",
+    "contrast": "Contraste",
+    "standard": "Escuro padrão",
+    "high": "Contraste reforçado",
+    "density": "Espaçamento",
+    "compact": "Compacto",
+    "comfortable": "Confortável",
+    "densityHelp": "O espaçamento confortável amplia controles, linhas de tabelas, cartões de workspaces e entradas de atividade.",
+    "motion": "Movimento",
+    "systemMotion": "Seguir o sistema",
+    "reducedMotion": "Reduzir movimento",
+    "osReduced": "Seu sistema solicita movimento reduzido. Animações e transições permanecem desativadas nas duas opções.",
+    "osStandard": "Seu sistema permite movimento. Escolha Reduzir movimento para desativar animações e transições aqui.",
+    "zoomHelp": "Para ampliar o texto no navegador, use o zoom do navegador. Os controles de tamanho de fonte do painel ainda não estão disponíveis.",
+    "localScope": "A aparência é salva neste navegador ou perfil do Desktop, separadamente das preferências de workspace e notificações.",
+    "storageUnavailable": "A aparência se aplica nesta visita. O armazenamento local está indisponível e ela pode ser redefinida após recarregar.",
+    "reset": "Redefinir aparência",
+    "resetHelp": "Restaurar contraste escuro padrão, espaçamento compacto e movimento do sistema? Idioma, seleção de workspace, preferências de notificações, histórico capturado e rascunhos de artefatos permanecem iguais.",
+    "resetConfirm": "Restaurar aparência padrão",
+    "notificationScope": "Categorias e som são salvos pelo Bridge local e compartilhados pelos painéis conectados. A permissão é gerenciada pelo navegador; o áudio pode exigir nova ativação após recarregar.",
+    "notificationsUnavailable": "As preferências de notificações exigem uma conexão atual com o Bridge. O conforto de leitura e o idioma continuam disponíveis.",
+    "privacy": "Privacidade e armazenamento",
+    "privacyHelp": "O histórico observado é armazenado no banco SQLite do Bridge local. As preferências da interface ficam neste navegador ou perfil do Desktop. O texto capturado não é confiável e a ocultação de dados sensíveis é uma proteção parcial.",
+    "privacyLimit": "Redefinir a aparência altera apenas as preferências de aparência. Esta tela não exclui histórico, altera retenção, acessa credenciais de provedores ou modifica sessões nativas de agentes."
   }
 }
