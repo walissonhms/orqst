@@ -343,8 +343,13 @@ test('analytics refresh follows observed source events, not snapshot polling or 
   const queries = await syntheticApi(page);
   await openModels(page);
   const count = queries.length;
+  const comparison = page.getByRole('region', { name: 'Compare observed usage', exact: true });
+  await comparison.getByLabel('Comparison row 1').selectOption({ label: 'codex: synthetic-alpha' });
+  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'codex: synthetic-beta' });
+  await expect(comparison.getByRole('table')).toBeVisible();
   await page.getByLabel('Language').selectOption('pt-BR');
   await page.getByLabel('Idioma').selectOption('en-US');
+  await expect(comparison.getByRole('table')).toBeVisible();
   // Cross the existing snapshot polling interval with no new source evidence.
   await page.waitForTimeout(5500);
   expect(queries).toHaveLength(count);
@@ -385,6 +390,8 @@ test('analytics refresh follows observed source events, not snapshot polling or 
   );
   await expect.poll(() => queries.length).toBe(count + 1);
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
+  await expect(comparison.getByLabel('Comparison row 1')).toHaveValue('');
+  await expect(comparison.getByRole('table')).toHaveCount(0);
   await page.waitForTimeout(600);
   expect(queries).toHaveLength(count + 1);
 });
@@ -445,6 +452,18 @@ test('unmocked Analytics reconciles two models ingested through the disposable o
   await expect(rows.nth(1)).toContainText('synthetic-integration-alpha');
   await expect(rows.nth(1)).toContainText('37.5%');
   await expect(page.locator('.analytics-coverage')).toContainText('Incomplete coverage');
+  const comparison = page.getByRole('region', { name: 'Compare observed usage', exact: true });
+  await comparison
+    .getByLabel('Comparison row 1')
+    .selectOption({ label: 'codex: synthetic-integration-beta' });
+  await comparison
+    .getByLabel('Comparison row 2')
+    .selectOption({ label: 'codex: synthetic-integration-alpha' });
+  const compared = comparison.getByRole('row', { name: 'Reported tokens', exact: false });
+  await expect(compared.getByRole('cell')).toHaveText(['500', '300']);
+  await expect(
+    comparison.getByRole('row', { name: /^Observed sessions/ }).getByRole('cell'),
+  ).toHaveText(['1', '1']);
   // Unmocked authenticated worker response -> bounded runtime admission -> gesture download.
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
@@ -458,4 +477,156 @@ test('unmocked Analytics reconciles two models ingested through the disposable o
   );
   expect(text).not.toContain('/synthetic/analytics-integration');
   expect(text).not.toContain('synthetic-ranking-');
+});
+
+test('comparison projects current rows without recomputing, guessing or fetching a catalog', async ({
+  page,
+}) => {
+  const queries = await syntheticApi(page);
+  await openModels(page);
+  // This synthetic report has an unbounded query, matching the export reading contract.
+  await page.getByLabel('Period', { exact: true }).selectOption('all');
+  await expect(page.getByRole('button', { name: 'Export CSV', exact: true })).toBeEnabled();
+  const comparison = page.getByRole('region', { name: 'Compare observed usage', exact: true });
+  const count = queries.length;
+  await expect(comparison.getByRole('combobox')).toHaveCount(3);
+  await expect(comparison.getByRole('table')).toHaveCount(0);
+  await comparison.getByLabel('Comparison row 1').selectOption({ label: 'codex: synthetic-alpha' });
+  await expect(comparison.getByRole('table')).toHaveCount(0);
+  await expect(
+    comparison
+      .getByLabel('Comparison row 2')
+      .getByRole('option', { name: 'codex: synthetic-alpha' }),
+  ).toHaveJSProperty('disabled', true);
+  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'codex: synthetic-beta' });
+  await expect(
+    comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
+  ).toHaveText(['600', '300']);
+  await expect(comparison.getByRole('row', { name: /^Cached/ }).getByRole('cell')).toHaveText([
+    '180',
+    '90',
+  ]);
+  await comparison
+    .getByLabel('Comparison row 3')
+    .selectOption({ label: 'codex: Unidentified model' });
+  await expect(
+    comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
+  ).toHaveText(['600', '300', '100']);
+  await expect(comparison.getByText(/Descriptive, non-equivalent observations/)).toBeVisible();
+  await expect(
+    comparison.getByText(/Observed identifiers do not establish current availability/),
+  ).toBeVisible();
+  await expect(comparison.getByText(/Unavailable: tokens per execution/)).toBeVisible();
+  await expect(comparison.getByText('Provider unavailable', { exact: true })).toHaveCount(3);
+  await page.getByLabel('Rank by').selectOption('sessions');
+  await expect(
+    comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
+  ).toHaveText(['600', '300', '100']);
+  expect(queries).toHaveLength(count);
+  await comparison.getByLabel('Comparison row 2').selectOption('');
+  await expect(
+    comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
+  ).toHaveText(['600', '100']);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
+  const download = await downloadPromise;
+  const exported = await readFile((await download.path())!, 'utf8');
+  expect(exported).toContain('synthetic-beta');
+  expect(exported).toContain('1000');
+  expect(queries).toHaveLength(count);
+  await comparison.getByLabel('Comparison row 3').selectOption('');
+  await expect(comparison.getByRole('table')).toHaveCount(0);
+});
+
+test('comparison distinguishes zero, null and hostile identifiers in localized mobile layout', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const longModel = hostileModel + ' synthetic-long-identifier'.repeat(24);
+  await page.route('**/api/analytics/models?*', async (route) => {
+    const body = report();
+    body.models = [
+      { ...body.models[0]!, model: longModel, usage: null },
+      { ...body.models[1]!, model: null, usage: usage(0) },
+    ];
+    body.usage = usage(0);
+    await route.fulfill({ json: body });
+  });
+  await page.goto('/#models');
+  const comparison = page.locator('.analytics-comparison');
+  await comparison.getByLabel('Comparison row 1').selectOption({ label: `codex: ${longModel}` });
+  await comparison
+    .getByLabel('Comparison row 2')
+    .selectOption({ label: 'codex: Unidentified model' });
+  await expect(
+    comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
+  ).toHaveText(['Unavailable', '0']);
+  await expect(comparison.locator('img')).toHaveCount(0);
+  expect(await page.evaluate(() => Reflect.get(window, 'analyticsInjected'))).toBeUndefined();
+  await page.getByLabel('Language').selectOption('pt-BR');
+  await expect(comparison.getByRole('heading', { name: 'Comparar uso observado' })).toBeVisible();
+  await expect(
+    comparison.getByRole('row', { name: /^Tokens reportados/ }).getByRole('cell'),
+  ).toHaveText(['Indisponível', '0']);
+  await expect(comparison).toContainText('Observações descritivas, sem equivalência de tarefas');
+  await expect(comparison).not.toContainText('analytics.');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const scroll = comparison.getByRole('region', { name: 'Uso observado lado a lado' });
+  await scroll.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => scroll.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+});
+
+test('comparison discards choices on refresh, filters, errors and disconnect/reconnect', async ({
+  page,
+}) => {
+  await syntheticApi(page);
+  let blockedStream = false;
+  let socket: { close: () => Promise<void> } | undefined;
+  await page.routeWebSocket(/\/ws/, (route) => {
+    if (blockedStream) {
+      void route.close();
+      return;
+    }
+    socket = route;
+    route.connectToServer();
+  });
+  await openModels(page);
+  const comparison = page.locator('.analytics-comparison');
+  const selectPair = async () => {
+    await comparison
+      .getByLabel('Comparison row 1')
+      .selectOption({ label: 'codex: synthetic-alpha' });
+    await comparison
+      .getByLabel('Comparison row 2')
+      .selectOption({ label: 'codex: synthetic-beta' });
+    await expect(comparison.getByRole('table')).toBeVisible();
+  };
+  const expectReset = async () => {
+    await expect(comparison.getByLabel('Comparison row 1')).toHaveValue('');
+    await expect(comparison.getByRole('table')).toHaveCount(0);
+  };
+  await selectPair();
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expectReset();
+  await selectPair();
+  await page.getByLabel('Period', { exact: true }).selectOption('today');
+  await expectReset();
+  await selectPair();
+  await page.route('**/api/analytics/models?*', (route) =>
+    route.fulfill({ status: 503, json: { error: 'analytics_unavailable' } }),
+  );
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Local analytics is unavailable');
+  await expect(comparison).toHaveCount(0);
+  await page.unrouteAll({ behavior: 'wait' });
+  await syntheticApi(page);
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expectReset();
+  await selectPair();
+  blockedStream = true;
+  await socket!.close();
+  await expect(comparison).toHaveCount(0);
+  blockedStream = false;
+  await expectReset();
 });

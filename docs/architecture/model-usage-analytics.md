@@ -105,6 +105,38 @@ multi-model allocation, large-archive performance, temporal charts, native Deskt
 equivalent-task comparison and the full Desktop workflow remain unvalidated or
 unimplemented. No complete Analytics MVP acceptance is claimed.
 
+## Descriptive comparison increment
+
+The existing **Most used models** screen now offers three optional row selectors;
+at least two distinct rows are required to show the side-by-side table. Choices
+come exclusively from the current validated aggregate, including its unidentified
+bucket. Identity uses the exact adapter/model pair, preserving null and arbitrary
+plain-text identifiers. This is observation history, not a model catalog or an
+executable choice. The view makes no additional requests, reads no provider/cache
+files, adds no persistence or dependency, and changes no API, IPC or export grant.
+
+The table projects only reported input/output/cache/total and observed session
+counts. Zero is preserved; missing usage stays unavailable. Cache remains a subset
+of input, and session counts are non-additive. It inherits the report's period,
+filters, canonical delta basis and incomplete coverage, without recomputing usage
+or narrowing the aggregate/export denominator. Provider, outcomes, equivalent tasks,
+per-execution/task usage, active time and verified cost remain unavailable. A
+visible descriptive/non-equivalent disclosure prevents quality, efficiency, value
+or current-access claims.
+
+Selections exist only in this component's memory. A fresh reading gets a new mount;
+refresh, filter/cursor changes, invalid intervals, errors, disconnection and
+reconnection clear the comparison before another reading is shown. Ranking and
+locale changes preserve choices within the same reading. The table has scoped
+headers, a keyboard-scrollable region and wrapping inert labels on mobile.
+
+Synthetic browser coverage extends the disposable unmocked two-model observer
+case to the comparison and covers null/zero, unidentified/hostile labels, duplicate
+choices, selection lifetime, English/Portuguese and mobile keyboard scrolling.
+These cases do not establish real multi-model provider or native Desktop visual
+acceptance; qualified equivalent-task comparison and the Analytics MVP remain
+incomplete.
+
 ## Measurement identity and provenance
 
 A qualified measurement must retain the observed model identifier, provider, agent,

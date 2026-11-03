@@ -202,6 +202,17 @@
     "reportedTokens": "Tokens reportados",
     "coveredOnly": "Dentro da cobertura disponível",
     "nonAdditive": "Sessões observadas não são aditivas entre modelos; uma sessão pode aparecer em várias linhas.",
+    "comparison": {
+      "title": "Comparar uso observado",
+      "limits": "Observações descritivas, sem equivalência de tarefas. Equivalência e resultados das tarefas não foram registrados; totais de tokens não comprovam qualidade, eficiência ou um modelo melhor. Identificadores observados não comprovam disponibilidade ou acesso atuais.",
+      "scope": "Escolha duas ou três linhas deste relatório. Aplicam-se o mesmo período, filtros, base de medição e cobertura incompleta. As escolhas são descartadas ao atualizar, mudar filtros, receber novas observações ou perder a conexão. A comparação não altera o ranking nem o agregado exportado.",
+      "slot": "Linha de comparação {{number}}",
+      "choose": "Escolha uma linha observada",
+      "minimum": "Selecione pelo menos duas linhas observadas distintas para comparar. Linhas não identificadas continuam disponíveis quando presentes no relatório.",
+      "table": "Uso observado lado a lado",
+      "metric": "Medição",
+      "unavailable": "Indisponíveis: tokens por execução ou tarefa bem-sucedida, média/mediana por tarefa, tempo ativo, taxa de sucesso e custo. Contagens de execuções, resultados de tarefas equivalentes, tempo medido e preços/cobrança verificados não foram registrados."
+    },
     "ranking": "Ranking de modelos",
     "order": "Ordenar por",
     "share": "Participação em tokens",

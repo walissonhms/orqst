@@ -1626,6 +1626,25 @@ th:nth-last-child(2) {
   margin-top: 20px;
   line-height: 1.8;
 }
+.analytics-comparison {
+  padding: 20px;
+  margin-top: 20px;
+}
+.analytics-comparison p,
+.analytics-comparison .analytics-filters {
+  margin-top: 14px;
+  line-height: 1.7;
+}
+.analytics-comparison-table {
+  min-width: 600px;
+  table-layout: fixed;
+}
+.analytics-comparison-table th {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-transform: none;
+  letter-spacing: normal;
+}
 .analytics-evidence p {
   margin-top: 10px;
 }

@@ -65,6 +65,11 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   native dialog and exact-reading revalidation; it never accepts page-supplied report
   content or paths. See the
   [export contract](docs/api/analytics-export.md).
+- **Descriptive comparison increment:** choose two or three observed aggregate rows
+  in **Most used models** to view reported input/output/cache/total and session counts
+  side by side under the current filters and coverage. Unknown values stay unavailable;
+  no task equivalence, quality, efficiency, price or current model access is inferred.
+  Choices reset with each report reading and never narrow the exported aggregate.
 - **Planned:** six delivery phases covering Core/contracts, the Desktop MVP,
   robust provider integrations, managed sessions, evidence-gated optimizer integration,
   and distribution. Desktop includes Terminal, Monitor/Notifications, Artifacts,
@@ -371,6 +376,17 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The descriptive Analytics comparison increment passed lint, typecheck, 222 Node
+tests, full build and all 62 Chromium cases, including five independent comparison
+QA cases. The first full browser run exposed a synthetic export fixture whose query
+did not match the selected period; correcting the fixture to all-history preserved
+the existing export checks. The final full rerun passed with exclusive port/state/output.
+Independent critical review approved the increment without blockers. These checks use
+synthetic reports and disposable observer storage; real-provider multi-model and native
+Desktop visual acceptance remain pending. Ingestion is unchanged, so `validate:local`
+and live provider tests were not run. The installed service, Desktop, database and
+source sessions were preserved without restart.
 
 The native aggregate Analytics export increment (2026-11-02) passed lint, typecheck,
 202 Node tests (including 15 independent native-export QA cases), full build and

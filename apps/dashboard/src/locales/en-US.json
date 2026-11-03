@@ -202,6 +202,17 @@
     "reportedTokens": "Reported tokens",
     "coveredOnly": "Within available coverage",
     "nonAdditive": "Observed sessions are not additive across models; one session can appear in multiple rows.",
+    "comparison": {
+      "title": "Compare observed usage",
+      "limits": "Descriptive, non-equivalent observations. Task equivalence and outcomes are not recorded; token totals do not establish quality, efficiency or a better model. Observed identifiers do not establish current availability or access.",
+      "scope": "Choose two or three rows from this report. The same period, filters, measurement basis and incomplete coverage apply. Choices reset on refresh, filter changes, new observations or loss of connection. Comparison choices do not change the ranking or exported aggregate.",
+      "slot": "Comparison row {{number}}",
+      "choose": "Choose an observed row",
+      "minimum": "Select at least two distinct observed rows to compare. Unidentified rows remain available when present in the report.",
+      "table": "Observed usage side by side",
+      "metric": "Measurement",
+      "unavailable": "Unavailable: tokens per execution or successful task, mean/median task usage, active time, success rate and cost. Execution counts, equivalent task outcomes, measured time and verified prices/billing are not recorded."
+    },
     "ranking": "Model ranking",
     "order": "Rank by",
     "share": "Token share",

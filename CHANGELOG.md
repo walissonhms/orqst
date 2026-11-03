@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Descriptive comparison of two or three current observed Analytics rows, with
+  input/output/cache/total and non-additive session counts. English/Portuguese
+  disclosures preserve incomplete coverage, unavailable task/price measurements
+  and unverified current model access. Choices are memory-only and reset with the
+  report; ranking, aggregate export, observer and transport contracts are unchanged.
+
 - Session-header observed model identifier with English/Portuguese evidence limits:
   model observation time is unavailable and availability, capabilities and selection
   remain unverified. This observational Model Manager increment adds no catalog,

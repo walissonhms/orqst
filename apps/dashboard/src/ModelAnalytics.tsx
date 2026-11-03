@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, RefreshCw } from 'lucide-react';
+import { ModelComparison } from './ModelComparison';
 import {
   modelAnalyticsExportSourceSchema,
   analyticsReadingSchema,
@@ -520,6 +521,7 @@ export function ModelAnalytics({
             )}
             <p className="fine-print analytics-note">{t('analytics.cache')}</p>
           </section>
+          <ModelComparison key={result?.readingId} data={data} />
           <section className="panel analytics-evidence" aria-label={t('analytics.coverage')}>
             <h2>{t('analytics.coverage')}</h2>
             <p>
