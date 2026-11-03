@@ -565,6 +565,14 @@ and [SECURITY.md](SECURITY.md).
 
 ## Validation status
 
+The 2026-11-03 Artifact source-library increment, combined with concurrent Terminal
+recovery, passed lint, typecheck, all 303 Node cases, build and 40 focused Chromium
+cases for the library, manual Artifacts, draft guards, shell and six view routes.
+Dark/light screenshots cover 1440/1280/390/320px at maximum reading sizes. This is
+synthetic checkout evidence, not full-archive, native Desktop or screen-reader
+acceptance. Ingestion was unchanged; `validate:local` was not rerun. See
+[commands and limits](docs/development/testing.md#artifact-source-library-validation--2026-11-03).
+
 The configurable Overview increment started after `39eaf4d` and preserves the
 concurrent brand, native-boundary and clean-route work through `f0ef4eb`. Final combined
 checks passed lint, typecheck, all 282 Node cases, full build and 69 focused Chromium

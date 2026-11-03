@@ -291,8 +291,8 @@ links and same-document session/history links. Cancel retains exact edits/contex
 confirmation performs the requested transition. Pending saves block navigation with
 feedback. Browser reload/exit warnings are best-effort and browser-controlled.
 This closes an available data-loss UX gap without adding persistence or provider
-capabilities. Desktop close/quit, native document loads, crash recovery, durable drafts
-and durable draft recovery remain pending; a bounded searchable source library is now implemented. See the
+capabilities. Desktop close/quit, native document loads and durable draft/crash recovery
+remain pending; a bounded searchable source library is now implemented. See the
 [interface specification](docs/design/ui-ux-specification.md).
 
 ### Terminal native-boundary increment — 2026-11-03
