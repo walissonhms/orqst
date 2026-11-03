@@ -505,10 +505,11 @@ summary usage as zero. Screenshots use synthetic data at desktop/laptop/mobile
 widths and remain generated output. No installed listener, storage or provider
 session is used.
 
-The complete browser suite currently has a pre-existing order dependency: the
-live-update case in `dashboard.spec.ts` advances the shared baseline from 120 to
-170 tokens, while three threshold cases still assert the initial 120. Those cases
-must also be run in a fresh fixture, retaining their assertions. Do not change
-production accounting or weaken assertions to hide shared-fixture contamination.
+The live-update case in `dashboard.spec.ts` uses a dedicated synthetic source and
+session. It advances that session from 120 to 170 tokens and verifies aggregate
+totals of 240 then 290, leaving the shared baseline at 120 for threshold cases.
+Run the dashboard and threshold files together to catch shared-fixture regressions;
+keep the exact token assertions. The Electron smoke explicitly returns to
+`/#overview` after Analytics because a hashless URL restores the persisted view.
 See the [screen matrix](../design/ui-ux-specification.md) for remaining product and
 manual/native acceptance gaps.

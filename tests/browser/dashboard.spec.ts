@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { readFile, appendFile } from 'node:fs/promises';
+import { readFile, appendFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 test('synthetic session renders, localization persists, results are escaped, workspace association saves', async ({
   page,
@@ -75,7 +76,38 @@ test('new external source records update the page and notification history witho
   const { file } = JSON.parse(await readFile(process.env.ORQST_BROWSER_STATE!, 'utf8')) as {
     file: string;
   };
+  // Preserve the shared 120-token session used by later threshold checks.
+  const liveFile = join(dirname(file), 'synthetic-dashboard-live.jsonl');
+  const liveSession = 'synthetic-dashboard-live-session';
   const timestamp = new Date().toISOString();
+  await writeFile(
+    liveFile,
+    [
+      {
+        type: 'session_meta',
+        payload: {
+          id: liveSession,
+          cwd: '/synthetic/dashboard-live',
+          agent_nickname: 'Synthetic live browser agent',
+        },
+      },
+      {
+        type: 'token_usage_record',
+        payload: {
+          thread_id: liveSession,
+          thread_token_usage: {
+            input_tokens: 100,
+            output_tokens: 20,
+            cached_input_tokens: 40,
+            total_tokens: 120,
+          },
+        },
+      },
+    ]
+      .map((record) => JSON.stringify({ ...record, timestamp }) + '\n')
+      .join(''),
+  );
+  await expect(page.locator('.stats .stat').last()).toContainText('240');
   const records = [
     { type: 'event_msg', payload: { type: 'task_started', turn_id: 'synthetic-live-turn' } },
     {
@@ -90,7 +122,7 @@ test('new external source records update the page and notification history witho
     {
       type: 'token_usage_record',
       payload: {
-        thread_id: 'synthetic-browser-session',
+        thread_id: liveSession,
         response_id: 'synthetic-live-response',
         thread_token_usage: {
           input_tokens: 140,
@@ -106,13 +138,13 @@ test('new external source records update the page and notification history witho
     },
   ];
   await appendFile(
-    file,
+    liveFile,
     records.map((record) => JSON.stringify({ ...record, timestamp }) + '\n').join(''),
   );
   await expect(
-    page.getByRole('button', { name: /Synthetic browser agent Synthetic live browser task/ }),
+    page.getByRole('button', { name: /Synthetic live browser agent Synthetic live browser task/ }),
   ).toBeVisible();
-  await expect(page.locator('.stats .stat').last()).toContainText('170');
+  await expect(page.locator('.stats .stat').last()).toContainText('290');
   await page.getByRole('button', { name: 'Notifications', exact: true }).click();
   await expect(page.locator('.notification-item')).toHaveCount(1);
   await expect(page.locator('.notification-item')).toContainText('Turn completed');
