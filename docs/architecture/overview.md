@@ -214,7 +214,7 @@ specifies planned module/mascot behavior without implementing those capabilities
   cursor deduplication, reconnect with backoff, five-second snapshot fallback.
 - `App.tsx` — workspace navigation, agent table, execution timeline, attention
   center, token summary, session detail, notifications, workspace creation.
-- `ModelAnalytics.tsx` — bounded aggregate ranking view at `/#models`, filters,
+- `ModelAnalytics.tsx` — bounded aggregate ranking view at `/models`, filters,
   share bars and explicit coverage/capacity/unavailable states. It consumes the
   aggregate route, never the evidence-bearing local library report.
 - `locales/en-US.json` and `locales/pt-BR.json` — all user-facing strings.

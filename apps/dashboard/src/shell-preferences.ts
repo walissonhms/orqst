@@ -1,5 +1,7 @@
-export const appViews = ['overview', 'workspaces', 'agents', 'models', 'settings'] as const;
-export type AppView = (typeof appViews)[number];
+import { dashboardViewSchema, type DashboardView } from '@orqst/protocol';
+
+export const appViews = dashboardViewSchema.options;
+export type AppView = DashboardView;
 export interface ShellPreferences {
   view: AppView;
   workspaceId: string;

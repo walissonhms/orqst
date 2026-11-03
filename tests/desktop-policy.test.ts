@@ -17,10 +17,27 @@ test('desktop configuration accepts only a bounded loopback port', () => {
 
 test('desktop limits navigation and resources to its configured Bridge', () => {
   const origin = bridgeOrigin('4320');
-  for (const url of [origin + '/', origin + '/#models', offlineURL])
+  for (const url of [
+    origin + '/',
+    origin + '/#models',
+    ...['overview', 'workspaces', 'agents', 'models', 'settings'].flatMap((view) => [
+      origin + '/' + view,
+      origin + '/' + view + '#session=synthetic',
+    ]),
+    offlineURL,
+  ])
     assert.equal(allowedNavigation(url, origin), true, url);
   for (const url of [
     origin + '/api/snapshot',
+    ...[
+      '/overview/',
+      '/settings/nested',
+      '/arbitrary',
+      '/%73ettings',
+      '/settings?x=1',
+      '/ws',
+      '/assets/app.js',
+    ].map((path) => origin + path),
     origin + '/?url=https://example.com',
     'http://user@127.0.0.1:4320/',
     'http://127.0.0.1:4317/',

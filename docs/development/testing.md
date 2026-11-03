@@ -511,7 +511,8 @@ session. It advances that session from 120 to 170 tokens and verifies aggregate
 totals of 240 then 290, leaving the shared baseline at 120 for threshold cases.
 Run the dashboard and threshold files together to catch shared-fixture regressions;
 keep the exact token assertions. The Electron smoke explicitly returns to
-`/#overview` after Analytics because a hashless URL restores the persisted view.
+`/overview` after Analytics because the root URL restores the persisted view.
+Legacy `/#overview` remains an accepted alias.
 See the [screen matrix](../design/ui-ux-specification.md) for remaining product and
 manual/native acceptance gaps.
 
@@ -624,6 +625,64 @@ native-select automation and ambiguous/exact-label selectors; the final run reta
 cross-tab, focus, exact draft text, real Analytics readiness and containment checks.
 The existing Vite chunk-size warning remains; no native visual or release acceptance
 is implied.
+
+## Configurable Overview panels
+
+`tests/overview-preferences.test.ts` covers bounded/allowlisted layout parsing,
+partial preference compatibility and nonmutating reorder boundaries.
+`tests/browser/overview-layout.spec.ts` exercises actual DOM order and visibility,
+wide-primary/single/all-hidden layouts, keyboard row moves and focus restoration,
+scoped defaults, reload, malformed/removed storage, cross-tab synchronization and
+offline/storage-denied use. It preserves exact active Artifact draft text/provenance
+and the existing navigation guard. Layout storage contains only panel identifiers,
+never source content. Hiding a panel changes presentation, not notification policy.
+
+The shared renderer keeps summary, session search/filter/list and details outside
+the configurable panels. There are no new APIs, WebSocket/IPC contracts, migrations,
+dependencies or ingestion changes. Live/provider tests, `validate:local` and another
+Electron smoke are not required for this presentation-only increment. The installed
+service, Desktop profile, database and source sessions must remain untouched.
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+ORQST_BROWSER_PORT=4591 pnpm exec playwright test \
+  tests/browser/overview-layout.spec.ts tests/browser/path-navigation.spec.ts \
+  tests/browser/brand-assets.spec.ts \
+  tests/browser/dashboard.spec.ts tests/browser/shell-navigation.spec.ts \
+  tests/browser/settings.spec.ts tests/browser/reading-preferences.spec.ts \
+  tests/browser/theme-preferences.spec.ts tests/browser/artifact-navigation.spec.ts \
+  tests/browser/artifact-draft.spec.ts tests/browser/artifacts.spec.ts \
+  --output=/tmp/orqst-overview-check
+```
+
+Use an exclusive port/output; the fixture owns temporary synthetic sources/storage.
+Generated screenshots cover 1440/1280/390/320px with maximum reading sizes,
+comfortable spacing and light/higher-contrast appearance, including pt-BR mobile.
+Default-dark behavior and the existing theme/contrast/reading suites remain covered.
+Inspect images for wrapping, internal scrolling, reachable recovery controls, visible
+focus and consistent reading order. Other-browser, native Desktop visual and manual
+screen-reader acceptance remain pending; no full WCAG or release claim is made.
+
+The Overview increment started after `39eaf4d`. After preserving concurrent brand
+and experimental native-boundary work plus clean routes through `f0ef4eb`, lint,
+typecheck, all 282 Node cases, full build and the 69 selected Chromium cases passed
+on isolated port 4591 (Node 24.22.2/pnpm 10.34.9). Before that last rebase, the broader 132-case Chromium
+suite passed on port 4589. It was not repeated wholesale after the final rebase;
+the final selection covers every changed UI/catalog area, including brand assets,
+Overview, Settings, reading, themes, clean-path/legacy/history navigation and Artifact
+drafts. New Overview cases use the canonical view/session URLs. The locale merge
+retains every incoming key/value and appends only `overviewLayout` in both languages.
+
+The receiving-tab check confirms layout synchronization does not echo writes;
+the all-hidden recovery case verifies focus returns to the header when its original
+trigger disappears. Synthetic desktop and pt-BR/320px screenshots were inspected.
+Early new-test iterations corrected translated-label/native-tab assumptions and
+an invalid expectation that unchanged defaults must rewrite storage. The existing
+Vite chunk-size warning remains. No installed services or source data were changed
+by this increment, and no native/provider or release acceptance is implied.
 
 ## Explicit native Terminal transport acceptance
 

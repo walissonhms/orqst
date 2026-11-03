@@ -38,3 +38,25 @@ Images stay in generated test output. Inspect them for wrapping, control visibil
 and focus; the automated checks do not establish manual screen-reader acceptance
 or native Desktop/OS notification delivery. Ingestion and real session sources are
 not changed by these UI preferences.
+
+## Dashboard paths and draft history
+
+After `pnpm build`, run the route and neighboring guard/preference coverage:
+
+```bash
+ORQST_BROWSER_PORT=4347 pnpm test:browser tests/browser/path-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/settings.spec.ts
+```
+
+The synthetic route suite covers direct entry/reload for all five exact paths,
+legacy aliases without extra entries, root preference restoration, language,
+same-document multi-entry Back/Forward, deferred source-backed session links and
+invalid identities, canonical session encoding, address-bar fragment navigation
+and inherited history indexes with duplicate popstate/hashchange delivery. Draft cases repeat cancellation in both directions, verify
+exact text, confirm one traversal and retain the forward destination. Neighboring
+suites cover pending saves, workspace/palette/notification guards, browser unload
+warnings, offline and persisted preferences. No installed service, source sessions
+or owner storage is used. Native window close/quit/reload protection and durable
+draft recovery remain unimplemented; Chromium coverage does not establish other
+browser or OS acceptance. `pnpm test` includes exact Bridge fallback and Electron
+navigation/sender allowlist negatives; `pnpm test:desktop` uses a disposable native
+profile and synthetic Bridge.

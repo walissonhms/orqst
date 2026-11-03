@@ -99,7 +99,12 @@ ORQST is designed for a **single trusted OS user on a local machine**.
   and are validated with zod.
 - The static dashboard server rejects dotfile paths and NUL bytes, resolves
   files under the dashboard root, verifies the real path, and denies anything
-  outside it.
+  outside it. HTML fallback is limited to `/`, `/overview`, `/workspaces`,
+  `/agents`, `/models`, `/settings` and strictly validated
+  `/overview/sessions/<encoded-id>`; unknown extensionless paths return 404.
+  Electron main-frame navigation and IPC sender authorization use the same fixed
+  route schemas at the configured IPv4 loopback origin, without query strings or
+  credentials. Legacy fragments do not confer native or API authority.
 - The Codex reader skips symlinks, opens files with `O_NOFOLLOW`, verifies the
   canonical path stays inside the session root, and never writes to the source.
 - Responses set `Content-Security-Policy`, `X-Content-Type-Options: nosniff`,
