@@ -106,7 +106,9 @@ through `--terminal-config`; reuse manifests cannot enter that legacy path.
   while the view is hidden; the tray can reopen it. Closing offers stay/hide with
   an explicit continue-running notice. Quit defaults to cancel; confirmed quit
   acknowledges disconnect without stop. Cancel preserves handlers and the runtime.
-  Reopening the same live view does not launch another process.
+  Reopening the same live view restores a minimized window and requests native
+  window/content focus; it does not launch another process. Focus requests are not
+  evidence that the operating system granted focus.
   Reload, navigation, renderer loss and application quit disconnect without an
   implicit signal, preserve uncertainty and cannot adopt/retry work. Provider hosts
   retain the existing 30-minute lifetime, then TERM and KILL after 5 seconds;
@@ -133,8 +135,9 @@ Synthetic integration tests cover separate signatures, canceled preparations,
 distinct identities/threads, the complete A-to-B-to-A return, result correlation,
 acceptance without invented delivery, exact public schemas, source loss and refusal
 to reopen existing journals. The explicit Electron smoke opens the shipped view and
-checks isolation/lifetime indicators and empty controls without selecting manifests
-or launching a provider. It uses the existing native menu opener, which grants no
+checks isolation/lifetime indicators, empty controls, native focus refusal through
+real preload/IPC and minimized-window restore without selecting manifests or
+launching a provider. It uses the existing native menu opener, which grants no
 process authority. Native OS focus could not be obtained for automated active
 mutations; those requests were refused rather than bypassing the gate. Active
 hide/quit dialogs and retirement in Electron remain unvalidated; Core synthetic
@@ -155,3 +158,53 @@ milestone has been accepted. `history_changed` in the shared source guard remain
 **inconclusive**, as fixed in dffa1e6; no passing preservation claim is inferred from
 this UI, from fixtures or from absence of visible errors. See
 [real acceptance and preservation evidence](codex-two-agent-acceptance.md).
+
+## Follow-up focus and native-host validation — 2026-11-03
+
+Focus refusal now has a specific localized explanation in the dedicated view and
+in the dashboard opener. A refused opener no longer silently does nothing. The
+native sender/session/main-frame/generation checks and checks before/after modal
+review are unchanged; no focus result, gesture, signing or ownership gate is mocked
+in the shipped client. A renderer cannot request native refocusing through IPC.
+Older running version-1 preloads that return no opener result remain supported.
+
+The real Electron 45.2.1 process in this environment reported both native window
+and content unfocused despite explicit test activation requests. A separately
+identified disposable Electron copy behaved the same. These attempts started no
+provider and do not establish a production focus defect or a fix for active modal
+flows. Human native focus and active start/delegate/hide/quit/retire acceptance
+remain open. Do not treat a rendered screenshot or Chromium click as native focus.
+
+The explicit command below exercises the actual Desktop Core composition, pinned
+Node host, native child JSONL transport, two distinct processes/threads, signed
+A-to-B-to-A, correlated results, SIGTERM with native-confirmed exits and signed
+retirement. It compiles a fixed synthetic C executable and provisions private
+HOME/config/manifests/journals/admission under a disposable root. It neither opens
+credentials/external sessions nor executes an installed provider. The fixture
+has an independent 90-second watchdog and starts no descendants. It is separate
+from automatic tests, normal startup and the real-provider milestone:
+
+```bash
+pnpm build:desktop
+pnpm accept:managed-agents --authorize-synthetic-agents
+```
+
+A passing result is **native-process synthetic integration**, not Electron active
+interaction, native dialog acceptance, provider compatibility/authentication,
+model access, source preservation, crash recovery or descendant containment. Use
+`pnpm test:desktop` separately for the shipped view's disposable Electron smoke.
+All new profiles/stores remain separate; no resident Desktop restart, database
+migration, historical reservation or quarantine change is part of either command.
+
+For this follow-up, lint, typecheck, full build, all 441 Node tests, the focal
+Chromium opener case (both locales and legacy preload) and the disposable Electron
+smoke passed. Electron checked real preload/IPC focus refusals and native
+minimize/reopen restoration; active authorization remained unvalidated. The native
+synthetic two-process command above also passed. `validate:local`, real providers,
+human dialogs and the full Chromium suite were not run; ingestion is unchanged.
+
+Critical review approved the focus/identity, opener compatibility, restore and
+synthetic integration boundaries. A focus-only refusal now preserves the last
+observed lifecycle label; mutation buttons stay disabled until a fresh snapshot
+restores them. A synthetic Chromium regression covers this client state transition,
+without claiming native focus or modal acceptance.

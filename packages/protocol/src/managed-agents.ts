@@ -73,12 +73,17 @@ export const managedAgentsSnapshotSchema = z.strictObject({
 });
 export type ManagedAgentsSnapshot = z.infer<typeof managedAgentsSnapshotSchema>;
 export const managedAgentsReplySchema = z.strictObject({
-  status: z.enum(['ok', 'cancelled', 'busy', 'denied', 'unavailable']),
+  status: z.enum(['ok', 'cancelled', 'busy', 'denied', 'focus_required', 'unavailable']),
   snapshot: managedAgentsSnapshotSchema.optional(),
   empty: z.boolean().optional(),
 });
 export type ManagedAgentsReply = z.infer<typeof managedAgentsReplySchema>;
+export const managedAgentsOpenReplySchema = z.strictObject({
+  status: z.enum(['ok', 'focus_required', 'denied', 'unavailable']),
+});
+export type ManagedAgentsOpenReply = z.infer<typeof managedAgentsOpenReplySchema>;
 export interface DesktopManagedAgents {
   readonly contractVersion: 1;
-  open(): Promise<void>;
+  // Void preserves compatibility with an already running version-1 preload.
+  open(): Promise<ManagedAgentsOpenReply | void>;
 }

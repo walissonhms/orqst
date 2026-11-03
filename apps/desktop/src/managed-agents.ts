@@ -48,7 +48,7 @@ export async function createManagedAgents(
     if (request.url === terminalDocumentURL) {
       const card = (slot: number) =>
         `<section class="pane"><h2>${t('terminal')} ${slot === 0 ? 'A' : 'B'}</h2><label>${t('model')} <input id="model-${slot}" maxlength="128" autocomplete="off"></label><nav><button id="start-${slot}">${t('start')}</button><button id="stop-${slot}" disabled>${t('stop')}</button></nav><pre id="identity-${slot}">${t('notStarted')}</pre><pre class="output" id="output-${slot}" aria-label="${t('output')}"></pre></section>`;
-      body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${t('title')}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${t('title')}</h1><p>${t('scope')}</p><p>${t('setup')}</p><p>${t('risk')}</p><aside class="lifetime"><p>${t('lifetime')}</p><p id="lifetime" role="status" ${['idle', 'active', 'uncertain', 'reserved', 'retired'].map((k) => `data-${k}="${t(`lifetime_${k}`)}"`).join(' ')}>${t('lifetime_idle')}</p><p>${t('recoveryLimit')}</p><button id="retire" disabled>${t('retire')}</button></aside><p id="status" role="status" aria-live="polite" ${['ok', 'cancelled', 'busy', 'denied', 'unavailable', 'working'].map((k) => `data-${k}="${t(k)}"`).join(' ')}>${t('notStarted')}</p><p id="project"></p><div class="panes">${card(0)}${card(1)}</div><section><h2>${t('delegation')}</h2><label>${t('instructions')}<textarea id="instructions" maxlength="2048"></textarea></label><label>${t('task')}<textarea id="task" maxlength="1024"></textarea></label><button id="delegate" disabled>${t('send')}</button><p>${t('limits')}</p><pre id="communication" aria-label="${t('communication')}"></pre></section></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+      body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${t('title')}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${t('title')}</h1><p>${t('scope')}</p><p>${t('setup')}</p><p>${t('risk')}</p><aside class="lifetime"><p>${t('lifetime')}</p><p id="lifetime" role="status" ${['idle', 'active', 'uncertain', 'reserved', 'retired'].map((k) => `data-${k}="${t(`lifetime_${k}`)}"`).join(' ')}>${t('lifetime_idle')}</p><p>${t('recoveryLimit')}</p><button id="retire" disabled>${t('retire')}</button></aside><p id="status" role="status" aria-live="polite" ${['ok', 'cancelled', 'busy', 'denied', 'focus_required', 'unavailable', 'working'].map((k) => `data-${k}="${t(k)}"`).join(' ')}>${t('notStarted')}</p><p id="project"></p><div class="panes">${card(0)}${card(1)}</div><section><h2>${t('delegation')}</h2><label>${t('instructions')}<textarea id="instructions" maxlength="2048"></textarea></label><label>${t('task')}<textarea id="task" maxlength="1024"></textarea></label><button id="delegate" disabled>${t('send')}</button><p>${t('limits')}</p><pre id="communication" aria-label="${t('communication')}"></pre></section></main><script src="${terminalScriptURL}" defer></script></body></html>`;
       type = 'text/html; charset=utf-8';
     } else if (request.url === terminalScriptURL) {
       body = readFileSync(join(__dirname, 'managed-agents-client.js'), 'utf8');
@@ -134,6 +134,10 @@ export async function createManagedAgents(
       window === currentWindow &&
       !!document &&
       authorizedTerminalSender(event, currentWindow, browserSession, document, generation, focus);
+    const refusal = () => ({
+      status: current(false) ? 'focus_required' : 'denied',
+      empty: !core,
+    });
     const parsed = managedAgentsRequestSchema.safeParse(raw);
     if (!parsed.success || !current(false)) return { status: 'denied' };
     const r = parsed.data;
@@ -150,7 +154,7 @@ export async function createManagedAgents(
       }
     }
     if (busy) return { status: 'busy' };
-    if (!current(true)) return { status: 'denied' };
+    if (!current(true)) return refusal();
     busy = true;
     try {
       if (retired && r.action === 'start') {
@@ -167,7 +171,8 @@ export async function createManagedAgents(
           filters: [{ name: 'JSON', extensions: ['json'] }],
         });
         if (selected.canceled) return { status: 'cancelled', empty: true };
-        if (!current(true) || selected.filePaths.length !== 2) return { status: 'denied' };
+        if (!current(true)) return refusal();
+        if (selected.filePaths.length !== 2) return { status: 'denied', empty: true };
         // Native selection only. Paths never cross the renderer boundary.
         core = await connectManagedAgents(
           [selected.filePaths[0]!, selected.filePaths[1]!],
@@ -177,7 +182,7 @@ export async function createManagedAgents(
       }
       if (!current(true)) {
         if (disposed) core.close();
-        return { status: 'denied' };
+        return refusal();
       }
       let challenge: TerminalChallenge;
       let details: unknown;
@@ -217,7 +222,8 @@ export async function createManagedAgents(
         (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
       );
       // Match the existing native confirmation bound; a scrolling review surface is not implemented.
-      if (detail.length > 4096 || !current(true)) return { status: 'denied' };
+      if (detail.length > 4096) return { status: 'denied' };
+      if (!current(true)) return refusal();
       const result = await dialog.showMessageBox(currentWindow!, {
         type: 'warning',
         title: translate('managedAgents.title'),
@@ -229,7 +235,8 @@ export async function createManagedAgents(
         noLink: true,
       });
       if (result.response !== 1) return { status: 'cancelled' };
-      if (!current(true) || Date.now() >= challenge.expiresAt) return { status: 'denied' };
+      if (!current(true)) return refusal();
+      if (Date.now() >= challenge.expiresAt) return { status: 'denied' };
       const proof = {
         challengeId: challenge.challengeId,
         signature: sign(null, terminalChallengeBytes(challenge), keys.privateKey).toString(
@@ -267,8 +274,10 @@ export async function createManagedAgents(
   });
   const open = () => {
     if (window && !window.isDestroyed()) {
+      if (window.isMinimized()) window.restore();
       window.show();
       window.focus();
+      window.webContents.focus();
       return;
     }
     if (disposed) return;

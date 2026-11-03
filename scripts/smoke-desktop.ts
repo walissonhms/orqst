@@ -208,6 +208,12 @@ Module._load = load;
     false,
   );
   await page.screenshot({ path: join(evidenceDir, 'synthetic-observer.png') });
+  // Real preload/IPC must explain native focus refusal without opening a process or view.
+  await page.locator('body').click({ position: { x: 5, y: 5 } });
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.blur());
+  assert.deepEqual(await page.evaluate(async () => window.orqstManagedAgents!.open()), {
+    status: 'focus_required',
+  });
   // Open the shipped structured surface without configuring or executing any provider.
   // Use the shipped native menu opener; opening an empty view grants no process authority.
   // This fixture does not claim the OS focus acceptance required for signed mutations.
@@ -254,7 +260,48 @@ Module._load = load;
     }),
     'denied',
   );
+  await agents.locator('#model-0').click();
+  await desktop.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
+      .blur(),
+  );
+  assert.deepEqual(
+    await agents.evaluate(async () => {
+      const client = Reflect.get(window, 'orqstManagedAgentsClient') as {
+        request(request: unknown): Promise<unknown>;
+      };
+      return client.request({ version: 1, action: 'start', slot: 0, model: 'SYNTHETIC' });
+    }),
+    { status: 'focus_required', empty: true },
+  );
   await agents.screenshot({ path: join(evidenceDir, 'synthetic-managed-agents-empty.png') });
+  await desktop.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
+      .minimize(),
+  );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
+          .isMinimized(),
+      ),
+    )
+    .toBe(true);
+  await desktop.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()!.getMenuItemById('managed-agents-open')!.click(),
+  );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
+          .isMinimized(),
+      ),
+    )
+    .toBe(false);
   assert.equal(
     await desktop.evaluate(({ BrowserWindow, Menu }) => {
       const managed = BrowserWindow.getAllWindows().find(
@@ -855,7 +902,7 @@ Module._load = load;
         observerComposition:
           'synthetic Bridge on ephemeral loopback; observer has view-only managed opener and no terminal authority; shipped two-terminal empty view opened/isolation, sticky lifetime, retirement disabled and same-view hide/reopen checked; no manifests, provider, login or inference',
         managedAgentsNativeFocus:
-          'native menu opener exercised; header/native-focus active mutations remain unvalidated',
+          'real preload/IPC focus refusal for opener/start passed; native menu opener exercised; active native-focus/modal acceptance remains unvalidated',
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
         analyticsFiles:

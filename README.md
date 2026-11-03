@@ -24,6 +24,10 @@ reuse native authentication with new ephemeral threads and private SQLite/log st
 native auth/config remain shared. The Desktop **Managed agents** surface now connects
 two explicitly signed structured terminals and scoped delegation; one authorized native acceptance attempt failed
 before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
+Native focus refusals now have localized client feedback; active native-modal/focus
+acceptance remains pending. `pnpm accept:managed-agents --authorize-synthetic-agents`
+checks two disposable synthetic native processes and the signed A-to-B-to-A transport,
+without a provider or credentials. It does not accept the two-real-agent milestone.
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
 window inside ORQST Desktop for a new owned Codex process, with separate login,

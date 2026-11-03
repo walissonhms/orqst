@@ -491,3 +491,10 @@ It archives admission/task metadata, then fences the old runtime before releasin
 capacity, and preserves uncertain outcomes and journals.
 It cannot recover older/post-crash/lost-owner markers or prove descendant cleanup;
 never delete evidence to bypass admission. See [client limits](docs/development/managed-agents-client.md).
+
+Managed-agents focus refusal feedback is a bounded private IPC status, not a grant.
+Native document identity and window/content focus remain required before signing;
+the client never bypasses them or automatically retries. Native reopening can
+restore a minimized view without process authority. Active OS focus/modal acceptance
+and post-crash reconciliation remain unvalidated; see
+[managed client limits](docs/development/managed-agents-client.md).

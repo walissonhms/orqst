@@ -792,3 +792,16 @@ and extra fields; malformed diagnostics cannot revoke or restore authority.
 Counters are sampled, saturating and frozen at startup outcome, not durable proof
 of native parsing or cleanup. No public API, observer access or ownership policy
 changes. Historical timeouts remain unproven. See [the counter contract](../development/codex-startup-diagnostics.md).
+
+### Native focus refusal feedback — 2026-11-03
+
+The private managed-agents opener returns bounded status acknowledgments; the
+current authorized terminal document can receive `focus_required` before signing.
+The dashboard displays localized refusal feedback and supports older void-returning
+version-1 preloads. These replies expose no paths, keys, prompts or provider facts.
+Sender/session/main-frame/generation and native window/content focus gates remain
+required. Invalid document identity remains denied; no renderer focus command,
+automatic retry or post-dialog focus override is added. Native reopening restores
+a minimized live view and requests focus without granting execution authority.
+REST, WebSocket, observation cookies, static serving and journal/recovery policy
+are unchanged. Active OS focus/modal acceptance remains unvalidated.

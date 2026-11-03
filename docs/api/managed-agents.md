@@ -7,7 +7,10 @@ It is not a REST/WebSocket/MCP API. The observer remains read-only.
 ## View opener
 
 The observer preload exposes frozen `orqstManagedAgents`, version 1, with only
-`open(): Promise<void>`. It checks transient activation; main verifies its exact
+`open(): Promise<{ status } | void>`. New preloads return a strict status of `ok`,
+`focus_required`, `denied` or `unavailable`; `void` supports a version-1 preload
+already running when dashboard assets update. The dashboard shows localized refusal
+feedback without retrying or requesting agent execution. It checks transient activation; main verifies its exact
 window/main frame/session, URL and native focus. The only effect is opening or
 focusing the dedicated view. It cannot pass task, file, identity or proof fields.
 The native menu offers the same view without granting a provider start.
@@ -33,8 +36,11 @@ environment, target pane, correlation, signature, approval, resume or retry fiel
 exists. A chooses only the exact B task/target authorized by the native plan; agent
 content cannot issue native confirmations or enlarge its grant.
 
-Replies have `status` (`ok`, `cancelled`, `busy`, `denied`, `unavailable`) and an
-optional strictly validated `snapshot`. `empty:true` is supplied only when main
+Replies have `status` (`ok`, `cancelled`, `busy`, `denied`, `focus_required`, `unavailable`) and an
+optional strictly validated `snapshot`. `focus_required` is returned only for the
+current authorized document when its native window/content lack focus before
+signing. It grants nothing and never restores focus or retries automatically.
+Invalid document identity remains `denied`. `empty:true` is supplied only when main
 knows no pair host exists; missing snapshots never authorize new starts. `ok` reports
 completion of the client
 operation, never inferred completion of a provider task. A task submission returns

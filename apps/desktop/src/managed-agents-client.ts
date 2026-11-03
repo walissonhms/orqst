@@ -67,6 +67,8 @@ async function request(r: ManagedAgentsRequest) {
     if (r.action !== 'snapshot' || reply.status !== 'ok')
       status.textContent = status.dataset[reply.status] ?? '';
     if (r.action !== 'snapshot') busy = false;
+    // Focus refusal is not lifecycle evidence. Keep controls revoked until a fresh snapshot.
+    if (reply.status === 'focus_required' && !reply.snapshot) return;
     if (reply.snapshot) render(reply.snapshot);
     else if (!busy && reply.empty) {
       for (const slot of [0, 1]) button(`start-${slot}`).disabled = false;

@@ -1019,7 +1019,23 @@ export function App() {
           </div>
           <div className="topbar-actions">
             {window.orqstManagedAgents?.contractVersion === 1 && (
-              <button className="button" onClick={() => void window.orqstManagedAgents?.open()}>
+              <button
+                className="button"
+                onClick={() => {
+                  void window.orqstManagedAgents
+                    ?.open()
+                    .then((reply) => {
+                      if (reply?.status && reply.status !== 'ok')
+                        setNotice(
+                          reply.status === 'focus_required'
+                            ? 'managedAgents.open_focus_required'
+                            : 'managedAgents.open_unavailable',
+                        );
+                      else setNotice('');
+                    })
+                    .catch(() => setNotice('managedAgents.open_unavailable'));
+                }}
+              >
                 <Terminal size={15} />
                 {t('managedAgents.title')}
               </button>

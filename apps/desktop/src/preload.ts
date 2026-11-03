@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   analyticsNativeRequestSchema,
+  managedAgentsOpenReplySchema,
+  type ManagedAgentsOpenReply,
   type DesktopAnalytics,
   type DesktopArtifacts,
   type ArtifactSaveRequest,
@@ -27,9 +29,15 @@ contextBridge.exposeInMainWorld(
   'orqstManagedAgents',
   Object.freeze({
     contractVersion: 1,
-    async open(): Promise<void> {
-      if (navigator.userActivation.isActive)
-        await ipcRenderer.invoke('orqst:managed-agents-open').catch(() => {});
+    async open(): Promise<ManagedAgentsOpenReply> {
+      if (!navigator.userActivation.isActive) return { status: 'denied' };
+      try {
+        return managedAgentsOpenReplySchema.parse(
+          await ipcRenderer.invoke('orqst:managed-agents-open'),
+        );
+      } catch {
+        return { status: 'unavailable' };
+      }
     },
   }),
 );

@@ -133,12 +133,12 @@ async function start(): Promise<void> {
     if (
       quitting ||
       !window ||
-      !window.isFocused() ||
-      !window.webContents.isFocused() ||
       !authorizedArtifactSender(event, window.webContents, browserSession, origin)
     )
-      return;
+      return { status: 'denied' };
+    if (!window.isFocused() || !window.webContents.isFocused()) return { status: 'focus_required' };
     openManagedAgents();
+    return { status: 'ok' };
   });
   ipcMain.handle('orqst:save-markdown', async (event, input: unknown) => {
     const current = window;
