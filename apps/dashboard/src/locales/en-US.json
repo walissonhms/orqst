@@ -679,6 +679,9 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
+    "reuseScope": "Experimental Codex native login reuse. Native configuration, MCPs, skills and session root stay shared; Codex may refresh credentials and write new sessions. Not ephemeral or a container. Read-only/on-request startup defaults; provider UI can change permissions. No automatic task, resume or login. Real-provider and MCP integration acceptance are pending; Claude Code and OpenCode are not enabled.",
+    "reuseIdle": "No owned process started. Start requires native confirmation. Separate login is disabled for this native reuse profile.",
+    "focus_required": "Bring this Terminal window to the foreground and try again. macOS must be unlocked; no operation was authorized.",
     "title": "Managed Terminal",
     "open": "Open Codex Terminal",
     "scope": "Legacy separate-login opt-in with your macOS user privileges; not a container. Existing native login reuse is not implemented. Read-only/on-request startup defaults; provider UI may change permissions. Closing hides this view; process lifetime is 30 minutes. Real Codex acceptance is pending; Claude Code and OpenCode are not enabled.",

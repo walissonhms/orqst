@@ -24,6 +24,7 @@ export const managedCodexConfigSchema = z.strictObject({
   node: binary,
   project: path,
   state: path,
+  interactive: z.strictObject({ sharedNativeSessions: z.literal(true) }).optional(),
   // Optional extension: legacy manifests retain their separate-login behavior.
   authentication: z
     .strictObject({
@@ -149,6 +150,8 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   terminalDirectory(config.project);
   terminalDirectory(config.state, true);
   assertSeparateTerminalState(config.project, config.state);
+  if (config.interactive && !config.authentication)
+    throw new Error('Interactive native reuse requires existing authentication');
   if (config.authentication) {
     terminalDirectory(config.authentication.home);
     terminalDirectory(config.authentication.codexHome);
@@ -174,18 +177,38 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
 }
 
 export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfile[] {
-  if (config.authentication)
-    throw new Error('Existing authentication is supported only by the structured runtime');
+  if (config.authentication && !config.interactive)
+    throw new Error(
+      'Existing authentication is supported only by the structured runtime unless interactive native session writes are acknowledged',
+    );
   const common = {
     projectId: terminalDigest(config.project),
     executable: config.executable.path,
     executableSha256: config.executable.sha256,
     executableVersion: config.executableVersion,
     cwd: config.project,
-    environmentProfile: 'managed-home-no-inherited-credentials-v1',
+    environmentProfile: config.authentication
+      ? 'native-auth-config-sessions-no-inherited-credentials-v1'
+      : 'managed-home-no-inherited-credentials-v1',
     permissions:
       'Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.',
   };
+  if (config.authentication)
+    return [
+      {
+        ...common,
+        id: 'codex-terminal-v1',
+        argv: [
+          '--no-daemon',
+          '--sandbox',
+          'read-only',
+          '--ask-for-approval',
+          'on-request',
+          ...nativeCodexOverrides(config).flatMap((value) => ['-c', value]),
+        ],
+        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${common.permissions}`,
+      },
+    ];
   return [
     {
       ...common,
@@ -228,7 +251,17 @@ export function managedCodexEnvironment(config: ManagedCodexConfig): Record<stri
 export function structuredCodexArguments(config: ManagedCodexConfig): string[] {
   if (!config.authentication)
     return ['-c', 'cli_auth_credentials_store="file"', 'app-server', '--listen', 'stdio://'];
-  const overrides = [
+  return [
+    ...nativeCodexOverrides(config).flatMap((value) => ['-c', value]),
+    'app-server',
+    '--listen',
+    'stdio://',
+  ];
+}
+
+/** Overrides are not hard containment and do not disable inherited MCP tables. */
+function nativeCodexOverrides(config: ManagedCodexConfig): string[] {
+  return [
     `sqlite_home=${JSON.stringify(join(config.state, 'codex'))}`,
     `log_dir=${JSON.stringify(join(config.state, 'codex'))}`,
     'history.persistence="none"',
@@ -246,7 +279,4 @@ export function structuredCodexArguments(config: ManagedCodexConfig): string[] {
     'notify=[]',
     'shell_environment_policy.inherit="none"',
   ];
-  // MCP tables merge: an empty override DOES NOT disable configured servers.
-  // Shared native configuration remains part of the explicit same-user contract.
-  return [...overrides.flatMap((value) => ['-c', value]), 'app-server', '--listen', 'stdio://'];
 }

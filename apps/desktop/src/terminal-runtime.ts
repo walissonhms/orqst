@@ -109,10 +109,16 @@ function bindRuntime(
       disposed ||
       !binding ||
       !broker ||
-      !authorizedTerminalSender(event, window, session, binding, generation, false) ||
-      !terminalNativeRequestSchema.safeParse(raw).success
+      !authorizedTerminalSender(event, window, session, binding, generation, false)
     )
       return { status: 'denied' };
+    const parsedRequest = terminalNativeRequestSchema.safeParse(raw);
+    if (!parsedRequest.success) return { status: 'denied' };
+    if (
+      ['start', 'attach', 'input', 'paste', 'write', 'stop'].includes(parsedRequest.data.action) &&
+      !authorizedTerminalSender(event, window, session, binding, generation, true)
+    )
+      return { status: 'focus_required' };
     if (busy) return { status: 'busy' };
     busy = true;
     active = event;

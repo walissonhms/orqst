@@ -160,8 +160,9 @@ export async function createManagedTerminals(files: string[], translate: (key: s
       let body: string;
       let contentType: string;
       if (request.url === terminalDocumentURL) {
-        const button = (id: string) => `<button id="${id}">${text(id)}</button>`;
-        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</h1><p>${text('scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? 'idle')}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+        const button = (id: string) =>
+          `<button id="${id}"${id === 'login' && config.authentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
+        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</h1><p>${text(config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
         contentType = 'text/html; charset=utf-8';
       } else if (request.url === terminalScriptURL) {
         body = readFileSync(join(__dirname, 'managed-terminal-client.js'), 'utf8');
@@ -244,8 +245,10 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     await window.loadURL(terminalDocumentURL);
     return () => {
       if (!window.isDestroyed()) {
+        if (window.isMinimized()) window.restore();
         window.show();
         window.focus();
+        window.webContents.focus();
       }
     };
   }

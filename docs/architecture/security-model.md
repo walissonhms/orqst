@@ -833,3 +833,21 @@ worker can wait/submit only for its fixed task; transport loss is unknown task o
 never process exit or permission to retry. No MCP method writes task text into a PTY.
 Same-user malicious replacement is outside this contract. See the
 [security review and provider gates](docs/development/interactive-cli-mcp.md).
+
+### Explicit Codex native-login PTY profile
+
+A new manifest-only opt-in acknowledges shared native session writes independently
+of structured reuse. Native start still needs the unchanged focused, document-bound
+confirmation and signed one-use launch. Reuse exposes no separate-login profile;
+ORQST never reads/copies credentials. HOME/CODEX_HOME and native config/MCP/session
+roots remain shared, and native credential refresh/new session writes are possible.
+No resume/adoption or initial task is supplied. Private SQLite/log/temp paths and
+read-only/on-request startup defaults do not provide hard containment. This path has
+synthetic evidence only; it does not claim real-provider or per-instance MCP acceptance.
+
+The PTY IPC router validates document/schema before returning `focus_required` for
+unfocused mutations; it prepares no grant on this path. Window reopening requests
+focus but cannot authorize work. The sender predicate and post-modal checks are
+unchanged. Locked-console detection exists only in the explicit developer acceptance
+script, not in the trust boundary. No new Bridge/API, WebSocket or network listener
+is introduced. Existing journals, quarantines and external sessions are preserved.

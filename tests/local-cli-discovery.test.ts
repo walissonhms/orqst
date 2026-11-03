@@ -261,6 +261,15 @@ test('existing-login setup requires shared-config acknowledgment and never reads
     const environment = { PATH: f.bin };
     await assert.rejects(run(process.execPath, args, { env: environment }), /No state created/);
     assert.equal(existsSync(state), false);
+    for (const extra of [['--interactive'], ['--acknowledge-shared-native-sessions']]) {
+      await assert.rejects(
+        run(process.execPath, [...args, '--acknowledge-shared-native-config', ...extra], {
+          env: environment,
+        }),
+        /No state created/,
+      );
+      assert.equal(existsSync(state), false);
+    }
     const output = await run(process.execPath, [...args, '--acknowledge-shared-native-config'], {
       env: environment,
     });

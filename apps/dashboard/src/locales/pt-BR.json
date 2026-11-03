@@ -679,6 +679,9 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
+    "reuseScope": "Reuso experimental do login nativo Codex. Configuração, MCPs, skills e raiz de sessões nativas ficam compartilhados; Codex pode renovar credenciais e gravar novas sessões. Não é efêmero nem um contêiner. Padrões iniciais somente leitura/sob solicitação; a interface do provider pode mudar permissões. Sem tarefa automática, retomada ou login. Aceite do provider real e integração MCP pendentes; Claude Code e OpenCode não estão habilitados.",
+    "reuseIdle": "Nenhum processo próprio iniciado. Iniciar exige confirmação nativa. Login separado fica desabilitado neste perfil de reuso nativo.",
+    "focus_required": "Traga esta janela de Terminal para frente e tente novamente. O macOS deve estar desbloqueado; nenhuma operação foi autorizada.",
     "title": "Terminal gerenciado",
     "open": "Abrir Terminal Codex",
     "scope": "Opção legada de login separado com privilégios do seu usuário macOS; não é um container. Reuso do login nativo existente não implementado. Início em read-only/on-request; a UI do provider pode alterar permissões. Fechar oculta esta janela; duração de 30 minutos. Aceite real Codex pendente; Claude Code e OpenCode não estão habilitados.",

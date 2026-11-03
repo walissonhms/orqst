@@ -150,3 +150,10 @@ pair RPC separately binds slot 0/1 and supports signed retirement; it is not an
 HTTP/WebSocket or renderer capability. Core-issued terminal identities are separate
 from process-instance UUIDs. See [interactive MCP boundary](../development/interactive-cli-mcp.md)
 for the independent synthetic-only stdio task/result contract.
+
+The dedicated PTY IPC reply additionally permits `status: "focus_required"` for a
+valid current document whose start/attach/input/paste/write/stop request lacks
+native window or content focus. It returns before preparing a grant or process;
+invalid documents/schema still receive `denied`. The native sender predicate,
+post-modal revalidation and blur revocation remain unchanged. The observer API
+has no corresponding operation.

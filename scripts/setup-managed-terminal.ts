@@ -22,6 +22,8 @@ const { values } = parseArgs({
     state: { type: 'string' },
     authentication: { type: 'string', default: 'reuse-existing' },
     'acknowledge-shared-native-config': { type: 'boolean' },
+    interactive: { type: 'boolean' },
+    'acknowledge-shared-native-sessions': { type: 'boolean' },
     'user-home': { type: 'string' },
     'codex-home': { type: 'string' },
   },
@@ -33,6 +35,17 @@ if (
 )
   throw new Error(
     'Existing authentication shares native user configuration and may start configured MCP servers. No state created. Structured reuse requires --acknowledge-shared-native-config; the legacy profile requires --authentication separate-login. Never copy or link credentials.',
+  );
+if (
+  (values.interactive || values['acknowledge-shared-native-sessions']) &&
+  !(
+    values.interactive &&
+    values['acknowledge-shared-native-sessions'] &&
+    values.authentication === 'reuse-existing'
+  )
+)
+  throw new Error(
+    'No state created. --interactive requires reuse-existing and --acknowledge-shared-native-sessions. Codex may write new sessions in its native home.',
   );
 if (!values['executable-version'] || !values.project || !values.state)
   throw new Error(
@@ -58,6 +71,7 @@ const config = managedCodexConfigSchema.parse({
   node: { path: node, sha256: terminalExecutableSha256(node) },
   project,
   state,
+  ...(values.interactive ? { interactive: { sharedNativeSessions: true } } : {}),
   ...(values.authentication === 'reuse-existing'
     ? {
         authentication: {
@@ -89,5 +103,5 @@ writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\
   mode: 0o600,
 });
 console.log(
-  `Provisioned ${join(state, 'terminal.json')}. No provider executed. ${config.authentication ? 'Structured runtime only: native login/config stay shared; no login or credential access performed.' : 'Open Desktop with --terminal-config=PATH; login and start require separate native confirmation.'}`,
+  `Provisioned ${join(state, 'terminal.json')}. No provider executed. ${config.authentication ? (config.interactive ? 'Interactive native reuse opt-in: native login/config/session root stay shared. New session writes and credential refresh are possible only after a separately confirmed start. Real-provider compatibility remains unvalidated.' : 'Structured runtime only: native login/config stay shared; no login or credential access performed.') : 'Open Desktop with --terminal-config=PATH; login and start require separate native confirmation.'}`,
 );

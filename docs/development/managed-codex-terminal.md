@@ -1,10 +1,10 @@
 # Embedded managed Codex Terminal
 
 **Current direction:** reuse installed CLIs/native authentication by default. This
-guide describes the earlier optional separate-login profile; it does not implement
-credential reuse. `terminal:setup` defaults to reuse-existing with an explicit
-shared-config acknowledgment for the structured path; those manifests are blocked
-in this PTY surface. The legacy PTY path requires an explicit separate-login choice. Start with the
+guide covers the earlier optional separate-login profile and the
+[explicit native-login PTY opt-in](#explicit-native-login-pty-opt-in--2026-11-03). `terminal:setup` defaults to reuse-existing with an explicit
+shared-config acknowledgment for the structured path; those manifests stay blocked
+in this PTY surface unless the additional interactive/session-write opt-in is selected. The legacy PTY path requires an explicit separate-login choice. Start with the
 [passive existing-CLI preflight](local-cli-integration.md). Do not create two new
 homes/logins as the default next acceptance step.
 
@@ -163,8 +163,9 @@ slot. Navigation/reload fences that slot; it does not revoke the other slot.
 There is no third window, independent second pair or shared input stream.
 Duplicate manifests/states (including hard links), nested state roots and more than
 two manifests are rejected before opening Core/journals. Existing journals are not
-opened for recovery by this surface. Existing-login manifests instead display a
-blocked xterm view without creating Core, journals, admission or a provider.
+opened for recovery by this surface. Existing-login manifests without the additional
+interactive/session-write opt-in display a blocked xterm view without creating
+Core, journals, admission or a provider.
 If either selected manifest is blocked, the entire pair opens blocked without Core.
 No duplicate installation/login is performed automatically.
 
@@ -208,3 +209,100 @@ show/focus attempts. The gate was preserved. An earlier two-window transport run
 passed; that does not accept the final additional reload/blocked-view checks or
 human focus/modals. Final native acceptance remains pending in an available focused
 macOS session, separately from the passing synthetic Node/MCP tests.
+
+## Explicit native-login PTY opt-in — 2026-11-03
+
+Codex now has a separate **experimental** interactive profile for native login reuse.
+This is code plus synthetic Core/PTY evidence, not real Codex compatibility, native
+login or two-agent acceptance. Existing structured manifests remain PTY-blocked.
+Create fresh state only; never edit an old manifest, reset a journal, remove a
+reservation or change a quarantined directory to enable it.
+
+```bash
+pnpm terminal:setup --authentication reuse-existing --acknowledge-shared-native-config \
+  --interactive --acknowledge-shared-native-sessions \
+  --executable ABSOLUTE_NATIVE_BINARY --executable-version OWNER_REVIEWED_VERSION \
+  --project EMPTY_DISPOSABLE_PROJECT --state NEW_PRIVATE_SLOT
+```
+
+Repeat with another new private slot for B, then explicitly start Desktop with
+both `--terminal-config=PATH` arguments as described above. Setup hashes files and
+creates a manifest only; it executes no CLI and reads no credentials. The added
+`interactive: {sharedNativeSessions:true}` manifest field is independent of
+structured reuse. The native start confirmation must still be reviewed separately.
+Do not start a real CLI until its exact binary/version, shared side effects and
+operation have specific owner authorization. The version string is owner-supplied,
+not a live protocol or authentication check.
+
+Only the TUI profile is available in reuse mode; separate login is disabled in the
+renderer and absent from Core profiles. Native `HOME`/`CODEX_HOME` remain shared and
+no credential backend is forced. Fixed argv uses a new foreground TUI with
+`--no-daemon`, read-only/on-request defaults and the existing structured path's
+telemetry/hook/history/update overrides. No resume/session ID or initial task is
+supplied. The upstream source review covers Codex `rust-v0.162.1`, commit
+`092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`; it does not prove the selected installed
+binary. Newer public documentation may differ.
+
+**This TUI is not ephemeral.** Native session files, configuration, MCPs, skills,
+requirements and caches may remain shared; the CLI may create new sessions and
+refresh its credentials. `history.persistence=none` concerns prompt history and
+must not be described as disabling session persistence. A real TUI can write new
+rollout JSONL files under the shared `CODEX_HOME/sessions` root even with prompt
+history disabled. The synthetic fixture does not validate those native rollout
+effects or promise that the shared home stays byte-for-byte unchanged. SQLite/log/temp paths are
+private to each new slot; that is not filesystem/network containment. Native MCP
+configuration can start other processes. ORQST neither copies credentials nor
+writes/adopts/resumes external sessions, and no such source is modified by these
+synthetic checks. Real native side effects remain unvalidated.
+
+Per-instance ORQST MCP remains an independent synthetic transport library. This
+profile does not install a relay or promise automatic delivery to an idle TUI.
+Claude Code and OpenCode still have no launch adapter. See
+[the provider-specific gates](interactive-cli-mcp.md).
+
+### Native focus prerequisite
+
+The pair opener now restores minimized windows and requests window/content focus.
+The unchanged native sender predicate still requires both focus signals; the
+router returns localized `focus_required` before preparing start, attach, input,
+paste, keyboard write or stop when either is absent. There is no queued consent or
+automatic retry. Blur still revokes leases and a closed native modal must pass the
+existing final focus/document checks.
+
+A repeated local acceptance attempt found the console **locked**, confirmed by
+macOS IORegistry and CoreGraphics session metadata. All windows reported false
+native focus. Showing the Dock, requesting regular activation and using a temporary
+unique app bundle did not resolve that OS state; those experiments were removed.
+`accept:terminal-pair` now detects a reported locked console before creating any
+temporary state or fixture process and exits nonzero with an unlock instruction.
+This diagnostic is not an authorization source. Unlock macOS, bring the Terminal
+window forward, then rerun the same synthetic acceptance. No lock-screen bypass or
+focus mock is provided. Positive native focus/modal/retirement acceptance remains
+pending on an unlocked owner session.
+
+The independent command below runs two actual compiled synthetic C processes
+through the same Node Core, PTY hosts and reuse profiles using temporary homes,
+unreadable synthetic native sentinels, synthetic signatures and owned exit receipts.
+It requires the Desktop build and never starts Electron or a real provider:
+
+```bash
+pnpm build:desktop
+pnpm accept:terminal-reuse --authorize-synthetic-pty
+```
+
+Its result covers native reuse profile transport only. It cannot accept human
+focus/modal consent, actual credentials, model use or provider MCP integration.
+
+### Verification of this increment
+
+On macOS/arm64 with Node24.22.2 and pnpm10.34.9, this increment passed lint,
+typecheck, 464 Node tests, full build, the disposable Electron45.2.1 smoke and the
+new synthetic native-reuse PTY command. The build retains the existing dashboard
+chunk-size warning. The pair GUI command exited nonzero at its locked-console
+preflight; this is a reported blocker, not a passed focus acceptance. No real CLI,
+native authentication query, inference, external session, quarantine or old
+reservation was used or changed. Full Chromium and `validate:local` were not rerun;
+observer ingestion and Bridge/API behavior are unchanged. Localhost served the
+current dashboard index byte-for-byte after the build, without restarting Bridge,
+Desktop or owned processes. The running Desktop has not hot-adopted the new native
+code; use a later safe normal launch for that client update.

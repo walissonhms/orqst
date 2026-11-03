@@ -12,8 +12,9 @@ has one private Node Core, two independently owned slots, per-slot journals and
 document-bound native clients. The common `TerminalBackend` contract provides
 owned start/output/exit and explicit user-authorized keyboard/paste/resize/signals;
 the pair keeps provider-specific profiles outside that common lifecycle. The
-adapter registry has a factory only for the earlier explicit Codex separate-login
-profile. Existing-login PTY, Claude and OpenCode have no admitted factory.
+adapter registry has the earlier explicit Codex separate-login factory and a new
+[separately acknowledged native-login PTY opt-in](managed-codex-terminal.md#explicit-native-login-pty-opt-in--2026-11-03).
+Existing structured manifests remain PTY-blocked. Claude and OpenCode have no factory.
 Discovery reports these integration limits separately from executable availability.
 Version metadata in a manifest remains owner-supplied, not an inspected protocol
 or evidence of native login, model access or provider acceptance.
@@ -97,11 +98,11 @@ provider integration; a loopback HTTP fallback is not silently enabled.
 No installed CLI version is newly admitted by this increment. Review of upstream
 mechanisms is a design input, not compatibility or login evidence:
 
-| CLI         | Existing-login boundary                                                                                                                              | Per-invocation MCP / idle-worker issue                                                                                                                                  | Current status                                                                          |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Codex       | The structured path can retain native HOME/CODEX_HOME; interactive PTY reuse remains blocked. TUI session writes must not be described as ephemeral. | Native configuration can merge user MCPs; every exact flag, timeout and TUI worker mechanism needs installed-version evidence.                                          | Legacy separate-login PTY fixture only; real provider and interactive reuse unvalidated |
-| Claude Code | Preserve native identity/Keychain selection; do not substitute CLAUDE_CONFIG_DIR or inject API keys.                                                 | Proposed per-invocation strict MCP configuration/session UUID and optional preview channels need separate version/permission validation. Preview flags are not enabled. | No managed adapter or compatibility claim                                               |
-| OpenCode    | Preserve native auth/config/data identity; a Codex environment that replaces XDG roots is unsuitable.                                                | Proposed per-invocation configuration merges and timeouts require exact-version evidence; no headless server is adopted.                                                | No managed adapter or compatibility claim                                               |
+| CLI         | Existing-login boundary                                                                                                                                                                                      | Per-invocation MCP / idle-worker issue                                                                                                                                  | Current status                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Codex       | The structured path can retain native HOME/CODEX_HOME; interactive PTY reuse has an explicit synthetic-only opt-in with shared native session writes. TUI session writes must not be described as ephemeral. | Native configuration can merge user MCPs; every exact flag, timeout and TUI worker mechanism needs installed-version evidence.                                          | Separate-login and explicit native-reuse PTY fixtures; real provider unvalidated |
+| Claude Code | Preserve native identity/Keychain selection; do not substitute CLAUDE_CONFIG_DIR or inject API keys.                                                                                                         | Proposed per-invocation strict MCP configuration/session UUID and optional preview channels need separate version/permission validation. Preview flags are not enabled. | No managed adapter or compatibility claim                                        |
+| OpenCode    | Preserve native auth/config/data identity; a Codex environment that replaces XDG roots is unsuitable.                                                                                                        | Proposed per-invocation configuration merges and timeouts require exact-version evidence; no headless server is adopted.                                                | No managed adapter or compatibility claim                                        |
 
 The proposed portable B worker starts with a separately authorized initial argv
 prompt instructing it to wait/execute/submit via MCP. That is a proposal, not an
@@ -135,3 +136,28 @@ passed, while the repeated final Electron run stopped at the real native-focus
 precondition before any CLI start. The gate was retained; no focus mock, process
 retry or provider run was introduced to replace that refusal. Independent Node,
 Unix-socket and stdio fixtures do not establish human/native focus acceptance.
+
+### Reviewed next adapter contracts — 2026-11-03
+
+The [official Codex configuration reference](https://learn.chatgpt.com/docs/config-file/config-reference)
+and [MCP guide](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) were reopened.
+They describe stdio command/args/environment, tool timeouts and per-server enable
+controls. Native tables merge: adding an ORQST server does not disable inherited
+servers. The offline official `rust-v0.162.1` source was also inspected at commit
+`092d3acd6bec3e3a14bdc7e7a2810ab628ab759d` for foreground TUI selection. No provider
+was executed to perform this review. Shared session writes require their distinct
+manifest acknowledgment; prompt-history suppression is not session isolation.
+
+The [Claude Code MCP guide](https://code.claude.com/docs/en/mcp) documents local
+stdio servers, runtime-specific retry/timeout behavior and channels. The
+[OpenCode MCP guide](https://opencode.ai/docs/mcp-servers/) documents local command
+arrays, environment and merged configuration. These official mechanisms justify
+further adapter work; they do not establish installed-version compatibility,
+native identity preservation or idle-worker delivery. No Claude/OpenCode factory,
+preview channel or headless fallback is enabled by this delivery.
+
+The next concrete provider/MCP gate is a specifically authorized native Codex
+no-task TUI/stdio handshake on an unlocked console with a fresh disposable project,
+then separately authorized inference/delegation. The Desktop still has no wired
+per-instance MCP grant/relay composition. An ordinary human TUI start cannot count
+as A-to-B-to-A acceptance. Existing reservations/quarantines remain unchanged.

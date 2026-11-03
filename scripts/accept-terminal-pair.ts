@@ -1,6 +1,6 @@
 // Explicit two-window Desktop acceptance. Only a compiled synthetic CLI and disposable state.
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -28,6 +28,16 @@ assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-pty']);
 assert.match(process.version, /^v24\./);
 assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
+// Diagnostic preflight only; the unchanged native sender predicate remains authoritative.
+const consoleState = execFileSync('/usr/sbin/ioreg', ['-n', 'Root', '-d1'], {
+  encoding: 'utf8',
+  timeout: 3000,
+  maxBuffer: 1024 * 1024,
+});
+assert.ok(
+  !/"CGSSessionScreenIsLocked"\s*=\s*Yes/.test(consoleState),
+  'Native focus unavailable: macOS console is locked. Unlock macOS and rerun. No fixture or provider started.',
+);
 process.umask(0o077);
 const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-terminal-pair-')));
 const run = promisify(execFile);

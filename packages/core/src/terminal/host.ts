@@ -23,10 +23,14 @@ const publicKey = createPublicKey({
 const authority = new TerminalAuthority(new Map([['desktop-managed', publicKey]]), Date.now);
 const admission = desktopAgentsAdmission(process.argv[4]!, files);
 const stores: Store[] = [];
-const adapter = interactiveCliAdapter('codex', 'separate-login');
 const pair = new ManagedTerminalPair(
   authority,
   selection.map(({ config }, slot) => {
+    const adapter = interactiveCliAdapter(
+      'codex',
+      config.authentication ? 'reuse-existing' : 'separate-login',
+      !!config.interactive,
+    );
     const store = new Store(join(config.state, 'terminal.sqlite'));
     stores.push(store);
     return {

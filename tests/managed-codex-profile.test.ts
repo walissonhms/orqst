@@ -196,3 +196,44 @@ test('private Terminal RPC denies arbitrary execution, argument expansion and un
     false,
   );
 });
+
+test('interactive native reuse needs a separate opt-in, exposes no login profile and never probes credentials', () => {
+  const f = fixture();
+  try {
+    const nativeHome = join(f.root, 'synthetic-native-home');
+    mkdirSync(nativeHome, { mode: 0o700 });
+    const secret = join(nativeHome, 'auth.json');
+    writeFileSync(secret, 'SYNTHETIC-UNREADABLE-CREDENTIAL', { mode: 0o000 });
+    const config: ManagedCodexConfig = {
+      ...f.config,
+      authentication: {
+        mode: 'reuse-existing',
+        home: f.root,
+        codexHome: nativeHome,
+        sharedNativeConfiguration: true,
+      },
+      interactive: { sharedNativeSessions: true },
+    };
+    writeFileSync(f.file, JSON.stringify(config));
+    const profiles = managedCodexProfiles(readManagedCodexConfig(f.file));
+    assert.equal(profiles.length, 1);
+    const profile = profiles[0]!;
+    assert.equal(profile.id, 'codex-terminal-v1');
+    assert.ok(profile.argv.includes('--no-daemon'));
+    assert.ok(profile.argv.includes('read-only'));
+    assert.ok(profile.argv.includes('on-request'));
+    assert.ok(profile.argv.includes('history.persistence="none"'));
+    assert.ok(
+      !profile.argv.some((value) => /cli_auth_credentials_store|resume|ephemeral/.test(value)),
+    );
+    assert.match(profile.permissions, /session root are SHARED/);
+    assert.equal(managedTerminalBackend(f.file, '/never-started.cjs').validate(profile), true);
+    chmodSync(secret, 0o600);
+    assert.equal(readFileSync(secret, 'utf8'), 'SYNTHETIC-UNREADABLE-CREDENTIAL');
+    assert.throws(() => readFileSync(join(f.state, 'codex/auth.json')), /ENOENT/);
+    writeFileSync(f.file, JSON.stringify({ ...f.config, interactive: config.interactive }));
+    assert.throws(() => readManagedCodexConfig(f.file), /requires existing authentication/);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});

@@ -23,7 +23,7 @@ export function managedTerminalBackend(file: string, host: string): TerminalBack
       if (!expected.some((value) => JSON.stringify(value) === JSON.stringify(profile)))
         return false;
       // Metadata only: provider owns and reads its credentials. Never import or expose them.
-      if (profile.id === 'codex-terminal-v1') {
+      if (profile.id === 'codex-terminal-v1' && !config.authentication) {
         const auth = lstatSync(join(config.state, 'codex/auth.json'));
         if (
           !auth.isFile() ||

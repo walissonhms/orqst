@@ -284,3 +284,31 @@ test('terminal network policy is independent, exact and excludes Bridge, frames,
   assert.ok(terminalContentSecurityPolicy.includes("connect-src 'none'"));
   assert.ok(terminalContentSecurityPolicy.includes("frame-src 'none'"));
 });
+
+test('runtime reports native focus refusal before preparing any mutating operation', async () => {
+  const s = setup();
+  s.loaded();
+  const id = await s.start();
+  await s.action('attach', { instanceId: id });
+  await s.action('input', { instanceId: id });
+  const confirms = s.confirms();
+  for (const surface of [s.window, s.contents]) {
+    Object.assign(surface, { isFocused: () => false });
+    for (const [name, fields] of [
+      ['start', { profileId: 'synthetic' }],
+      ['attach', { instanceId: id }],
+      ['input', { instanceId: id }],
+      ['paste', { instanceId: id, sequence: 0, text: 'synthetic' }],
+      ['write', { instanceId: id, sequence: 0, text: 'synthetic' }],
+      ['stop', { instanceId: id, signal: 'SIGTERM' }],
+    ] as const)
+      assert.equal((await s.action(name, fields)).status, 'focus_required');
+    assert.equal((await s.action('snapshot', { instanceId: id })).status, 'ok');
+    Object.assign(surface, { isFocused: () => true });
+  }
+  assert.equal(s.starts(), 1);
+  assert.equal(s.confirms(), confirms);
+  assert.deepEqual(s.writes, []);
+  assert.deepEqual(s.signals, []);
+  s.dispose();
+});

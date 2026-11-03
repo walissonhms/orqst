@@ -14,7 +14,8 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
       provider === 'codex'
         ? ('legacy_separate_login_fixture_validated' as const)
         : ('unimplemented' as const),
-    existingLoginPty: 'blocked' as const,
+    existingLoginPty:
+      provider === 'codex' ? ('explicit_opt_in_unvalidated' as const) : ('blocked' as const),
     perInstanceMcp: 'synthetic_transport_only' as const,
     installedVersionCompatibility: 'unvalidated' as const,
     automaticTaskDelivery: 'unvalidated' as const,
@@ -26,9 +27,13 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
 export function interactiveCliAdapter(
   provider: LocalCliProvider,
   authentication: 'reuse-existing' | 'separate-login',
+  nativeSessionWritesAcknowledged = false,
 ) {
-  if (provider !== 'codex' || authentication !== 'separate-login')
-    throw new Error('Interactive CLI adapter has no validated launch contract for this mode');
+  if (
+    provider !== 'codex' ||
+    (authentication === 'reuse-existing' && !nativeSessionWritesAcknowledged)
+  )
+    throw new Error('Interactive CLI adapter has no reviewed launch contract for this mode');
   return {
     readManifest: readManagedCodexConfig,
     profiles: managedCodexProfiles,
