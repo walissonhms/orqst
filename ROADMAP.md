@@ -217,9 +217,16 @@ capabilities, a sticky confirmed-token session strip and filtered source-linked
 notifications. UI preferences persist locally; neither processes nor session tabs
 are restored. Existing observation, Analytics and manual Artifacts stay intact.
 
+Grouped Settings now adds General, Appearance & accessibility, Notifications and
+Privacy & storage. Contrast, comfortable spacing and reduced motion are local
+preferences with storage-denial feedback and a scoped confirmed reset. Language
+and reading comfort work offline; delivery preferences reuse the existing Bridge
+contract. This does not implement provider configuration or storage management.
+
 Remaining frontend work includes configurable Overview panels, project tabs/splits,
-a searchable artifact library, grouped Settings and onboarding. Studio/PTY controls,
-CLI/model discovery, task Kanban and orchestration require real Core/provider and
+a searchable artifact library, light theme/font controls, broader Settings and
+onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
+require real Core/provider and
 authorization contracts; no visual placeholder counts as delivered functionality.
 The screen matrix is the integration checklist, while the six phases above retain
 their existing backend and release gates.
