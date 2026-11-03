@@ -45,6 +45,12 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Observed tools increment:** session details group uniquely correlated retained
+  Codex invocation/return records, with inert bounded text and per-record sources.
+  This is partial historical tool evidence, not a terminal connection; interactive
+  Terminal remains blocked on managed ownership, authorization and provider/PTY
+  validation. See [terminal boundary](docs/development/terminal-boundary.md).
+
 - **Observed usage evolution:** **Most used models** can request a bounded chronological
   chart/table with the current filters, confirmed aggregate reconciliation, explicit
   zero/missing windows and separate lifetime totals without known time distribution.

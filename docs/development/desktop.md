@@ -267,3 +267,10 @@ native visual acceptance. The profile, Bridge, sessions and files are synthetic 
 disposable. `ORQST_DESKTOP_SMOKE_OUTPUT` optionally places screenshots in an exclusive
 output directory; by default they are discarded with the temporary profile. Never
 use the owner's profile or installed Bridge for this smoke.
+
+## Terminal scope
+
+The shared session details now provide a bounded **Observed tools** evidence view.
+It does not attach to a process or expose input/interrupt controls. See the
+[terminal boundary](terminal-boundary.md) for supported semantics and the concrete
+managed-execution decisions required before an interactive terminal can ship.

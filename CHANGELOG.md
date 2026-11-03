@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Read-only Observed tools in session details: bounded, source-backed Codex tool
+  invocation/return groups with strict correlation, explicit partial/stale history
+  and inert control-character display. No process state or execution is inferred.
+  Interactive Terminal remains pending the documented managed-authorization,
+  ownership and provider/PTY boundary; no control API, IPC or dependency was added.
+
 - Bounded observed usage evolution integrated into Most used models: chronological
   bars and accessible UTC-window table, existing filters, cumulative reconciliation,
   explicit missing/zero readings and separate undistributed lifetime totals. A strict

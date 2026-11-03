@@ -491,3 +491,14 @@ It adds no writer, source-file reader, schema migration or Desktop grant. Runtim
 schemas bound and reconcile at most 64 windows; individual evidence stays worker-local.
 Aggregate query/model metadata keeps the existing privacy limits. See the
 [contract and detailed security review](../api/analytics-evolution.md).
+
+## Review note — retained tool evidence view
+
+The session Observed tools view only projects already-loaded Codex tool events.
+It adds no API, IPC, execution capability, process ownership or session adoption.
+Output and arguments remain untrusted React text; terminal/direction controls are
+shown visibly without an emulator or active links. Per-field and record-window
+limits bound rendering, and each record retains its source reference. Historical
+returns never prove process exit, success or current liveness. See the
+[terminal boundary](../development/terminal-boundary.md) for unresolved managed
+authorization, executable/argv/cwd/environment, lifecycle and PTY decisions.

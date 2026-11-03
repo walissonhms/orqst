@@ -417,5 +417,25 @@
       "invalid_evidence": "History unavailable: evidence could not be validated.",
       "identity_conflict": "History unavailable: session evidence identity conflicts."
     }
+  },
+  "observedTools": {
+    "tab": "Observed tools",
+    "title": "Observed tool input and output",
+    "boundary": "Read-only tool records from an external Codex session. This is not a terminal transcript or a process connection. Start, input, interrupt and resume are unavailable.",
+    "coverage": "Partial loaded history only: at most {{records}} tool records from the last {{inspected}} loaded events, with {{text}} display characters per text field. Records can be missing, redacted or truncated before this view; redaction is best-effort.",
+    "controls": "Captured content is plain text. Terminal controls (except newline/tab) and direction characters are shown as Unicode escapes; no terminal sequences, links or commands are executed.",
+    "offline": "Disconnected or refreshing: retained records are historical, not live output.",
+    "failed": "History could not be refreshed. The records shown may be incomplete or out of date.",
+    "limited": "The display window limit was reached. Earlier loaded records are omitted; use Activity to browse other retained events.",
+    "invalid": "Some tool records could not be validated for this view and were omitted.",
+    "empty": "No supported tool records in this loaded window. This does not prove that no tools ran.",
+    "paired": "Invocation and return with matching recorded identity",
+    "unpaired": "Separate record — no unique pair in this window",
+    "invocation": "Recorded invocation · normalized event time:",
+    "output": "Recorded return · normalized event time:",
+    "noText": "No retained text. An empty or missing record does not prove empty process output.",
+    "truncated": "Display shortened. This is not the complete retained field.",
+    "sourceNote": "Retained event {{sequence}}. Source was not rechecked; this record does not prove process liveness, exit, success or terminal ownership.",
+    "position": "Source line {{line}} · byte offset {{offset}}"
   }
 }

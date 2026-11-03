@@ -41,6 +41,7 @@ import { api } from './api';
 import { ArtifactPanel, type ArtifactCloseGuard } from './ArtifactPanel';
 import { LiveMetrics } from './LiveMetrics';
 import { ModelHistory } from './ModelHistory';
+import { ObservedTools } from './ObservedTools';
 import { useSessionMetrics } from './use-session-metrics';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
@@ -239,7 +240,7 @@ function SessionDetail({
   const [events, setEvents] = useState<StoredEvent[]>([]);
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState(false);
-  const [tab, setTab] = useState<'activity' | 'results' | 'usage'>('activity');
+  const [tab, setTab] = useState<'activity' | 'results' | 'usage' | 'observedTools'>('activity');
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const [tokenThreshold, setTokenThreshold] = useState<number>();
@@ -384,13 +385,13 @@ function SessionDetail({
         </span>
       </div>
       <div className="tabs">
-        {(['activity', 'results', 'usage'] as const).map((value) => (
+        {(['activity', 'results', 'usage', 'observedTools'] as const).map((value) => (
           <button
             key={value}
             className={tab === value ? 'selected' : ''}
             onClick={() => setTab(value)}
           >
-            {t(value)}
+            {t(value === 'observedTools' ? 'observedTools.tab' : value)}
           </button>
         ))}
       </div>
@@ -425,6 +426,16 @@ function SessionDetail({
             </button>
           )}
         </>
+      )}
+      {tab === 'observedTools' && (
+        <ObservedTools
+          events={events}
+          sessionId={session.id}
+          online={connection === 'connected' && !snapshotError}
+          failed={error}
+          hasOlder={hasOlder}
+          onOlder={() => void older()}
+        />
       )}
       {artifactRequest && (
         <ArtifactPanel

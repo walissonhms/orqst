@@ -316,3 +316,8 @@ It adds no writer, source-file reader, schema migration or Desktop grant. Runtim
 schemas bound and reconcile at most 64 windows; individual evidence stays worker-local.
 Aggregate query/model metadata keeps the existing privacy limits. See the
 [contract and detailed security review](docs/api/analytics-evolution.md).
+
+The session Observed tools view is retained historical evidence, not a terminal
+connection or execution surface. It never interprets terminal escapes or sends
+input to an agent. Interactive terminals remain gated by the
+[terminal security boundary](docs/development/terminal-boundary.md).

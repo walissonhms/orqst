@@ -417,5 +417,25 @@
       "invalid_evidence": "Histórico indisponível: a evidência não pôde ser validada.",
       "identity_conflict": "Histórico indisponível: conflito de identidade na evidência da sessão."
     }
+  },
+  "observedTools": {
+    "tab": "Ferramentas observadas",
+    "title": "Entrada e saída de ferramentas observadas",
+    "boundary": "Registros somente de leitura de ferramentas de uma sessão externa do Codex. Esta visão não é uma transcrição de terminal nem conexão com um processo. Início, entrada, interrupção e retomada estão indisponíveis.",
+    "coverage": "Somente histórico parcial carregado: até {{records}} registros de ferramentas dos últimos {{inspected}} eventos carregados, com {{text}} caracteres de exibição por campo de texto. Registros podem estar ausentes, censurados ou truncados antes desta visão; a remoção de dados sensíveis é uma tentativa sem garantia de completude.",
+    "controls": "O conteúdo capturado é texto simples. Controles de terminal (exceto nova linha/tabulação) e caracteres de direção aparecem como escapes Unicode; nenhuma sequência de terminal, link ou comando é executado.",
+    "offline": "Desconectado ou atualizando: os registros retidos são históricos, não saída ao vivo.",
+    "failed": "Não foi possível atualizar o histórico. Os registros exibidos podem estar incompletos ou desatualizados.",
+    "limited": "O limite da janela de exibição foi atingido. Registros anteriores carregados foram omitidos; use Atividade para consultar outros eventos retidos.",
+    "invalid": "Alguns registros de ferramentas não puderam ser validados para esta visão e foram omitidos.",
+    "empty": "Nenhum registro de ferramenta suportado nesta janela carregada. Isso não comprova que nenhuma ferramenta foi executada.",
+    "paired": "Chamada e retorno com identidade registrada correspondente",
+    "unpaired": "Registro separado — sem par único nesta janela",
+    "invocation": "Chamada registrada · horário do evento normalizado:",
+    "output": "Retorno registrado · horário do evento normalizado:",
+    "noText": "Sem texto retido. Um registro vazio ou ausente não comprova saída vazia do processo.",
+    "truncated": "Exibição abreviada. Este não é o campo retido completo.",
+    "sourceNote": "Evento retido {{sequence}}. A fonte não foi verificada novamente; este registro não comprova atividade, saída, sucesso do processo ou posse do terminal.",
+    "position": "Linha de origem {{line}} · posição em bytes {{offset}}"
   }
 }

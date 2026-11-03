@@ -1924,3 +1924,36 @@ th:nth-last-child(2) {
   text-align: left;
   padding: 12px 0;
 }
+
+.observed-tools {
+  padding: 20px;
+  min-width: 0;
+}
+.observed-tools article {
+  margin-top: 16px;
+  border: 1px solid #23333e;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 0;
+}
+.observed-tools h3,
+.observed-tools h4 {
+  margin-bottom: 10px;
+}
+.observed-tool-record + .observed-tool-record {
+  border-top: 1px solid #23333e;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+.observed-tools pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
+  font-size: 11px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 8px 0;
+}
+.session-detail .tabs {
+  flex-wrap: wrap;
+}
