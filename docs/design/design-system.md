@@ -87,8 +87,8 @@ of new approved brand artwork or native Desktop visual acceptance.
 
 Light normal text, secondary accents and semantic colors must meet 4.5:1 against
 the three opaque layers and their used soft fills; focus and control boundaries
-must meet 3:1. `theme-preferences.spec.ts` computes these ratios from actual resolved
-CSS, including derived colors. This bounded check is not a full accessibility audit.
+must meet 3:1. `theme-preferences.spec.ts` checks both palettes and computes these
+ratios from actual resolved CSS, including derived colors. This bounded check is not a full accessibility audit.
 
 ## Typography and layout
 
@@ -98,9 +98,10 @@ Use `--orqst-font-mono` (SFMono-Regular, Consolas, Liberation Mono, monospace) f
 identifiers, captured code and exact readings; use tabular numerals for tokens.
 Captured content keeps its original language and is rendered inertly.
 
-The current dense dashboard uses a 13px root, 27px desktop page titles, 13px panel
-titles and 10–12px compact labels. Preserve browser zoom and text wrapping. Do
-not truncate the only accessible copy of provenance or identifiers. The spacing
+The dashboard uses a 13px body baseline, 30px desktop page titles, 14px panel
+titles and 11–13px compact labels. Primary navigation uses 13px text and icon
+controls have a 36px minimum target; comfortable spacing retains 40px targets.
+Preserve browser zoom and text wrapping. Do not truncate the only accessible copy of provenance or identifiers. The spacing
 scale `--orqst-space-1` through `--orqst-space-6` is 4, 8, 12, 16, 20 and 24px.
 Existing asymmetric layout spacing and larger page insets remain intentional.
 
@@ -110,12 +111,19 @@ boundary use `--orqst-border-strong`. Default control radius is
 Retain the existing compact badges and icon shapes. Avoid excessive shadows,
 glass layers or decorative effects competing with observation data.
 
-Preserve the current responsive layout: fixed sidebar on wide screens; stacked
-secondary panels below 900px; workspace menu and two-column overview metrics
-below 700px; one-column Analytics metrics and filters below 700px; narrower
-artifact/provenance and metric layouts below 600px. Tables scroll inside their
-container; long captured text wraps. Keyboard focus must remain visible on
-buttons, links, selects, inputs, textareas and disclosure summaries. Dialog
+The sidebar is fixed and independently scrollable on wide screens, including
+short windows; secondary panels stack below 900px. Overview metrics use two
+columns below 1100px. Below 700px, the workspace menu includes the theme-aware
+logo, and a 108px two-row header separates scope from actions; the session context
+strip shares that height token to avoid overlap. Session rows become labeled
+mobile cards while preserving all original fields, table headers and actions.
+Analytics metrics and filters use one column below 700px; artifact/provenance and
+metric layouts narrow below 600px. Other tables scroll inside their containers;
+long captured text wraps. Analytics export/evolution panels use the same internal
+spacing as other panels.
+Desktop Settings keeps the smaller groups together beside Appearance, avoiding
+empty grid rows; narrow windows retain DOM order. Keyboard focus must remain
+visible on buttons, links, selects, inputs, textareas and disclosure summaries. Dialog
 behavior, labels, dismissal, validation and existing i18next translations remain
 part of the component contract.
 
@@ -197,8 +205,9 @@ wins; Follow system never forces animation against it. See the
 
 ## Development and acceptance
 
-For visual changes run lint, types, tests and build, then inspect desktop/mobile,
-keyboard focus, contrast and reduced motion against isolated synthetic data.
+See [dashboard visual checks](../development/dashboard-visual-checks.md) for
+the reproducible synthetic matrix. For visual changes run lint, types, tests and
+build, then inspect desktop/mobile, keyboard focus, contrast and reduced motion against isolated synthetic data.
 Record actual outcomes separately from requirements. Do not publish captured
 sessions, private briefs, generated screenshots or local acceptance reports.
 Native Desktop, other-browser and manual assistive-technology acceptance require

@@ -12,6 +12,13 @@ const assets = [
     sha256: '563c296a50c64601bb35236912fb4d7a5ab3b71ea272ec54a0a2ddf989781e1d',
   },
   {
+    name: 'logo-dark',
+    title: 'ORQST',
+    width: 880,
+    height: 270,
+    sha256: '4413d876432dd344cc348ffcb65e702aa874543dab243b6e075be590cb37eb88',
+  },
+  {
     name: 'mascot',
     title: 'ORQST mascot',
     width: 690,
@@ -21,7 +28,7 @@ const assets = [
 ];
 
 for (const asset of assets) {
-  test(`approved ${asset.name} contains only a fixed SVG wrapper and unchanged PNG`, async () => {
+  test(`reviewed ${asset.name} contains only a fixed SVG wrapper and pinned PNG`, async () => {
     const svg = await readFile(`apps/dashboard/public/brand/orqst-${asset.name}.svg`, 'utf8');
     // A full-document allowlist rejects any extra tags, attributes, external URLs or declarations.
     const wrapper = new RegExp(

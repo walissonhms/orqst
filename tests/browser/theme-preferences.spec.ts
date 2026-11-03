@@ -184,47 +184,49 @@ function ratio(a: number, b: number) {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 }
 
-test('light text, semantic states, controls and focus retain AA contrast in both contrast modes', async ({
-  page,
-}) => {
-  await settings(page);
-  await themeSelect(page).selectOption('light');
-  let standardMuted = 0;
-  for (const contrast of ['standard', 'high']) {
-    await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption(contrast);
-    const colors = await palette(page);
-    for (const surface of ['background', 'surface', 'elevated']) {
-      for (const token of ['text', 'muted', 'neon', 'lavender', 'success', 'warning', 'danger']) {
-        expect(
-          ratio(colors[token]!, colors[surface]!),
-          `${contrast}: ${token} on ${surface}`,
-        ).toBeGreaterThanOrEqual(4.5);
+for (const theme of ['dark', 'light']) {
+  test(`${theme} text, semantic states, controls and focus retain AA contrast in both contrast modes`, async ({
+    page,
+  }) => {
+    await settings(page);
+    await themeSelect(page).selectOption(theme);
+    let standardMuted = 0;
+    for (const contrast of ['standard', 'high']) {
+      await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption(contrast);
+      const colors = await palette(page);
+      for (const surface of ['background', 'surface', 'elevated']) {
+        for (const token of ['text', 'muted', 'neon', 'lavender', 'success', 'warning', 'danger']) {
+          expect(
+            ratio(colors[token]!, colors[surface]!),
+            `${contrast}: ${token} on ${surface}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+        for (const token of ['border-strong', 'neon']) {
+          expect(
+            ratio(colors[token]!, colors[surface]!),
+            `${token} boundary on ${surface}`,
+          ).toBeGreaterThanOrEqual(3);
+        }
       }
-      for (const token of ['border-strong', 'neon']) {
-        expect(
-          ratio(colors[token]!, colors[surface]!),
-          `${token} boundary on ${surface}`,
-        ).toBeGreaterThanOrEqual(3);
+      for (const token of ['success', 'warning', 'danger']) {
+        expect(ratio(colors[token]!, colors[`${token}-soft`]!)).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(ratio(colors.lavender!, colors['accent-soft']!)).toBeGreaterThanOrEqual(4.5);
+      for (const token of ['primary', 'primary-hover']) {
+        expect(ratio(colors['on-primary']!, colors[token]!)).toBeGreaterThanOrEqual(4.5);
+      }
+      const muted = ratio(colors.muted!, colors.surface!);
+      if (contrast === 'standard') standardMuted = muted;
+      else {
+        expect(muted).toBeGreaterThan(standardMuted);
+        expect(ratio(colors.border!, colors.surface!)).toBeGreaterThanOrEqual(3);
       }
     }
-    for (const token of ['success', 'warning', 'danger']) {
-      expect(ratio(colors[token]!, colors[`${token}-soft`]!)).toBeGreaterThanOrEqual(4.5);
-    }
-    expect(ratio(colors.lavender!, colors['accent-soft']!)).toBeGreaterThanOrEqual(4.5);
-    for (const token of ['primary', 'primary-hover']) {
-      expect(ratio(colors['on-primary']!, colors[token]!)).toBeGreaterThanOrEqual(4.5);
-    }
-    const muted = ratio(colors.muted!, colors.surface!);
-    if (contrast === 'standard') standardMuted = muted;
-    else {
-      expect(muted).toBeGreaterThan(standardMuted);
-      expect(ratio(colors.border!, colors.surface!)).toBeGreaterThanOrEqual(3);
-    }
-  }
-  await themeSelect(page).focus();
-  await expect(themeSelect(page)).toHaveCSS('outline-style', 'solid');
-  await expect(themeSelect(page)).toHaveCSS('outline-width', '2px');
-});
+    await themeSelect(page).focus();
+    await expect(themeSelect(page)).toHaveCSS('outline-style', 'solid');
+    await expect(themeSelect(page)).toHaveCSS('outline-width', '2px');
+  });
+}
 
 test('light theme covers real views and source text at desktop, laptop and mobile widths', async ({
   page,

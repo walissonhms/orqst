@@ -7,7 +7,6 @@ import {
   Bell,
   Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Circle,
   Command,
@@ -560,6 +559,17 @@ export function App() {
   const [notificationFilter, setNotificationFilter] = useState('all');
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
+      setMenuOpen(false);
+      menuTrigger.current?.focus();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [menuOpen]);
   const [notice, setNotice] = useState('');
   const prefsRef = useRef<Preferences>({
     sound: false,
@@ -875,7 +885,11 @@ export function App() {
         >
           <img
             className="brand-logo"
-            src="/brand/orqst-logo.svg"
+            src={
+              appearance.resolvedTheme === 'dark'
+                ? '/brand/orqst-logo-dark.svg'
+                : '/brand/orqst-logo.svg'
+            }
             width={880}
             height={270}
             alt={t('brand')}
@@ -989,6 +1003,7 @@ export function App() {
         <header className="topbar">
           <div className="breadcrumbs">
             <button
+              ref={menuTrigger}
               className="icon-button menu-toggle"
               aria-label={t('workspaceNav')}
               aria-controls="app-sidebar"
@@ -1170,7 +1185,9 @@ export function App() {
                   </span>
                   <strong>
                     {f.number(sessions.filter((session) => session.status === 'running').length)}
-                    <i className="stat-live" />
+                    {sessions.some((session) => session.status === 'running') && (
+                      <i className="stat-live" aria-hidden="true" />
+                    )}
                   </strong>
                   <small>{t('latest')}</small>
                 </div>
@@ -1235,7 +1252,6 @@ export function App() {
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={12} />
                   </label>
                 </div>
                 {!sessions.length ? (
@@ -1258,8 +1274,8 @@ export function App() {
                     )}
                   </div>
                 ) : (
-                  <div className="table-scroll">
-                    <table>
+                  <div className="table-scroll" tabIndex={0} role="group" aria-label={t('agents')}>
+                    <table className="session-table" role="table">
                       <thead>
                         <tr>
                           <th>{t('agent')}</th>
@@ -1300,12 +1316,18 @@ export function App() {
                                 </span>
                               </button>
                             </td>
-                            <td>
+                            <td data-label={t('status')}>
                               <Status status={session.status} />
                             </td>
-                            <td className="mono muted">{f.duration(session)}</td>
-                            <td className="mono muted">{f.date(session.lastActivity)}</td>
-                            <td className="mono token-cell">{f.compact(session.usage.total)}</td>
+                            <td className="mono muted" data-label={t('duration')}>
+                              {f.duration(session)}
+                            </td>
+                            <td className="mono muted" data-label={t('lastActivity')}>
+                              {f.date(session.lastActivity)}
+                            </td>
+                            <td className="mono token-cell" data-label={t('tokens')}>
+                              {f.compact(session.usage.total)}
+                            </td>
                             <td>
                               <button
                                 className="icon-button"
