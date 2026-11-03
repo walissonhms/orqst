@@ -953,3 +953,7 @@ Disposable state is retained when an exit is not confirmed. These fixtures take
 about 30 seconds because they exercise the actual eight-second request deadlines.
 They do not inspect, reconcile, delete or reuse prior real acceptance state, prove
 descendant cleanup for a provider, or establish installed Codex compatibility.
+
+The [startup counter contract](codex-startup-diagnostics.md) describes the added
+fixed-size metadata, fake-only privacy/limit/cleanup tests and sample-lag limits.
+No real-provider acceptance follows from those counters.

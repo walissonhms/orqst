@@ -16,6 +16,7 @@ static void record(const char *method) {
 int main(void) {
   alarm(12); /* Independent disposable-child deadline, including after IPC disconnect. */
   setbuf(stdout, NULL);
+  fputs("SYNTHETIC-SECRET-STDERR-CREDENTIAL\n", stderr);
   char cwd[4096];
   if (!getcwd(cwd, sizeof(cwd))) return 32;
   const char *mode = strrchr(cwd, '/');

@@ -1,4 +1,10 @@
 import { fork } from 'node:child_process';
+import {
+  hostDiagnosticSchema,
+  StartupCounters,
+  type HostDiagnostic,
+  type HostCounter,
+} from './startup-diagnostics.js';
 import { closeSync } from 'node:fs';
 import { createLifecycleReceipt, type LifecycleBinding } from './lifecycle-receipt.js';
 import { randomUUID } from 'node:crypto';
@@ -114,6 +120,18 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
       let lost: (() => void) | undefined;
       let disposed = false;
       let pendingBytes = 0;
+      const counters = new StartupCounters([
+        'sendQueued',
+        'sendCallbacks',
+        'sendErrors',
+        'sendBackpressure',
+        'dataFrames',
+        'receivedBytes',
+        'diagnosticFrames',
+        'diagnosticRejected',
+      ] as const);
+      let host: HostDiagnostic | null = null;
+      let diagnosticsFinished = false;
       const fail = () => {
         if (!disposed) lost?.();
       };
@@ -122,6 +140,31 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
       child.on('exit', fail); // A host exit is not provider exit evidence.
       child.on('message', (raw: unknown) => {
         if (disposed) return;
+        if (
+          typeof raw === 'object' &&
+          raw !== null &&
+          'type' in raw &&
+          raw.type === 'startup_diagnostic'
+        ) {
+          if (diagnosticsFinished) return;
+          const diagnostic = hostDiagnosticSchema.safeParse(raw);
+          if (
+            !diagnostic.success ||
+            diagnostic.data.sequence <= (host?.sequence ?? 0) ||
+            (host !== null &&
+              (diagnostic.data.elapsedMs < host.elapsedMs ||
+                (host.saturated && !diagnostic.data.saturated) ||
+                Object.entries(host.counters).some(
+                  ([key, count]) => diagnostic.data.counters[key as HostCounter] < count,
+                )))
+          ) {
+            counters.add('diagnosticRejected');
+            return;
+          }
+          host = diagnostic.data;
+          counters.add('diagnosticFrames');
+          return;
+        }
         const parsed = z
           .discriminatedUnion('type', [
             z.strictObject({
@@ -142,7 +185,12 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
         if (!parsed.success) return fail();
         const message = parsed.data;
         if (message.type === 'started') events.started(message.processId);
-        if (message.type === 'data') data?.(Buffer.from(message.base64, 'base64'));
+        if (message.type === 'data') {
+          const bytes = Buffer.from(message.base64, 'base64');
+          counters.add('dataFrames');
+          counters.add('receivedBytes', bytes.length);
+          data?.(bytes);
+        }
         if (message.type === 'lost') fail();
         if (message.type === 'exit') {
           if (message.code === null && message.signal === null) return fail();
@@ -152,24 +200,44 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
       const send = (message: object) => {
         const bytes = Buffer.byteLength(JSON.stringify(message));
         if (disposed || !child.connected || pendingBytes + bytes > 512 * 1024) {
+          counters.add('sendErrors');
           fail();
           throw new Error('Codex private transport unavailable');
         }
         pendingBytes += bytes;
+        counters.add('sendQueued');
         try {
           // false reports backpressure, not rejection: the message is already queued.
           // Never retry it; only the completion callback reports a failed send.
-          child.send(message, (error) => {
+          const accepted = child.send(message, (error) => {
             pendingBytes -= bytes;
-            if (error) fail();
+            counters.add('sendCallbacks');
+            if (error) {
+              counters.add('sendErrors');
+              fail();
+            }
           });
+          if (!accepted) counters.add('sendBackpressure');
         } catch {
+          counters.add('sendErrors');
           pendingBytes -= bytes;
           fail();
           throw new Error('Codex private transport unavailable');
         }
       };
+      const finishDiagnostics = () => {
+        diagnosticsFinished = true;
+        counters.freeze();
+      };
       return {
+        startupDiagnostic: () => ({
+          version: 1,
+          binding: { ...binding },
+          parent: counters.snapshot(),
+          host: host === null ? null : structuredClone(host),
+          finished: diagnosticsFinished,
+        }),
+        finishDiagnostics,
         send: (line) => send({ action: 'send', line }),
         listen: (onData, onLost) => {
           data = onData;
@@ -181,6 +249,7 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
         },
         signal: (signal) => send({ action: 'signal', signal }),
         detach: () => {
+          finishDiagnostics();
           disposed = true;
           data = undefined;
           lost = undefined;
@@ -406,6 +475,7 @@ export class CodexStructuredRuntime {
         ]);
       } finally {
         clearTimeout(timer);
+        channel.finishDiagnostics();
       }
       if (this.snapshot(id).state !== 'running' || this.closed)
         throw new Error('Codex OS start not confirmed');
@@ -456,6 +526,13 @@ export class CodexStructuredRuntime {
       nativeProcessId: a.nativeProcessId ?? null,
       launchFailure: a.launchFailure ?? null,
       channelDiagnostic: a.channel?.diagnostic() ?? null,
+      startupDiagnostic: a.channel
+        ? {
+            version: 1,
+            parser: a.channel.startupDiagnostic(),
+            transport: a.transport?.startupDiagnostic?.() ?? null,
+          }
+        : null,
       paneId: a.pane?.paneId ?? null,
       requestedModel: a.input.model,
       ...(a.adapter?.snapshot() ?? {

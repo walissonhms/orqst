@@ -1,3 +1,7 @@
+import {
+  hostCounterNames,
+  StartupCounters,
+} from '../packages/core/src/managed-codex/startup-diagnostics.js';
 // SYNTHETIC native-protocol fixtures only. Never launch Codex or inspect user credentials/history.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -1435,6 +1439,81 @@ test('legacy host lifecycle without receipt version is rejected without provider
     assert.equal(started, 0);
     assert.equal(exited, 0);
     assert.equal(channel.available, false);
+  } finally {
+    transport?.detach();
+    f.close();
+  }
+});
+
+test('host metadata versions, regressions and extra fields cannot leak or revoke ownership', async () => {
+  const f = fixture();
+  let transport: CodexTransport | undefined;
+  try {
+    const slot = f.config('SYNTHETIC-diagnostics', true);
+    const host = join(f.root, 'SYNTHETIC-diagnostics-host.cjs');
+    const initial = new StartupCounters(hostCounterNames).snapshot();
+    writeFileSync(
+      host,
+      `
+      const frame={type:'startup_diagnostic',version:1,sequence:1,...${JSON.stringify(initial)}};
+      frame.counters.stdoutBytes=1;
+      process.send({type:'started',lifecycleVersion:1,processId:process.pid});
+      process.send({...frame,version:2,payload:'SYNTHETIC-SECRET'});
+      process.send(frame);
+      process.send({...frame,sequence:2,counters:{...frame.counters,stdoutBytes:0}});
+      process.send({...frame,sequence:3,counters:{...frame.counters,stdoutBytes:2}});
+      process.send({type:'data',base64:Buffer.from('ACK').toString('base64')});
+      process.on('disconnect',()=>process.exit(0));
+      setTimeout(()=>process.exit(0),5000).unref();
+    `,
+      { mode: 0o600 },
+    );
+    let receive: () => void;
+    let failReceive: (error: Error) => void;
+    const received = new Promise<void>((resolve, reject) => {
+      receive = resolve;
+      failReceive = reject;
+    });
+    let losses = 0;
+    transport = nativeCodexBackend(host).open(
+      slot.file,
+      slot.config,
+      {
+        started: () => {},
+        exit: () => {},
+      },
+      {
+        instanceId: randomUUID(),
+        epoch: randomUUID(),
+        manifestDigest: 'a'.repeat(64),
+        configDigest: 'b'.repeat(64),
+      },
+    );
+    transport.listen(
+      () => receive(),
+      () => {
+        losses++;
+        failReceive(new Error('Synthetic metadata host lost'));
+      },
+    );
+    await received;
+    const snapshot = transport.startupDiagnostic!() as {
+      host: { sequence: number; counters: { stdoutBytes: number } };
+      parent: {
+        counters: { diagnosticFrames: number; diagnosticRejected: number; dataFrames: number };
+      };
+    };
+    assert.equal(losses, 0);
+    assert.equal(snapshot.host.sequence, 3);
+    assert.equal(snapshot.host.counters.stdoutBytes, 2);
+    assert.equal(snapshot.parent.counters.diagnosticFrames, 2);
+    assert.equal(snapshot.parent.counters.diagnosticRejected, 2);
+    assert.equal(snapshot.parent.counters.dataFrames, 1);
+    assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-SECRET'));
+    transport.finishDiagnostics!();
+    const frozen = JSON.stringify(transport.startupDiagnostic!());
+    transport.send('SYNTHETIC-SECRET-PROMPT');
+    assert.equal(JSON.stringify(transport.startupDiagnostic!()), frozen);
   } finally {
     transport?.detach();
     f.close();

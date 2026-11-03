@@ -1,5 +1,6 @@
 // Separate Node owner keeps its fixed deadline if Core/IPC disappears. Never part of observer startup.
 import { spawn } from 'node:child_process';
+import { StartupCounters, hostCounterNames, reportHostStartup } from './startup-diagnostics.js';
 import { z } from 'zod';
 import { terminalDigest } from '../terminal/authority.js';
 import { armLifecycleReceipt } from './lifecycle-receipt.js';
@@ -25,24 +26,54 @@ const receipt = armLifecycleReceipt(4, terminalDigest(terminalFile(process.argv[
 const child = spawn(config.executable.path, structuredCodexArguments(config), {
   cwd: config.project,
   env: managedCodexEnvironment(config),
-  stdio: ['pipe', 'pipe', 'ignore'],
+  stdio: ['pipe', 'pipe', 'pipe'],
 });
+const counters = new StartupCounters(hostCounterNames);
+const stopDiagnostics = reportHostStartup(counters, (frame, done) => {
+  if (!process.connected) {
+    done(new Error('IPC unavailable'));
+    return;
+  }
+  process.send!(frame, done);
+});
+child.stderr.on('data', (bytes: Buffer) => counters.add('stderrBytes', bytes.length));
 let exited = false;
 let spawned = false;
 let escalation: ReturnType<typeof setTimeout> | undefined;
 const send = (value: object) => {
   if (!process.connected) return;
+  const isData = 'type' in value && value.type === 'data';
   try {
-    if (!process.send!(value, () => child.stdout.resume())) child.stdout.pause();
+    counters.add('ipcQueued');
+    if (isData) counters.add('ipcDataQueued');
+    if (
+      !process.send!(value, (error) => {
+        counters.add('ipcCallbacks');
+        if (isData) counters.add('ipcDataCallbacks');
+        if (error) {
+          counters.add('ipcErrors');
+          if (isData) counters.add('ipcDataErrors');
+        }
+        child.stdout.resume();
+      })
+    ) {
+      counters.add('ipcBackpressure');
+      child.stdout.pause();
+    }
   } catch {
+    counters.add('ipcErrors');
+    if (isData) counters.add('ipcDataErrors');
     child.stdout.resume();
   }
 };
 async function persist(value: Parameters<typeof receipt.record>[0]): Promise<boolean> {
+  counters.add('receiptQueued');
   try {
     await receipt.record(value);
+    counters.add('receiptCompleted');
     return true;
   } catch {
+    counters.add('receiptErrors');
     send({ type: 'lost' });
     return false;
   }
@@ -53,10 +84,19 @@ child.on('spawn', async () => {
     send({ type: 'started', lifecycleVersion: 1, processId: child.pid });
 });
 child.stdout.on('data', (bytes: Buffer) => {
+  counters.add('stdoutBytes', bytes.length);
+  counters.add('stdoutChunks');
+  let newlines = 0;
+  for (const byte of bytes) if (byte === 10) newlines++;
+  counters.add('stdoutNewlines', newlines);
   for (let offset = 0; offset < bytes.length; offset += 32 * 1024)
     send({ type: 'data', base64: bytes.subarray(offset, offset + 32 * 1024).toString('base64') });
 });
-child.stdin.on('error', () => send({ type: 'lost' }));
+child.stdin.on('error', () => {
+  counters.add('stdinErrors');
+  send({ type: 'lost' });
+});
+child.stdin.on('drain', () => counters.add('stdinDrains'));
 child.on('error', async () => {
   send({ type: 'lost' });
   if (!spawned) {
@@ -65,6 +105,7 @@ child.on('error', async () => {
   }
 });
 child.on('exit', async (code, signal) => {
+  counters.add('exits');
   exited = true;
   clearTimeout(lifetime);
   clearTimeout(escalation);
@@ -73,6 +114,7 @@ child.on('exit', async (code, signal) => {
   finish();
 });
 function finish() {
+  stopDiagnostics();
   exited = true;
   clearTimeout(lifetime);
   clearTimeout(escalation);
@@ -90,15 +132,33 @@ const command = z.discriminatedUnion('action', [
 ]);
 process.on('message', (raw: unknown) => {
   if (exited) return;
+  counters.add('commands');
   const parsed = command.safeParse(raw);
-  if (!parsed.success) return;
+  if (!parsed.success) {
+    counters.add('rejected');
+    return;
+  }
   if (parsed.data.action === 'signal') child.kill(parsed.data.signal);
-  else if (child.stdin.writableLength + Buffer.byteLength(parsed.data.line) <= 256 * 1024)
-    child.stdin.write(parsed.data.line);
-  else send({ type: 'lost' });
+  else if (child.stdin.writableLength + Buffer.byteLength(parsed.data.line) <= 256 * 1024) {
+    counters.add('accepted');
+    counters.add('stdinBytes', Buffer.byteLength(parsed.data.line));
+    if (
+      !child.stdin.write(parsed.data.line, (error) => {
+        counters.add('stdinCallbacks');
+        if (error) counters.add('stdinErrors');
+      })
+    )
+      counters.add('stdinBackpressure');
+  } else {
+    counters.add('rejected');
+    send({ type: 'lost' });
+  }
 });
 // Disconnect revokes controls; only the already-disclosed lifetime can later signal this handle.
-process.on('disconnect', () => child.stdout.resume());
+process.on('disconnect', () => {
+  stopDiagnostics();
+  child.stdout.resume();
+});
 const lifetime = setTimeout(
   () => {
     if (exited) return;

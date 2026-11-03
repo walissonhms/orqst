@@ -39,7 +39,7 @@ import {
 } from '../packages/core/src/terminal/codex-profile.js';
 
 test(
-  'production host/IPC initialize diagnostics distinguish framing errors but cannot identify silence causes',
+  'production startup counters distinguish observed boundaries without inferring the cause of silence',
   { timeout: 55000, skip: process.platform !== 'darwin' || process.arch !== 'arm64' },
   async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-initialize-')));
@@ -179,6 +179,52 @@ test(
               /No owned/,
             );
             assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-SECRET'));
+            const diagnostic = snapshot.startupDiagnostic!;
+            const transport = diagnostic.transport as {
+              finished: boolean;
+              host: {
+                counters: {
+                  accepted: number;
+                  stdinBytes: number;
+                  stdinCallbacks: number;
+                  stdoutBytes: number;
+                  stdoutNewlines: number;
+                  stderrBytes: number;
+                };
+              } | null;
+              parent: { counters: { sendQueued: number; dataFrames: number } };
+            };
+            assert.equal(transport.finished, true);
+            assert.equal(
+              diagnostic.parser.counters.correlatedResponses,
+              mode === 'rejected' ? 1 : 0,
+            );
+            if (['silent', 'unterminated', 'events-only'].includes(mode)) {
+              assert.ok(
+                transport.host,
+                'Host observations are present before the eight-second deadline',
+              );
+              assert.equal(transport.parent.counters.sendQueued, 1);
+              assert.equal(transport.host.counters.accepted, 1);
+              assert.ok(transport.host.counters.stdinBytes > 0);
+              assert.equal(transport.host.counters.stdinCallbacks, 1);
+              assert.equal(transport.host.counters.stdoutNewlines, mode === 'events-only' ? 1 : 0);
+              assert.equal(
+                diagnostic.parser.counters.completeLines,
+                mode === 'events-only' ? 1 : 0,
+              );
+              assert.equal(diagnostic.parser.bufferedBytes > 0, mode === 'unterminated');
+              assert.equal(transport.host.counters.stdoutBytes > 0, mode !== 'silent');
+              assert.ok(transport.host.counters.stderrBytes > 0);
+            }
+            const frozen = JSON.stringify(diagnostic);
+            await delay(20);
+            assert.equal(
+              JSON.stringify(runtime.snapshot(prepared.instanceId).startupDiagnostic),
+              frozen,
+            );
+            assert.ok(!frozen.includes('SYNTHETIC-SECRET'));
+            assert.ok(!frozen.includes(area));
           }
         } finally {
           // Never adopt a PID or signal after loss. Each fake has an independent bounded self-exit.

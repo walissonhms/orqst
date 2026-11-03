@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import { StartupCounters } from './startup-diagnostics.js';
 
 export const codexChannelLimits = Object.freeze({
   lineBytes: 256 * 1024,
@@ -37,6 +38,8 @@ export interface CodexTransport {
   listen(data: (chunk: Uint8Array) => void, lost: () => void): () => void;
   signal(signal: 'SIGTERM' | 'SIGKILL'): void;
   detach(): void;
+  startupDiagnostic?(): unknown;
+  finishDiagnostics?(): void;
 }
 export interface CodexNotification {
   method: string;
@@ -46,6 +49,28 @@ export interface CodexNotification {
 
 /** Bounded JSON-lines RPC. No arbitrary method is exposed to a renderer or agent. */
 export class CodexChannel {
+  private readonly startup = new StartupCounters([
+    'receivedBytes',
+    'chunks',
+    'completeLines',
+    'notifications',
+    'responses',
+    'correlatedResponses',
+    'invalidMessages',
+    'outputLimits',
+  ] as const);
+  private bufferedAtFinish: number | undefined;
+  startupDiagnostic() {
+    return {
+      ...this.startup.snapshot(),
+      bufferedBytes: this.bufferedAtFinish ?? this.buffer.length,
+    };
+  }
+  finishDiagnostics(): void {
+    this.bufferedAtFinish ??= this.buffer.length;
+    this.startup.freeze();
+    this.transport.finishDiagnostics?.();
+  }
   private pending = new Map<
     string,
     {
@@ -151,6 +176,8 @@ export class CodexChannel {
 
   private receive(chunk: Uint8Array): void {
     if (this.closed) return;
+    this.startup.add('receivedBytes', chunk.byteLength);
+    this.startup.add('chunks');
     this.total += chunk.byteLength;
     if (
       chunk.byteLength > codexChannelLimits.lineBytes ||
@@ -167,6 +194,7 @@ export class CodexChannel {
         return this.fail('output_limit');
       this.buffer = Buffer.concat([this.buffer, part]);
       if (newline < 0) return;
+      this.startup.add('completeLines');
       const line = this.buffer;
       this.buffer = Buffer.alloc(0);
       offset = newline + 1;
@@ -175,6 +203,7 @@ export class CodexChannel {
           JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(line)),
         );
         if (raw.method) {
+          this.startup.add('notifications');
           if (raw.method === 'item/tool/call' && raw.id !== undefined) {
             const key = JSON.stringify(raw.id);
             if (this.serverRequests.has(key) || this.serverRequests.size >= 4)
@@ -188,6 +217,7 @@ export class CodexChannel {
           };
           for (const listener of this.listeners) listener(event);
         } else {
+          this.startup.add('responses');
           const request = this.pending.get(String(raw.id));
           if (
             !request ||
@@ -195,6 +225,7 @@ export class CodexChannel {
             (raw.error === undefined) === (raw.result === undefined)
           )
             return this.fail('unexpected_response');
+          this.startup.add('correlatedResponses');
           this.pending.delete(String(raw.id));
           clearTimeout(request.timer);
           if (raw.error !== undefined) {
@@ -209,6 +240,9 @@ export class CodexChannel {
   }
   private fail(reason: FailureReason, method: CodexMethod | null = null): void {
     if (this.closed) return;
+    if (reason === 'invalid_message') this.startup.add('invalidMessages');
+    if (reason === 'output_limit') this.startup.add('outputLimits');
+    this.finishDiagnostics();
     this.closed = true;
     this.failure ??= { reason, method };
     this.buffer = Buffer.alloc(0);

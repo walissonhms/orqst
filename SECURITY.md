@@ -461,3 +461,13 @@ attempt metadata. No public API, WebSocket, cookie or static-serving path change
 Same-user tampering, storage/host failure, hard containment and descendant cleanup
 remain outside this evidence guarantee. Earlier lost attempts cannot be repaired
 retroactively. See [the detailed contract](docs/development/codex-lifecycle-receipts.md).
+
+## Structured startup counter review — 2026-11-03
+
+Future explicit starts expose bounded private in-memory byte/callback counters at
+parent, host, pipes, IPC and parser boundaries. Stderr is drained and discarded;
+only its byte count is retained. Strict versioned host metadata excludes payloads
+and extra fields; malformed diagnostics cannot revoke or restore authority.
+Counters are sampled, saturating and frozen at startup outcome, not durable proof
+of native parsing or cleanup. No public API, observer access or ownership policy
+changes. Historical timeouts remain unproven. See [the counter contract](docs/development/codex-startup-diagnostics.md).

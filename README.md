@@ -67,6 +67,12 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Future structured startup diagnostics:** explicit starts now retain bounded,
+  payload-free in-memory counters across parent/host/pipes/IPC/parser. Missing or
+  lagging host samples remain qualified; old timeouts cannot be diagnosed
+  retroactively and ownership/deadlines are unchanged. See
+  [the counter contract](docs/development/codex-startup-diagnostics.md).
+
 - **Future structured lifecycle evidence (2026-11-03):** private host receipts now
   sync start/exit metadata independently of IPC. Explicit read-only inspection
   preserves lost reservations; it cannot reconcile the previous native attempt.
