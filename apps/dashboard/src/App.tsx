@@ -25,7 +25,6 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  Sparkles,
   Terminal,
   X,
   Zap,
@@ -842,13 +841,13 @@ export function App() {
             navigate('overview');
           }}
         >
-          <span className="brand-mark">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          <span>{t('brand')}</span>
+          <img
+            className="brand-logo"
+            src="/brand/orqst-logo.svg"
+            width={880}
+            height={270}
+            alt={t('brand')}
+          />
         </a>
         <p className="brand-tagline">{t('tagline')}</p>
         <button
@@ -1185,9 +1184,14 @@ export function App() {
                 </div>
                 {!sessions.length ? (
                   <div className="empty-state">
-                    <span className="empty-icon">
-                      <Sparkles size={27} />
-                    </span>
+                    <img
+                      className="empty-mascot"
+                      src="/brand/orqst-mascot.svg"
+                      width={690}
+                      height={590}
+                      alt=""
+                      aria-hidden="true"
+                    />
                     <h3>{t('emptyTitle')}</h3>
                     <p>{t('emptyBody')}</p>
                     {snapshot?.diagnostics.scanning && (
