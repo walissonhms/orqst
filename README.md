@@ -446,6 +446,16 @@ and [SECURITY.md](SECURITY.md).
 
 ## Validation status
 
+The owned-terminal library candidate (`fdff231`) passed independent read-only critical
+QA for experimental, uncomposed integration. Finalization against the navigation
+baseline passed lint, typecheck, all 252 Node tests, full build and the explicit
+synthetic PTY probe on macOS/arm64 Node24.22.2 with pnpm10.34.9. The existing bundle-size
+warning remains. QA's capacity/ownership documentation clarifications are included.
+No browser, native Desktop, local-source or live-provider checks were repeated for
+this library-only increment; their earlier evidence and failures remain below.
+Native authorization, provider terminals and production composition remain unavailable.
+See the [lab scope and remaining gates](docs/development/terminal-owned-lab.md).
+
 The navigation/directory increment passed lint, typecheck, 240 Node tests and the
 full build after integration with the visual system and synthetic PTY test work.
 The complete Chromium run passed 94/97: three existing threshold cases still expect

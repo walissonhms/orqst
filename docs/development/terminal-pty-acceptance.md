@@ -95,3 +95,20 @@ No real provider, session data, installed service or database was accessed.
 `validate:local`, browser tests and native Desktop smoke were not run because the
 observer, API, IPC and renderer did not change. Native gesture/enrollment,
 provider/PTY integration and durable audit/recovery acceptance remain incomplete.
+
+### Reviewed integration
+
+Candidate `fdff231` received independent read-only critical QA approval for this
+experimental, uncomposed scope. Finalization with the navigation baseline passed
+lint, typecheck, all 252 Node tests, full build and the explicit synthetic PTY command
+above using Node24.22.2 / pnpm10.34.9 on macOS/arm64. No tests were skipped or weakened;
+the existing dashboard bundle-size warning remains. QA did not independently rerun
+commands. The late-exit/capacity and per-supervisor attempt-cap clarifications are
+recorded in the [library guide](terminal-owned-lab.md).
+
+Earlier browser evidence is reused without claiming a new full-browser pass; the
+known shared-fixture failures remain documented in [testing](testing.md). Ingestion,
+transport and UI are unchanged, so local-source, browser, native Desktop and real
+provider acceptance were not repeated. No push or service restart was performed;
+installed processes/storage and external sessions were preserved. Native enrollment,
+consent, provider terminals, durable recovery and runtime composition remain unavailable.
