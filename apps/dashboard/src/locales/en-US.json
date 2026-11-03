@@ -579,5 +579,18 @@
     "stop": "Send this exact signal to this owned process? Exit is not guaranteed.",
     "cancel": "Cancel",
     "confirm": "Authorize once"
+  },
+  "overviewLayout": {
+    "title": "Customize overview",
+    "help": "Changes apply immediately. Show or hide panels and move them with the arrow buttons. The first visible panel gets the wide column; the others follow in order. Narrow screens stack them in the same reading order.",
+    "scope": "Only this browser/Desktop profile layout changes, across all workspaces. Summary, sessions and session details remain available. Hiding Attention does not silence notifications or change observed states. No history or drafts are deleted.",
+    "moveUp": "Move {{panel}} up",
+    "moveDown": "Move {{panel}} down",
+    "moved": "{{panel}} moved to position {{position}} of {{count}}.",
+    "reset": "Restore default layout",
+    "restored": "Default overview layout restored.",
+    "done": "Done",
+    "empty": "Optional overview panels are hidden. Customize the layout to show them again.",
+    "storageUnavailable": "Layout applies for this visit. Local storage is unavailable, so it may not survive reload."
   }
 }

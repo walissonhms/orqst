@@ -3,10 +3,11 @@
 ORQST's shared React dashboard follows **Minimal Dark + Developer Studio**, with
 dark as the default and optional light/system themes for reading comfort.
 Start with the [design system](design-system.md) for colors, spacing, typography,
-accessibility and evidence-backed motion. The approved nine-screen collage and
-original brand artwork are design references supplied separately; they are not
-bundled here. This public specification records the implemented experience and
-its remaining dependencies without distributing private design briefs.
+accessibility and evidence-backed motion. The supplied nine-screen collage remains
+a separate design reference. The approved logo and static welcome mascot are bundled
+as local images; see [brand assets](brand-assets.md) for provenance and boundaries.
+This public specification records the implemented experience and its remaining
+dependencies without distributing private design briefs.
 
 ## Navigate real observations
 
@@ -81,6 +82,36 @@ rows. Notifications and workspace creation use native dialogs with Escape,
 contained focus and return to their trigger. Permission and save errors remain
 explicit. No quiet hours, per-workspace delivery preferences or new event categories
 are implemented by this increment.
+
+## Customize Overview panels
+
+**Customize overview** changes the four existing optional panels: Execution timeline,
+Needs attention, Token usage and Source health. Checkboxes show/hide panels; named
+Move up/down buttons change their order without requiring dragging. Changes apply
+immediately; Done, Close and Escape dismiss the editor without reverting them.
+A native modal owns focus and returns it to the trigger. If showing a panel removes
+its empty-state recovery trigger, focus returns to the permanent header action.
+Moving a row focuses its
+checkbox, including when a move reaches a boundary, and announces the new list
+position. First/last move buttons disable at their respective boundaries.
+
+The first visible panel occupies the wide column; remaining panels follow in a
+narrow column. At 900px and below, all panels stack in the same DOM/reading order.
+A single visible panel takes the available width. When all four are hidden, a named
+empty state offers Customize overview again. The header action remains available.
+Restore default layout immediately restores timeline, attention, usage and health in
+that order, all visible, and changes only the layout preference.
+
+This is one browser/Desktop-profile layout across workspaces. Summary cards, session
+search/filter/list, source-linked navigation and the inspector retain their existing
+behavior. An open inspector continues to replace the secondary panels; customization
+never closes it or resets an Artifact draft. Hidden panels resume using the current
+snapshot when shown; hiding Attention does not silence delivery or change observed
+statuses. Existing summary/token accounting limitations remain unchanged. Layout
+choices work offline and do not write to the Bridge or captured source files.
+No panel resizing, drag-and-drop, new metrics or separate Observability screen is
+implemented. Other-browser, manual screen-reader and native visual acceptance remain
+pending.
 
 ## Artifact drafts and safe navigation
 
@@ -175,6 +206,15 @@ remains available. Reading presentation never alters captured text, draft bytes,
 clipboard content, exports or saved Markdown. Appearance reset
 changes only this key; clearing site data removes local UI preferences.
 
+`orqst.overview.v1` stores only an allowlisted `order` and `hidden` list of the four
+panel identifiers. Missing/invalid storage defaults to all visible in original order;
+valid partial orders keep their order and append missing supported panels. Unknown
+identifiers and duplicates are discarded. Same-origin tabs synchronize layout changes
+and reset/removal. Receiving a change does not write it back; queued storage events
+read the latest stored choice rather than replaying an older value. Storage denial keeps choices in memory for the
+visit with a notice in the editor. Clearing site data removes the layout preference.
+It contains no workspace/session IDs, search text, metric values or captured content.
+
 Search terms, session selection, captured content and artifact drafts are not stored.
 There is no process restoration, tab/split persistence, account, upload or database
 migration. Clear site data to remove these UI preferences. Existing i18next language
@@ -187,7 +227,7 @@ The status describes this checkout, not full product acceptance.
 | Screen / capability            | Status      | Implemented files and verification                                                                                                                                 | Remaining dependency or limitation                                                                                                                                                        |
 | ------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Navigation shell and search    | Implemented | `App.tsx`, `Modal.tsx`, `CommandPalette.tsx`, `shell-preferences.ts`, `shell.css`; `tests/shell-preferences.test.ts`, `tests/browser/shell-navigation.spec.ts`     | No workspace tabs, resizable splits or process/session restoration                                                                                                                        |
-| Overview / Observability       | Partial     | `App.tsx`, `LiveMetrics.tsx`, `SessionTokenBadge.tsx`, existing timeline/attention; dashboard, Live Metrics and shell browser tests                                | Rearrangeable widgets, broader performance metrics, verified costs and independent Observability screen remain planned; summary totals retain legacy limitations                          |
+| Overview / Observability       | Partial     | `App.tsx`, `OverviewLayout.tsx`, `overview-preferences.ts`, Live Metrics and existing timeline/attention; overview-layout Node/browser and existing suites         | Local panel order/visibility implemented; resizing, broader metrics, verified costs and separate Observability remain planned; summary totals retain legacy limitations                   |
 | Workspaces                     | Partial     | `Workspaces.tsx`; shell browser cases cover scopes, search, sort, layout and reload                                                                                | No rename/archive, filesystem picker, pinning, multiple open project tabs or terminal layout                                                                                              |
 | Agents                         | Partial     | `Agents.tsx` projects actual adapter descriptors; shell cases cover matrix, unavailable state and locales                                                          | CLI path/version/auth/model discovery and managed profiles unavailable                                                                                                                    |
 | Models & Analytics             | Partial     | Existing `ModelAnalytics.tsx`, `ModelComparison.tsx`, `ModelEvolution.tsx` and export components; dedicated existing browser suites                                | Observational comparisons only; real-provider comparative acceptance, task efficiency and verified cost remain pending                                                                    |
@@ -229,6 +269,12 @@ offline/storage denial and both locales. It calculates WCAG contrast from resolv
 light CSS tokens (normal text/statuses 4.5:1, focus/control boundaries 3:1), covers
 all five views at 1440/1280/390/320px with maximum reading sizes and a source/draft/
 discard workflow at 320px, and produces synthetic screenshots for visual inspection.
+`tests/browser/overview-layout.spec.ts` checks real DOM order/visibility, primary/single/
+all-hidden layouts, keyboard moves/focus, default restoration, local persistence,
+malformed/removed storage, cross-tab synchronization, offline/storage-denied use,
+exact open-draft preservation and its navigation guard. Synthetic screenshots check
+1440/1280/390/320px containment with maximum reading sizes, comfortable spacing and
+pt-BR/light mode; broader dark-theme coverage stays in the existing suites.
 The existing suites also cover Overview, Analytics, session details, Artifacts and
 notifications. Inspect the generated images for these criteria:
 
@@ -240,6 +286,7 @@ notifications. Inspect the generated images for these criteria:
 - Selected-session tokens stay exact, confirmed/stale/unavailable and visible on scroll.
 
 Exact collage parity, manual screen-reader acceptance, other browsers and native
-Desktop visual acceptance are pending. The reference artwork was not available as
-a repository asset, so no new mascot derivative or collage-fidelity claim is made.
+Desktop visual acceptance are pending. The logo/static welcome mascot are bundled;
+state reactions and exact nine-screen collage fidelity remain unimplemented or
+unvalidated. No new mascot derivative or collage-fidelity claim is made.
 See [testing](../development/testing.md) for commands and actual validation scope.
