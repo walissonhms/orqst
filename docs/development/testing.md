@@ -826,3 +826,14 @@ services, Desktop processes, observer storage and external sessions were preserv
 there was no restart or credential/provider access. Publication follows the owner
 authorization and a separate audit of every pending commit; it does not activate
 managed providers or update the installed application.
+
+### Publication history
+
+Before first publication of these increments, pending local history was reconstructed
+from the existing remote base to remove development-agent ownership notes from every
+snapshot. Source code, tests, authored messages and author/committer metadata were
+preserved. Earlier validation hashes identify the original local snapshots; they
+are not extra published references. The backup and obsolete local references are
+excluded from publication. The source-equivalent global checks and focused tests
+above remain valid; documentation formatting and the entire outgoing history were
+reviewed again after reconstruction.
