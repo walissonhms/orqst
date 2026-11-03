@@ -71,9 +71,25 @@ try {
   );
   env.ORQST_DESKTOP_PORT = String(port);
   delete env.ELECTRON_RUN_AS_NODE;
+  // Disposable bootstrap retains the base nativeImage used by the application Tray.
+  const bootstrap = join(root, 'desktop-bootstrap.cjs');
+  await writeFile(
+    bootstrap,
+    `const electron = require('electron');
+const createFromPath = electron.nativeImage.createFromPath;
+electron.nativeImage.createFromPath = function (path) {
+  const image = createFromPath(path);
+  if (path.endsWith('/orqst-menubar-18.png') || path.endsWith('/orqst-16.png')) {
+    globalThis.syntheticDesktopTrayImage = image;
+  }
+  return image;
+};
+require(${JSON.stringify(resolve('apps/desktop'))});
+`,
+  );
   desktop = await _electron.launch({
     executablePath: desktopRequire('electron') as string,
-    args: [resolve('apps/desktop'), `--user-data-dir=${join(root, 'profile')}`],
+    args: [bootstrap, `--user-data-dir=${join(root, 'profile')}`],
     env,
     timeout: 30000,
   });
@@ -85,6 +101,31 @@ try {
     await realpath(join(root, 'profile')),
   );
   let page = await desktop.firstWindow();
+  if (process.platform === 'darwin') {
+    const icon = await desktop.evaluate(({ nativeImage }, iconsDirectory) => {
+      const image = Reflect.get(globalThis, 'syntheticDesktopTrayImage') as Electron.NativeImage;
+      return {
+        size: image.getSize(),
+        scales: image.getScaleFactors(),
+        template: image.isTemplateImage(),
+        matchesOriginal: [1, 2].map((scaleFactor) =>
+          image
+            .toPNG({ scaleFactor })
+            .equals(
+              nativeImage
+                .createFromPath(`${iconsDirectory}/orqst-menubar-${18 * scaleFactor}.png`)
+                .toPNG(),
+            ),
+        ),
+      };
+    }, resolve('apps/desktop/resources/icons'));
+    assert.deepEqual(icon, {
+      size: { width: 18, height: 18 },
+      scales: [1, 2],
+      template: false,
+      matchesOriginal: [true, true],
+    });
+  }
   // Test-only instrumentation in the main process; no shipped IPC/test endpoint.
   // Capture the real Tray menu and Notification objects, suppress actual OS delivery.
   await desktop.evaluate(({ Tray, Notification }) => {

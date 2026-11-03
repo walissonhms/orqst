@@ -319,16 +319,31 @@ async function start(): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const activeNotifications = new Set<Notification>();
   const trayIcon = nativeImage.createFromPath(
-    join(iconsDirectory, process.platform === 'win32' ? 'orqst.ico' : 'orqst-16.png'),
+    join(
+      iconsDirectory,
+      process.platform === 'darwin'
+        ? 'orqst-menubar-18.png'
+        : process.platform === 'win32'
+          ? 'orqst.ico'
+          : 'orqst-16.png',
+    ),
   );
   if (trayIcon.isEmpty()) throw new Error('Missing ORQST tray icon');
   if (process.platform !== 'win32') {
     trayIcon.addRepresentation({
       scaleFactor: 2,
-      buffer: nativeImage.createFromPath(join(iconsDirectory, 'orqst-32.png')).toPNG(),
+      buffer: nativeImage
+        .createFromPath(
+          join(
+            iconsDirectory,
+            process.platform === 'darwin' ? 'orqst-menubar-36.png' : 'orqst-32.png',
+          ),
+        )
+        .toPNG(),
     });
   }
-  if (process.platform === 'darwin') trayIcon.setTemplateImage(true);
+  // Preserve the owner-supplied colors instead of applying macOS template tinting.
+  if (process.platform === 'darwin') trayIcon.setTemplateImage(false);
   const tray = new Tray(trayIcon);
   const updateTray = () => {
     if (stopped || tray.isDestroyed()) return;
