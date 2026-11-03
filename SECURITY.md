@@ -321,3 +321,15 @@ The session Observed tools view is retained historical evidence, not a terminal
 connection or execution surface. It never interprets terminal escapes or sends
 input to an agent. Interactive terminals remain gated by the
 [terminal security boundary](docs/development/terminal-boundary.md).
+
+## Synthetic PTY experiment review
+
+The opt-in [PTY acceptance command](docs/development/terminal-pty-acceptance.md)
+starts only fixed disposable Node fixtures outside the application runtime. Its
+locked `node-pty` dependency is development-only; no API, IPC, renderer, database
+or observed-session authority is added. The exact authorization flag, private
+temporary directories, minimal child environment, output budget and cooperative
+deadlines constrain this experiment; they are not an OS sandbox. Parent termination
+can bypass temporary-file cleanup, and native/event-loop failure is not contained.
+Provider, native authorization, descendant cleanup, emulator and packaging remain
+unvalidated. See the [proposed design](docs/architecture/managed-terminal-design.md).

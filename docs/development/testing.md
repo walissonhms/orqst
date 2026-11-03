@@ -62,6 +62,11 @@ Not established by these checks: actual OS notification delivery, audible playba
 
 ## Incremental delivery and integration
 
+The [synthetic PTY guide](terminal-pty-acceptance.md) documents the separately invoked
+`pnpm accept:terminal-pty --authorize-synthetic-pty` mechanics check. It uses no real
+agent or user history and is excluded from automatic tests/build/runtime. Its
+macOS/arm64 Node-host evidence does not validate an interactive product terminal.
+
 1. Inspect the repository, applicable instructions, README, roadmap and ADRs before
    each change. Maintain [requirement coverage](../architecture/product-requirements.md)
    against implementation evidence; existing/partial/absent does not mean accepted.

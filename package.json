@@ -28,7 +28,8 @@
     "dev:desktop": "pnpm build:desktop && pnpm desktop",
     "build:desktop": "node scripts/build-desktop.mjs",
     "desktop": "pnpm --filter @orqst/desktop exec electron .",
-    "test:desktop": "tsx scripts/smoke-desktop.ts"
+    "test:desktop": "tsx scripts/smoke-desktop.ts",
+    "accept:terminal-pty": "tsx scripts/accept-terminal-pty.ts"
   },
   "devDependencies": {
     "@orqst/core": "workspace:*",
@@ -48,7 +49,8 @@
     "@orqst/protocol": "workspace:*",
     "@orqst/shared": "workspace:*",
     "@orqst/database": "workspace:*",
-    "@orqst/adapter-codex": "workspace:*"
+    "@orqst/adapter-codex": "workspace:*",
+    "node-pty": "1.1.0"
   },
   "dependencies": {
     "chokidar": "^6.0.0",

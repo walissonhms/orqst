@@ -45,6 +45,14 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Terminal mechanics increment:** an opt-in developer command now checks a real
+  PTY using only fixed disposable synthetic Node processes, private temporary
+  directories and bounded output/lifetime. The macOS/arm64 Node-host check passed;
+  no agent is launched and no application control is exposed. Read the
+  [reproduction guide](docs/development/terminal-pty-acceptance.md) and
+  [proposed managed terminal design](docs/architecture/managed-terminal-design.md).
+  Provider, authorization, isolation and packaging acceptance remain pending.
+
 - **Observed tools increment:** session details group uniquely correlated retained
   Codex invocation/return records, with inert bounded text and per-record sources.
   This is partial historical tool evidence, not a terminal connection; interactive
@@ -305,6 +313,10 @@ Uninstall stops the service and removes its plist; it preserves the database, ba
 | `pnpm format`         | Write Prettier formatting                                                           |
 | `pnpm typecheck`      | `tsc --noEmit` across the workspace                                                 |
 | `pnpm validate:local` | Read bounded local Codex files into a disposable database and print aggregates only |
+
+`pnpm accept:terminal-pty --authorize-synthetic-pty` explicitly runs the fixed
+synthetic PTY mechanics experiment on macOS/arm64. It is separate from automatic
+tests and launches no agent. See [scope and limits](docs/development/terminal-pty-acceptance.md).
 
 Additional commands: `pnpm validate:live` runs an explicitly requested native Codex acceptance task; `pnpm runtime:install` and `pnpm service:{plan,install,status,restart,uninstall}` manage the private macOS runtime/service. The live test uses the current Codex login/model and consumes real provider usage. It never runs as part of the application, automatic tests or CI.
 

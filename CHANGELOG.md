@@ -17,6 +17,13 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Explicit developer-only synthetic PTY acceptance on macOS/arm64 with locked
+  `node-pty@1.1.0`, a fixed Node fixture, private staging, minimal environment,
+  bounded output/deadlines and confirmed handle-owned exit/signal checks. This is
+  excluded from automatic tests/build/runtime. A public design specifies proposed
+  native grants, process identity, resource budgets and recovery; no interactive
+  terminal, provider launch, execution API or external-session adoption is shipped.
+
 - Read-only Observed tools in session details: bounded, source-backed Codex tool
   invocation/return groups with strict correlation, explicit partial/stale history
   and inert control-character display. No process state or execution is inferred.

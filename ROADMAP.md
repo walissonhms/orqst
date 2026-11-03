@@ -58,6 +58,12 @@ multi-model temporal acceptance remains pending. See [contract](docs/api/analyti
 
 ## Mandatory quality and security criteria for each increment
 
+The terminal engineering increment provides an explicit developer-only synthetic PTY
+acceptance command and a [managed execution design](docs/architecture/managed-terminal-design.md).
+macOS/arm64 Node-host mechanics are validated; native grants, provider integration,
+isolation/recovery, emulator and distribution remain unimplemented or unvalidated.
+The observer remains read-only; this does not complete Phase 2 or Phase 4.
+
 Apply the public [contribution policy](CONTRIBUTING.md), [security policy](SECURITY.md),
 [security model](docs/architecture/security-model.md) and
 [verification guidance](docs/development/testing.md) to every delivery:
