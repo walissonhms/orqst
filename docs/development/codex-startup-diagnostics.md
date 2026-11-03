@@ -14,7 +14,7 @@ or existing-login acceptance. The driver invoked that transport directly; it did
 not exercise signed runtime admission, account availability, thread creation, model
 entitlement or delegation.
 
-| Boundary              | Isolated probe                                                                                                                                           | Failed native preparation                                                                                                                   |
+| Boundary              | Isolated probe                                                                                                                                           | Preparation 604 (retained initialize diagnostic)                                                                                            |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Executable            | Installed 0.162.1, recorded binary hash                                                                                                                  | Same version/hash in the sanitized report                                                                                                   |
 | Argv                  | Production `structuredCodexArguments` reuse branch: fixed `-c` overrides, then `app-server --listen stdio://`                                            | Same source recipe at the reviewed revision; no independently captured native argv                                                          |
@@ -29,8 +29,9 @@ entitlement or delegation.
 The probe's outer sandbox had a separate 10-second driver deadline. Its total
 835 ms included launch work and a deliberate 600 ms sampling delay before shutdown;
 comparing that total directly with the 38 ms RPC measurement would mix boundaries.
-The earlier native-login attempt retained an approximately 8.3-second duration but
-no method-specific diagnostic, so it cannot be assigned the later failure's cause.
+Run 598, the earlier native-login attempt, retained an approximately 8.3-second
+duration but no method-specific diagnostic. Its failed method and cause cannot be
+retroactively assigned from preparation 604.
 Previously reproduced IPC backpressure and slow required-MCP thread startup were
 fixed before the latest preparation attempt. Neither establishes an initialize
 failure in that attempt.
@@ -42,6 +43,37 @@ its cause. No new framing, argv, authentication or timeout fix follows from it.
 No new native execution is required to review these retained results. Future
 existing-login acceptance still needs its own authorization and capacity decision;
 diagnostics cannot reconcile or release quarantined reservations.
+
+A follow-up controlled comparison uses only disposable synthetic homes/configuration,
+empty projects and the pinned installed binary. It compares empty/file-backend config,
+legacy/reuse argv, required MCP, project trust, hooks, large config, custom providers,
+analytics/update settings, marketplaces and false expired authentication. The loopback
+blackhole accepts TCP connections and withholds responses; other network access stays
+denied. This matters because immediate network denial can conceal a blocking-network
+failure. The authentication variant additionally redirects the native refresh URL in
+its test-only host; that environment difference is explicit, not production behavior.
+The redirect variable was found in binary strings, not established by an upstream
+contract. Observed loopback traffic does not prove token refresh: the refresh path
+remains inconclusive without an otherwise identical redirect-removal control.
+No account, thread, turn, login or inference request is sent.
+
+Those configurations have not reproduced the historical initialize timeout. Required
+MCP did not start during this handshake-only comparison; prior evidence of a slow
+required MCP concerned `thread/start`. Successful JSONL responses and direct exits
+with bound receipts do not prove full readiness, descendant cleanup or that different
+real configuration cannot block startup. Named-pipe probes likewise do not establish
+that the native loader actually read a source. The stderr error-handler fix covers a
+separately injected host regression introduced by these diagnostics, after preparation
+604; it is not a historical root-cause claim. No deadline or shared-config policy is
+changed on this evidence.
+
+The negative result covers only the tested configurations. Loopback blackholes do
+not cover DNS, VPN or mDNS stalls. Only the file credential backend was exercised;
+`keyring`/`auto`, locked Keychain and native credential UI prompts were not tested.
+Calls to fixed endpoints may ignore redirects and fail immediately under the sandbox
+instead of reproducing a stall. These gaps leave the historical cause unresolved.
+Per-cell repetitions, connection counts and synthetic controls stay in private local
+evidence outside Git; none contains native user configuration or credentials.
 
 `CodexStructuredRuntime.snapshot().startupDiagnostic` is version 1, in memory only.
 It retains one parser snapshot and, for the native backend, one parent snapshot and
@@ -72,8 +104,16 @@ method-name retention. Host samples are at most 128 frames, at 250 ms intervals,
 less than 1 KiB each, with one metadata frame in flight and no retries. Reporting
 stops on its count/deadline, IPC disconnect, direct host finish or send failure.
 Its timers are unreferenced and cannot extend process lifetime. Stderr keeps being
-drained after sampling stops. Diagnostic failure cannot prevent the existing host
-lifetime/escalation or lifecycle persistence.
+drained after sampling stops. Unlike the earlier `/dev/null` sink, stderr is now a
+pipe: if the host dies first, a later native write can fail with `EPIPE` (Rust Codex
+ignores `SIGPIPE`). Read errors on this optional diagnostic stream are discarded
+locally; they must not terminate the host, its lifetime timer or receipt writer.
+This does not catch errors on stdin, stdout, IPC or lifecycle persistence.
+Diagnostic metadata shares the same Node IPC channel and its contention with data
+and lifecycle frames. Exclusion from the counters does not mean isolation from
+backpressure; `sendBackpressure > 0` does not prove pressure exclusively from data.
+A diagnostic send/read failure must not bypass the existing host lifetime/escalation
+or lifecycle persistence. Host death or IPC contention still limits these guarantees.
 
 Parser/parent snapshots freeze when startup resolves/rejects or transport detaches.
 Host sampling independently lasts at most 32 seconds when callbacks flow, or 60
@@ -115,6 +155,8 @@ pnpm exec tsx --test tests/codex-startup-diagnostics.test.ts tests/codex-native-
 These test metadata injection/version rejection, saturation, immutability, bounded
 reporting under blocked/error/throwing send callbacks, timer cleanup, withheld/final
 LF and late response, secret sentinels including stderr, real fake-process pipes/IPC,
-unchanged request deadlines and lost ownership. Fake cleanup still requires genuine
-durable exits and preserves uncertain disposable state. They do not execute Codex,
+unchanged request deadlines and lost ownership. A real stderr Readable error is
+injected into the compiled host: startup and the still-owned exit plus durable
+receipt must survive, without retaining the error payload. Fake cleanup still
+requires genuine durable exits and preserves uncertain disposable state. They do not execute Codex,
 login, inference, user configuration or quarantines, and are not provider acceptance.

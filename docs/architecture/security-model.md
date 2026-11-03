@@ -739,7 +739,11 @@ retroactively. See [the detailed contract](../development/codex-lifecycle-receip
 
 Future explicit starts expose bounded private in-memory byte/callback counters at
 parent, host, pipes, IPC and parser boundaries. Stderr is drained and discarded;
-only its byte count is retained. Strict versioned host metadata excludes payloads
+only its byte count is retained. Its optional read errors are discarded locally;
+stdin, stdout, IPC and receipt errors retain their own handling. Replacing the old
+`/dev/null` sink with a pipe permits native `EPIPE` if the host dies first. Diagnostic
+frames share IPC contention with data/lifecycle frames, so backpressure is not
+evidence exclusively of data pressure. Strict versioned host metadata excludes payloads
 and extra fields; malformed diagnostics cannot revoke or restore authority.
 Counters are sampled, saturating and frozen at startup outcome, not durable proof
 of native parsing or cleanup. No public API, observer access or ownership policy

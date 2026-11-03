@@ -61,6 +61,43 @@ test(
       target: 'node24',
       format: 'cjs',
     });
+    const stderrErrorBundle = join(root, 'SYNTHETIC-stderr-error-host.cjs');
+    await build({
+      entryPoints: ['packages/core/src/managed-codex/native-host.ts'],
+      outfile: stderrErrorBundle,
+      bundle: true,
+      platform: 'node',
+      target: 'node24',
+      format: 'cjs',
+      plugins: [
+        {
+          name: 'synthetic-stderr-read-error',
+          setup(builder) {
+            builder.onResolve({ filter: /^node:child_process$/ }, (args) =>
+              args.namespace === 'stderr-fault'
+                ? { path: args.path, external: true }
+                : { path: args.path, namespace: 'stderr-fault' },
+            );
+            builder.onLoad({ filter: /.*/, namespace: 'stderr-fault' }, () => ({
+              contents: `
+              import { spawn as nativeSpawn } from 'node:child_process';
+              import { writeFileSync } from 'node:fs';
+              import { join } from 'node:path';
+              export function spawn(...args) {
+                const child = nativeSpawn(...args);
+                setImmediate(() => {
+                  writeFileSync(join(process.env.TMPDIR, 'SYNTHETIC-stderr-error'), 'injected');
+                  child.stderr.destroy(new Error('SYNTHETIC-SECRET'));
+                });
+                return child;
+              }
+            `,
+              loader: 'js',
+            }));
+          },
+        },
+      ],
+    });
     const keys = generateKeyPairSync('ed25519');
     const proof = (challenge: TerminalChallenge) => ({
       challengeId: challenge.challengeId,
@@ -70,6 +107,7 @@ test(
     });
     const scenarios = [
       'compatible',
+      'stderr-error',
       'silent',
       'unterminated',
       'events-only',
@@ -81,7 +119,8 @@ test(
       for (const mode of scenarios) {
         const area = join(root, mode);
         mkdirSync(area, { mode: 0o700 });
-        const project = join(area, mode);
+        const compatible = mode === 'compatible' || mode === 'stderr-error';
+        const project = join(area, compatible ? 'compatible' : mode);
         const state = join(area, 'state');
         for (const directory of [
           project,
@@ -128,7 +167,7 @@ test(
           () => {
             throw new Error('No inference during synthetic preparation');
           },
-          nativeCodexBackend(bundle),
+          nativeCodexBackend(mode === 'stderr-error' ? stderrErrorBundle : bundle),
         );
         const prepared = runtime.prepare('synthetic', file, {
           workspaceId: 'synthetic',
@@ -145,7 +184,7 @@ test(
         };
         let receipt: ReturnType<typeof readLifecycleReceipt> = { status: 'missing' };
         try {
-          if (mode === 'compatible') {
+          if (compatible) {
             await runtime.launch(prepared.instanceId, proof(prepared.challenge));
             const snapshot = runtime.snapshot(prepared.instanceId);
             assert.equal(snapshot.authentication, 'existing-native-login');
@@ -154,6 +193,9 @@ test(
             assert.equal(snapshot.dynamicTools, 'requested');
             assert.equal(snapshot.channelDiagnostic, null);
             assert.equal(snapshot.activeTurnId, null);
+            assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-SECRET'));
+            if (mode === 'stderr-error')
+              assert.ok(existsSync(join(state, 'tmp/SYNTHETIC-stderr-error')));
             const stop = runtime.requestStop('synthetic', prepared.instanceId, 'SIGTERM');
             runtime.stop(prepared.instanceId, 'SIGTERM', proof(stop));
           } else {
@@ -234,7 +276,7 @@ test(
               receipt = readLifecycleReceipt(state, binding);
               if (
                 receipt.status === 'recorded_exit' &&
-                (mode !== 'compatible' || runtime.snapshot(prepared.instanceId).nativeExit !== null)
+                (!compatible || runtime.snapshot(prepared.instanceId).nativeExit !== null)
               ) {
                 exitConfirmed = true;
                 break;
@@ -242,7 +284,7 @@ test(
               await delay(100);
             }
             const snapshot = runtime.snapshot(prepared.instanceId);
-            if (mode === 'compatible') {
+            if (compatible) {
               assert.equal(snapshot.state, 'exited');
               assert.deepEqual(snapshot.nativeExit, { code: null, signal: 'SIGTERM' });
             } else {
@@ -262,7 +304,7 @@ test(
           methods,
           mode === 'silent'
             ? []
-            : mode === 'compatible'
+            : compatible
               ? ['initialize', 'initialized', 'account/read', 'thread/start']
               : ['initialize'],
         );

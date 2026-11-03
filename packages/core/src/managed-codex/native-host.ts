@@ -37,6 +37,7 @@ const stopDiagnostics = reportHostStartup(counters, (frame, done) => {
   process.send!(frame, done);
 });
 child.stderr.on('data', (bytes: Buffer) => counters.add('stderrBytes', bytes.length));
+child.stderr.on('error', () => {}); // Optional diagnostics must not revoke the host lifetime.
 let exited = false;
 let spawned = false;
 let escalation: ReturnType<typeof setTimeout> | undefined;
