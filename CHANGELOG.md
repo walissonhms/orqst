@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- A standalone Artifact source library at `/artifacts`, with search over loaded
+  retained Codex messages/context, workspace/session filtering, provenance, bounded
+  older-page loading and explicit coverage/retention/offline/error/limit states.
+  Sources open the existing identity-checked manual panel and draft guard. Search
+  is not a full archive index and does not catalog saved files or memory drafts.
+
 - Optional experimental Terminal metadata journal through the existing SQLite Store:
   commit-before-start admission, explicit epoch fencing, conservative recovery and
   retained lost-ownership capacity. Synthetic abrupt-writer-exit tests verify WAL

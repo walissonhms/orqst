@@ -50,14 +50,21 @@ test('local shell preferences reject malformed storage and unsupported capabilit
   assert.deepEqual(readShellPreferences(), defaultShellPreferences);
 });
 test('hash navigation admits only implemented views, leaving session identities to their existing resolver', () => {
-  for (const view of ['overview', 'workspaces', 'agents', 'models', 'settings'])
+  for (const view of ['overview', 'workspaces', 'agents', 'models', 'settings', 'artifacts'])
     assert.equal(viewFromHash(`#${view}`), view);
   for (const hash of ['', '#studio', '#session=synthetic', '#models?run=true', '#WORKSPACES'])
     assert.equal(viewFromHash(hash), undefined);
 });
 
 test('clean paths and legacy view aliases resolve only implemented views', () => {
-  for (const view of ['overview', 'workspaces', 'agents', 'models', 'settings'] as const) {
+  for (const view of [
+    'overview',
+    'workspaces',
+    'agents',
+    'models',
+    'settings',
+    'artifacts',
+  ] as const) {
     assert.equal(viewFromLocation({ pathname: '/' + view, hash: '' }), view);
     assert.equal(viewFromLocation({ pathname: '/', hash: '#' + view }), view);
     assert.equal(viewPath(view), '/' + view);

@@ -13,6 +13,7 @@ import {
   Command,
   ExternalLink,
   Folder,
+  FileText,
   GitBranch,
   Globe2,
   Layers3,
@@ -40,6 +41,8 @@ import type {
   Usage,
 } from '@orqst/protocol';
 import { api } from './api';
+import { ArtifactLibrary } from './ArtifactLibrary';
+import { artifactSelection } from './artifact-library';
 import { ArtifactPanel, type ArtifactCloseGuard } from './ArtifactPanel';
 import { LiveMetrics } from './LiveMetrics';
 import { ModelHistory } from './ModelHistory';
@@ -189,22 +192,16 @@ function Timeline({
                 <pre className="reading-content">{event.payload.text ?? event.payload.result}</pre>
               </details>
             )}
-            {onExtract &&
-              event.type === 'agent.message' &&
-              ((event.payload.role === 'assistant' &&
-                event.source.recordType === 'response_item:message') ||
-                (event.payload.role === 'agent' &&
-                  event.source.recordType === 'response_item:agent_message')) &&
-              Boolean(event.payload.text?.trim()) && (
-                <button
-                  className="button"
-                  disabled={extractionOpen}
-                  id={`artifact-extract-${event.sequence}`}
-                  onClick={() => onExtract(event)}
-                >
-                  {t('artifacts.extract')}
-                </button>
-              )}
+            {onExtract && artifactSelection(event) && (
+              <button
+                className="button"
+                disabled={extractionOpen}
+                id={`artifact-extract-${event.sequence}`}
+                onClick={() => onExtract(event)}
+              >
+                {t('artifacts.extract')}
+              </button>
+            )}
             {event.payload.usage && (
               <div className="event-usage">
                 <Zap size={12} />
@@ -244,6 +241,8 @@ function SessionDetail({
   onSave,
   onMetrics,
   artifactCloseGuard,
+  artifactRequest,
+  onArtifact,
 }: {
   session: SessionView;
   snapshot: Snapshot;
@@ -253,6 +252,8 @@ function SessionDetail({
   onSave: () => void;
   onMetrics: (sessionId: string, metrics: LiveMetricsState) => void;
   artifactCloseGuard: RefObject<ArtifactCloseGuard | null>;
+  artifactRequest: ArtifactExtractionRequest | undefined;
+  onArtifact: (request: ArtifactExtractionRequest | undefined) => void;
 }) {
   const { t } = useTranslation();
   const f = useFormatting();
@@ -260,7 +261,6 @@ function SessionDetail({
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<'activity' | 'results' | 'usage' | 'observedTools'>('activity');
-  const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const [tokenThreshold, setTokenThreshold] = useState<number>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
   const metrics = useSessionMetrics(session, snapshot, connection, snapshotError);
@@ -425,17 +425,7 @@ function SessionDetail({
             events={events}
             extractionOpen={Boolean(artifactRequest)}
             onExtract={(event) => {
-              setArtifactRequest({
-                contractVersion: 1,
-                sequence: event.sequence,
-                eventId: event.id,
-                sessionId: event.sessionId,
-                machineId: event.machineId,
-                adapter: event.adapter,
-                workspaceId: event.workspaceId,
-                agentId: event.agentId,
-                sourceHash: event.source.hash,
-              });
+              onArtifact(artifactSelection(event));
             }}
           />
           {hasOlder && (
@@ -467,7 +457,7 @@ function SessionDetail({
           metrics={metrics}
           tokenThreshold={tokenThreshold}
           onClose={() => {
-            setArtifactRequest(undefined);
+            onArtifact(undefined);
             requestAnimationFrame(() => {
               const trigger = document.getElementById(
                 `artifact-extract-${artifactRequest.sequence}`,
@@ -531,6 +521,7 @@ export function App() {
   const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
+  const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const navigation = useRef<DashboardHistory | null>(null);
   const pendingSessionLink = useRef(isSessionLocation(location));
   const routeActions = useRef({
@@ -645,6 +636,7 @@ export function App() {
       setQuery('');
       setStatus('');
     } else if (page === 'overview') applySession(undefined);
+    if (page !== 'overview') setArtifactRequest(undefined);
     setView(page);
     navigation.current?.replace(viewPath(page, id));
     setMenuOpen(false);
@@ -709,7 +701,10 @@ export function App() {
     else action();
   }
   function applySession(id: string | undefined) {
-    if (id !== selected) setHeaderMetrics(undefined);
+    if (id !== selected) {
+      setHeaderMetrics(undefined);
+      setArtifactRequest(undefined);
+    }
     setSelected(id);
   }
   function selectSession(id: string | undefined) {
@@ -720,6 +715,7 @@ export function App() {
     }, id !== undefined);
   }
   function applyView(page: AppView, sessionId = selected) {
+    if (page !== 'overview') setArtifactRequest(undefined);
     setView(page);
     navigation.current?.push(viewPath(page, sessionId));
     setMenuOpen(false);
@@ -738,7 +734,7 @@ export function App() {
       applyView(page, '');
     });
   }
-  function openSession(id: string) {
+  function openSession(id: string, artifact?: ArtifactExtractionRequest) {
     const session = snapshot?.sessions.find((item) => item.id === id);
     if (!session) return;
     const transition = () => {
@@ -747,6 +743,7 @@ export function App() {
       setStatus('');
       applySession(id);
       applyView('overview', id);
+      if (artifact) setArtifactRequest(artifact);
     };
     if (id === selected && view === 'overview') transition();
     else requestNavigation(transition);
@@ -900,6 +897,8 @@ export function App() {
                 <BarChart3 size={16} />
               ) : page === 'workspaces' ? (
                 <Folder size={16} />
+              ) : page === 'artifacts' ? (
+                <FileText size={16} />
               ) : page === 'agents' ? (
                 <Terminal size={16} />
               ) : (
@@ -1091,6 +1090,16 @@ export function App() {
               connection={connection}
               snapshotError={error}
             />
+          ) : view === 'artifacts' ? (
+            snapshot && (
+              <ArtifactLibrary
+                key={workspaceId}
+                snapshot={snapshot}
+                workspaceId={workspaceId}
+                online={connection === 'connected' && !error}
+                onOpen={(request) => openSession(request.sessionId, request)}
+              />
+            )
           ) : view === 'workspaces' ? (
             snapshot && (
               <Workspaces
@@ -1310,6 +1319,8 @@ export function App() {
                   snapshotError={error}
                   onMetrics={updateHeaderMetrics}
                   artifactCloseGuard={artifactCloseGuard}
+                  artifactRequest={artifactRequest}
+                  onArtifact={setArtifactRequest}
                   onClose={() => selectSession(undefined)}
                   onSave={() => {
                     void refresh();
