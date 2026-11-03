@@ -43,7 +43,7 @@ try {
   const fixture = join(root, 'synthetic-fixture.mjs');
   await copyFile(fileURLToPath(new URL('./terminal/fixture.mjs', import.meta.url)), fixture);
   const node = await realpath(process.execPath);
-  // At most one active owned fixture; two mechanics starts and one supervisor start.
+  // At most one active owned fixture; two mechanics starts and two sequential supervisor starts.
   for (const mode of ['exit', 'signal'] as const) {
     const home = join(root, mode);
     await mkdir(home, { mode: 0o700 });
@@ -65,7 +65,7 @@ try {
 console.log(
   JSON.stringify({
     result: 'passed',
-    scope: 'synthetic-pty-mechanics-and-owned-supervisor',
+    scope: 'synthetic-pty-mechanics-owned-supervisor-and-native-broker',
     platform: process.platform,
     arch: process.arch,
     node: process.version,

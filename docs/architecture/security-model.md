@@ -516,3 +516,14 @@ limits bound rendering, and each record retains its source reference. Historical
 returns never prove process exit, success or current liveness. See the
 [terminal boundary](../development/terminal-boundary.md) for unresolved managed
 authorization, executable/argv/cwd/environment, lifecycle and PTY decisions.
+
+## Experimental native terminal boundary — 2026-11-03
+
+The [native terminal broker](../api/terminal-native.md) and Electron helpers are implemented but
+uncomposed. No application IPC/API/control surface, observer permission or provider
+capability is enabled. Strict requests, private exact-action signatures, native
+sender/document/focus checks and lifecycle revocation have synthetic coverage;
+actual native gesture, independent enrollment/transport, immutable admission,
+containment and durable recovery remain acceptance gates. External sessions are
+never adopted. Explicit supervisor teardown retains uncertain live ownership
+without signaling, retrying or claiming process exit.

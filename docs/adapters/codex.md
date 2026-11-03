@@ -310,3 +310,10 @@ Both layers passed on the recorded macOS environment. Other providers, releases 
 Local JSONL metadata identified Codex CLI 0.162.1. A bounded validation used eight actual sessions across two workspaces, including one explicit parent relationship. Cumulative accounting, replay, restart and source-prefix integrity passed. The compiled application and Chromium dashboard also loaded this disposable real dataset. See [validation scope and reproduction commands](../development/testing.md).
 
 No direct `request_user_input`/`functions.request_user_input` call was found in a separate 30-file recent sample, so `userIntervention` remains false. Failure, interruption and input-request compatibility paths are fixture-tested only. Code-mode-nested requests, approval prompts and arbitrary terminal input cannot be reliably detected or answered from this adapter.
+
+## Managed-terminal research update — 2026-11-03
+
+[Primary-source CLI research](managed-terminal-research.md) now records public
+release metadata and documented TUI/structured interfaces. This is not a real
+provider run, implemented managed adapter or capability validation. The existing
+observation descriptor remains unchanged; external sessions stay read-only.

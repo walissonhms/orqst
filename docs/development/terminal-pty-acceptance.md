@@ -32,10 +32,11 @@ privileged install, service restart or provider command is involved.
 
 ## What it checks
 
-Three sequential starts, with at most one active child, run the current absolute Node
-binary and a fixed synthetic fixture through a real PTY. Each gets a fresh private
-cwd, HOME, CODEX_HOME and TMPDIR, a small explicit locale/terminal environment and
-no inherited loader options or credentials. The fixture validates its TTY, directory
+Four sequential starts, with at most one active child, run the current absolute Node
+binary and a fixed synthetic fixture through a real PTY. The mechanics starts each
+get a fresh private cwd, HOME, CODEX_HOME and TMPDIR; the direct-supervisor and
+broker starts reuse one private directory sequentially. All use a small explicit
+locale/terminal environment with no inherited loader options or credentials. The fixture validates its TTY, directory
 and environment (allowing macOS's added CoreFoundation encoding key), accepts only
 fixed test words and never evaluates input or creates descendants.
 
@@ -112,3 +113,22 @@ transport and UI are unchanged, so local-source, browser, native Desktop and rea
 provider acceptance were not repeated. No push or service restart was performed;
 installed processes/storage and external sessions were preserved. Native enrollment,
 consent, provider terminals, durable recovery and runtime composition remain unavailable.
+
+### Native broker increment — 2026-11-03
+
+A fourth sequential fixture start now traverses the strict native broker: immutable
+consent manifest, private proof dispatch, leased/sequenced keyboard input, bounded
+read, revocation and separately confirmed stop. The host confirmation is synthetic;
+it does not prove an actual native gesture, live Electron IPC or any provider.
+The experiment still uses only the fixed hash-checked Node fixture and the same
+bounded deadlines/output/cleanup policy. No application import or provider flag is
+added. See the [native contract](../api/terminal-native.md) for remaining gates.
+
+This increment passed the explicit native PTY command on macOS/arm64, Node24.22.2
+and node-pty1.1.0, plus lint, typecheck, all 271 Node tests and the full build. An
+initial concurrent-check run had one Analytics HTTP ECONNRESET; the separate
+Analytics file rerun passed all eight cases and the final full suite passed without
+changing tests. The existing dashboard bundle-size warning remains. No local-source
+validation, browser, native Desktop gesture or provider acceptance was run; ingestion,
+application IPC and visible UI are unchanged. No installed service or user data was
+modified and no push/restart was performed.

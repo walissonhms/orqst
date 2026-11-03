@@ -119,3 +119,15 @@ A disposable browser fixture covers the real observer-to-view path, hostile outp
 updates, localization and offline behavior. No user command, real session, running
 service or production data is part of these checks. No managed execution, native
 PTY, provider interaction or native Desktop terminal has been accepted.
+
+## Native broker increment — 2026-11-03
+
+The [experimental native-client contract](../api/terminal-native.md) is now implemented
+for the explicit lab: strict requests, exact per-operation confirmation, private
+proofs/leases, document/focus revalidation, lifecycle revocation and conservative
+supervisor shutdown. Electron helpers exist but are not registered in the runtime.
+The broker is tested with doubles and the fixed synthetic PTY, not a genuine native
+gesture or real provider. Production enrollment, isolated transport, immutable
+admission, lifetime/containment and durable recovery gates above remain unresolved.
+[Current primary-source provider research](../adapters/managed-terminal-research.md)
+does not change adapter capabilities or authorize adopting external sessions.

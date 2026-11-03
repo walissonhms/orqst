@@ -173,3 +173,15 @@ license, typings and native-loader/helper paths;
 [xterm.js security](https://xtermjs.org/docs/guides/security/) and
 [flow control](https://xtermjs.org/docs/guides/flowcontrol/). The Node host choice,
 grant protocol and budgets above are ORQST design proposals, not upstream guarantees.
+
+## Native broker increment — 2026-11-03
+
+The [experimental native-client contract](../api/terminal-native.md) is now implemented
+for the explicit lab: strict requests, exact per-operation confirmation, private
+proofs/leases, document/focus revalidation, lifecycle revocation and conservative
+supervisor shutdown. Electron helpers exist but are not registered in the runtime.
+The broker is tested with doubles and the fixed synthetic PTY, not a genuine native
+gesture or real provider. Production enrollment, isolated transport, immutable
+admission, lifetime/containment and durable recovery gates above remain unresolved.
+[Current primary-source provider research](../adapters/managed-terminal-research.md)
+does not change adapter capabilities or authorize adopting external sessions.
