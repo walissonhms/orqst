@@ -917,3 +917,39 @@ Validation for this change used Node 24.22.2/pnpm 10.34.9: lint, typecheck,
 369 Node tests (including 38 focused acceptance/runtime cases) and build passed.
 The build retains the existing Vite chunk-size advisory. `validate:local`, browser
 tests, Desktop smoke and the real acceptance command were not run.
+
+## Structured initialization transport fixtures
+
+`tests/codex-native-initialize.test.ts` builds the production structured host and a
+small, independently written native **fake** app-server on macOS arm64. It uses
+empty disposable native homes, no credentials, no provider executable, no network
+and no subprocess descendants. The fake rejects inference and records only its
+four allowlisted handshake/preparation method names. Run with Node 24/pnpm 10:
+
+```bash
+pnpm exec tsx --test tests/codex-native-initialize.test.ts
+```
+
+The compatible scenario exercises actual child pipes and Node IPC, a startup
+notification spanning 32 KiB host slices, fragmented UTF-8, CRLF, interleaved
+notifications and the native initialization response fields. It verifies requested
+dynamic-tool support remains unobserved and no turn is submitted. Its signed stop
+requires the exact owned signal-only exit, with matching durable lifecycle evidence.
+
+Three separate fakes produce the same `request_timeout` / `initialize` diagnostic:
+one never reads stdin, one writes the response without its newline, and one emits
+only a notification. A Content-Length header instead produces `invalid_message`;
+a correlated RPC error produces `native_request_rejected`, without retaining its
+secret sentinel. The silence scenarios therefore establish diagnostic ambiguity,
+not a cause for a historical native timeout. The documented stdio protocol is
+JSONL, with the JSON-RPC version header omitted; initialization is acknowledged by
+`initialized` only after its response. See the
+[official app-server protocol](https://learn.chatgpt.com/docs/app-server#protocol).
+
+Each fake has a 12-second independent self-exit bound. Lost transports receive no
+signals or PID adoption; the test waits for the fake's real durable exit and keeps
+the runtime `ownership_lost` rather than retroactively claiming owned cleanup.
+Disposable state is retained when an exit is not confirmed. These fixtures take
+about 30 seconds because they exercise the actual eight-second request deadlines.
+They do not inspect, reconcile, delete or reuse prior real acceptance state, prove
+descendant cleanup for a provider, or establish installed Codex compatibility.
