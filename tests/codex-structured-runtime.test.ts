@@ -1360,7 +1360,7 @@ test('runtime method allowlist rejects untrusted names before dispatch or diagno
   try {
     await assert.rejects(
       Reflect.apply(channel.request, channel, ['SYNTHETIC-PRIVATE-METHOD', {}]),
-      /method unavailable/,
+      (error: unknown) => error instanceof Error && error.message === 'Codex method unavailable',
     );
     assert.deepEqual(transport.requests, []);
     assert.equal(channel.diagnostic(), null);
