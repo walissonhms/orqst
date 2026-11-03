@@ -132,3 +132,10 @@ changing tests. The existing dashboard bundle-size warning remains. No local-sou
 validation, browser, native Desktop gesture or provider acceptance was run; ingestion,
 application IPC and visible UI are unchanged. No installed service or user data was
 modified and no push/restart was performed.
+
+Independent critical review approved the native boundary only as an experimental,
+uncomposed increment. The documented paste-review, same-document navigation,
+modal-focus, per-document enrollment and uncertain-teardown limits remain explicit.
+After incorporating the concurrent main branch brand-assets increment, lint,
+typecheck, all 273 Node tests and the complete build passed again. Browser/native
+provider acceptance was not repeated; no terminal control is enabled by integration.
