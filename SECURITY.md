@@ -41,6 +41,26 @@ data in the report. Redact evidence.
 There is no bug bounty and no response-time commitment at this stage. The owner
 will acknowledge a report when possible and coordinate disclosure after a fix.
 
+## Current managed Terminal opt-in
+
+The [managed Terminal opt-in](docs/development/managed-codex-terminal.md) implements
+a separate native trusted/same-user path in the checkout. Electron is a client;
+an independent Node component owns private metadata, grants and PTY handles.
+Native-confirmed login/start/input/paste/stop are isolated from the observer cookie,
+API and preload. Fixed profiles, hashes/canonical paths, private new state and a
+minimal environment prevent accidental reuse of external credentials and sessions.
+They are not immutable kernel binding or a hard sandbox. Provider UI can change the
+initial read-only/on-request defaults; the process has the OS user's privileges.
+Same-user compromise, hostile descendants and hard resource containment are outside
+this mode. Real-provider acceptance is pending specific authorization.
+
+The dedicated xterm document has no remote requests, captured HTML or generic IPC.
+OSC clipboard/link/title actions and automatic emulator input are disabled. Only
+its CSS policy permits inline styles for xterm; the observer CSP is unchanged.
+Closing the view hides it. Quit/loss records uncertainty without signaling a stored
+PID; each owned PTY host retains its start-authorized 30-minute deadline. No
+recovery/adoption, delegated-task protocol or remote execution is exposed.
+
 ## Architecture approval and future control
 
 The current runtime is an observation service. Phase 0 approves future managed

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-03 — Embedded managed Codex Terminal
+
+- Add opt-in Desktop xterm Terminal with independent Node-owned supervisor/journal,
+  fixed Codex login/start profiles, private new homes and native confirmations.
+- Select native trusted/same-user execution with pinned executable/path drift checks,
+  separate authentication and explicit lifetime, without claiming hard isolation.
+- Add disposable real Electron/PTY acceptance with a synthetic native executable.
+  Real Codex, Claude Code/OpenCode and delegation/automatic results remain unvalidated
+  or unimplemented. Observer APIs and external sessions remain read-only.
+
 ## Unreleased — native aggregate Analytics save
 
 - Desktop can save bounded Analytics CSV/Markdown with a separate strict capability,

@@ -1,4 +1,4 @@
-// Experimental library only. No application transport enrolls a terminal client.
+// Native Terminal authority; only explicit trusted composition enrolls a client.
 import { createHash, randomUUID, verify, type KeyObject } from 'node:crypto';
 
 export type TerminalOperation = 'start' | 'attach' | 'input' | 'paste' | 'stop';

@@ -1,5 +1,10 @@
 # Experimental Terminal recovery — 2026-11-03
 
+Current update: the owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
+selects a trusted/same-user contract and composes the library behind a private Node
+Core. It supersedes the blanket immutable-binding/container gate in this historical
+engineering note; it does not claim hard isolation or real-provider acceptance.
+
 The owned-terminal library now supports a durable metadata journal through the
 existing SQLite `Store`. This is implemented engineering code, not an enabled
 managed Codex terminal. Normal Core/Bridge/Desktop startup and the native PTY lab

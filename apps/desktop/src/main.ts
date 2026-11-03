@@ -14,6 +14,7 @@ import {
 import { join } from 'node:path';
 import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
 import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
+import { createManagedTerminal } from './managed-terminal.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
@@ -33,6 +34,7 @@ app.setName('ORQST');
 app.enableSandbox();
 protocol.registerSchemesAsPrivileged([
   { scheme: 'orqst-desktop', privileges: { standard: true, secure: true } },
+  { scheme: 'orqst-terminal', privileges: { standard: true, secure: true } },
 ]);
 const origin = bridgeOrigin(process.env.ORQST_DESKTOP_PORT);
 let window: BrowserWindow | undefined;
@@ -79,8 +81,29 @@ async function start(): Promise<void> {
       },
     );
   });
+  const terminalConfig = process.argv
+    .find((value) => value.startsWith('--terminal-config='))
+    ?.slice('--terminal-config='.length);
+  const openTerminal = terminalConfig
+    ? await createManagedTerminal(terminalConfig, (key) => i18n.t(key))
+    : undefined;
   Menu.setApplicationMenu(
-    Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }]),
+    Menu.buildFromTemplate([
+      { role: 'appMenu' },
+      { role: 'editMenu' },
+      {
+        label: i18n.t('managedTerminal.title'),
+        submenu: [
+          {
+            id: 'managed-terminal-open',
+            label: i18n.t('managedTerminal.open'),
+            enabled: !!openTerminal,
+            click: () => openTerminal?.(),
+          },
+        ],
+      },
+      { role: 'windowMenu' },
+    ]),
   );
 
   const saver = new ArtifactSaver();
