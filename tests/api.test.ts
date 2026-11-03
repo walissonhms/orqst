@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import { request as httpRequest } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -103,6 +104,83 @@ test('protects local API, validates origin/input, and serves only dashboard asse
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.ok(response.headers.get('content-security-policy')?.includes("frame-ancestors 'none'"));
+  } finally {
+    await ctx.close();
+  }
+});
+test('dashboard fallback serves only exact public routes and preserves request security', async () => {
+  const ctx = await setup();
+  try {
+    for (const path of [
+      '/',
+      '/overview',
+      '/workspaces',
+      '/agents',
+      '/models',
+      '/settings',
+      '/overview/sessions/synthetic-id',
+      '/overview/sessions/synthetic%20%3F%23%20sess%C3%A3o',
+    ]) {
+      const response = await fetch(ctx.base + path);
+      assert.equal(response.status, 200, path);
+      assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+      assert.match(await response.text(), /Synthetic dashboard/);
+      assert.equal(response.headers.get('set-cookie'), null);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.ok(response.headers.get('content-security-policy')?.includes("base-uri 'none'"));
+      const head = await fetch(ctx.base + path, { method: 'HEAD' });
+      assert.equal(head.status, 200);
+      assert.equal(await head.text(), '');
+      assert.equal((await fetch(ctx.base + path, { method: 'POST' })).status, 405);
+      const untrustedHeaders: Record<string, string>[] = [
+        { Origin: 'https://untrusted.invalid' },
+        { 'Sec-Fetch-Site': 'cross-site' },
+      ];
+      for (const headers of untrustedHeaders)
+        assert.equal(
+          (await fetch(ctx.base + path, { headers })).status,
+          403,
+          JSON.stringify(headers),
+        );
+    }
+    const badHost = await new Promise<number | undefined>((resolve, reject) => {
+      const request = httpRequest(
+        ctx.base + '/settings',
+        { headers: { Host: 'untrusted.invalid' } },
+        (response) => {
+          response.resume();
+          resolve(response.statusCode);
+        },
+      );
+      request.on('error', reject);
+      request.end();
+    });
+    assert.equal(badHost, 403);
+    for (const path of [
+      '/arbitrary',
+      '/overview/',
+      '/settings/nested',
+      '/%73ettings',
+      '/overview/sessions',
+      '/overview/sessions/',
+      '/overview/sessions/id/extra',
+      '/overview/sessions/a%2Fb',
+      '/overview/sessions/a%5Cb',
+      '/overview/sessions/a%252Fb',
+      '/overview/sessions/%61gent',
+      '/overview/sessions/' + 'x'.repeat(201),
+      '/ws',
+      '/assets/missing.js',
+    ]) {
+      const response = await fetch(ctx.base + path);
+      assert.equal(response.status, 404, path);
+      assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+    }
+    for (const path of ['/api/missing', '/api/snapshot']) {
+      assert.equal((await fetch(ctx.base + path)).status, 401);
+    }
+    assert.equal((await fetch(ctx.base + '/%00')).status, 403);
+    assert.equal((await fetch(ctx.base + '/%')).status, 400);
   } finally {
     await ctx.close();
   }

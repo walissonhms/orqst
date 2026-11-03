@@ -47,7 +47,8 @@ import { useSessionMetrics, type LiveMetricsState } from './use-session-metrics'
 import { SessionTokenBadge } from './SessionTokenBadge';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
-import { sessionFromHash } from './session-link';
+import { isSessionLocation, sessionFromLocation } from './session-link';
+import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
 import { Agents } from './Agents';
 import { Workspaces } from './Workspaces';
 import { CommandPalette } from './CommandPalette';
@@ -55,13 +56,7 @@ import { Modal } from './Modal';
 import { Settings } from './Settings';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
-import {
-  appViews,
-  readShellPreferences,
-  shellStorageKey,
-  viewFromHash,
-  type AppView,
-} from './shell-preferences';
+import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -511,13 +506,18 @@ export function App() {
   const [shell, setShell] = useState(readShellPreferences);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
   const [view, setView] = useState<AppView>(
-    location.hash ? (viewFromHash(location.hash) ?? 'overview') : shell.view,
+    viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
   );
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
-  const acceptedHash = useRef(location.hash);
+  const navigation = useRef<DashboardHistory | null>(null);
+  const pendingSessionLink = useRef(isSessionLocation(location));
+  const routeActions = useRef({
+    traverse: () => {},
+    guard: (_href: string, action: () => void) => action(),
+  });
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -612,47 +612,49 @@ export function App() {
     [nativeDesktop, sound, t],
   );
   const { snapshot, connection, error, refresh } = useObservatory(onLive);
+  function linkedDestination() {
+    if (isSessionLocation(location) && !snapshot) {
+      pendingSessionLink.current = true;
+      return;
+    }
+    pendingSessionLink.current = false;
+    const id = sessionFromLocation(location, snapshot?.sessions.map((value) => value.id) ?? []);
+    const page = viewFromLocation(location) ?? view;
+    if (id) {
+      applySession(id);
+      setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
+      setQuery('');
+      setStatus('');
+    } else if (page === 'overview') applySession(undefined);
+    setView(page);
+    navigation.current?.replace(viewPath(page, id));
+    setMenuOpen(false);
+  }
+  routeActions.current = {
+    traverse: linkedDestination,
+    guard: (href, action) => {
+      const target = new URL(href, location.origin);
+      const id = sessionFromLocation(target, snapshot?.sessions.map((value) => value.id) ?? []);
+      const page = viewFromLocation(target) ?? view;
+      if (page !== view || (page === 'overview' && id !== selected)) requestNavigation(action);
+      else action();
+    },
+  };
   useEffect(() => {
-    const selectLinkedDestination = () => {
-      const targetHash = location.hash;
-      const id = sessionFromHash(targetHash, snapshot?.sessions.map((value) => value.id) ?? []);
-      // Initial session links wait for their source-backed snapshot.
-      if (targetHash.startsWith('#session=') && !snapshot) return;
-      const page = viewFromHash(targetHash) ?? 'overview';
-      const transition = () => {
-        if (id) {
-          applySession(id);
-          setWorkspaceId(
-            snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '',
-          );
-          setQuery('');
-          setStatus('');
-        }
-        setView(id ? 'overview' : page);
-        acceptedHash.current = id ? '#overview' : targetHash;
-        history.replaceState(
-          null,
-          '',
-          `${location.pathname}${location.search}${acceptedHash.current}`,
-        );
-        setMenuOpen(false);
-      };
-      if ((id && id !== selected) || (!id && page !== view)) {
-        // Hash traversal has already changed the URL. Keep the current view/URL
-        // until the user decides; do not add another history entry on confirmation.
-        history.replaceState(
-          null,
-          '',
-          `${location.pathname}${location.search}${acceptedHash.current}`,
-        );
-        requestNavigation(transition);
-      } else transition();
+    const controller = new DashboardHistory(
+      (href, action) => routeActions.current.guard(href, action),
+      () => routeActions.current.traverse(),
+    );
+    navigation.current = controller;
+    routeActions.current.traverse();
+    return () => {
+      controller.dispose();
+      navigation.current = null;
     };
-    // Snapshot refreshes must not replay a pending or cancelled navigation.
-    if (location.hash.startsWith('#session=')) selectLinkedDestination();
-    window.addEventListener('hashchange', selectLinkedDestination);
-    return () => window.removeEventListener('hashchange', selectLinkedDestination);
-  }, [snapshot, selected, view]);
+  }, []);
+  useEffect(() => {
+    if (snapshot && pendingSessionLink.current) routeActions.current.traverse();
+  }, [snapshot]);
   useEffect(() => {
     if (snapshot && !prefsSaving) setLocalPrefs(snapshot.preferences);
   }, [snapshot, prefsSaving]);
@@ -693,13 +695,14 @@ export function App() {
   }
   function selectSession(id: string | undefined) {
     if (id === selected) return;
-    requestNavigation(() => applySession(id), id !== undefined);
+    requestNavigation(() => {
+      applySession(id);
+      navigation.current?.push(viewPath(view, id));
+    }, id !== undefined);
   }
-  function applyView(page: AppView) {
+  function applyView(page: AppView, sessionId = selected) {
     setView(page);
-    acceptedHash.current = `#${page}`;
-    if (location.hash !== acceptedHash.current)
-      history.pushState(null, '', `${location.pathname}${location.search}${acceptedHash.current}`);
+    navigation.current?.push(viewPath(page, sessionId));
     setMenuOpen(false);
   }
   function navigate(page: AppView) {
@@ -713,7 +716,7 @@ export function App() {
       applySession(undefined);
       setQuery('');
       setStatus('');
-      applyView(page);
+      applyView(page, '');
     });
   }
   function openSession(id: string) {
@@ -724,7 +727,7 @@ export function App() {
       setQuery('');
       setStatus('');
       applySession(id);
-      applyView('overview');
+      applyView('overview', id);
     };
     if (id === selected && view === 'overview') transition();
     else requestNavigation(transition);
@@ -834,7 +837,7 @@ export function App() {
       <aside id="app-sidebar" className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
         <a
           className="brand"
-          href="#overview"
+          href="/overview"
           aria-label={t('brand')}
           onClick={(event) => {
             event.preventDefault();
@@ -863,7 +866,7 @@ export function App() {
             <a
               key={page}
               className={`workspace-link ${view === page ? 'active' : ''}`}
-              href={`#${page}`}
+              href={viewPath(page)}
               title={t(`shell.views.${page}`)}
               aria-label={t(`shell.views.${page}`)}
               aria-current={view === page ? 'page' : undefined}

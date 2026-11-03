@@ -511,7 +511,8 @@ session. It advances that session from 120 to 170 tokens and verifies aggregate
 totals of 240 then 290, leaving the shared baseline at 120 for threshold cases.
 Run the dashboard and threshold files together to catch shared-fixture regressions;
 keep the exact token assertions. The Electron smoke explicitly returns to
-`/#overview` after Analytics because a hashless URL restores the persisted view.
+`/overview` after Analytics because the root URL restores the persisted view.
+Legacy `/#overview` remains an accepted alias.
 See the [screen matrix](../design/ui-ux-specification.md) for remaining product and
 manual/native acceptance gaps.
 

@@ -13,7 +13,9 @@ and observer. If the Bridge exits, Desktop cannot keep observation running.
 The renderer has sandbox and context isolation enabled, no Node integration and no webview. The later Artifacts slice adds only the narrow
 isolated preload/IPC described below. Its browser session is in memory with cache disabled.
 Requests are restricted to the configured IPv4 loopback origin and its `/ws` socket;
-root/hash dashboard navigation is permitted. New windows, subframes, external navigation,
+only root and exact `/overview`, `/workspaces`, `/agents`, `/models`, `/settings`
+dashboard navigation plus validated `/overview/sessions/<encoded-id>` is permitted,
+with legacy fragments and no query or credentials. New windows, subframes, external navigation,
 downloads and permission requests are denied. Renderer notifications, media capture, external links and downloads are denied.
 Markdown export is available only through the native Artifacts action described below.
 Native alerts originate only in the main-process monitor described below. No generic shell, filesystem, URL or path method is exposed. Dashboard content stays untrusted plain text.
@@ -167,10 +169,14 @@ Native title/body are only `ORQST` and a fixed localized category: no agent name
 path, session ID, prompt, conversation, result, secret or error details are copied.
 Clicking an in-memory notification fetches a fresh authenticated snapshot and checks
 that the Codex session still exists before opening/restoring the window. A percent-encoded
-`#session=` fragment is consumed only if it matches an identity in the dashboard's current
-snapshot; unknown/malformed/oversize identities cannot open a detail view. The fragment
+`#session=` fragment is accepted only if it matches an identity in the dashboard's current
+snapshot; unknown/malformed/oversize identities cannot open a detail view. Valid
+links canonicalize to `/overview/sessions/<encoded-id>` for reload/history; IDs
+unsafe for a canonical path segment retain their legacy hash form. The live
+main-frame IPC sender check uses this same fixed path allowlist while retaining webContents, session, frame and document equality checks. The fragment
 selects a view, never executes a command or dereferences a source. The normal lifecycle
-query, API/WS shapes, cookies, CSP and allowlists are unchanged.
+query, API/WS shapes, cookies and CSP are unchanged. The observer navigation
+allowlist is the shared dashboard route schema.
 
 `Notification.isSupported()` indicates API availability, **not authorization or delivery**.
 The tray reports `failed`/synchronous API errors using fixed text and never logs OS error

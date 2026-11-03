@@ -134,12 +134,19 @@ Invalid input returns a 4xx response; it never reaches SQLite unvalidated.
 
 The bridge serves the built dashboard from `apps/dashboard/dist`.
 
-- The request path is URL-decoded and resolved under the dashboard root.
+- Asset request paths are URL-decoded and resolved under the dashboard root.
+  Valid dashboard routes select the fixed index file before filesystem mapping.
 - A resolved path outside the root is rejected.
-- Any path segment beginning with `.` is rejected, as are NUL bytes.
+- Any asset path segment beginning with `.` is rejected, as are NUL bytes.
 - The canonical path is resolved with `realpath` and must remain under the root.
 - The target must be a regular file.
-- Extensionless paths and the root fall back to `index.html`.
+- Only exact `/`, `/overview`, `/workspaces`, `/agents`, `/models` and `/settings`
+  paths and `/overview/sessions/<encoded-id>` validated by the shared protocol
+  schema fall back to `index.html`. Session segments must be canonical, bounded
+  and free of separators, residual percent signs, controls and dot-only values.
+  They select the fixed index file, never a source/static path. Unknown
+  extensionless/nested routes, trailing-slash aliases and noncanonical route
+  spellings fail. Assets retain the existing containment/realpath checks.
 - Only a small MIME allowlist is used; everything else is
   `application/octet-stream`.
 - If the bundle is missing, the response is `404 {"error":"dashboard_not_built"}`.
@@ -527,3 +534,28 @@ actual native gesture, independent enrollment/transport, immutable admission,
 containment and durable recovery remain acceptance gates. External sessions are
 never adopted. Explicit supervisor teardown retains uncertain live ownership
 without signaling, retrying or claiming process exit.
+
+## Clean-route security review — 2026-11-03
+
+The dashboard uses the existing History API, without a router dependency or new
+API/IPC operation. Electron main-frame navigation and live sender authorization
+admit only the configured IPv4 loopback origin, root, five exact view paths and
+strict session-path schema listed above; query strings, credentials, other
+ports/hosts and arbitrary paths remain denied. Legacy fragments carry no authority. Session selection still requires an
+identity present in the authenticated Bridge snapshot. IPC continues checking the
+expected live webContents, Electron session, exact main frame and current URL;
+navigation still revokes pending native grants through the existing generation.
+
+The Bridge's former generic extensionless fallback is narrowed to those protocol
+schemas. Direct session entry/reload now sends the existing ID in its HTTP path,
+as the existing session APIs already do. No request URL logging is implemented;
+`Referrer-Policy: no-referrer` remains in force. URLs contain no new session
+content or workspace paths and IDs must not be treated as anonymous. Legacy
+identities unsafe for a path preserve their fragment form instead of being
+rewritten to a fabricated identity. Static routes issue no authentication cookie
+and expose only the bundle;
+bootstrap, API and WebSocket cookie/Host/Origin/fetch-metadata checks, CSP and asset
+containment are unchanged. Automated negative cases cover unknown/nested/encoded
+paths, unauthenticated APIs and untrusted Host/Origin/fetch metadata. Native
+Desktop close/quit/reload and native notification loads still bypass renderer
+draft confirmation; no durable draft recovery is introduced.

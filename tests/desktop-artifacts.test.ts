@@ -365,7 +365,7 @@ test('open failure is distinct from successful saving and sanitized', async (t) 
   assert.equal(readFileSync(ctx.path, 'utf8'), '# Synthetic retained original');
 });
 
-test('sender must be the live main frame, expected webContents, session and exact root origin', () => {
+test('sender must be the live main frame, expected webContents, session and exact dashboard origin and routes', () => {
   const session = {} as Session;
   const origin = 'http://127.0.0.1:4321';
   const frame = { url: origin + '/', detached: false, isDestroyed: () => false };
@@ -377,7 +377,20 @@ test('sender must be the live main frame, expected webContents, session and exac
   } as unknown as WebContents;
   const event = { sender, senderFrame: frame } as unknown as IpcMainInvokeEvent;
   const check = (value = event) => authorizedArtifactSender(value, sender, session, origin);
-  assert.equal(check(), true);
+  for (const path of [
+    '/',
+    '/overview',
+    '/workspaces',
+    '/agents',
+    '/models',
+    '/settings',
+    '/overview#session=synthetic',
+    '/overview/sessions/synthetic',
+    '/overview/sessions/synthetic%20%3F%23%20sess%C3%A3o',
+  ]) {
+    frame.url = origin + path;
+    assert.equal(check(), true, path);
+  }
   assert.equal(
     check({ ...event, senderFrame: { ...frame } } as unknown as IpcMainInvokeEvent),
     false,
@@ -390,6 +403,19 @@ test('sender must be the live main frame, expected webContents, session and exac
   for (const url of [
     'file:///synthetic.md',
     origin + '/api/bootstrap',
+    ...[
+      '/overview/',
+      '/overview/sessions/a%2Fb',
+      '/overview/sessions/a%252Fb',
+      '/overview/sessions/id/extra',
+      '/overview/sessions/id?x=1',
+      '/settings/nested',
+      '/arbitrary',
+      '/%73ettings',
+      '/settings?x=1',
+      '/ws',
+      '/assets/app.js',
+    ].map((path) => origin + path),
     origin + '/?x=1',
     'orqst-desktop://offline/',
     'http://localhost:4321/',
