@@ -49,6 +49,14 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Observation guide:** Settings, Search & commands and the empty-session welcome
+  open a three-step guide using the existing Bridge snapshot: connection, source
+  reading diagnostics and retained sessions across all workspaces. Missing snapshots
+  stay unavailable; loaded evidence is qualified when stale. Existing capability and
+  workspace routes keep their navigation/draft guards. This is read-only orientation,
+  not CLI discovery, an installation test or a saved onboarding checklist. See the
+  [interface guide](docs/design/ui-ux-specification.md#first-observation-guide).
+
 - **Searchable Artifact sources:** `/artifacts` adds a read-only library of retained
   Codex assistant/agent messages, with search over loaded text/agent/session/workspace,
   current-workspace and exact-session filtering, provenance and explicit older-page
@@ -564,6 +572,16 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The observation-guide increment after `f4ed5f6` passed lint, typecheck, all 303 Node
+tests, full build and 45 focused Chromium cases on isolated port 4613. Coverage
+includes the guide's real snapshot evidence, unavailable/stale states, keyboard and
+focus, exact draft/navigation guards and neighboring Settings/routes/brand behavior.
+Synthetic dark/light images at desktop and 320px pt-BR were inspected with maximum
+reading sizes. The existing bundle-size advisory remains. Real-source/live-provider,
+native Desktop, other-browser and manual screen-reader checks were not repeated;
+ingestion and native contracts are unchanged. No installed service, user history or
+source session was changed. See the [test record](docs/development/testing.md#first-observation-guide--2026-11-03).
 
 The 2026-11-03 Artifact source-library increment, combined with concurrent Terminal
 recovery, passed lint, typecheck, all 303 Node cases, build and 40 focused Chromium

@@ -76,3 +76,21 @@ failure/offline recovery, draft guards and localized containment/screenshots in 
 at 1440/1280/390/320px with maximum reading sizes. Node cases cover source admission,
 UTF-8 limits and malformed/unordered/cross-session pages. These do not establish full-archive
 search performance, other browsers, manual screen-reader or native Desktop visual acceptance.
+
+## First-observation guide coverage
+
+After building, run the guide and neighboring navigation/Settings checks:
+
+```bash
+ORQST_BROWSER_PORT=4613 pnpm test:browser tests/browser/observation-guide.spec.ts tests/browser/settings.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/brand-assets.spec.ts
+```
+
+The synthetic guide suite checks actual snapshot diagnostics/time, unavailable versus
+zero counts, global history in an empty workspace scope, in-place updates and stale
+snapshot errors, offline entry, no mutation requests or progress storage, modal Tab/
+Escape/return focus, palette handoff, existing route/history behavior and exact draft
+cancellation/confirmed navigation. Dark/light captures cover 1440/1280/390/320px at
+maximum reading sizes with comfortable spacing/reduced motion, including pt-BR at
+320px. Inspect generated images for wrapping and readable diagnostic values; they
+remain disposable output. Native visual, manual screen-reader and other-browser
+acceptance, CLI discovery and the broader onboarding workflow are outside this suite.

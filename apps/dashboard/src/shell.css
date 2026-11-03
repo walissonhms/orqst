@@ -66,6 +66,57 @@
 .shell-dialog::backdrop {
   background: var(--orqst-backdrop);
 }
+.observation-guide {
+  width: 720px;
+  max-width: calc(100% - 32px);
+  margin: auto;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.observation-guide .panel-heading {
+  align-items: flex-start;
+  gap: var(--orqst-space-3);
+}
+.observation-guide .panel-heading h2 {
+  flex-wrap: wrap;
+}
+.observation-guide .panel-heading .icon-button {
+  flex-shrink: 0;
+}
+.observation-guide-body {
+  padding: var(--orqst-space-5);
+}
+.observation-guide-body p {
+  margin: var(--orqst-space-3) 0;
+  line-height: 1.7;
+}
+.observation-guide-steps {
+  list-style: decimal;
+  padding-left: var(--orqst-space-5);
+  margin: var(--orqst-space-5) 0;
+}
+.observation-guide-steps > li {
+  padding: var(--orqst-space-4) 0;
+  border-top: 1px solid var(--orqst-border);
+}
+.observation-guide-facts {
+  display: grid;
+  gap: var(--orqst-space-3);
+  margin: var(--orqst-space-4) 0;
+}
+.observation-guide-facts > div {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--orqst-space-2) var(--orqst-space-4);
+}
+.observation-guide-facts dt {
+  color: var(--orqst-muted);
+}
+.observation-guide-facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
 .overview-heading {
   flex-wrap: wrap;
   gap: var(--orqst-space-4);

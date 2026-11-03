@@ -12,6 +12,7 @@ export function CommandPalette({
   onSession,
   onNotifications,
   onCreate,
+  onGuide,
   onClose,
 }: {
   snapshot?: Snapshot;
@@ -20,6 +21,7 @@ export function CommandPalette({
   onSession: (id: string) => void;
   onNotifications: () => void;
   onCreate: () => void;
+  onGuide: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -36,6 +38,12 @@ export function CommandPalette({
       label: t('notifications'),
       detail: t('shell.palette.actions'),
       action: onNotifications,
+    },
+    {
+      id: 'observation-guide',
+      label: t('observationGuide.title'),
+      detail: t('shell.palette.actions'),
+      action: onGuide,
     },
     {
       id: 'create',

@@ -17,6 +17,11 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Optional Observation guide from Settings, Search & commands and the empty welcome:
+  existing Bridge connection, source diagnostics and retained-session evidence with
+  unavailable/stale states. Native modal keyboard/focus and existing route/draft
+  guards remain in use; no CLI discovery, installation test or saved progress.
+
 - A standalone Artifact source library at `/artifacts`, with search over loaded
   retained Codex messages/context, workspace/session filtering, provenance, bounded
   older-page loading and explicit coverage/retention/offline/error/limit states.

@@ -255,7 +255,7 @@ restoration. See the [interface guide](docs/design/ui-ux-specification.md#pin-wo
 
 Remaining frontend work includes project tabs/splits,
 full-archive Artifact search and saved-file indexing, terminal fonts, broader Settings and
-onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
+onboarding beyond the read-only orientation guide. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
 require real Core/provider and
 authorization contracts; no visual placeholder counts as delivered functionality.
 The screen matrix is the integration checklist, while the six phases above retain
@@ -336,3 +336,15 @@ offline, empty, retention and capacity states stay explicit. This closes the sta
 source-discovery gap without a new API, database index, transport or file grant.
 Full-archive search, saved-file/draft indexing, automatic extraction and durable draft
 recovery remain pending. Terminal/provider work and phase/release gates are unchanged.
+
+### First observation guide increment — 2026-11-03
+
+The shared dashboard now offers optional three-step orientation from Settings,
+Search & commands and the empty-session welcome. It uses existing transport and
+snapshot evidence for connection, source diagnostics and global retained-session
+counts, distinguishing unavailable and stale data. Links reuse the existing Agents
+and Workspaces routes and Artifact navigation guard. No scan, CLI discovery,
+permission prompt, installation check, saved progress or runtime control is added.
+Broader onboarding and manual assistive-technology/native visual acceptance remain
+pending; Terminal and provider development retain their separate gates. See the
+[interface guide](docs/design/ui-ux-specification.md#first-observation-guide).
