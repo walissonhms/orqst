@@ -15,6 +15,9 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Official design system](design/design-system.md) — shared palette, typography,
   spacing, components, evidence-backed motion and planned mascot states.
 
+- [Interface guide and screen matrix](design/ui-ux-specification.md) — navigation,
+  local preferences, confirmed session context, implemented screens and dependencies.
+
 ## Architecture
 
 - [Overview](architecture/overview.md) — components, process model, data flow,

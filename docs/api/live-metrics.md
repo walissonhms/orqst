@@ -142,3 +142,12 @@ indexed reads and byte admission. Errors omit raw SQLite/JSON diagnostics. Recor
 paths/IDs/hashes remain sensitive local metadata, rendered as inert React text.
 Cookie/Host/Origin/CSP/loopback and single-writer protections remain unchanged.
 Bootstrap still assumes a trusted local OS user; this is not provider-source authentication.
+
+## Compact selected-session disclosure
+
+The Overview session context strip reuses the inspector's already validated reading;
+there is no additional request or poll. The compact disclosure remains visible on
+scroll while that inspector is open, with input/output/cache and occurrence time.
+Absent confirmation renders a dash; a previous reading during refresh/error/offline
+is labeled out of date. Changing sessions cannot reuse another session's reading.
+It does not extend the API, metric semantics, threshold lifetime or source coverage.
