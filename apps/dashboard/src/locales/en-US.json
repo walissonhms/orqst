@@ -679,6 +679,9 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
+    "dashboard": "Show dashboard",
+    "hidePane": "Hide pane",
+    "details": "Session details",
     "selectManifests": "Select and review existing terminal manifests…",
     "chooseManifests": "Select one or two private terminal.json files from the same provider. Selection order is A, then B. Nothing is started or provisioned by this review.",
     "reviewManifests": "Keep this selection in memory? Review the complete manifests and blockers. This creates no Core, journal, reservation or provider. Open interactive terminal A or B separately to initialize the existing Desktop pair and its journals; blocked selections create only a view. Starting a CLI still requires a separate signed native confirmation. Native configuration can cause provider activity and costs at startup; no inference-free guarantee. Opening locks this pair for the rest of this Desktop run, including failures; existing reservations and external sessions are preserved.",

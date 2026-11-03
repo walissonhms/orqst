@@ -86,9 +86,7 @@ async function start(): Promise<void> {
   const terminalConfigs = process.argv
     .filter((value) => value.startsWith('--terminal-config='))
     .map((value) => value.slice('--terminal-config='.length));
-  let terminals = terminalConfigs.length
-    ? await createManagedTerminals(terminalConfigs, (key) => i18n.t(key))
-    : undefined;
+  let terminals: Awaited<ReturnType<typeof createManagedTerminals>> | undefined;
   const terminalSelection = new TerminalSelection();
   let terminalOpening = false;
   let managedLifetime = 'idle';
@@ -128,6 +126,13 @@ async function start(): Promise<void> {
             click: () => void openTerminalSelection(slot),
           })),
           {
+            id: 'managed-terminal-dashboard',
+            label: i18n.t('managedTerminal.dashboard'),
+            enabled: !!terminals,
+            accelerator: 'CmdOrCtrl+Shift+O',
+            click: () => terminals?.showDashboard(),
+          },
+          {
             id: 'managed-terminal-mcp',
             label: i18n.t('managedTerminal.mcpAuthorize'),
             enabled: !!terminals?.mcpEnabled,
@@ -163,6 +168,8 @@ async function start(): Promise<void> {
           (!!terminals?.openers[slot] ||
             (!terminalSelection.locked && slot < terminalSelection.count));
     }
+    const dashboard = menu?.getMenuItemById('managed-terminal-dashboard');
+    if (dashboard) dashboard.enabled = !!terminals;
     const mcp = menu?.getMenuItemById('managed-terminal-mcp');
     if (mcp) mcp.enabled = !!terminals?.mcpEnabled;
     const retire = menu?.getMenuItemById('managed-terminal-retire');
@@ -270,7 +277,7 @@ async function start(): Promise<void> {
     updateTerminalMenu();
     try {
       const files = terminalSelection.take();
-      terminals = await createManagedTerminals(files, (key) => i18n.t(key));
+      terminals = await createManagedTerminals(files, (key) => i18n.t(key), window!);
       if (context.current()) terminals.openers[slot]?.();
     } catch {
       if (context.current())
@@ -459,6 +466,12 @@ async function start(): Promise<void> {
       },
     });
     window = current;
+    current.on('close', (event) => {
+      if (!quitting && (terminals || terminalOpening)) {
+        event.preventDefault();
+        current.hide();
+      }
+    });
     current.webContents.on('did-start-navigation', () => {
       documentGeneration++;
     });
@@ -730,6 +743,15 @@ async function start(): Promise<void> {
     openWindow();
   });
   openWindow();
+  if (terminalConfigs.length) {
+    terminalOpening = true;
+    try {
+      terminals = await createManagedTerminals(terminalConfigs, (key) => i18n.t(key), window!);
+    } finally {
+      terminalOpening = false;
+      updateTerminalMenu();
+    }
+  }
 }
 
 // Closing the macOS window detaches only this client; the Bridge owns its lifetime.

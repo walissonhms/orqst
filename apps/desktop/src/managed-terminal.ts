@@ -1,7 +1,7 @@
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
+import { app, WebContentsView, dialog, ipcMain, session, type BrowserWindow } from 'electron';
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
 import { TerminalNativeBroker } from '../../../packages/core/src/terminal/native-broker.js';
 import {
@@ -24,10 +24,16 @@ import {
   terminalScriptURL,
   terminalStyleURL,
 } from './terminal-policy.js';
+import { TerminalPanels } from './terminal-panels.js';
+import { authorizedTerminalSender } from './terminal-sender.js';
 import { escapeHTML } from './policy.js';
 
 /** Explicit native pair; external sessions and the observer cookie never grant execution. */
-export async function createManagedTerminals(files: string[], translate: (key: string) => string) {
+export async function createManagedTerminals(
+  files: string[],
+  translate: (key: string) => string,
+  window: BrowserWindow,
+) {
   if (process.platform !== 'darwin' || process.arch !== 'arm64' || process.getuid?.() === 0)
     throw new Error('Managed Terminal currently requires non-root macOS arm64');
   const selection = inspectManagedTerminalFiles(files);
@@ -39,7 +45,16 @@ export async function createManagedTerminals(files: string[], translate: (key: s
   let retiring = false;
   let retired = false;
   let initialized = false;
-  const windows: BrowserWindow[] = [];
+  const panels = new TerminalPanels(window);
+  const views: WebContentsView[] = [];
+  const viewActions = new Map<
+    number,
+    (event: Electron.IpcMainInvokeEvent, action: unknown) => boolean
+  >();
+  ipcMain.handle(
+    'orqst:terminal-view',
+    (event, action: unknown) => viewActions.get(event.sender.id)?.(event, action) ?? false,
+  );
   const openers: Array<() => void> = [];
   try {
     if (!blocker) {
@@ -58,7 +73,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
         );
     }
     for (const [slot, file] of files.entries()) {
-      const open = await createWindow(file, slot);
+      const open = await createPane(file, slot);
       openers.push(open);
     }
     initialized = true;
@@ -66,7 +81,8 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     // No broker can dispatch before the whole pair loads. Preserve all disk/admission evidence.
     router.close();
     core?.close();
-    for (const window of windows) if (!window.isDestroyed()) window.destroy();
+    ipcMain.removeHandler('orqst:terminal-view');
+    panels.close();
     throw error;
   }
   app.on('before-quit', (event) => {
@@ -74,22 +90,30 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     quitting = true;
     router.close();
     core?.close();
+    panels.close();
+    ipcMain.removeHandler('orqst:terminal-view');
   });
   return {
     openers,
+    showDashboard: () => panels.showDashboard(),
     mcpEnabled: !!selection[0]!.config.interactive?.mcp && !blocker,
     async authorizeMcp() {
       if (!core || retiring || retired) return;
       retiring = true;
-      const target = windows.find((window) => window.isFocused());
-      const frame = target?.webContents.mainFrame;
+      const target = window;
+      const focused = views.find(
+        (view, slot) => panels.visible(slot) && view.webContents.isFocused(),
+      );
+      const frame = focused?.webContents.mainFrame;
       const current = () =>
         !!target &&
         !target.isDestroyed() &&
         target.isFocused() &&
-        target.webContents.isFocused() &&
-        target.webContents.mainFrame === frame &&
-        target.webContents.getURL() === terminalDocumentURL;
+        !!focused &&
+        panels.visible(views.indexOf(focused)) &&
+        focused.webContents.isFocused() &&
+        focused.webContents.mainFrame === frame &&
+        focused.webContents.getURL() === terminalDocumentURL;
       try {
         if (!current()) return;
         const prepared = (await core.prepareMcp()) as {
@@ -132,9 +156,21 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     async retire() {
       if (!core || retiring || retired) return;
       retiring = true;
-      const target = windows.find((window) => window.isFocused());
+      const target = window;
+      const focused = views.find(
+        (view, slot) => panels.visible(slot) && view.webContents.isFocused(),
+      );
+      const frame = focused?.webContents.mainFrame;
+      const current = () =>
+        !target.isDestroyed() &&
+        target.isFocused() &&
+        !!focused &&
+        panels.visible(views.indexOf(focused)) &&
+        focused.webContents.isFocused() &&
+        focused.webContents.mainFrame === frame &&
+        focused.webContents.getURL() === terminalDocumentURL;
       try {
-        if (!target || !target.webContents.isFocused()) return;
+        if (!current()) return;
         const prepared = (await core.prepareRetire()) as {
           challenge: TerminalChallenge;
           evidence: unknown;
@@ -151,13 +187,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
           cancelId: 0,
           noLink: true,
         });
-        if (
-          result.response !== 1 ||
-          target.isDestroyed() ||
-          !target.isFocused() ||
-          !target.webContents.isFocused()
-        )
-          return;
+        if (result.response !== 1 || !current()) return;
         await core.retire({
           challengeId: prepared.challenge.challengeId,
           signature: sign(
@@ -169,8 +199,8 @@ export async function createManagedTerminals(files: string[], translate: (key: s
         retired = true;
         router.close();
         core.close();
-        for (const window of windows)
-          if (!window.isDestroyed()) window.setTitle(translate('managedTerminal.retired'));
+        viewActions.clear();
+        panels.close();
       } catch {
         if (target && !target.isDestroyed())
           await dialog.showMessageBox(target, {
@@ -200,10 +230,10 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     },
   };
 
-  async function createWindow(file: string, slot: number): Promise<() => void> {
+  async function createPane(file: string, slot: number): Promise<() => void> {
     const config = readInteractiveTerminalConfig(file);
     const provider = interactiveProvider(config);
-    const providerLabel = translate(`settings.adapters.${provider}`);
+    const providerLabel = translate(`shell.adapters.${provider}`);
     const startProfile = `${provider}-terminal-v1`;
     const authority = new TerminalAuthority(
       new Map([['desktop-managed', keys.publicKey]]),
@@ -230,7 +260,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
       if (request.url === terminalDocumentURL) {
         const button = (id: string) =>
           `<button id="${id}"${id === 'login' && config.authentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
-        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main data-start-profile="${startProfile}"><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</h1><p>${text(provider === 'opencode' ? 'opencodeScope' : provider === 'claude' ? 'claudeScope' : config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main data-start-profile="${startProfile}"><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</h1><details><summary>${text('details')}</summary><p>${text(provider === 'opencode' ? 'opencodeScope' : provider === 'claude' ? 'claudeScope' : config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p></details><nav><button id="dashboard">${text('dashboard')}</button><button id="hide-pane">${text('hidePane')}</button></nav><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
         contentType = 'text/html; charset=utf-8';
       } else if (request.url === terminalScriptURL) {
         body = readFileSync(join(__dirname, 'managed-terminal-client.js'), 'utf8');
@@ -253,13 +283,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
       });
     });
     const supervisor = core?.supervisors[slot];
-    const window = new BrowserWindow({
-      title: `${translate('managedTerminal.title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${providerLabel}`,
-      width: 1100,
-      height: 800,
-      minWidth: 640,
-      minHeight: 480,
-      show: false,
+    const view = new WebContentsView({
       webPreferences: {
         preload: join(__dirname, 'terminal-preload.cjs'),
         session: terminalSession,
@@ -275,49 +299,94 @@ export async function createManagedTerminals(files: string[], translate: (key: s
         navigateOnDragDrop: false,
       },
     });
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-    window.webContents.on('will-navigate', (event) => event.preventDefault());
-    window.webContents.on('will-frame-navigate', (event) => event.preventDefault());
-    window.webContents.on('will-redirect', (event) => event.preventDefault());
-    window.webContents.on('will-attach-webview', (event) => event.preventDefault());
-    windows.push(window);
+    view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    view.webContents.on('will-navigate', (event) => event.preventDefault());
+    view.webContents.on('will-frame-navigate', (event) => event.preventDefault());
+    view.webContents.on('will-redirect', (event) => event.preventDefault());
+    view.webContents.on('will-attach-webview', (event) => event.preventDefault());
+    views.push(view);
+    let revoke = () => {};
+    panels.add(view, () => revoke());
     if (supervisor && core)
-      router.bind(window, terminalSession, (document, current) => {
-        const broker = new TerminalNativeBroker(
-          authority,
-          supervisor,
-          'desktop-managed',
-          keys.privateKey,
-          document,
-          {
-            current: (_document, focus) => initialized && current(focus),
-            confirm: (_document, details) =>
-              confirmTerminalAction(dialog, window, translate, details),
-          },
-        );
-        return {
-          dispatch: (document, request) => broker.dispatch(document, request),
-          revokeInput: () => broker.revokeInput(),
-          close: () => {
-            broker.close();
-            void core?.closeSlot(slot).catch(() => {});
-          },
-        };
+      router.bind(
+        window,
+        terminalSession,
+        (document, current) => {
+          viewActions.set(view.webContents.id, (event, action) => {
+            if (
+              !initialized ||
+              !authorizedTerminalSender(
+                event,
+                window,
+                terminalSession,
+                document,
+                document.generation,
+                true,
+                view.webContents,
+                panels.visible(slot),
+              )
+            )
+              return false;
+            if (action === 'dashboard') panels.showDashboard();
+            else if (action === 'hide') panels.hide(slot);
+            else return false;
+            return true;
+          });
+          const broker = new TerminalNativeBroker(
+            authority,
+            supervisor,
+            'desktop-managed',
+            keys.privateKey,
+            document,
+            {
+              current: (_document, focus) => initialized && current(focus),
+              confirm: (_document, details) =>
+                confirmTerminalAction(dialog, window, translate, details),
+            },
+          );
+          revoke = () => broker.revokeInput();
+          return {
+            dispatch: (document, request) => broker.dispatch(document, request),
+            revokeInput: () => broker.revokeInput(),
+            close: () => {
+              broker.close();
+              void core?.closeSlot(slot).catch(() => {});
+            },
+          };
+        },
+        { contents: view.webContents, visible: () => panels.visible(slot) },
+      );
+    // View navigation controls grant no process authority, even for a blocked manifest.
+    if (!supervisor) {
+      view.webContents.once('did-finish-load', () => {
+        const document = { frame: view.webContents.mainFrame, generation: 0 };
+        viewActions.set(view.webContents.id, (event, action) => {
+          if (
+            !authorizedTerminalSender(
+              event,
+              window,
+              terminalSession,
+              document,
+              0,
+              true,
+              view.webContents,
+              panels.visible(slot),
+            )
+          )
+            return false;
+          if (action === 'dashboard') panels.showDashboard();
+          else if (action === 'hide') panels.hide(slot);
+          else return false;
+          return true;
+        });
       });
-    window.on('close', (event) => {
-      if (!quitting) {
-        event.preventDefault();
-        window.hide();
-      }
-    });
-    await window.loadURL(terminalDocumentURL);
+    }
+    await view.webContents.loadURL(terminalDocumentURL);
+    view.webContents.on('did-start-navigation', () => viewActions.delete(view.webContents.id));
+    const contentsId = view.webContents.id;
+    view.webContents.on('destroyed', () => viewActions.delete(contentsId));
     return () => {
-      if (!window.isDestroyed()) {
-        if (window.isMinimized()) window.restore();
-        window.show();
-        window.focus();
-        window.webContents.focus();
-      }
+      if (!quitting && !retired) panels.open(slot);
     };
   }
 }

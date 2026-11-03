@@ -1,4 +1,4 @@
-// Explicit two-window Desktop acceptance. Only a compiled synthetic CLI and disposable state.
+// Explicit same-window Desktop acceptance. Only a compiled synthetic CLI and disposable state.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import {
@@ -45,6 +45,31 @@ const project = join(root, 'synthetic-project');
 const sessions = join(root, 'synthetic-sessions');
 await mkdir(project);
 await mkdir(sessions);
+const draftOriginal = '# Synthetic terminal draft source';
+const draftText = '# Exact synthetic draft 😀\nUnsaved and retained across native view changes.';
+await writeFile(
+  join(sessions, 'synthetic-draft.jsonl'),
+  [
+    {
+      type: 'session_meta',
+      payload: {
+        id: 'synthetic-terminal-draft',
+        cwd: project,
+        agent_nickname: 'Synthetic draft test',
+      },
+    },
+    {
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: draftOriginal }],
+      },
+    },
+  ]
+    .map((record) => JSON.stringify({ ...record, timestamp: new Date().toISOString() }))
+    .join('\n') + '\n',
+);
 const bridge = createBridge({
   port: 0,
   dataDir: join(root, 'observer'),
@@ -102,7 +127,11 @@ try {
       timeout: 30000,
     });
   desktop = await launch(states.map((state) => join(state, 'terminal.json')));
-  await expect.poll(() => desktop!.windows().length).toBe(3);
+  await expect.poll(() => desktop!.context().pages().length).toBe(3);
+  assert.equal(
+    await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
+    1,
+  );
   await desktop.evaluate(({ dialog }) => {
     Reflect.set(globalThis, 'syntheticConfirmCount', 0);
     dialog.showMessageBox = async () => {
@@ -115,6 +144,20 @@ try {
     };
     dialog.showMessageBoxSync = () => 1;
   });
+  const observer = desktop
+    .context()
+    .pages()
+    .find((page) => page.url().startsWith('http:'))!;
+  await observer.goto(`http://127.0.0.1:${port}/overview/sessions/synthetic-terminal-draft`);
+  await observer
+    .getByRole('button', { name: /Extract artifact manually|Extrair artefato manualmente/ })
+    .click();
+  const draft = observer.locator('.artifact-panel').getByRole('textbox');
+  await observer
+    .locator('.artifact-panel')
+    .getByRole('button', { name: /Edit draft|Editar rascunho/, exact: true })
+    .click();
+  await draft.fill(draftText);
   const focus = async (slot: number) => {
     await desktop!.evaluate(({ app, Menu, BrowserWindow }, index) => {
       app.show();
@@ -122,20 +165,22 @@ try {
       Menu.getApplicationMenu()!
         .getMenuItemById(index === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open')!
         .click();
-      const w = BrowserWindow.getAllWindows().find((w) =>
-        w.getTitle().includes(index === 0 ? 'T-001' : 'T-002'),
-      )!;
+      const w = BrowserWindow.getAllWindows()[0]!;
       w.show();
       w.focus();
-      w.webContents.focus();
     }, slot);
     await expect
       .poll(() =>
         desktop!.evaluate(({ BrowserWindow }, index) => {
-          const w = BrowserWindow.getAllWindows().find((w) =>
-            w.getTitle().includes(index === 0 ? 'T-001' : 'T-002'),
-          );
-          return !!w && w.isFocused() && w.webContents.isFocused();
+          const w = BrowserWindow.getAllWindows()[0]!;
+          const view = w.contentView.children.find(
+            (view) =>
+              'webContents' in view &&
+              (view as Electron.WebContentsView).webContents
+                .getTitle()
+                .includes(index === 0 ? 'T-001' : 'T-002'),
+          ) as Electron.WebContentsView | undefined;
+          return !!view && w.isFocused() && view.webContents.isFocused();
         }, slot),
       )
       .toBe(true)
@@ -160,7 +205,8 @@ try {
       });
   };
   const pages = desktop
-    .windows()
+    .context()
+    .pages()
     .filter((page) => page.url() === 'orqst-terminal://local/index.html');
   // Select by native trusted header, never by provider output.
   const indexed = await Promise.all(
@@ -212,6 +258,50 @@ try {
     ids[1]!,
   );
   assert.equal(cross.status, 'denied');
+  // Both native views are children of the sole window, with adjacent non-overlapping bounds.
+  assert.deepEqual(
+    await desktop.evaluate(({ BrowserWindow }) => {
+      const w = BrowserWindow.getAllWindows()[0]!;
+      const panes = w.contentView.children.filter(
+        (v) =>
+          'webContents' in v &&
+          (v as Electron.WebContentsView).webContents.getURL().startsWith('orqst-terminal:'),
+      );
+      const a = panes[0]!.getBounds(),
+        b = panes[1]!.getBounds();
+      return {
+        count: BrowserWindow.getAllWindows().length,
+        visible: panes.map((v) => v.getVisible()),
+        adjacent: a.x + a.width === b.x,
+        sameHeight: a.height === b.height,
+      };
+    }),
+    { count: 1, visible: [true, true], adjacent: true, sameHeight: true },
+  );
+  await focus(0);
+  await terminals[0]!.locator('#dashboard').click();
+  await expect(draft).toHaveValue(draftText);
+  assert.equal(
+    await observer.evaluate(() => typeof Reflect.get(window, 'orqstTerminal')),
+    'undefined',
+  );
+  await focus(0);
+  await terminals[0]!.locator('#input').click();
+  await terminals[0]!.locator('.xterm-helper-textarea').pressSequentially('ping', { delay: 20 });
+  await terminals[0]!.locator('.xterm-helper-textarea').press('Enter');
+  await expect(terminals[0]!.locator('#terminal')).toContainText('SYNTHETIC:PONG');
+  // Native close hides this window: original observer document and owned processes survive.
+  const before = await observer.evaluate(() => {
+    Reflect.set(window, 'syntheticDraft', 'exact draft');
+    return location.href;
+  });
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
+  assert.equal(
+    await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
+    1,
+  );
+  assert.equal(await observer.evaluate(() => Reflect.get(window, 'syntheticDraft')), 'exact draft');
+  assert.equal(observer.url(), before);
   const marker = join(profile, 'managed-agents/active-pair.json');
   const originalMarker = await readFile(marker, 'utf8');
   for (const [slot, page] of terminals.entries()) {
@@ -233,6 +323,8 @@ try {
     const header = JSON.parse((await readFile(join(state, receipts[0]!), 'utf8')).split('\n')[0]!);
     assert.equal(readLifecycleReceipt(state, header.binding).status, 'recorded_exit');
   }
+  await expect(draft).toHaveValue(draftText);
+  await draft.fill(draftOriginal);
   await desktop.close();
   desktop = undefined;
   const preserved = JSON.stringify({ version: 1, owner: 'SYNTHETIC-OLD-RESERVATION' }) + '\n';
@@ -265,9 +357,10 @@ try {
     blockedFiles.push(file);
   }
   desktop = await launch(blockedFiles);
-  await expect.poll(() => desktop!.windows().length).toBe(3);
+  await expect.poll(() => desktop!.context().pages().length).toBe(3);
   for (const page of desktop
-    .windows()
+    .context()
+    .pages()
     .filter((page) => page.url() === 'orqst-terminal://local/index.html')) {
     await expect(page.locator('#status')).toHaveAttribute('data-blocked', 'true');
     await expect(page.locator('#status')).toContainText(
@@ -284,10 +377,12 @@ try {
   console.log(
     JSON.stringify({
       result: 'passed',
-      scope: 'two-synthetic-PTY-xterm-windows-same-workspace',
+      scope: 'two-synthetic-PTY-xterm-panels-one-window',
       checks: [
         'two-owned-identities',
         'keyboard-both-slots',
+        'exact-unsaved-artifact-draft-preserved',
+        'one-window-native-adjacent-panels',
         'isolated-cross-instance-denial',
         'sticky-admission-until-signed-retirement',
         'durable-owned-exit-receipts',

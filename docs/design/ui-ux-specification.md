@@ -423,3 +423,15 @@ Desktop visual acceptance are pending. The logo/static welcome mascot are bundle
 state reactions and exact nine-screen collage fidelity remain unimplemented or
 unvalidated. No new mascot derivative or collage-fidelity claim is made.
 See [testing](../development/testing.md) for commands and actual validation scope.
+
+## Same-window interactive Studio subset — 2026-11-03
+
+The owner's original Master UI/UX specification section 3.2 requires integrated
+terminals as the highest-priority Studio experience. The opt-in Desktop now hosts
+interactive A/B terminals as isolated native sibling panels in the main window,
+with a fixed side-by-side split, window-driven resize, real PTY keyboard/output and
+native-confirmed paste. Returning to the dashboard preserves its loaded document
+and unsaved drafts. External top-level terminal windows are not accepted as this
+requirement. This is a subset: tabs, drag handles/reordering, search/clear, dynamic
+model controls, terminal inspectors, notifications and durable layout restoration
+remain pending. See [item-by-item coverage](../development/embedded-terminal-panels.md#original-specification-coverage).

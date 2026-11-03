@@ -9,3 +9,15 @@ contextBridge.exposeInMainWorld(
     () => navigator.userActivation.isActive,
   ),
 );
+
+// Local layout actions only; no command, identity or proof is accepted.
+contextBridge.exposeInMainWorld(
+  'orqstTerminalPane',
+  Object.freeze({
+    show(action: unknown) {
+      if (!navigator.userActivation.isActive || !['dashboard', 'hide'].includes(String(action)))
+        return Promise.resolve(false);
+      return ipcRenderer.invoke('orqst:terminal-view', action);
+    },
+  }),
+);

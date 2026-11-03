@@ -18,6 +18,22 @@ no enabled provider, generic shell, external-session adoption or credential impo
 See [provider research](../adapters/managed-terminal-research.md) and the
 [managed design](../architecture/managed-terminal-design.md).
 
+## Same-window Desktop composition — 2026-11-03
+
+The interactive Desktop pair now uses two `WebContentsView` siblings in the main
+window. Each retains its own partition, reserved main frame, preload and broker.
+Sender validation uses the exact view's `webContents`, session, frame and document
+generation; focus requires the containing native window and that visible view.
+The dashboard document never qualifies as a Terminal sender. Window/view blur and
+hide revoke input; view navigation, crash and destruction permanently close that
+slot's client. These events do not grant renewal or imply process exit.
+
+The separate `orqst:terminal-view` channel accepts only `dashboard` and `hide`
+layout actions. Its isolated preload requires user activation; main validates the
+native sender and focus. It accepts no slot, command, process ID, path or proof and
+cannot start/stop/delegate. Native menu commands retain the existing fixed slots.
+See [composition, behavior and evidence](../development/embedded-terminal-panels.md).
+
 ## Native ownership and request contract
 
 `TerminalNativeBroker` consumes the strict, version-1 `terminalNativeRequestSchema`
@@ -91,7 +107,7 @@ and removes listeners. Modal-focus behavior needs native acceptance on every tar
 platform: if the modal does not restore native focus, a legitimate confirmation may
 be denied. A focus loss fails closed, including while confirmation is pending.
 Transport loss remains the composition owner's explicit revocation responsibility.
-None of these helpers is installed on the observer window.
+The observer document never receives Terminal IPC authority.
 
 ## Lifecycle and shutdown
 

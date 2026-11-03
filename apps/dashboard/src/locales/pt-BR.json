@@ -679,6 +679,9 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
+    "dashboard": "Mostrar painel de observação",
+    "hidePane": "Ocultar painel",
+    "details": "Detalhes da sessão",
     "selectManifests": "Selecionar e revisar manifests de terminal existentes…",
     "chooseManifests": "Selecione um ou dois arquivos terminal.json privados do mesmo provider. A ordem da seleção é A, depois B. Esta revisão não inicia nem provisiona nada.",
     "reviewManifests": "Manter esta seleção em memória? Revise os manifests completos e os bloqueios. Isto não cria Core, journal, reserva ou provider. Abra o terminal interativo A ou B separadamente para inicializar o par Desktop existente e seus journals; seleções bloqueadas criam apenas a visualização. Iniciar uma CLI continua exigindo confirmação nativa assinada separada. A configuração nativa pode causar atividade de provider e custos no startup; não há garantia de ausência de inferência. Abrir fixa este par pelo restante desta execução do Desktop, inclusive em falhas; reservas existentes e sessões externas são preservadas.",

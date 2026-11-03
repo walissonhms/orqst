@@ -929,3 +929,15 @@ migrations are unknown. Only TUI lifecycle has synthetic evidence; descendant ex
 and concurrent native DB access are unvalidated. Capacity retirement is refused
 for OpenCode selections. No observer API/WS/cookie/static changes or global config
 writes; no real startup, DB inspection or inference occurred in this increment.
+
+## Embedded Terminal panels — 2026-11-03
+
+Interactive terminals share the main native window through separate
+`WebContentsView` documents, never dashboard iframes or shared preloads. Each
+retains its private session, exact frame/generation binding, local resource
+allowlist and sandbox. The native broker verifies the view's WebContents plus
+parent-window/view focus and visibility. Switching views or hiding revokes input;
+view reload/crash/destruction closes that broker. The layout-only IPC accepts no
+process operation or authority. Observation cookies and the dashboard preload
+remain ineligible for execution. Core/PTY/native authentication and MCP policies
+are unchanged. See [review and limits](../development/embedded-terminal-panels.md).

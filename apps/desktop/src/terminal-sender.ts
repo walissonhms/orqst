@@ -1,6 +1,12 @@
-import type { BrowserWindow, IpcMainInvokeEvent, Session, WebFrameMain } from 'electron';
+import type {
+  BrowserWindow,
+  IpcMainInvokeEvent,
+  Session,
+  WebContents,
+  WebFrameMain,
+} from 'electron';
 
-// Reserved dedicated document. The observer window must never qualify as a terminal client.
+// Reserved dedicated document. The observer document must never qualify as a terminal client.
 export const terminalDocumentURL = 'orqst-terminal://local/index.html';
 export interface TerminalDocumentBinding {
   readonly frame: WebFrameMain;
@@ -15,9 +21,10 @@ export function authorizedTerminalSender(
   binding: TerminalDocumentBinding,
   currentGeneration: number,
   requireFocus: boolean,
+  contents: WebContents = window.webContents,
+  visible: boolean = true,
 ): boolean {
   try {
-    const contents = window.webContents;
     const document = binding.frame;
     return (
       binding.generation === currentGeneration &&
@@ -31,7 +38,7 @@ export function authorizedTerminalSender(
       contents.mainFrame === document &&
       document.url === terminalDocumentURL &&
       contents.getURL() === terminalDocumentURL &&
-      (!requireFocus || (window.isFocused() && contents.isFocused()))
+      (!requireFocus || (visible && window.isFocused() && contents.isFocused()))
     );
   } catch {
     return false;

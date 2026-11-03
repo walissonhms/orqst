@@ -240,3 +240,9 @@ window.addEventListener(
 fit.fit();
 
 updateButtons();
+
+const pane = (
+  window as unknown as { orqstTerminalPane: { show(action: string): Promise<boolean> } }
+).orqstTerminalPane;
+document.getElementById('dashboard')!.addEventListener('click', () => void pane.show('dashboard'));
+document.getElementById('hide-pane')!.addEventListener('click', () => void pane.show('hide'));

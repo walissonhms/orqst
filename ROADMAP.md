@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## Same-window interactive Terminal correction — 2026-11-03
+
+A/B now occupy native panels in the primary Desktop window, with independent
+restricted documents and focus-bound input. Dashboard switching preserves its live
+document. This fixes window placement; arbitrary splits, persisted layouts, model
+selection and the real two-agent milestone remain incomplete. See
+[the correction and evidence](docs/development/embedded-terminal-panels.md).
+
 ## Existing CLI and authentication direction — 2026-11-03
 
 Use installed Codex, Claude Code and OpenCode CLIs and their existing native

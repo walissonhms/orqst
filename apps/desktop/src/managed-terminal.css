@@ -40,3 +40,24 @@ button:focus-visible {
   padding: 8px;
   background: #080b1e;
 }
+
+main {
+  min-width: 0;
+  overflow: auto;
+  border-inline-start: 1px solid #241a3e;
+}
+code {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+summary {
+  cursor: pointer;
+}
+nav {
+  display: flex;
+  flex-wrap: wrap;
+}
+nav button {
+  font-size: 12px;
+  padding: 6px;
+}

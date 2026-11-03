@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-03 — Interactive terminals in the main window
+
+- Replaced per-terminal native windows with isolated A/B WebContentsView panels
+  inside the main Desktop window, retaining separate sessions/preloads and native
+  confirmations. Both panels can remain visible side by side.
+- Added real hide/dashboard navigation without reloading the observer; input
+  revokes on pane/window blur and hide. Managed window close hides the client.
+- Preserved Core/PTY/MCP grants, native login profiles, reservations and retirement.
+  No provider execution, credential access or inference is part of this correction.
+- See [scope and validation](docs/development/embedded-terminal-panels.md).
+
 ## 2026-11-03 — Scoped native delegation facade
 
 - Add an optional native dynamic tool with a separately signed exact A/B/task root

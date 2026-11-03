@@ -74,23 +74,46 @@ try {
     },
     timeout: 30000,
   });
+  await desktop.evaluate(({ dialog }) => {
+    dialog.showMessageBoxSync = () => 1;
+  });
   await expect
     .poll(() =>
-      desktop!.windows().some((page) => page.url().startsWith(`http://127.0.0.1:${port}/`)),
+      desktop!
+        .context()
+        .pages()
+        .some((page) => page.url().startsWith(`http://127.0.0.1:${port}/`)),
     )
     .toBe(true);
   const observer = desktop
-    .windows()
+    .context()
+    .pages()
     .find((page) => page.url().startsWith(`http://127.0.0.1:${port}/`))!;
   assert.equal(
     await observer.evaluate(() => typeof Reflect.get(window, 'orqstTerminal')),
     'undefined',
   );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(
+        ({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.enabled,
+      ),
+    )
+    .toBe(true);
   await desktop.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
   );
+  await expect
+    .poll(() =>
+      desktop!
+        .context()
+        .pages()
+        .some((page) => page.url() === 'orqst-terminal://local/index.html'),
+    )
+    .toBe(true);
   const terminal = desktop
-    .windows()
+    .context()
+    .pages()
     .find((page) => page.url() === 'orqst-terminal://local/index.html')!;
   await expect(terminal.locator('#terminal .xterm')).toBeVisible();
   await desktop.evaluate(({ dialog }) => {
@@ -128,9 +151,7 @@ try {
   await terminal.locator('.xterm-helper-textarea').press('Enter');
   await expect(terminal.locator('#terminal')).toContainText('SYNTHETIC:PONG');
   await desktop.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
-      .setSize(960, 720),
+    BrowserWindow.getAllWindows()[0]!.setSize(960, 720),
   );
   await terminal.locator('.xterm-helper-textarea').pressSequentially('size', { delay: 50 });
   await terminal.locator('.xterm-helper-textarea').press('Enter');
@@ -152,11 +173,9 @@ try {
     false,
   );
   await terminal.evaluate(() => window.open('https://example.invalid/'));
-  assert.equal(desktop.windows().length, 2);
+  assert.equal(desktop.context().pages().length, 2);
   await desktop.evaluate(({ BrowserWindow }) => {
-    const current = BrowserWindow.getAllWindows().find((window) =>
-      window.webContents.getURL().startsWith('orqst-terminal:'),
-    )!;
+    const current = BrowserWindow.getAllWindows()[0]!;
     current.emit('blur');
     current.focus();
   });
@@ -174,17 +193,9 @@ try {
     });
   });
   assert.equal(pasted.status, 'ok');
-  await desktop.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()
-      .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
-      .close(),
-  );
+  await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.close());
   assert.equal(
-    await desktop.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()
-        .find((w) => w.webContents.getURL().startsWith('orqst-terminal:'))!
-        .isVisible(),
-    ),
+    await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isVisible()),
     false,
   );
   await desktop.evaluate(({ Menu }) =>
@@ -199,12 +210,15 @@ try {
   );
   await desktop.evaluate(({ app, BrowserWindow }) => {
     app.focus({ steal: true });
-    const w = BrowserWindow.getAllWindows().find((w) =>
-      w.webContents.getURL().startsWith('orqst-terminal:'),
-    )!;
+    const w = BrowserWindow.getAllWindows()[0]!;
     w.show();
     w.focus();
-    w.webContents.focus();
+    const view = w.contentView.children.find(
+      (v) =>
+        'webContents' in v &&
+        (v as Electron.WebContentsView).webContents.getURL().startsWith('orqst-terminal:'),
+    ) as Electron.WebContentsView;
+    view.webContents.focus();
   });
   await expect(terminal.locator('#status')).toHaveAttribute('data-pending', 'false');
   await terminal.locator('#stop').click();

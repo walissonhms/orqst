@@ -24,10 +24,10 @@ reuse native authentication with new ephemeral threads and private SQLite/log st
 native auth/config remain shared. The Desktop **Managed agents** surface now connects
 two explicitly signed structured terminals and scoped delegation; one authorized native acceptance attempt failed
 before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
-Two interactive xterm/PTY windows now share one Node Core and sticky capacity with
+Two interactive xterm/PTY panels in the main Desktop window now share one Node Core and sticky capacity with
 Managed agents; each slot has independent ownership and metadata-only lifecycle
 receipts. The explicit separate-login fixture path has earlier two-window transport evidence;
-final native-focus acceptance remains pending.
+human native-modal acceptance remains pending.
 An explicit Codex existing-login PTY opt-in now requires separate acknowledgment
 of shared native session writes; it has synthetic evidence only. Claude 2.1.178 now has a version/hash-scoped native-login PTY launch opt-in, with
 synthetic process evidence and optional strict MCP configuration. OpenCode 2.2.5 now has a version/hash-scoped Desktop factory with a blocked-by-default
@@ -57,7 +57,7 @@ checks two disposable synthetic native processes and the signed A-to-B-to-A tran
 without a provider or credentials. It does not accept the two-real-agent milestone.
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
-window per slot inside ORQST Desktop for up to two new owned Codex processes, with separate login,
+panel per slot inside the main ORQST Desktop window for up to two new owned Codex processes, with separate login,
 private state and native confirmations. It uses the selected native trusted/same-user
 contract; it is not hard containment. The real provider has not been executed for
 acceptance. Normal startup and external sessions remain observation-only. See
@@ -98,6 +98,12 @@ acceptance. Normal startup and external sessions remain observation-only. See
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
 ## Delivery status and roadmap
+
+- **Terminals in one window:** interactive A/B terminals now use isolated native
+  views inside the main Desktop window. Opening both shows them side by side;
+  **Show dashboard** preserves the observer document and drafts without a reload.
+  Hiding a pane or changing focus revokes input without stopping its process.
+  See [behavior, security and limits](docs/development/embedded-terminal-panels.md).
 
 - **Bounded Codex initialization latency mitigation:** a controlled false-token,
   loopback-only comparison confirmed native refresh can delay the first response

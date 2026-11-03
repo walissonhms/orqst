@@ -9,10 +9,16 @@ in this PTY surface unless the additional interactive/session-write opt-in is se
 homes/logins as the default next acceptance step.
 
 This opt-in checkout feature adds a real xterm.js terminal in each of up to two identified ORQST
-Desktop windows, opened from the **Managed Terminal** menu. It is not an external
+Desktop panels in the main window, opened from the **Managed Terminal** menu. It is not an external
 terminal window or an inert transcript. Normal observer startup still launches no
 provider. Codex is the first fixed managed profile; Claude Code and OpenCode are
 not enabled. Real Codex/provider acceptance remains pending specific authorization.
+
+The current [same-window correction](embedded-terminal-panels.md) replaces the
+older per-terminal windows below with native sibling views. Open A/B from the
+native menu; **Hide pane** hides only that view, and **Show dashboard** returns to
+the existing observer document. No session reload, process stop or login change
+is implied. Older dated two-window evidence describes the earlier layout.
 
 ## Trust and provisioning
 
@@ -104,7 +110,7 @@ never the observer database. It stores metadata only; input, terminal output,
 prompts and credentials are excluded. Codex may retain its own history/authentication
 inside its dedicated home. Existing journal caps and epoch fencing apply, including
 permanent reservation of unresolved ownership slots. The native client accepts one or two manifests as one pair, with one independently
-owned slot/journal per window. Both slots may use the same workspace; their provider
+owned slot/journal per panel. Both slots may use the same workspace; their provider
 permissions and any approved project writes can still conflict. Structured Managed
 agents is a different surface and is not a TUI terminal.
 

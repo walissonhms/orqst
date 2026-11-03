@@ -233,11 +233,11 @@ try {
   await expect
     .poll(() => desktop!.evaluate(() => Reflect.get(globalThis, 'syntheticConfirmCount')))
     .toBe(4);
-  const nextWindow = desktop.waitForEvent('window');
+  const nextView = desktop.context().waitForEvent('page');
   await desktop.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
   );
-  const terminal = await nextWindow;
+  const terminal = await nextView;
   await expect(terminal.locator('#status')).toHaveAttribute('data-blocked', 'true');
   await expect(terminal.locator('#start')).toBeDisabled();
   await expect(terminal.locator('#login')).toBeDisabled();
@@ -264,7 +264,7 @@ try {
   const observer = await desktop.firstWindow();
   await expect.poll(() => observer.url()).toBe(`http://127.0.0.1:${port}/`);
   await desktop.evaluate(
-    ({ BrowserWindow, dialog }, files) => {
+    ({ BrowserWindow, webContents, dialog }, files) => {
       const window = BrowserWindow.getAllWindows()[0]!;
       window.isFocused = () => true;
       window.webContents.isFocused = () => true;
@@ -275,14 +275,17 @@ try {
         Reflect.set(globalThis, 'syntheticInitializationDenied', true);
         return { response: 0, checkboxChecked: false };
       };
-      const original = BrowserWindow.prototype.loadURL;
+      const prototype = Object.getPrototypeOf(
+        webContents.getAllWebContents()[0]!,
+      ) as Electron.WebContents;
+      const original = prototype.loadURL;
       let terminalLoads = 0;
       Reflect.set(
-        BrowserWindow.prototype,
+        prototype,
         'loadURL',
-        function (this: Electron.BrowserWindow, url: string, options?: Electron.LoadURLOptions) {
+        function (this: Electron.WebContents, url: string, options?: Electron.LoadURLOptions) {
           if (url === 'orqst-terminal://local/index.html' && ++terminalLoads === 2)
-            return Promise.reject(new Error('SYNTHETIC second window failure'));
+            return Promise.reject(new Error('SYNTHETIC second pane failure'));
           return original.call(this, url, options);
         },
       );

@@ -1,8 +1,20 @@
-import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, Session, WebFrameMain } from 'electron';
+import type {
+  BrowserWindow,
+  IpcMain,
+  IpcMainInvokeEvent,
+  Session,
+  WebContents,
+  WebFrameMain,
+} from 'electron';
 import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
 import type { TerminalNativeReply } from '../../../packages/core/src/terminal/native-broker.js';
 import { authorizedTerminalSender, type TerminalDocumentBinding } from './terminal-sender.js';
 import { bindTerminalNativeLifecycle } from './terminal-lifecycle.js';
+
+export interface TerminalSurface {
+  contents: WebContents;
+  visible(): boolean;
+}
 
 interface Broker {
   dispatch(document: TerminalDocumentBinding, request: unknown): Promise<TerminalNativeReply>;
@@ -27,13 +39,19 @@ export function createTerminalRuntimeRouter(ipc: Pick<IpcMain, 'handle' | 'remov
       documents.get(event.senderFrame!)?.(event, raw) ?? { status: 'denied' },
   );
   return {
-    bind(window: BrowserWindow, session: Session, create: CreateBroker) {
+    bind(window: BrowserWindow, session: Session, create: CreateBroker, surface?: TerminalSurface) {
       if (closed || bindings.size >= 2) throw new Error('Terminal document capacity exceeded');
-      const dispose = bindRuntime(window, session, create, (frame, dispatch) => {
-        if (documents.has(frame)) throw new Error('Terminal document already bound');
-        documents.set(frame, dispatch);
-        return () => documents.delete(frame);
-      });
+      const dispose = bindRuntime(
+        window,
+        session,
+        create,
+        (frame, dispatch) => {
+          if (documents.has(frame)) throw new Error('Terminal document already bound');
+          documents.set(frame, dispatch);
+          return () => documents.delete(frame);
+        },
+        surface,
+      );
       const unbind = () => {
         dispose();
         bindings.delete(unbind);
@@ -51,7 +69,7 @@ export function createTerminalRuntimeRouter(ipc: Pick<IpcMain, 'handle' | 'remov
   };
 }
 
-/** One dedicated window/document; reload permanently closes it. No recovery/adoption shortcut. */
+/** One dedicated native document; reload permanently closes it. No recovery/adoption shortcut. */
 export function bindTerminalRuntime(
   ipc: Pick<IpcMain, 'handle' | 'removeHandler'>,
   window: BrowserWindow,
@@ -68,7 +86,10 @@ function bindRuntime(
   session: Session,
   create: CreateBroker,
   register: (frame: WebFrameMain, dispatch: Dispatch) => () => void,
+  surface?: TerminalSurface,
 ): () => void {
+  const contents = surface?.contents ?? window.webContents;
+  const visible = () => surface?.visible() ?? true;
   let generation = 0;
   let initialized = false;
   let disposed = false;
@@ -81,7 +102,16 @@ function bindRuntime(
     !disposed &&
     !!binding &&
     !!active &&
-    authorizedTerminalSender(active, window, session, binding, generation, focus);
+    authorizedTerminalSender(
+      active,
+      window,
+      session,
+      binding,
+      generation,
+      focus,
+      contents,
+      visible(),
+    );
   const navigate = (_event: unknown, _url: string, _inPlace: boolean, mainFrame: boolean) => {
     if (!mainFrame) return;
     generation++;
@@ -91,7 +121,7 @@ function bindRuntime(
   const initialize = () => {
     if (initialized || disposed || window.isDestroyed()) return;
     initialized = true;
-    binding = Object.freeze({ frame: window.webContents.mainFrame, generation });
+    binding = Object.freeze({ frame: contents.mainFrame, generation });
     // Sender validation below still rejects any initial URL except the reserved document.
     broker = create(binding, current);
     unregister = register(binding.frame, dispatch);
@@ -100,23 +130,41 @@ function bindRuntime(
     revokeInput: () => broker?.revokeInput(),
     close: () => broker?.close(),
   };
-  const unbind = bindTerminalNativeLifecycle(window, client);
-  window.webContents.on('did-start-navigation', navigate);
-  window.webContents.on('did-finish-load', initialize);
+  const unbind = bindTerminalNativeLifecycle(window, client, contents);
+  contents.on('did-start-navigation', navigate);
+  contents.on('did-finish-load', initialize);
   const dispatch: Dispatch = async (event, raw: unknown) => {
     // Reject identity and shape before reserving state; never retain a request queue.
     if (
       disposed ||
       !binding ||
       !broker ||
-      !authorizedTerminalSender(event, window, session, binding, generation, false)
+      !authorizedTerminalSender(
+        event,
+        window,
+        session,
+        binding,
+        generation,
+        false,
+        contents,
+        visible(),
+      )
     )
       return { status: 'denied' };
     const parsedRequest = terminalNativeRequestSchema.safeParse(raw);
     if (!parsedRequest.success) return { status: 'denied' };
     if (
       ['start', 'attach', 'input', 'paste', 'write', 'stop'].includes(parsedRequest.data.action) &&
-      !authorizedTerminalSender(event, window, session, binding, generation, true)
+      !authorizedTerminalSender(
+        event,
+        window,
+        session,
+        binding,
+        generation,
+        true,
+        contents,
+        visible(),
+      )
     )
       return { status: 'focus_required' };
     if (busy) return { status: 'busy' };
@@ -149,7 +197,7 @@ function bindRuntime(
     unbind();
     active = undefined;
     unregister?.();
-    window.webContents.removeListener('did-start-navigation', navigate);
-    window.webContents.removeListener('did-finish-load', initialize);
+    contents.removeListener('did-start-navigation', navigate);
+    contents.removeListener('did-finish-load', initialize);
   };
 }
