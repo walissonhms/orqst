@@ -60,17 +60,18 @@ export function useAppearancePreferences() {
   const [systemLightTheme, setSystemLightTheme] = useState(
     () => matchMedia('(prefers-color-scheme: light)').matches,
   );
+  const resolvedTheme =
+    appearance.theme === 'system' ? (systemLightTheme ? 'light' : 'dark') : appearance.theme;
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme =
-      appearance.theme === 'system' ? (systemLightTheme ? 'light' : 'dark') : appearance.theme;
+    root.dataset.theme = resolvedTheme;
     root.dataset.contrast = appearance.contrast;
     root.dataset.density = appearance.density;
     root.dataset.motion = appearance.motion;
     root.dataset.textSize = appearance.textSize;
     root.dataset.contentSize = appearance.contentSize;
     root.dataset.contentFont = appearance.contentFont;
-  }, [appearance, systemLightTheme]);
+  }, [appearance, resolvedTheme]);
   useEffect(() => {
     try {
       localStorage.setItem(appearanceStorageKey, JSON.stringify(appearance));
@@ -100,5 +101,5 @@ export function useAppearancePreferences() {
       window.removeEventListener('storage', onStorage);
     };
   }, []);
-  return { appearance, setAppearance, storageUnavailable, systemReducedMotion };
+  return { appearance, setAppearance, storageUnavailable, systemReducedMotion, resolvedTheme };
 }

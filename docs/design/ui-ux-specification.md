@@ -40,7 +40,14 @@ captured content is added to URLs. Paths and session fragments never grant API o
 native capabilities.
 
 Collapse the desktop sidebar to retain icon navigation and accessible names.
-Narrow windows use the existing workspace menu.
+Narrow windows use the existing workspace menu with a transparent theme-aware
+logo. The header separates scope and actions into two rows. Escape closes the
+open navigation disclosure and returns focus to its trigger. Sidebar content
+scrolls independently in short windows. Session rows show labeled fields as
+mobile cards, so status, time and token counts remain visible without horizontal
+swiping; source actions keep their existing behavior. Search/status controls wrap
+onto separate rows. Overview running indicators appear only when a source-backed
+running turn is present.
 
 **Cmd/Ctrl+K** opens Search & commands. Search the loaded local snapshot by workspace
 name/path, agent, task, observed model or session ID. Arrow keys move through results,

@@ -29,14 +29,14 @@ test('approved artwork loads locally, preserves proportions and remains accessib
       await page.setViewportSize({ width, height: 1000 });
       if (width <= 700) await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
       const logo = page.getByRole('img', { name: 'ORQST', exact: true });
-      if (width <= 700) {
-        // Preserve the existing mobile menu policy: branding is hidden there.
-        await expect(page.locator('.brand')).toBeHidden();
-      } else {
-        await expect(logo).toBeVisible();
-        await expect(page.getByRole('link', { name: 'ORQST', exact: true })).toBeVisible();
-      }
-      for (const element of width <= 700 ? [mascot] : [logo, mascot]) {
+      await expect(logo).toBeVisible();
+      await expect(page.getByRole('link', { name: 'ORQST', exact: true })).toBeVisible();
+      await expect(page.locator('.brand')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(logo).toHaveAttribute(
+        'src',
+        theme === 'dark' ? '/brand/orqst-logo-dark.svg' : '/brand/orqst-logo.svg',
+      );
+      for (const element of [logo, mascot]) {
         const metrics = await element.evaluate((image: HTMLImageElement) => ({
           loaded: image.complete && image.naturalWidth > 0,
           naturalRatio: image.naturalWidth / image.naturalHeight,
@@ -75,4 +75,68 @@ test('approved artwork loads locally, preserves proportions and remains accessib
     true,
   );
   expect(failures).toEqual([]);
+});
+
+test('transparent theme variant preserves the source silhouette and purple accent without a backing', async ({
+  page,
+}) => {
+  await page.goto('/settings');
+  const pixels = await page.evaluate(async () => {
+    const decode = async (src: string) => {
+      const image = new Image();
+      image.src = src;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d')!;
+      context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, canvas.width, canvas.height).data;
+    };
+    const original = await decode('/brand/orqst-logo.svg');
+    const dark = await decode('/brand/orqst-logo-dark.svg');
+    let transparentChanged = 0;
+    let silhouetteChanged = 0;
+    let accentChanged = 0;
+    let accentCount = 0;
+    let lightInk = 0;
+    for (let i = 0; i < original.length; i += 4) {
+      const x = (i / 4) % 880;
+      const y = Math.floor(i / 4 / 880);
+      if (original[i + 3] === 0 && dark[i + 3] !== 0) transparentChanged++;
+      // The only removed pixels are stray source noise outside the artwork bounds.
+      if (x >= 64 && x <= 878 && y >= 63 && y <= 248 && original[i + 3] !== dark[i + 3])
+        silhouetteChanged++;
+      if (original[i + 3]! > 0 && original[i]! >= 40 && original[i + 2]! >= 80) {
+        accentCount++;
+        if ([0, 1, 2, 3].some((channel) => original[i + channel] !== dark[i + channel]))
+          accentChanged++;
+      }
+      if (dark[i]! > 230 && dark[i + 1]! > 230 && dark[i + 2]! > 240 && dark[i + 3]! > 128)
+        lightInk++;
+    }
+    return {
+      transparentChanged,
+      silhouetteChanged,
+      accentChanged,
+      accentCount,
+      lightInk,
+      corner: Array.from(dark.slice(0, 4)),
+    };
+  });
+  expect(pixels.transparentChanged).toBe(0);
+  expect(pixels.silhouetteChanged).toBe(0);
+  expect(pixels.accentChanged).toBe(0);
+  expect(pixels.accentCount).toBeGreaterThan(3000);
+  expect(pixels.lightInk).toBeGreaterThan(60000);
+  expect(pixels.corner).toEqual([0, 0, 0, 0]);
+  await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('system');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator('.brand-logo')).toHaveAttribute(
+      'src',
+      colorScheme === 'dark' ? '/brand/orqst-logo-dark.svg' : '/brand/orqst-logo.svg',
+    );
+    await expect(page.locator('.brand-logo')).toHaveCSS('filter', 'none');
+  }
 });
