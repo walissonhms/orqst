@@ -52,8 +52,11 @@ Then call `launch(instanceId, proof)` exactly once.
 
 The library revalidates the complete config and pinned native binary before
 consuming the proof and again at dispatch. It commits the slot's metadata admission
-before opening the process channel, then registers a new pane with the existing
-durable registry. The registry alone allocates nonreused `T-NNN` IDs. Each pane binds
+before opening the process channel. The new pane is registered before dispatch
+using the existing durable registry; registry/validation/expiry failures before the
+backend boundary become start_failed and close that never-dispatched pane. A backend
+exception after crossing the boundary remains uncertain, because it may have acted.
+The registry alone allocates nonreused `T-NNN` IDs. Each pane binds
 one instance/project/terminal epoch; a subsequent start gets a new pane, including
 a start using a previously exited slot. Native thread, requested model and reported
 model remain separate in `snapshot`. CLI version is owner-supplied manifest metadata,
@@ -90,7 +93,10 @@ Native turn/start response confirms **accepted** only. Matching turn/started con
 **running**. Notifications arriving before the response are bounded and buffered
 until its exact turn ID is known. Completion needs the matching thread and turn,
 prior native start, a successful turn/completed status and bounded authoritative
-agentMessage text. Commentary/deltas are not results. No separate delivered receipt
+agentMessage text. This adapter maps one bounded task to one response turn:
+completed means that correlated native response is available, not that repository
+artifacts, tests or the user's broader goal have been independently validated.
+Commentary/deltas are not results. No separate delivered receipt
 is fabricated. A provider failure is separate from process exit; interrupted turns,
 missing results, mismatched IDs, disconnection or malformed data become unavailable
 and communication records uncertainty. Native process exit never proves task success.
@@ -111,11 +117,17 @@ unknown outcomes are never automatically retried.
 ## Bounds, lifecycle and recovery
 
 - Two active or ownership-lost attempts per runtime owner, 128 prepared/retained
-  attempts. This is not a machine-wide process/resource service or a guarantee across
+  attempts. The communication registry separately retains at most **128 historical
+  panes**, including closed panes, across runtime restarts; there is no pruning,
+  retention/reclamation API or safe counter reset. Capacity exhaustion fails a new
+  start before backend dispatch. A future registry retention design must preserve
+  identity and nonreuse. This is not a machine-wide process/resource service or a
+  guarantee across
   independently constructed owners. Slot journals prevent concurrent ownership of
   the same state; communication has its own durable global active-task cap.
 - Initialization/RPC deadlines are 10 seconds overall/8 seconds per request.
-  Communication's 10-second dispatch/submit timeout remains authoritative. Task observation
+  Communication's 10-second dispatch/submit timeout remains authoritative. Task
+  observation
   expires at its own grant-bounded deadline (at most 15 minutes); expiry revokes
   adapter readiness and marks uncertainty, without asserting provider cancellation.
 - Maximum native JSON line 256 KiB, session structured traffic 8 MiB, four outstanding
@@ -140,6 +152,12 @@ unknown outcomes are never automatically retried.
   shutdown still retains lost-ownership reservations. There is no reclamation or
   reconciliation API and no promise to restore control after reboot. Do not reset,
   delete, replace journals or invent a new state to bypass unresolved capacity.
+  The journal is an epoch fence, not an OS lock preventing the legacy PTY Core
+  from explicitly opening it with recover:true. That recovery revokes this owner
+  and reserves its unresolved slot, which blocks another same-project process from
+  starting. It must not be used to convert/adopt a structured process or restore
+  capacity. Future composition must keep configured states distinct and review
+  recovery before enabling production.
   A future reviewed reconciliation path must establish native process and task
   outcomes before releasing slots or retrying side effects.
 
