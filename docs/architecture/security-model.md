@@ -1,5 +1,50 @@
 # Security model
 
+## Current embedded Terminal exception — 2026-11-03
+
+The [managed Codex Terminal](../development/managed-codex-terminal.md) is an explicit
+Desktop opt-in, under the owner-selected native trusted/same-user contract. This
+section supersedes the uncomposed-library description in the historical paragraphs
+below. It does not broaden the observer, public API, WebSocket or observation cookie.
+External sessions remain read-only and have no execution capability.
+
+Electron main holds an ephemeral Ed25519 key bound to one dedicated document. An
+independent pinned Node Core receives only its public key through a private inherited
+parent/child transport; it owns grants, a separate private metadata journal, lifecycle
+and PTYs. No enrollment socket or renderer signing API exists. Strict bounded RPC
+exposes only existing supervisor methods, never arbitrary executable/cwd/environment,
+prompt or resume parameters. Transport loss rejects pending calls without retries
+and conservatively releases ownership. Desktop remains a database client. Input
+leases/sequences and one-use operation signatures retain their existing scope.
+Both native processes use the trusted OS clock for short shared expiry; clock
+changes are not a hardened time boundary.
+
+Setup creates new state only, outside the project, with private homes/config/auth
+storage and no credential/session imports. Canonical paths, no-follow reads,
+owner/mode checks and pinned hashes detect accidental drift before dispatch.
+They do not close path-replacement races against malicious same-user actors, who
+are outside this trust model. The admitted provider/user retain OS user privileges.
+Codex sandbox/approval flags are startup defaults, not immutable ORQST enforcement.
+CPU/RSS/descendants are not hard-contained; container/VM is a separate backend choice.
+
+xterm runs in a separate sandboxed document, preload and memory-only session. Only
+fixed local HTML/script/CSS requests are accepted; permissions, navigation, downloads,
+remote connections and window opening are denied. Output is terminal text, never HTML.
+OSC clipboard/title/link effects and automatic terminal replies are disabled.
+Trusted keyboard events and separately native-reviewed exact paste are input paths.
+Bounded output parsing precedes the next read; a replay gap stops reconstruction/input.
+xterm dynamic styles require inline CSS in this document; script/observer policies
+remain unchanged.
+
+The owned PTY host's 30-minute TERM/5-second KILL lifetime is disclosed in native
+start consent. Closing the view hides it; quit/loss never implicitly signals from
+journal data. Detached hosts retain the original deadline. Survivor adoption,
+stored-PID signaling, automatic resume/retry, lost-slot release, structured delegation
+and multi-agent result delivery remain absent. Synthetic acceptance is scoped;
+real provider and human-modal acceptance require separate authorization.
+
+## Historical observer and engineering-library baseline
+
 The experimental [owned terminal library](../development/terminal-owned-lab.md)
 is not composed into the application. Its signed one-use grants and leased,
 sequenced owned-handle I/O are tested with in-memory doubles and an explicit
@@ -596,6 +641,11 @@ late callbacks. Retention removes only old reconciled terminal records, never lo
 ownership. Storage errors revoke local effects without claiming that side effects
 were undone. Synthetic crash/restart evidence is not production containment,
 immutable executable/cwd admission, provider credential isolation or live recovery.
+
+Revoking/destroying the native Terminal document also disconnects the dedicated
+Core channel. Core then revokes its enrolled public key and closes its journal;
+revocation is not confined to Electron's local signer. A normal view hide only
+revokes input, preserving that live document/Core. Proposed xterm APIs are disabled.
 
 ## Artifact source-library review — 2026-11-03
 

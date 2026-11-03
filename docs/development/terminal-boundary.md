@@ -1,5 +1,10 @@
 # Terminal boundary and retained tool evidence
 
+Current update: the owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
+selects a trusted/same-user contract and composes the library behind a private Node
+Core. It supersedes the blanket immutable-binding/container gate in this historical
+engineering note; it does not claim hard isolation or real-provider acceptance.
+
 ## Current delivery
 
 The shared browser/Desktop session details include **Observed tools**, a read-only

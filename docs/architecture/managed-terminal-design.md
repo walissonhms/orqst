@@ -1,5 +1,10 @@
 # Managed terminal: proposed execution boundary
 
+Current update: the owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
+selects a trusted/same-user contract and composes the library behind a private Node
+Core. It supersedes the blanket immutable-binding/container gate in this historical
+engineering note; it does not claim hard isolation or real-provider acceptance.
+
 Implementation update (2026-11-03): the optional
 [metadata journal and epoch recovery](../development/terminal-recovery.md) now
 implement conservative persistence/admission in the experimental library. The

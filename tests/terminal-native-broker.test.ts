@@ -7,6 +7,7 @@ import { TerminalAuthority, terminalDigest } from '../packages/core/src/terminal
 import {
   TerminalNativeBroker,
   type TerminalConfirmation,
+  type TerminalNativeSupervisor,
 } from '../packages/core/src/terminal/native-broker.js';
 import {
   TerminalSupervisor,
@@ -19,7 +20,10 @@ import {
 } from '../apps/desktop/src/terminal-sender.js';
 
 // Synthetic in-memory doubles. No CLI, IPC listener, Electron app, keys on disk or process.
-function setup() {
+function setup(
+  transport: (supervisor: TerminalSupervisor) => TerminalNativeSupervisor = (supervisor) =>
+    supervisor,
+) {
   const keys = generateKeyPairSync('ed25519');
   let now = 1000;
   const authority = new TerminalAuthority(new Map([['native', keys.publicKey]]), () => now);
@@ -70,7 +74,7 @@ function setup() {
   );
   const broker = new TerminalNativeBroker(
     authority,
-    supervisor,
+    transport(supervisor),
     'native',
     keys.privateKey,
     document,
@@ -413,4 +417,44 @@ test('native lifecycle invalidates blur, main navigation, process loss and destr
   assert.equal(closes, 5);
   assert.equal(window.listenerCount('blur'), 0);
   assert.equal(contents.listenerCount('did-start-navigation'), 0);
+});
+
+test('native blur during asynchronous input grant revokes the returned lease before reuse', async () => {
+  let release: () => void = () => {};
+  let granted: () => void = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    granted = resolve;
+  });
+  const s = setup(
+    (supervisor) =>
+      new Proxy(supervisor, {
+        get(target, property) {
+          if (property === 'enableInput')
+            return async (...args: Parameters<TerminalSupervisor['enableInput']>) => {
+              const lease = target.enableInput(...args);
+              granted();
+              await pending;
+              return lease;
+            };
+          const value: unknown = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as unknown as TerminalNativeSupervisor,
+  );
+  const instanceId = await s.start();
+  assert.equal((await s.send('attach', { instanceId })).status, 'ok');
+  const enabling = s.send('input', { instanceId });
+  await requested;
+  s.broker.revokeInput();
+  release();
+  assert.equal((await enabling).status, 'denied');
+  assert.equal(
+    (await s.send('write', { instanceId, sequence: 0, text: 'must not arrive' })).status,
+    'denied',
+  );
+  assert.deepEqual(s.writes, []);
+  s.supervisor.shutdown();
 });

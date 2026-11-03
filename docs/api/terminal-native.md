@@ -1,4 +1,11 @@
-# Experimental native terminal client boundary
+# Native terminal client boundary
+
+Current opt-in composition: the [embedded managed Codex Terminal](../development/managed-codex-terminal.md)
+uses this unchanged strict wire contract in a separate Desktop document/preload.
+Main keeps signing keys/leases private and calls a Node-owned supervisor through
+bounded inherited IPC. No observer HTTP/WebSocket endpoint or dashboard capability
+is added. The following historical library notes describe the earlier uncomposed
+baseline; real Codex/human-modal acceptance remains separate.
 
 The later [durable recovery increment](../development/terminal-recovery.md) adds an
 optional private Store journal to the supervisor. It does not change this wire

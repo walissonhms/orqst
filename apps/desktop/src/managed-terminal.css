@@ -1,0 +1,42 @@
+@import '@xterm/xterm/css/xterm.css';
+
+body {
+  margin: 0;
+  color: #d9c9ff;
+  background: #080b1e;
+  font: 14px system-ui;
+}
+main {
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+p {
+  margin: 4px 0 8px;
+}
+button {
+  color: inherit;
+  background: #241a3e;
+  border: 1px solid #b45cff;
+  padding: 8px;
+  margin: 4px;
+  font: inherit;
+}
+button:disabled {
+  opacity: 0.5;
+}
+button:focus-visible {
+  outline: 2px solid #9abfff;
+}
+#terminal {
+  flex: 1;
+  min-height: 100px;
+  padding: 8px;
+  background: #080b1e;
+}
