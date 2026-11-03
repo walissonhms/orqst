@@ -1,5 +1,21 @@
 # ORQST roadmap
 
+## CLI team creation and recovery — 2026-11-03
+
+The native creation wizard removes manual manifests for the initial same-provider
+A/B preset and an empty disposable project. Exact binary pins, explicit shared-state
+consent and separate selection/open/start/task grants remain mandatory. A proved
+pre-admission/Core view failure permits fresh review; uncertain effects retain the
+latch and sticky reservations. Partial creation remains inert and preserved.
+
+The complementary team/recovery direction is now mapped in
+[CLI team recovery](docs/development/cli-team-recovery.md): next investigate only
+proved pre-spawn `start_failed` recovery in the same slot, preserving any successful
+sibling. N-member/model/role/default selection, additive durable team tables, native
+capability negotiation, per-pane partial recovery, reconnect and pane-addressed busy
+delivery are incomplete. Do not label unknown effects retryable. PTY and structured
+state remain separate; real two-CLI A-to-B-to-A acceptance is still pending.
+
 ## Studio layout controls — 2026-11-03
 
 The existing native A/B documents now support provider-labeled tab navigation,

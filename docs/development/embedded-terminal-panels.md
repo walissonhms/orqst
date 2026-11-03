@@ -154,3 +154,13 @@ That earlier intermittent failure remains unexplained, not fixed by a retry.
 Full Chromium, real-source validation, human dialogs and real providers were not
 run for this layout increment. The existing localhost Bridge serves the rebuilt
 dashboard assets without a restart; a loaded Desktop main/preload remains unchanged.
+
+## Native creation and bounded early recovery — 2026-11-03
+
+The [new native creation flow](cli-team-recovery.md) removes manual manifests for
+the same-provider A/B preset with an empty project. It does not generalize the
+fixed panels, model selection or identity registry. A partial blocked-view
+construction failure now permits fresh review only with explicit no-admission/Core
+evidence and complete cleanup; any possible effect keeps the existing latch.
+The prior rule that every failed construction always locks the run is superseded
+only for that proved case. Reservations and successful blocked views stay fixed.

@@ -442,3 +442,15 @@ There is no generic filesystem/shell/path method, new service, Core writer, data
 schema or source-session change. Browser clients explain that native file actions
 require Desktop. See [Artifacts contract](../api/artifacts.md) and
 [security review](security-model.md#native-markdown-destination-boundary--2026-11-02).
+
+## Native pair preparation and team recovery direction — 2026-11-03
+
+The Desktop-only native creation flow now builds the first fixed A/B preset without
+manual manifests. It shares existing Core/PTY boundaries rather than adding a runner
+to ObserverCore/Bridge. Creation writes private files only; selection, open, provider
+start and MCP task grants remain distinct. Proved pre-admission/Core view failure
+permits fresh review; any possible effect retains the latch. The team direction is
+N-member, with independent attempts, partial success, durable membership and
+pane-addressed delivery, but those expansions remain unimplemented. Keep structured,
+PTY, native-session, task and delivery states separate. See
+[scope, concrete conflicts and next slices](../development/cli-team-recovery.md).

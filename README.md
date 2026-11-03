@@ -36,6 +36,15 @@ synthetic process evidence and optional strict MCP configuration. OpenCode 2.2.5
 review manifest; explicit native startup, migration/activity acknowledgment and signed
 Desktop confirmation are required. See [OpenCode setup and effects](docs/development/opencode-desktop-terminal.md). See [Claude setup and provider limits](docs/development/claude-interactive-terminal.md) and
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
+The native **Create and review terminal pair A/B…** wizard now prepares private
+Codex/Claude/OpenCode manifests entirely in the client, using exact binary pins,
+an empty disposable project, explicit shared-identity consent and optional MCP.
+Creation starts nothing; OpenCode stays blocked. Proven pre-admission/Core view
+failures permit a fresh review, while uncertain effects/reservations remain fixed.
+N-member teams, model selection, durable reconnect and real CLI delegation remain
+pending. Full PTY acceptance remains intermittently failing; it is not approved.
+See [client creation, recovery and real-acceptance blockers](docs/development/cli-team-recovery.md).
+
 The updated Desktop native menu can select/review existing manifests in memory,
 then open its fixed Terminal pair without restarting. Layout preferences survive
 view switching in memory; they do not restore processes or layouts after restart. It accepts one provider per

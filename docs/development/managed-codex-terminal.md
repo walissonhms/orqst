@@ -337,3 +337,13 @@ Either interactive slot can now select the separately provisioned, hash-pinned C
 shared native state, one-dispatch fresh UUID and distinct strict-MCP acknowledgment.
 The native pair capacity and signed task grant are unchanged; no OpenCode executable
 profile or real-provider acceptance is added.
+
+## Native pair provisioning — 2026-11-03
+
+Manual setup is now optional for the first same-provider A/B preset: the Desktop
+native menu creates both manifests using installed canonical binaries and an empty
+project. Creation requires the reviewed Codex hash in addition to its declared
+0.162.1 contract, without executing --version or querying login. Native identity
+selectors stay shared; separate native start and MCP task grants remain mandatory.
+No login or compatibility claim follows from the pin. See
+[creation and safe pre-Core recovery](cli-team-recovery.md).

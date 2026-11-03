@@ -17,6 +17,9 @@ import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
 import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { TerminalSelection } from './terminal-selection.js';
+import { prepareTerminalCreation } from './terminal-creation.js';
+import { TerminalPreCoreFailure } from './terminal-selection.js';
+import type { LocalCliProvider } from '../../../packages/core/src/terminal/local-cli.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
@@ -109,6 +112,11 @@ async function start(): Promise<void> {
         label: i18n.t('managedTerminal.title'),
         submenu: [
           {
+            id: 'managed-terminal-create',
+            label: i18n.t('managedTerminal.createPair'),
+            click: () => void createTerminalSelection(),
+          },
+          {
             id: 'managed-terminal-select',
             label: i18n.t('managedTerminal.selectManifests'),
             enabled: !terminals,
@@ -155,11 +163,17 @@ async function start(): Promise<void> {
   let nativeFileBusy = false;
   let documentGeneration = 0;
   let quitting = false;
+  let terminalCreationAttempted = false;
+  let terminalCreationCompleted = false;
 
   function updateTerminalMenu(): void {
     const menu = Menu.getApplicationMenu();
     const select = menu?.getMenuItemById('managed-terminal-select');
     if (select) select.enabled = !terminals && !terminalSelection.locked && !terminalOpening;
+    const create = menu?.getMenuItemById('managed-terminal-create');
+    if (create)
+      create.enabled =
+        !terminals && !terminalSelection.locked && !terminalOpening && !terminalCreationAttempted;
     for (const [slot, id] of ['managed-terminal-open', 'managed-terminal-b-open'].entries()) {
       const item = menu?.getMenuItemById(id);
       if (item)
@@ -213,10 +227,136 @@ async function start(): Promise<void> {
     return { target, current, dispose: () => target?.removeListener('blur', invalidate) };
   }
 
-  async function reviewTerminalSelection(): Promise<void> {
+  async function explainTerminalFocus(target: BrowserWindow | undefined): Promise<void> {
+    if (!target || target.isDestroyed() || !target.isVisible()) return;
+    await dialog.showMessageBox(target, {
+      type: 'warning',
+      message: i18n.t('managedTerminal.selectionFocusRequired'),
+      buttons: [i18n.t('terminalNative.cancel')],
+      noLink: true,
+    });
+  }
+
+  async function createTerminalSelection(): Promise<void> {
+    if (
+      terminals ||
+      terminalOpening ||
+      terminalSelection.locked ||
+      nativeFileBusy ||
+      terminalCreationAttempted
+    )
+      return;
+    const context = terminalSelectionContext();
+    if (!context.current()) {
+      await explainTerminalFocus(context.target);
+      context.dispose();
+      return;
+    }
+    nativeFileBusy = true;
+    const expires = Date.now() + 300000;
+    const current = () => Date.now() < expires && context.current();
+    let files: string[] | undefined;
+    try {
+      const providerResult = await dialog.showMessageBox(context.target!, {
+        title: i18n.t('managedTerminal.createPair'),
+        message: i18n.t('managedTerminal.createProvider'),
+        buttons: [
+          i18n.t('terminalNative.cancel'),
+          ...['codex', 'claude', 'opencode'].map((provider) =>
+            i18n.t(`managedTerminal.createProvider_${provider}`),
+          ),
+        ],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      const provider: LocalCliProvider | undefined = (['codex', 'claude', 'opencode'] as const)[
+        providerResult.response - 1
+      ];
+      if (!current() || !provider) return;
+      const choose = async (key: string, directory = false) => {
+        if (!current()) return undefined;
+        const result = await dialog.showOpenDialog(context.target!, {
+          title: i18n.t(`managedTerminal.${key}`),
+          properties: [
+            directory ? 'openDirectory' : 'openFile',
+            'dontAddToRecent',
+            'noResolveAliases',
+          ],
+        });
+        return current() && !result.canceled && result.filePaths.length === 1
+          ? result.filePaths[0]
+          : undefined;
+      };
+      const executable = await choose('createExecutable');
+      if (!executable) return;
+      const node = await choose('createNode');
+      if (!node) return;
+      const project = await choose('createProject', true);
+      if (!project) return;
+      const mcpResult = await dialog.showMessageBox(context.target!, {
+        title: i18n.t('managedTerminal.createPair'),
+        message: i18n.t(`managedTerminal.createMcp_${provider}`),
+        buttons: [
+          i18n.t('terminalNative.cancel'),
+          i18n.t('managedTerminal.createWithoutMcp'),
+          i18n.t('managedTerminal.createWithMcp'),
+        ],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (!current() || ![1, 2].includes(mcpResult.response)) return;
+      const plan = prepareTerminalCreation({
+        provider,
+        executable,
+        node,
+        project,
+        parent: app.getPath('userData'),
+        home: process.env.HOME ?? app.getPath('home'),
+        environment: process.env,
+        mcp: mcpResult.response === 2,
+      });
+      const reviewExpires = Date.now() + 60000;
+      const reviewed = () => current() && Date.now() < reviewExpires;
+      const result = await dialog.showMessageBox(context.target!, {
+        type: 'warning',
+        title: i18n.t('managedTerminal.createPair'),
+        message: i18n.t('managedTerminal.createReview'),
+        detail: plan.detail,
+        checkboxLabel: i18n.t('managedTerminal.createAcknowledgment'),
+        checkboxChecked: false,
+        buttons: [i18n.t('terminalNative.cancel'), i18n.t('managedTerminal.createFiles')],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      if (!reviewed() || result.response !== 1 || !result.checkboxChecked) return;
+      terminalCreationAttempted = true;
+      files = plan.provision(reviewed);
+      terminalCreationCompleted = true;
+    } catch {
+      if (context.current())
+        await dialog.showMessageBox(context.target!, {
+          type: 'warning',
+          message: i18n.t('managedTerminal.creationDenied'),
+          buttons: [i18n.t('terminalNative.cancel')],
+          noLink: true,
+        });
+    } finally {
+      context.dispose();
+      nativeFileBusy = false;
+      updateTerminalMenu();
+    }
+    // New transaction: registration remains the existing complete native review, with its own TTL.
+    if (files) await reviewTerminalSelection(files);
+  }
+
+  async function reviewTerminalSelection(createdFiles?: string[]): Promise<void> {
     if (terminals || terminalOpening || terminalSelection.locked || nativeFileBusy) return;
     const context = terminalSelectionContext();
     if (!context.current()) {
+      await explainTerminalFocus(context.target);
       context.dispose();
       return;
     }
@@ -225,6 +365,7 @@ async function start(): Promise<void> {
       const result = await terminalSelection.review({
         current: context.current,
         choose: async () => {
+          if (createdFiles) return createdFiles;
           const result = await dialog.showOpenDialog(context.target!, {
             title: i18n.t('managedTerminal.selectManifests'),
             message: i18n.t('managedTerminal.chooseManifests'),
@@ -269,6 +410,7 @@ async function start(): Promise<void> {
     if (terminalOpening || nativeFileBusy || slot >= terminalSelection.count) return;
     const context = terminalSelectionContext();
     if (!context.current()) {
+      await explainTerminalFocus(context.target);
       context.dispose();
       return;
     }
@@ -279,11 +421,22 @@ async function start(): Promise<void> {
       const files = terminalSelection.take();
       terminals = await createManagedTerminals(files, (key) => i18n.t(key), window!);
       if (context.current()) terminals.openers[slot]?.();
-    } catch {
+    } catch (error) {
+      if (error instanceof TerminalPreCoreFailure) {
+        terminalSelection.retryBeforeCore(error);
+        if (terminalCreationCompleted) {
+          terminalCreationAttempted = false;
+          terminalCreationCompleted = false;
+        }
+      }
       if (context.current())
         await dialog.showMessageBox(context.target!, {
           type: 'warning',
-          message: i18n.t('managedTerminal.selectionOpenDenied'),
+          message: i18n.t(
+            error instanceof TerminalPreCoreFailure
+              ? 'managedTerminal.selectionRetryReady'
+              : 'managedTerminal.selectionOpenDenied',
+          ),
           buttons: [i18n.t('terminalNative.cancel')],
           noLink: true,
         });

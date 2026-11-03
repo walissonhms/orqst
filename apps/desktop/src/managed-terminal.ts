@@ -1,4 +1,4 @@
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, WebContentsView, dialog, ipcMain, session, type BrowserWindow } from 'electron';
@@ -27,6 +27,7 @@ import {
 import { TerminalPanels } from './terminal-panels.js';
 import { authorizedTerminalSender } from './terminal-sender.js';
 import { escapeHTML } from './policy.js';
+import { TerminalPreCoreFailure } from './terminal-selection.js';
 
 /** Explicit native pair; external sessions and the observer cookie never grant execution. */
 export async function createManagedTerminals(
@@ -38,6 +39,8 @@ export async function createManagedTerminals(
     throw new Error('Managed Terminal currently requires non-root macOS arm64');
   const selection = inspectManagedTerminalFiles(files);
   const keys = generateKeyPairSync('ed25519');
+  const partitionId = randomUUID();
+  const terminalSessions: Electron.Session[] = [];
   const router = createTerminalRuntimeRouter(ipcMain);
   let core: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
   let blocker: string | undefined = selection.find((slot) => slot.blocker)?.blocker;
@@ -56,8 +59,11 @@ export async function createManagedTerminals(
     (event, action: unknown) => viewActions.get(event.sender.id)?.(event, action) ?? false,
   );
   const openers: Array<() => void> = [];
+  let effectsPossible = false;
   try {
     if (!blocker) {
+      // Admission inspection can create its private directory. Anything from here is uncertain.
+      effectsPossible = true;
       const directory = join(app.getPath('userData'), 'managed-agents');
       try {
         desktopAgentsAdmission(directory, files); // Inspect old markers without claiming or reconciling.
@@ -83,6 +89,9 @@ export async function createManagedTerminals(
     core?.close();
     ipcMain.removeHandler('orqst:terminal-view');
     panels.close();
+    for (const terminalSession of terminalSessions)
+      terminalSession.protocol.unhandle('orqst-terminal');
+    if (!effectsPossible) throw new TerminalPreCoreFailure('No admission or Core entered');
     throw error;
   }
   app.on('before-quit', (event) => {
@@ -239,9 +248,10 @@ export async function createManagedTerminals(
       new Map([['desktop-managed', keys.publicKey]]),
       Date.now,
     );
-    const terminalSession = session.fromPartition(`orqst-managed-terminal-${slot}`, {
+    const terminalSession = session.fromPartition(`orqst-managed-terminal-${partitionId}-${slot}`, {
       cache: false,
     });
+    terminalSessions.push(terminalSession);
     await terminalSession.setProxy({ mode: 'direct' });
     terminalSession.setPermissionRequestHandler((_contents, _permission, callback) =>
       callback(false),

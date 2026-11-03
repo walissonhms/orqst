@@ -267,3 +267,13 @@ Desktop manifest and installed-code collision evidence. It also records the corr
 OpenCode 2.2.5 local-MCP schema and the unresolved native TUI/server ownership gate.
 OpenCode remains unavailable. Real login, MCP negotiation/tool behavior, positive
 native focus and inference/delegation acceptance remain pending for all new paths.
+
+## Native creation is configuration only — 2026-11-03
+
+The Desktop [A/B creation wizard](cli-team-recovery.md) can prepare per-slot MCP
+opt-ins without manual manifests. Codex keeps native definitions, Claude strict
+selection excludes them, OpenCode merges them and remains startup-blocked. Existing
+short private socket roots and timeout/environment builders are unchanged; sockets
+are not placed under the long user-data pair path. The wizard dispatches no message
+and grants no task authority. Native protocol negotiation, idle/busy delivery and
+real A-to-B-to-A processing/return remain unvalidated.

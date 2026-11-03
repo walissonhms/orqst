@@ -952,3 +952,20 @@ The observer preload and public HTTP/WebSocket remain unchanged. Layout notifica
 contain only orientation/proportion/visible slots/count. Layout actions revoke input
 leases and never grant execution, start a provider, restore a process, stop a task
 or rewrite session data. Tab labels come from reviewed manifests, not provider output.
+
+## Native pair provisioning and pre-Core recovery — 2026-11-03
+
+The [creation wizard](../development/cli-team-recovery.md) expands only trusted
+Electron main-process file selection/provisioning. Parent-bound native focus,
+document generation, five-minute preparation and 60-second final consent, complete
+bounded review, exact binary pins and O_NOFOLLOW/canonical checks precede new private
+state. Source identities and empty project are revalidated before publication.
+No renderer/IPC/HTTP creation method is exposed. Existing shared native identity is
+selected without reading/copying credentials or configuration. OpenCode startup stays
+blocked. Orphan staging is preserved inert; admission is untouched by creation.
+Fresh volatile session partitions are allocated per opening attempt; failed-session
+protocol handlers are removed before the no-effect proof. Only a typed failure
+after complete cleanup with no admission/Core entry can unlock
+a fresh review. Unknown effects/reservations, structured/PTY state separation and
+the existing same-user threat model remain intact. Native capacity feedback reveals
+no sensitive paths and authorizes no reconciliation. No observer boundary changed.

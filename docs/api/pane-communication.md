@@ -183,3 +183,13 @@ prove two real identified panes delegate a bounded task and return correlated re
 evidence automatically. Then expose the Communication Inspector over those facts.
 Native PTY success alone does not satisfy that milestone. Claude Code and OpenCode
 remain unvalidated communication contracts; no provider is silently substituted.
+
+## Native pair creation does not establish task delivery — 2026-11-03
+
+The [native wizard](../development/cli-team-recovery.md) prepares optional MCP
+configuration with separate per-provider acknowledgments. It does not enqueue a task,
+register native processing, grant model access or establish busy-pane deferred
+delivery. Both signed starts and a separate task grant remain mandatory. Real
+A-to-B-to-A processing/result acceptance, pane-addressed UI delivery and N-member
+composition remain incomplete. Preserve current source/target/idempotency/status
+semantics; an uncertain result must not be replayed as if acceptance never occurred.

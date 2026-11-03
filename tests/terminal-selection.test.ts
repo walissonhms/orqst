@@ -18,6 +18,7 @@ import test from 'node:test';
 import {
   TerminalSelection,
   inspectTerminalSelection,
+  TerminalPreCoreFailure,
 } from '../apps/desktop/src/terminal-selection.js';
 import {
   managedCodexSettings,
@@ -96,6 +97,25 @@ test('native selection reviews complete ordered manifests without writes; openin
     assert.deepEqual(f.before(), before);
     assert.throws(() => selection.take(), /available/);
     assert.equal(await selection.review(f.ports), 'denied');
+  } finally {
+    f.close();
+  }
+});
+
+test('only native pre-Core failure evidence releases the latch and discards the old selection', async () => {
+  const f = fixture();
+  try {
+    const selection = new TerminalSelection();
+    assert.equal(await selection.review(f.ports), 'reviewed');
+    selection.take();
+    assert.throws(() => selection.retryBeforeCore(new Error('uncertain')), /proven/);
+    assert.equal(selection.locked, true);
+    selection.retryBeforeCore(new TerminalPreCoreFailure('SYNTHETIC cleanup before Core'));
+    assert.equal(selection.locked, false);
+    assert.equal(selection.count, 0);
+    assert.throws(() => selection.take(), /available/);
+    assert.equal(await selection.review(f.ports), 'reviewed');
+    assert.deepEqual(selection.take(), f.files);
   } finally {
     f.close();
   }

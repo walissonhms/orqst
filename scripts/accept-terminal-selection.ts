@@ -250,6 +250,14 @@ try {
   assert.deepEqual((await readdir(state)).sort(), ['terminal.json', 'tmp']);
   assert.equal(await readFile(marker, 'utf8'), reservation);
   assert.equal(await readFile(file, 'utf8'), bytes + '\n');
+  await expect
+    .poll(() =>
+      desktop!.evaluate(
+        ({ Menu }) =>
+          Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-dashboard')!.enabled,
+      ),
+    )
+    .toBe(true);
   // A separate disposable app lifetime exercises partial pair initialization in the same domain.
   await desktop.close();
   desktop = undefined;
@@ -284,8 +292,13 @@ try {
         prototype,
         'loadURL',
         function (this: Electron.WebContents, url: string, options?: Electron.LoadURLOptions) {
-          if (url === 'orqst-terminal://local/index.html' && ++terminalLoads === 2)
-            return Promise.reject(new Error('SYNTHETIC second pane failure'));
+          if (url === 'orqst-terminal://local/index.html') {
+            terminalLoads++;
+            if (terminalLoads === 1)
+              Reflect.set(globalThis, 'syntheticOldTerminalSession', this.session);
+            if (terminalLoads === 2)
+              return Promise.reject(new Error('SYNTHETIC second pane failure'));
+          }
           return original.call(this, url, options);
         },
       );
@@ -308,11 +321,57 @@ try {
     await desktop.evaluate(
       ({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-select')!.enabled,
     ),
-    false,
+    true, // Proven blocked-view failure: no admission/Core was entered and cleanup completed.
   );
   assert.equal(await enabled(), false);
+  assert.equal(
+    await desktop.evaluate(async () =>
+      (
+        Reflect.get(globalThis, 'syntheticOldTerminalSession') as Electron.Session
+      ).protocol.isProtocolHandled('orqst-terminal'),
+    ),
+    false,
+  );
   for (const directory of [state, secondState])
     assert.deepEqual((await readdir(directory)).sort(), ['terminal.json', 'tmp']);
+  assert.equal(await readFile(marker, 'utf8'), reservation);
+  await select(); // Retry requires a new complete native review; retained files/marker are unchanged.
+  await expect.poll(enabled).toBe(true);
+  const retriedView = desktop.context().waitForEvent('page');
+  await desktop.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
+  );
+  const retried = await retriedView;
+  await expect(retried.locator('#status')).toHaveAttribute('data-blocked', 'true');
+  await expect(retried.locator('#start')).toBeDisabled();
+  assert.equal(
+    await desktop.evaluate(({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((contents) => contents.getURL() === 'orqst-terminal://local/index.html')
+        .every(
+          (contents) => contents.session !== Reflect.get(globalThis, 'syntheticOldTerminalSession'),
+        ),
+    ),
+    true,
+  );
+  assert.equal(
+    await desktop.evaluate(({ webContents }) =>
+      webContents
+        .getAllWebContents()
+        .filter((contents) => contents.getURL() === 'orqst-terminal://local/index.html')
+        .every((contents) => contents.session.storagePath === null),
+    ),
+    true,
+  );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(
+        ({ Menu }) =>
+          Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-dashboard')!.enabled,
+      ),
+    )
+    .toBe(true);
   assert.equal(await readFile(marker, 'utf8'), reservation);
   console.log(
     JSON.stringify({

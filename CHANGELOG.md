@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-03 — Native pair creation and proved early-failure recovery
+
+- Create reviewed Codex/Claude/OpenCode A/B manifests from native Desktop dialogs,
+  with exact binary pins, shared-identity acknowledgment and optional scoped MCP.
+- Publish both private skeletons together without a Core, journal or admission claim;
+  OpenCode stays blocked. Preserve partial state and unknown reservations.
+- Permit fresh review only after proved pre-admission/Core view failure and cleanup;
+  clarify capacity/focus feedback. Team N-member/reconnect/native delegation remain pending.
+- Keep full PTY acceptance explicitly unstable; preserve failure-only metadata diagnostics
+  without changing assertions or request behavior.
+- See [workflow, recovery limits and validation](docs/development/cli-team-recovery.md).
+
 ## 2026-11-03 — Studio terminal layout controls
 
 - Add provider-labeled A/B tab navigation, side-by-side/stacked native splits,

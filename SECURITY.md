@@ -620,3 +620,23 @@ The observer preload and public HTTP/WebSocket remain unchanged. Layout notifica
 contain only orientation/proportion/visible slots/count. Layout actions revoke input
 leases and never grant execution, start a provider, restore a process, stop a task
 or rewrite session data. Tab labels come from reviewed manifests, not provider output.
+
+## Native pair-creation file boundary — 2026-11-03
+
+The native menu can now create two private terminal manifests after parented
+Cancel-default review and explicit identity/session acknowledgment. File choosers
+do not resolve aliases; canonical paths, ownership/modes, O_NOFOLLOW executable
+hashing, exact provider pins, directory identities, empty-project checks and focused
+expiring consent apply. Common trusted HOME/project roots need not be private; new
+state remains 0700/0600. No version command, credential/configuration/native-DB read,
+provider process, Core, journal or admission claim is performed by creation.
+Both completed skeletons publish via same-parent rename; unpublished partial files
+point at absent state and remain ineligible, never automatically removed. Same-user
+malicious path replacement and power-loss durability are not stronger guarantees.
+A native-only typed failure permits fresh selection solely after complete view
+cleanup before admission/Core. Attempt-specific volatile partitions avoid reusing
+protocol registrations; failed-session handlers are unregistered before retry proof.
+Any possible write/transport effect keeps the latch.
+Capacity feedback contains no paths/marker content and provides no takeover, reset
+or signal action. No observer HTTP/WS/cookie/static/schema, dependency or credentials
+interface changed. See [workflow and limits](docs/development/cli-team-recovery.md).

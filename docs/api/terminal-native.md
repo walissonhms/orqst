@@ -71,8 +71,16 @@ challenges, keys, attachment/lease IDs or backend diagnostics. `ok` means the re
 was processed; a snapshot may still report `starting`, `start_failed` or uncertainty.
 Neither successful stop nor dispatch success proves process exit.
 
-Only one request is in flight per broker, without an offline queue. Native
-confirmation starts only from a current focused document. Expiry, enrollment,
+Only one request is in flight per broker, without an offline queue. After sender
+and request-shape validation (and native focus validation for effects in the IPC
+router), an already occupied transport/broker may return `busy` before inspecting
+the instance's input lease. `busy` is a rejected, unqueued request, not an
+authorization decision or a promise to execute later. A revoked write submitted
+when idle is denied; a concurrent snapshot does not renew it. Synthetic
+characterization verifies zero written bytes and no additional confirmation across
+that transition. This clarifies existing behavior, not a changed reply contract.
+
+Native confirmation starts only from a current focused document. Expiry, enrollment,
 document and revocation generation are rechecked after the asynchronous dialog
 and synchronously before signing/dispatching the effect. Native blur/transport loss
 must call `revokeInput`; navigation/destruction calls `close`. Re-focus never renews

@@ -396,3 +396,15 @@ read-only inspection is not a public API and cannot restore ownership or mutate
 observed events. Journal feature schema 2 retains nullable numeric exit code with
 an explicit signal for signal-only exits. Observer protocol and statuses are
 unchanged. See [receipt semantics and limits](../development/codex-lifecycle-receipts.md).
+
+## Desktop pre-Core retry boundary — 2026-11-03
+
+Native pair creation is preparation, not a process/session/task lifecycle transition.
+A Desktop opening failure can unlock fresh selection only with a native
+`TerminalPreCoreFailure` after complete partial-view cleanup and no entry into
+admission/Core. Admission inspection itself can write a directory and therefore
+counts as a possible effect. Core/journal initialization, lost transport, cleanup
+failure and unknown side effects keep the latch. This adds no retry/reconnect
+operation to provider or observer APIs. Per-slot proved pre-spawn `start_failed`
+recovery is a subsequent design/validation slice; `ownership_lost` remains reserved.
+See [recovery mapping](../development/cli-team-recovery.md).

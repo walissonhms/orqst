@@ -1,0 +1,244 @@
+# Native CLI pair creation and safe early-failure recovery
+
+## Implemented first slice — 2026-11-03
+
+In a newly loaded Desktop build, choose **Managed Terminal → Create and review
+terminal pair A/B…**. Ordinary pair preparation no longer needs a shell command or
+a manually authored manifest. The native menu is the only entry; browser clients
+and the observer preload receive no creation or execution authority.
+
+1. Declare the reviewed installed CLI selection: Codex 0.162.1, Claude Code
+   2.1.178 or OpenCode 2.2.5. Choose its canonical native executable and an installed
+   Node 24 executable through native file choosers. Shims, aliases and symlink paths
+   are refused. No version, login, model or capability command is executed.
+2. Choose an existing **empty disposable project**. This initial slice deliberately
+   excludes a populated working repository. Each choice is explicit; no shell
+   profiles, credentials or native configuration contents are inspected.
+3. Choose whether to prepare optional ORQST MCP. Codex retains native MCP definitions;
+   Claude strict selection excludes them for these processes; OpenCode merges them.
+   The provider-specific warning is a separate Cancel-default choice. Configuration
+   does not prove native protocol compatibility, deferred delivery or delegation.
+4. Review the complete two-manifest JSON and check the initially unchecked shared
+   identity/session-write acknowledgment. All confirmation dialogs are native,
+   parented and Cancel by default. Preparation has a five-minute bound; the final
+   creation consent expires after 60 seconds. Blur/navigation/destruction invalidates
+   it. Binary hashes, directory identities, empty project and focus are rechecked.
+5. **Create files only** writes a fresh UUID pair under this Desktop's existing
+   user-data directory. It creates private manifests/skeletons, no Core, journal,
+   admission directory/claim or provider process. Both complete slots publish
+   together by a same-parent rename. Earlier failure leaves `.pending` files pointing
+   at the absent final root; they fail normal manifest validation. Files are `0600`,
+   directories `0700`. This is atomic visibility, not a power-loss durability claim.
+6. A new, complete native selection review follows automatically. Keeping it stores
+   only memory. Cancellation keeps completed files; the advanced native selector
+   remains available. Complete reviews use compact JSON if formatting alone would
+   exceed 4096 characters, and refuse any still-oversized details without truncation.
+7. Separately choose **Open interactive terminal A/B**. Existing validation, Core,
+   journals and the original shared admission domain apply. Each CLI still needs
+   its separate focused signed start. MCP needs both starts and a separate task grant.
+   OpenCode manifests created here always remain `nativeStartupAuthorized:false`;
+   this wizard does not authorize native SQLite migrations/startup activity.
+
+Creation preserves the current process's native HOME and applicable CODEX_HOME,
+CLAUDE_CONFIG_DIR or OpenCode HOME/XDG/config/DB selectors. Only directory metadata
+is checked; the OpenCode DB selector checks its parent, never the database. Unsupported
+OpenCode selectors fail closed. Other inherited environment variables/tokens are
+not copied into manifests. Existing login remains **unknown**. The provider alone
+may resolve/refresh credentials after a separately authorized start; preservation
+of the selector is not a claim of authentication or byte-immutable native state.
+
+All three creation choices require the passively reviewed binary hashes. The Codex
+candidate pin is `74c6a6d263f40d65f99c27a815275f5b4ed0bcc2baecc396b4cf3255498bdfc0`;
+Claude/OpenCode reuse existing reviewed pins. Codex's version label is the selected
+reviewed contract, not a fresh `--version` result. A hash identifies bytes; it does
+not prove installed-version protocol compatibility, login, model entitlement or
+readiness. Node's path/hash is recorded; the private Core validates Node 24 when
+explicitly opened. Common trusted project/home directories do not require `0700`;
+only newly private state does. Canonical checks and `O_NOFOLLOW` remain in the shared
+file helper. The trusted same-user model does not promise immutable OS binding
+against a malicious same-user replacement race.
+
+## Early failure, capacity and retry
+
+An opening failure can now permit **fresh review without restarting Desktop** only
+when native code proves it never entered admission/Core and finished cleaning all
+partial views/router handlers. Each attempt uses a fresh volatile Electron partition;
+failed-view cleanup unregisters all of its protocol handlers before returning proof.
+A typed main-process failure releases the selection
+latch and discards the old selection. Completed creation can then be offered again;
+old files remain. A successful blocked view is not an opening failure.
+
+The proof is intentionally narrower than "no process observed": admission inspection
+itself may create a directory. Entering that path, attempting a Core connection,
+creating a journal, losing transport, any cleanup error or any uncertain effect
+retains the latch, even if no provider is known to have started. A partial creation
+attempt also stays disabled for this run; it is not automatically removed/retried.
+There is no per-slot retry after Core startup in this increment. Partitions have no
+`persist:` prefix and `storagePath` is null; native Session objects can remain in
+memory until app exit. Normal Chromium profile artifacts may still exist. No
+automatic profile, session-storage or reservation cleanup is introduced.
+
+`capacity_reserved` now explains that private capacity is reserved or unverifiable,
+that opening started no process, and that evidence-backed reconciliation of the
+prior lifetime is needed. It reveals no marker contents or sensitive paths.
+Creating another pair/restarting does not release capacity. Do not delete markers,
+rebaseline, adopt sessions or signal unknown processes. This client has no recovery
+shortcut. Focus refusal has explicit foreground/unlocked-console feedback and grants
+no operation. Existing hide, detach, stop, kill and signed retirement remain distinct.
+
+## Team recovery direction and current gaps
+
+The owner's complementary team/recovery requirements are incorporated as the
+following incremental implementation map. The private source specification is not
+stored here. This delivery is the first bounded slice, not its definition of done.
+
+| Requirement                                                     | Current implementation / next concrete work                                                                                                                                                                                                         |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| In-client A/B creation                                          | Native workflow above; fixed pair, same provider, empty project                                                                                                                                                                                     |
+| Independent launch attempts and partial success                 | Existing immutable instance/attempt records and finally cleanup retained; per-slot reconfiguration/retry after Core is missing                                                                                                                      |
+| Safe next recovery slice                                        | Investigate a new attempt **in the same slot** only with proved pre-spawn `start_failed`; verify backend/claim/journal evidence first. Preserve A while B is reviewed. `ownership_lost`, lost transport or unknown side effects remain nonretryable |
+| 1..N members, team name, roles, labels, models, policy/defaults | Not implemented by this wizard. Generalize admission, Core/schema and UI together; A/B becomes a preset. Do not merely increase a renderer count                                                                                                    |
+| Durable team configuration and identity                         | Private manifests persist; full SQLite team/membership model and additive migration acceptance remain missing. Do not recycle existing pane registry IDs                                                                                            |
+| Discovery/auth/models                                           | Existing passive PATH discovery and exact pins; login/models unknown. Capability negotiation or probes need provider-specific safe contracts and explicit authorization                                                                             |
+| Crash/reconnect/native-session continuity                       | Existing receipts/reservations preserve uncertainty; no live PTY resurrection, automatic reconnect/adoption or session resume                                                                                                                       |
+| Pane-addressed task/delivery queue                              | Existing opt-in communication library and MCP transport have synthetic evidence; busy delivery, native acceptance and end-to-end real processing/return remain unvalidated                                                                          |
+| Mixed providers                                                 | Live selection still refuses them. Review each adapter's model, permission, auth and delivery semantics before composition; no parity inferred                                                                                                      |
+
+Keep structured sessions and interactive PTY processes separate. The structured
+communication registry, TUI Core identities, native sessions, task status and message
+delivery are different evidence domains. A live PTY is not task acceptance; MCP
+catalog/configuration is not successful processing; missing confirmation stays
+unknown/uncertain. Queue admission or an idempotency key is not exactly-once work.
+See [capability evidence](../adapters/capability-model.md), [lifecycle contracts](../api/lifecycle-contracts.md),
+[pane communication](../api/pane-communication.md), and ADR-033 in
+[decisions](../architecture/decisions.md).
+
+External Anywh/Overclock/Tucano material informs future review only. No runtime
+dependency or code was imported, and no new claims about their internal drivers,
+delivery guarantees, licenses or recovery behavior were independently established
+by this increment. Preserve the existing pinned Tucano evidence record.
+
+## Verification and real acceptance gate
+
+Explicit disposable integration:
+
+```bash
+pnpm accept:terminal-creation --authorize-synthetic-creation
+pnpm accept:terminal-selection --authorize-synthetic-review
+```
+
+The creation integration substitutes only fixture hashes in a temporary bundle,
+uses disposable identity/project/profile directories and intercepts native
+focus/dialogs. It exercises cancel, missing acknowledgment, blur/navigation, all
+three creation shapes and blocked opening with a byte-preserved unknown reservation.
+The selector integration injects a pre-Core second-view failure and proves cleanup,
+fresh review and successful blocked reopening without touching the original marker.
+Unit tests cover drift, canonical paths, strict pins, permissions, late invalidation,
+destination collision, inert partial state and refusal to release uncertain latches.
+These are synthetic transport/UI checks, not human-dialog or native-provider proof.
+
+Real acceptance still needs separately scoped authorization: unlocked native
+gestures, an available/reconciled admission domain, exact provider startup/shared
+state effects, authentication/model availability, owned new sessions and actual
+A→B processing plus result return. OpenCode additionally lacks an established
+inference-free startup boundary and accepted native DB/descendant effects. No
+provider/inference, credentials, native DB, quarantines or unknown reservations
+were accessed to bypass those gates. Do not restart a loaded Desktop with drafts
+or managed work just to expose the rebuilt menu; see [build freshness](desktop.md#checking-which-build-is-active-without-losing-work).
+
+## Current-change evidence and open instability
+
+Node 24.22.2/pnpm 10.34.9 validation passed lint, typecheck, all 505 Node tests
+and full build. Explicit synthetic creation, selection/reopening and the disposable
+Desktop smoke passed. Selection additionally verifies fresh session identity,
+removed old protocol handlers and null persistent storage paths. Creation checks
+concurrent duplicate gestures produce only one pair. Architecture review was read-only;
+critical QA approved the pins, no-effect retry and partition cleanup boundaries.
+
+The same-window PTY acceptance first failed waiting for `exited` after a Stop click:
+both snapshots remained `running`; at post-mortem both showed `data-pending=false`,
+with accepted/revoked status text and running lifecycle. `data-gap` contains a static
+localized message and does not itself prove a gap. An unchanged repeat passed.
+A later diagnostic run failed a different existing assertion after layout revocation:
+a direct write returned `busy` where the test required `denied`. Both were non-OK;
+this does not prove the lease was accepted. Both journal snapshots were `running`
+with no recorded exit, lifecycle receipts were incomplete, initial fixture markers
+were visible and the gap message was not displayed. Confirmation count was seven.
+The strict assertion remains failed and unchanged. The PTY acceptance is therefore
+**not consistently passing** in this change.
+These remain unresolved intermittent failures in that acceptance; the earlier
+missing `SYNTHETIC:OWNED_TUI` after attach also passed on retry without a proved
+cause. Neither is dismissed as environmental noise or claimed fixed. Assertions,
+request handling and timeouts remain unchanged. The failure-only diagnostics now
+collect bounded native visibility/focus/confirmation count, state/pending/displayed
+gap/lifecycle, a read-only owned-fixture journal snapshot and validated lifecycle
+receipts when available. Private input leases are not exposed or renewed for
+diagnostics; their absence from the report is unknown, not a negative lease result.
+No captured user/provider payload is collected.
+
+Full Chromium, real-source ingestion validation, human native dialogs and real
+provider/login/MCP acceptance were not run. Ingestion is unchanged. The existing
+localhost Bridge returned current built HTML and exact JS/CSS bytes without a
+restart; that does not update a loaded Electron main/preload. The existing Vite
+chunk-size advisory remains.
+
+## Reuse-first follow-up
+
+The complementary reuse-first direction does not replace this delivery's tested
+Core/PTY/communication paths. This wizard reuses their existing schemas, file
+validators, profile/environment builders, brokers, admission and native selection
+flow. A separate isolated research workstream owns the pinned upstream/license/
+dependency audit; this delivery imports no third-party source, changes no license
+or instruction file and claims no new upstream component reuse. The explicit
+no-copy repository instruction remains preserved while that audit records the
+governance conflict and safe incorporation decision.
+
+## Baseline comparison before publication
+
+The `busy`/`denied` observation was compared with `fe004d6` in a detached checkout,
+using the same existing dependency installation/lockfile, Node 24.22.2, pnpm 10.34.9,
+Electron 45.2.1, synthetic source, authorization flag and native pair acceptance.
+No upstream installation or provider probe was added. An initial baseline build
+missed workspace module links; after completing those links the baseline built.
+The original baseline pair assertions/behavior were left unchanged.
+
+Three bounded baseline UI runs produced: one pass, one timeout waiting for
+`SYNTHETIC:PONG`, and one Electron startup failure. None reproduced the exact
+`busy`/`denied` UI assertion. These runs demonstrate prior instability, not proof
+that the exact UI timing is absent from the baseline or caused by this change.
+
+The broker, IPC router and renderer client files have identical SHA-256 bytes in
+base and current code. A new deterministic synthetic characterization was run
+against both production versions (only the test was overlaid in the baseline):
+a held asynchronous snapshot, followed by lease revocation, makes a concurrent
+write return `busy`; after the snapshot completes, the same write returns
+`denied`. Both leave zero written bytes, no queued work and no additional native
+confirmation. Both broker/runtime groups passed 24/24 cases. The initial new
+characterization had an incorrect absolute confirmation-count assumption, which
+was corrected to assert no extra confirmation; its failed and passing logs remain.
+
+This establishes that busy-before-lease admission is an existing permitted contract,
+not a new reply behavior introduced by pair creation. It does not establish which
+in-flight call overlapped the intermittent UI request, nor explain the attach,
+PONG, Stop or startup observations. No production behavior, PTY assertion or timeout
+was changed to obtain a pass. The overall PTY milestone remains **not approved**.
+A matching current UI run again missed the initial fixture marker. Its post-mortem
+showed the native window unfocused, a `focus_required` status, slot A running with
+armed/started receipt phases and no slot-B attempt. The document-level focus Boolean
+was true, demonstrating why it cannot replace the native focus gate. This records
+that run's refusal; it does not explain the earlier Stop or busy timing.
+
+Raw comparison logs, build logs, exact test overlay and source hashes are retained
+locally outside Git; the detached baseline remains available for critical review.
+
+A subsequent full 506-case unit run (including the new characterization) recorded
+505 passes, zero failed assertions and one cancelled case: the existing synthetic
+`codex-native-initialize` test exceeded its unchanged 55-second timeout. That run
+is not reported as green. Its complete log is retained alongside the comparison.
+The earlier 505-case full run and the 24-case base/current characterization passed;
+these are separate coverage claims.
+
+The unchanged full-unit repeat subsequently passed all 506 cases, including that
+initialization test. Both logs are retained; the timeout is not erased or claimed
+fixed by the repeat. This final unit result does not approve the separate PTY
+acceptance or real-provider milestone.

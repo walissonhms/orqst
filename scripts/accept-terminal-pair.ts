@@ -15,11 +15,13 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { DatabaseSync } from 'node:sqlite';
 import { _electron, expect, type ElectronApplication } from '@playwright/test';
 import type { DesktopTerminal } from '@orqst/protocol';
 import { createBridge } from '../apps/bridge/src/app.js';
 import {
   managedCodexSettings,
+  terminalFile,
   type ManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
 import { readLifecycleReceipt } from '../packages/core/src/managed-codex/lifecycle-receipt.js';
@@ -80,11 +82,11 @@ const bridge = createBridge({
   dev: false,
 });
 let desktop: ElectronApplication | undefined;
+const states = [join(root, 'slot-a'), join(root, 'slot-b')];
 try {
   const fake = join(root, 'synthetic-native-cli');
   await run('/usr/bin/cc', [resolve('tests/helpers/managed-terminal-fixture.c'), '-o', fake]);
   await chmod(fake, 0o700);
-  const states = [join(root, 'slot-a'), join(root, 'slot-b')];
   for (const state of states) {
     await run(process.execPath, [
       '--import',
@@ -502,6 +504,93 @@ try {
       providerAcceptance: 'NOT RUN',
     }),
   );
+} catch (error) {
+  // Post-mortem only: preserve assertions/behavior for the unresolved initial-output flake.
+  try {
+    console.error(
+      'SYNTHETIC_PAIR_NATIVE_POST_MORTEM',
+      JSON.stringify(
+        await desktop?.evaluate(({ BrowserWindow }) => ({
+          confirmCount: Reflect.get(globalThis, 'syntheticConfirmCount'),
+          leaseEvidence: 'private; no new authorization or request made for diagnostics',
+          windows: BrowserWindow.getAllWindows().map((window) => ({
+            visible: window.isVisible(),
+            focused: window.isFocused(),
+            views: window.contentView.children
+              .filter((view) => 'webContents' in view)
+              .map((view) => ({
+                visible: view.getVisible(),
+                focused: (view as Electron.WebContentsView).webContents.isFocused(),
+              })),
+          })),
+        })),
+      ),
+    );
+  } catch {
+    console.error('SYNTHETIC_PAIR_NATIVE_POST_MORTEM: native state unavailable');
+  }
+  for (const page of desktop?.context().pages() ?? []) {
+    if (page.url() !== 'orqst-terminal://local/index.html') continue;
+    try {
+      console.error(
+        'SYNTHETIC_PAIR_POST_MORTEM',
+        await page.evaluate(() => {
+          const status = document.getElementById('status');
+          return {
+            state: status?.getAttribute('data-state'),
+            gap: status?.getAttribute('data-gap'),
+            pending: status?.getAttribute('data-pending'),
+            blocked: status?.getAttribute('data-blocked'),
+            focused: document.hasFocus(),
+            displayedGapMessage: status?.textContent === status?.getAttribute('data-gap'),
+            initialMarkerVisible: document
+              .getElementById('terminal')
+              ?.textContent?.includes('SYNTHETIC:OWNED_TUI'),
+            status: status?.textContent,
+            lifecycle: document.getElementById('lifecycle')?.textContent,
+          };
+        }),
+      );
+    } catch {
+      console.error('SYNTHETIC_PAIR_POST_MORTEM: document unavailable');
+    }
+  }
+  for (const [slot, state] of states.entries()) {
+    try {
+      const journal = new DatabaseSync(join(state, 'terminal.sqlite'), { readOnly: true });
+      try {
+        console.error('SYNTHETIC_PAIR_JOURNAL_POST_MORTEM', {
+          slot,
+          attempts: journal
+            .prepare(
+              "SELECT instance_id,state,updated_at,json_extract(metadata,'$.exit') AS exit FROM terminal_attempts LIMIT 2",
+            )
+            .all(),
+        });
+      } finally {
+        journal.close();
+      }
+      const receipts = [];
+      for (const name of (await readdir(state))
+        .filter((name) => /^lifecycle-[a-f0-9-]+\.jsonl$/.test(name))
+        .slice(0, 2)) {
+        const header = JSON.parse(
+          terminalFile(join(state, name), true, 4096).toString('utf8').split('\n')[0]!,
+        );
+        const receipt = readLifecycleReceipt(state, header.binding);
+        const exit = receipt.records?.find((record) => record.type === 'exit');
+        receipts.push({
+          status: receipt.status,
+          phases: receipt.records?.map((record) => record.type),
+          ...(exit ? { exit: { code: exit.code, signal: exit.signal } } : {}),
+        });
+      }
+      console.error('SYNTHETIC_PAIR_RECEIPT_POST_MORTEM', JSON.stringify({ slot, receipts }));
+    } catch {
+      console.error('SYNTHETIC_PAIR_JOURNAL_POST_MORTEM: evidence unavailable', { slot });
+    }
+  }
+  throw error;
 } finally {
   await desktop?.close();
   await bridge.stop();

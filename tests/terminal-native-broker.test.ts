@@ -179,6 +179,51 @@ test('native dialog has one operation in flight, with no queued or replayed star
   assert.equal(s.confirmations.length, 1);
 });
 
+test('revoked write is busy during an in-flight snapshot, then denied without queue or bytes', async () => {
+  let hold = false;
+  let release: () => void = () => {};
+  let requested: () => void = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reading = new Promise<void>((resolve) => {
+    requested = resolve;
+  });
+  const s = setup(
+    (supervisor) =>
+      new Proxy(supervisor, {
+        get(target, property) {
+          if (property === 'snapshot')
+            return async (...args: Parameters<TerminalSupervisor['snapshot']>) => {
+              if (hold) {
+                requested();
+                await pending;
+              }
+              return target.snapshot(...args);
+            };
+          const value: unknown = Reflect.get(target, property);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      }) as unknown as TerminalNativeSupervisor,
+  );
+  const instanceId = await s.start();
+  await s.input(instanceId);
+  const confirmations = s.confirmations.length;
+  hold = true;
+  const snapshot = s.send('snapshot', { instanceId });
+  await reading;
+  s.broker.revokeInput();
+  const write = { instanceId, sequence: 0, text: 'SYNTHETIC-MUST-NOT-ARRIVE' };
+  assert.equal((await s.send('write', write)).status, 'busy');
+  assert.deepEqual(s.writes, []);
+  release();
+  assert.equal((await snapshot).status, 'ok');
+  assert.equal((await s.send('write', write)).status, 'denied');
+  assert.deepEqual(s.writes, []);
+  assert.equal(s.confirmations.length, confirmations);
+  s.supervisor.shutdown();
+});
+
 for (const invalidation of ['blur', 'navigation', 'expiry', 'close', 'revocation'] as const) {
   test(`native ${invalidation} while confirming denies launch`, async () => {
     const s = setup();

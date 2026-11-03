@@ -4,6 +4,9 @@ import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.
 import { interactiveProvider } from '../../../packages/core/src/terminal/interactive-profile.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 
+/** Main-process evidence only: no admission/Core path entered and partial views cleaned up. */
+export class TerminalPreCoreFailure extends Error {}
+
 /** Native-selected files only. Inspection never opens a journal, native DB or provider. */
 export function inspectTerminalSelection(files: readonly string[]) {
   if (files.length < 1 || files.length > 2) throw new Error('Select one or two manifests');
@@ -33,7 +36,8 @@ export function inspectTerminalSelection(files: readonly string[]) {
   });
   const snapshot = JSON.stringify(slots);
   // Display the entire selection, including flags/identity, without invisible format controls.
-  const detail = JSON.stringify(slots, null, 2).replace(
+  const formatted = JSON.stringify(slots, null, 2);
+  const detail = (formatted.length <= 4096 ? formatted : snapshot).replace(
     /\p{Cf}/gu,
     (character) => `\\u{${character.codePointAt(0)!.toString(16)}}`,
   );
@@ -55,6 +59,13 @@ export class TerminalSelection {
 
   get locked(): boolean {
     return this.attempted;
+  }
+
+  retryBeforeCore(evidence: TerminalPreCoreFailure): void {
+    if (!(evidence instanceof TerminalPreCoreFailure) || !this.attempted || this.busy)
+      throw new Error('No proven pre-Core failure');
+    this.attempted = false;
+    this.selection = undefined; // A fresh explicit review is always required.
   }
 
   async review(ports: {

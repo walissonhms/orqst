@@ -384,3 +384,15 @@ main/preload, shared route allowlist and sender policy keep their boundaries. No
 Desktop terminal menu, provider execution or external-session authority is enabled.
 Real transport acceptance uses intercepted native dialogs; native human/modal and
 Codex-specific acceptance remain pending.
+
+## Prepare a pair entirely in the client — 2026-11-03
+
+The new native **Create and review terminal pair A/B…** action precedes existing
+manifest selection/opening. Choose reviewed canonical CLI/Node binaries and an empty
+disposable project, review complete private files and explicitly acknowledge shared
+native identity/session effects. No CLI is executed by creation, including version
+checks. Optional MCP is a separate provider-specific selection; OpenCode stays blocked.
+A proven pre-admission/Core view failure can now reopen selection after cleanup;
+capacity, journal or uncertain state retains its existing reservation. See the
+[complete workflow and recovery limits](cli-team-recovery.md). A loaded old shell
+is preserved and will not acquire this menu merely from a build or second instance.
