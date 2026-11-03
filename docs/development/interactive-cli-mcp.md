@@ -1,5 +1,11 @@
 # Interactive CLIs and per-instance MCP
 
+The subsequent [OpenCode standalone review](opencode-standalone-review.md) adds
+an exact-version passive launch candidate and exercises generated Claude/OpenCode
+relay commands in both source/worker orders. OpenCode launch remains blocked by
+unauthorized native shared-database startup writes and possible pending migrations;
+`--standalone` resolves shared-service selection but does not isolate credentials.
+
 The owner selected a hybrid direction: real native TUI processes in PTY/xterm,
 with a separate structured task/result channel. A structured text panel does not
 satisfy the interactive-terminal requirement. MCP does not create a terminal or

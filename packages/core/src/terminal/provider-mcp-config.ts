@@ -93,18 +93,24 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
     evidence: 'passive_binary_metadata_and_official_documentation' as const,
     execution: 'blocked' as const,
     providerAcceptance: 'not_run' as const,
-    argv: [],
+    // Default 2.2.5 startup discovers/starts the user's background service. Never use it.
+    argv: ['--standalone'],
     environmentOverrides: {
       OPENCODE_CONFIG_CONTENT: JSON.stringify({
         mcp: {
-          [mcp.serverName]: {
-            type: 'local',
-            command: [input.nodePath, mcp.relay.path],
-            environment: { ORQST_SOCKET_PATH: mcp.socketPath, ORQST_CAP_FILE: mcp.capabilityFile },
-            disabled: false,
-            codemode: false,
-            protocol: 'legacy',
-            timeout: { startup: 10000, catalog: 10000, execution: 125000 },
+          servers: {
+            [mcp.serverName]: {
+              type: 'local',
+              command: [input.nodePath, mcp.relay.path],
+              environment: {
+                ORQST_SOCKET_PATH: mcp.socketPath,
+                ORQST_CAP_FILE: mcp.capabilityFile,
+              },
+              disabled: false,
+              codemode: false,
+              protocol: 'legacy',
+              timeout: { startup: 10000, catalog: 10000, execution: 125000 },
+            },
           },
         },
       }),
@@ -115,6 +121,8 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
       'XDG_DATA_HOME',
       'XDG_STATE_HOME',
       'XDG_CACHE_HOME',
+      'OPENCODE_CONFIG_DIR',
+      'OPENCODE_DB',
     ],
     mcpConfiguration: 'merged_inline_configuration' as const,
     installedTimeoutConfiguration: 'separate_startup_catalog_execution' as const,
@@ -124,7 +132,8 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
       'native_auth_and_session_data_roots_coupled',
       'merged_plugins_hooks_and_managed_settings_unvalidated',
       'installed_tool_exposure_and_timeout_behavior_unvalidated',
-      'native_tui_server_ownership_and_attachment_unverified',
+      'native_database_startup_migrations_not_authorized',
+      'native_standalone_descendant_lifecycle_unvalidated',
     ],
   };
 }

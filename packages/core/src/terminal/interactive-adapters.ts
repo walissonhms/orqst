@@ -15,7 +15,7 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
         ? ('legacy_separate_login_fixture_validated' as const)
         : provider === 'claude'
           ? ('explicit_opt_in_synthetic_only' as const)
-          : ('unimplemented' as const),
+          : ('standalone_plan_only' as const),
     existingLoginPty:
       provider !== 'opencode' ? ('explicit_opt_in_unvalidated' as const) : ('blocked' as const),
     perInstanceMcp: 'synthetic_transport_only' as const,

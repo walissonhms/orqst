@@ -1,5 +1,10 @@
 # OpenCode adapter contract
 
+The passive [standalone launch review](../development/opencode-standalone-review.md)
+now establishes the exact installed 2.2.5 private-server selector and an inspectable
+candidate command. Native launch stays unavailable because credentials/sessions share
+the database and startup can apply migrations. No observation capability changes.
+
 ## Status
 
 **Contract only. Not implemented.**

@@ -33,6 +33,12 @@ of shared native session writes; it has synthetic evidence only. Claude 2.1.178 
 synthetic process evidence and optional strict MCP configuration. OpenCode remains
 launch-blocked. See [Claude setup and provider limits](docs/development/claude-interactive-terminal.md) and
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
+`pnpm terminal:plan:opencode` now reviews the exact installed 2.2.5 standalone
+candidate without executing it. Passive evidence resolves shared-service selection,
+but native credentials/sessions share a database whose startup can migrate schema;
+startup remains unauthorized and launch stays blocked. Generated Claude/OpenCode MCP
+documents now complete synthetic relay A-to-B-to-A in both directions. See
+[the concrete block and three-provider acceptance matrix](docs/development/opencode-standalone-review.md).
 A native-signed MCP stdio/Unix-socket library now completes synthetic
 A-to-B-to-A transport without PTY task injection. An explicit Desktop Codex 0.162.1
 configuration opt-in composes per-slot relays and a separately confirmed task grant;

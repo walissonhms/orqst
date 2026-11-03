@@ -72,8 +72,9 @@ const reuseBlockers = {
     'native_provider_acceptance_pending',
   ],
   opencode: [
-    'opencode_auth_and_data_isolation_unverified',
-    'native_tui_server_ownership_and_attachment_unverified',
+    'opencode_native_database_credentials_and_sessions_coupled',
+    'native_database_startup_migrations_not_authorized',
+    'native_standalone_descendant_lifecycle_unvalidated',
     'managed_adapter_unimplemented',
   ],
 } as const;

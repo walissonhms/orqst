@@ -107,6 +107,12 @@ MCP/tool discovery, permissions, wait duration, login and inference remain unval
 
 ## OpenCode stays blocked
 
+The subsequent [standalone review](opencode-standalone-review.md) resolves the
+server-selection uncertainty below: exact installed `--standalone` avoids the
+shared service. It does not separate existing credentials from the native session
+database or suppress startup migrations. The passive candidate is implemented;
+native startup remains unauthorized; pending migrations have not been established.
+
 The installed 2.2.5 binary was rehashed to
 `abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
 Its embedded `Mcp.LocalConfig` uses `disabled`, `codemode`, `protocol` and an object

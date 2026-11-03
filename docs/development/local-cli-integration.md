@@ -158,7 +158,8 @@ The native Desktop now supports up to two identified xterm/PTY windows through o
 Node Core, separate per-slot journals and a shared sticky reservation with structured
 Managed agents. This is implemented and synthetic-fixture validated for the explicit
 legacy Codex separate-login path and the [explicit native-login PTY opt-in](managed-codex-terminal.md#explicit-native-login-pty-opt-in--2026-11-03). Existing structured manifests open blocked
-PTY views without Core/journals or automatic login unless that additional opt-in is present. Claude/OpenCode remain unavailable.
+PTY views without Core/journals or automatic login unless that additional opt-in is present.
+Claude now has the separately acknowledged opt-in below; OpenCode remains unavailable.
 See [pair admission and receipts](managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
 PTY interaction and a future per-instance MCP task/result channel are distinct:
 MCP does not create a TUI or prove that an idle CLI will accept/execute a task. No
@@ -169,7 +170,10 @@ terminal output parser or programmatic task text injection is used for delegatio
 The [native Claude setup command](claude-interactive-terminal.md) now provisions
 a separately confirmed owned Desktop process with shared native identity and a fresh
 single-dispatch session UUID. Codex remains available through its existing setup path.
-OpenCode has only a corrected installed-schema MCP builder and remains launch-blocked
-until native TUI/server/session ownership can be established. Native login, MCP tool
+OpenCode has a corrected installed-schema MCP builder and a passive standalone
+launch-plan command. The exact installed `--standalone` path avoids shared-service
+discovery, but existing credentials and sessions share the database whose startup
+can apply migrations. No-migration launch remains blocked. See the
+[concrete evidence and acceptance matrix](opencode-standalone-review.md). Native login, MCP tool
 behavior, focus and inference acceptance remain pending; no credential probing or
 automatic provider execution is performed.

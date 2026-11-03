@@ -56,9 +56,12 @@ test('Claude 2.1.178 configuration uses evidenced strict inline MCP/session flag
 
 test('OpenCode 2.2.5 configuration uses a merged runtime environment document, no fictitious CLI flags or Codex roots', () => {
   const plan = opencodeInteractiveMcpConfiguration(fixture('opencode'));
-  assert.deepEqual(plan.argv, []);
+  assert.deepEqual(plan.argv, ['--standalone']);
   const config = JSON.parse(plan.environmentOverrides.OPENCODE_CONFIG_CONTENT);
-  const server = config.mcp[fixture('opencode').mcp.serverName];
+  // v2.2.5 Config.MCP decodes native fields only under servers; direct entries use v1 decoding.
+  assert.deepEqual(Object.keys(config.mcp), ['servers']);
+  assert.deepEqual(Object.keys(config.mcp.servers), [fixture('opencode').mcp.serverName]);
+  const server = config.mcp.servers[fixture('opencode').mcp.serverName];
   assert.deepEqual(server.command, ['/synthetic/private/node', '/synthetic/private/relay.cjs']);
   assert.equal(server.type, 'local');
   assert.equal(server.disabled, false);
