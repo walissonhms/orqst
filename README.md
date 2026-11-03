@@ -45,6 +45,12 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Artifact close protection increment:** explicitly closing the panel or session
+  details asks before discarding a draft that differs from the retained original.
+  Cancel/Escape preserve the draft; copying/saving does not bypass confirmation.
+  Session/view navigation, reload and window closing remain outside this protection;
+  drafts have no persistence or recovery.
+
 - **Artifact draft editing increment:** the manual panel indicates whether its draft
   exactly matches the retained original and can restore that text after explicit
   confirmation. Cancel/Escape preserve edits. This memory-only comparison does not

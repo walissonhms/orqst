@@ -438,3 +438,15 @@ offline frozen-lockfile install; initial browser failures led to preserving the 
 metrics announcer and correcting an innerText/textContent assertion. Final affected
 browser checks passed after those fixes. Build emitted the nonblocking >500-kB chunk
 warning. Full browser/real-provider/native visual acceptance was not repeated.
+
+## Artifact explicit-close protection
+
+The draft browser suite also exercises changed/empty/whitespace edits through both
+explicit close controls, immediate unchanged/restored closing, cancellation and focus
+return, confirmed close/reextraction, pt-BR mobile modal bounds and keyboard containment.
+The existing synthetic Desktop save capability checks that pending native saving
+blocks details closing and a successful save does not suppress draft confirmation.
+These use a disposable synthetic observer/API/dashboard; no real session, database,
+service or native dialog is required. Browser window close, reload, session/view
+navigation and crash recovery are outside this bounded guard. Native Electron visual
+acceptance is not established by Chromium or the mocked save capability.

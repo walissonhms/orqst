@@ -70,8 +70,9 @@ The panel exposes recorded project/session/agent/machine, adapter/role, event da
 event ID/sequence, contract/event versions and source record provenance as inert text.
 **Original source** never changes. **Draft preview** and **Edit draft** use a separate
 32-KiB UTF-8 memory-only draft initialized from that original. Oversized edits are
-rejected with a visible error. Closing the panel, switching sessions or reloading
-discards the draft. No artifact persistence, draft history or document versions exist.
+rejected with a visible error. Closing the panel or session details, switching
+sessions, leaving Overview or reloading discards the draft. No artifact persistence,
+draft history or document versions exist.
 Close the current panel before extracting another message.
 
 Every view indicates whether the draft exactly matches the retained original, including
@@ -83,7 +84,23 @@ with the already loaded retained text, clears draft copy/save feedback and edit 
 and returns focus to Edit draft. It does not reextract content, alter provenance,
 update the retained original or touch saved files. Draft editing, view changes and
 native saving are disabled during confirmation; restoration is disabled during a
-native save. Closing or leaving the panel retains the existing discard behavior.
+native save.
+
+Explicitly closing the artifact panel or its session details now asks before discarding
+text that differs from the retained original, including an empty or whitespace-only
+edit. The shared modal focuses Cancel, contains keyboard focus and accepts Escape;
+cancelling preserves text, provenance, view and copy/save feedback, returning focus
+to the closing control. Confirming performs only that requested close. Unchanged or
+restored drafts close immediately. Copying or successfully saving does not remove the
+warning: comparison is against the retained original, not a saved-file revision. The
+confirmation neither saves nor reextracts content. While a native save is pending,
+both explicit close actions leave the panel open without a discard prompt.
+
+This is a bounded protection for the two explicit close controls, not a global
+navigation or recovery guard. Selecting another session, leaving Overview, reloading,
+closing the browser/Desktop window or a process failure can still discard drafts
+without this confirmation. No unload handler, persistence or automatic saving is
+introduced. The modal grants no filesystem, IPC or agent authority.
 
 The React preview supports only heading lines, bullet lists and fenced code blocks.
 Other syntax, including inline Markdown, HTML, links, images and URLs, stays literal.

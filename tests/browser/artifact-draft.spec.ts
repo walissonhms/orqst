@@ -149,6 +149,12 @@ test('restoration and native saving exclude each other; comparison never claims 
   await save.click();
   await expect(restore).toBeDisabled();
   await expect(panel.getByRole('textbox')).toBeDisabled();
+  await page
+    .getByRole('region', { name: 'Session details', exact: true })
+    .getByRole('button', { name: 'Close', exact: true })
+    .click();
+  await expect(panel).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   const request = await page.evaluate(() => Reflect.get(window, 'syntheticSaveRequest'));
   expect(request).toMatchObject({
     contractVersion: 1,
@@ -158,6 +164,13 @@ test('restoration and native saving exclude each other; comparison never claims 
   });
   await page.evaluate(() => window.dispatchEvent(new Event('synthetic-save-complete')));
   await expect(panel.getByRole('status')).toHaveText('Markdown file saved.');
+  await panel
+    .getByRole('button', { name: 'Close artifact and discard draft', exact: true })
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: 'Discard artifact draft?', exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(
     panel.getByText('The draft differs from the retained original.', { exact: false }),
   ).toBeVisible();
@@ -213,3 +226,120 @@ for (const outcome of ['resolve', 'reject'] as const) {
     await expect(panel.getByRole('status')).toHaveText('Copied to clipboard.');
   });
 }
+
+test('explicit panel closing confirms changed text; Cancel and Escape preserve the draft and focus', async ({
+  page,
+}) => {
+  let extractions = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/artifacts/extract') extractions++;
+  });
+  let panel = await openArtifact(page);
+  const original = await panel.locator('pre.artifact-content').innerText();
+  await panel
+    .getByRole('button', { name: 'Close artifact and discard draft', exact: true })
+    .click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(panel).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Extract artifact manually', exact: true }).first(),
+  ).toBeFocused();
+  await page
+    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .first()
+    .click();
+  panel = page.getByRole('region', { name: 'Manual artifact', exact: true });
+  await panel.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  const draft = `${original} `;
+  await panel.getByRole('textbox').fill(draft);
+  const close = panel.getByRole('button', {
+    name: 'Close artifact and discard draft',
+    exact: true,
+  });
+  await close.click();
+  const dialog = page.getByRole('dialog', { name: 'Discard artifact draft?', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(close).toBeFocused();
+  await expect(panel.getByRole('textbox')).toHaveValue(draft);
+  await close.click();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(close).toBeFocused();
+  await expect(panel.getByRole('textbox')).toHaveValue(draft);
+  expect(extractions).toBe(2);
+  await close.click();
+  await dialog.getByRole('button', { name: 'Discard draft and close', exact: true }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Session details', exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .first()
+    .click();
+  await expect(page.locator('pre.artifact-content')).toHaveText(original);
+});
+
+test('session details closing uses the same guard and restored text needs no discard confirmation', async ({
+  page,
+}) => {
+  const panel = await openArtifact(page);
+  const details = page.getByRole('region', { name: 'Session details', exact: true });
+  const close = details.getByRole('button', { name: 'Close', exact: true });
+  await panel.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  await panel.getByRole('textbox').fill('');
+  await close.click();
+  const dialog = page.getByRole('dialog', { name: 'Discard artifact draft?', exact: true });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(close).toBeFocused();
+  await expect(panel.getByRole('textbox')).toHaveValue('');
+  await panel.getByRole('button', { name: 'Restore draft from original…', exact: true }).click();
+  await panel.getByRole('button', { name: 'Discard edits and restore draft', exact: true }).click();
+  await close.click();
+  await expect(dialog).toHaveCount(0);
+  await expect(details).toHaveCount(0);
+  // The guard is removed with its panel, including after confirming a details close.
+  const reopened = await openArtifact(page);
+  await reopened.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  await reopened.getByRole('textbox').fill('Synthetic changed draft');
+  await close.click();
+  await dialog.getByRole('button', { name: 'Discard draft and close', exact: true }).click();
+  await expect(details).toHaveCount(0);
+});
+
+test('pt-BR discard confirmation traps keyboard focus and fits a mobile viewport', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openArtifact(page);
+  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  const panel = page.getByRole('region', { name: 'Artefato manual', exact: true });
+  await panel.getByRole('button', { name: 'Editar rascunho', exact: true }).click();
+  await panel.getByRole('textbox').fill('Rascunho sintético');
+  await panel
+    .getByRole('button', { name: 'Fechar artefato e descartar rascunho', exact: true })
+    .click();
+  const dialog = page.getByRole('dialog', { name: 'Descartar rascunho do artefato?', exact: true });
+  const cancel = dialog.getByRole('button', { name: 'Cancelar', exact: true });
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(
+    dialog.getByRole('button', { name: 'Descartar rascunho e fechar', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(cancel).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(
+    dialog.getByRole('button', { name: 'Descartar rascunho e fechar', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(cancel).toBeFocused();
+  const bounds = await dialog.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('textbox')).toHaveValue('Rascunho sintético');
+  await expect(dialog).toHaveCount(0);
+});

@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Confirm changed Artifacts drafts before explicitly closing the panel or its session
+  details. A shared localized modal focuses Cancel, contains keyboard focus and accepts
+  Escape. Unchanged/restored text closes immediately; copy/save feedback never marks
+  text as unchanged. Native saving blocks these closes. Session/view navigation, reload
+  and window closing remain outside this bounded protection; drafts remain memory-only.
+
 - Manual Artifacts draft comparison and confirmed restoration from the already loaded
   retained original. English/Portuguese text, Cancel-first keyboard focus and Escape
   cancellation preserve explicit editing. Native save and restore cannot overlap;

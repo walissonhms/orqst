@@ -1897,3 +1897,16 @@ th:nth-last-child(2) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.artifact-discard-dialog {
+  width: 430px;
+  max-width: calc(100% - 30px);
+  max-height: calc(100% - 30px);
+  overflow: auto;
+  padding: 24px;
+  color: inherit;
+  background: #14212a;
+}
+.artifact-discard-dialog::backdrop {
+  background: rgb(0 0 0 / 65%);
+}

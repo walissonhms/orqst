@@ -54,6 +54,10 @@ test('manual source, inert preview and separate memory draft stay integrated wit
   await panel
     .getByRole('button', { name: 'Close artifact and discard draft', exact: true })
     .click();
+  await page
+    .getByRole('dialog', { name: 'Discard artifact draft?', exact: true })
+    .getByRole('button', { name: 'Discard draft and close', exact: true })
+    .click();
   await expect(
     page.getByRole('button', { name: 'Extract artifact manually', exact: true }).first(),
   ).toBeFocused();

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   artifactExtractionResultSchema,
@@ -12,16 +12,20 @@ import { artifactBlocks, readableArtifact } from './artifact-preview';
 import { LiveMetrics } from './LiveMetrics';
 import type { LiveMetricsState } from './use-session-metrics';
 
+export type ArtifactCloseGuard = (close: () => void) => void;
+
 export function ArtifactPanel({
   request,
   metrics,
   tokenThreshold,
   onClose,
+  closeGuard,
 }: {
   request: ArtifactExtractionRequest;
   metrics: LiveMetricsState;
   tokenThreshold?: number;
   onClose: () => void;
+  closeGuard: RefObject<ArtifactCloseGuard | null>;
 }) {
   const { t } = useTranslation();
   const heading = useRef<HTMLHeadingElement>(null);
@@ -29,6 +33,12 @@ export function ArtifactPanel({
   const cancelRestoreButton = useRef<HTMLButtonElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const restoreId = useId();
+  const discardId = useId();
+  const discardDialog = useRef<HTMLDialogElement>(null);
+  const cancelDiscardButton = useRef<HTMLButtonElement>(null);
+  const confirmDiscardButton = useRef<HTMLButtonElement>(null);
+  const closeTrigger = useRef<HTMLElement | null>(null);
+  const [closeAction, setCloseAction] = useState<(() => void) | null>(null);
   const [result, setResult] = useState<ArtifactExtractionResult>();
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState('');
@@ -120,6 +130,33 @@ export function ArtifactPanel({
   const artifact = result?.availability === 'available' ? result.value : undefined;
   const reference = artifact?.reference;
   const draftChanged = artifact !== undefined && draft !== artifact.original.text;
+  function requestClose(close: () => void) {
+    if (saving) return;
+    if (!draftChanged) {
+      close();
+      return;
+    }
+    closeTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setRestoring(false);
+    setCloseAction(() => close);
+  }
+  useEffect(() => {
+    closeGuard.current = requestClose;
+    return () => {
+      closeGuard.current = null;
+    };
+  });
+  useEffect(() => {
+    if (closeAction) {
+      discardDialog.current?.showModal();
+      cancelDiscardButton.current?.focus();
+    }
+  }, [closeAction]);
+  function cancelDiscard() {
+    setCloseAction(null);
+    requestAnimationFrame(() => closeTrigger.current?.focus());
+  }
   function cancelRestore() {
     setRestoring(false);
     requestAnimationFrame(() => restoreButton.current?.focus());
@@ -130,10 +167,43 @@ export function ArtifactPanel({
         <h3 id="artifact-heading" tabIndex={-1} ref={heading}>
           {t('artifacts.title')}
         </h3>
-        <button className="button" disabled={saving} onClick={onClose}>
+        <button className="button" disabled={saving} onClick={() => requestClose(onClose)}>
           {t('artifacts.close')}
         </button>
       </div>
+      {closeAction && (
+        <dialog
+          className="artifact-discard-dialog panel"
+          ref={discardDialog}
+          aria-labelledby={discardId}
+          aria-describedby={`${discardId}-warning`}
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') {
+              event.preventDefault();
+              const next =
+                document.activeElement === cancelDiscardButton.current
+                  ? confirmDiscardButton.current
+                  : cancelDiscardButton.current;
+              next?.focus();
+            }
+          }}
+          onCancel={(event) => {
+            event.preventDefault();
+            cancelDiscard();
+          }}
+        >
+          <h3 id={discardId}>{t('artifacts.discardTitle')}</h3>
+          <p id={`${discardId}-warning`}>{t('artifacts.discardWarning')}</p>
+          <div className="artifact-actions">
+            <button className="button" ref={cancelDiscardButton} onClick={cancelDiscard}>
+              {t('cancel')}
+            </button>
+            <button className="button" ref={confirmDiscardButton} onClick={closeAction}>
+              {t('artifacts.confirmDiscard')}
+            </button>
+          </div>
+        </dialog>
+      )}
       <LiveMetrics state={metrics} threshold={tokenThreshold} />
       <p className="fine-print">{t('artifacts.manualNote')}</p>
       {failed && <p role="alert">{t('artifacts.loadFailed')}</p>}

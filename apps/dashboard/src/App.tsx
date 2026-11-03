@@ -38,7 +38,7 @@ import type {
   Usage,
 } from '@orqst/protocol';
 import { api } from './api';
-import { ArtifactPanel } from './ArtifactPanel';
+import { ArtifactPanel, type ArtifactCloseGuard } from './ArtifactPanel';
 import { LiveMetrics } from './LiveMetrics';
 import { ModelHistory } from './ModelHistory';
 import { useSessionMetrics } from './use-session-metrics';
@@ -240,6 +240,7 @@ function SessionDetail({
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<'activity' | 'results' | 'usage'>('activity');
+  const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const [tokenThreshold, setTokenThreshold] = useState<number>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
@@ -314,7 +315,14 @@ function SessionDetail({
             {session.agentName}
           </h2>
         </div>
-        <button className="icon-button" aria-label={t('close')} onClick={onClose}>
+        <button
+          className="icon-button"
+          aria-label={t('close')}
+          onClick={() => {
+            if (artifactCloseGuard.current) artifactCloseGuard.current(onClose);
+            else onClose();
+          }}
+        >
           <X size={18} />
         </button>
       </div>
@@ -421,6 +429,7 @@ function SessionDetail({
       {artifactRequest && (
         <ArtifactPanel
           request={artifactRequest}
+          closeGuard={artifactCloseGuard}
           metrics={metrics}
           tokenThreshold={tokenThreshold}
           onClose={() => {
