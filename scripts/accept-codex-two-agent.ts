@@ -30,7 +30,7 @@ import {
   twoAgentCleanupConfirmed,
   twoAgentAcceptancePrompts,
 } from './terminal/two-agent-acceptance.js';
-import { acceptanceSourceGuard } from './terminal/two-agent-source-guard.js';
+import { acceptanceSourceGuard, runSourceCheck } from './terminal/two-agent-source-guard.js';
 import {
   readLifecycleReceipt,
   type LifecycleBinding,
@@ -90,8 +90,14 @@ for (let index = 0; index < 2; index++) {
 }
 assert.deepEqual(configs[0]!.executable, configs[1]!.executable);
 assert.equal(existsSync(join(root, 'communication.sqlite')), false);
-const verifySources = acceptanceSourceGuard(
-  configs.map((config) => config.authentication?.codexHome ?? join(config.state, 'codex')),
+const emitSourceCheck = (record: object) => console.log(JSON.stringify(record));
+const verifySources = runSourceCheck(
+  'baseline',
+  () =>
+    acceptanceSourceGuard(
+      configs.map((config) => config.authentication?.codexHome ?? join(config.state, 'codex')),
+    ),
+  emitSourceCheck,
 );
 const keys = generateKeyPairSync('ed25519');
 const authority = new TerminalAuthority(
@@ -175,7 +181,7 @@ try {
     runtime.snapshot(instances[0]!).nativeThreadId,
     runtime.snapshot(instances[1]!).nativeThreadId,
   );
-  verifySources(threadIds);
+  runSourceCheck('pre-confirmation', () => verifySources(threadIds), emitSourceCheck);
   if (values['prepare-only']) {
     assert.deepEqual(readdirSync(project), []);
     passed = true;
@@ -284,7 +290,7 @@ try {
   let sourcesVerified = false;
   try {
     if (threadIds.length) {
-      verifySources(threadIds);
+      runSourceCheck('cleanup', () => verifySources(threadIds), emitSourceCheck);
       sourcesVerified = true;
     }
   } catch {

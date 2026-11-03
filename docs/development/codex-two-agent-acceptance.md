@@ -310,6 +310,32 @@ hashed, copied or logged. This is bounded test-thread evidence, not a guarantee 
 every pre-existing source byte is unchanged. The observer is neither paused nor
 reconfigured, and no external process is stopped to stabilize the check.
 
+The guard snapshots at most two homes, identifies duplicate directory aliases by
+device/inode and checks each alias still names that directory. The original global
+100,000-entry budget remains shared by all distinct homes and their active and
+archived trees, with an eight-level depth limit. An exceeded bound, unsafe path,
+inspection error, changed history or test thread found in either tree fails closed.
+In particular, a history write by a test process also fails; the guard does not
+attribute the writer or excuse it.
+
+The command emits JSON `source-preservation` records on stdout for baseline,
+pre-confirmation and cleanup checks. Baseline `captured` is only a snapshot, not
+verification. Failure records contain a fixed reason and source category, the input
+home index, bounded counts/limits and boolean history-field change flags when
+applicable. They exclude paths, entry names, thread IDs, metadata values, raw errors
+and captured content. Retain these records with the private acceptance evidence;
+discarding stdout loses the diagnostic. A failed pre-confirmation check remains a
+failure even if the cleanup check later passes. These diagnostics cannot establish
+the writer or reconstruct a previous run's discarded error.
+
+The 2026-11-03 pane-620 prepare-only run reached two ready threads and recorded
+both owned direct exits, but its source check failed and its original reason was not
+retained. Its cause remains unknown and the run remains unaccepted. Synthetic tests
+reproduce a double-counted alias exhausting the old budget; distinct homes that
+exceed the global budget still fail. Neither case establishes the cause of pane-620.
+Future real preparation or inference still requires a separate owner decision and
+authorization.
+
 Native command/file/MCP/other unexpected tool item types reject acceptance, even
 when the marker matches. Prompt restrictions and post-observation checks cannot
 prevent tool side effects. Configured MCP startup remains shared/unverified and

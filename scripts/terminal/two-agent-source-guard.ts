@@ -1,54 +1,206 @@
 // Explicit acceptance only: inspect names/metadata, never captured content or credentials.
-import assert from 'node:assert/strict';
 import { lstatSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-function metadata(file: string): string | null {
+const entryLimit = 100000;
+const depthLimit = 8;
+type Source = 'home' | 'history' | 'sessions' | 'archived_sessions' | 'input';
+type Reason =
+  | 'invalid_input'
+  | 'unsafe_home'
+  | 'home_changed'
+  | 'unsafe_history'
+  | 'history_changed'
+  | 'unsafe_directory'
+  | 'unsafe_entry'
+  | 'thread_materialized'
+  | 'depth_exceeded'
+  | 'budget_exceeded'
+  | 'inspection_error';
+export type SourceDiagnostic = {
+  reason: Reason;
+  source: Source;
+  homeIndex: number | null;
+  entries: number;
+  entryLimit: number;
+  depth: number | null;
+  depthLimit: number;
+  historyChanges: {
+    presence: boolean;
+    inode: boolean;
+    size: boolean;
+    mtime: boolean;
+    ctime: boolean;
+  } | null;
+};
+
+export class SourceGuardError extends Error {
+  constructor(readonly diagnostic: SourceDiagnostic) {
+    super(`Source preservation: ${diagnostic.reason}`);
+    this.name = 'SourceGuardError';
+  }
+}
+
+function failure(
+  reason: Reason,
+  source: Source,
+  homeIndex: number | null,
+  entries = 0,
+  depth: number | null = null,
+  historyChanges: SourceDiagnostic['historyChanges'] = null,
+): never {
+  throw new SourceGuardError({
+    reason,
+    source,
+    homeIndex,
+    entries,
+    entryLimit,
+    depth,
+    depthLimit,
+    historyChanges,
+  });
+}
+
+export function sourceDiagnostic(error: unknown): SourceDiagnostic {
+  return error instanceof SourceGuardError
+    ? error.diagnostic
+    : {
+        reason: 'inspection_error',
+        source: 'input',
+        homeIndex: null,
+        entries: 0,
+        entryLimit,
+        depth: null,
+        depthLimit,
+        historyChanges: null,
+      };
+}
+
+export function runSourceCheck<T>(
+  check: 'baseline' | 'pre-confirmation' | 'cleanup',
+  operation: () => T,
+  emit: (record: object) => void,
+): T {
+  try {
+    const result = operation();
+    emit({
+      phase: 'source-preservation',
+      check,
+      status: check === 'baseline' ? 'captured' : 'verified',
+      diagnostic: null,
+    });
+    return result;
+  } catch (error) {
+    const diagnostic = sourceDiagnostic(error);
+    emit({ phase: 'source-preservation', check, status: 'failed', diagnostic });
+    throw new SourceGuardError(diagnostic);
+  }
+}
+
+type Metadata = { inode: number; size: number; mtime: number; ctime: number } | null;
+function metadata(file: string, homeIndex: number): Metadata {
   try {
     const info = lstatSync(file);
-    assert.ok(info.isFile() && !info.isSymbolicLink(), 'Unsafe native history path');
-    return `${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+    if (!info.isFile() || info.isSymbolicLink()) failure('unsafe_history', 'history', homeIndex);
+    return { inode: info.ino, size: info.size, mtime: info.mtimeMs, ctime: info.ctimeMs };
   } catch (error) {
+    if (error instanceof SourceGuardError) throw error;
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
+    return failure('inspection_error', 'history', homeIndex);
   }
 }
 
 /** Concurrent history writes are inconclusive and fail acceptance; never stop other sessions. */
 export function acceptanceSourceGuard(codexHomes: readonly string[]) {
-  const homes = [...new Set(codexHomes)];
-  const history = homes.map((home) => metadata(join(home, 'history.jsonl')));
+  if (!codexHomes.length || codexHomes.length > 2) failure('invalid_input', 'input', null);
+  const homes: Array<{
+    path: string;
+    identity: string;
+    history: Metadata;
+    index: number;
+    aliases: Array<{ path: string; index: number }>;
+  }> = [];
+  for (const [index, input] of codexHomes.entries()) {
+    const path = resolve(input);
+    let info;
+    try {
+      info = lstatSync(path, { bigint: true });
+    } catch {
+      failure('inspection_error', 'home', index);
+    }
+    if (!info.isDirectory() || info.isSymbolicLink()) failure('unsafe_home', 'home', index);
+    const identity = `${info.dev}:${info.ino}`;
+    const existing = homes.find((home) => home.identity === identity);
+    if (existing) existing.aliases.push({ path, index });
+    else
+      homes.push({
+        path,
+        identity,
+        history: metadata(join(path, 'history.jsonl'), index),
+        index,
+        aliases: [{ path, index }],
+      });
+  }
   return (threadIds: readonly string[]) => {
-    assert.ok(threadIds.length > 0 && threadIds.every((id) => /^[a-zA-Z0-9_-]+$/.test(id)));
+    if (!threadIds.length || !threadIds.every((id) => /^[a-zA-Z0-9_-]+$/.test(id)))
+      failure('invalid_input', 'input', null);
     let entries = 0;
-    const inspect = (directory: string, depth: number) => {
-      assert.ok(depth <= 8, 'Native source inspection depth exceeded');
-      let info;
-      try {
-        info = lstatSync(directory);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
-        throw error;
+    for (const home of homes) {
+      for (const alias of home.aliases) {
+        let info;
+        try {
+          info = lstatSync(alias.path, { bigint: true });
+        } catch {
+          failure('inspection_error', 'home', alias.index);
+        }
+        if (!info.isDirectory() || info.isSymbolicLink())
+          failure('unsafe_home', 'home', alias.index);
+        if (`${info.dev}:${info.ino}` !== home.identity)
+          failure('home_changed', 'home', alias.index);
       }
-      assert.ok(info.isDirectory() && !info.isSymbolicLink(), 'Unsafe native source directory');
-      for (const entry of readdirSync(directory, { withFileTypes: true })) {
-        assert.ok(++entries <= 100000, 'Native source inspection budget exceeded');
-        assert.ok(!entry.isSymbolicLink(), 'Native source symlink inspection denied');
-        assert.ok(
-          !threadIds.some((id) => entry.name.includes(id)),
-          'Acceptance thread materialized in a native session source',
-        );
-        if (entry.isDirectory()) inspect(join(directory, entry.name), depth + 1);
-      }
-    };
-    homes.forEach((home, index) => {
-      assert.equal(
-        metadata(join(home, 'history.jsonl')),
-        history[index],
-        'Native history metadata changed; acceptance is inconclusive',
-      );
-      inspect(join(home, 'sessions'), 0);
-      inspect(join(home, 'archived_sessions'), 0);
-    });
+      const current = metadata(join(home.path, 'history.jsonl'), home.index);
+      const previous = home.history;
+      const changes = {
+        presence: (current === null) !== (previous === null),
+        inode: current !== null && previous !== null && current.inode !== previous.inode,
+        size: current !== null && previous !== null && current.size !== previous.size,
+        mtime: current !== null && previous !== null && current.mtime !== previous.mtime,
+        ctime: current !== null && previous !== null && current.ctime !== previous.ctime,
+      };
+      if (Object.values(changes).some(Boolean))
+        failure('history_changed', 'history', home.index, 0, null, changes);
+      const inspect = (
+        directory: string,
+        source: 'sessions' | 'archived_sessions',
+        depth: number,
+      ) => {
+        if (depth > depthLimit) failure('depth_exceeded', source, home.index, entries, depth);
+        let info;
+        try {
+          info = lstatSync(directory);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT' && depth === 0) return;
+          failure('inspection_error', source, home.index, entries, depth);
+        }
+        if (!info.isDirectory() || info.isSymbolicLink())
+          failure('unsafe_directory', source, home.index, entries, depth);
+        let children;
+        try {
+          children = readdirSync(directory, { withFileTypes: true });
+        } catch {
+          failure('inspection_error', source, home.index, entries, depth);
+        }
+        for (const entry of children) {
+          if (++entries > entryLimit)
+            failure('budget_exceeded', source, home.index, entries, depth);
+          if (entry.isSymbolicLink()) failure('unsafe_entry', source, home.index, entries, depth);
+          if (threadIds.some((id) => entry.name.includes(id)))
+            failure('thread_materialized', source, home.index, entries, depth);
+          if (entry.isDirectory()) inspect(join(directory, entry.name), source, depth + 1);
+        }
+      };
+      inspect(join(home.path, 'sessions'), 'sessions', 0);
+      inspect(join(home.path, 'archived_sessions'), 'archived_sessions', 0);
+    }
   };
 }

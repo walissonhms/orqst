@@ -89,8 +89,10 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 - **Preparation evidence:** the explicit two-Codex `--prepare-only` command now
   retains expected lifecycle identities before launch and requires matching durable
-  receipts plus both still-owned exits. Its labeled preparation result does not
-  establish inference/model entitlement, delegation or descendant cleanup. See
+  receipts plus both still-owned exits. Source-check failures now emit bounded,
+  payload-free diagnostics; the failed pane-620 check remains unexplained. Its labeled
+  preparation result does not establish inference/model entitlement, delegation or
+  descendant cleanup. See
   [preparation scope](docs/development/codex-two-agent-acceptance.md).
 
 - **Codex existing-login implementation (2026-11-03):** explicit structured setup can
