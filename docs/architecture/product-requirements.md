@@ -1,5 +1,21 @@
 # Product requirements and implementation coverage
 
+## Terminal and communication update — 2026-11-03
+
+This dated update qualifies the earlier matrix below. The
+[embedded Terminal](../development/managed-codex-terminal.md) implements a checkout
+opt-in xterm view, native-confirmed owned-process operations and separate state.
+Its current UI selects one configured project/instance; multiple terminal tabs and
+real Codex acceptance remain pending. External sessions and the Bridge stay read-only.
+Native trusted/same-user execution is not hard isolation.
+
+The [communication library](../api/pane-communication.md) implements scoped stable
+pane identity, durable FIFO, grants, separate delivery/task evidence and Core result
+subscriptions/inbox with synthetic transport tests. It is not a public endpoint or
+an agent-to-agent workflow. No real two-Codex delegation/automatic CLI return,
+Communication Inspector, planner or Claude Code/OpenCode communication is delivered.
+These partial increments do not complete Phase 2/4 or the Desktop MVP.
+
 ## Audit basis — 2026-11-02
 
 This public capability inventory follows the owner-approved desktop direction.

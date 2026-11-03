@@ -28,8 +28,9 @@ Community remains Apache-2.0 and independent of Cloud. Release metadata remains
 The integrated baseline is the read-only Codex observer in [README](README.md).
 The first macOS Electron slice adds a checkout-only observer window over the existing
 Bridge, with independent lifetime and offline/retry states (ADR-030). Phase 2 remains
-incomplete: terminals and distribution are not delivered. The next increment implements
-a menu-bar tray and source-gated native alert mechanism (ADR-031); signed-identity and
+incomplete: the opt-in Terminal lacks real-provider acceptance and distribution is
+not delivered. A menu-bar tray and source-gated native alert mechanism are implemented
+(ADR-031); signed-identity and
 real macOS visual notification acceptance remain pending.
 
 Incremental, non-destructive development is authorized. **The observer Core extraction and local Analytics library are
@@ -85,6 +86,12 @@ Desktop or manual assistive-technology acceptance. See the
 [interface guide](docs/design/ui-ux-specification.md#grouped-settings-and-reading-comfort).
 
 ## Mandatory quality and security criteria for each increment
+
+The engineering entries below preserve earlier acceptance stages. The embedded
+Terminal increment above supersedes claims that all terminal mechanisms are
+uncomposed. Its native trusted/same-user mode does not require or claim hard
+containment. Passing synthetic library or PTY tests still cannot establish real
+provider support, human consent acceptance or completion of the two-agent milestone.
 
 The [native integration lab](docs/development/terminal-native-acceptance.md) now
 connects the experimental broker to a restricted Electron document/preload, native
@@ -375,7 +382,11 @@ pending; Terminal and provider development retain their separate gates. See the
 adds a private Core pane registry and bounded durable structured queue, explicit
 workspace/actor grants, independent delivery/task evidence, idempotency, result
 inbox/subscriptions and conservative epoch recovery. These are library capabilities
-validated with synthetic transports, not enabled provider communication.
+validated with synthetic transports, not enabled provider communication. Source/target
+capabilities are enforced independently of grants; a resolved submission without
+acceptance becomes uncertain. Four unresolved outcomes exhaust global capacity
+even after pane closure/restart. No reclamation/reset bypass exists; reviewed
+evidence-backed reconciliation is required before normal-runtime provider dispatch.
 
 The first useful Agentic Mode milestone remains two real managed CLIs in separate
 stable identified panes: A delegates a bounded task to B, acceptance remains separate
