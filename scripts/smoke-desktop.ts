@@ -71,20 +71,24 @@ try {
   );
   env.ORQST_DESKTOP_PORT = String(port);
   delete env.ELECTRON_RUN_AS_NODE;
-  // Disposable bootstrap retains the base nativeImage used by the application Tray.
+  // Intercept only the bundle's import, retaining the image passed to the real Tray.
   const bootstrap = join(root, 'desktop-bootstrap.cjs');
   await writeFile(
     bootstrap,
-    `const electron = require('electron');
-const createFromPath = electron.nativeImage.createFromPath;
-electron.nativeImage.createFromPath = function (path) {
-  const image = createFromPath(path);
-  if (path.endsWith('/orqst-menubar-18.png') || path.endsWith('/orqst-16.png')) {
-    globalThis.syntheticDesktopTrayImage = image;
-  }
-  return image;
+    `const Module = require('node:module');
+const load = Module._load;
+Module._load = function (id, parent, ...args) {
+  const exported = load.call(this, id, parent, ...args);
+  if (id !== 'electron' || parent?.filename !== ${JSON.stringify(resolve('apps/desktop/dist/main.cjs'))}) return exported;
+  return { ...exported, Tray: new Proxy(exported.Tray, {
+    construct(target, args) {
+      globalThis.syntheticDesktopTrayImage = args[0];
+      return Reflect.construct(target, args);
+    }
+  }) };
 };
 require(${JSON.stringify(resolve('apps/desktop'))});
+Module._load = load;
 `,
   );
   desktop = await _electron.launch({
@@ -102,29 +106,55 @@ require(${JSON.stringify(resolve('apps/desktop'))});
   );
   let page = await desktop.firstWindow();
   if (process.platform === 'darwin') {
-    const icon = await desktop.evaluate(({ nativeImage }, iconsDirectory) => {
+    const icon = await desktop.evaluate(({ nativeImage }) => {
       const image = Reflect.get(globalThis, 'syntheticDesktopTrayImage') as Electron.NativeImage;
       return {
         size: image.getSize(),
         scales: image.getScaleFactors(),
         template: image.isTemplateImage(),
-        matchesOriginal: [1, 2].map((scaleFactor) =>
-          image
-            .toPNG({ scaleFactor })
-            .equals(
-              nativeImage
-                .createFromPath(`${iconsDirectory}/orqst-menubar-${18 * scaleFactor}.png`)
-                .toPNG(),
-            ),
-        ),
+        representations: [1, 2].map((scaleFactor) => {
+          const decoded = nativeImage.createFromBuffer(image.toPNG({ scaleFactor }));
+          const { width, height } = decoded.getSize();
+          const bitmap = decoded.toBitmap();
+          let left = width;
+          let top = height;
+          let right = -1;
+          let bottom = -1;
+          let colored = false;
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const offset = (y * width + x) * 4;
+              if (bitmap[offset + 3]! <= 8) continue;
+              left = Math.min(left, x);
+              top = Math.min(top, y);
+              right = Math.max(right, x);
+              bottom = Math.max(bottom, y);
+              colored ||=
+                bitmap[offset] !== bitmap[offset + 1] || bitmap[offset + 1] !== bitmap[offset + 2];
+            }
+          }
+          return {
+            width,
+            height,
+            visibleWidth: right - left + 1,
+            visibleHeight: bottom - top + 1,
+            colored,
+          };
+        }),
       };
-    }, resolve('apps/desktop/resources/icons'));
-    assert.deepEqual(icon, {
-      size: { width: 18, height: 18 },
-      scales: [1, 2],
-      template: false,
-      matchesOriginal: [true, true],
     });
+    assert.deepEqual(icon.size, { width: 24, height: 20 });
+    assert.deepEqual(icon.scales, [1, 2]);
+    assert.equal(icon.template, false);
+    for (const [index, representation] of icon.representations.entries()) {
+      const scale = index + 1;
+      assert.equal(representation.width, 24 * scale);
+      assert.equal(representation.height, 20 * scale);
+      assert.ok(representation.visibleWidth >= 22 * scale);
+      assert.ok(representation.visibleHeight >= 18 * scale);
+      assert.equal(representation.colored, true);
+    }
+    console.log('Menu-bar icon:', JSON.stringify(icon));
   }
   // Test-only instrumentation in the main process; no shipped IPC/test endpoint.
   // Capture the real Tray menu and Notification objects, suppress actual OS delivery.

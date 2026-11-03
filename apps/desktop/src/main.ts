@@ -318,28 +318,29 @@ async function start(): Promise<void> {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const activeNotifications = new Set<Notification>();
-  const trayIcon = nativeImage.createFromPath(
+  const traySource = nativeImage.createFromPath(
     join(
       iconsDirectory,
       process.platform === 'darwin'
-        ? 'orqst-menubar-18.png'
+        ? 'orqst-menubar-128.png'
         : process.platform === 'win32'
           ? 'orqst.ico'
           : 'orqst-16.png',
     ),
   );
-  if (trayIcon.isEmpty()) throw new Error('Missing ORQST tray icon');
+  if (traySource.isEmpty()) throw new Error('Missing ORQST tray icon');
+  // Trim only transparent padding; keep the complete colored artwork and its aspect ratio.
+  const macTraySource =
+    process.platform === 'darwin'
+      ? traySource.crop({ x: 2, y: 12, width: 126, height: 105 })
+      : undefined;
+  const trayIcon = macTraySource?.resize({ width: 24, height: 20, quality: 'best' }) ?? traySource;
   if (process.platform !== 'win32') {
     trayIcon.addRepresentation({
       scaleFactor: 2,
-      buffer: nativeImage
-        .createFromPath(
-          join(
-            iconsDirectory,
-            process.platform === 'darwin' ? 'orqst-menubar-36.png' : 'orqst-32.png',
-          ),
-        )
-        .toPNG(),
+      buffer: macTraySource
+        ? macTraySource.resize({ width: 48, height: 40, quality: 'best' }).toPNG()
+        : nativeImage.createFromPath(join(iconsDirectory, 'orqst-32.png')).toPNG(),
     });
   }
   // Preserve the owner-supplied colors instead of applying macOS template tinting.

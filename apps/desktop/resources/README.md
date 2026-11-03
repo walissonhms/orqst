@@ -11,8 +11,9 @@ The dashboard's `public/orqst.ico` is an unchanged copy of the same ICO.
 The owner supplied `ORQST-menubar-cores-originais.zip` on 2026-11-02 to restore
 the macOS menu-bar colors. Archive SHA-256:
 `d7156174036c4806450516a242662484ca454d67ae550cdbb57c62f313adf6d3`.
-`orqst-menubar-18.png` and `orqst-menubar-36.png` are unchanged copies from that
-archive. Only this 1x/2x pair is used; the preview and unused sizes are omitted.
+`orqst-menubar-18.png`, `orqst-menubar-36.png` and `orqst-menubar-128.png` are
+unchanged copies from that archive. The 128 px source now supplies the menu-bar
+icon; the earlier 18/36 px pair is retained. The preview and unused sizes are omitted.
 
 These are owner-submitted project branding assets, intentionally supplied for
 inclusion under the repository's existing [contribution terms](../../../CONTRIBUTING.md)
@@ -24,8 +25,12 @@ Apache-2.0 does not grant trademark rights.
 
 ## Runtime and distribution
 
-- macOS: the PNG supplies the running Dock icon. The dedicated transparent
-  18/36 px menu-bar images supply an 18-point 1x/2x tray icon with original colors.
+- macOS: the PNG supplies the running Dock icon. The 128 px menu-bar source has
+  visible alpha bounds `(6, 16)` to `(125, 112)` (exclusive end). At runtime a
+  `(2, 12, 126, 105)` crop removes transparent padding without clipping the artwork.
+  The same crop is downsampled at best quality to 24 x 20 px and 48 x 40 px for
+  1x/2x, preserving its 6:5 canvas ratio. The original colors and artwork proportions
+  remain intact; visible height grows from approximately 13.5 to 18.5 points on Retina.
   It is explicitly non-template: macOS template tinting would discard those colors.
   Light/dark menu-bar contrast still needs visual acceptance on the target display.
   The ICNS is retained for a future explicitly approved application packaging pipeline.

@@ -60,9 +60,9 @@ Recheck support/security patches before distribution; the pin is not an automati
 
 The owner-supplied application icons are stored in `apps/desktop/resources/icons/`
 and copied beside the built main process. The running macOS Dock uses the supplied
-PNG, the menu-bar tray uses dedicated transparent 18/36 px images at 1x/2x with
-original colors (non-template), and the shared dashboard has an ICO favicon. Windows
-window/tray ICO and Linux PNG selection are implemented but have not been accepted
+PNG, the menu-bar tray uses a cropped high-resolution source at 24 x 20 points
+with 1x/2x representations and original colors (non-template), and the shared dashboard
+has an ICO favicon. Windows window/tray ICO and Linux PNG selection are implemented but have not been accepted
 on those operating systems. The supplied ICNS is retained for future
 packaging; this does not create an installer or change Electron's installed app bundle.
 See [asset provenance and usage](../../apps/desktop/resources/README.md).
@@ -101,8 +101,8 @@ exception is added for Electron.
 `pnpm test` includes pure URL/port security policy tests. `pnpm test:desktop` is an
 explicit Playwright `_electron` smoke with a real native Electron window and a real
 Bridge using only temporary synthetic sessions, storage and a temporary Chromium
-profile. On macOS it also checks the tray image's 18-point size, 1x/2x representations,
-non-template mode and decoded pixels against the original color assets. This does
+profile. On macOS it also checks the tray image's 24 x 20 point size, 1x/2x
+representations, non-template mode, retained color and effective visible bounds. This does
 not assert visual menu-bar contrast. It selects an ephemeral loopback port, preserves
 unrelated listeners and cleans up the disposable Bridge/profile. It checks render/Node isolation, denied
 permissions/new windows, HttpOnly/Strict cookie issuance, loaded-dashboard reconnect,
