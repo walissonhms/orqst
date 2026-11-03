@@ -1006,7 +1006,10 @@ The follow-up native Codex test also verified a real read-only tool call, live c
 ORQST Community Edition, including the core, protocol, adapters and documentation,
 is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) and the
 [licensing decision](docs/commercial/licensing-decision.md). Third-party dependencies
-retain their own licenses and notices.
+retain their own licenses and notices. The private structured Codex channel now includes
+an attributed Apache-2.0 Anywh byte-framing adaptation; see the
+[pinned reuse audit and limits](docs/research/reuse-first-audit.md) and [NOTICE](NOTICE).
+This adds no provider capability or execution authority.
 
 Tucano was used as an architectural reference; no Tucano code or assets were copied.
 Future independently developed Cloud modules may have separate terms; no Cloud

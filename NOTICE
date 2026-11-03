@@ -3,3 +3,12 @@ Copyright 2026 the ORQST owner.
 
 Licensed under the Apache License, Version 2.0. See LICENSE.
 Third-party dependencies retain their own licenses and copyright notices.
+
+This product includes code adapted from Anywh (Apache License 2.0):
+https://github.com/anywh-sh/anywh
+Commit: 546f189c04415c3c5af5f40e3931a0a90b9aba31
+Source: relay/src/agentHost/lineSplitter.ts (BufferLineSplitter)
+Destination: packages/core/src/managed-codex/line-splitter.ts
+Modified by ORQST for bounded, lazy raw-byte framing and explicit reset.
+The upstream tree at this commit contains LICENSE and no NOTICE file.
+See LICENSE and docs/research/reuse-first-audit.md for provenance and changes.
