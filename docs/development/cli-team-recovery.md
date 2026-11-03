@@ -113,10 +113,12 @@ See [capability evidence](../adapters/capability-model.md), [lifecycle contracts
 [pane communication](../api/pane-communication.md), and ADR-033 in
 [decisions](../architecture/decisions.md).
 
-External Anywh/Overclock/Tucano material informs future review only. No runtime
-dependency or code was imported, and no new claims about their internal drivers,
-delivery guarantees, licenses or recovery behavior were independently established
-by this increment. Preserve the existing pinned Tucano evidence record.
+The pair-creation increment itself imports no third-party source. The subsequent
+[reuse-first audit](../research/reuse-first-audit.md) verifies pinned Anywh/Tucano
+licenses and adapts only Anywh byte framing in the private structured Codex channel.
+It adds no runtime dependency or driver, delivery or recovery guarantee. Overclock
+remains a functional reference without an established source grant; the historical
+pinned Tucano evidence record is preserved.
 
 ## Verification and real acceptance gate
 
@@ -184,14 +186,19 @@ chunk-size advisory remains.
 
 ## Reuse-first follow-up
 
-The complementary reuse-first direction does not replace this delivery's tested
-Core/PTY/communication paths. This wizard reuses their existing schemas, file
-validators, profile/environment builders, brokers, admission and native selection
-flow. A separate isolated research workstream owns the pinned upstream/license/
-dependency audit; this delivery imports no third-party source, changes no license
-or instruction file and claims no new upstream component reuse. The explicit
-no-copy repository instruction remains preserved while that audit records the
-governance conflict and safe incorporation decision.
+The owner's direct reuse-first instruction authorizes compatible open-source reuse
+after exact-commit license, attribution, dependency and compatibility review,
+superseding the earlier general no-copy restriction for audited incorporation.
+Repository instruction files and historical audits remain unchanged.
+
+The integrated [audit and source ledger](../research/reuse-first-audit.md) and
+[ADR-035](../architecture/decisions.md#adr-035--audited-source-reuse-with-preserved-observer-and-managed-boundaries)
+record the actual Anywh `BufferLineSplitter` adaptation, its modifications and
+root NOTICE attribution. The wizard retains its existing schemas, validators,
+profile/environment builders, brokers, admission and native selection flow. The
+framing change preserves structured-channel limits and strict UTF-8 decoding; it
+does not resolve the attach/Stop flakes or approve full PTY, real-provider or
+A-to-B processing acceptance. No service restart or provider inference is required.
 
 ## Baseline comparison before publication
 

@@ -506,3 +506,14 @@ composition, approved task/cost bounds, MCP where needed and reconciliation. Sub
 CLI/model discovery, typed intent planning, safe worktree allocation and opt-in cleanup.
 No observed external session is controllable and no PTY input channel is exposed.
 See [implemented vs missing capabilities](docs/api/pane-communication.md).
+
+### Audited source reuse increment — 2026-11-03
+
+The [reuse-first matrix](docs/research/reuse-first-audit.md) records exact source
+pins, licenses/NOTICE and separate observed, declared, inferred and unverified
+capabilities. A small Apache-2.0 Anywh byte-framing component is adapted inside
+the private structured Codex channel, with bounded synthetic fragmentation tests
+and provenance in NOTICE. Existing source ingestion, journals, managed ownership
+and task queue are retained. No provider is executed for this increment; this
+does not validate native A/B delivery, reconnect, N-member teams or new adapters.
+Next reuse requires another closed dependency/license and per-version audit.

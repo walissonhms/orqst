@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { StartupCounters } from './startup-diagnostics.js';
+import { BoundedLineSplitter } from './line-splitter.js';
 
 export const codexChannelLimits = Object.freeze({
   lineBytes: 256 * 1024,
@@ -65,11 +66,11 @@ export class CodexChannel {
   startupDiagnostic() {
     return {
       ...this.startup.snapshot(),
-      bufferedBytes: this.bufferedAtFinish ?? this.buffer.length,
+      bufferedBytes: this.bufferedAtFinish ?? this.lines.pendingLength,
     };
   }
   finishDiagnostics(): void {
-    this.bufferedAtFinish ??= this.buffer.length;
+    this.bufferedAtFinish ??= this.lines.pendingLength;
     this.startup.freeze();
     this.transport.finishDiagnostics?.();
   }
@@ -82,7 +83,7 @@ export class CodexChannel {
       method: CodexMethod;
     }
   >();
-  private buffer = Buffer.alloc(0);
+  private readonly lines = new BoundedLineSplitter(codexChannelLimits.lineBytes);
   private total = 0;
   private closed = false;
   private failure: Diagnostic | null = null;
@@ -191,60 +192,55 @@ export class CodexChannel {
       this.total > codexChannelLimits.sessionBytes
     )
       return this.fail('output_limit');
-    let offset = 0;
-    const bytes = Buffer.from(chunk);
-    while (offset < bytes.length && !this.closed) {
-      const newline = bytes.indexOf(10, offset);
-      const end = newline < 0 ? bytes.length : newline;
-      const part = bytes.subarray(offset, end);
-      if (this.buffer.length + part.length > codexChannelLimits.lineBytes)
-        return this.fail('output_limit');
-      this.buffer = Buffer.concat([this.buffer, part]);
-      if (newline < 0) return;
-      this.startup.add('completeLines');
-      const line = this.buffer;
-      this.buffer = Buffer.alloc(0);
-      offset = newline + 1;
-      try {
-        const raw = messageSchema.parse(
-          JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(line)),
-        );
-        if (raw.method) {
-          this.startup.add('notifications');
-          if (raw.method === 'item/tool/call' && raw.id !== undefined) {
-            const key = JSON.stringify(raw.id);
-            if (this.serverRequests.has(key) || this.serverRequests.size >= 4)
-              return this.fail('dynamic_request_limit');
-            this.serverRequests.add(key);
+    try {
+      for (const line of this.lines.push(Buffer.from(chunk))) {
+        if (this.closed) return;
+        this.startup.add('completeLines');
+        try {
+          const raw = messageSchema.parse(
+            JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(line)),
+          );
+          if (raw.method) {
+            this.startup.add('notifications');
+            if (raw.method === 'item/tool/call' && raw.id !== undefined) {
+              const key = JSON.stringify(raw.id);
+              if (this.serverRequests.has(key) || this.serverRequests.size >= 4)
+                return this.fail('dynamic_request_limit');
+              this.serverRequests.add(key);
+            }
+            const event = {
+              method: raw.method,
+              params: raw.params,
+              ...(raw.id === undefined ? {} : { requestId: raw.id }),
+            };
+            for (const listener of this.listeners) listener(event);
+          } else {
+            this.startup.add('responses');
+            const request = this.pending.get(String(raw.id));
+            if (
+              !request ||
+              raw.id === undefined ||
+              (raw.error === undefined) === (raw.result === undefined)
+            )
+              return this.fail('unexpected_response');
+            this.startup.add('correlatedResponses');
+            this.pending.delete(String(raw.id));
+            clearTimeout(request.timer);
+            if (raw.error !== undefined) {
+              this.failure ??= { reason: 'native_request_rejected', method: request.method };
+              request.reject(new Error('Codex rejected structured request'));
+            } else request.resolve(raw.result);
           }
-          const event = {
-            method: raw.method,
-            params: raw.params,
-            ...(raw.id === undefined ? {} : { requestId: raw.id }),
-          };
-          for (const listener of this.listeners) listener(event);
-        } else {
-          this.startup.add('responses');
-          const request = this.pending.get(String(raw.id));
-          if (
-            !request ||
-            raw.id === undefined ||
-            (raw.error === undefined) === (raw.result === undefined)
-          )
-            return this.fail('unexpected_response');
-          this.startup.add('correlatedResponses');
-          this.pending.delete(String(raw.id));
-          clearTimeout(request.timer);
-          if (raw.error !== undefined) {
-            this.failure ??= { reason: 'native_request_rejected', method: request.method };
-            request.reject(new Error('Codex rejected structured request'));
-          } else request.resolve(raw.result);
+        } catch {
+          this.fail('invalid_message');
         }
-      } catch {
-        this.fail('invalid_message');
+        if (this.closed) return;
       }
+    } catch {
+      this.fail('output_limit');
     }
   }
+
   private fail(reason: FailureReason, method: CodexMethod | null = null): void {
     if (this.closed) return;
     if (reason === 'invalid_message') this.startup.add('invalidMessages');
@@ -252,7 +248,7 @@ export class CodexChannel {
     this.finishDiagnostics();
     this.closed = true;
     this.failure ??= { reason, method };
-    this.buffer = Buffer.alloc(0);
+    this.lines.clear();
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
       pending.reject(new Error('Codex structured outcome unavailable'));

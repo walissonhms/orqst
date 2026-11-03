@@ -677,3 +677,30 @@ in-memory layout preferences and the existing bounded two-slot/provider selectio
 no provider startup, schema migration, durable restoration, model capability or
 additional ownership is implied. A toolbar range control supplies mouse/keyboard
 resizing; draggable native boundaries and full multi-tab Studio remain future work.
+
+---
+
+## ADR-035 — Audited source reuse with preserved observer and managed boundaries
+
+**Status:** Accepted on 2026-11-03 for the audited component below.
+
+**Context.** Existing CLI/process/recovery implementations must be evaluated before
+adding replacements. Apache-2.0 permits compatible third-party incorporation with
+license, attribution and modification notices; a project license alone does not
+clear every dependency or establish runtime compatibility.
+
+**Decision.** Permit narrow source reuse after exact-commit license/NOTICE,
+dependency-closure, security and compatibility review. Preserve the historical
+reference audit and ADR-013 as records of the earlier no-copy decision. This new
+decision authorizes the audited Anywh `BufferLineSplitter` adaptation in the private
+Codex channel; it does not import Tucano, Overclock, an upstream relay, schemas or
+assets. See the [source ledger and decision matrix](../research/reuse-first-audit.md).
+
+**Consequences.** Retain source provenance/modification headers, LICENSE and NOTICE.
+The adaptation removes repeated prefix concatenation during fragmented structured
+RPC, while preserving existing limits, strict decoding, correlation and failure
+semantics. No public API, dependency, data migration, service, listener or authority
+is added. The observer remains read-only; separately authorized native managed
+operations remain valid. Static upstream declarations, synthetic validation and
+real-provider acceptance remain distinct. Revert the isolated increment to restore
+the previous parser without touching stored data or native sessions.

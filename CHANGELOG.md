@@ -12,6 +12,16 @@
   without changing assertions or request behavior.
 - See [workflow, recovery limits and validation](docs/development/cli-team-recovery.md).
 
+## 2026-11-03 — Audited structured-channel source reuse
+
+- Publish the pinned Anywh/Tucano/Overclock inventory with license, NOTICE,
+  dependency, compatibility, acceptance and rollback evidence.
+- Adapt Anywh's Apache-2.0 BufferLineSplitter in the private structured Codex
+  channel to concatenate fragmented lines at completion, preserving byte budgets,
+  strict UTF-8, correlation, failure diagnostics and existing authorization.
+- Retain the source reader, process hosts, durable journals and scoped queue; no new
+  dependency, migration, listener or provider call. See [audit](docs/research/reuse-first-audit.md).
+
 ## 2026-11-03 — Studio terminal layout controls
 
 - Add provider-labeled A/B tab navigation, side-by-side/stacked native splits,
