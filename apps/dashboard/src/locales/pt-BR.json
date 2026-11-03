@@ -447,7 +447,8 @@
       "workspaces": "Diretório de workspaces",
       "agents": "Agentes e integrações",
       "models": "Modelos mais usados",
-      "settings": "Configurações"
+      "settings": "Configurações",
+      "artifacts": "Biblioteca de artefatos"
     },
     "skip": "Ir para o conteúdo principal",
     "collapse": "Recolher navegação",
@@ -622,5 +623,24 @@
     "ok": "Solicitação processada; saída exige evidência explícita.",
     "idle": "Nenhum processo próprio foi iniciado.",
     "output": "Saída inerte do processo sintético"
+  },
+  "artifactLibrary": {
+    "title": "Biblioteca de artefatos",
+    "description": "Encontre mensagens retidas e abra o fluxo de artefato manual.",
+    "scope": "A busca cobre apenas as observações carregadas, no workspace e sessão selecionados. As fontes são mensagens retidas de assistant/agent do Codex, não arquivos salvos, rascunhos ou documentos detectados automaticamente. O filtro de workspace usa a associação atual da sessão.",
+    "search": "Buscar texto carregado, agentes, sessões ou workspaces",
+    "session": "Sessão de origem",
+    "allSessions": "Todas as sessões do escopo",
+    "coverage": "Fontes correspondentes: {{count}} · Fontes carregadas: {{sources}} · Observações lidas: {{scanned}}",
+    "refresh": "Atualizar fontes",
+    "offline": "Conexão indisponível. As fontes carregadas podem estar desatualizadas; abrir e carregar exige reconexão.",
+    "newer": "Há novas observações disponíveis. Atualize as fontes para incluí-las.",
+    "failed": "Não foi possível carregar as fontes. Atualize ou tente carregar observações anteriores novamente; os resultados existentes podem estar desatualizados.",
+    "loading": "Carregando observações retidas…",
+    "empty": "Nenhuma fonte correspondente nas observações carregadas. Tente outra busca/sessão ou carregue observações anteriores.",
+    "open": "Abrir artefato manual",
+    "limit": "Limite de leitura atingido ({{observations}} observações ou {{sources}} fontes). Escolha uma sessão específica para explorar seu histórico.",
+    "older": "Carregar observações anteriores",
+    "end": "Fim das observações retidas desta leitura. A retenção pode ter removido conteúdo anterior."
   }
 }

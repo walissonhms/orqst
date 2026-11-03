@@ -447,7 +447,8 @@
       "workspaces": "Workspace directory",
       "agents": "Agents & integrations",
       "models": "Most used models",
-      "settings": "Settings"
+      "settings": "Settings",
+      "artifacts": "Artifact library"
     },
     "skip": "Skip to main content",
     "collapse": "Collapse sidebar",
@@ -622,5 +623,24 @@
     "ok": "Request processed; exit requires explicit evidence.",
     "idle": "No owned process has been started.",
     "output": "Inert synthetic process output"
+  },
+  "artifactLibrary": {
+    "title": "Artifact library",
+    "description": "Find retained message sources and open the manual Artifact workflow.",
+    "scope": "Search covers loaded observations only, within the selected workspace and session. Sources are retained Codex assistant/agent messages, not saved files, drafts or automatically detected documents. Workspace filters use the current session association.",
+    "search": "Search loaded text, agents, sessions or workspaces",
+    "session": "Source session",
+    "allSessions": "All scoped sessions",
+    "coverage": "Matching sources: {{count}} · Loaded sources: {{sources}} · Observations read: {{scanned}}",
+    "refresh": "Refresh sources",
+    "offline": "Connection unavailable. Loaded sources may be out of date; opening and loading require reconnection.",
+    "newer": "New observations are available. Refresh sources to include them.",
+    "failed": "Unable to load sources. Refresh or retry loading older observations; existing results may be out of date.",
+    "loading": "Loading retained observations…",
+    "empty": "No matching sources in the loaded observations. Try another search/session or load older observations.",
+    "open": "Open manual artifact",
+    "limit": "Reading limit reached ({{observations}} observations or {{sources}} sources). Choose a specific session to explore its history.",
+    "older": "Load older observations",
+    "end": "End of retained observations for this reading. Retention may have removed earlier content."
   }
 }

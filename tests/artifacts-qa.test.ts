@@ -290,8 +290,13 @@ test('panel and activity integration are manual-only, memory-only and free of ac
   assert.match(panel, /copyFailed/);
   assert.match(panel, /new TextEncoder\(\)/);
   assert.match(panel, /\/api\/artifacts\/extract/);
-  assert.match(app, /event\.payload\.role === 'assistant'/);
-  assert.match(app, /event\.payload\.role === 'agent'/);
+  const selection = readFileSync(
+    join(process.cwd(), 'apps/dashboard/src/artifact-library.ts'),
+    'utf8',
+  );
+  assert.match(app, /onExtract && artifactSelection\(event\)/);
+  assert.match(selection, /event\.payload\.role === 'assistant'/);
+  assert.match(selection, /event\.payload\.role === 'agent'/);
   assert.match(app, /key=\{selectedSession\.id\}/);
   for (const forbidden of ['dangerouslySetInnerHTML', 'fetch(', 'window.open', '<img', '<a '])
     assert.equal(preview.includes(forbidden), false, forbidden);
