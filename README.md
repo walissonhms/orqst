@@ -34,6 +34,11 @@ synthetic process evidence and optional strict MCP configuration. OpenCode 2.2.5
 review manifest; explicit native startup, migration/activity acknowledgment and signed
 Desktop confirmation are required. See [OpenCode setup and effects](docs/development/opencode-desktop-terminal.md). See [Claude setup and provider limits](docs/development/claude-interactive-terminal.md) and
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
+The updated Desktop native menu can select/review existing manifests in memory,
+then open its fixed Terminal pair without restarting. It accepts one provider per
+live selection and preserves existing reservations; review starts no provider or
+Core. An older loaded shell is not hot-upgraded by rebuilding. Strict inference-free
+OpenCode startup remains blocked by the [documented enforcement gap](docs/development/opencode-startup-safety.md).
 `pnpm terminal:plan:opencode` now reviews the exact installed 2.2.5 standalone
 candidate without executing it. Passive evidence resolves shared-service selection,
 but native credentials/sessions share a database whose startup can migrate schema;

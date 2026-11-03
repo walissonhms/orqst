@@ -679,6 +679,12 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
+    "selectManifests": "Selecionar e revisar manifests de terminal existentes…",
+    "chooseManifests": "Selecione um ou dois arquivos terminal.json privados do mesmo provider. A ordem da seleção é A, depois B. Esta revisão não inicia nem provisiona nada.",
+    "reviewManifests": "Manter esta seleção em memória? Revise os manifests completos e os bloqueios. Isto não cria Core, journal, reserva ou provider. Abra o terminal interativo A ou B separadamente para inicializar o par Desktop existente e seus journals; seleções bloqueadas criam apenas a visualização. Iniciar uma CLI continua exigindo confirmação nativa assinada separada. A configuração nativa pode causar atividade de provider e custos no startup; não há garantia de ausência de inferência. Abrir fixa este par pelo restante desta execução do Desktop, inclusive em falhas; reservas existentes e sessões externas são preservadas.",
+    "keepSelection": "Manter seleção revisada",
+    "selectionDenied": "Seleção recusada: escolha um ou dois manifests privados completos do mesmo provider. Arquivos alterados, configuração incompatível, estados duplicados ou sobrepostos e revisões maiores que 4096 caracteres são recusados. Nada foi iniciado ou provisionado.",
+    "selectionOpenDenied": "Não foi possível abrir a seleção revisada. A abertura não iniciou nenhuma CLI. Se a inicialização foi tentada, esta execução do Desktop não pode substituir nem repetir o par; preserve journals e reservas existentes. Arquivos alterados precisam de nova revisão antes da inicialização.",
     "reuseScope": "Reuso experimental do login nativo Codex. Configuração, MCPs, skills e raiz de sessões nativas ficam compartilhados; Codex pode renovar credenciais e gravar novas sessões. Não é efêmero nem um contêiner. Padrões iniciais somente leitura/sob solicitação; a interface do provider pode mudar permissões. Sem tarefa automática, retomada ou login. Aceite do provider real e integração MCP pendentes; OpenCode exige seu opt-in explícito de startup separado.",
     "reuseIdle": "Nenhum processo próprio iniciado. Iniciar exige confirmação nativa. Login separado fica desabilitado neste perfil de reuso nativo.",
     "focus_required": "Traga esta janela de Terminal para frente e tente novamente. O macOS deve estar desbloqueado; nenhuma operação foi autorizada.",

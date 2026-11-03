@@ -16,6 +16,7 @@ import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
 import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
 import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
+import { TerminalSelection } from './terminal-selection.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
 import { DesktopMonitor, readMonitorSnapshot, type NativeAlert } from './monitor.js';
@@ -85,9 +86,11 @@ async function start(): Promise<void> {
   const terminalConfigs = process.argv
     .filter((value) => value.startsWith('--terminal-config='))
     .map((value) => value.slice('--terminal-config='.length));
-  const terminals = terminalConfigs.length
+  let terminals = terminalConfigs.length
     ? await createManagedTerminals(terminalConfigs, (key) => i18n.t(key))
     : undefined;
+  const terminalSelection = new TerminalSelection();
+  let terminalOpening = false;
   let managedLifetime = 'idle';
   let refreshManagedTray: () => void = () => undefined;
   const openManagedAgents = await createManagedAgents(
@@ -108,15 +111,21 @@ async function start(): Promise<void> {
         label: i18n.t('managedTerminal.title'),
         submenu: [
           {
+            id: 'managed-terminal-select',
+            label: i18n.t('managedTerminal.selectManifests'),
+            enabled: !terminals,
+            click: () => void reviewTerminalSelection(),
+          },
+          {
             id: 'managed-agents-open',
             label: i18n.t('managedAgents.title'),
             click: openManagedAgents,
           },
-          ...(terminals?.openers ?? [undefined]).map((open, slot) => ({
+          ...[0, 1].map((slot) => ({
             id: slot === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open',
             label: `${i18n.t('managedTerminal.open')} ${slot === 0 ? 'A' : 'B'}`,
-            enabled: !!open,
-            click: () => open?.(),
+            enabled: !!terminals?.openers[slot],
+            click: () => void openTerminalSelection(slot),
           })),
           {
             id: 'managed-terminal-mcp',
@@ -141,6 +150,143 @@ async function start(): Promise<void> {
   let nativeFileBusy = false;
   let documentGeneration = 0;
   let quitting = false;
+
+  function updateTerminalMenu(): void {
+    const menu = Menu.getApplicationMenu();
+    const select = menu?.getMenuItemById('managed-terminal-select');
+    if (select) select.enabled = !terminals && !terminalSelection.locked && !terminalOpening;
+    for (const [slot, id] of ['managed-terminal-open', 'managed-terminal-b-open'].entries()) {
+      const item = menu?.getMenuItemById(id);
+      if (item)
+        item.enabled =
+          !terminalOpening &&
+          (!!terminals?.openers[slot] ||
+            (!terminalSelection.locked && slot < terminalSelection.count));
+    }
+    const mcp = menu?.getMenuItemById('managed-terminal-mcp');
+    if (mcp) mcp.enabled = !!terminals?.mcpEnabled;
+    const retire = menu?.getMenuItemById('managed-terminal-retire');
+    if (retire) retire.enabled = !!terminals;
+  }
+
+  // The native menu is the sole entry. There is no renderer/IPC path or second-instance import.
+  function terminalSelectionContext() {
+    const target = window;
+    const frame = target && !target.isDestroyed() ? target.webContents.mainFrame : undefined;
+    const generation = documentGeneration;
+    let invalidated = false;
+    const invalidate = () => {
+      invalidated = true;
+    };
+    target?.on('blur', invalidate);
+    const current = () => {
+      try {
+        return (
+          !invalidated &&
+          !quitting &&
+          !!target &&
+          window === target &&
+          !target.isDestroyed() &&
+          !target.webContents.isDestroyed() &&
+          target.webContents.session === browserSession &&
+          frame === target.webContents.mainFrame &&
+          !!frame &&
+          !frame.detached &&
+          !frame.isDestroyed() &&
+          generation === documentGeneration &&
+          frame.url === target.webContents.getURL() &&
+          allowedNavigation(frame.url, origin) &&
+          target.isFocused() &&
+          target.webContents.isFocused()
+        );
+      } catch {
+        return false;
+      }
+    };
+    return { target, current, dispose: () => target?.removeListener('blur', invalidate) };
+  }
+
+  async function reviewTerminalSelection(): Promise<void> {
+    if (terminals || terminalOpening || terminalSelection.locked || nativeFileBusy) return;
+    const context = terminalSelectionContext();
+    if (!context.current()) {
+      context.dispose();
+      return;
+    }
+    nativeFileBusy = true;
+    try {
+      const result = await terminalSelection.review({
+        current: context.current,
+        choose: async () => {
+          const result = await dialog.showOpenDialog(context.target!, {
+            title: i18n.t('managedTerminal.selectManifests'),
+            message: i18n.t('managedTerminal.chooseManifests'),
+            filters: [{ name: 'JSON', extensions: ['json'] }],
+            properties: ['openFile', 'multiSelections', 'dontAddToRecent', 'noResolveAliases'],
+          });
+          return result.canceled ? undefined : result.filePaths;
+        },
+        confirm: async (detail) => {
+          const result = await dialog.showMessageBox(context.target!, {
+            type: 'warning',
+            title: i18n.t('managedTerminal.selectManifests'),
+            message: i18n.t('managedTerminal.reviewManifests'),
+            detail,
+            buttons: [i18n.t('terminalNative.cancel'), i18n.t('managedTerminal.keepSelection')],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          return result.response === 1;
+        },
+      });
+      if (result === 'denied' && context.current())
+        await dialog.showMessageBox(context.target!, {
+          type: 'warning',
+          message: i18n.t('managedTerminal.selectionDenied'),
+          buttons: [i18n.t('terminalNative.cancel')],
+          noLink: true,
+        });
+    } finally {
+      context.dispose();
+      nativeFileBusy = false;
+      updateTerminalMenu();
+    }
+  }
+
+  async function openTerminalSelection(slot: number): Promise<void> {
+    if (terminals) {
+      terminals.openers[slot]?.();
+      return;
+    }
+    if (terminalOpening || nativeFileBusy || slot >= terminalSelection.count) return;
+    const context = terminalSelectionContext();
+    if (!context.current()) {
+      context.dispose();
+      return;
+    }
+    terminalOpening = true;
+    nativeFileBusy = true;
+    updateTerminalMenu();
+    try {
+      const files = terminalSelection.take();
+      terminals = await createManagedTerminals(files, (key) => i18n.t(key));
+      if (context.current()) terminals.openers[slot]?.();
+    } catch {
+      if (context.current())
+        await dialog.showMessageBox(context.target!, {
+          type: 'warning',
+          message: i18n.t('managedTerminal.selectionOpenDenied'),
+          buttons: [i18n.t('terminalNative.cancel')],
+          noLink: true,
+        });
+    } finally {
+      context.dispose();
+      terminalOpening = false;
+      nativeFileBusy = false;
+      updateTerminalMenu();
+    }
+  }
   ipcMain.handle('orqst:managed-agents-open', (event) => {
     if (
       quitting ||
@@ -556,6 +702,10 @@ async function start(): Promise<void> {
   updateTray();
   void poll();
   app.prependListener('before-quit', (event) => {
+    if (terminalOpening) {
+      event.preventDefault();
+      return;
+    }
     if (!openManagedAgents.confirmQuit() || (terminals && !terminals.confirmQuit())) {
       event.preventDefault();
       return;

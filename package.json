@@ -39,6 +39,7 @@
     "accept:managed-agents": "tsx scripts/accept-managed-agents.ts",
     "accept:managed-terminal": "tsx scripts/accept-managed-terminal.ts",
     "accept:terminal-pair": "tsx scripts/accept-terminal-pair.ts",
+    "accept:terminal-selection": "tsx scripts/accept-terminal-selection.ts",
     "accept:terminal-reuse": "tsx scripts/accept-terminal-reuse.ts"
   },
   "devDependencies": {

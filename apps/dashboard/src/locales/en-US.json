@@ -679,6 +679,12 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
+    "selectManifests": "Select and review existing terminal manifests…",
+    "chooseManifests": "Select one or two private terminal.json files from the same provider. Selection order is A, then B. Nothing is started or provisioned by this review.",
+    "reviewManifests": "Keep this selection in memory? Review the complete manifests and blockers. This creates no Core, journal, reservation or provider. Open interactive terminal A or B separately to initialize the existing Desktop pair and its journals; blocked selections create only a view. Starting a CLI still requires a separate signed native confirmation. Native configuration can cause provider activity and costs at startup; no inference-free guarantee. Opening locks this pair for the rest of this Desktop run, including failures; existing reservations and external sessions are preserved.",
+    "keepSelection": "Keep reviewed selection",
+    "selectionDenied": "Selection refused: choose one or two complete private manifests from the same provider. Changed files, unsupported configuration, duplicate or overlapping state, and reviews larger than 4096 characters are refused. Nothing was started or provisioned.",
+    "selectionOpenDenied": "The reviewed selection could not be opened. No CLI was started by opening. If initialization was attempted, this Desktop run cannot replace or retry the pair; preserve any journals and reservations. Changed files must be reviewed again before initialization.",
     "reuseScope": "Experimental Codex native login reuse. Native configuration, MCPs, skills and session root stay shared; Codex may refresh credentials and write new sessions. Not ephemeral or a container. Read-only/on-request startup defaults; provider UI can change permissions. No automatic task, resume or login. Real-provider and MCP integration acceptance are pending; OpenCode requires its separate explicit startup opt-in.",
     "reuseIdle": "No owned process started. Start requires native confirmation. Separate login is disabled for this native reuse profile.",
     "focus_required": "Bring this Terminal window to the foreground and try again. macOS must be unlocked; no operation was authorized.",

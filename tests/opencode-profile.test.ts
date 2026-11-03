@@ -19,7 +19,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { build, type PluginBuild } from 'esbuild';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import {
+  managedCodexSettings,
+  terminalExecutableSha256,
+  type ManagedCodexConfig,
+} from '../packages/core/src/terminal/codex-profile.js';
 import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 import {
   managedOpenCodeConfigSchema,
@@ -27,6 +31,7 @@ import {
   openCodeTerminalEnvironment,
 } from '../packages/core/src/terminal/opencode-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import type { TerminalSelection } from '../apps/desktop/src/terminal-selection.js';
 
 function configFixture() {
   return managedOpenCodeConfigSchema.parse({
@@ -149,10 +154,12 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
       },
     };
     const setup = join(root, 'setup.cjs'),
-      driver = join(root, 'driver.cjs');
+      driver = join(root, 'driver.cjs'),
+      selectionDriver = join(root, 'selection.cjs');
     for (const [entry, outfile] of [
       ['scripts/setup-opencode-terminal.ts', setup],
       ['packages/core/src/terminal/managed-files.ts', driver],
+      ['apps/desktop/src/terminal-selection.ts', selectionDriver],
     ] as const)
       await build({
         entryPoints: [entry],
@@ -204,6 +211,27 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
     assert.equal(selected.blocker, 'opencode_startup_required');
     assert.equal(readdirSync(state).includes('terminal.sqlite'), false);
     assert.equal(readdirSync(state).includes('desktop-communication.sqlite'), false);
+    const selectionModule = createRequire(import.meta.url)(selectionDriver) as {
+      TerminalSelection: typeof TerminalSelection;
+      inspectTerminalSelection: typeof import('../apps/desktop/src/terminal-selection.js').inspectTerminalSelection;
+    };
+    const selection = new selectionModule.TerminalSelection();
+    assert.equal(
+      await selection.review({
+        current: () => true,
+        choose: async () => [join(state, 'terminal.json')],
+        confirm: async (detail) => {
+          const reviewed = JSON.parse(detail)[0];
+          assert.equal(reviewed.blocker, 'opencode_startup_required');
+          assert.equal(reviewed.config.interactive.nativeStartupAuthorized, false);
+          assert.equal(reviewed.config.authentication.nativeIdentity.OPENCODE_DB, db);
+          return true;
+        },
+      }),
+      'reviewed',
+    );
+    assert.deepEqual(selection.take(), [join(state, 'terminal.json')]);
+    assert.deepEqual(readdirSync(state).sort(), ['terminal.json', 'tmp']);
     assert.throws(() => execFileSync(node, args, { env, stdio: 'pipe' })); // No adoption.
     const authorized = join(root, 'authorized');
     execFileSync(
@@ -220,6 +248,43 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
     assert.equal(
       inspect.inspectManagedTerminalFiles([join(authorized, 'terminal.json')])[0]!.blocker,
       undefined,
+    );
+    assert.equal(
+      JSON.parse(
+        selectionModule.inspectTerminalSelection([
+          join(state, 'terminal.json'),
+          join(authorized, 'terminal.json'),
+        ]).detail,
+      ).length,
+      2,
+    );
+    // A valid Codex reuse manifest remains a different provider, even with the same binary pin.
+    const codexState = join(root, 'codex-review');
+    mkdirSync(codexState, { mode: 0o700 });
+    for (const name of ['tmp', 'home', 'codex']) mkdirSync(join(codexState, name), { mode: 0o700 });
+    const codexFile = join(codexState, 'terminal.json');
+    const codexConfig: ManagedCodexConfig = {
+      version: 1,
+      trust: 'native-same-user',
+      executable: { path: node, sha256: terminalExecutableSha256(node) },
+      node: { path: node, sha256: terminalExecutableSha256(node) },
+      executableVersion: 'SYNTHETIC',
+      project,
+      state: codexState,
+      authentication: {
+        mode: 'reuse-existing',
+        home,
+        codexHome: home,
+        sharedNativeConfiguration: true,
+      },
+    };
+    writeFileSync(join(codexState, 'codex/config.toml'), managedCodexSettings(codexConfig), {
+      mode: 0o600,
+    });
+    writeFileSync(codexFile, JSON.stringify(codexConfig), { mode: 0o600 });
+    assert.throws(
+      () => selectionModule.inspectTerminalSelection([join(state, 'terminal.json'), codexFile]),
+      /one provider/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

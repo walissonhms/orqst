@@ -43,6 +43,18 @@ will acknowledge a report when possible and coordinate disclosure after a fix.
 
 ## Current managed Terminal opt-in
 
+The native application menu can select/review existing Terminal manifests while
+Desktop runs. Review stores only memory and exposes no new renderer/IPC/path API.
+A separate Open uses the existing fixed-pair admission/journals; actual provider
+start still requires its signed native confirmation. No live pair replacement,
+external-session adoption, reservation reset or failed-initialization retry is
+offered. Same-provider live selection and complete bounded review fail closed on
+focus/navigation/expiry or file/identity drift. See the
+[selection security review](docs/architecture/security-model.md#live-native-terminal-manifest-selection--2026-11-03).
+Strict inference-free OpenCode startup remains unestablished; native policies and
+simulation are not claimed as all-code containment or zero-billing proof. See the
+[pinned-source investigation](docs/development/opencode-startup-safety.md).
+
 The [structured Desktop client](docs/development/managed-agents-client.md) now
 composes two explicitly native-confirmed Codex starts and exact A-to-B-to-A task
 authority in a separate sandboxed document. The observer preload only opens the

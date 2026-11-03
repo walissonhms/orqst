@@ -35,29 +35,39 @@ export async function createManagedTerminals(files: string[], translate: (key: s
   const router = createTerminalRuntimeRouter(ipcMain);
   let core: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
   let blocker: string | undefined = selection.find((slot) => slot.blocker)?.blocker;
-  if (!blocker) {
-    const directory = join(app.getPath('userData'), 'managed-agents');
-    try {
-      desktopAgentsAdmission(directory, files); // Inspect old markers without claiming or reconciling.
-    } catch {
-      blocker = 'capacity_reserved';
-    }
-    if (!blocker)
-      core = await connectManagedTerminalCore(
-        files,
-        join(__dirname, 'managed-terminal-core.cjs'),
-        keys.publicKey,
-        directory,
-      );
-  }
   let quitting = false;
   let retiring = false;
   let retired = false;
+  let initialized = false;
   const windows: BrowserWindow[] = [];
   const openers: Array<() => void> = [];
-  for (const [slot, file] of files.entries()) {
-    const open = await createWindow(file, slot);
-    openers.push(open);
+  try {
+    if (!blocker) {
+      const directory = join(app.getPath('userData'), 'managed-agents');
+      try {
+        desktopAgentsAdmission(directory, files); // Inspect old markers without claiming or reconciling.
+      } catch {
+        blocker = 'capacity_reserved';
+      }
+      if (!blocker)
+        core = await connectManagedTerminalCore(
+          files,
+          join(__dirname, 'managed-terminal-core.cjs'),
+          keys.publicKey,
+          directory,
+        );
+    }
+    for (const [slot, file] of files.entries()) {
+      const open = await createWindow(file, slot);
+      openers.push(open);
+    }
+    initialized = true;
+  } catch (error) {
+    // No broker can dispatch before the whole pair loads. Preserve all disk/admission evidence.
+    router.close();
+    core?.close();
+    for (const window of windows) if (!window.isDestroyed()) window.destroy();
+    throw error;
   }
   app.on('before-quit', (event) => {
     if (event.defaultPrevented) return;
@@ -280,7 +290,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
           keys.privateKey,
           document,
           {
-            current: (_document, focus) => current(focus),
+            current: (_document, focus) => initialized && current(focus),
             confirm: (_document, details) =>
               confirmTerminalAction(dialog, window, translate, details),
           },

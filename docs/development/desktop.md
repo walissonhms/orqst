@@ -64,6 +64,15 @@ Recheck support/security patches before distribution; the pin is not an automati
 
 ## Commands
 
+**Managed Terminal → Select and review existing terminal manifests…** now selects
+one or two existing manifests through a native file chooser and complete native
+review, without restarting this build. Review is memory-only; a separate Open
+initializes the fixed pair and its existing admission/journal path. Blocked OpenCode
+manifests create only blocked views. Native CLI start remains separately signed.
+No renderer path method or second-instance import exists. Selection becomes fixed
+once initialization is attempted, including failures; no live pair is replaced.
+See [the flow, same-provider limit and focus gates](opencode-desktop-terminal.md#select-an-existing-manifest-in-a-running-desktop).
+
 The owner-supplied application icons are stored in `apps/desktop/resources/icons/`
 and copied beside the built main process. The running macOS Dock uses the supplied
 PNG, the menu-bar tray uses a cropped high-resolution source at 24 x 20 points

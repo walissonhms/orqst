@@ -957,3 +957,30 @@ descendant cleanup for a provider, or establish installed Codex compatibility.
 The [startup counter contract](codex-startup-diagnostics.md) describes the added
 fixed-size metadata, fake-only privacy/limit/cleanup tests and sample-lag limits.
 No real-provider acceptance follows from those counters.
+
+## Live native Terminal manifest selection
+
+After `pnpm build`, the explicit disposable Electron integration is:
+
+```bash
+pnpm accept:terminal-selection --authorize-synthetic-review
+```
+
+It uses its own synthetic Bridge, empty source directory, profile, reservation and
+blocked OpenCode review manifest. Only a temporary test bundle substitutes Node's
+hash for the provider hash; that executable is never dispatched as a provider.
+Native focus and file/review dialog answers are intercepted. The test exercises
+the actual application menu, memory-only review, cancellation, blur/navigation
+invalidation, drift/re-review and opening the blocked view without Core/journal
+creation, preserving the synthetic old reservation. It removes only its own root.
+It also injects a second-window load failure in a second disposable lifetime of the
+same profile and checks partial-window cleanup, preserved files/reservation and the
+fixed initialization latch.
+This proves wiring/preservation, not actual native-modal visibility, focus, login,
+inference-free startup, provider readiness or billing. Normal tests/CI do not run
+this explicit Electron command. See [the flow and limits](opencode-desktop-terminal.md).
+
+`tests/terminal-selection.test.ts` and `tests/opencode-profile.test.ts` cover strict
+files/permissions/identity, ordered complete review, oversize refusal, invisible
+format controls, cancellation/expiry/concurrency, source/inode/blocker drift,
+one-time initialization and same-provider selection with disposable fixtures.

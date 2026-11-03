@@ -1,5 +1,39 @@
 # Security model
 
+## Live native terminal manifest selection — 2026-11-03
+
+The Desktop application menu alone opens a parented native file chooser and a
+Cancel-default full-manifest review. There is no new preload/IPC, renderer path,
+HTTP, WebSocket, cookie or static-serving capability. Main binds the transaction
+to the observer window/session/frame/generation and focused document (including
+the trusted local offline page); blur permanently invalidates that review.
+Navigation, destruction, 60-second expiry and source/config/blocker/inode drift
+fail closed. Existing strict schemas, no-follow/canonical owner/mode checks and
+executable hashes are reused. Oversized reviews are refused, never truncated.
+
+Registration stores only memory, with no Core, journal, provider, reservation claim
+or native-data access. An explicit Open revalidates and latches the selection
+before the existing pair factory can create a Node Core/journals. The same Desktop
+user-data admission domain remains authoritative; no state/profile reset, append,
+adoption, capacity release or retry after initialization failure is introduced.
+An existing startup-argv pair disables selection. New live selections require the
+same provider across slots; existing MCP pair/workspace opt-ins and separately
+signed task grants remain. Provider startup still uses the current native signed
+broker. Blocked OpenCode manifests remain blocked, with no Core/journal.
+All brokers are fenced until every window in the pair loads. Initialization failure
+closes only its private router/Core connections and destroys partial windows while
+preserving disk/admission evidence and the no-retry latch. No provider signal or
+external-window cleanup is added.
+Journals created before failure remain reserved and block reuse after restart;
+absence of a provider dispatch is not an automatic journal-release permission.
+
+Tests use temporary synthetic state and intercepted native dialogs/focus. They do
+not accept human-modal visibility or real provider behavior. Same-user malicious
+replacement races and lack of process/descendant containment remain disclosed.
+The [startup investigation](../development/opencode-startup-safety.md) does not
+establish an inference-free OpenCode launch. Native identity, sessions, databases,
+quarantines and running external processes remain outside this change.
+
 ## Structured Desktop composition review — 2026-11-03
 
 The [Managed agents client](../development/managed-agents-client.md) adds an explicit
