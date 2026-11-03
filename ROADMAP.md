@@ -36,7 +36,9 @@ highlights fields changed by newer confirmed evidence, with static reduced-motio
 it never interpolates counts or times. A temporary session token threshold now adds
 a visual advisory in both headers, using only confirmed cumulative totals. Closing
 session details clears it; stale readings cannot claim to be below or above it. This
-is not a provider quota, spending cap or execution limit. Terminal display, project/
+is not a provider quota, spending cap or execution limit. An exact confirmed-total
+difference and static reached-threshold flame now supplement the advisory; stale
+readings suppress both. Terminal display, project/
 persistent limits, verified pricing, Fast and mascot reactions remain planned. See
 [contract](docs/api/live-metrics.md).
 

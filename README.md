@@ -50,6 +50,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   a current confirmed cumulative reading; stale/pending/error/offline readings leave
   comparison unavailable. The threshold clears when session details close or reload.
   This is a visual advisory, without persistence, system alerts or execution control.
+  It now shows the exact difference from the confirmed total and a static flame at
+  or above the threshold; stale readings suppress both. The difference is not a
+  provider allowance or forecast.
 
 - **Implemented:** the local Codex observer, SQLite store, loopback API, live React
   dashboard, en-US/pt-BR UI, macOS user-service helper and minimal Electron observer

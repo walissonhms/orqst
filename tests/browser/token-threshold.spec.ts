@@ -63,6 +63,8 @@ test('unmocked synthetic totals drive the shared visual alert without adding cac
   await expect(status).toHaveCount(0);
   await apply('250');
   await expect(status).toContainText(below);
+  await expect(status).toContainText('Confirmed total: 20 tokens below the threshold.');
+  await expect(status.locator('svg')).toHaveCount(0);
   await expect(header.locator('.live-token-threshold-reached')).toHaveCount(0);
   await page.getByRole('button', { name: 'Extract artifact manually', exact: true }).click();
   const artifact = page.locator('.artifact-panel .live-metrics');
@@ -71,10 +73,27 @@ test('unmocked synthetic totals drive the shared visual alert without adding cac
   await appendFile(source, tokenLine(210, 40, 80));
   await expect(header.locator('.live-token-threshold-reached')).toContainText(reached);
   await expect(artifact.locator('.live-token-threshold-reached')).toContainText(reached);
+  for (const panel of [header, artifact]) {
+    await expect(panel.locator('.live-token-threshold')).toContainText(
+      'The confirmed total exactly matches the threshold.',
+    );
+    await expect(panel.locator('.live-token-threshold-icon')).toHaveAttribute(
+      'aria-hidden',
+      'true',
+    );
+  }
   await expect(header.locator('.live-metric-values strong')).toHaveText(['210', '40', '80', '250']);
   await expect(header.locator('time')).toHaveAttribute('datetime', timestamp);
   await expect(page.locator('.session-detail [aria-live]')).toHaveCount(1);
   await expect(header.locator('[aria-live]')).toContainText(reached);
+  await appendFile(source, tokenLine(211, 40, 80));
+  for (const panel of [header, artifact])
+    await expect(panel.locator('.live-token-threshold')).toContainText(
+      'Confirmed total: 1 token above the threshold.',
+    );
+  await expect(header.locator('[aria-live]')).toContainText(
+    'Confirmed total: 1 token above the threshold.',
+  );
   await header.getByRole('button', { name: 'Clear threshold', exact: true }).click();
   await expect(status).toHaveCount(0);
   await expect(artifact.locator('.live-token-threshold')).toHaveCount(0);
@@ -90,6 +109,7 @@ test('explicit integer validation preserves an applied threshold until replaceme
   await apply('9007199254740991');
   await expect(status).toContainText('9,007,199,254,740,991');
   await expect(status).toContainText(below);
+  await expect(status).toContainText('Confirmed total: 9,007,199,254,740,871 tokens below');
   for (const invalid of [
     '',
     '0',
@@ -157,6 +177,8 @@ test('pending, failed and unavailable metrics suppress the visual comparison and
   mode = 'pending';
   await refresh();
   await expect(status).toContainText(unavailable);
+  await expect(status).not.toContainText('Confirmed total:');
+  await expect(status.locator('svg')).toHaveCount(0);
   await expect(header.locator('.live-token-threshold-reached')).toHaveCount(0);
   // Polling is visual only; the single announcer retains the last settled comparison.
   await expect(header.locator('[aria-live]')).toHaveText(announced!);
@@ -167,6 +189,8 @@ test('pending, failed and unavailable metrics suppress the visual comparison and
     await refresh();
     await expect(header).toHaveAttribute('aria-busy', 'false');
     await expect(status).toContainText(next === 'available' ? reached : unavailable);
+    await expect(status.locator('svg')).toHaveCount(next === 'available' ? 1 : 0);
+    if (next !== 'available') await expect(status).not.toContainText('Confirmed total:');
     await expect(header.locator('.live-metric-values strong')).toHaveText(counts);
   }
 });
@@ -183,12 +207,22 @@ test('threshold is memory-only, localized and keyboard accessible at mobile widt
   await expect(header.locator('.live-token-threshold')).toContainText(
     'O último total confirmado atingiu ou ultrapassou o limiar.',
   );
+  await expect(header.locator('.live-token-threshold')).toContainText(
+    'Total confirmado: 119 tokens acima do limiar.',
+  );
+  const icon = header.locator('.live-token-threshold-icon');
+  await expect(icon).toHaveCSS('animation-name', 'none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await expect(icon).toHaveCSS('animation-name', 'none');
   await expect(input).toHaveAccessibleName('Limiar do total de tokens');
   await expect(header).not.toContainText('liveMetrics.threshold.');
   await input.focus();
   await input.fill('9007199254740991');
   await input.press('Enter');
   await expect(header.locator('.live-token-threshold')).toContainText('9.007.199.254.740.991');
+  await expect(header.locator('.live-token-threshold')).toContainText(
+    'Total confirmado: 9.007.199.254.740.871 tokens abaixo do limiar.',
+  );
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   await page
     .getByRole('region', { name: 'Detalhes da sessão', exact: true })
@@ -210,3 +244,28 @@ test('threshold is memory-only, localized and keyboard accessible at mobile widt
   await expect(header).toBeVisible();
   await expect(header.locator('.live-token-threshold')).toHaveCount(0);
 });
+
+for (const total of [0, Number.MAX_SAFE_INTEGER]) {
+  test(`synthetic confirmed total ${total} keeps threshold arithmetic exact`, async ({ page }) => {
+    await page.route('**/api/sessions/*/metrics', async (route) => {
+      const data = sessionMetricsResultSchema.parse(await (await route.fetch()).json());
+      if (data.availability !== 'available') throw new Error('Synthetic baseline unavailable');
+      data.value.usage = { input: total, output: 0, cached: total, total };
+      await route.fulfill({ json: sessionMetricsResultSchema.parse(data) });
+    });
+    const { header, apply } = await openControl(page);
+    await apply('1');
+    await expect(header.locator('.live-token-threshold')).toContainText(
+      total === 0
+        ? 'Confirmed total: 1 token below the threshold.'
+        : 'Confirmed total: 9,007,199,254,740,990 tokens above the threshold.',
+    );
+    await expect(header.locator('.live-token-threshold-icon')).toHaveCount(total === 0 ? 0 : 1);
+    if (total > 0) {
+      await apply(String(total));
+      await expect(header.locator('.live-token-threshold')).toContainText(
+        'The confirmed total exactly matches the threshold.',
+      );
+    }
+  });
+}

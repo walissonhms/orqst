@@ -116,10 +116,20 @@ states require an available, non-stale reading; pending, failed, unavailable and
 offline readings show comparison unavailable while retaining the threshold and last
 confirmed counts. Recovery reevaluates the confirmed reading without predicting use.
 
-The warning uses static text and a border/color cue; it never relies on color alone
-or adds motion, sound, OS notifications or a new live region. The existing session
-announcer includes the last settled comparison and stays stable through polling's
-transient pending state; Artifacts remains silent. This advisory neither enforces
+The comparison also shows the exact absolute difference between the confirmed total
+and the threshold, formatted in the selected locale. Equality has explicit text.
+This is arithmetic on one safe-integer cumulative reading, not a token rate, forecast,
+remaining provider allowance or allocation to an artifact. Cached input is not added
+again. When comparison is unavailable, both the difference and the reached indicator
+are removed; previous confirmed counts/time remain labeled as out of date.
+
+The warning uses static text, a border/color cue and a small static flame icon at or
+above the threshold. The decorative icon is hidden from accessibility APIs; the text
+conveys the full result. It stays still with or without reduced motion and never
+relies on color alone or adds motion, sound, OS notifications or a new live region.
+The existing session announcer includes the last settled comparison and difference
+and stays stable through polling's transient pending state; Artifacts remains silent.
+This advisory neither enforces
 a provider quota/spending limit nor stops or changes execution. Nothing is persisted,
 sent to the Bridge, added to an export or written to observed sessions. Persistent/
 project limits, native alert policy and enforceable budgets require separate work.

@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Exact confirmed-total distance from the temporary session token threshold, with
+  explicit equality and a static flame at or above it. Session/Artifacts text and
+  the existing single announcer share the comparison; stale states hide the distance
+  and icon. Localized numbers/plurals preserve safe-integer precision without
+  forecasting usage or implying remaining provider capacity.
+
 - Temporary session total-token threshold with an explicit Apply/Clear flow and a
   shared session/Artifacts visual advisory. Only current confirmed normalized totals
   are compared; stale/pending/error/offline readings remain unavailable. English and

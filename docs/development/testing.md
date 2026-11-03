@@ -387,3 +387,23 @@ QA includes context changes during choose and overwrite confirmation, consumed U
 late context generations, sender/file integrity and critical Artifacts regressions.
 No installed service/client/profile/database/session was used or restarted. There
 were no ingestion changes, so `validate:local` and live provider tests were not run.
+
+## Confirmed threshold distance and flame — 2026-11-02
+
+This UI-only increment passed `pnpm lint`, `pnpm typecheck`, `pnpm build` and
+`pnpm exec tsx --test tests/locales.test.ts tests/live-metrics.test.ts tests/live-metrics-qa.test.ts`
+(21 cases). The affected browser suites passed 10 Chromium cases on disposable port
+4356 with an isolated output directory:
+
+```bash
+ORQST_BROWSER_PORT=4356 pnpm exec playwright test tests/browser/token-threshold.spec.ts tests/browser/token-threshold-qa.spec.ts --output=/tmp/orqst-token-alert-distance-554
+```
+
+Coverage includes an unmocked synthetic observer-to-session/Artifacts transition
+from below to equal to above the threshold, cache subset handling, exact zero and
+safe-integer extremes, unavailable/pending/failure/offline recovery, one stable polite
+announcer, English/Portuguese formatting, mobile keyboard use and static presentation
+with either motion preference. This does not validate native visual delivery or real
+provider usage. The full Node/browser suites, Electron smoke and `validate:local`
+were not rerun: ingestion, persistence, API, IPC and native grants are unchanged.
+No installed service, database, client or source sessions were changed or restarted.

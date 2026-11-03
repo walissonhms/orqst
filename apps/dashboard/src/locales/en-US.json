@@ -51,6 +51,11 @@
       "value": "Session alert threshold: {{value}} tokens.",
       "reached": "The last confirmed total is at or above the threshold.",
       "below": "The last confirmed total is below the threshold. Usage after the metric time is unknown.",
+      "distanceBelow_one": "Confirmed total: {{value}} token below the threshold.",
+      "distanceBelow_other": "Confirmed total: {{value}} tokens below the threshold.",
+      "distanceAbove_one": "Confirmed total: {{value}} token above the threshold.",
+      "distanceAbove_other": "Confirmed total: {{value}} tokens above the threshold.",
+      "exact": "The confirmed total exactly matches the threshold.",
       "unavailable": "Threshold comparison is unavailable until metrics are confirmed again."
     }
   },

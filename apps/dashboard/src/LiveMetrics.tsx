@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Flame } from 'lucide-react';
 import type { LiveMetricsState } from './use-session-metrics';
 import { TokenThresholdControl } from './TokenThresholdControl';
 
@@ -44,18 +45,26 @@ export function LiveMetrics({
   }, [update]);
   const locale = i18n.resolvedLanguage ?? 'en-US';
   const number = new Intl.NumberFormat(locale);
-  const thresholdStatus = (available: boolean) =>
-    threshold === undefined
-      ? ''
-      : t('liveMetrics.threshold.value', { value: number.format(threshold) }) +
-        ' ' +
-        t(
-          !available || !metric
-            ? 'liveMetrics.threshold.unavailable'
-            : metric.usage.total >= threshold
-              ? 'liveMetrics.threshold.reached'
-              : 'liveMetrics.threshold.below',
-        );
+  const thresholdStatus = (available: boolean) => {
+    if (threshold === undefined) return '';
+    const label = t('liveMetrics.threshold.value', { value: number.format(threshold) });
+    if (!available || !metric) return `${label} ${t('liveMetrics.threshold.unavailable')}`;
+    // Both operands are normalized nonnegative safe integers. The difference is exact;
+    // it describes this reading only, never remaining provider capacity or future usage.
+    const difference = metric.usage.total - threshold;
+    const status = t(
+      difference >= 0 ? 'liveMetrics.threshold.reached' : 'liveMetrics.threshold.below',
+    );
+    const distance = t(
+      difference === 0
+        ? 'liveMetrics.threshold.exact'
+        : difference > 0
+          ? 'liveMetrics.threshold.distanceAbove'
+          : 'liveMetrics.threshold.distanceBelow',
+      { count: Math.abs(difference), value: number.format(Math.abs(difference)) },
+    );
+    return `${label} ${status} ${distance}`;
+  };
   // Pending is visual only. Repeated snapshot reconciliation keeps this text stable;
   // only the session header announces meaningful state/count changes.
   const announcement = state.offline
@@ -105,7 +114,10 @@ export function LiveMetrics({
         <p
           className={`fine-print live-token-threshold${eligible && metric && metric.usage.total >= threshold ? ' live-token-threshold-reached' : ''}`}
         >
-          {thresholdStatus(eligible)}
+          {eligible && metric && metric.usage.total >= threshold && (
+            <Flame className="live-token-threshold-icon" aria-hidden="true" />
+          )}
+          <span>{thresholdStatus(eligible)}</span>
         </p>
       )}
       {onThresholdChange && <TokenThresholdControl onChange={onThresholdChange} />}

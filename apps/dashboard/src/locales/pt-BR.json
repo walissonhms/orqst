@@ -51,6 +51,11 @@
       "value": "Limiar de alerta da sessão: {{value}} tokens.",
       "reached": "O último total confirmado atingiu ou ultrapassou o limiar.",
       "below": "O último total confirmado está abaixo do limiar. O uso após o horário da métrica é desconhecido.",
+      "distanceBelow_one": "Total confirmado: {{value}} token abaixo do limiar.",
+      "distanceBelow_other": "Total confirmado: {{value}} tokens abaixo do limiar.",
+      "distanceAbove_one": "Total confirmado: {{value}} token acima do limiar.",
+      "distanceAbove_other": "Total confirmado: {{value}} tokens acima do limiar.",
+      "exact": "O total confirmado corresponde exatamente ao limiar.",
       "unavailable": "A comparação com o limiar está indisponível até nova confirmação das métricas."
     }
   },

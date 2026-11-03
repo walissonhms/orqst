@@ -140,12 +140,16 @@ test('offline and stale keep the comparison unavailable and recovery is honest',
   await expect(status(page)).toContainText(
     'Threshold comparison is unavailable until metrics are confirmed again.',
   );
+  await expect(status(page).locator('svg')).toHaveCount(0);
+  await expect(status(page)).not.toContainText('Confirmed total:');
 
   blocked = false;
   await expect(
     page.locator('.session-detail p.fine-print').filter({ hasText: 'Last confirmed reading' }),
   ).toBeVisible({ timeout: 20000 });
   await expect(status(page)).toContainText('at or above');
+  await expect(status(page)).toContainText('Confirmed total: 20 tokens above the threshold.');
+  await expect(status(page).locator('svg')).toHaveCount(1);
 });
 
 test('pending keeps the settled announcement once and the panel never announces', async ({
