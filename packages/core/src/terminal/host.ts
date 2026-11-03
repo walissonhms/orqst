@@ -3,6 +3,7 @@ import { createPublicKey, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Store } from '@orqst/database';
 import { TerminalAuthority } from './authority.js';
+import { interactiveProvider } from './interactive-profile.js';
 import { interactiveCliAdapter } from './interactive-adapters.js';
 import { ManagedTerminalPair } from './managed-pair.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
@@ -69,7 +70,7 @@ async function start() {
       authority,
       selection.map(({ config }, slot) => {
         const adapter = interactiveCliAdapter(
-          'codex',
+          interactiveProvider(config),
           config.authentication ? 'reuse-existing' : 'separate-login',
           !!config.interactive,
         );
@@ -147,10 +148,10 @@ async function start() {
     send({
       type: 'ready',
       epoch: authority.epoch,
-      identities: selection.map((_config, slot) => ({
+      identities: selection.map(({ config }, slot) => ({
         slot,
         terminalId: randomUUID(),
-        provider: 'codex',
+        provider: interactiveProvider(config),
       })),
     });
   } catch {

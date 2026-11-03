@@ -29,8 +29,9 @@ Managed agents; each slot has independent ownership and metadata-only lifecycle
 receipts. The explicit separate-login fixture path has earlier two-window transport evidence;
 final native-focus acceptance remains pending.
 An explicit Codex existing-login PTY opt-in now requires separate acknowledgment
-of shared native session writes; it has synthetic evidence only. Claude/OpenCode
-now have version/hash-scoped MCP configuration builders; managed launch remains blocked. See
+of shared native session writes; it has synthetic evidence only. Claude 2.1.178 now has a version/hash-scoped native-login PTY launch opt-in, with
+synthetic process evidence and optional strict MCP configuration. OpenCode remains
+launch-blocked. See [Claude setup and provider limits](docs/development/claude-interactive-terminal.md) and
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
 A native-signed MCP stdio/Unix-socket library now completes synthetic
 A-to-B-to-A transport without PTY task injection. An explicit Desktop Codex 0.162.1
@@ -75,7 +76,7 @@ acceptance. Normal startup and external sessions remain observation-only. See
 | Claude Code adapter                                                          | Contract only, not implemented                         |
 | OpenCode adapter                                                             | Contract only, not implemented                         |
 | Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added      |
-| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending   |
+| Embedded managed Codex/Claude Terminal                                       | Opt-in native paths; real-provider acceptance pending  |
 | Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence      |
 | Codex structured runtime                                                     | Explicit Desktop surface; synthetic protocol tests     |
 | Scoped native A-to-B-to-A delegation facade                                  | Desktop-wired; synthetic only; real acceptance pending |

@@ -163,3 +163,13 @@ See [pair admission and receipts](managed-codex-terminal.md#two-interactive-wind
 PTY interaction and a future per-instance MCP task/result channel are distinct:
 MCP does not create a TUI or prove that an idle CLI will accept/execute a task. No
 terminal output parser or programmatic task text injection is used for delegation.
+
+## Version-scoped Claude PTY opt-in — 2026-11-03
+
+The [native Claude setup command](claude-interactive-terminal.md) now provisions
+a separately confirmed owned Desktop process with shared native identity and a fresh
+single-dispatch session UUID. Codex remains available through its existing setup path.
+OpenCode has only a corrected installed-schema MCP builder and remains launch-blocked
+until native TUI/server/session ownership can be established. Native login, MCP tool
+behavior, focus and inference acceptance remain pending; no credential probing or
+automatic provider execution is performed.

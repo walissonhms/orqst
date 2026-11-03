@@ -198,3 +198,12 @@ refresh, exact protocol/timeout/tool exposure, focus and idle-worker delivery re
 acceptance gates. No OpenCode Desktop launch profile or provisioning command exists.
 Every listed blocker is mandatory for any future launch composition; generating
 a configuration document cannot bypass those gates.
+
+## Installed schema correction and launch gate — 2026-11-03
+
+Further passive embedded-code inspection found `Mcp.LocalConfig` in installed 2.2.5
+uses `disabled`, `codemode`, `protocol` and an object timeout (`startup`, `catalog`,
+`execution`). The builder now follows that installed shape rather than the earlier
+`enabled`/numeric-timeout candidate. It remains blocked and non-executable. Native
+TUI/service attachment, fresh session routing, server exposure and descendant
+ownership remain unproved. See [provider evidence and limits](../development/claude-interactive-terminal.md#opencode-stays-blocked).

@@ -168,3 +168,13 @@ binds actual dispatched instance IDs, workspace and epoch and requires both slot
 to remain owned/running. The native menu confirms exact grant metadata separately
 from each launch. MCP tools remain the bounded synthetic-only contract described
 in [interactive CLI/MCP](../development/interactive-cli-mcp.md).
+
+## Version-scoped Claude Desktop profile — 2026-11-03
+
+The private Node pair RPC accepts `claude-terminal-v1` alongside the two fixed
+Codex profile IDs; ready identities can label `codex` or `claude`. The renderer
+request/reply schema and observer API are unchanged. Native document routing still
+selects the slot, and only signed native grants authorize new owned starts. A
+version-2 Claude manifest is hash/version pinned and admits one dispatch with a fresh
+UUID. OpenCode has no accepted profile or ready-provider value. See
+[configuration, authorization and evidence limits](../development/claude-interactive-terminal.md).

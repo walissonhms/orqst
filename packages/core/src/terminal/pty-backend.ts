@@ -4,12 +4,12 @@ import { closeSync, lstatSync } from 'node:fs';
 import { terminalDigest } from './authority.js';
 import { createLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import type { TerminalBackend, TerminalProfile } from './supervisor.js';
+import { terminalFile } from './codex-profile.js';
 import {
-  managedCodexEnvironment,
-  managedCodexProfiles,
-  readManagedCodexConfig,
-  terminalFile,
-} from './codex-profile.js';
+  interactiveTerminalEnvironment,
+  interactiveTerminalProfiles,
+  readInteractiveTerminalConfig,
+} from './interactive-profile.js';
 import { managedTerminalEventSchema } from './pty-channel.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 
@@ -18,18 +18,20 @@ export function managedTerminalBackend(
   host: string,
   mcp?: TerminalMcpLaunch,
 ): TerminalBackend {
-  const config = readManagedCodexConfig(file);
-  const expected = managedCodexProfiles(config, mcp);
+  const config = readInteractiveTerminalConfig(file);
+  const expected = interactiveTerminalProfiles(config, mcp);
   const source = terminalFile(file, true);
+  let dispatched = false;
   return {
     validate: (profile) => {
+      if (config.version === 2 && dispatched) return false;
       if (!source.equals(terminalFile(file, true))) return false;
-      const current = managedCodexProfiles(readManagedCodexConfig(file), mcp);
+      const current = interactiveTerminalProfiles(readInteractiveTerminalConfig(file), mcp);
       if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
       if (!expected.some((value) => JSON.stringify(value) === JSON.stringify(profile)))
         return false;
       // Metadata only: provider owns and reads its credentials. Never import or expose them.
-      if (profile.id === 'codex-terminal-v1' && !config.authentication) {
+      if (config.version === 1 && profile.id === 'codex-terminal-v1' && !config.authentication) {
         const auth = lstatSync(join(config.state, 'codex/auth.json'));
         if (
           !auth.isFile() ||
@@ -45,6 +47,8 @@ export function managedTerminalBackend(
       // Repeat at the last synchronous dispatch boundary. Same-user races remain disclosed.
       if (!this.validate(profile)) throw new Error('Managed profile changed');
       if (!identity) throw new Error('PTY lifecycle identity required');
+      // A Claude manifest's fresh UUID must never be dispatched a second time, even after failure.
+      dispatched = true;
       const receipt = createLifecycleReceipt(config.state, {
         ...identity,
         configDigest: terminalDigest(source),
@@ -55,7 +59,7 @@ export function managedTerminalBackend(
           execPath: config.node.path,
           execArgv: [],
           cwd: config.state,
-          env: managedCodexEnvironment(config),
+          env: interactiveTerminalEnvironment(config),
           stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
         });
       } finally {

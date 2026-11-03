@@ -67,8 +67,15 @@ export function discoverLocalClis(searchPath: string): LocalCliDiscovery[] {
 
 const reuseBlockers = {
   codex: ['codex_auth_and_session_root_coupled', 'installed_protocol_unverified'],
-  claude: ['claude_auth_and_config_identity_coupled', 'managed_adapter_unimplemented'],
-  opencode: ['opencode_auth_and_data_isolation_unverified', 'managed_adapter_unimplemented'],
+  claude: [
+    'claude_native_shared_state_acknowledgment_required',
+    'native_provider_acceptance_pending',
+  ],
+  opencode: [
+    'opencode_auth_and_data_isolation_unverified',
+    'native_tui_server_ownership_and_attachment_unverified',
+    'managed_adapter_unimplemented',
+  ],
 } as const;
 
 /** A reviewable integration preflight, deliberately incapable of launching or logging in. */

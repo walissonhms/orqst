@@ -322,3 +322,12 @@ The required relay intentionally couples startup: **MCP failure can block the
 interactive terminal**. Socket loss never proves provider exit or permits automatic
 retry. See [the exact flow and evidence limits](interactive-cli-mcp.md#desktop-composition-opt-in--2026-11-03).
 This adds synthetic composition evidence, not human focus/modal or provider acceptance.
+
+## Claude slot selection — 2026-11-03
+
+Either interactive slot can now select the separately provisioned, hash-pinned Claude
+2.1.178 native profile. Existing Codex manifests keep their behavior. The
+[Claude provisioning guide](claude-interactive-terminal.md) documents the new command,
+shared native state, one-dispatch fresh UUID and distinct strict-MCP acknowledgment.
+The native pair capacity and signed task grant are unchanged; no OpenCode executable
+profile or real-provider acceptance is added.

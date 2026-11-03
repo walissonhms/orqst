@@ -679,14 +679,14 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
-    "reuseScope": "Reuso experimental do login nativo Codex. Configuração, MCPs, skills e raiz de sessões nativas ficam compartilhados; Codex pode renovar credenciais e gravar novas sessões. Não é efêmero nem um contêiner. Padrões iniciais somente leitura/sob solicitação; a interface do provider pode mudar permissões. Sem tarefa automática, retomada ou login. Aceite do provider real e integração MCP pendentes; Claude Code e OpenCode não estão habilitados.",
+    "reuseScope": "Reuso experimental do login nativo Codex. Configuração, MCPs, skills e raiz de sessões nativas ficam compartilhados; Codex pode renovar credenciais e gravar novas sessões. Não é efêmero nem um contêiner. Padrões iniciais somente leitura/sob solicitação; a interface do provider pode mudar permissões. Sem tarefa automática, retomada ou login. Aceite do provider real e integração MCP pendentes; OpenCode não está habilitado.",
     "reuseIdle": "Nenhum processo próprio iniciado. Iniciar exige confirmação nativa. Login separado fica desabilitado neste perfil de reuso nativo.",
     "focus_required": "Traga esta janela de Terminal para frente e tente novamente. O macOS deve estar desbloqueado; nenhuma operação foi autorizada.",
     "title": "Terminal gerenciado",
-    "open": "Abrir Terminal Codex",
-    "scope": "Opção legada de login separado com privilégios do seu usuário macOS; não é um container. Reuso do login nativo existente não implementado. Início em read-only/on-request; a UI do provider pode alterar permissões. Fechar oculta esta janela; duração de 30 minutos. Aceite real Codex pendente; Claude Code e OpenCode não estão habilitados.",
+    "open": "Abrir terminal interativo",
+    "scope": "Opção legada de login separado com privilégios do seu usuário macOS; não é um container. Início em read-only/on-request; a UI do provider pode alterar permissões. Fechar oculta esta janela; duração de 30 minutos. Aceite real Codex pendente; OpenCode não está habilitado.",
     "login": "Login Codex separado",
-    "start": "Iniciar Codex",
+    "start": "Iniciar CLI",
     "attach": "Conectar saída",
     "input": "Habilitar teclado (2 minutos)",
     "detach": "Desconectar visualização",
@@ -699,7 +699,7 @@
     "ok": "Solicitação aceita. Processo em execução não comprova prontidão ou autenticação do provider.",
     "gap": "Parte da saída foi descartada. Reconstrução de tela e entrada desabilitadas; pare e inicie outro processo.",
     "revoked": "Entrada desabilitada. Habilite o teclado novamente para continuar.",
-    "output": "Terminal interativo de uma instância Codex própria",
+    "output": "Terminal interativo de CLI próprio",
     "identity": "UUID da instância própria",
     "prepared": "Preparada; nenhum processo iniciado",
     "starting": "Início solicitado; aguardando evidência do SO",
@@ -710,7 +710,7 @@
     "keyboard": "Entrada de teclado do Terminal próprio",
     "tooMuch": "Saída excessiva no terminal. Leia o restante da saída visualmente.",
     "mcpAuthorize": "Autorizar uma tarefa MCP A → B → A",
-    "mcpConfirm": "Autorizar uma tarefa e seu resultado correlacionado entre estas duas instâncias de Terminal em execução por até 120 segundos. Isso não envia prompt aos agentes nem concede ferramentas do provedor. Login, configuração, gravações de sessão e outros MCPs nativos continuam compartilhados. A desconexão MCP deixa resultado desconhecido e não encerra nenhum processo.",
+    "mcpConfirm": "Autorizar uma tarefa e seu resultado correlacionado entre estas duas instâncias de Terminal em execução por até 120 segundos. Isso não envia prompt aos agentes nem concede ferramentas do provedor. Login/configuração e gravações de sessões nativas ficam compartilhados. Codex mescla outros MCPs; a seleção estrita do Claude os exclui. A desconexão MCP deixa resultado desconhecido e não encerra nenhum processo.",
     "mcpDenied": "A autorização MCP foi recusada ou seu resultado é desconhecido. As duas instâncias de Terminal devem manter a adesão explícita, a posse e a execução. Não repita trabalho com resultado incerto.",
     "retire": "Retirar par de Terminais encerrados",
     "retired": "Par de Terminais retirado; reinicie o Desktop com manifests novos",
@@ -720,7 +720,8 @@
     "reuse_unavailable": "Bloqueado: reuso do login nativo existente não validado para PTY interativo. Nenhum Core, journal ou provider foi iniciado.",
     "existing_state": "Bloqueado: este estado já tem um journal. Reservas existentes não serão adotadas, redefinidas ou removidas.",
     "capacity_reserved": "Bloqueado: a capacidade está reservada ou seu estado privado de admissão não pôde ser verificado. Nenhum processo foi iniciado; reservas existentes foram preservadas.",
-    "terminalIdentity": "UUID do Terminal no Core"
+    "terminalIdentity": "UUID do Terminal no Core",
+    "claudeScope": "Reuso experimental do login nativo Claude Code. HOME/config/Keychain, hooks, plugins, políticas e gravações de sessões nativas ficam compartilhados; o CLI pode renovar credenciais. Sem sandbox. Novo UUID, um disparo por manifesto; sem tarefa, login ou retomada automática. No opt-in MCP, a seleção estrita exclui outros MCPs e a aprovação nativa pode bloquear a inicialização. Aceite de foco, login, MCP e provider pendente. Lançamento OpenCode indisponível."
   },
   "managedAgents": {
     "title": "Agentes gerenciados",

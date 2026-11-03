@@ -5,12 +5,12 @@ import { join } from 'node:path';
 import { constants } from 'node:os';
 import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
+import { terminalFile } from './codex-profile.js';
 import {
-  managedCodexEnvironment,
-  managedCodexProfiles,
-  readManagedCodexConfig,
-  terminalFile,
-} from './codex-profile.js';
+  interactiveTerminalEnvironment,
+  interactiveTerminalProfiles,
+  readInteractiveTerminalConfig,
+} from './interactive-profile.js';
 import { managedTerminalCommandSchema } from './pty-channel.js';
 import { terminalMcpLaunchSchema } from './mcp-launch.js';
 
@@ -18,12 +18,14 @@ process.umask(0o077);
 if (!process.send || ![4, 5].includes(process.argv.length) || !/^v24\./.test(process.version))
   throw new Error('Private Node host only');
 async function start(): Promise<void> {
-  const config = readManagedCodexConfig(process.argv[2]!);
+  const config = readInteractiveTerminalConfig(process.argv[2]!);
   const mcp = process.argv[4]
     ? terminalMcpLaunchSchema.parse(JSON.parse(process.argv[4]))
     : undefined;
   if (!!config.interactive?.mcp !== !!mcp) throw new Error('MCP launch composition required');
-  const profile = managedCodexProfiles(config, mcp).find((value) => value.id === process.argv[3]);
+  const profile = interactiveTerminalProfiles(config, mcp).find(
+    (value) => value.id === process.argv[3],
+  );
   if (!profile) throw new Error('Unknown fixed terminal profile');
   const receipt = armLifecycleReceipt(4, terminalDigest(terminalFile(process.argv[2]!, true)));
   const { spawn } = createRequire(__filename)(join(__dirname, 'terminal-pty/lib/index.js')) as {
@@ -33,7 +35,7 @@ async function start(): Promise<void> {
   try {
     child = spawn(profile.executable, [...profile.argv], {
       cwd: profile.cwd,
-      env: managedCodexEnvironment(config),
+      env: interactiveTerminalEnvironment(config),
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

@@ -1,14 +1,19 @@
 import { lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { readManagedCodexConfig } from './codex-profile.js';
+import { readInteractiveTerminalConfig } from './interactive-profile.js';
 
 /** Inspect the complete selection before creating a Core, journal or admission marker. */
 export function inspectManagedTerminalFiles(files: readonly string[]) {
   if (files.length < 1 || files.length > 2) throw new Error('Select one or two terminal manifests');
   const identities = new Set<string>();
   const states: string[] = [];
+  const sessions = new Set<string>();
   const selection = files.map((file) => {
-    const config = readManagedCodexConfig(file);
+    const config = readInteractiveTerminalConfig(file);
+    if (config.version === 2) {
+      if (sessions.has(config.sessionId)) throw new Error('Duplicate Claude session UUID');
+      sessions.add(config.sessionId);
+    }
     for (const path of [file, config.state]) {
       const info = lstatSync(path);
       const identity = `${info.dev}:${info.ino}`;

@@ -561,3 +561,13 @@ to the native process; capability contents stay in private files. The pinned rel
 is required, so its startup failure can prevent TUI startup. Same-user replacement,
 shared native config/auth/session writes and provider tool permissions retain their
 existing limitations. No real-provider, human-focus or sandbox acceptance is claimed.
+
+## Experimental Claude native Desktop opt-in
+
+The [version-scoped native Claude path](docs/development/claude-interactive-terminal.md)
+requires explicit shared-native-state and per-start consent. It never copies provider
+credentials or adopts an external session. Native configuration/hooks/plugins and
+session writes remain shared; this is trusted same-user execution, without a sandbox.
+Optional strict MCP excludes other MCP definitions and grants no task/tool permissions
+automatically. OpenCode execution remains unavailable. Synthetic process validation
+does not establish native login/MCP/inference or unlocked-console focus acceptance.

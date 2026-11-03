@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, session } from 'electron';
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
 import { TerminalNativeBroker } from '../../../packages/core/src/terminal/native-broker.js';
-import { readManagedCodexConfig } from '../../../packages/core/src/terminal/codex-profile.js';
+import {
+  readInteractiveTerminalConfig,
+  interactiveProvider,
+} from '../../../packages/core/src/terminal/interactive-profile.js';
 import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { confirmTerminalAction } from './terminal-confirmation.js';
 import { createTerminalRuntimeRouter } from './terminal-runtime.js';
@@ -188,7 +191,10 @@ export async function createManagedTerminals(files: string[], translate: (key: s
   };
 
   async function createWindow(file: string, slot: number): Promise<() => void> {
-    const config = readManagedCodexConfig(file);
+    const config = readInteractiveTerminalConfig(file);
+    const provider = interactiveProvider(config);
+    const providerLabel = translate(`settings.adapters.${provider}`);
+    const startProfile = provider === 'claude' ? 'claude-terminal-v1' : 'codex-terminal-v1';
     const authority = new TerminalAuthority(
       new Map([['desktop-managed', keys.publicKey]]),
       Date.now,
@@ -214,7 +220,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
       if (request.url === terminalDocumentURL) {
         const button = (id: string) =>
           `<button id="${id}"${id === 'login' && config.authentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
-        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex</h1><p>${text(config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+        body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main data-start-profile="${startProfile}"><h1>${text('title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(providerLabel)}</h1><p>${text(provider === 'claude' ? 'claudeScope' : config.authentication ? 'reuseScope' : 'scope')}</p><p>${escapeHTML(config.project)} · ${escapeHTML(config.executableVersion)}</p><nav>${['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'].map(button).join('')}</nav><p id="status" data-blocked="${blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(blocker ?? (config.authentication ? 'reuseIdle' : 'idle'))}</p><p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(core?.identities[slot]?.terminalId ?? '—')}</code></p><p>${text('identity')}: <code id="instance">—</code></p><p id="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}></p><div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div></main><script src="${terminalScriptURL}" defer></script></body></html>`;
         contentType = 'text/html; charset=utf-8';
       } else if (request.url === terminalScriptURL) {
         body = readFileSync(join(__dirname, 'managed-terminal-client.js'), 'utf8');
@@ -238,7 +244,7 @@ export async function createManagedTerminals(files: string[], translate: (key: s
     });
     const supervisor = core?.supervisors[slot];
     const window = new BrowserWindow({
-      title: `${translate('managedTerminal.title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · Codex`,
+      title: `${translate('managedTerminal.title')} ${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${providerLabel}`,
       width: 1100,
       height: 800,
       minWidth: 640,

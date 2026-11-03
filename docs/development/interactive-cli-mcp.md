@@ -14,13 +14,15 @@ owned start/output/exit and explicit user-authorized keyboard/paste/resize/signa
 the pair keeps provider-specific profiles outside that common lifecycle. The
 adapter registry has the earlier explicit Codex separate-login factory and a new
 [separately acknowledged native-login PTY opt-in](managed-codex-terminal.md#explicit-native-login-pty-opt-in--2026-11-03).
-Existing structured manifests remain PTY-blocked. Claude and OpenCode have no factory.
+Existing structured manifests remain PTY-blocked. The new
+[Claude native launch opt-in](claude-interactive-terminal.md) adds an exact-version
+factory and optional strict MCP selection. OpenCode has no executable factory.
 Discovery reports these integration limits separately from executable availability.
 Version metadata in a manifest remains owner-supplied, not an inspected protocol
 or evidence of native login, model access or provider acceptance.
 
 The Core MCP library and Node stdio relay implement a synthetic-only A -> B -> A
-path. An explicit Desktop Codex PTY opt-in now composes the transport with owned
+path. An explicit Desktop Codex/Claude PTY opt-in now composes the transport with owned
 starts, a native menu grant and per-invocation configuration. The Bridge, renderer
 IPC and normal observer startup do not expose MCP authority. Building stages
 `orqst-mcp-relay.cjs`; building alone opens no socket or provider.
@@ -248,3 +250,12 @@ approved the pure builders with the strict-MCP/session-ID/launch-gate disclosure
 above. No provider, native login/inference, quarantine or existing reservation was
 used or changed. Native focus acceptance, full Chromium and `validate:local` were
 not run; the unchanged dashboard build retains its existing chunk-size warning.
+
+### Native Claude factory and installed OpenCode schema correction — 2026-11-03
+
+The [native Claude increment](claude-interactive-terminal.md) supersedes the earlier
+Claude no-factory and session-collision gates with a hash-pinned, single-dispatch
+Desktop manifest and installed-code collision evidence. It also records the corrected
+OpenCode 2.2.5 local-MCP schema and the unresolved native TUI/server ownership gate.
+OpenCode remains unavailable. Real login, MCP negotiation/tool behavior, positive
+native focus and inference/delegation acceptance remain pending for all new paths.

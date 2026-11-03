@@ -869,3 +869,15 @@ startup is required and can block TUI startup. Filesystem/hash checks remain a
 native same-user contract; shared auth/config/session writes, provider permissions
 and malicious same-user races are not hard containment. Synthetic composition and
 independent QA do not establish installed-provider or human-focus acceptance.
+
+## Explicit Claude native launch — 2026-11-03
+
+The separate Desktop native surface now accepts an exact-version/hash Claude manifest.
+Shared native identity/configuration/session writes require acknowledgments; optional
+strict MCP requires a distinct acknowledgment because it excludes native MCP definitions.
+Native start/focus/proof, private IPC, last-boundary hash checks, sticky admission and
+one-dispatch session UUID fencing preserve the owned-process boundary. No credentials
+are read/copied by ORQST, and no observer endpoint gains execution authority. Native
+CLI hooks/plugins, policy, credential refresh and state writes remain provider-owned,
+without hard containment. OpenCode launch stays blocked. See the
+[security review and acceptance limits](../development/claude-interactive-terminal.md#validation-scope-and-security-review).

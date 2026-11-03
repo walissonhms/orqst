@@ -61,9 +61,12 @@ test('OpenCode 2.2.5 configuration uses a merged runtime environment document, n
   const server = config.mcp[fixture('opencode').mcp.serverName];
   assert.deepEqual(server.command, ['/synthetic/private/node', '/synthetic/private/relay.cjs']);
   assert.equal(server.type, 'local');
-  assert.equal(server.enabled, true);
-  assert.equal(server.timeout, 125000);
-  assert.equal(plan.installedTimeoutDescriptionMs, 5000);
+  assert.equal(server.disabled, false);
+  assert.equal(server.codemode, false);
+  assert.equal(server.protocol, 'legacy');
+  assert.deepEqual(server.timeout, { startup: 10000, catalog: 10000, execution: 125000 });
+  assert.equal('enabled' in server, false);
+  assert.equal(plan.installedTimeoutConfiguration, 'separate_startup_catalog_execution');
   assert.equal(plan.mcpConfiguration, 'merged_inline_configuration');
   assert.deepEqual(Object.keys(plan.environmentOverrides), ['OPENCODE_CONFIG_CONTENT']);
   assert.equal(plan.execution, 'blocked');
@@ -98,11 +101,26 @@ test('provider configuration review rejects version/hash drift and injected cred
     assert.throws(() => build({ ...input, mcp: { ...input.mcp, secret: 'SYNTHETIC' } }));
     assert.throws(() => build({ ...input, nodePath: 'relative/node' }));
     assert.throws(() => build({ ...input, mcp: { ...input.mcp, serverName: 'native-server' } }));
-    assert.throws(
-      () => interactiveCliAdapter(provider, 'reuse-existing', true),
-      /no reviewed launch contract/,
+    if (provider === 'opencode')
+      assert.throws(
+        () => interactiveCliAdapter(provider, 'reuse-existing', true),
+        /no reviewed launch contract/,
+      );
+    else {
+      assert.throws(
+        () => interactiveCliAdapter(provider, 'reuse-existing'),
+        /no reviewed launch contract/,
+      );
+      assert.throws(
+        () => interactiveCliAdapter(provider, 'separate-login', true),
+        /no reviewed launch contract/,
+      );
+      assert.ok(interactiveCliAdapter(provider, 'reuse-existing', true).backend);
+    }
+    assert.equal(
+      interactiveCliStatus(provider).mcpConfiguration,
+      provider === 'opencode' ? 'version_scoped_builder_only' : 'desktop_opt_in_synthetic_only',
     );
-    assert.equal(interactiveCliStatus(provider).mcpConfiguration, 'version_scoped_builder_only');
     assert.equal(interactiveCliStatus(provider).installedVersionCompatibility, 'unvalidated');
     const plan = build(input);
     assert.ok(plan.nativeIdentityEnvironment.includes('HOME'));

@@ -2,9 +2,9 @@ import { fork } from 'node:child_process';
 import { randomUUID, type KeyObject } from 'node:crypto';
 import type { TerminalNativeSupervisor } from '../../../packages/core/src/terminal/native-broker.js';
 import {
-  managedCodexEnvironment,
-  readManagedCodexConfig,
-} from '../../../packages/core/src/terminal/codex-profile.js';
+  interactiveTerminalEnvironment,
+  readInteractiveTerminalConfig,
+} from '../../../packages/core/src/terminal/interactive-profile.js';
 import {
   terminalRPCReplySchema,
   terminalPairReadySchema,
@@ -20,7 +20,7 @@ export async function connectManagedTerminalCore(
   publicKey: KeyObject,
   admissionDirectory: string,
 ) {
-  const config = readManagedCodexConfig(files[0]!);
+  const config = readInteractiveTerminalConfig(files[0]!);
   const child = fork(
     host,
     [
@@ -32,14 +32,14 @@ export async function connectManagedTerminalCore(
       execPath: config.node.path,
       execArgv: [],
       cwd: config.state,
-      env: managedCodexEnvironment(config),
+      env: interactiveTerminalEnvironment(config),
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
       serialization: 'json',
     },
   );
   let closed = false;
   let initialized = false;
-  let identities: Array<{ slot: number; terminalId: string; provider: 'codex' }> = [];
+  let identities: Array<{ slot: number; terminalId: string; provider: 'codex' | 'claude' }> = [];
   let ready: () => void;
   let failed: (error: Error) => void;
   const startup = new Promise<void>((resolve, reject) => {

@@ -28,7 +28,7 @@ const inputSchema = z.strictObject({
 const claudeInputSchema = inputSchema.extend({ sessionId: z.uuid() });
 
 const commonBlockers = [
-  'managed_factory_unimplemented',
+  'native_launch_grant_required',
   'installed_mcp_protocol_unverified',
   'native_login_identity_unvalidated',
   'shared_native_session_writes_require_acknowledgment',
@@ -77,7 +77,6 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
     blockers: [
       ...commonBlockers,
       'strict_mcp_exclusion_requires_acknowledgment',
-      'fresh_session_uuid_and_no_resume_unvalidated',
       'strict_project_mcp_approval_can_still_block_2_1_178',
     ],
   };
@@ -102,8 +101,10 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
             type: 'local',
             command: [input.nodePath, mcp.relay.path],
             environment: { ORQST_SOCKET_PATH: mcp.socketPath, ORQST_CAP_FILE: mcp.capabilityFile },
-            enabled: true,
-            timeout: 125000,
+            disabled: false,
+            codemode: false,
+            protocol: 'legacy',
+            timeout: { startup: 10000, catalog: 10000, execution: 125000 },
           },
         },
       }),
@@ -116,12 +117,14 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
       'XDG_CACHE_HOME',
     ],
     mcpConfiguration: 'merged_inline_configuration' as const,
-    installedTimeoutDescriptionMs: 5000,
+    installedTimeoutConfiguration: 'separate_startup_catalog_execution' as const,
     blockers: [
       ...commonBlockers,
+      'managed_factory_unimplemented',
       'native_auth_and_session_data_roots_coupled',
       'merged_plugins_hooks_and_managed_settings_unvalidated',
       'installed_tool_exposure_and_timeout_behavior_unvalidated',
+      'native_tui_server_ownership_and_attachment_unverified',
     ],
   };
 }

@@ -18,7 +18,7 @@ import { ManagedTerminalPair } from '../packages/core/src/terminal/managed-pair.
 import { connectMcpInstance } from '../packages/core/src/terminal/mcp-socket.js';
 import type { TerminalEvents } from '../packages/core/src/terminal/supervisor.js';
 
-async function fixture() {
+async function fixture(profileIds = ['codex-terminal-v1', 'codex-terminal-v1']) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-mcp-pair-')));
   const keys = generateKeyPairSync('ed25519');
   const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]));
@@ -45,7 +45,7 @@ async function fixture() {
       return {
         profiles: [
           {
-            id: 'codex-terminal-v1',
+            id: profileIds[slot]!,
             projectId: 'synthetic-workspace',
             executable: '/synthetic/never-executed',
             executableSha256: terminalDigest('synthetic'),
@@ -84,7 +84,7 @@ async function fixture() {
     signature: sign(null, terminalChallengeBytes(challenge), keys.privateKey).toString('base64url'),
   });
   const launch = (slot: number) => {
-    const prepared = call(slot, 'prepare', ['desktop-managed', 'codex-terminal-v1']) as {
+    const prepared = call(slot, 'prepare', ['desktop-managed', profileIds[slot]!]) as {
       attemptId: string;
       challenge: TerminalChallenge;
     };
@@ -206,5 +206,36 @@ test('owned process loss ends a pending MCP wait as unknown and does not recover
     assert.deepEqual(f.writes, []);
   } finally {
     await f.close();
+  }
+});
+
+test('mixed Codex/Claude profile slots preserve signed source/worker roles without PTY delivery', async () => {
+  for (const profiles of [
+    ['codex-terminal-v1', 'claude-terminal-v1'],
+    ['claude-terminal-v1', 'codex-terminal-v1'],
+  ]) {
+    const f = await fixture(profiles);
+    try {
+      const source = f.launch(0);
+      const target = f.launch(1);
+      const prepared = f.session.prepare();
+      assert.equal(prepared.grant.sourceInstanceId, source);
+      assert.equal(prepared.grant.targetInstanceId, target);
+      f.session.authorize(f.proof(prepared.challenge));
+      const waiting = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+      const outcome = f.clients[0]!.call(randomUUID(), {
+        name: 'delegate_task',
+        arguments: { task: 'SYNTHETIC mixed-provider contract' },
+      });
+      const task = (await waiting) as { taskId: string };
+      await f.clients[1]!.call(randomUUID(), {
+        name: 'submit_result',
+        arguments: { taskId: task.taskId, result: 'SYNTHETIC result' },
+      });
+      assert.equal(((await outcome) as { state: string }).state, 'completed');
+      assert.deepEqual(f.writes, []);
+    } finally {
+      await f.close();
+    }
   }
 });

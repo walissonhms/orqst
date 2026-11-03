@@ -181,7 +181,10 @@ for (const action of actions) {
         void send({
           version: 1,
           action: 'start',
-          profileId: action === 'login' ? 'codex-login-v1' : 'codex-terminal-v1',
+          profileId:
+            action === 'login'
+              ? 'codex-login-v1'
+              : document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
         });
       return;
     }

@@ -198,3 +198,13 @@ is a future launch gate, not advisory metadata that a composition may ignore.
 Native configuration/hooks/plugins, shared session writes, approval UI,
 relay protocol revision and idle-worker delivery still require acceptance. There
 is no Claude Desktop launch profile or provisioning command in this delivery.
+
+## Native Desktop launch opt-in — 2026-11-03
+
+A separate [owned native PTY launch path](../development/claude-interactive-terminal.md)
+now admits the exact installed 2.1.178 binary after explicit shared-state and native
+start authorization. A fresh UUID and one dispatch per manifest replace the earlier
+no-factory/session-collision gates. Optional strict MCP excludes other definitions;
+project/enterprise approval can still block startup. This has synthetic process
+evidence only, with no native login, MCP or inference acceptance. The external
+observation descriptor above remains entirely false.
