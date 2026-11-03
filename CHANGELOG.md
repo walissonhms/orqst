@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-03 — Scoped native delegation facade
+
+- Add an optional native dynamic tool with a separately signed exact A/B/task root
+  plan, one-call/deadline limits and verified B-result return into A's pending RPC.
+- Require native tool receipt, retain requested/observed capability distinctions and
+  return bounded tool failure for oversized serialized results. Synthetic tests cover
+  grant mutation/replay, correlation, negative paths and acceptance-command gates.
+- Prepare an explicit developer acceptance with separate homes, empty project,
+  advisory-cost acknowledgement and confirmed owned-process cleanup. It was not
+  executed; real Codex protocol/model/authentication and A-to-B-to-A acceptance,
+  Desktop/Studio/MCP composition and additional providers remain pending.
+
 ## 2026-11-03 — Dashboard visual refinement
 
 - Remove the logo's CSS white backing and add a documented transparent dark-theme

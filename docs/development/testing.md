@@ -855,3 +855,27 @@ Native Desktop, Safari/Firefox and manual screen-reader acceptance remain unvali
 The existing Vite bundle advisory remains. Publication does not itself replace the
 installed static bundle; that separately authorized action is coordinated with the
 visual contributor, without a Bridge/Desktop restart or schema migration.
+
+## Scoped native delegation integration — 2026-11-03
+
+The runtime contributor checked the exact delivered delta with lint, typecheck,
+366 Node cases, build and diff checks; independent QA approved the opt-in library.
+The integrator applied only that new commit onto the sanitized/published lineage,
+compared all eight delivered files and repeated the 36 structured-runtime cases
+with Node 24.22.2, all passing. Global suites were not repeated on unchanged
+frontend and source-equivalent validated modules. Public documentation formatting,
+local links and outgoing-history checks were performed separately.
+
+Synthetic evidence covers separately signed root plans, immutable exact task/target,
+one-call/deadline limits, B-result scope/hash, A's native tool receipt, replay/negative
+cases, oversized serialized result as bounded failure and missing real-acceptance
+flags rejected before filesystem/provider access. Two labeled Node IPC hosts remain
+synthetic transport evidence. No installed provider, real login, credential access
+or paid inference occurred. The prepared real acceptance was not executed.
+
+The private native protocol shapes remain unvalidated against an installed binary;
+128 retained root plans/panes have no reclamation, and uncertain ownership/tasks
+retain capacity. Protocol/permission loss can leave the live process under its
+previously authorized 30-minute lifetime. Cost allowance is advisory, without an
+enforced spending cap. These limits and the separate owner-authorized acceptance
+are described in [the developer contract](codex-two-agent-acceptance.md).

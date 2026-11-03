@@ -73,6 +73,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## Development
 
+- [Two-agent native acceptance](development/codex-two-agent-acceptance.md) — scoped
+  dynamic-tool library and synthetic A-to-B-to-A evidence; an explicit real-provider
+  command is prepared but unexecuted and requires separate authorization.
+
 - [Dashboard visual checks](development/dashboard-visual-checks.md) — synthetic
   responsive/locale/theme/contrast/brand matrix and native acceptance limits.
 

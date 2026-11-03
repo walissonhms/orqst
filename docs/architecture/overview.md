@@ -35,8 +35,9 @@ A separate [structured Codex runtime library](../development/codex-structured-ru
 now joins signed native admission, per-slot private homes/journals and exact pane
 bindings to an app-server adapter. Its native host is compiled as an inert build
 artifact; normal startup never constructs it. Two independent identities and Core
-results have synthetic protocol evidence only. Native provider execution, human
-consent, agent-facing MCP/tools and result consumption inside a sender CLI remain
+results have synthetic protocol evidence only. An optional exact-grant dynamic tool now supports return into A's pending native
+RPC with synthetic B-result/native-receipt evidence. Native provider execution,
+human consent, installed-protocol compatibility, MCP and interactive UI remain
 unvalidated or unimplemented. This library does not convert the xterm process into
 a structured endpoint or change external observation.
 

@@ -18,8 +18,13 @@ The separate [structured Codex runtime](../development/codex-structured-runtime.
 now joins native admission, distinct slot homes and exact pane bindings to an
 app-server adapter at library level. Synthetic transports cover two identities and
 correlated Core results. Normal Desktop/Bridge startup, real-provider protocol/
-authentication/model acceptance, native consent composition and sender-CLI consumption
-remain pending. The shared-project slots do not supply isolated write worktrees.
+authentication/model acceptance, native consent composition and real sender-CLI
+return remain pending. The shared-project slots do not supply isolated write worktrees.
+The optional [native dynamic facade](../development/codex-two-agent-acceptance.md)
+now has synthetic exact-grant A-to-B-to-A evidence, including verified B result and
+A's native tool receipt. Its prepared real acceptance has not run; installed
+protocol compatibility and actual native return remain unvalidated. There is no
+interactive multi-agent UI or MCP composition.
 These partial increments do not complete Phase 2/4 or the Desktop MVP.
 
 ## Audit basis — 2026-11-02

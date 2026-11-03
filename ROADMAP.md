@@ -36,10 +36,29 @@ ObserverCore/Bridge/Desktop do not compose the library. Actual provider IPC/flag
 authentication, model access and human consent remain unvalidated. The two-slot cap
 is per runtime owner, not machine-wide containment; unresolved ownership and task
 outcomes retain separate durable capacity. The registry retains 128 historical pane
-identities, including closed panes, without pruning or reclamation. MCP/agent tools, sender-CLI result
-consumption, scheduling/Inspector UI, worktree allocation and evidence-backed
+identities, including closed panes, without pruning or reclamation. An optional
+exact-grant native dynamic tool now returns B's verified result to A's pending RPC
+and requires a matching native receipt. This A-to-B-to-A path is synthetic-tested
+only; normal startup, interactive UI, MCP, worktree allocation and evidence-backed
 reconciliation remain missing. The real A-to-B-to-A milestone remains incomplete.
 No Phase 2/4, additional-provider or release acceptance is implied.
+
+## Scoped native delegation increment — 2026-11-03
+
+A separately signed root plan now binds A, B, exact task text, correlation,
+deadline and a single native dynamic-tool call. B receives no recursive grant;
+queue admission and provider acceptance cannot satisfy result return. The response
+requires B's completed result/hash/scope and A's matching native tool receipt.
+Oversized serialized results return bounded tool failure. Requested dynamic-tool
+capability is never treated as observed support merely after initialization.
+
+The [two-agent developer acceptance](docs/development/codex-two-agent-acceptance.md)
+is prepared and not executed: it requires exact binary/model approval, separate new
+homes/logins, an empty project, explicit provider/cost/cleanup flags and confirmed
+owned exits. Cost allowances are advisory, without a hard token/dollar cap. Installed
+protocol shapes, model/account compatibility and actual native A-to-B-to-A remain
+unvalidated. This is an opt-in headless library, without Desktop/Studio/MCP
+composition, extra providers or an MVP/release claim.
 
 ## Product direction and delivery status
 
@@ -421,8 +440,8 @@ stable identified panes: A delegates a bounded task to B, acceptance remains sep
 from completion and a verified correlated result returns automatically into A.
 The opt-in structured runtime above implements the identity/admission and
 separate-state join at library level with synthetic protocol evidence. Remaining
-dependencies include a verified provider version, native consent composition, narrow
-authenticated MCP/response transport, approved task budgets and reconciliation. Subsequent work includes Inspector/notifications, native queue/result UX,
+dependencies include real-provider/native-receipt acceptance, native consent/UI
+composition, approved task/cost bounds, MCP where needed and reconciliation. Subsequent work includes Inspector/notifications, native queue/result UX,
 CLI/model discovery, typed intent planning, safe worktree allocation and opt-in cleanup.
 No observed external session is controllable and no PTY input channel is exposed.
 See [implemented vs missing capabilities](docs/api/pane-communication.md).

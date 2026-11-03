@@ -32,28 +32,28 @@ acceptance. Normal startup and external sessions remain observation-only. See
 
 ## What works today
 
-| Area                                                                         | State                                                |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------- |
-| Codex CLI session discovery (read-only)                                      | Implemented                                          |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                          |
-| Normalized event protocol with runtime validation                            | Implemented                                          |
-| Local SQLite persistence, migrations, retention                              | Implemented                                          |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                          |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                          |
-| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer            |
-| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending          |
-| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending     |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                          |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions          |
-| Claude Code adapter                                                          | Contract only, not implemented                       |
-| OpenCode adapter                                                             | Contract only, not implemented                       |
-| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added    |
-| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending |
-| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence    |
-| Codex structured runtime                                                     | Opt-in library; synthetic protocol tests only        |
-| Agent-to-agent delegation and automatic return inside a CLI                  | Not delivered or validated                           |
-| ORQST Cloud, accounts, billing                                               | Not implemented                                      |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                             |
+| Area                                                                         | State                                                   |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Codex CLI session discovery (read-only)                                      | Implemented                                             |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                             |
+| Normalized event protocol with runtime validation                            | Implemented                                             |
+| Local SQLite persistence, migrations, retention                              | Implemented                                             |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                             |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                             |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer               |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending             |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending        |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                             |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions             |
+| Claude Code adapter                                                          | Contract only, not implemented                          |
+| OpenCode adapter                                                             | Contract only, not implemented                          |
+| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added       |
+| Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending    |
+| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence       |
+| Codex structured runtime                                                     | Opt-in library; synthetic protocol tests only           |
+| Scoped native A-to-B-to-A delegation facade                                  | Opt-in library; synthetic only; real acceptance pending |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                         |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                                |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
@@ -87,11 +87,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   native thread; acceptance, turn start and matching result remain separate.
   Synthetic transports exercise two identities and correlated Core results. Normal
   Desktop/Bridge startup does not construct this path, and its compiled native host
-  has not been exercised against real Codex. There is no agent-facing facade, MCP,
-  automatic return into a sender CLI, multi-agent UI or provider acceptance claim.
+  has not been exercised against real Codex. An optional native dynamic-tool facade
+  now returns B's verified result into A's pending RPC under a separate signed,
+  exact-target/task root grant and one-call budget. Synthetic tests cover that
+  return and its native receipt. Requested capability stays distinct from observed
+  support. MCP, multi-agent UI and real-provider acceptance remain pending.
   This is separate from the interactive xterm Terminal; no existing process or
   external session is converted or adopted. See the
-  [runtime contract and remaining acceptance](docs/development/codex-structured-runtime.md).
+  [runtime contract](docs/development/codex-structured-runtime.md) and
+  [prepared, unexecuted two-agent acceptance](docs/development/codex-two-agent-acceptance.md).
 
 - **Observation guide:** Settings, Search & commands and the empty-session welcome
   open a three-step guide using the existing Bridge snapshot: connection, source
@@ -595,9 +599,10 @@ and [SECURITY.md](SECURITY.md).
 - **External sessions stay read-only.** Observation APIs cannot answer interventions,
   approve tool calls, stop runs or deliver prompts. Alerts direct users to the original
   terminal. Managed Terminal input/signals apply only to separately owned instances.
-- **Agentic communication is incomplete.** The private Core queue/inbox is a library,
-  not an agent-accessible transport. Real correlated delegation and return to a CLI,
-  concurrent multi-agent UI and additional providers remain undelivered. The native
+- **Agentic communication is incomplete.** The optional native dynamic facade now
+  has synthetic exact-grant A-to-B-to-A evidence; normal startup exposes no agent
+  transport. Real-provider protocol/return, concurrent multi-agent UI and additional
+  providers remain unvalidated or undelivered. The native
   Terminal is not hard containment, and provider UI can change its initial defaults.
 - **macOS-first.** Linux and Windows/WSL behavior is unvalidated.
 - **Node 24 only.** Older Node versions are rejected by `engine-strict`.
@@ -623,6 +628,11 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The latest scoped native-delegation delta passed the contributor's lint, types,
+366 Node cases and build; independent QA and the integrator each passed its 36
+structured-runtime cases with Node 24. Real two-Codex acceptance was not executed.
+See the [delta evidence and limits](docs/development/testing.md#scoped-native-delegation-integration--2026-11-03).
 
 The Terminal/communication baseline at `eecf345` passed lint, typecheck, 330 Node
 cases and full build using Node 24.22.2/pnpm 10.34.9. The runtime contributor then
