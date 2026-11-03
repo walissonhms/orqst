@@ -604,5 +604,23 @@
     "done": "Done",
     "empty": "Optional overview panels are hidden. Customize the layout to show them again.",
     "storageUnavailable": "Layout applies for this visit. Local storage is unavailable, so it may not survive reload."
+  },
+  "terminalLab": {
+    "title": "Synthetic native Terminal lab",
+    "scope": "Disposable engineering acceptance only. No user project, external session, credential or real provider is used. The fixture exits after eight seconds.",
+    "provider": "Codex is the first provider candidate; managed execution is unavailable. Claude Code and OpenCode remain unvalidated.",
+    "start": "Start fixture",
+    "attach": "Attach output",
+    "input": "Enable input",
+    "detach": "Detach",
+    "stop": "Stop fixture",
+    "paste": "Exact fixture input (ping, size or exit followed by a newline)",
+    "send": "Confirm exact paste",
+    "denied": "Request denied or input revoked.",
+    "cancelled": "Native confirmation cancelled.",
+    "busy": "Another request is pending.",
+    "ok": "Request processed; exit requires explicit evidence.",
+    "idle": "No owned process has been started.",
+    "output": "Inert synthetic process output"
   }
 }

@@ -131,3 +131,13 @@ gesture or real provider. Production enrollment, isolated transport, immutable
 admission, lifetime/containment and durable recovery gates above remain unresolved.
 [Current primary-source provider research](../adapters/managed-terminal-research.md)
 does not change adapter capabilities or authorize adopting external sessions.
+
+## Native transport integration lab — 2026-11-03
+
+The [explicit native lab](terminal-native-acceptance.md) now provides a working
+disposable Electron/preload/IPC/native-broker/Node-host/PTY path for the fixed
+synthetic fixture. The production observer is still read-only and no provider
+backend is enabled. Real transport acceptance passed with intercepted dialogs;
+human-native consent, immutable admission, managed credentials, containment and
+durable long-lived recovery remain unaccepted. This is code and synthetic machine
+evidence, not a functional managed Codex terminal or Phase 2/4 completion.

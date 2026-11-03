@@ -121,11 +121,23 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Terminal native-boundary increment (2026-11-03):** a strict native-client
   broker now connects fixed profiles, private signed consent, input leases and
   owned lifecycle in the explicit synthetic PTY lab. Electron sender, native
-  confirmation and lifecycle helpers are implemented and unit-tested but remain
-  uncomposed; no terminal control or provider is enabled in the application.
+  confirmation and lifecycle helpers are implemented and unit-tested. The later
+  native lab below composes them outside normal Desktop startup; no provider is enabled.
   Codex is still the only implemented observer; Claude Code and OpenCode remain
   contracts. Read the [native contract](docs/api/terminal-native.md) and
   [dated primary-source CLI research](docs/adapters/managed-terminal-research.md).
+
+- **Native Terminal integration lab (2026-11-03):** an explicit developer command
+  now builds a disposable Electron document, separate session/preload and bounded
+  IPC runtime connected to an owned synthetic PTY in a separate Node host. Native
+  cancellation, private grants, leased exact paste, focus revocation, confirmed
+  exit and permanent reload revocation are exercised through real Electron/IPC.
+  Dialog answers are intercepted in acceptance, not evidence of a human native
+  gesture. Run only the [explicit synthetic acceptance](docs/development/terminal-native-acceptance.md).
+  The normal Desktop/Bridge has no terminal execution channel. Codex is the first
+  managed-provider candidate, but executable/cwd binding, independent credentials,
+  containment/lifetime and durable ownership recovery still prevent enabling it.
+  No real provider is launched; Claude Code/OpenCode remain unvalidated contracts.
 
 - **Terminal mechanics increment:** an opt-in developer command now checks a real
   PTY using only fixed disposable synthetic Node processes, private temporary

@@ -66,6 +66,15 @@ Desktop or manual assistive-technology acceptance. See the
 
 ## Mandatory quality and security criteria for each increment
 
+The [native integration lab](docs/development/terminal-native-acceptance.md) now
+connects the experimental broker to a restricted Electron document/preload, native
+IPC and a separate Node-host synthetic PTY. It is a working disposable engineering
+path, outside normal Desktop/Bridge startup and automatic tests. Real Electron
+transport is exercised with intercepted native dialogs; provider, genuine human
+consent, immutable admission, isolation and durable recovery remain gates. This
+does not complete a functional managed Terminal or Phase 2/4 acceptance. Codex is
+the first provider candidate; Claude Code/OpenCode capabilities do not change.
+
 The terminal engineering increment provides an explicit developer-only synthetic PTY
 acceptance command and a [managed execution design](docs/architecture/managed-terminal-design.md).
 macOS/arm64 Node-host mechanics are validated; native grants, provider integration,
