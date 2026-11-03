@@ -736,3 +736,65 @@ Node Core/journal and PTY. It uses an empty disposable observer and fake authent
 it never launches Codex or reads real credentials, configuration or sessions. Native
 confirmations are intercepted, so this is not genuine human-modal/accessibility or
 provider acceptance. Normal test/CI commands do not run this native acceptance.
+
+## Artifact source-library validation — 2026-11-03
+
+The source-library increment was rebased onto the concurrent Terminal recovery baseline
+(`1a66514`), preserving its implementation and public records. On Node 24.22.2/pnpm
+10.34.9, the combined checkout passed `pnpm lint`, `pnpm typecheck`, `pnpm test`
+(303 cases), `pnpm build` and the following focused Chromium run on isolated port 4601
+(40 cases):
+
+```bash
+ORQST_BROWSER_PORT=4601 pnpm test:browser tests/browser/artifact-library.spec.ts tests/browser/artifacts.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/shell-navigation.spec.ts
+```
+
+Coverage includes real extraction from the synthetic retained-message fixture, exact
+selection/retention failures, loaded-text search, older pages, observation/source caps,
+current workspace and exact session scope, obsolete requests, malformed responses,
+offline recovery, draft confirmation, six direct/legacy routes and Back/Forward.
+Dark/light pt-BR screenshots cover 1440/1280/390/320px with maximum reading sizes and
+comfortable spacing; desktop and narrow images were visually inspected. The build
+retains the existing chunk-size advisory above 500 kB; no bundling policy was weakened.
+
+An initial static Node assertion still expected the admission predicate in `App.tsx`;
+it now checks the shared helper used there, with additional runtime negative cases.
+Initial browser cases also exposed mismatched test labels and a fragile lookup of the
+wrapped session selector; it now has an explicit localized accessible label.
+No ingestion code changed, so `pnpm validate:local` was not run. The complete Chromium
+suite, native Desktop/assistive-technology acceptance, other browsers and real-provider
+history were not revalidated by this increment. No installed service, user database,
+provider process or source session was changed, and no push/restart was performed.
+Full-archive search, saved-file/draft indexing, automatic extraction and durable draft
+recovery remain outside this delivery.
+
+## First observation guide — 2026-11-03
+
+This UI-only increment starts after `f4ed5f6` and preserves the separate experimental
+Terminal work. With isolated Node 24.22.2/pnpm 10.34.9 it passed `pnpm lint`,
+`pnpm typecheck`, `pnpm test` (303 cases), `pnpm build` and 45 Chromium cases on
+isolated port 4613, using the selection in the
+[browser guide](browser-tests.md#first-observation-guide-coverage).
+
+The seven new synthetic cases cover snapshot diagnostic values/time, unavailable
+versus zero, global history in an empty selected workspace, automatic fact updates,
+stale snapshot failures/recovery, offline entry, no mutation requests/progress
+storage, modal keyboard/focus, palette handoff, canonical routes/history and exact
+Artifact draft cancellation/confirmed navigation. Neighboring Settings, shell,
+Artifact guards, routes and brand checks also pass. Dark/light screenshots cover
+1440/1280/390/320px at maximum reading sizes, comfortable spacing and reduced motion;
+desktop and pt-BR/light 320px images were visually inspected.
+
+Initial guide tests exposed native Tab boundary behavior, which is now explicitly
+contained. Palette return focus correctly restores its original field; a test also
+needed an exact language label. An intermediate repeat coincided with a rebuild
+removing served assets and returned `dashboard_not_built` in an existing Settings
+case. The final 45-case run used the completed, unchanged build and passed without
+retries. The existing Vite chunk-size advisory remains; no check was weakened.
+
+No ingestion, API, native contract or dependency changed, so `pnpm validate:local`,
+live-provider and Desktop smoke checks were not repeated. Full Chromium, other
+browsers, manual screen-reader and native visual acceptance remain pending. There
+was no installed service restart, push, user database/source change or provider
+execution. CLI discovery, authentication/installation checks, saved onboarding
+progress and the broader first-run workflow remain outside this delivery.

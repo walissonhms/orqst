@@ -37,6 +37,21 @@ let busy = false;
 let gap = false;
 let pending = '';
 let live = false;
+const actions = ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const;
+const updateButtons = () => {
+  for (const action of actions) {
+    let disabled = busy;
+    if (action === 'login' || action === 'start')
+      disabled ||= live || status.dataset.state === 'ownership_lost';
+    else if (action === 'attach')
+      disabled ||=
+        !instanceId || attached || !['running', 'exited'].includes(status.dataset.state ?? '');
+    else if (action === 'detach') disabled ||= !attached;
+    else if (action === 'input') disabled ||= !attached || !live || gap;
+    else disabled ||= !live;
+    (document.getElementById(action) as HTMLButtonElement).disabled = disabled;
+  }
+};
 const show = (key: string) => {
   status.textContent = status.dataset[key] ?? '';
 };
@@ -50,6 +65,7 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
   if (busy) return;
   busy = true;
   status.dataset.pending = 'true';
+  updateButtons();
   try {
     const reply = await client.request(request);
     if (reply.status !== 'ok') {
@@ -79,9 +95,6 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
         input = false;
         pending = '';
       }
-      for (const id of ['start', 'login'])
-        (document.getElementById(id) as HTMLButtonElement).disabled =
-          live || reply.snapshot.state === 'ownership_lost';
     }
     if (request.action === 'attach') {
       attached = true;
@@ -115,6 +128,7 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
   } finally {
     busy = false;
     status.dataset.pending = 'false';
+    updateButtons();
   }
 }
 
@@ -153,7 +167,7 @@ container.addEventListener(
   true,
 );
 container.addEventListener('drop', (event) => event.preventDefault(), true);
-for (const action of ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const) {
+for (const action of actions) {
   document.getElementById(action)!.addEventListener('click', () => {
     if (busy) {
       show('busy');
@@ -218,3 +232,5 @@ window.addEventListener(
   { once: true },
 );
 fit.fit();
+
+updateButtons();

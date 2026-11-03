@@ -86,6 +86,15 @@ Open `http://127.0.0.1:4317`.
 The bridge starts with an empty database and an empty dashboard. That is
 expected.
 
+Open **Observation guide** in the empty-session welcome, Settings / General or
+Search & commands. Its three steps explain the existing Bridge connection, source
+reading diagnostics and retained-session count across all workspaces. A missing
+snapshot stays unavailable; disconnected or failed refreshes qualify last loaded
+evidence. The guide links to the existing capability inventory and workspace
+directory. It never starts Codex, scans installations, tests authentication or
+changes service configuration. Check `ORQST_CODEX_SESSIONS` in the Bridge environment
+if existing history is missing; the dashboard does not receive that configured path.
+
 Synthetic discovery checks belong to the isolated automated harness:
 
 ```bash

@@ -20,7 +20,7 @@ test('desktop limits navigation and resources to its configured Bridge', () => {
   for (const url of [
     origin + '/',
     origin + '/#models',
-    ...['overview', 'workspaces', 'agents', 'models', 'settings'].flatMap((view) => [
+    ...['overview', 'workspaces', 'agents', 'models', 'settings', 'artifacts'].flatMap((view) => [
       origin + '/' + view,
       origin + '/' + view + '#session=synthetic',
     ]),
@@ -32,6 +32,9 @@ test('desktop limits navigation and resources to its configured Bridge', () => {
     ...[
       '/overview/',
       '/settings/nested',
+      '/artifacts/',
+      '/artifacts/nested',
+      '/artifacts?q=synthetic',
       '/arbitrary',
       '/%73ettings',
       '/settings?x=1',

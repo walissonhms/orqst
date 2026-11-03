@@ -274,8 +274,8 @@ reports visit-only scope. This does not add archive/rename, filesystem or proces
 restoration. See the [interface guide](docs/design/ui-ux-specification.md#pin-workspaces).
 
 Remaining frontend work includes project tabs/splits,
-a searchable artifact library, terminal fonts, broader Settings and
-onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
+full-archive Artifact search and saved-file indexing, terminal fonts, broader Settings and
+onboarding beyond the read-only orientation guide. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
 require real Core/provider and
 authorization contracts; no visual placeholder counts as delivered functionality.
 The screen matrix is the integration checklist, while the six phases above retain
@@ -311,8 +311,8 @@ links and same-document session/history links. Cancel retains exact edits/contex
 confirmation performs the requested transition. Pending saves block navigation with
 feedback. Browser reload/exit warnings are best-effort and browser-controlled.
 This closes an available data-loss UX gap without adding persistence or provider
-capabilities. Desktop close/quit, native document loads, crash recovery, durable drafts
-and a searchable artifact library remain pending. See the
+capabilities. Desktop close/quit, native document loads and durable draft/crash recovery
+remain pending; a bounded searchable source library is now implemented. See the
 [interface specification](docs/design/ui-ux-specification.md).
 
 ### Terminal native-boundary increment — 2026-11-03
@@ -343,3 +343,28 @@ these library semantics. Normal observer startup and the native lab do not open 
 Codex remains the first managed target, not an enabled provider. Immutable OS
 binding, isolated authentication, native enrollment, containment and individual
 provider acceptance are still required; Claude Code/OpenCode remain contracts.
+
+### Searchable Artifact sources increment — 2026-11-03
+
+`/artifacts` now discovers retained Codex assistant/agent messages through the existing
+bounded event API. Search covers loaded text and recorded context, with current-workspace
+and exact-session filtering, source references, explicit pagination and qualified coverage.
+Opening a source navigates to the existing session/manual Artifact panel; it does not
+create or save a document. Each reading stops at 2,000 observations or 200 sources;
+a specific session starts its own reading. Newer observations require refresh. Failure,
+offline, empty, retention and capacity states stay explicit. This closes the standalone
+source-discovery gap without a new API, database index, transport or file grant.
+Full-archive search, saved-file/draft indexing, automatic extraction and durable draft
+recovery remain pending. Terminal/provider work and phase/release gates are unchanged.
+
+### First observation guide increment — 2026-11-03
+
+The shared dashboard now offers optional three-step orientation from Settings,
+Search & commands and the empty-session welcome. It uses existing transport and
+snapshot evidence for connection, source diagnostics and global retained-session
+counts, distinguishing unavailable and stale data. Links reuse the existing Agents
+and Workspaces routes and Artifact navigation guard. No scan, CLI discovery,
+permission prompt, installation check, saved progress or runtime control is added.
+Broader onboarding and manual assistive-technology/native visual acceptance remain
+pending; Terminal and provider development retain their separate gates. See the
+[interface guide](docs/design/ui-ux-specification.md#first-observation-guide).

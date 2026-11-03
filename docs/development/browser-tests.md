@@ -47,7 +47,7 @@ After `pnpm build`, run the route and neighboring guard/preference coverage:
 ORQST_BROWSER_PORT=4347 pnpm test:browser tests/browser/path-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/settings.spec.ts
 ```
 
-The synthetic route suite covers direct entry/reload for all five exact paths,
+The synthetic route suite covers direct entry/reload for all six exact paths,
 legacy aliases without extra entries, root preference restoration, language,
 same-document multi-entry Back/Forward, deferred source-backed session links and
 invalid identities, canonical session encoding, address-bar fragment navigation
@@ -60,3 +60,37 @@ draft recovery remain unimplemented; Chromium coverage does not establish other
 browser or OS acceptance. `pnpm test` includes exact Bridge fallback and Electron
 navigation/sender allowlist negatives; `pnpm test:desktop` uses a disposable native
 profile and synthetic Bridge.
+
+## Artifact source-library coverage
+
+After building, run the source library and neighboring manual/draft/route coverage:
+
+```bash
+ORQST_BROWSER_PORT=4601 pnpm test:browser tests/browser/artifact-library.spec.ts tests/browser/artifacts.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/shell-navigation.spec.ts
+```
+
+The library suite uses disposable synthetic observations. It checks actual retained-message
+extraction through the existing panel, loaded-text search, source identity/retention errors,
+older pagination, workspace/session scope and obsolete requests, explicit capacity,
+failure/offline recovery, draft guards and localized containment/screenshots in dark/light
+at 1440/1280/390/320px with maximum reading sizes. Node cases cover source admission,
+UTF-8 limits and malformed/unordered/cross-session pages. These do not establish full-archive
+search performance, other browsers, manual screen-reader or native Desktop visual acceptance.
+
+## First-observation guide coverage
+
+After building, run the guide and neighboring navigation/Settings checks:
+
+```bash
+ORQST_BROWSER_PORT=4613 pnpm test:browser tests/browser/observation-guide.spec.ts tests/browser/settings.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/brand-assets.spec.ts
+```
+
+The synthetic guide suite checks actual snapshot diagnostics/time, unavailable versus
+zero counts, global history in an empty workspace scope, in-place updates and stale
+snapshot errors, offline entry, no mutation requests or progress storage, modal Tab/
+Escape/return focus, palette handoff, existing route/history behavior and exact draft
+cancellation/confirmed navigation. Dark/light captures cover 1440/1280/390/320px at
+maximum reading sizes with comfortable spacing/reduced motion, including pt-BR at
+320px. Inspect generated images for wrapping and readable diagnostic values; they
+remain disposable output. Native visual, manual screen-reader and other-browser
+acceptance, CLI discovery and the broader onboarding workflow are outside this suite.
