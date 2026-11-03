@@ -24,6 +24,17 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
   native grants, process identity, resource budgets and recovery; no interactive
   terminal, provider launch, execution API or external-session adoption is shipped.
 
+- Official dark design tokens and an expanded observation UI: collapsible navigation,
+  Cmd/Ctrl+K search over the loaded snapshot, workspace directory with search/sort/
+  grid/list, adapter capability matrix and local allowlisted layout/scope preferences.
+- Sticky selected-session context and token disclosure reuse the inspector's confirmed
+  reading, keeping missing/stale/offline states explicit without additional polling.
+- Notification filters, workspace context and source-session navigation across views;
+  native modal focus/Escape/return behavior for search, notifications and workspace
+  creation. Existing preference and workspace APIs are preserved.
+- Public interface guide with screen-by-screen capabilities and backend dependencies;
+  no interactive terminal, CLI installation scan, model switch or orchestration is implied.
+
 - Read-only Observed tools in session details: bounded, source-backed Codex tool
   invocation/return groups with strict correlation, explicit partial/stale history
   and inert control-character display. No process state or execution is inferred.

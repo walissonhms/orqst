@@ -175,6 +175,24 @@ bundle served by the bridge in production and by Vite in development.
 - **No cloud dependency:** local operation requires no account, API key,
   telemetry, or upload.
 
+## Find your work quickly
+
+Use the sidebar to open **Overview**, **Workspace directory**, **Agents & integrations**
+or **Most used models**. Press **Cmd/Ctrl+K** to search local workspaces, observed
+agents/models, tasks and sessions. The directory supports search, grid/list and
+recent/name sorting. Selecting a workspace keeps Analytics in its current view;
+source notifications open the relevant session from any screen.
+
+Collapse desktop navigation when space is tight. The last view/workspace, status
+filter and directory layout/sort are saved in this browser origin, without search
+terms or captured content. This restores UI context, not agent processes. An open
+session's sticky context strip shares confirmed token readings with its inspector,
+including explicit stale/unavailable states. The adapter matrix reports observation
+support, without pretending to detect installations or change models.
+
+See the [interface guide and capability matrix](docs/design/ui-ux-specification.md)
+for shortcuts, persistence, current screens and remaining backend dependencies.
+
 ## Observed model identifier
 
 The session header labels its historical model identifier explicitly and discloses
@@ -427,6 +445,19 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The navigation/directory increment passed lint, typecheck, 240 Node tests and the
+full build after integration with the visual system and synthetic PTY test work.
+The complete Chromium run passed 94/97: three existing threshold cases still expect
+120 tokens after `dashboard.spec.ts` advances their shared fixture to 170. Their
+assertions were preserved. A fresh isolated run passed all 17 shell/threshold cases;
+after rebasing, 15 shell/dashboard/Artifacts regression cases passed. Synthetic
+screenshots cover 1440/1280/390px, keyboard focus and reduced motion. The build's
+bundle-size warning remains. No ingestion changed, so local/live provider validation
+and native Desktop smoke were not repeated. Installed services, storage and source
+sessions were preserved without restart. Exact approved-collage matching and manual
+screen-reader/native visual acceptance remain pending. See the
+[interface guide and screen matrix](docs/design/ui-ux-specification.md).
 
 The observed usage evolution increment passed lint, typecheck, 225 Node tests,
 full build and a compiled-worker smoke with disposable synthetic storage. Both new

@@ -437,5 +437,81 @@
     "truncated": "Display shortened. This is not the complete retained field.",
     "sourceNote": "Retained event {{sequence}}. Source was not rechecked; this record does not prove process liveness, exit, success or terminal ownership.",
     "position": "Source line {{line}} · byte offset {{offset}}"
+  },
+  "shell": {
+    "views": {
+      "overview": "Overview",
+      "workspaces": "Workspace directory",
+      "agents": "Agents & integrations",
+      "models": "Most used models"
+    },
+    "skip": "Skip to main content",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "loading": "Loading local observations…",
+    "palette": {
+      "title": "Search & commands",
+      "shortLabel": "Search",
+      "search": "Search views, workspaces, agents, models or session IDs",
+      "help": "Searches the loaded local snapshot. ↑ / ↓ to move, Enter to open, Escape to close. No agent commands are sent.",
+      "navigation": "Navigation",
+      "actions": "Local actions",
+      "empty": "No matching views, workspaces or sessions.",
+      "count": "Showing {{shown}} of {{count}} matches",
+      "shortcut": "⌘ / Ctrl K"
+    },
+    "workspaces": {
+      "description": "Explore observed projects and their sessions, with a separate context for each workspace.",
+      "search": "Search workspace names or paths",
+      "sort": "Sort by",
+      "recent": "Recent activity",
+      "layout": "Workspace layout",
+      "grid": "Grid view",
+      "list": "List view",
+      "open": "Open sessions",
+      "noMatches": "No workspaces match this search.",
+      "empty": "No workspaces recorded. Use Codex outside ORQST or add a local workspace label.",
+      "localNote": "Workspace paths are labels and observed working directories. Opening a workspace filters observations; it does not open files, launch a CLI or resume a process."
+    },
+    "agents": {
+      "description": "Inspect the capabilities declared by the local observation adapters.",
+      "matrix": "Observation capability matrix",
+      "discoveryNote": "This is an adapter inventory, not a machine installation scan. Executable paths, installed versions, authentication and currently available models are not detected.",
+      "capability": "Capability",
+      "mode": "Mode",
+      "supported": "Supported",
+      "unavailable": "Unavailable",
+      "limits": "Capabilities describe source-backed observation support. A recorded running turn does not prove process liveness. Managed execution, terminal input and model changes are unavailable.",
+      "evidence": "Adapter evidence & limits",
+      "evidenceNote": "Evidence descriptions are supplied by the adapters and kept in their original language."
+    },
+    "adapters": {
+      "codex": "Codex CLI",
+      "claude": "Claude Code",
+      "opencode": "OpenCode"
+    },
+    "capabilities": {
+      "sessionDiscovery": "External session discovery",
+      "realtimeEvents": "New event observation",
+      "messages": "Captured messages",
+      "toolCalls": "Recorded tool input/output",
+      "subagents": "Explicit parent relationships",
+      "tokenUsage": "Cumulative token snapshots",
+      "taskResults": "Captured final results",
+      "userIntervention": "Verified input requests",
+      "remoteControl": "Session control"
+    },
+    "notifications": {
+      "filter": "Notification filter",
+      "all": "All notifications",
+      "unread": "Unread only",
+      "noMatches": "No notifications match this filter.",
+      "sourceMissing": "The source session is no longer available."
+    },
+    "metrics": {
+      "context": "Selected observed session",
+      "confirmed": "Last confirmed",
+      "outdated": "Out of date"
+    }
   }
 }

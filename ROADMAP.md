@@ -207,6 +207,23 @@ responsive desktop/mobile layouts and reduced motion with no lost information.
 Record real-machine visual acceptance separately; palette adoption alone does not
 complete Phase 2 or authorize a release.
 
+## UI/UX screen delivery
+
+The [public interface specification](docs/design/ui-ux-specification.md) tracks each
+screen as Implemented / Partial / Planned / Blocked, with component/test pointers.
+The navigation foundation now includes a collapsible sidebar, Cmd/Ctrl+K search,
+workspace grid/list and scoped Analytics navigation, descriptor-based agent
+capabilities, a sticky confirmed-token session strip and filtered source-linked
+notifications. UI preferences persist locally; neither processes nor session tabs
+are restored. Existing observation, Analytics and manual Artifacts stay intact.
+
+Remaining frontend work includes configurable Overview panels, project tabs/splits,
+a searchable artifact library, grouped Settings and onboarding. Studio/PTY controls,
+CLI/model discovery, task Kanban and orchestration require real Core/provider and
+authorization contracts; no visual placeholder counts as delivered functionality.
+The screen matrix is the integration checklist, while the six phases above retain
+their existing backend and release gates.
+
 ## Global Desktop MVP acceptance
 
 A user opens a project, selects a supported agent/model, starts an authorized session

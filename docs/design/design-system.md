@@ -8,7 +8,10 @@ The ORQST logo and mascot are the visual references. Preserve approved artwork;
 do not recolor or replace native menu-bar assets through dashboard CSS.
 
 This is a Desktop MVP requirement, shared by the browser and Electron dashboard.
-The current implementation remains an observation-only React client. A visual
+The current implementation remains an observation-only React client. The
+[interface guide](ui-ux-specification.md) records the navigation/directory increment
+and per-screen boundaries. Behavioral layout rules in `shell.css` consume these
+same tokens. A visual
 specification does not enable terminals, agent execution or orchestration.
 
 ## Shared colors
@@ -81,18 +84,18 @@ part of the component contract.
 All planned frontend modules inherit this system when they become supported.
 This table is a visual requirement, not a declaration that a module is shipped.
 
-| Area                                   | Application and current boundary                                                                                               |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                  |
-| Workspaces and tabs                    | Lavender labels with neon selection indicators; current navigation/association only                                            |
-| Agent and model selectors              | Current filters use dark fields and visible focus; observed models remain historical identifiers, not execution pickers        |
-| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact |
-| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                      |
-| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved   |
-| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; broader settings/onboarding remain planned             |
-| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                  |
-| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                             |
-| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                  |
+| Area                                   | Application and current boundary                                                                                                           |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                              |
+| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                              |
+| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers |
+| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact             |
+| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                  |
+| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved               |
+| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; broader settings/onboarding remain planned                         |
+| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                              |
+| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                         |
+| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                              |
 
 Electron's native menu-bar artwork, menus, OS dialogs and alerts have their own
 platform constraints. The shared dashboard stylesheet does not theme native OS
