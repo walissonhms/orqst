@@ -21,6 +21,7 @@ import {
   PanelLeftOpen,
   BarChart3,
   Plus,
+  Pin,
   Radio,
   Search,
   Settings2,
@@ -51,6 +52,7 @@ import { isSessionLocation, sessionFromLocation } from './session-link';
 import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
 import { Agents } from './Agents';
 import { Workspaces } from './Workspaces';
+import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
 import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
@@ -506,6 +508,7 @@ export function App() {
   const f = useFormatting();
   const appearance = useAppearancePreferences();
   const overview = useOverviewPreferences();
+  const workspacePins = useWorkspacePins();
   const [overviewLayoutOpen, setOverviewLayoutOpen] = useState(false);
   const overviewLayoutTrigger = useRef<HTMLButtonElement>(null);
   const overviewLayoutOpener = useRef<Element | null>(null);
@@ -929,21 +932,30 @@ export function App() {
             <span>{t('allWorkspaces')}</span>
             <small>{snapshot?.sessions.length ?? 0}</small>
           </button>
-          {snapshot?.workspaces.map((workspace) => (
-            <button
-              key={workspace.id}
-              className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
-              title={workspace.path}
-              aria-label={workspace.name}
-              onClick={() => {
-                openWorkspace(workspace.id);
-              }}
-            >
-              <Folder size={16} />
-              <span>{workspace.name}</span>
-              <small>{workspace.sessions}</small>
-            </button>
-          ))}
+          {snapshot &&
+            pinnedFirst(snapshot.workspaces, workspacePins.pins).map((workspace) => (
+              <button
+                key={workspace.id}
+                className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
+                title={workspace.path}
+                aria-label={
+                  workspacePins.pins.includes(workspace.id)
+                    ? t('shell.workspaces.pinnedName', { name: workspace.name })
+                    : workspace.name
+                }
+                onClick={() => {
+                  openWorkspace(workspace.id);
+                }}
+              >
+                {workspacePins.pins.includes(workspace.id) ? (
+                  <Pin size={16} aria-hidden="true" />
+                ) : (
+                  <Folder size={16} />
+                )}
+                <span>{workspace.name}</span>
+                <small>{workspace.sessions}</small>
+              </button>
+            ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="integration-heading">{t('integration')}</div>
@@ -1084,6 +1096,7 @@ export function App() {
               <Workspaces
                 snapshot={snapshot}
                 activeId={workspaceId}
+                pins={workspacePins}
                 layout={shell.workspaceLayout}
                 sort={shell.workspaceSort}
                 onLayout={(value) =>
