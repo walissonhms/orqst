@@ -66,6 +66,109 @@
 .shell-dialog::backdrop {
   background: var(--orqst-backdrop);
 }
+.overview-heading {
+  flex-wrap: wrap;
+  gap: var(--orqst-space-4);
+}
+.overview-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--orqst-space-5);
+  align-items: start;
+  margin-top: 22px;
+}
+.overview-primary,
+.overview-secondary,
+[data-overview-panel] {
+  min-width: 0;
+}
+.overview-secondary {
+  display: grid;
+  gap: 18px;
+}
+.overview-panels-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.overview-empty {
+  margin-top: 22px;
+  padding: var(--orqst-space-5);
+}
+.overview-empty p {
+  color: var(--orqst-muted);
+  margin-bottom: var(--orqst-space-4);
+}
+.overview-layout-dialog {
+  width: 540px;
+  max-width: calc(100% - 32px);
+  margin: auto;
+  overflow: auto;
+}
+.overview-layout-body {
+  padding: var(--orqst-space-5);
+}
+.overview-layout-body > p {
+  margin: 0 0 var(--orqst-space-4);
+  color: var(--orqst-muted);
+  line-height: 1.7;
+}
+.overview-layout-list {
+  list-style: decimal inside;
+  padding: 0;
+  margin: 0 0 var(--orqst-space-5);
+}
+.overview-layout-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--orqst-space-3);
+  padding: var(--orqst-space-3) 0;
+  border-bottom: 1px solid var(--orqst-border);
+}
+.overview-layout-list label {
+  display: flex;
+  align-items: center;
+  gap: var(--orqst-space-3);
+  min-height: 40px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.overview-layout-list input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--orqst-neon);
+}
+.overview-move-controls,
+.overview-layout-actions {
+  display: flex;
+  gap: var(--orqst-space-2);
+}
+.overview-move-controls {
+  flex-shrink: 0;
+}
+.overview-move-controls .icon-button {
+  min-width: 40px;
+  min-height: 40px;
+}
+.overview-layout-actions {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+@media (min-width: 1500px) {
+  .overview-panels:not(.overview-panels-single) {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}
+@media (max-width: 1100px) {
+  .overview-panels:not(.overview-panels-single) {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+@media (max-width: 900px) {
+  .overview-panels:not(.overview-panels-single) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .workspace-dialog {
   width: 430px;
   max-width: calc(100% - 30px);

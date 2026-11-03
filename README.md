@@ -49,6 +49,16 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Configurable Overview panels:** **Customize overview** shows/hides and reorders
+  the existing timeline, attention, token usage and source-health panels. The first
+  visible panel uses the wide column; narrow windows keep the same reading order.
+  Keyboard arrow buttons, immediate changes, scoped default restoration and an
+  all-hidden recovery action work without the Bridge. Layout persists locally and
+  synchronizes between same-origin tabs; storage denial reports visit-only scope.
+  Summary, sessions, open details/drafts and notification delivery keep their existing
+  behavior. No new metrics, data deletion, drag-and-drop or panel resizing is added.
+  See the [interface guide](docs/design/ui-ux-specification.md#customize-overview-panels).
+
 - **Clean dashboard routes:** use `/overview`, `/workspaces`, `/agents`, `/models`
   and `/settings`, including direct entry and reload. `/` restores the last view;
   explicit routes take precedence over that preference. Legacy `/#overview` (and
@@ -508,6 +518,20 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The configurable Overview increment started after `39eaf4d` and preserves the
+concurrent brand, native-boundary and clean-route work through `f0ef4eb`. Final combined
+checks passed lint, typecheck, all 282 Node cases, full build and 69 focused Chromium
+cases on isolated port 4591. A broader 132-case Chromium run passed before the final rebase.
+The final selection covers layout-only persistence/synchronization, keyboard moves/
+focus (including recovery when a trigger disappears), offline/storage denial, exact
+active drafts, clean routes/history, brand assets, Settings, reading comfort and themes.
+Synthetic images were inspected at desktop and 320px pt-BR with maximum reading sizes.
+The existing Vite bundle-size warning remains. No ingestion or native contract was
+changed by this increment; local/live provider validation, Electron smoke, other-browser,
+native visual and manual screen-reader acceptance were not repeated. This delivery
+neither restarts services nor changes stored observations/source sessions. See
+[Overview testing](docs/development/testing.md#configurable-overview-panels).
 
 The clean-route increment on 2026-11-03 passed lint, typecheck, 279 Node tests,
 build, 36 focused Chromium navigation/draft/preference cases and the separate

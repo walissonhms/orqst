@@ -51,6 +51,8 @@ import { isSessionLocation, sessionFromLocation } from './session-link';
 import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
 import { Agents } from './Agents';
 import { Workspaces } from './Workspaces';
+import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
+import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
@@ -503,6 +505,20 @@ export function App() {
   const { t, i18n } = useTranslation();
   const f = useFormatting();
   const appearance = useAppearancePreferences();
+  const overview = useOverviewPreferences();
+  const [overviewLayoutOpen, setOverviewLayoutOpen] = useState(false);
+  const overviewLayoutTrigger = useRef<HTMLButtonElement>(null);
+  const overviewLayoutOpener = useRef<Element | null>(null);
+  function openOverviewLayout() {
+    overviewLayoutOpener.current = document.activeElement;
+    setOverviewLayoutOpen(true);
+  }
+  function closeOverviewLayout() {
+    setOverviewLayoutOpen(false);
+    requestAnimationFrame(() => {
+      if (!overviewLayoutOpener.current?.isConnected) overviewLayoutTrigger.current?.focus();
+    });
+  }
   const [shell, setShell] = useState(readShellPreferences);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
   const [view, setView] = useState<AppView>(
@@ -1083,7 +1099,7 @@ export function App() {
             snapshot && <Agents snapshot={snapshot} />
           ) : (
             <>
-              <div className="page-heading">
+              <div className="page-heading overview-heading">
                 <div>
                   <span className="eyebrow">
                     <Radio size={12} />
@@ -1092,9 +1108,10 @@ export function App() {
                   <h1>{t('heading')}</h1>
                   <p>{t('description')}</p>
                 </div>
-                <div className="heading-decoration">
-                  <Activity size={40} />
-                </div>
+                <button ref={overviewLayoutTrigger} className="button" onClick={openOverviewLayout}>
+                  <Settings2 size={16} />
+                  {t('overviewLayout.title')}
+                </button>
               </div>
               {(error || saveError) && (
                 <p className="notice" role="alert">
@@ -1286,84 +1303,94 @@ export function App() {
                   }}
                 />
               ) : (
-                <div className="lower-grid">
-                  <section className="panel activity-panel">
-                    <div className="panel-heading">
-                      <h2>
-                        <Activity size={17} />
-                        {t('activity')}
-                      </h2>
-                      <span className="subtle-label">{f.number(recent.length)}</span>
-                    </div>
-                    <Timeline events={recent.slice(-45)} />
-                    <div className="panel-footer">
-                      {t('limitNotice', { count: Math.min(recent.length, 45) })}
-                    </div>
-                  </section>
-                  <div className="right-column">
-                    <section className="panel attention-panel">
-                      <div className="panel-heading">
-                        <h2>
-                          <Bell size={16} />
-                          {t('attention')}
-                        </h2>
-                        <span className="count-badge">{attention.length}</span>
-                      </div>
-                      {attention.length ? (
-                        <div className="attention-list">
-                          {attention.slice(0, 10).map((session) => (
-                            <button onClick={() => selectSession(session.id)} key={session.id}>
-                              <span>
-                                <strong>{session.agentName}</strong>
-                                <Status status={session.status} />
-                              </span>
-                              <ChevronRight size={16} />
-                            </button>
-                          ))}
+                <OverviewPanels
+                  preferences={overview.preferences}
+                  onCustomize={openOverviewLayout}
+                  panels={{
+                    activity: (
+                      <section className="panel activity-panel">
+                        <div className="panel-heading">
+                          <h2>
+                            <Activity size={17} />
+                            {t('activity')}
+                          </h2>
+                          <span className="subtle-label">{f.number(recent.length)}</span>
                         </div>
-                      ) : (
-                        <div className="quiet-state">
-                          <CheckCircle2 size={26} />
-                          <strong>{t('attentionEmpty')}</strong>
-                          <p>{t('attentionBody')}</p>
+                        <Timeline events={recent.slice(-45)} />
+                        <div className="panel-footer">
+                          {t('limitNotice', { count: Math.min(recent.length, 45) })}
                         </div>
-                      )}
-                    </section>
-                    <section className="panel usage-panel">
-                      <div className="panel-heading">
-                        <h2>
-                          <Zap size={16} />
-                          {t('usage')}
-                        </h2>
-                      </div>
-                      <div className="usage-body">
-                        <TokenSummary usage={usage} />
-                      </div>
-                    </section>
-                    <section className="panel diagnostics-panel">
-                      <div className="panel-heading">
-                        <h2>
-                          <ShieldCheck size={16} />
-                          {t('diagnostics')}
-                        </h2>
-                      </div>
-                      <dl>
-                        {[
-                          ['sourceFiles', snapshot?.diagnostics.files ?? 0],
-                          ['malformed', snapshot?.diagnostics.malformed ?? 0],
-                          ['oversized', snapshot?.diagnostics.oversized ?? 0],
-                          ['scanErrors', snapshot?.diagnostics.errors ?? 0],
-                        ].map(([key, value]) => (
-                          <div key={key}>
-                            <dt>{t(String(key))}</dt>
-                            <dd>{f.number(Number(value))}</dd>
+                      </section>
+                    ),
+                    attention: (
+                      <section className="panel attention-panel">
+                        <div className="panel-heading">
+                          <h2>
+                            <Bell size={16} />
+                            {t('attention')}
+                          </h2>
+                          <span className="count-badge">{attention.length}</span>
+                        </div>
+                        {attention.length ? (
+                          <div className="attention-list">
+                            {attention.slice(0, 10).map((session) => (
+                              <button onClick={() => selectSession(session.id)} key={session.id}>
+                                <span>
+                                  <strong>{session.agentName}</strong>
+                                  <Status status={session.status} />
+                                </span>
+                                <ChevronRight size={16} />
+                              </button>
+                            ))}
                           </div>
-                        ))}
-                      </dl>
-                      <p className="fine-print">{t('retentionNote')}</p>
-                    </section>
-                  </div>
-                </div>
+                        ) : (
+                          <div className="quiet-state">
+                            <CheckCircle2 size={26} />
+                            <strong>{t('attentionEmpty')}</strong>
+                            <p>{t('attentionBody')}</p>
+                          </div>
+                        )}
+                      </section>
+                    ),
+                    usage: (
+                      <section className="panel usage-panel">
+                        <div className="panel-heading">
+                          <h2>
+                            <Zap size={16} />
+                            {t('usage')}
+                          </h2>
+                        </div>
+                        <div className="usage-body">
+                          <TokenSummary usage={usage} />
+                        </div>
+                      </section>
+                    ),
+                    diagnostics: (
+                      <section className="panel diagnostics-panel">
+                        <div className="panel-heading">
+                          <h2>
+                            <ShieldCheck size={16} />
+                            {t('diagnostics')}
+                          </h2>
+                        </div>
+                        <dl>
+                          {[
+                            ['sourceFiles', snapshot?.diagnostics.files ?? 0],
+                            ['malformed', snapshot?.diagnostics.malformed ?? 0],
+                            ['oversized', snapshot?.diagnostics.oversized ?? 0],
+                            ['scanErrors', snapshot?.diagnostics.errors ?? 0],
+                          ].map(([key, value]) => (
+                            <div key={key}>
+                              <dt>{t(String(key))}</dt>
+                              <dd>{f.number(Number(value))}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                        <p className="fine-print">{t('retentionNote')}</p>
+                      </section>
+                    ),
+                  }}
+                />
               )}
             </>
           )}
@@ -1380,6 +1407,14 @@ export function App() {
           </span>
         </footer>
       </div>
+      {overviewLayoutOpen && (
+        <OverviewLayoutEditor
+          preferences={overview.preferences}
+          onChange={overview.setPreferences}
+          storageUnavailable={overview.storageUnavailable}
+          onClose={closeOverviewLayout}
+        />
+      )}
       {paletteOpen && (
         <CommandPalette
           snapshot={snapshot}
