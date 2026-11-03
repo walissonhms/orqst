@@ -84,18 +84,18 @@ part of the component contract.
 All planned frontend modules inherit this system when they become supported.
 This table is a visual requirement, not a declaration that a module is shipped.
 
-| Area                                   | Application and current boundary                                                                                                                                   |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                                                      |
-| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                      |
-| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                         |
-| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                     |
-| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                          |
-| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                       |
-| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; grouped Settings adds contrast/spacing/motion and scoped reset; onboarding remains planned |
-| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                      |
-| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                 |
-| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                                                      |
+| Area                                   | Application and current boundary                                                                                                                                                        |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                                                                           |
+| Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                                           |
+| Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                                              |
+| Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                                          |
+| Notifications / Attention Center       | Elevated drawer, warning/danger/success with category text; current preference/history behavior preserved                                                                               |
+| Artifacts                              | Dark inert source/preview/editor, selected-mode indicators and elevated discard dialog; original/draft distinction preserved                                                            |
+| Settings and onboarding                | Current notification preferences/workspace form follow shared controls; grouped Settings adds contrast/spacing/motion, reading sizes/fonts and scoped reset; onboarding remains planned |
+| Studio and integrated terminals        | Planned: shared canvas/layers and readable monospace; no PTY or controls added by this update                                                                                           |
+| Orchestration / Agent Collaboration    | Planned: same tokens; only explicit source-backed relationships and separately authorized controls                                                                                      |
+| Kanban                                 | Planned: same surfaces, focus and semantic labels; do not infer task progress from inactivity                                                                                           |
 
 Electron's native menu-bar artwork, menus, OS dialogs and alerts have their own
 platform constraints. The shared dashboard stylesheet does not theme native OS
@@ -137,9 +137,16 @@ text. Avoid flashing, perpetual bouncing and animation that hides source content
 Settings offers standard/higher dark contrast and compact/comfortable spacing.
 Higher contrast derives muted text and borders from lavender without changing
 semantic state colors. Comfortable spacing increases control targets (40px), table
-rows, workspace cards and activity entries. Font size retains the existing scale;
-browser zoom remains available. No light palette or terminal font control
-is implemented.
+rows, workspace cards and activity entries. Interface sizes use `rem` with the existing
+pixel-equivalent baseline at the usual 16px browser default. The root follows the
+browser default and allows 100%, 112.5% or 125% scaling; layout spacing remains separate.
+Captured task/message/tool bodies and Artifact content use a shared 13px-equivalent
+reading baseline with an additional 0%, 15% or 30% increase. Source/edit keep their
+existing font defaults; optional local monospace/sans-serif reading choices never
+alter text. Inert Markdown code blocks always retain monospace. Identifiers, provenance
+and metric values follow interface scaling only. Keep long text wrappable and bound
+scrolling inside panels. Browser zoom remains available. No light palette or terminal
+font control is implemented.
 
 The local Reduce motion choice and existing `prefers-reduced-motion: reduce` rule
 disable animations, transitions and smooth scrolling. Keep the exact numbers, static outline, state

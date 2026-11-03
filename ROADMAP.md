@@ -224,7 +224,7 @@ and reading comfort work offline; delivery preferences reuse the existing Bridge
 contract. This does not implement provider configuration or storage management.
 
 Remaining frontend work includes configurable Overview panels, project tabs/splits,
-a searchable artifact library, light theme/font controls, broader Settings and
+a searchable artifact library, light theme/terminal fonts, broader Settings and
 onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
 require real Core/provider and
 authorization contracts; no visual placeholder counts as delivered functionality.
@@ -240,3 +240,15 @@ and opens **Most Used Models** with source-reconciled data and working filters.
 Unavailable data stays explicit, observed external sessions stay read-only, and the
 Bridge has no regression. Record real-machine evidence and owner release acceptance
 before announcing 1.0. Follow the [delivery workflow](docs/development/testing.md#incremental-delivery-and-integration).
+
+### Reading accessibility increment
+
+Settings now adds relative interface text scaling, additional captured-text scaling
+and local original/monospace/sans-serif reading choices with a labeled example.
+Expanded messages, session tasks, tool payloads and Artifact source/preview/edit
+share the reading choice; provenance and metrics keep distinct typography. Preview
+code stays monospace. Old appearance preferences remain compatible, offline changes
+remain usable and reset includes the new settings. This addresses an available UX
+backlog without new transport or provider capabilities. Light theme, terminal fonts,
+manual screen-reader/native visual acceptance and the broader Phase 2/6 gates remain
+pending. See the [interface specification](docs/design/ui-ux-specification.md).

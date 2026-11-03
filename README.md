@@ -54,7 +54,10 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   reduced motion always wins. Reset appearance asks for confirmation and changes
   only these three choices. Language and reading comfort work offline; notification
   categories/sound reuse the Bridge store and disable without a current connection.
-  Light theme, font controls, retention/deletion UI, quiet hours and provider
+  Reading controls now scale interface text (100/112.5/125%) and captured text
+  (an additional 0/15/30%), with original/monospace/system sans-serif reading fonts
+  and a labeled example. Old preferences migrate safely; copied/saved text stays exact.
+  Light theme, terminal font controls, retention/deletion UI, quiet hours and provider
   configuration remain pending. See the [interface guide](docs/design/ui-ux-specification.md).
 
 - **Terminal mechanics increment:** an opt-in developer command now checks a real
@@ -457,6 +460,18 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The reading accessibility increment was checked on top of `b92c971`, preserving
+its isolated live-session fixtures and explicit Desktop navigation. Targeted checks
+passed lint, typecheck, three appearance/locale Node cases, full build and 12
+Chromium cases for reading, Settings and the existing inert Artifact workflow.
+Synthetic screenshots were inspected at maximum reading sizes, including pt-BR at
+320px; narrow Settings fields stack to keep selected values readable. The existing
+bundle-size warning remains. The prior 252-Node/97-Chromium/Electron acceptance was
+not repeated wholesale. No ingestion or native contract changed, so real-source/live
+provider validation and another Electron smoke were not run. Other browsers,
+manual screen-reader and native visual acceptance remain pending. No installed
+services, stored observations or source sessions were changed or restarted.
 
 The owned-terminal library candidate (`fdff231`) passed independent read-only critical
 QA for experimental, uncomposed integration. Finalization against the navigation

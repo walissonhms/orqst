@@ -513,3 +513,32 @@ keep the exact token assertions. The Electron smoke explicitly returns to
 `/#overview` after Analytics because a hashless URL restores the persisted view.
 See the [screen matrix](../design/ui-ux-specification.md) for remaining product and
 manual/native acceptance gaps.
+
+## Reading accessibility preferences
+
+After building, select the Settings/reading cases and the existing source/preview
+regression on an exclusive port:
+
+```bash
+ORQST_BROWSER_PORT=4389 pnpm test:browser tests/browser/settings.spec.ts tests/browser/reading-preferences.spec.ts tests/browser/artifacts.spec.ts --grep 'Settings|appearance|comfortable|reading|retained text|manual source'
+```
+
+Reading cases cover old three-field preferences, allowlisted choices, same-origin
+sync, storage denial/offline operation, keyboard selection and reset focus. They
+measure computed text sizes, exercise maximum interface/content sizes and comfortable
+spacing at 1440/1280/390/320px, and check exact original/draft clipboard content and
+inert Markdown. Code typography and source/metric distinction remain intentional.
+Screenshots are disposable synthetic output, including pt-BR reset at 320px. These
+checks do not establish other-browser, screen-reader or native Desktop visual
+acceptance. Ingestion, native IPC, installed services and source data are unchanged;
+local/live provider validation and another Electron smoke are not required here.
+
+This increment passed lint/typecheck, the three targeted appearance/locale Node
+cases, full build and the 12 selected Chromium cases on the `b92c971` baseline.
+Initial new-test attempts failed on label-text selectors and headless native-select
+key assumptions; role-based selectors and explicit focus traversal resolved them.
+A reading-editor specificity issue and cramped 320px Settings fields were corrected
+before the final build/browser run. The existing bundle-size warning remains.
+The earlier 252 Node / 97 Chromium / Electron validation was preserved rather than
+repeated. The entire Node/browser suites and Electron smoke were not rerun for this
+presentation-only increment.
