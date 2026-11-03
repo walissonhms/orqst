@@ -2,9 +2,10 @@
 
 This is an **opt-in Core library**, separate from the embedded xterm/PTY Terminal.
 Normal ObserverCore, Bridge and Desktop startup do not import or construct it. It
-has no dashboard control, Electron IPC, MCP server, planner, provider approval UI or
-agent-facing tool. There is no automatic result injection into a sender's native
-CLI. The first milestone of two real Codex agents delegating and receiving results
+has no dashboard control, Electron IPC, MCP server, planner or provider approval UI.
+An optional narrow dynamic tool now supports a separately authorized fixed A-to-B-to-A
+flow; see [developer acceptance and remaining gates](codex-two-agent-acceptance.md).
+It does not inject into an interactive PTY or an externally observed session. The first milestone of two real Codex agents delegating and receiving results
 inside ORQST remains incomplete. No real Codex/provider was run for this increment.
 
 ## Implemented composition
@@ -86,8 +87,9 @@ workspace, source, targets and expiry rules. Starting a process does not grant a
 agent permission to send tasks. `dispatchNext(targetPaneId)` submits one queued
 message through `turn/start` when the adapter is ready; it returns after native
 acceptance and never waits for the full task. Busy work remains FIFO in SQLite.
-There is no scheduler loop in this library; a future host must invoke dispatch on
-admission and readiness without racing independent dispatchers.
+A native readiness callback now attempts one bounded dispatch after a verified turn
+ends. The optional facade also invokes dispatch after admission. There is no polling
+scheduler or automatic retry; the same durable service enforces claims and grants.
 
 Native turn/start response confirms **accepted** only. Matching turn/started confirms
 **running**. Notifications arriving before the response are bounded and buffered
@@ -102,11 +104,14 @@ missing results, mismatched IDs, disconnection or malformed data become unavaila
 and communication records uncertainty. Native process exit never proves task success.
 
 Result references flow to the existing post-commit Core subscription and durable
-inbox. Native agent A cannot yet call this facade, delegate through MCP or consume
-B's result in its own thread. Synthetic return to a Core subscriber is narrower
-than the required real agent-to-agent milestone.
+inbox. A separately authorized root turn can now invoke the optional dynamic facade and
+receive B's verified result in its pending native tool response. The return is
+confirmed by the corresponding native dynamicToolCall completion before root success.
+This path has synthetic acceptance only, no MCP or interactive Desktop composition;
+the required real agent-to-agent milestone remains pending.
 
-A native permission/input request marks waiting for approval where it can be
+A native permission/input request, except the one granted dynamic delegation tool,
+marks waiting for approval where it can be
 correlated. The library does not answer it. A future permission UI must be separately
 reviewed. A later result without supported resolution evidence fails closed. Native
 enrollment revocation, terminal journal fencing and owner shutdown prevent new native
@@ -183,8 +188,8 @@ provider IPC/flags and native human-consent path remain unvalidated.
 
 Real acceptance still requires specific authorization for the exact native binary,
 two new private states, separate logins/provider use, requested models and bounded
-read-only tasks/cost, then a native host/MCP/UI composition and actual A-to-B-to-A
-verification. Until that evidence exists, report **implemented library; synthetic
+read-only tasks/cost, then actual A-to-B-to-A verification using the explicit developer command below.
+Interactive Desktop/Studio/MCP composition remains a distinct pending step. Until that evidence exists, report **implemented library; synthetic
 protocol tests; real-provider milestone pending**. No installed service, source
 session, user database or existing Desktop process needs to change for development.
 

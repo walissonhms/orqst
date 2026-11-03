@@ -3,8 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
 import { Store } from '@orqst/database';
-import type { CommunicationPane, TerminalJournal, TerminalState } from '@orqst/protocol';
-import { PaneCommunication } from '../communication/service.js';
+import {
+  communicationContentSchema,
+  type CommunicationPane,
+  type TerminalJournal,
+  type TerminalState,
+} from '@orqst/protocol';
+import { PaneCommunication, type CommunicationResolver } from '../communication/service.js';
+import { authorizedDelegation } from './dynamic-tools.js';
 import { TerminalAuthority, terminalDigest } from '../terminal/authority.js';
 import {
   managedCodexEnvironment,
@@ -29,7 +35,24 @@ const startSchema = z.strictObject({
   name: z.string().trim().min(1).max(100),
   ownerId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   model: z.string().min(1).max(128).nullable(),
+  dynamicTools: z.boolean().default(false),
 });
+const rootSchema = z.strictObject({
+  targetPaneId: z.uuid(),
+  text: z.string().min(1).max(4096),
+  delegatedTask: z.string().min(1).max(2048),
+  deadline: z.number().int().safe().positive(),
+});
+interface RootAttempt {
+  id: string;
+  correlationId: string;
+  source: Attempt;
+  target: Attempt;
+  input: z.infer<typeof rootSchema>;
+  digest: string;
+  clientId: string;
+  used: boolean;
+}
 interface RuntimeEvents {
   started(): void;
   exit(code: number | null, signal: string | null): void;
@@ -48,6 +71,7 @@ interface Attempt {
   expiresAt: number;
   clientId: string;
   state: TerminalState;
+  nativeExit?: { code: number | null; signal: string | null };
   pane?: CommunicationPane;
   transport?: CodexTransport;
   channel?: CodexChannel;
@@ -141,6 +165,7 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
 export class CodexStructuredRuntime {
   private attempts = new Map<string, Attempt>();
   private closed = false;
+  private roots = new Map<string, RootAttempt>();
   private slots = new Map<string, { store: Store; journal: TerminalJournal }>();
 
   constructor(
@@ -148,6 +173,7 @@ export class CodexStructuredRuntime {
     private communication: PaneCommunication,
     private results: CodexResultWriter,
     private backend: CodexRuntimeBackend,
+    private readContent?: CommunicationResolver,
   ) {}
 
   prepare(clientId: string, configFile: string, input: unknown) {
@@ -265,8 +291,9 @@ export class CodexStructuredRuntime {
               this.lose(attempt);
             }
           },
-          exit: (code) => {
+          exit: (code, signal) => {
             if (!['starting', 'running'].includes(attempt.state)) return;
+            attempt.nativeExit = { code, signal };
             // The existing journal cannot encode a null exit code; never invent one.
             try {
               if (code === null) this.lose(attempt);
@@ -300,6 +327,20 @@ export class CodexStructuredRuntime {
           } catch {
             return false;
           }
+        },
+        attempt.input.dynamicTools,
+        () => {
+          if (this.closed || !attempt.pane || attempt.state !== 'running') return;
+          this.communication.setPaneState(attempt.pane.paneId, 'ready');
+          queueMicrotask(() => {
+            if (!this.closed && attempt.pane)
+              void this.communication
+                .dispatchNext(attempt.pane.paneId)
+                .catch(() => this.lose(attempt));
+          });
+        },
+        () => {
+          this.communication.setPaneState(attempt.pane!.paneId, 'busy');
         },
       );
       attempt.adapter = adapter;
@@ -360,15 +401,148 @@ export class CodexStructuredRuntime {
       instanceId: id,
       slotId: terminalDigest(a.config.state),
       state: a.state,
+      nativeExit: a.nativeExit ?? null,
       paneId: a.pane?.paneId ?? null,
       requestedModel: a.input.model,
       ...(a.adapter?.snapshot() ?? {
+        dynamicTools: a.input.dynamicTools ? 'requested' : 'disabled',
+        delegationReturned: false,
         nativeThreadId: null,
         reportedModel: null,
         activeTurnId: null,
         available: false,
       }),
     };
+  }
+  prepareRootTask(clientId: string, instanceId: string, raw: unknown) {
+    const source = this.get(instanceId);
+    const input = rootSchema.parse(raw);
+    const target = [...this.attempts.values()].find((a) => a.pane?.paneId === input.targetPaneId);
+    if (
+      this.closed ||
+      !this.readContent ||
+      this.roots.size >= 128 ||
+      !source.input.dynamicTools ||
+      !source.pane ||
+      !target?.pane ||
+      source === target ||
+      source.pane.workspaceId !== target.pane.workspaceId ||
+      !source.adapter?.ready(source.pane) ||
+      !target.adapter?.ready(target.pane) ||
+      input.deadline <= Date.now() ||
+      input.deadline > Date.now() + 180000 ||
+      Buffer.byteLength(input.text) > 4096 ||
+      Buffer.byteLength(input.delegatedTask) > 2048
+    )
+      throw new Error('Root delegation plan unavailable or outside policy');
+    const id = randomUUID();
+    const correlationId = randomUUID();
+    const plan = {
+      taskId: id,
+      correlationId,
+      source: source.pane,
+      target: target.pane,
+      input,
+      maximumDelegations: 1,
+      permissions: 'read-only; no provider approval; exact target/task; no retries',
+    };
+    const digest = terminalDigest(JSON.stringify(plan));
+    const challenge = this.authority.prepare(clientId, { operation: 'input', target: id, digest });
+    this.roots.set(id, {
+      id,
+      correlationId,
+      source,
+      target,
+      input: structuredClone(input),
+      digest,
+      clientId,
+      used: false,
+    });
+    return { plan: structuredClone(plan), challenge };
+  }
+  async runRootTask(taskId: string, proof: unknown) {
+    const root = this.roots.get(taskId);
+    if (
+      !root ||
+      root.used ||
+      this.closed ||
+      !this.readContent ||
+      !root.source.pane ||
+      !root.target.pane ||
+      !root.source.adapter?.ready(root.source.pane) ||
+      !root.target.adapter?.ready(root.target.pane) ||
+      Date.now() >= root.input.deadline
+    )
+      throw new Error('Root delegation grant unavailable');
+    this.authority.consume(proof, { operation: 'input', target: taskId, digest: root.digest });
+    root.used = true;
+    const context = { taskId, correlationId: root.correlationId, deadline: root.input.deadline };
+    const facade = authorizedDelegation(
+      this.communication,
+      {
+        actorId: root.source.pane.ownerId,
+        workspaceId: root.source.pane.workspaceId,
+        sourcePaneId: root.source.pane.paneId,
+        targetPaneId: root.target.pane.paneId,
+      },
+      root.input.delegatedTask,
+      context,
+      this.results,
+      this.readContent,
+    );
+    let resolve: (result: {
+      taskId: string;
+      correlationId: string;
+      result: import('@orqst/protocol').CommunicationContent;
+    }) => void;
+    let reject: (error: Error) => void;
+    const completed = new Promise<{
+      taskId: string;
+      correlationId: string;
+      result: import('@orqst/protocol').CommunicationContent;
+    }>((yes, no) => {
+      resolve = yes;
+      reject = no;
+    });
+    // Observe failures immediately even if native completion races the acceptance response.
+    void completed.catch(() => {});
+    try {
+      await root.source.adapter.startRoot(
+        root.input.text,
+        context,
+        (event, result) => {
+          if (event === 'completed' && result) {
+            if (!facade.succeeded() || !root.source.adapter!.snapshot().delegationReturned)
+              reject(new Error('Native A-to-B-to-A delegation was not confirmed'));
+            else {
+              try {
+                const ref = communicationContentSchema.parse(result);
+                const bytes = this.readContent!(
+                  {
+                    workspaceId: root.source.pane!.workspaceId,
+                    actorId: root.source.pane!.ownerId,
+                    sourcePaneId: root.source.pane!.paneId,
+                    targetPaneId: root.source.pane!.paneId,
+                    purpose: 'result',
+                  },
+                  ref.id,
+                );
+                if (bytes.length !== ref.bytes || terminalDigest(bytes) !== ref.sha256)
+                  throw new Error('Root result reference mismatch');
+                resolve({ taskId, correlationId: root.correlationId, result: ref });
+              } catch {
+                reject(new Error('Root result reference unavailable'));
+              }
+            }
+          } else if (['failed', 'outcome_unknown', 'waiting_approval'].includes(event))
+            reject(new Error('Root delegation outcome unavailable; no retry'));
+        },
+        facade.handle,
+      );
+      return await completed;
+    } finally {
+      facade.close();
+    }
   }
   requestStop(clientId: string, id: string, signal: 'SIGTERM' | 'SIGKILL') {
     z.enum(['SIGTERM', 'SIGKILL']).parse(signal);

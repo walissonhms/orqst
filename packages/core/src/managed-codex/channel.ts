@@ -40,6 +40,7 @@ export class CodexChannel {
   private buffer = Buffer.alloc(0);
   private total = 0;
   private closed = false;
+  private serverRequests = new Set<string>();
   private unsubscribe: () => void;
   private listeners = new Set<(message: CodexNotification) => void>();
   private lostListeners = new Set<() => void>();
@@ -89,6 +90,28 @@ export class CodexChannel {
       throw new Error('Codex initialization uncertain');
     }
   }
+  replyDynamic(id: string | number, result: { success: boolean; text: string }): void {
+    const key = JSON.stringify(id);
+    const output = z
+      .strictObject({ success: z.boolean(), text: z.string().min(1).max(16384) })
+      .parse(result);
+    if (this.closed || !this.serverRequests.delete(key) || Buffer.byteLength(output.text) > 16384)
+      throw new Error('No matching native dynamic request');
+    try {
+      this.transport.send(
+        JSON.stringify({
+          id,
+          result: {
+            success: output.success,
+            contentItems: [{ type: 'inputText', text: output.text }],
+          },
+        }) + '\n',
+      );
+    } catch {
+      this.fail();
+      throw new Error('Dynamic result delivery uncertain');
+    }
+  }
   /** Release transport ownership without signaling or adopting a PID. */
   detach(): void {
     this.fail();
@@ -120,6 +143,11 @@ export class CodexChannel {
           JSON.parse(new TextDecoder('utf8', { fatal: true }).decode(line)),
         );
         if (raw.method) {
+          if (raw.method === 'item/tool/call' && raw.id !== undefined) {
+            const key = JSON.stringify(raw.id);
+            if (this.serverRequests.has(key) || this.serverRequests.size >= 4) return this.fail();
+            this.serverRequests.add(key);
+          }
           const event = {
             method: raw.method,
             params: raw.params,
@@ -154,6 +182,7 @@ export class CodexChannel {
       pending.reject(new Error('Codex structured outcome unavailable'));
     }
     this.pending.clear();
+    this.serverRequests.clear();
     this.unsubscribe?.();
     for (const listener of this.lostListeners) {
       try {
