@@ -22,6 +22,7 @@ import {
   managedCodexSettings,
   readManagedCodexConfig,
   type ManagedCodexConfig,
+  structuredCodexArguments,
 } from '../packages/core/src/terminal/codex-profile.js';
 import { terminalRPCSchema, terminalRPCOutputSchema } from '../packages/core/src/terminal/rpc.js';
 import { managedTerminalBackend } from '../packages/core/src/terminal/pty-backend.js';
@@ -85,6 +86,54 @@ test('managed Codex admission pins profiles and rejects executable, config, perm
     writeFileSync(f.file, JSON.stringify(f.config));
     writeFileSync(f.executable, 'SYNTHETIC REPLACEMENT');
     assert.throws(() => readManagedCodexConfig(f.file), /executable changed|native Mach-O/);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
+
+test('structured native reuse keeps the CLI credential identity and segregates owned state without a PTY escape', () => {
+  const f = fixture();
+  try {
+    const nativeHome = join(f.root, 'synthetic-native-home');
+    mkdirSync(nativeHome, { mode: 0o700 });
+    // A credential file is deliberately unreadable: admission inspects directories only.
+    writeFileSync(join(nativeHome, 'auth.json'), 'SYNTHETIC-SECRET', { mode: 0o000 });
+    const config: ManagedCodexConfig = {
+      ...f.config,
+      authentication: {
+        mode: 'reuse-existing',
+        home: f.root,
+        codexHome: nativeHome,
+        sharedNativeConfiguration: true,
+      },
+    };
+    writeFileSync(f.file, JSON.stringify(config));
+    assert.deepEqual(readManagedCodexConfig(f.file), config);
+    const environment = managedCodexEnvironment(config);
+    assert.equal(environment.HOME, f.root);
+    assert.equal(environment.CODEX_HOME, nativeHome);
+    assert.equal(environment.CODEX_SQLITE_HOME, join(config.state, 'codex'));
+    assert.equal(environment.TMPDIR, join(config.state, 'tmp'));
+    assert.equal(environment.OPENAI_API_KEY, undefined);
+    assert.equal(environment.NODE_OPTIONS, undefined);
+    const argv = structuredCodexArguments(config);
+    assert.ok(!argv.some((value) => value.includes('cli_auth_credentials_store')));
+    assert.ok(!argv.includes('mcp_servers={}')); // Does not disable inherited servers.
+    assert.ok(argv.includes('features.hooks=false'));
+    assert.ok(argv.includes('features.remote_plugin=false'));
+    assert.ok(!argv.includes('features.plugins=false'));
+    assert.ok(argv.includes('history.persistence="none"'));
+    assert.ok(argv.includes('otel.metrics_exporter="none"'));
+    assert.throws(() => managedCodexProfiles(config), /structured runtime/);
+    assert.throws(() => managedTerminalBackend(f.file, '/never-started.cjs'), /structured runtime/);
+    writeFileSync(
+      f.file,
+      JSON.stringify({
+        ...config,
+        authentication: { ...config.authentication, codexHome: f.state },
+      }),
+    );
+    assert.throws(() => readManagedCodexConfig(f.file), /inside managed state/);
   } finally {
     rmSync(f.root, { recursive: true, force: true });
   }

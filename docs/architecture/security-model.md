@@ -685,3 +685,31 @@ Recovery fences old writers and does not restore grants or adopt processes. Exis
 HTTP/WS protections and external read-only boundaries are unchanged. No runtime
 activation or real-provider security claim follows from synthetic tests.
 See [the threat boundary and missing gates](../api/pane-communication.md).
+
+## Structured Codex existing-login boundary — 2026-11-03
+
+The explicit developer-only structured path can keep the native user HOME and
+CODEX_HOME. ORQST checks directory metadata, never reads or copies authentication
+files, accesses Keychain, forwards inherited secret environment variables, starts
+login/logout or resumes/adopts existing sessions. The native executable alone
+loads/refreshes its login. `account/read` uses `refreshToken:false`; only supported
+login availability is retained, never account identity/plan fields. Missing or
+unsupported login prevents thread/task creation. Threads must confirm ephemeral
+mode and the exact requested model; new manifests require shared-config
+acknowledgment and are denied by the legacy PTY profile builder.
+
+Per-slot SQLite/log/temp state and metadata journals do not isolate the shared
+native auth/config/skills/cache/requirements roots. Native configuration can start
+MCP servers; an empty table override does not disable them. ORQST does not inspect
+full native configuration responses that could contain secrets. Native overrides
+request disabled hooks/remote-plugin-catalog/shell-snapshots/history/telemetry and no inherited shell environment,
+but are not hard containment or a guarantee of zero native shared writes. Config
+and binary trust are same-user. No HTTP, WebSocket, cookie, static-serving or
+normal-startup authority changes. See the [full contract](../development/local-cli-integration.md).
+
+A read-only same-user agent can still read credential paths; native MCP tools are
+not constrained by the command sandbox. Prompt restrictions and rejection of
+unexpected native tool items in acceptance do not prevent those effects. The
+slot config is only an admission canary for reuse, not the native active config.
+Remote catalog disabling does not disable every installed plugin. Shared auth
+refresh can race other CLI instances; ORQST never closes them to avoid a race.

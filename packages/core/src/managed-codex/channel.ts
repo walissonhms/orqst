@@ -64,7 +64,10 @@ export class CodexChannel {
     return !this.closed;
   }
 
-  request(method: 'initialize' | 'thread/start' | 'turn/start', params: object): Promise<unknown> {
+  request(
+    method: 'initialize' | 'account/read' | 'thread/start' | 'turn/start',
+    params: object,
+  ): Promise<unknown> {
     return new Promise((resolve, reject) => {
       if (this.closed || this.pending.size >= codexChannelLimits.pendingRequests)
         return reject(new Error('Codex structured channel unavailable'));

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -48,6 +48,10 @@ class SyntheticTransport implements CodexTransport {
   threadId = randomUUID();
   turnId = randomUUID();
   reportedModel = 'synthetic-model';
+  accountType: string | null = 'chatgpt';
+  ephemeral = true;
+  sandbox = 'readOnly';
+  approvalPolicy = 'on-request';
   startedBeforeReply = true;
   replyToTurn = true;
   listen(data: (bytes: Uint8Array) => void, lost: () => void) {
@@ -75,10 +79,26 @@ class SyntheticTransport implements CodexTransport {
     queueMicrotask(() => {
       if (request.method === 'initialize')
         this.emit({ id: request.id, result: { userAgent: 'SYNTHETIC' } });
+      if (request.method === 'account/read')
+        this.emit({
+          id: request.id,
+          result: {
+            account:
+              this.accountType === null
+                ? null
+                : { type: this.accountType, email: 'SYNTHETIC-PRIVATE-IDENTITY' },
+            requiresOpenaiAuth: true,
+          },
+        });
       if (request.method === 'thread/start')
         this.emit({
           id: request.id,
-          result: { thread: { id: this.threadId }, model: this.reportedModel },
+          result: {
+            thread: { id: this.threadId, ephemeral: this.ephemeral },
+            model: this.reportedModel,
+            sandbox: { type: this.sandbox },
+            approvalPolicy: this.approvalPolicy,
+          },
         });
       if (request.method === 'turn/start' && this.replyToTurn) {
         this.turnId = randomUUID();
@@ -141,7 +161,15 @@ class SyntheticTransport implements CodexTransport {
   }
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
-function fixture(options: { tamperRootResult?: boolean } = {}) {
+function fixture(
+  options: {
+    tamperRootResult?: boolean;
+    accountType?: string | null;
+    ephemeral?: boolean;
+    sandbox?: string;
+    approvalPolicy?: string;
+  } = {},
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-structured-')));
   const project = join(root, 'project');
   mkdirSync(project, { mode: 0o700 });
@@ -178,6 +206,10 @@ function fixture(options: { tamperRootResult?: boolean } = {}) {
   const backend: CodexRuntimeBackend = {
     open: (_file, _config, events) => {
       const transport = new SyntheticTransport();
+      if ('accountType' in options) transport.accountType = options.accountType ?? null;
+      if (options.ephemeral !== undefined) transport.ephemeral = options.ephemeral;
+      if (options.sandbox !== undefined) transport.sandbox = options.sandbox;
+      if (options.approvalPolicy !== undefined) transport.approvalPolicy = options.approvalPolicy;
       transports.push(transport);
       exits.push(events.exit);
       queueMicrotask(events.started);
@@ -187,7 +219,7 @@ function fixture(options: { tamperRootResult?: boolean } = {}) {
   const runtime = new CodexStructuredRuntime(authority, communication, write, backend, read);
   const executable = realpathSync('/usr/bin/true'); // Tiny native fixture: never executed as a provider.
   const binary = { path: executable, sha256: terminalExecutableSha256(executable) };
-  const config = (name: string, nativeNode = false) => {
+  const config = (name: string, nativeNode = false, reuseExisting = false) => {
     const state = join(root, name);
     mkdirSync(state, { mode: 0o700 });
     for (const directory of ['home', 'codex', 'tmp'])
@@ -205,7 +237,25 @@ function fixture(options: { tamperRootResult?: boolean } = {}) {
         : binary,
       project,
       state,
+      ...(reuseExisting
+        ? {
+            authentication: {
+              mode: 'reuse-existing' as const,
+              home: root,
+              codexHome: join(root, 'synthetic-native-home'),
+              sharedNativeConfiguration: true as const,
+            },
+          }
+        : {}),
     };
+    if (reuseExisting && !existsSync(config.authentication!.codexHome)) {
+      mkdirSync(config.authentication!.codexHome, { mode: 0o700 });
+      writeFileSync(
+        join(config.authentication!.codexHome, 'auth.json'),
+        'SYNTHETIC-SECRET-NEVER-READ',
+        { mode: 0o000 },
+      );
+    }
     writeFileSync(join(state, 'codex/config.toml'), managedCodexSettings(config), { mode: 0o600 });
     const file = join(state, 'terminal.json');
     writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
@@ -641,7 +691,7 @@ test('private native transport uses isolated Node IPC and distinguishes host los
     writeFileSync(
       host,
       `
-      process.send({type:'started'});
+      process.send({type:'started',processId:process.pid});
       process.on('message', request => {
         if (request.action === 'send') {
           const rpc = JSON.parse(request.line);
@@ -665,7 +715,11 @@ test('private native transport uses isolated Node IPC and distinguishes host los
       exit = resolve;
     });
     transport = nativeCodexBackend(host).open(slot.file, slot.config, {
-      started: () => started(),
+      started: (processId) => {
+        assert.ok(Number.isSafeInteger(processId) && processId! > 0);
+        assert.notEqual(processId, process.pid);
+        started();
+      },
       exit: (code, signal) => {
         assert.equal(code, 0);
         assert.equal(signal, null);
@@ -693,7 +747,11 @@ test('a native host exit without an owned-provider exit report does not invent p
   try {
     const slot = f.config('native-host-loss', true);
     const host = join(f.root, 'SYNTHETIC-lost-host.cjs');
-    writeFileSync(host, "process.send({type:'started'}, () => process.exit(0));", { mode: 0o600 });
+    writeFileSync(
+      host,
+      "process.send({type:'started',processId:process.pid}, () => process.exit(0));",
+      { mode: 0o600 },
+    );
     let exits = 0;
     transport = nativeCodexBackend(host).open(slot.file, slot.config, {
       started: () => {},
@@ -1034,3 +1092,95 @@ test('a changed local root result cannot pass a native delegation completion', a
     f.close();
   }
 });
+
+test('existing native authentication is checked before two distinct ephemeral threads without credentials access', async () => {
+  const f = fixture();
+  try {
+    const a = await f.launch(f.config('reuse-a', false, true).file, 'Initiator');
+    const b = await f.launch(f.config('reuse-b', false, true).file, 'Worker');
+    assert.notEqual(a.pane.paneId, b.pane.paneId);
+    assert.notEqual(
+      f.runtime.snapshot(a.prepared.instanceId).nativeThreadId,
+      f.runtime.snapshot(b.prepared.instanceId).nativeThreadId,
+    );
+    for (const transport of f.transports) {
+      const requests = transport.requests.filter((request) => request.method !== 'initialized');
+      assert.deepEqual(
+        requests.map((request) => request.method),
+        ['initialize', 'account/read', 'thread/start'],
+      );
+      assert.deepEqual(requests[1]!.params, { refreshToken: false });
+      assert.equal(requests[2]!.params.ephemeral, true);
+      assert.equal(requests[2]!.params.allowProviderModelFallback, false);
+    }
+    const snapshot = f.runtime.snapshot(a.prepared.instanceId);
+    assert.equal(snapshot.authentication, 'existing-native-login');
+    assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-PRIVATE-IDENTITY'));
+  } finally {
+    f.close();
+  }
+});
+
+for (const accountType of [null, 'chatgptAuthTokens', 'unexpected']) {
+  test(`native reuse rejects unavailable or unsupported auth ${accountType} before thread creation`, async () => {
+    const f = fixture({ accountType });
+    try {
+      await assert.rejects(f.launch(f.config('reuse', false, true).file, 'Initiator'));
+      assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'thread/start'));
+      assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('native reuse requires explicit ephemeral confirmation before any task can start', async () => {
+  const f = fixture({ ephemeral: false });
+  try {
+    await assert.rejects(f.launch(f.config('reuse', false, true).file, 'Initiator'));
+    assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+  } finally {
+    f.close();
+  }
+});
+
+for (const policy of [{ sandbox: 'dangerFullAccess' }, { approvalPolicy: 'never' }]) {
+  test('native reuse rejects unconfirmed permission policy before a task', async () => {
+    const f = fixture(policy);
+    try {
+      await assert.rejects(f.launch(f.config('reuse', false, true).file, 'Initiator'));
+      assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+    } finally {
+      f.close();
+    }
+  });
+}
+
+for (const type of ['commandExecution', 'fileChange', 'mcpToolCall', 'unknownFutureTool']) {
+  test(`acceptance can detect ${type} even when the task returns a valid result`, async () => {
+    const f = fixture();
+    try {
+      const a = await f.launch(f.config('slot-a').file, 'Initiator');
+      const b = await f.launch(f.config('slot-b').file, 'Worker');
+      const caller = f.client(a.pane, b.pane);
+      const request = f.request(a.pane, b.pane);
+      caller.send(request);
+      await f.communication.dispatchNext(b.pane.paneId);
+      const transport = f.transports[1]!;
+      assert.equal(f.runtime.snapshot(b.prepared.instanceId).unexpectedToolUse, false);
+      transport.emit({
+        method: 'item/started',
+        params: {
+          threadId: transport.threadId,
+          turnId: transport.turnId,
+          item: { id: randomUUID(), type },
+        },
+      });
+      transport.complete();
+      assert.equal(caller.status(request.messageId).taskState, 'completed');
+      assert.equal(f.runtime.snapshot(b.prepared.instanceId).unexpectedToolUse, true);
+    } finally {
+      f.close();
+    }
+  });
+}

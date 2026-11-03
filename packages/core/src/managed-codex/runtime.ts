@@ -28,7 +28,7 @@ export const codexRuntimePolicy = Object.freeze({
   killAfterMs: 5000,
   startupMs: 10000,
   permissions:
-    'Native same-user; separate home; read-only/on-request defaults; no provider approvals exposed; network for provider. 30 minute owned-process lifetime then TERM/KILL. No descendant containment, resume, PID adoption or automatic retry.',
+    'Native same-user; authentication/state paths are specified in the signed config, with shared native config/auth for reuse-existing; read-only/on-request defaults; no provider approvals exposed; network for provider. 30 minute owned-process lifetime then TERM/KILL. No descendant containment, resume, PID adoption or automatic retry.',
 });
 const startSchema = z.strictObject({
   workspaceId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -54,7 +54,7 @@ interface RootAttempt {
   used: boolean;
 }
 interface RuntimeEvents {
-  started(): void;
+  started(processId?: number): void;
   exit(code: number | null, signal: string | null): void;
 }
 /** Private trusted test/composition seam; never select a backend through user/agent content. */
@@ -72,6 +72,7 @@ interface Attempt {
   clientId: string;
   state: TerminalState;
   nativeExit?: { code: number | null; signal: string | null };
+  nativeProcessId?: number;
   pane?: CommunicationPane;
   transport?: CodexTransport;
   channel?: CodexChannel;
@@ -107,7 +108,7 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
         if (disposed) return;
         const parsed = z
           .discriminatedUnion('type', [
-            z.strictObject({ type: z.literal('started') }),
+            z.strictObject({ type: z.literal('started'), processId: z.number().int().positive() }),
             z.strictObject({ type: z.literal('lost') }),
             z.strictObject({ type: z.literal('data'), base64: z.string().max(44 * 1024) }),
             z.strictObject({
@@ -119,7 +120,7 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
           .safeParse(raw);
         if (!parsed.success) return fail();
         const message = parsed.data;
-        if (message.type === 'started') events.started();
+        if (message.type === 'started') events.started(message.processId);
         if (message.type === 'data') data?.(Buffer.from(message.base64, 'base64'));
         if (message.type === 'lost') fail();
         if (message.type === 'exit') {
@@ -281,11 +282,12 @@ export class CodexStructuredRuntime {
       });
       attempt.transport = journal.withOwner(() =>
         this.backend.open(attempt.file, attempt.config, {
-          started: () => {
+          started: (processId) => {
             if (attempt.state !== 'starting') return;
             try {
               journal.transition(id, 'running');
               attempt.state = 'running';
+              attempt.nativeProcessId = processId;
               confirmStarted();
             } catch {
               this.lose(attempt);
@@ -349,7 +351,11 @@ export class CodexStructuredRuntime {
         await Promise.race([
           (async () => {
             await started;
-            await adapter.initialize(attempt.config.project, attempt.input.model);
+            await adapter.initialize(
+              attempt.config.project,
+              attempt.input.model,
+              attempt.config.authentication !== undefined,
+            );
           })(),
           new Promise<never>((_resolve, reject) => {
             timer = setTimeout(
@@ -402,9 +408,12 @@ export class CodexStructuredRuntime {
       slotId: terminalDigest(a.config.state),
       state: a.state,
       nativeExit: a.nativeExit ?? null,
+      nativeProcessId: a.nativeProcessId ?? null,
       paneId: a.pane?.paneId ?? null,
       requestedModel: a.input.model,
       ...(a.adapter?.snapshot() ?? {
+        authentication: 'unknown' as const,
+        unexpectedToolUse: false,
         dynamicTools: a.input.dynamicTools ? 'requested' : 'disabled',
         delegationReturned: false,
         nativeThreadId: null,

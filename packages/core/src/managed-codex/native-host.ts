@@ -1,7 +1,11 @@
 // Separate Node owner keeps its fixed deadline if Core/IPC disappears. Never part of observer startup.
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
-import { managedCodexEnvironment, readManagedCodexConfig } from '../terminal/codex-profile.js';
+import {
+  managedCodexEnvironment,
+  readManagedCodexConfig,
+  structuredCodexArguments,
+} from '../terminal/codex-profile.js';
 
 process.umask(0o077);
 if (
@@ -14,15 +18,11 @@ if (
 )
   throw new Error('Private managed Codex host only');
 const config = readManagedCodexConfig(process.argv[2]!);
-const child = spawn(
-  config.executable.path,
-  ['-c', 'cli_auth_credentials_store="file"', 'app-server', '--listen', 'stdio://'],
-  {
-    cwd: config.project,
-    env: managedCodexEnvironment(config),
-    stdio: ['pipe', 'pipe', 'ignore'],
-  },
-);
+const child = spawn(config.executable.path, structuredCodexArguments(config), {
+  cwd: config.project,
+  env: managedCodexEnvironment(config),
+  stdio: ['pipe', 'pipe', 'ignore'],
+});
 let exited = false;
 let escalation: ReturnType<typeof setTimeout> | undefined;
 const send = (value: object) => {
@@ -33,7 +33,7 @@ const send = (value: object) => {
     child.stdout.resume();
   }
 };
-child.on('spawn', () => send({ type: 'started' }));
+child.on('spawn', () => send({ type: 'started', processId: child.pid }));
 child.stdout.on('data', (bytes: Buffer) => {
   for (let offset = 0; offset < bytes.length; offset += 32 * 1024)
     send({ type: 'data', base64: bytes.subarray(offset, offset + 32 * 1024).toString('base64') });

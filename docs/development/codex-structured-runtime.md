@@ -6,7 +6,19 @@ has no dashboard control, Electron IPC, MCP server, planner or provider approval
 An optional narrow dynamic tool now supports a separately authorized fixed A-to-B-to-A
 flow; see [developer acceptance and remaining gates](codex-two-agent-acceptance.md).
 It does not inject into an interactive PTY or an externally observed session. The first milestone of two real Codex agents delegating and receiving results
-inside ORQST remains incomplete. No real Codex/provider was run for this increment.
+inside ORQST remains incomplete. No real provider inference has been validated for this increment.
+
+## Existing native login extension — 2026-11-03
+
+An optional manifest authentication block supports explicit `reuse-existing` for
+this structured runtime only. It retains native HOME/CODEX_HOME, delegates login
+loading/refresh to Codex, gates thread creation on `account/read` without forced
+refresh and requires a new ephemeral thread. SQLite, logs, temp paths, journal and
+process/thread/pane IDs remain per-slot; native auth/config remain shared, including
+configured MCP startup. No complete physical isolation is claimed. See
+[setup and the shared-state boundary](local-cli-integration.md#structured-codex-reuse).
+Legacy manifests and their separate-login path retain the behavior documented below.
+No real inference or existing-login acceptance is established by fixture tests.
 
 ## Implemented composition
 
@@ -170,8 +182,9 @@ This is native trusted/same-user execution on non-root macOS arm64/Node 24. Proj
 cwd is not filesystem containment; Codex can use provider network access and OS
 user privileges. Provider configuration/policy can affect effective capabilities.
 Pinned hashes/path checks detect drift, not malicious same-user replacement races.
-Real sandbox, configuration, authentication, model and protocol behavior have not
-been validated against an installed Codex version. No release readiness is implied.
+A no-credential native probe confirmed the requested thread shape and permission
+response on Codex 0.162.1; real-account sandbox, configuration, authentication,
+model access and delegation behavior remain unvalidated. No release readiness is implied.
 
 ## Validation and remaining acceptance
 
@@ -183,11 +196,13 @@ correlation failures, deadlines, missing acceptance/results, approvals, exits an
 conservative recovery. Two IPC cases also fork labeled synthetic Node hosts to check the isolated
 transport and host-loss classification. These tests never launch an installed
 provider or inspect real credentials/history. The compiled provider-owning native
-host is build-checked; its actual
-provider IPC/flags and native human-consent path remain unvalidated.
+host is build-checked. One authorized existing-login attempt failed before first
+thread readiness and either task submission; its process exit was not confirmed by
+the protocol. The actual provider workflow and native human-consent path remain
+unvalidated. See [the current acceptance result](codex-two-agent-acceptance.md#current-machine-validation-status--2026-11-03).
 
 Real acceptance still requires specific authorization for the exact native binary,
-two new private states, separate logins/provider use, requested models and bounded
+two new private states, the chosen native-authentication/provider path, requested models and bounded
 read-only tasks/cost, then actual A-to-B-to-A verification using the explicit developer command below.
 Interactive Desktop/Studio/MCP composition remains a distinct pending step. Until that evidence exists, report **implemented library; synthetic
 protocol tests; real-provider milestone pending**. No installed service, source

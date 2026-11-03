@@ -29,6 +29,7 @@ import {
   assertTwoAgentAcceptanceResults,
   twoAgentAcceptancePrompts,
 } from './terminal/two-agent-acceptance.js';
+import { acceptanceSourceGuard } from './terminal/two-agent-source-guard.js';
 
 const { values } = parseArgs({
   options: {
@@ -38,6 +39,8 @@ const { values } = parseArgs({
     'acceptance-root': { type: 'string' },
     model: { type: 'string' },
     authentication: { type: 'string' },
+    'acknowledge-shared-native-config': { type: 'boolean' },
+    'prepare-only': { type: 'boolean' },
   },
 });
 // Gate before filesystem/authentication/config access or any native launch.
@@ -47,8 +50,9 @@ assert.ok(
     values['cleanup-owned-processes'] &&
     values['acceptance-root'] &&
     values.model &&
-    values.authentication === 'separate-login',
-  'Requires explicit --authorize-real-codex --acknowledge-advisory-cost-only --cleanup-owned-processes --authentication separate-login --acceptance-root NEW_PRIVATE_ROOT --model EXACT_MODEL. Existing-auth reuse is not implemented. Read docs/development/codex-two-agent-acceptance.md first.',
+    (values.authentication === 'separate-login' ||
+      (values.authentication === 'reuse-existing' && values['acknowledge-shared-native-config'])),
+  'Requires explicit --authorize-real-codex --acknowledge-advisory-cost-only --cleanup-owned-processes --authentication separate-login OR --authentication reuse-existing --acknowledge-shared-native-config, --acceptance-root NEW_PRIVATE_ROOT --model EXACT_MODEL. Read docs/development/codex-two-agent-acceptance.md first.',
 );
 assert.match(process.version, /^v24\./);
 assert.equal(process.platform, 'darwin');
@@ -66,6 +70,11 @@ assert.deepEqual(
 const files = ['slot-a', 'slot-b'].map((slot) => join(root, slot, 'terminal.json'));
 const configs = files.map(readManagedCodexConfig);
 for (let index = 0; index < 2; index++) {
+  assert.equal(
+    configs[index]!.authentication?.mode ?? 'separate-login',
+    values.authentication,
+    'Acceptance authentication choice must match both manifests',
+  );
   assert.equal(configs[index]!.project, project);
   assert.equal(configs[index]!.state, join(root, index === 0 ? 'slot-a' : 'slot-b'));
   assert.equal(
@@ -76,6 +85,9 @@ for (let index = 0; index < 2; index++) {
 }
 assert.deepEqual(configs[0]!.executable, configs[1]!.executable);
 assert.equal(existsSync(join(root, 'communication.sqlite')), false);
+const verifySources = acceptanceSourceGuard(
+  configs.map((config) => config.authentication?.codexHome ?? join(config.state, 'codex')),
+);
 const keys = generateKeyPairSync('ed25519');
 const authority = new TerminalAuthority(
   new Map([['developer-acceptance', keys.publicKey]]),
@@ -111,6 +123,7 @@ const runtime = new CodexStructuredRuntime(
   read,
 );
 const instances: string[] = [];
+const threadIds: string[] = [];
 let passed = false;
 try {
   const panes: CommunicationPane[] = [];
@@ -124,6 +137,7 @@ try {
     });
     instances.push(prepared.instanceId);
     panes.push(await runtime.launch(prepared.instanceId, proof(prepared.challenge)));
+    threadIds.push(runtime.snapshot(prepared.instanceId).nativeThreadId!);
     console.log(
       JSON.stringify({
         phase: 'native-thread-ready',
@@ -133,51 +147,72 @@ try {
       }),
     );
   }
-  const marker = `ORQST_B_${randomUUID()}`;
-  const { delegatedTask, text } = twoAgentAcceptancePrompts(panes[1]!.paneId, marker);
-  const prepared = runtime.prepareRootTask('developer-acceptance', instances[0]!, {
-    targetPaneId: panes[1]!.paneId,
-    text,
-    delegatedTask,
-    deadline: Date.now() + 120000,
-  });
-  const result = await runtime.runRootTask(prepared.plan.taskId, proof(prepared.challenge));
-  const answer = read(
-    {
-      workspaceId: panes[0]!.workspaceId,
-      actorId: panes[0]!.ownerId,
-      sourcePaneId: panes[0]!.paneId,
-      targetPaneId: panes[0]!.paneId,
-      purpose: 'result',
-    },
-    result.result.id,
+  assert.notEqual(panes[0]!.paneId, panes[1]!.paneId);
+  const processIds = instances.map((id) => runtime.snapshot(id).nativeProcessId);
+  assert.ok(processIds.every((id) => id !== null));
+  assert.notEqual(processIds[0], processIds[1], 'Native processes must be distinct');
+  assert.notEqual(
+    runtime.snapshot(instances[0]!).nativeThreadId,
+    runtime.snapshot(instances[1]!).nativeThreadId,
   );
-  const workerResults = [...content.values()]
-    .filter(
-      ({ scope }) =>
-        scope.workspaceId === panes[0]!.workspaceId &&
-        scope.actorId === panes[0]!.ownerId &&
-        scope.sourcePaneId === panes[0]!.paneId &&
-        scope.targetPaneId === panes[1]!.paneId &&
-        scope.purpose === 'result',
-    )
-    .map(({ bytes }) => bytes);
-  assertTwoAgentAcceptanceResults(marker, workerResults, answer);
-  assert.equal(runtime.snapshot(instances[0]!).dynamicTools, 'observed');
-  assert.equal(runtime.snapshot(instances[0]!).delegationReturned, true);
-  assert.deepEqual(readdirSync(project), []);
-  passed = true;
-  console.log(
-    JSON.stringify({
-      phase: 'native-delegation-confirmed',
-      taskId: result.taskId,
-      correlationId: result.correlationId,
-      resultHash: result.result.sha256,
-      tokens: 'unavailable',
-      actualCost: 'unavailable',
-      uiAcceptance: 'not-performed',
-    }),
-  );
+  verifySources(threadIds);
+  if (values['prepare-only']) {
+    console.log(
+      JSON.stringify({
+        phase: 'native-preparation-confirmed',
+        inferenceStarted: false,
+        nativeConfigStarted: true,
+        mcpServersStarted: 'unverified',
+      }),
+    );
+  } else {
+    const marker = `ORQST_B_${randomUUID()}`;
+    const { delegatedTask, text } = twoAgentAcceptancePrompts(panes[1]!.paneId, marker);
+    const prepared = runtime.prepareRootTask('developer-acceptance', instances[0]!, {
+      targetPaneId: panes[1]!.paneId,
+      text,
+      delegatedTask,
+      deadline: Date.now() + 120000,
+    });
+    const result = await runtime.runRootTask(prepared.plan.taskId, proof(prepared.challenge));
+    const answer = read(
+      {
+        workspaceId: panes[0]!.workspaceId,
+        actorId: panes[0]!.ownerId,
+        sourcePaneId: panes[0]!.paneId,
+        targetPaneId: panes[0]!.paneId,
+        purpose: 'result',
+      },
+      result.result.id,
+    );
+    const workerResults = [...content.values()]
+      .filter(
+        ({ scope }) =>
+          scope.workspaceId === panes[0]!.workspaceId &&
+          scope.actorId === panes[0]!.ownerId &&
+          scope.sourcePaneId === panes[0]!.paneId &&
+          scope.targetPaneId === panes[1]!.paneId &&
+          scope.purpose === 'result',
+      )
+      .map(({ bytes }) => bytes);
+    assertTwoAgentAcceptanceResults(marker, workerResults, answer);
+    assert.equal(runtime.snapshot(instances[0]!).dynamicTools, 'observed');
+    assert.equal(runtime.snapshot(instances[0]!).delegationReturned, true);
+    assert.ok(instances.every((id) => !runtime.snapshot(id).unexpectedToolUse));
+    assert.deepEqual(readdirSync(project), []);
+    passed = true;
+    console.log(
+      JSON.stringify({
+        phase: 'native-delegation-confirmed',
+        taskId: result.taskId,
+        correlationId: result.correlationId,
+        resultHash: result.result.sha256,
+        tokens: 'unavailable',
+        actualCost: 'unavailable',
+        uiAcceptance: 'not-performed',
+      }),
+    );
+  }
 } finally {
   const cleanup: Array<{ instanceId: string; confirmedExit: boolean }> = [];
   for (const id of instances) {
@@ -198,11 +233,24 @@ try {
   runtime.shutdown();
   store.close();
   content.clear();
+  let sourcesVerified = false;
+  try {
+    if (threadIds.length) {
+      verifySources(threadIds);
+      sourcesVerified = true;
+    }
+  } catch {
+    process.exitCode = 1;
+  }
   console.log(
     JSON.stringify({
       phase: 'cleanup',
-      passed,
+      passed: passed && sourcesVerified && cleanup.every((entry) => entry.confirmedExit),
       cleanup,
+      nativeConfigStarted: instances.length > 0,
+      mcpServersStarted: 'unverified',
+      descendantCleanup: 'not-verified',
+      sourcesVerified,
       privateStateRetained: true,
       note: 'Do not delete or reuse uncertain state; no PID adoption or automatic retry.',
     }),

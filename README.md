@@ -19,8 +19,10 @@ prompts or write into observed sessions.
 The intended integration uses already installed Codex, Claude Code and OpenCode
 CLIs with their native authentication when available, without duplicate installation
 or login by default. `pnpm terminal:discover` now provides a passive local preflight;
-authentication remains unknown and isolated existing-auth execution is not yet
-implemented. See [existing CLI integration](docs/development/local-cli-integration.md).
+discovery leaves authentication unknown. An explicit structured Codex path can now
+reuse native authentication with new ephemeral threads and private SQLite/log state;
+native auth/config remain shared; one authorized native acceptance attempt failed
+before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
 window inside ORQST Desktop for a new owned Codex process, with separate login,
@@ -64,6 +66,18 @@ acceptance. Normal startup and external sessions remain observation-only. See
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
 ## Delivery status and roadmap
+
+- **Codex existing-login implementation (2026-11-03):** explicit structured setup can
+  retain native HOME/CODEX_HOME without copying credentials or initiating login.
+  Native `account/read` gates new ephemeral threads; two slots keep separate IDs,
+  private SQLite/log/temp state and signed task authority. User configuration and
+  native auth remain shared, including configured MCP startup; acknowledgment is
+  required. The legacy PTY rejects reuse manifests. Offline Codex 0.162.1 protocol
+  inspection and synthetic tests do not establish real login/model/delegation
+  acceptance. After independent QA and 389 passing tests, the single authorized
+  native attempt failed during the first startup, before either task was submitted.
+  The protocol did not confirm that process exit; no retry or service restart was
+  performed. Headless real-provider acceptance remains blocked. See [the contract and limitations](docs/development/local-cli-integration.md).
 
 - **Existing CLI direction (2026-11-03):** bounded PATH/realpath discovery and
   provider-specific blocked reuse plans are implemented without executing providers

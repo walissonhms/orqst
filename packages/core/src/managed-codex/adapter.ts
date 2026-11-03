@@ -36,8 +36,10 @@ const itemSchema = z.object({
   }),
 });
 const threadResponseSchema = z.object({
-  thread: z.object({ id: nativeId }),
+  thread: z.object({ id: nativeId, ephemeral: z.boolean().optional() }),
   model: nativeId.optional(),
+  sandbox: z.object({ type: z.string() }).optional(),
+  approvalPolicy: z.string().optional(),
 });
 export type CodexResultWriter = (
   scope: Readonly<CommunicationContentScope>,
@@ -69,6 +71,8 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   private observedModel: string | null = null;
   private toolsObserved = false;
   private toolReturned = false;
+  private unexpectedToolUse = false;
+  private authentication: 'unknown' | 'existing-native-login' = 'unknown';
 
   constructor(
     private channel: CodexChannel,
@@ -85,7 +89,11 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     channel.onLost(() => this.lose());
   }
 
-  async initialize(cwd: string, requestedModel: string | null): Promise<void> {
+  async initialize(
+    cwd: string,
+    requestedModel: string | null,
+    reuseExistingAuthentication = false,
+  ): Promise<void> {
     if (!this.owns()) throw new Error('Codex owner is not confirmed');
     await this.channel.request('initialize', {
       clientInfo: { name: 'orqst', title: 'ORQST', version: '0.1.0' },
@@ -93,15 +101,34 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     });
     if (!this.owns()) throw new Error('Codex owner was revoked during initialization');
     this.channel.initialized();
+    if (reuseExistingAuthentication) {
+      // Strip account identity/plan fields immediately; never log or persist the response.
+      const status = z
+        .object({ account: z.object({ type: z.enum(['chatgpt', 'apiKey']) }).nullable() })
+        .parse(await this.channel.request('account/read', { refreshToken: false }));
+      if (!status.account) throw new Error('Existing native Codex login is unavailable');
+      this.authentication = 'existing-native-login';
+      if (!this.owns()) throw new Error('Codex owner revoked during authentication check');
+    }
     const reply = threadResponseSchema.parse(
       await this.channel.request('thread/start', {
         cwd,
         sandbox: 'read-only',
         approvalPolicy: 'on-request',
+        ...(reuseExistingAuthentication
+          ? { ephemeral: true, allowProviderModelFallback: false }
+          : {}),
         ...(this.dynamicTools ? { dynamicTools: [delegationTool] } : {}),
         ...(requestedModel === null ? {} : { model: requestedModel }),
       }),
     );
+    if (reuseExistingAuthentication && reply.thread.ephemeral !== true)
+      throw new Error('Native Codex did not confirm an ephemeral thread');
+    if (
+      reuseExistingAuthentication &&
+      (reply.sandbox?.type !== 'readOnly' || reply.approvalPolicy !== 'on-request')
+    )
+      throw new Error('Native Codex did not confirm the requested permission policy');
     if (requestedModel !== null && reply.model !== requestedModel)
       throw new Error('Requested Codex model was not confirmed; no substitution');
     if (!this.channel.available || this.closed) throw new Error('Codex initialization lost');
@@ -110,6 +137,8 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   }
   snapshot() {
     return {
+      authentication: this.authentication,
+      unexpectedToolUse: this.unexpectedToolUse,
       delegationReturned: this.toolReturned,
       dynamicTools: this.dynamicTools
         ? this.toolsObserved
@@ -232,6 +261,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
       ),
     };
     this.toolReturned = false;
+    this.unexpectedToolUse = false;
     this.active = active;
     try {
       const reply = z.object({ turn: turnSchema }).parse(
@@ -275,6 +305,14 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   }
   private process(active: Active, event: CodexNotification): void {
     if (this.active !== active || this.closed) return;
+    if (event.method === 'item/started' || event.method === 'item/completed') {
+      const params = itemSchema.parse(event.params);
+      this.correlate(params.threadId, params.turnId, active);
+      if (
+        !['agentMessage', 'reasoning', 'userMessage', 'dynamicToolCall'].includes(params.item.type)
+      )
+        this.unexpectedToolUse = true;
+    }
     if (event.requestId !== undefined && event.method === 'item/tool/call') {
       const call = dynamicCallSchema.parse(event.params);
       this.correlate(call.threadId, call.turnId, active);

@@ -229,3 +229,53 @@ test('legacy setup requires explicit auth choice and complete unambiguous discov
     rmSync(f.root, { recursive: true, force: true });
   }
 });
+
+test('existing-login setup requires shared-config acknowledgment and never reads or copies synthetic secrets', async () => {
+  const f = fixture();
+  try {
+    symlinkSync(process.execPath, join(f.bin, 'codex'));
+    const project = join(f.root, 'synthetic-project');
+    const nativeHome = join(f.root, 'synthetic-native-home');
+    mkdirSync(project, { mode: 0o700 });
+    mkdirSync(nativeHome, { mode: 0o700 });
+    for (const name of ['auth.json', 'config.toml'])
+      writeFileSync(join(nativeHome, name), 'SYNTHETIC-SECRET-MUST-NOT-BE-COPIED', { mode: 0o000 });
+    const state = join(f.root, 'new-slot');
+    const args = [
+      '--import',
+      'tsx',
+      resolve('scripts/setup-managed-terminal.ts'),
+      '--authentication',
+      'reuse-existing',
+      '--executable-version',
+      'SYNTHETIC-NODE-NOT-CODEX',
+      '--project',
+      project,
+      '--state',
+      state,
+      '--user-home',
+      f.root,
+      '--codex-home',
+      nativeHome,
+    ];
+    const environment = { PATH: f.bin };
+    await assert.rejects(run(process.execPath, args, { env: environment }), /No state created/);
+    assert.equal(existsSync(state), false);
+    const output = await run(process.execPath, [...args, '--acknowledge-shared-native-config'], {
+      env: environment,
+    });
+    const config = JSON.parse(readFileSync(join(state, 'terminal.json'), 'utf8'));
+    assert.equal(config.authentication.mode, 'reuse-existing');
+    assert.equal(config.authentication.codexHome, nativeHome);
+    assert.equal(config.authentication.sharedNativeConfiguration, true);
+    assert.equal(existsSync(join(state, 'codex/auth.json')), false);
+    assert.ok(!JSON.stringify(config).includes('SYNTHETIC-SECRET'));
+    assert.ok(!output.stdout.includes('SYNTHETIC-SECRET'));
+    await assert.rejects(
+      run(process.execPath, [...args, '--acknowledge-shared-native-config'], { env: environment }),
+      /EEXIST/,
+    );
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});

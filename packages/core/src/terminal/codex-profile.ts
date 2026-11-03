@@ -24,6 +24,15 @@ export const managedCodexConfigSchema = z.strictObject({
   node: binary,
   project: path,
   state: path,
+  // Optional extension: legacy manifests retain their separate-login behavior.
+  authentication: z
+    .strictObject({
+      mode: z.literal('reuse-existing'),
+      home: path,
+      codexHome: path,
+      sharedNativeConfiguration: z.literal(true),
+    })
+    .optional(),
 });
 export type ManagedCodexConfig = z.infer<typeof managedCodexConfigSchema>;
 
@@ -140,6 +149,16 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   terminalDirectory(config.project);
   terminalDirectory(config.state, true);
   assertSeparateTerminalState(config.project, config.state);
+  if (config.authentication) {
+    terminalDirectory(config.authentication.home);
+    terminalDirectory(config.authentication.codexHome);
+    // Credentials are exclusively the native CLI's responsibility. Check directories only.
+    for (const shared of [config.authentication.home, config.authentication.codexHome]) {
+      const inside = relative(config.state, shared);
+      if (inside !== '..' && !inside.startsWith('../'))
+        throw new Error('Existing authentication home cannot be inside managed state');
+    }
+  }
   for (const directory of ['home', 'codex', 'tmp'])
     terminalDirectory(join(config.state, directory), true);
   if (
@@ -155,6 +174,8 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
 }
 
 export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfile[] {
+  if (config.authentication)
+    throw new Error('Existing authentication is supported only by the structured runtime');
   const common = {
     projectId: terminalDigest(config.project),
     executable: config.executable.path,
@@ -190,8 +211,9 @@ export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfil
 
 export function managedCodexEnvironment(config: ManagedCodexConfig): Record<string, string> {
   return {
-    HOME: join(config.state, 'home'),
-    CODEX_HOME: join(config.state, 'codex'),
+    HOME: config.authentication?.home ?? join(config.state, 'home'),
+    CODEX_HOME: config.authentication?.codexHome ?? join(config.state, 'codex'),
+    CODEX_SQLITE_HOME: join(config.state, 'codex'),
     TMPDIR: join(config.state, 'tmp'),
     XDG_CONFIG_HOME: join(config.state, 'home/.config'),
     XDG_CACHE_HOME: join(config.state, 'home/.cache'),
@@ -200,4 +222,31 @@ export function managedCodexEnvironment(config: ManagedCodexConfig): Record<stri
     LC_ALL: 'en_US.UTF-8',
     TERM: 'xterm-256color',
   };
+}
+
+/** Do not force a credential backend when reusing the native user's identity. */
+export function structuredCodexArguments(config: ManagedCodexConfig): string[] {
+  if (!config.authentication)
+    return ['-c', 'cli_auth_credentials_store="file"', 'app-server', '--listen', 'stdio://'];
+  const overrides = [
+    `sqlite_home=${JSON.stringify(join(config.state, 'codex'))}`,
+    `log_dir=${JSON.stringify(join(config.state, 'codex'))}`,
+    'history.persistence="none"',
+    'analytics.enabled=false',
+    'feedback.enabled=false',
+    'otel.exporter="none"',
+    'otel.trace_exporter="none"',
+    'otel.metrics_exporter="none"',
+    'check_for_update_on_startup=false',
+    'features.hooks=false',
+    'features.remote_plugin=false',
+    'features.shell_snapshot=false',
+    'features.memories=false',
+    'features.multi_agent=false',
+    'notify=[]',
+    'shell_environment_policy.inherit="none"',
+  ];
+  // MCP tables merge: an empty override DOES NOT disable configured servers.
+  // Shared native configuration remains part of the explicit same-user contract.
+  return [...overrides.flatMap((value) => ['-c', value]), 'app-server', '--listen', 'stdio://'];
 }

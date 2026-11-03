@@ -1,19 +1,50 @@
 # Two-agent native delegation: reviewable acceptance
 
-**Suspended as the default route (2026-11-03):** the owner selected existing
-installed CLIs/native authentication rather than mandatory new homes/logins.
-The recipe below is preserved as an optional separate-login experiment; do not
-repeat or complete pending logins to advance it. See
-[existing CLI integration](local-cli-integration.md) for the implemented passive
-preflight and unresolved isolation contract. Both setup and this real-run command
-now require explicit `--authentication separate-login`; neither supports safe
-existing-auth dispatch yet. All real operations still require concrete approval.
+**Existing-login route (2026-11-03):** setup and this explicit developer command
+support `--authentication reuse-existing --acknowledge-shared-native-config`.
+This keeps native auth/config shared and creates new ephemeral threads with private
+SQLite/log/temp state, without ORQST reading/copying credentials or starting login.
+Configured native MCPs can start; this is not physical isolation. See
+[the exact contract](local-cli-integration.md#structured-codex-reuse). The legacy
+separate-login recipe below is optional and remains suspended as the default.
+Do not complete or alter pending logins to advance this test.
+
+For the existing-login route, provision `slot-a` and `slot-b` in a new private root
+with a separate empty `project` directory using:
+
+```bash
+pnpm terminal:setup --authentication reuse-existing --acknowledge-shared-native-config \
+  --executable ABSOLUTE_NATIVE_BINARY --executable-version VERIFIED_VERSION \
+  --project EMPTY_PROJECT --state NEW_SLOT_DIRECTORY
+```
+
+Then invoke the developer script explicitly, never through normal startup or CI:
+
+```bash
+pnpm exec tsx scripts/accept-codex-two-agent.ts \
+  --authorize-real-codex --acknowledge-advisory-cost-only --cleanup-owned-processes \
+  --authentication reuse-existing --acknowledge-shared-native-config \
+  --acceptance-root NEW_PRIVATE_ROOT --model EXACT_MODEL --prepare-only
+```
+
+`--prepare-only` starts the two owned app-server processes, checks their native login
+and distinct ephemeral thread identities, then requests cleanup; it never calls
+`turn/start`. Its record explicitly identifies native config startup and unverified
+MCP startup/descendant cleanup, rather than implying no native side effects. After reviewing preparation evidence, the already authorized two-agent
+test uses the same command without `--prepare-only` and **a fresh acceptance root**;
+previous journals are never reset or reused. The root task still needs its separate
+signed authority. Cost controls remain advisory; inference is real provider usage.
+Unsupported native shapes, login or model stop the test without fallback or login.
+The normal 30-minute host deadline remains if initialization/ownership is lost;
+cleanup is not guaranteed under transport loss and no external PID is signaled.
 
 **Implemented:** an opt-in app-server dynamic function, two independently identified
 Core panes, a separately signed root request, exact A-to-B delegation, durable
 communication and native tool-result return into A. Tests use synthetic transports;
-no installed provider, credential, login or paid inference has run for this change.
-The explicit developer command below is prepared, **not executed**. It is outside
+one authorized installed-provider attempt was executed after independent QA. It
+failed before first-thread readiness and before either `turn/start` submission. No
+new login was initiated; native login availability and delegation were not validated.
+The command remains explicitly invoked and is outside
 normal Desktop, observer, CI and automatic test startup. This is a headless native
 Core acceptance, not an interactive Studio/xterm visual acceptance.
 
@@ -251,3 +282,49 @@ model, task/correlation/hash and both cleanup results locally. Do not commit thi
 local evidence, homes, authentication, histories, database or generated output.
 Passing this command would validate the headless native path on that specific
 binary/account/OS; it would not validate interactive Desktop panes or the full MVP.
+
+## Existing-login acceptance evidence gates
+
+The script requires two distinct native process IDs reported at spawn, plus
+distinct pane/instance/thread identities. Process IDs are evidence only; all signals
+continue through owned child handles. Before task admission and after owned cleanup,
+a bounded metadata/name-only check rejects rollout filenames containing either new
+thread ID under native `sessions` or `archived_sessions`. `history.jsonl` inode, size,
+mtime and ctime must remain unchanged; concurrent native history writes make the
+acceptance inconclusive. No captured source content or credential file is read,
+hashed, copied or logged. This is bounded test-thread evidence, not a guarantee that
+every pre-existing source byte is unchanged. The observer is neither paused nor
+reconfigured, and no external process is stopped to stabilize the check.
+
+Native command/file/MCP/other unexpected tool item types reject acceptance, even
+when the marker matches. Prompt restrictions and post-observation checks cannot
+prevent tool side effects. Configured MCP startup remains shared/unverified and
+its descendants are not covered by the owned-process exit confirmation. The
+private config canary does not replace active native configuration. Credential
+refresh and shared cache/config effects remain native CLI behavior.
+
+## Current machine validation status — 2026-11-03
+
+Lint, typecheck, full build and 389 Node tests passed with Node 24.22.2/pnpm
+10.34.9. Independent QA approved the corrected boundaries with 59 focused tests.
+A separate Codex 0.162.1 no-credential/no-inference probe confirmed initialization,
+new ephemeral thread shape, exact requested model, readOnly/on-request response,
+absent hook sentinels and no sessions/history in its disposable native home.
+That probe is compatibility evidence only, not account/model entitlement.
+
+The subsequent **single authorized existing-login attempt failed** during the
+first native startup, before any confirmed thread or either task submission. The
+transport reported a generic unavailable/uncertain start, so this does not establish
+whether authentication, native configuration, protocol limits or readiness timing
+caused it. There was no fallback, automatic retry, second acceptance attempt,
+duplicate login, external-session adoption, service restart or native-state deletion.
+
+The protocol did not confirm the first owned process exit; therefore cleanup and
+source preservation are **not accepted** for that run. A later executable-process
+metadata inspection found no surviving selected test executable or host and kept
+the sampled pre-existing processes/service unchanged, but that does not reconcile
+the reserved journal or prove descendant cleanup. Private state/evidence remain
+outside Git and must not be deleted/reused to bypass uncertainty. Tokens and actual
+cost remain unavailable; no claim of zero billing or completed A-to-B-to-A is made.
+Further real execution needs diagnosis and explicit authorization for another attempt.
+Browser/Desktop acceptance and `validate:local` were not run; ingestion is unchanged.

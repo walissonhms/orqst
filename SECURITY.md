@@ -430,3 +430,20 @@ MCP tools or authorized by captured text. Scoped clients and content resolvers r
 independently verified workspace/actor/target authority. It cannot control observed
 sessions or write to a PTY. Real provider communication is not enabled; see
 [the communication contract](docs/api/pane-communication.md) for limits and recovery.
+
+## Structured existing-login review — 2026-11-03
+
+An explicit developer manifest can retain native Codex login/config while using
+new ephemeral threads and per-slot SQLite/log/temp state. ORQST never reads/copies
+credentials or starts login. Native account checks drop identity fields and fail
+closed before threads/tasks on unsupported/missing authentication. Shared native
+configuration, configured MCP startup, auth refresh and cache writes remain part
+of the disclosed same-user boundary; physical isolation is not claimed. Reuse is
+rejected by legacy PTY profiles. No API/WS/IPC authority or observer behavior changes.
+See [the security model](docs/architecture/security-model.md#structured-codex-existing-login-boundary--2026-11-03).
+
+Read-only command sandboxing does not prevent same-user credential reads, and MCP
+tools are outside that sandbox. The explicit acceptance rejects observed command,
+file, MCP or other unexpected item types; it cannot prevent their side effects.
+The reuse canary config is not the active user config. Remote catalog disabling
+is not a global installed-plugin deny policy; no hard isolation is claimed.
