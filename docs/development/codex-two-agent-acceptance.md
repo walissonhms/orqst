@@ -304,8 +304,9 @@ distinct pane/instance/thread identities. Process IDs are evidence only; all sig
 continue through owned child handles. Before task admission and after owned cleanup,
 a bounded metadata/name-only check rejects rollout filenames containing either new
 thread ID under native `sessions` or `archived_sessions`. `history.jsonl` inode, size,
-mtime and ctime must remain unchanged; concurrent native history writes make the
-acceptance inconclusive. No captured source content or credential file is read,
+mtime and ctime must remain unchanged; any detected shared-history change makes
+source preservation inconclusive. Metadata does not identify its writer: neither
+legitimate concurrency nor a write by the test process is inferred. No captured source content or credential file is read,
 hashed, copied or logged. This is bounded test-thread evidence, not a guarantee that
 every pre-existing source byte is unchanged. The observer is neither paused nor
 reconfigured, and no external process is stopped to stabilize the check.
@@ -320,13 +321,23 @@ attribute the writer or excuse it.
 
 The command emits JSON `source-preservation` records on stdout for baseline,
 pre-confirmation and cleanup checks. Baseline `captured` is only a snapshot, not
-verification. Failure records contain a fixed reason and source category, the input
+verification. `history_changed` emits `inconclusive`; all other errors emit `failed`.
+Both still throw, block task admission and cause an unsuccessful acceptance/exit 1.
+Error records contain a fixed reason and source category, the input
 home index, bounded counts/limits and boolean history-field change flags when
 applicable. They exclude paths, entry names, thread IDs, metadata values, raw errors
 and captured content. Retain these records with the private acceptance evidence;
-discarding stdout loses the diagnostic. A failed pre-confirmation check remains a
-failure even if the cleanup check later passes. These diagnostics cannot establish
+discarding stdout loses the diagnostic. The final cleanup record includes
+`sourcePreservation`: `failed`, `inconclusive`, `incomplete` or `verified`.
+`sourcesVerified` is true only when baseline, pre-confirmation and cleanup all
+succeeded. An earlier error remains in the final result even if a later check
+passes; no rebaseline, retry, history-content inspection or writer attribution is
+introduced. These diagnostics cannot establish
 the writer or reconstruct a previous run's discarded error.
+
+These labels exist only in the developer command's stdout. Desktop and the observer
+dashboard do not consume this acceptance report. See the
+[synthetic client path and composition limits](desktop.md#synthetic-client-testing-and-structured-runtime-boundary).
 
 The 2026-11-03 pane-620 prepare-only run reached two ready threads and recorded
 both owned direct exits, but its source check failed and its original reason was not

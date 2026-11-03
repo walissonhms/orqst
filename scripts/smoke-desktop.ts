@@ -197,9 +197,17 @@ Module._load = load;
     await page.evaluate(() => ({
       require: typeof Reflect.get(window, 'require'),
       process: typeof Reflect.get(window, 'process'),
+      terminal: typeof Reflect.get(window, 'orqstTerminal'),
     })),
-    { require: 'undefined', process: 'undefined' },
+    { require: 'undefined', process: 'undefined', terminal: 'undefined' },
   );
+  assert.equal(
+    await desktop.evaluate(
+      ({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.enabled,
+    ),
+    false,
+  );
+  await page.screenshot({ path: join(evidenceDir, 'synthetic-observer.png') });
   // Exact clean routes must pass real Electron navigation, reload and sender policy.
   for (const route of ['overview', 'workspaces', 'agents', 'models', 'settings']) {
     await page.goto(`${origin}/${route}`);
@@ -775,6 +783,8 @@ Module._load = load;
         result: 'passed',
         platform: process.platform,
         versions,
+        observerComposition:
+          'synthetic Bridge on ephemeral loopback; terminal menu disabled; no terminal preload, provider, login or structured two-agent UI',
         nativeDelivery: 'intercepted: mechanism only, no visual delivery claim',
         artifactClipboard,
         analyticsFiles:

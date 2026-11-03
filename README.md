@@ -89,11 +89,19 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 - **Preparation evidence:** the explicit two-Codex `--prepare-only` command now
   retains expected lifecycle identities before launch and requires matching durable
-  receipts plus both still-owned exits. Source-check failures now emit bounded,
-  payload-free diagnostics; the failed pane-620 check remains unexplained. Its labeled
+  receipts plus both still-owned exits. Source checks emit bounded, payload-free
+  diagnostics: shared-history changes report inconclusive preservation without
+  attributing a writer, still block acceptance and remain unsuccessful in the final
+  report. The failed pane-620 check remains unexplained. Its labeled
   preparation result does not establish inference/model entitlement, delegation or
   descendant cleanup. See
   [preparation scope](docs/development/codex-two-agent-acceptance.md).
+
+- **Client testing boundary:** the normal Desktop/localhost dashboard observes
+  sessions; structured two-agent execution is not composed into its UI. A disposable
+  real Electron/Bridge smoke exercises only labeled synthetic sessions, preserves
+  owner storage and asserts that terminal authority is absent. See the
+  [visual test command and remaining blockers](docs/development/desktop.md#synthetic-client-testing-and-structured-runtime-boundary).
 
 - **Codex existing-login implementation (2026-11-03):** explicit structured setup can
   retain native HOME/CODEX_HOME without copying credentials or initiating login.

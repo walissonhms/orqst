@@ -8,6 +8,7 @@ import {
   renameSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,9 @@ import test from 'node:test';
 import {
   acceptanceSourceGuard,
   runSourceCheck,
+  sourceCheckSummary,
   SourceGuardError,
+  type SourceCheckRecord,
 } from '../scripts/terminal/two-agent-source-guard.js';
 
 function reason(expected: string) {
@@ -75,7 +78,7 @@ test('history change is inconclusive, symlinks fail, and diagnostics retain no p
     assert.deepEqual(record, {
       phase: 'source-preservation',
       check: 'pre-confirmation',
-      status: 'failed',
+      status: 'inconclusive',
       diagnostic: {
         reason: 'history_changed',
         source: 'history',
@@ -119,6 +122,80 @@ test('history change is inconclusive, symlinks fail, and diagnostics retain no p
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('history metadata changes block admission and cleanup without rebaselining or attributing a writer', () => {
+  const root = mkdtempSync(join(tmpdir(), 'orqst-synthetic-history-report-'));
+  try {
+    const history = join(root, 'history.jsonl');
+    const mutations = [
+      () => appendFileSync(history, 'x'),
+      () => writeFileSync(history, ''),
+      () => {
+        renameSync(history, join(root, 'previous'));
+        writeFileSync(history, 'SYNTHETIC');
+      },
+      () => rmSync(history),
+      () => utimesSync(history, new Date(0), new Date(0)),
+    ];
+    for (const mutate of mutations) {
+      writeFileSync(history, 'SYNTHETIC');
+      const records: SourceCheckRecord[] = [];
+      const emit = (record: SourceCheckRecord) => records.push(record);
+      const verify = runSourceCheck('baseline', () => acceptanceSourceGuard([root]), emit);
+      mutate();
+      let admitted = false;
+      assert.throws(() => {
+        runSourceCheck('pre-confirmation', () => verify(['synthetic-thread']), emit);
+        admitted = true;
+      }, reason('history_changed'));
+      assert.equal(admitted, false);
+      assert.throws(
+        () => runSourceCheck('cleanup', () => verify(['synthetic-thread']), emit),
+        reason('history_changed'),
+      );
+      assert.deepEqual(
+        records.map(({ status }) => status),
+        ['captured', 'inconclusive', 'inconclusive'],
+      );
+      assert.equal(sourceCheckSummary(records), 'inconclusive');
+      // Reporting must retain the earlier result even if a later check succeeds.
+      runSourceCheck('cleanup', () => {}, emit);
+      assert.equal(sourceCheckSummary(records), 'inconclusive');
+      assert.ok(!JSON.stringify(records).includes(root));
+      assert.ok(!JSON.stringify(records).includes('SYNTHETIC'));
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('source reporting requires every check and keeps unsafe or unknown errors failed', () => {
+  const records: SourceCheckRecord[] = [];
+  const emit = (record: SourceCheckRecord) => records.push(record);
+  assert.equal(sourceCheckSummary(records), 'incomplete');
+  runSourceCheck('baseline', () => {}, emit);
+  runSourceCheck('cleanup', () => {}, emit);
+  assert.equal(sourceCheckSummary(records), 'incomplete');
+  runSourceCheck('pre-confirmation', () => {}, emit);
+  assert.equal(sourceCheckSummary(records), 'verified');
+  for (const check of ['pre-confirmation', 'cleanup'] as const) {
+    assert.throws(
+      () =>
+        runSourceCheck(
+          check,
+          () => {
+            throw new Error('SYNTHETIC-PRIVATE');
+          },
+          emit,
+        ),
+      reason('inspection_error'),
+    );
+    assert.equal(records.at(-1)?.status, 'failed');
+  }
+  runSourceCheck('cleanup', () => {}, emit);
+  assert.equal(sourceCheckSummary(records), 'failed');
+  assert.ok(!JSON.stringify(records).includes('SYNTHETIC'));
 });
 
 test('deduplicates directory aliases without increasing the global source entry budget', () => {

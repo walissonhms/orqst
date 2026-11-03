@@ -30,7 +30,12 @@ import {
   twoAgentCleanupConfirmed,
   twoAgentAcceptancePrompts,
 } from './terminal/two-agent-acceptance.js';
-import { acceptanceSourceGuard, runSourceCheck } from './terminal/two-agent-source-guard.js';
+import {
+  acceptanceSourceGuard,
+  runSourceCheck,
+  sourceCheckSummary,
+  type SourceCheckRecord,
+} from './terminal/two-agent-source-guard.js';
 import {
   readLifecycleReceipt,
   type LifecycleBinding,
@@ -90,7 +95,11 @@ for (let index = 0; index < 2; index++) {
 }
 assert.deepEqual(configs[0]!.executable, configs[1]!.executable);
 assert.equal(existsSync(join(root, 'communication.sqlite')), false);
-const emitSourceCheck = (record: object) => console.log(JSON.stringify(record));
+const sourceChecks: SourceCheckRecord[] = [];
+const emitSourceCheck = (record: SourceCheckRecord) => {
+  sourceChecks.push(record);
+  console.log(JSON.stringify(record));
+};
 const verifySources = runSourceCheck(
   'baseline',
   () =>
@@ -287,15 +296,15 @@ try {
   runtime.shutdown();
   store.close();
   content.clear();
-  let sourcesVerified = false;
   try {
     if (threadIds.length) {
       runSourceCheck('cleanup', () => verifySources(threadIds), emitSourceCheck);
-      sourcesVerified = true;
     }
   } catch {
     process.exitCode = 1;
   }
+  const sourcePreservation = sourceCheckSummary(sourceChecks);
+  const sourcesVerified = sourcePreservation === 'verified';
   const accepted =
     passed &&
     sourcesVerified &&
@@ -310,6 +319,7 @@ try {
       nativeConfigStarted: instances.length > 0,
       mcpServersStarted: 'unverified',
       descendantCleanup: 'not-verified',
+      sourcePreservation,
       sourcesVerified,
       privateStateRetained: true,
       note: 'Do not delete or reuse uncertain state; no PID adoption or automatic retry.',

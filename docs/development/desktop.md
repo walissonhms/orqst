@@ -4,8 +4,10 @@
 
 The Desktop client is an Electron window loading the existing React dashboard
 from `http://127.0.0.1:4317/`. The Bridge remains the independent Node 24 composition
-root and sole SQLite writer. Desktop imports no Core, adapter, database or service
-helper and never starts/stops a Bridge or agent. Browser clients continue working.
+root and sole SQLite writer. The default observer path never starts/stops a Bridge
+or agent. The separately opted-in legacy Managed Terminal imports Core authorization
+helpers and connects to its own Node host; that exception is not the observer or
+the structured existing-login runtime. Browser clients continue working.
 Closing a macOS window leaves the Desktop application available in the Dock; activating
 it reopens the window. The menu-bar tray also opens/restores it. Quitting Desktop also preserves the independently running Bridge
 and observer. If the Bridge exits, Desktop cannot keep observation running.
@@ -113,6 +115,48 @@ leaves its independent Bridge available. Window captures are saved under ignored
 `test-results/desktop-smoke/`; no captured source data or generated output is committed.
 These checks do not validate the installed service, real provider data or the complete
 Desktop MVP. Ingestion is unchanged, so no new `validate:local` run is required.
+
+## Synthetic client testing and structured runtime boundary
+
+The normal Electron window and the browser at `http://127.0.0.1:4317/` display
+the same Bridge-served observer dashboard: sessions, timeline, attention, token
+observations, model analytics, artifacts and settings. Observed session statuses
+describe captured evidence; they are not owned-process lifecycle confirmations.
+The observer preload exposes only artifact/analytics operations, not terminal
+authority. Without `--terminal-config`, the current checkout's native terminal
+menu is disabled. An already-running older shell is not updated by rebuilding files.
+
+For a visual check without provider execution or owner data, build and run:
+
+```bash
+export PATH="$HOME/.local/share/orqst/toolchain/bin:$PATH"
+pnpm build
+ORQST_DESKTOP_SMOKE_OUTPUT="$PWD/test-results/desktop-smoke" pnpm test:desktop
+```
+
+This opens a separate real Electron client and real Bridge on an ephemeral loopback
+port with a temporary profile/database and explicitly labeled synthetic sessions.
+It asserts visible fixture content, absence of the terminal renderer API and the
+disabled native terminal menu, and saves `synthetic-observer.png`, `online.png`
+and `offline.png`. Output is ignored by Git. Dialogs, editor launch and native alert
+delivery are intercepted; this does not establish human confirmation or OS banner
+acceptance. It neither restarts the installed Bridge/Desktop nor inserts fixtures
+into owner storage. No provider, login or inference is needed.
+
+The existing `accept:terminal-native --authorize-synthetic-pty` command is a
+separate synthetic Electron/Node/PTY lab with real fixture I/O. It does not compose
+the structured Codex A-to-B-to-A runtime into this dashboard. `--terminal-config`
+opens the legacy separate-login Managed Terminal and rejects existing-login reuse;
+it is not a shortcut to the structured path. No two-agent launch, delegation inbox
+or source-preservation report is exposed in the client. Acceptance stdout cannot
+be presented as a visible client result.
+
+Real two-agent client acceptance remains blocked by that missing composition and
+by unresolved native lifecycle/source-preservation acceptance. The next implementation
+requires a separately reviewed structured Desktop contract (ownership, explicit
+authorization, report provenance and lifecycle) and a fixture-backed client test
+before any newly authorized provider run. Existing quarantines remain intact;
+synthetic UI evidence cannot reconcile them or authorize a retry.
 
 This is a runnable development checkout client, not a distributable signed application.
 There is no `.app` packaging pipeline, installer, signing, notarization, auto-update,

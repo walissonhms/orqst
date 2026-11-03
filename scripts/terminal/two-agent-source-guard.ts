@@ -33,6 +33,28 @@ export type SourceDiagnostic = {
     ctime: boolean;
   } | null;
 };
+type SourceCheck = 'baseline' | 'pre-confirmation' | 'cleanup';
+export type SourceCheckRecord = {
+  phase: 'source-preservation';
+  check: SourceCheck;
+  status: 'captured' | 'verified' | 'inconclusive' | 'failed';
+  diagnostic: SourceDiagnostic | null;
+};
+
+/** Later success cannot erase an earlier failure or missing required check. */
+export function sourceCheckSummary(records: readonly SourceCheckRecord[]) {
+  if (records.some((record) => record.status === 'failed')) return 'failed';
+  if (records.some((record) => record.status === 'inconclusive')) return 'inconclusive';
+  return (['baseline', 'pre-confirmation', 'cleanup'] as const).every((check) =>
+    records.some(
+      (record) =>
+        record.check === check &&
+        record.status === (check === 'baseline' ? 'captured' : 'verified'),
+    ),
+  )
+    ? 'verified'
+    : 'incomplete';
+}
 
 export class SourceGuardError extends Error {
   constructor(readonly diagnostic: SourceDiagnostic) {
@@ -77,9 +99,9 @@ export function sourceDiagnostic(error: unknown): SourceDiagnostic {
 }
 
 export function runSourceCheck<T>(
-  check: 'baseline' | 'pre-confirmation' | 'cleanup',
+  check: SourceCheck,
   operation: () => T,
-  emit: (record: object) => void,
+  emit: (record: SourceCheckRecord) => void,
 ): T {
   try {
     const result = operation();
@@ -92,7 +114,12 @@ export function runSourceCheck<T>(
     return result;
   } catch (error) {
     const diagnostic = sourceDiagnostic(error);
-    emit({ phase: 'source-preservation', check, status: 'failed', diagnostic });
+    emit({
+      phase: 'source-preservation',
+      check,
+      status: diagnostic.reason === 'history_changed' ? 'inconclusive' : 'failed',
+      diagnostic,
+    });
     throw new SourceGuardError(diagnostic);
   }
 }
@@ -110,7 +137,7 @@ function metadata(file: string, homeIndex: number): Metadata {
   }
 }
 
-/** Concurrent history writes are inconclusive and fail acceptance; never stop other sessions. */
+/** Changed shared history is inconclusive and fails acceptance; its writer is unknown. */
 export function acceptanceSourceGuard(codexHomes: readonly string[]) {
   if (!codexHomes.length || codexHomes.length > 2) failure('invalid_input', 'input', null);
   const homes: Array<{
