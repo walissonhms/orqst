@@ -12,13 +12,18 @@ import {
   terminalFile,
 } from './codex-profile.js';
 import { managedTerminalCommandSchema } from './pty-channel.js';
+import { terminalMcpLaunchSchema } from './mcp-launch.js';
 
 process.umask(0o077);
-if (!process.send || process.argv.length !== 4 || !/^v24\./.test(process.version))
+if (!process.send || ![4, 5].includes(process.argv.length) || !/^v24\./.test(process.version))
   throw new Error('Private Node host only');
 async function start(): Promise<void> {
   const config = readManagedCodexConfig(process.argv[2]!);
-  const profile = managedCodexProfiles(config).find((value) => value.id === process.argv[3]);
+  const mcp = process.argv[4]
+    ? terminalMcpLaunchSchema.parse(JSON.parse(process.argv[4]))
+    : undefined;
+  if (!!config.interactive?.mcp !== !!mcp) throw new Error('MCP launch composition required');
+  const profile = managedCodexProfiles(config, mcp).find((value) => value.id === process.argv[3]);
   if (!profile) throw new Error('Unknown fixed terminal profile');
   const receipt = armLifecycleReceipt(4, terminalDigest(terminalFile(process.argv[2]!, true)));
   const { spawn } = createRequire(__filename)(join(__dirname, 'terminal-pty/lib/index.js')) as {

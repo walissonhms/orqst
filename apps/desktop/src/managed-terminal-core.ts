@@ -139,5 +139,7 @@ export async function connectManagedTerminalCore(
     closeSlot: (slot: number) => call({ kind: 'closeSlot', slot }),
     prepareRetire: () => call({ kind: 'prepareRetire' }),
     retire: (proof: unknown) => call({ kind: 'retire', proof }),
+    prepareMcp: () => call({ kind: 'prepareMcp' }),
+    authorizeMcp: (proof: unknown) => call({ kind: 'authorizeMcp', proof }),
   };
 }

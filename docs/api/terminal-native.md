@@ -157,3 +157,14 @@ native window or content focus. It returns before preparing a grant or process;
 invalid documents/schema still receive `denied`. The native sender predicate,
 post-modal revalidation and blur revocation remain unchanged. The observer API
 has no corresponding operation.
+
+### Private Desktop MCP composition
+
+The inherited Node pair RPC now additionally accepts `prepareMcp` and
+`authorizeMcp` with the existing strict one-use native proof shape. They accept no
+slot, source/target identity, task, command or environment. These are native-only
+operations, absent from renderer IPC, HTTP and WebSocket. The optional pair Core
+binds actual dispatched instance IDs, workspace and epoch and requires both slots
+to remain owned/running. The native menu confirms exact grant metadata separately
+from each launch. MCP tools remain the bounded synthetic-only contract described
+in [interactive CLI/MCP](../development/interactive-cli-mcp.md).

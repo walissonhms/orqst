@@ -19,11 +19,11 @@ Discovery reports these integration limits separately from executable availabili
 Version metadata in a manifest remains owner-supplied, not an inspected protocol
 or evidence of native login, model access or provider acceptance.
 
-The independent Core MCP library and Node stdio relay implement a synthetic-only
-A -> B -> A path. They are not registered in provider configuration, the Desktop
-IPC, Bridge or normal observer startup. Building stages `orqst-mcp-relay.cjs`; it
-does not start that helper, open a socket or authorize any provider invocation.
-No CLI-specific MCP flags are enabled by this library.
+The Core MCP library and Node stdio relay implement a synthetic-only A -> B -> A
+path. An explicit Desktop Codex PTY opt-in now composes the transport with owned
+starts, a native menu grant and per-invocation configuration. The Bridge, renderer
+IPC and normal observer startup do not expose MCP authority. Building stages
+`orqst-mcp-relay.cjs`; building alone opens no socket or provider.
 
 The relay follows the newline-delimited JSON-RPC
 [MCP stdio transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio)
@@ -110,7 +110,7 @@ implemented CLI start or guarantee of compliance. Any preview push/channel featu
 needs its own grant and validation. The Core must still enforce identity, role,
 deadline and one-use semantics regardless of native tool allowlists.
 
-Next independent work is exact binary/hash/version and offline flag/schema evidence
+Further provider work requires exact binary/hash/version and offline flag/schema evidence
 per adapter, followed by a specifically authorized no-task native TUI/MCP acceptance,
 then separately authorized inference/delegation. Shared native configuration, MCPs,
 session writes and auth refresh need explicit disclosure. None of these steps may
@@ -156,8 +156,63 @@ further adapter work; they do not establish installed-version compatibility,
 native identity preservation or idle-worker delivery. No Claude/OpenCode factory,
 preview channel or headless fallback is enabled by this delivery.
 
-The next concrete provider/MCP gate is a specifically authorized native Codex
+The next concrete provider/MCP acceptance gate is a specifically authorized native Codex
 no-task TUI/stdio handshake on an unlocked console with a fresh disposable project,
-then separately authorized inference/delegation. The Desktop still has no wired
-per-instance MCP grant/relay composition. An ordinary human TUI start cannot count
+then separately authorized inference/delegation. Desktop composition now exists
+behind the explicit opt-in below. An ordinary human TUI start cannot count
 as A-to-B-to-A acceptance. Existing reservations/quarantines remain unchanged.
+
+### Desktop composition opt-in — 2026-11-03
+
+Add `--interactive-mcp` to **each** existing-login `terminal:setup` invocation,
+along with `--interactive`, both shared-native acknowledgments and the exact
+`--executable-version 0.162.1` label. Both new manifests must select the same
+canonical project and separate private state. Start Desktop with the existing two
+`--terminal-config=PATH` arguments. This does not provision Claude/OpenCode or
+validate the owner-supplied version label against a native protocol.
+
+One Node Core creates one disposable hub per **pair**, with distinct source/worker
+endpoints and capabilities. No task grant exists at that point. Each signed start
+manifest includes its random `orqst_<32hex>` server name, pinned Node/relay and
+endpoint paths. The fixed Codex `-c` override adds this server **alongside** native
+MCPs; it does not disable inherited servers or write native configuration. Socket
+and capability-file paths appear in the TUI argv; the generated secret does not.
+The same-user threat boundary still applies.
+
+`required=true` deliberately fails closed: an ORQST MCP startup failure can block
+the interactive terminal's startup. The server uses a 10-second startup timeout
+and a 125-second tool timeout around the Core's maximum 120-second grant. There
+is no fallback to a TUI without the opted-in transport or to PTY task injection.
+
+After separately confirming both starts, focus a Terminal and select **Authorize
+one MCP task A → B → A** from the native menu. Core binds the source and target
+to actual dispatched instance UUIDs, workspace and epoch, and requires both to
+remain owned and running. The native dialog separately confirms exact grant
+metadata. No renderer request can select either identity or supply a proof.
+An authenticated relay can initialize/list its fixed tools before this grant;
+task calls are denied until authorization. There is one task/result exchange,
+without automatic retries, rebinds or new grants on the same pair.
+
+The user/model must explicitly call the source `delegate_task` and worker
+`wait_task`/`submit_result` tools after authorization. No initial worker prompt,
+idle-worker wakeup, preview channel or provider-tool approval is synthesized.
+Exit/loss/disposal of either owned handle invalidates the channel; MCP disconnect
+leaves both process lifetimes untouched. Hiding a view only revokes input;
+document closure/reload, retirement and Core disconnect invalidate MCP authority.
+Completed broker results remain completed; undispatched/uncertain work is never
+reported as success. Transport files are disposable; old reservations and external
+session files are never adopted, deleted or reconciled.
+
+Synthetic tests compose actual `ManagedTerminalPair`, metadata journals, signatures
+and Unix socket clients. Independent tests run two actual stdio relay children.
+They cover A → B → A, grant replay/role/correlation/byte limits, loss/disconnection,
+no PTY writes and relay/version drift. They do not prove that Codex 0.162.1
+negotiates the relay's exact MCP revision, displays tools, reuses login successfully
+or completes a task. No installed provider, inference or credentials were used.
+Human modal/focus acceptance remains pending an unlocked macOS session.
+
+This composition increment passed `pnpm lint`, `pnpm typecheck`, all 468 Node
+tests and `pnpm build` on Node24.22.2/pnpm10.34.9. Independent critical QA passed
+29 focused tests and found no security blocker. The existing dashboard chunk-size
+warning remains. Native Electron/focus acceptance, full Chromium and
+`validate:local` were not run for this slice; observer ingestion did not change.

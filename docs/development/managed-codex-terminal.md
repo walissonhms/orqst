@@ -306,3 +306,19 @@ observer ingestion and Bridge/API behavior are unchanged. Localhost served the
 current dashboard index byte-for-byte after the build, without restarting Bridge,
 Desktop or owned processes. The running Desktop has not hot-adopted the new native
 code; use a later safe normal launch for that client update.
+
+### Optional per-instance MCP composition — 2026-11-03
+
+The separate `--interactive-mcp` setup flag now composes two acknowledged
+native-login PTYs with one pair-scoped hub and separate per-slot relays/capabilities.
+It accepts the reviewed Codex 0.162.1 configuration label only; native compatibility
+remains unvalidated. Both opted-in manifests must share a project and keep separate
+state. Start authorization and the native **Authorize one MCP task A → B → A** menu
+confirmation are independent. No automatic prompt or task injection is added.
+
+The additional randomly named MCP server merges with native MCPs. Native settings
+are never rewritten. Endpoint paths enter the TUI argv; capability contents do not.
+The required relay intentionally couples startup: **MCP failure can block the
+interactive terminal**. Socket loss never proves provider exit or permits automatic
+retry. See [the exact flow and evidence limits](interactive-cli-mcp.md#desktop-composition-opt-in--2026-11-03).
+This adds synthetic composition evidence, not human focus/modal or provider acceptance.

@@ -13,6 +13,7 @@ import { dirname, isAbsolute, join, parse, relative } from 'node:path';
 import { z } from 'zod';
 import { terminalDigest } from './authority.js';
 import type { TerminalProfile } from './supervisor.js';
+import { terminalMcpLaunchSchema, type TerminalMcpLaunch } from './mcp-launch.js';
 
 const path = z.string().min(1).max(2048).refine(isAbsolute);
 const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
@@ -24,7 +25,9 @@ export const managedCodexConfigSchema = z.strictObject({
   node: binary,
   project: path,
   state: path,
-  interactive: z.strictObject({ sharedNativeSessions: z.literal(true) }).optional(),
+  interactive: z
+    .strictObject({ sharedNativeSessions: z.literal(true), mcp: z.literal(true).optional() })
+    .optional(),
   // Optional extension: legacy manifests retain their separate-login behavior.
   authentication: z
     .strictObject({
@@ -84,8 +87,8 @@ function openTerminalFile(path: string, privateFile: boolean, maximumBytes: numb
   }
 }
 
-export function terminalFile(path: string, privateFile = false): Buffer {
-  const fd = openTerminalFile(path, privateFile, 16 * 1024);
+export function terminalFile(path: string, privateFile = false, maximumBytes = 16 * 1024): Buffer {
+  const fd = openTerminalFile(path, privateFile, maximumBytes);
   try {
     return readFileSync(fd);
   } finally {
@@ -152,6 +155,8 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   assertSeparateTerminalState(config.project, config.state);
   if (config.interactive && !config.authentication)
     throw new Error('Interactive native reuse requires existing authentication');
+  if (config.interactive?.mcp && !/^(codex-cli )?0\.162\.1$/.test(config.executableVersion))
+    throw new Error('No reviewed interactive MCP configuration for this Codex version');
   if (config.authentication) {
     terminalDirectory(config.authentication.home);
     terminalDirectory(config.authentication.codexHome);
@@ -176,11 +181,17 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   }
 }
 
-export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfile[] {
+export function managedCodexProfiles(
+  config: ManagedCodexConfig,
+  mcp?: TerminalMcpLaunch,
+): TerminalProfile[] {
   if (config.authentication && !config.interactive)
     throw new Error(
       'Existing authentication is supported only by the structured runtime unless interactive native session writes are acknowledged',
     );
+  if (mcp && !config.interactive?.mcp) throw new Error('Interactive MCP not opted in');
+  if (config.interactive?.mcp && !mcp) throw new Error('Interactive MCP composition required');
+  const mcpArguments = mcp ? codexMcpArguments(config, mcp) : [];
   const common = {
     projectId: terminalDigest(config.project),
     executable: config.executable.path,
@@ -205,8 +216,9 @@ export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfil
           '--ask-for-approval',
           'on-request',
           ...nativeCodexOverrides(config).flatMap((value) => ['-c', value]),
+          ...mcpArguments,
         ],
-        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${common.permissions}`,
+        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${mcp ? 'Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ' : ''}${common.permissions}`,
       },
     ];
   return [
@@ -229,6 +241,19 @@ export function managedCodexProfiles(config: ManagedCodexConfig): TerminalProfil
         'cli_auth_credentials_store="file"',
       ],
     },
+  ];
+}
+
+/** Version-scoped inline table; never writes or replaces the user's native MCP configuration. */
+function codexMcpArguments(config: ManagedCodexConfig, raw: TerminalMcpLaunch): string[] {
+  const mcp = terminalMcpLaunchSchema.parse(raw);
+  if (!/^(codex-cli )?0\.162\.1$/.test(config.executableVersion))
+    throw new Error('Unreviewed Codex MCP version');
+  if (terminalDigest(terminalFile(mcp.relay.path, false, 16 * 1024 * 1024)) !== mcp.relay.sha256)
+    throw new Error('MCP relay changed');
+  return [
+    '-c',
+    `mcp_servers.${mcp.serverName}={command=${JSON.stringify(config.node.path)},args=[${JSON.stringify(mcp.relay.path)}],env={ORQST_SOCKET_PATH=${JSON.stringify(mcp.socketPath)},ORQST_CAP_FILE=${JSON.stringify(mcp.capabilityFile)}},startup_timeout_sec=10,tool_timeout_sec=125,required=true}`,
   ];
 }
 

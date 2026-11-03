@@ -72,8 +72,11 @@ export function readMcpLines(
 }
 
 /** Opt-in local Unix transport only. No TCP/HTTP endpoint, observed session or PTY access. */
-export async function openMcpInstanceSockets(broker: McpTaskBroker, parent = '/tmp') {
-  if (process.platform === 'win32' || broker.snapshot().state !== 'ready')
+export async function openMcpInstanceSockets(
+  broker: Pick<McpTaskBroker, 'call' | 'close'> & { snapshot(): { state: string } },
+  parent = '/tmp',
+) {
+  if (process.platform === 'win32' || !['ungranted', 'ready'].includes(broker.snapshot().state))
     throw new Error('MCP transport unavailable');
   const directory = await realpath(await mkdtemp(join(await realpath(parent), 'orqst-mcp-')));
   await chmod(directory, 0o700);

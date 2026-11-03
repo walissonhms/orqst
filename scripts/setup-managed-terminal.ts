@@ -23,6 +23,7 @@ const { values } = parseArgs({
     authentication: { type: 'string', default: 'reuse-existing' },
     'acknowledge-shared-native-config': { type: 'boolean' },
     interactive: { type: 'boolean' },
+    'interactive-mcp': { type: 'boolean' },
     'acknowledge-shared-native-sessions': { type: 'boolean' },
     'user-home': { type: 'string' },
     'codex-home': { type: 'string' },
@@ -51,6 +52,13 @@ if (!values['executable-version'] || !values.project || !values.state)
   throw new Error(
     'Required: --executable-version VERSION --project PROJECT --state NEW_PRIVATE_DIRECTORY; --executable ABSOLUTE_NATIVE_BINARY is optional only for a unique PATH candidate',
   );
+if (
+  values['interactive-mcp'] &&
+  (!values.interactive || !/^(codex-cli )?0\.162\.1$/.test(values['executable-version']))
+)
+  throw new Error(
+    'No state created. --interactive-mcp requires --interactive and reviewed Codex 0.162.1; synthetic composition only, native acceptance pending.',
+  );
 const discovery = values.executable ? undefined : discoverLocalClis(process.env.PATH ?? '')[0]!;
 const candidates = discovery?.candidates ?? [];
 if (!values.executable && (discovery?.inspection !== 'complete' || candidates.length !== 1))
@@ -71,7 +79,14 @@ const config = managedCodexConfigSchema.parse({
   node: { path: node, sha256: terminalExecutableSha256(node) },
   project,
   state,
-  ...(values.interactive ? { interactive: { sharedNativeSessions: true } } : {}),
+  ...(values.interactive
+    ? {
+        interactive: {
+          sharedNativeSessions: true,
+          ...(values['interactive-mcp'] ? { mcp: true } : {}),
+        },
+      }
+    : {}),
   ...(values.authentication === 'reuse-existing'
     ? {
         authentication: {

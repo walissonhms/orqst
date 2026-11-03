@@ -54,6 +54,8 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('closeSlot'), id, slot: z.number().int().min(0).max(1) }),
   z.strictObject({ kind: z.literal('prepareRetire'), id }),
   z.strictObject({ kind: z.literal('retire'), id, proof }),
+  z.strictObject({ kind: z.literal('prepareMcp'), id }),
+  z.strictObject({ kind: z.literal('authorizeMcp'), id, proof }),
 ]);
 
 export const terminalPairReadySchema = z.strictObject({

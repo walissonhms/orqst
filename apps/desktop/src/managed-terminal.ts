@@ -64,6 +64,58 @@ export async function createManagedTerminals(files: string[], translate: (key: s
   });
   return {
     openers,
+    mcpEnabled: !!selection[0]!.config.interactive?.mcp && !blocker,
+    async authorizeMcp() {
+      if (!core || retiring || retired) return;
+      retiring = true;
+      const target = windows.find((window) => window.isFocused());
+      const frame = target?.webContents.mainFrame;
+      const current = () =>
+        !!target &&
+        !target.isDestroyed() &&
+        target.isFocused() &&
+        target.webContents.isFocused() &&
+        target.webContents.mainFrame === frame &&
+        target.webContents.getURL() === terminalDocumentURL;
+      try {
+        if (!current()) return;
+        const prepared = (await core.prepareMcp()) as {
+          challenge: TerminalChallenge;
+          grant: unknown;
+        };
+        const detail = JSON.stringify(prepared.grant, null, 2);
+        if (detail.length > 4096) throw new Error('MCP grant too large');
+        const result = await dialog.showMessageBox(target!, {
+          type: 'warning',
+          title: translate('managedTerminal.mcpAuthorize'),
+          message: translate('managedTerminal.mcpConfirm'),
+          detail,
+          buttons: [translate('terminalNative.cancel'), translate('terminalNative.confirm')],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (result.response !== 1 || !current()) return;
+        await core.authorizeMcp({
+          challengeId: prepared.challenge.challengeId,
+          signature: sign(
+            null,
+            terminalChallengeBytes(prepared.challenge),
+            keys.privateKey,
+          ).toString('base64url'),
+        });
+      } catch {
+        if (target && !target.isDestroyed())
+          await dialog.showMessageBox(target, {
+            type: 'warning',
+            message: translate('managedTerminal.mcpDenied'),
+            buttons: [translate('terminalNative.cancel')],
+            noLink: true,
+          });
+      } finally {
+        retiring = false;
+      }
+    },
     async retire() {
       if (!core || retiring || retired) return;
       retiring = true;

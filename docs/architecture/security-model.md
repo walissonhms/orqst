@@ -851,3 +851,21 @@ focus but cannot authorize work. The sender predicate and post-modal checks are
 unchanged. Locked-console detection exists only in the explicit developer acceptance
 script, not in the trust boundary. No new Bridge/API, WebSocket or network listener
 is introduced. Existing journals, quarantines and external sessions are preserved.
+
+### Desktop per-instance MCP composition review
+
+The explicit `--interactive-mcp` PTY opt-in uses one disposable pair hub with
+distinct per-role capabilities and no task authorization during startup. Launch
+manifests bind each pinned relay and its endpoint paths. Native-only inherited RPC
+prepares/confirms the later grant against two actually dispatched, owned running
+UUIDs in one workspace/epoch. The renderer, Bridge and observation sources cannot
+enroll, sign, select identities or authorize tasks. Handle loss/disposal/exit and
+authenticated disconnect invalidate the exchange without inventing an exit or
+releasing uncertain process capacity. There is no PTY task injection or retry.
+
+The additional random Codex MCP table merges with native MCPs; no native config is
+written. Paths are visible in argv, generated capability contents are not. Relay
+startup is required and can block TUI startup. Filesystem/hash checks remain a
+native same-user contract; shared auth/config/session writes, provider permissions
+and malicious same-user races are not hard containment. Synthetic composition and
+independent QA do not establish installed-provider or human-focus acceptance.

@@ -11,15 +11,21 @@ import {
   terminalFile,
 } from './codex-profile.js';
 import { managedTerminalEventSchema } from './pty-channel.js';
+import type { TerminalMcpLaunch } from './mcp-launch.js';
 
-export function managedTerminalBackend(file: string, host: string): TerminalBackend {
+export function managedTerminalBackend(
+  file: string,
+  host: string,
+  mcp?: TerminalMcpLaunch,
+): TerminalBackend {
   const config = readManagedCodexConfig(file);
-  const expected = managedCodexProfiles(config);
+  const expected = managedCodexProfiles(config, mcp);
   const source = terminalFile(file, true);
   return {
     validate: (profile) => {
       if (!source.equals(terminalFile(file, true))) return false;
-      readManagedCodexConfig(file);
+      const current = managedCodexProfiles(readManagedCodexConfig(file), mcp);
+      if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
       if (!expected.some((value) => JSON.stringify(value) === JSON.stringify(profile)))
         return false;
       // Metadata only: provider owns and reads its credentials. Never import or expose them.
@@ -45,7 +51,7 @@ export function managedTerminalBackend(file: string, host: string): TerminalBack
       });
       let child;
       try {
-        child = fork(host, [file, profile.id], {
+        child = fork(host, [file, profile.id, ...(mcp ? [JSON.stringify(mcp)] : [])], {
           execPath: config.node.path,
           execArgv: [],
           cwd: config.state,

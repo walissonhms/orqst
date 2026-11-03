@@ -26,6 +26,7 @@ import {
 } from '../packages/core/src/terminal/codex-profile.js';
 import { terminalRPCSchema, terminalRPCOutputSchema } from '../packages/core/src/terminal/rpc.js';
 import { managedTerminalBackend } from '../packages/core/src/terminal/pty-backend.js';
+import type { TerminalMcpLaunch } from '../packages/core/src/terminal/mcp-launch.js';
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-managed-profile-')));
@@ -54,6 +55,62 @@ function fixture() {
   writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
   return { root, project, state, executable, config, file, settings };
 }
+
+test('opt-in MCP profiles pin the local relay and reviewed version without writing native config or changing login', () => {
+  const f = fixture();
+  try {
+    const nativeHome = join(f.root, 'synthetic-native-home');
+    mkdirSync(nativeHome, { mode: 0o700 });
+    const nativeConfig = join(nativeHome, 'config.toml');
+    writeFileSync(nativeConfig, '# SYNTHETIC native config must remain untouched\n', {
+      mode: 0o600,
+    });
+    f.config.executableVersion = '0.162.1'; // Synthetic binary, reviewed configuration label only.
+    f.config.authentication = {
+      mode: 'reuse-existing',
+      home: nativeHome,
+      codexHome: nativeHome,
+      sharedNativeConfiguration: true,
+    };
+    f.config.interactive = { sharedNativeSessions: true, mcp: true };
+    const relayPath = join(f.root, 'synthetic-relay.cjs');
+    writeFileSync(relayPath, '// SYNTHETIC never executed\n', { mode: 0o600 });
+    const launch: TerminalMcpLaunch = {
+      serverName: `orqst_${'a'.repeat(32)}`,
+      socketPath: join(f.root, 'source.sock'),
+      capabilityFile: join(f.root, 'source.cap'),
+      relay: { path: relayPath, sha256: terminalDigest(readFileSync(relayPath)) },
+    };
+    writeFileSync(f.file, JSON.stringify(f.config));
+    assert.throws(() => managedCodexProfiles(f.config), /composition required/);
+    const profile = managedCodexProfiles(f.config, launch)[0]!;
+    assert.match(profile.argv.join(' '), /mcp_servers\.orqst_a{32}=\{command=/);
+    assert.match(profile.argv.join(' '), /tool_timeout_sec=125/);
+    assert.match(profile.permissions, /Inherited MCPs remain enabled/);
+    assert.equal(managedCodexEnvironment(f.config).HOME, nativeHome);
+    assert.equal(managedCodexEnvironment(f.config).CODEX_HOME, nativeHome);
+    const backend = managedTerminalBackend(f.file, '/synthetic/never-executed', launch);
+    assert.equal(backend.validate(profile), true);
+    assert.equal(backend.validate({ ...profile, argv: [...profile.argv, '--unreviewed'] }), false);
+    assert.equal(
+      readFileSync(nativeConfig, 'utf8'),
+      '# SYNTHETIC native config must remain untouched\n',
+    );
+    assert.throws(
+      () => managedCodexProfiles({ ...f.config, executableVersion: 'future' }, launch),
+      /Unreviewed/,
+    );
+    assert.throws(
+      () =>
+        managedCodexProfiles({ ...f.config, interactive: { sharedNativeSessions: true } }, launch),
+      /not opted/,
+    );
+    writeFileSync(relayPath, '// SYNTHETIC changed\n');
+    assert.throws(() => backend.validate(profile), /relay changed/);
+  } finally {
+    rmSync(f.root, { recursive: true, force: true });
+  }
+});
 
 test('managed Codex admission pins profiles and rejects executable, config, permissions and path drift', () => {
   const f = fixture();

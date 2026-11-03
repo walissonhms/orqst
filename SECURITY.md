@@ -544,3 +544,20 @@ focus but cannot authorize work. The sender predicate and post-modal checks are
 unchanged. Locked-console detection exists only in the explicit developer acceptance
 script, not in the trust boundary. No new Bridge/API, WebSocket or network listener
 is introduced. Existing journals, quarantines and external sessions are preserved.
+
+### Explicit Desktop MCP composition security review
+
+`--interactive-mcp` creates one private Unix hub per opted-in terminal pair,
+with distinct role capabilities, before either provider starts. Authentication
+does not grant tasks. Separate native signatures bind launch manifests and the
+later one-use A-to-B-to-A grant to actual owned instance UUIDs, workspace and epoch.
+Neither renderer IPC nor the observer API can authorize that grant. Lost/exited/
+disposed handles and authenticated MCP disconnection invalidate task authority;
+MCP loss never establishes process exit or releases capacity.
+
+The reviewed Codex configuration adds a random server name through argv without
+editing native configuration or disabling native MCPs. Endpoint paths are visible
+to the native process; capability contents stay in private files. The pinned relay
+is required, so its startup failure can prevent TUI startup. Same-user replacement,
+shared native config/auth/session writes and provider tool permissions retain their
+existing limitations. No real-provider, human-focus or sandbox acceptance is claimed.

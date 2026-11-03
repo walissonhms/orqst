@@ -31,9 +31,10 @@ final native-focus acceptance remains pending.
 An explicit Codex existing-login PTY opt-in now requires separate acknowledgment
 of shared native session writes; it has synthetic evidence only. Claude/OpenCode remain blocked. See
 [two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
-A separate native-signed MCP stdio/Unix-socket library now completes synthetic
-A-to-B-to-A transport without PTY task injection. It is not installed into any CLI;
-existing-login TUI and idle-worker delivery remain unvalidated per provider. See
+A native-signed MCP stdio/Unix-socket library now completes synthetic
+A-to-B-to-A transport without PTY task injection. An explicit Desktop Codex 0.162.1
+configuration opt-in composes per-slot relays and a separately confirmed task grant;
+native CLI compatibility, existing-login TUI and idle-worker delivery remain unvalidated. See
 [the interactive CLI/MCP boundary](docs/development/interactive-cli-mcp.md).
 Native focus refusals now have localized client feedback in both structured and PTY
 views. Pair acceptance detects a locked macOS console before creating fixtures;

@@ -7,7 +7,7 @@ export function inspectManagedTerminalFiles(files: readonly string[]) {
   if (files.length < 1 || files.length > 2) throw new Error('Select one or two terminal manifests');
   const identities = new Set<string>();
   const states: string[] = [];
-  return files.map((file) => {
+  const selection = files.map((file) => {
     const config = readManagedCodexConfig(file);
     for (const path of [file, config.state]) {
       const info = lstatSync(path);
@@ -32,4 +32,12 @@ export function inspectManagedTerminalFiles(files: readonly string[]) {
     }
     return { config, blocker };
   });
+  if (
+    selection.some(({ config }) => config.interactive?.mcp) &&
+    (selection.length !== 2 ||
+      selection.some(({ config }) => !config.interactive?.mcp) ||
+      selection[0]!.config.project !== selection[1]!.config.project)
+  )
+    throw new Error('MCP requires two opted-in terminals in one workspace');
+  return selection;
 }

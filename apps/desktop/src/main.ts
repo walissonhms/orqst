@@ -119,6 +119,12 @@ async function start(): Promise<void> {
             click: () => open?.(),
           })),
           {
+            id: 'managed-terminal-mcp',
+            label: i18n.t('managedTerminal.mcpAuthorize'),
+            enabled: !!terminals?.mcpEnabled,
+            click: () => void terminals?.authorizeMcp(),
+          },
+          {
             id: 'managed-terminal-retire',
             label: i18n.t('managedTerminal.retire'),
             enabled: !!terminals,
