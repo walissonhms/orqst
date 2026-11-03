@@ -571,3 +571,17 @@ session writes remain shared; this is trusted same-user execution, without a san
 Optional strict MCP excludes other MCP definitions and grants no task/tool permissions
 automatically. OpenCode execution remains unavailable. Synthetic process validation
 does not establish native login/MCP/inference or unlocked-console focus acceptance.
+
+## OpenCode Desktop explicit native startup opt-in — 2026-11-03
+
+The [Desktop factory](docs/development/opencode-desktop-terminal.md) now accepts
+a hash/version-pinned OpenCode 2.2.5 standalone manifest through private native RPC.
+Review manifests are blocked before Core/journal/admission; explicit startup plus
+migration/activity acknowledgments and a signed focused start grant are required.
+HOME/XDG/DB selectors stay native; ORQST never opens/copies native credentials or DB.
+The CLI itself may write shared SQLite/WAL, permissions, migrations and credentials
+and execute native startup plugins/hooks/MCP/provider activity. Ledger and pending
+migrations are unknown. Only TUI lifecycle has synthetic evidence; descendant exit
+and concurrent native DB access are unvalidated. Capacity retirement is refused
+for OpenCode selections. No observer API/WS/cookie/static changes or global config
+writes; no real startup, DB inspection or inference occurred in this increment.

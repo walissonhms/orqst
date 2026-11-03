@@ -96,7 +96,7 @@ test('Claude strict MCP requires acknowledgment and composition; relay drift is 
   assert.throws(() => interactiveTerminalProfiles(config, mcp));
 });
 
-test('native pair RPC admits reviewed Claude profile and identities without enabling OpenCode launch', () => {
+test('native pair RPC admits reviewed Claude profile and identities and OpenCode identities (execution still requires authorized manifest)', () => {
   const id = randomUUID();
   assert.ok(
     terminalRPCSchema.safeParse({
@@ -111,7 +111,7 @@ test('native pair RPC admits reviewed Claude profile and identities without enab
       operation: 'prepare',
       args: ['desktop-managed', 'opencode-terminal-v1'],
     }).success,
-    false,
+    true,
   );
   assert.ok(
     terminalPairReadySchema.safeParse({

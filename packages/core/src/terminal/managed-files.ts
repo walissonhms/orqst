@@ -25,8 +25,10 @@ export function inspectManagedTerminalFiles(files: readonly string[]) {
         if (path === '' || (path !== '..' && !path.startsWith('../')))
           throw new Error('Overlapping terminal state');
     states.push(config.state);
-    let blocker: 'reuse_unavailable' | 'existing_state' | undefined =
+    let blocker: 'reuse_unavailable' | 'existing_state' | 'opencode_startup_required' | undefined =
       config.authentication && !config.interactive ? 'reuse_unavailable' : undefined;
+    if (config.version === 3 && !config.interactive.nativeStartupAuthorized)
+      blocker = 'opencode_startup_required';
     for (const name of ['terminal.sqlite', 'desktop-communication.sqlite']) {
       try {
         lstatSync(join(config.state, name)); // Dangling symlinks also reserve the state.

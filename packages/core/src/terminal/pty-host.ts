@@ -35,7 +35,7 @@ async function start(): Promise<void> {
   try {
     child = spawn(profile.executable, [...profile.argv], {
       cwd: profile.cwd,
-      env: interactiveTerminalEnvironment(config),
+      env: interactiveTerminalEnvironment(config, mcp),
       name: 'xterm-256color',
       cols: 80,
       rows: 24,

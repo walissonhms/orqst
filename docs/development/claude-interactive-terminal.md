@@ -1,5 +1,7 @@
 # Explicit native Claude interactive terminal
 
+Current increment: [OpenCode Desktop opt-in](opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
+
 The Desktop opt-in now accepts a version-2 Claude manifest alongside the existing
 version-1 Codex manifests. Either slot can select Codex or Claude; total capacity
 remains two, shared with structured Managed agents. This implements a launch path,

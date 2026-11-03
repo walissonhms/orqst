@@ -20,6 +20,14 @@ import {
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 import type { TerminalProfile } from './supervisor.js';
 
+import {
+  managedOpenCodeConfigSchema,
+  validateManagedOpenCodeConfig,
+  openCodeTerminalProfiles,
+  openCodeTerminalEnvironment,
+  type ManagedOpenCodeConfig,
+} from './opencode-profile.js';
+
 const path = z
   .string()
   .min(1)
@@ -50,10 +58,13 @@ export const managedClaudeConfigSchema = z.strictObject({
   }),
 });
 export type ManagedClaudeConfig = z.infer<typeof managedClaudeConfigSchema>;
-export type InteractiveTerminalConfig = ManagedCodexConfig | ManagedClaudeConfig;
+export type InteractiveTerminalConfig =
+  ManagedCodexConfig | ManagedClaudeConfig | ManagedOpenCodeConfig;
 
-export function interactiveProvider(config: InteractiveTerminalConfig): 'codex' | 'claude' {
-  return config.version === 2 ? config.provider : 'codex';
+export function interactiveProvider(
+  config: InteractiveTerminalConfig,
+): 'codex' | 'claude' | 'opencode' {
+  return config.version !== 1 ? config.provider : 'codex';
 }
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
@@ -83,6 +94,11 @@ export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
 
 export function readInteractiveTerminalConfig(file: string): InteractiveTerminalConfig {
   const raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
+  if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 3) {
+    const config = managedOpenCodeConfigSchema.parse(raw);
+    validateManagedOpenCodeConfig(config);
+    return config;
+  }
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 2) {
     const config = managedClaudeConfigSchema.parse(raw);
     validateManagedClaudeConfig(config);
@@ -98,6 +114,7 @@ export function interactiveTerminalProfiles(
   mcp?: TerminalMcpLaunch,
 ): TerminalProfile[] {
   if (config.version === 1) return managedCodexProfiles(config, mcp);
+  if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
     throw new Error('Claude MCP composition/acknowledgment mismatch');
   if (
@@ -136,8 +153,10 @@ export function interactiveTerminalProfiles(
 
 export function interactiveTerminalEnvironment(
   config: InteractiveTerminalConfig,
+  mcp?: TerminalMcpLaunch,
 ): Record<string, string> {
   if (config.version === 1) return managedCodexEnvironment(config);
+  if (config.version === 3) return openCodeTerminalEnvironment(config, mcp);
   return {
     HOME: config.authentication.home,
     ...(config.authentication.claudeConfigDirectory

@@ -128,7 +128,6 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
     installedTimeoutConfiguration: 'separate_startup_catalog_execution' as const,
     blockers: [
       ...commonBlockers,
-      'managed_factory_unimplemented',
       'native_auth_and_session_data_roots_coupled',
       'merged_plugins_hooks_and_managed_settings_unvalidated',
       'installed_tool_exposure_and_timeout_behavior_unvalidated',

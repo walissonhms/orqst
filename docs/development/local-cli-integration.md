@@ -1,5 +1,7 @@
 # Existing local CLI integration — 2026-11-03
 
+Current increment: [OpenCode Desktop opt-in](opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
+
 ORQST should use the owner's installed Codex, Claude Code and OpenCode CLIs and
 their existing native authentication when available. It must not require duplicate
 installation or login by default. This is product direction, not a claim that all

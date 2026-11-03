@@ -881,3 +881,17 @@ are read/copied by ORQST, and no observer endpoint gains execution authority. Na
 CLI hooks/plugins, policy, credential refresh and state writes remain provider-owned,
 without hard containment. OpenCode launch stays blocked. See the
 [security review and acceptance limits](../development/claude-interactive-terminal.md#validation-scope-and-security-review).
+
+## OpenCode Desktop explicit native startup opt-in — 2026-11-03
+
+The [Desktop factory](../development/opencode-desktop-terminal.md) now accepts
+a hash/version-pinned OpenCode 2.2.5 standalone manifest through private native RPC.
+Review manifests are blocked before Core/journal/admission; explicit startup plus
+migration/activity acknowledgments and a signed focused start grant are required.
+HOME/XDG/DB selectors stay native; ORQST never opens/copies native credentials or DB.
+The CLI itself may write shared SQLite/WAL, permissions, migrations and credentials
+and execute native startup plugins/hooks/MCP/provider activity. Ledger and pending
+migrations are unknown. Only TUI lifecycle has synthetic evidence; descendant exit
+and concurrent native DB access are unvalidated. Capacity retirement is refused
+for OpenCode selections. No observer API/WS/cookie/static changes or global config
+writes; no real startup, DB inspection or inference occurred in this increment.

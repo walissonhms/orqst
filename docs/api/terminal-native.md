@@ -176,5 +176,23 @@ Codex profile IDs; ready identities can label `codex` or `claude`. The renderer
 request/reply schema and observer API are unchanged. Native document routing still
 selects the slot, and only signed native grants authorize new owned starts. A
 version-2 Claude manifest is hash/version pinned and admits one dispatch with a fresh
-UUID. OpenCode has no accepted profile or ready-provider value. See
+UUID. The subsequent OpenCode opt-in below extends profile/ready-provider selection. See
 [configuration, authorization and evidence limits](../development/claude-interactive-terminal.md).
+
+## Version-scoped OpenCode Desktop profile — 2026-11-03
+
+The private inherited Node RPC now accepts `opencode-terminal-v1` for `prepare`
+and `opencode` in ready identities. It grants no authority from a renderer or
+observer API. Version-3 manifests preserve native HOME/XDG/database selectors;
+review manifests are blocked before Core, journal or admission creation. Explicit
+startup authorization, migration/activity acknowledgments and the existing focused,
+one-use signed start grant are required before dispatch. Only `--standalone` is
+permitted; no prompt, resume/session/adoption or login profile is supplied.
+
+The signed confirmation includes the selected native paths and ORQST state without
+credentials; details over 4096 characters (including long paths) fail closed without
+truncation. Optional v2 inline MCP configuration merges with native definitions and
+retains separate task authorization. TUI receipt exit is not descendant-server exit:
+`prepareRetire` and `retire` refuse selections containing OpenCode and leave sticky
+capacity reserved. See [setup, side effects and authorization](../development/opencode-desktop-terminal.md).
+Real startup/login/DB/migration/descendant/MCP/inference acceptance was not run.

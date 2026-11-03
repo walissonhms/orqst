@@ -39,7 +39,11 @@ export async function connectManagedTerminalCore(
   );
   let closed = false;
   let initialized = false;
-  let identities: Array<{ slot: number; terminalId: string; provider: 'codex' | 'claude' }> = [];
+  let identities: Array<{
+    slot: number;
+    terminalId: string;
+    provider: 'codex' | 'claude' | 'opencode';
+  }> = [];
   let ready: () => void;
   let failed: (error: Error) => void;
   const startup = new Promise<void>((resolve, reject) => {

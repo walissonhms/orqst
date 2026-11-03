@@ -32,6 +32,7 @@
     "accept:terminal-pty": "tsx scripts/accept-terminal-pty.ts",
     "accept:terminal-native": "tsx scripts/accept-terminal-native.ts",
     "terminal:setup": "tsx scripts/setup-managed-terminal.ts",
+    "terminal:setup:opencode": "tsx scripts/setup-opencode-terminal.ts",
     "terminal:setup:claude": "tsx scripts/setup-claude-terminal.ts",
     "terminal:plan:opencode": "tsx scripts/plan-opencode-terminal.ts",
     "terminal:discover": "tsx scripts/discover-local-clis.ts",

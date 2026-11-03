@@ -21,7 +21,10 @@ const text = z
 export const terminalRPCSchema = z.discriminatedUnion('operation', [
   action(
     'prepare',
-    z.tuple([client, z.enum(['codex-login-v1', 'codex-terminal-v1', 'claude-terminal-v1'])]),
+    z.tuple([
+      client,
+      z.enum(['codex-login-v1', 'codex-terminal-v1', 'claude-terminal-v1', 'opencode-terminal-v1']),
+    ]),
   ),
   action('launch', z.tuple([id, proof])),
   action('snapshot', z.tuple([id])),
@@ -69,7 +72,7 @@ export const terminalPairReadySchema = z.strictObject({
       z.strictObject({
         slot: z.number().int().min(0).max(1),
         terminalId: id,
-        provider: z.enum(['codex', 'claude']),
+        provider: z.enum(['codex', 'claude', 'opencode']),
       }),
     )
     .min(1)

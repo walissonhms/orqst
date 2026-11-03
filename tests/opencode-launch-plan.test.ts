@@ -41,14 +41,14 @@ test('OpenCode standalone candidate preserves native identity without granting l
   assert.ok(plan.blockers.includes('native_database_startup_migrations_not_authorized'));
   for (const [name, value] of Object.entries(input.nativeIdentity))
     assert.equal(plan.environment[name as keyof typeof plan.environment], value);
-  assert.throws(() => interactiveCliAdapter('opencode', 'reuse-existing', true));
+  assert.ok(interactiveCliAdapter('opencode', 'reuse-existing', true));
   assert.equal(
     terminalRPCSchema.safeParse({
       id: randomUUID(),
       operation: 'prepare',
       args: ['desktop-managed', 'opencode-terminal-v1'],
     }).success,
-    false,
+    true,
   );
   assert.doesNotMatch(
     JSON.stringify(plan.argv),

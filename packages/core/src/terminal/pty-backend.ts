@@ -24,7 +24,7 @@ export function managedTerminalBackend(
   let dispatched = false;
   return {
     validate: (profile) => {
-      if (config.version === 2 && dispatched) return false;
+      if (config.version !== 1 && dispatched) return false;
       if (!source.equals(terminalFile(file, true))) return false;
       const current = interactiveTerminalProfiles(readInteractiveTerminalConfig(file), mcp);
       if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
@@ -47,7 +47,7 @@ export function managedTerminalBackend(
       // Repeat at the last synchronous dispatch boundary. Same-user races remain disclosed.
       if (!this.validate(profile)) throw new Error('Managed profile changed');
       if (!identity) throw new Error('PTY lifecycle identity required');
-      // A Claude manifest's fresh UUID must never be dispatched a second time, even after failure.
+      // Native Claude/OpenCode manifests are single-dispatch, including failed starts.
       dispatched = true;
       const receipt = createLifecycleReceipt(config.state, {
         ...identity,
@@ -59,7 +59,7 @@ export function managedTerminalBackend(
           execPath: config.node.path,
           execArgv: [],
           cwd: config.state,
-          env: interactiveTerminalEnvironment(config),
+          env: interactiveTerminalEnvironment(config, mcp),
           stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
         });
       } finally {

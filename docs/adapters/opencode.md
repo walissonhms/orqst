@@ -1,5 +1,7 @@
 # OpenCode adapter contract
 
+Current increment: [OpenCode Desktop opt-in](../development/opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
+
 The passive [standalone launch review](../development/opencode-standalone-review.md)
 now establishes the exact installed 2.2.5 private-server selector and an inspectable
 candidate command. Native launch stays unavailable because credentials/sessions share

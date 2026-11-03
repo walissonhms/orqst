@@ -13,16 +13,10 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
     terminal:
       provider === 'codex'
         ? ('legacy_separate_login_fixture_validated' as const)
-        : provider === 'claude'
-          ? ('explicit_opt_in_synthetic_only' as const)
-          : ('standalone_plan_only' as const),
-    existingLoginPty:
-      provider !== 'opencode' ? ('explicit_opt_in_unvalidated' as const) : ('blocked' as const),
+        : ('explicit_opt_in_synthetic_only' as const),
+    existingLoginPty: 'explicit_opt_in_unvalidated' as const,
     perInstanceMcp: 'synthetic_transport_only' as const,
-    mcpConfiguration:
-      provider !== 'opencode'
-        ? ('desktop_opt_in_synthetic_only' as const)
-        : ('version_scoped_builder_only' as const),
+    mcpConfiguration: 'desktop_opt_in_synthetic_only' as const,
     installedVersionCompatibility: 'unvalidated' as const,
     automaticTaskDelivery: 'unvalidated' as const,
     providerAcceptance: 'not_run' as const,
@@ -36,7 +30,7 @@ export function interactiveCliAdapter(
   nativeSessionWritesAcknowledged = false,
 ) {
   if (
-    provider === 'opencode' ||
+    (provider === 'opencode' && authentication !== 'reuse-existing') ||
     (provider === 'claude' && authentication !== 'reuse-existing') ||
     (authentication === 'reuse-existing' && !nativeSessionWritesAcknowledged)
   )

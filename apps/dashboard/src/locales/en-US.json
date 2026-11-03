@@ -679,12 +679,12 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
-    "reuseScope": "Experimental Codex native login reuse. Native configuration, MCPs, skills and session root stay shared; Codex may refresh credentials and write new sessions. Not ephemeral or a container. Read-only/on-request startup defaults; provider UI can change permissions. No automatic task, resume or login. Real-provider and MCP integration acceptance are pending; OpenCode is not enabled.",
+    "reuseScope": "Experimental Codex native login reuse. Native configuration, MCPs, skills and session root stay shared; Codex may refresh credentials and write new sessions. Not ephemeral or a container. Read-only/on-request startup defaults; provider UI can change permissions. No automatic task, resume or login. Real-provider and MCP integration acceptance are pending; OpenCode requires its separate explicit startup opt-in.",
     "reuseIdle": "No owned process started. Start requires native confirmation. Separate login is disabled for this native reuse profile.",
     "focus_required": "Bring this Terminal window to the foreground and try again. macOS must be unlocked; no operation was authorized.",
     "title": "Managed Terminal",
     "open": "Open interactive terminal",
-    "scope": "Legacy separate-login opt-in with your macOS user privileges; not a container. Read-only/on-request startup defaults; provider UI may change permissions. Closing hides this view; process lifetime is 30 minutes. Real Codex acceptance is pending; OpenCode is not enabled.",
+    "scope": "Legacy separate-login opt-in with your macOS user privileges; not a container. Read-only/on-request startup defaults; provider UI may change permissions. Closing hides this view; process lifetime is 30 minutes. Real Codex acceptance is pending; OpenCode requires its separate explicit startup opt-in.",
     "login": "Separate Codex login",
     "start": "Start CLI",
     "attach": "Attach output",
@@ -710,7 +710,7 @@
     "keyboard": "Owned Terminal keyboard input",
     "tooMuch": "Too much terminal output. Read the remaining output visually.",
     "mcpAuthorize": "Authorize one MCP task A → B → A",
-    "mcpConfirm": "Authorize one task and correlated result between these two running Terminal instances for up to 120 seconds. This does not prompt either agent or grant provider tools. Native login/configuration and session writes remain shared. Codex merges other MCPs; Claude strict selection excludes them. MCP disconnection leaves an unknown outcome and does not stop either process.",
+    "mcpConfirm": "Authorize one task and correlated result between these two running Terminal instances for up to 120 seconds. This does not prompt either agent or grant provider tools. Native login/configuration and session writes remain shared. Codex and OpenCode merge other MCPs; Claude strict selection excludes them. MCP disconnection leaves an unknown outcome and does not stop either process.",
     "mcpDenied": "MCP authorization was refused or its outcome is unknown. Both opted-in Terminal instances must still be owned and running. Do not retry uncertain work.",
     "retire": "Retire exited Terminal pair",
     "retired": "Terminal pair retired; restart Desktop with fresh manifests",
@@ -721,7 +721,9 @@
     "existing_state": "Blocked: this state already has a journal. Existing reservations will not be adopted, reset or removed.",
     "capacity_reserved": "Blocked: capacity is reserved or its private admission state cannot be verified. No process was started; existing reservations are preserved.",
     "terminalIdentity": "Core Terminal UUID",
-    "claudeScope": "Experimental Claude Code native login reuse. HOME/config/Keychain selection, hooks, plugins, policies and native session writes stay shared; the CLI may refresh credentials. No sandbox. New UUID, one dispatch per manifest; no automatic task, login or resume. With MCP opt-in, strict selection excludes other MCP definitions and native approval can block startup. Native focus, login, MCP and provider acceptance remain pending. OpenCode launch is unavailable."
+    "claudeScope": "Experimental Claude Code native login reuse. HOME/config/Keychain selection, hooks, plugins, policies and native session writes stay shared; the CLI may refresh credentials. No sandbox. New UUID, one dispatch per manifest; no automatic task, login or resume. With MCP opt-in, strict selection excludes other MCP definitions and native approval can block startup. Native focus, login, MCP and provider acceptance remain pending. OpenCode has a separate explicit startup opt-in.",
+    "opencodeScope": "Experimental OpenCode 2.2.5 standalone with existing login identity. HOME/XDG/config/database stay native and shared. Startup opens writable SQLite, may change permissions/WAL and apply pending migrations or refresh credentials. Database and migration ledger were not inspected; pending migrations are unknown and rollback is not guaranteed. Native plugins, hooks and MCPs may execute code or provider requests at startup. No ORQST task, automatic login or resume. Not a sandbox. TUI exit does not prove descendant exit; login, session routing, MCP and provider acceptance remain unvalidated. Inline MCP merges with native definitions.",
+    "opencode_startup_required": "OpenCode startup is blocked. Provision a new manifest only after explicitly authorizing shared native database writes/possible migrations and native startup activity. No database was inspected or opened."
   },
   "managedAgents": {
     "title": "Managed agents",

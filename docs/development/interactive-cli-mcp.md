@@ -1,5 +1,7 @@
 # Interactive CLIs and per-instance MCP
 
+Current increment: [OpenCode Desktop opt-in](opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
+
 The subsequent [OpenCode standalone review](opencode-standalone-review.md) adds
 an exact-version passive launch candidate and exercises generated Claude/OpenCode
 relay commands in both source/worker orders. OpenCode launch remains blocked by

@@ -125,9 +125,13 @@ async function start() {
             pair.closeSlot(request.slot);
             break;
           case 'prepareRetire':
+            if (selection.some(({ config }) => config.version === 3))
+              throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
             value = pair.prepareRetire();
             break;
           case 'retire':
+            if (selection.some(({ config }) => config.version === 3))
+              throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
             pair.retire(request.proof);
             void mcp?.close();
             break;

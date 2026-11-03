@@ -1,10 +1,15 @@
 # OpenCode standalone review and remaining acceptance
 
-## Implemented boundary — 2026-11-03
+Current increment: [OpenCode Desktop opt-in](opencode-desktop-terminal.md) supersedes
+the historical no-factory/native RPC refusal below. A blocked-by-default review
+manifest and explicit signed Desktop startup path now exist with fixture evidence;
+no native startup or database inspection was performed.
+
+## Passive review boundary at fd5c26d — 2026-11-03
 
 `pnpm terminal:plan:opencode` produces a passive, version/hash-scoped launch candidate.
 It is not a Desktop manifest, `TerminalProfile`, process launcher or execution grant.
-OpenCode remains rejected by the interactive factory and native RPC. Codex and Claude
+At that commit, OpenCode was rejected by the interactive factory and native RPC. Codex and Claude
 keep their existing explicit native Desktop paths; the two-slot capacity is unchanged.
 
 ```bash
@@ -41,7 +46,7 @@ native provider credentials. The report uses the installed local-MCP schema:
 timeouts of 10000 startup, 10000 catalog and 125000 execution. Inline configuration
 merges with native definitions; it is not Claude's strict exclusion contract.
 
-## Concrete cause of the launch block
+## Concrete native startup risk and historical launch block
 
 Passive inspection of the exact installed executable resolved the earlier unknown
 server-selection gate. The [official v2 CLI guide](https://dev.opencode.ai/v2/docs/cli)
@@ -121,7 +126,7 @@ pending migrations and native credential refresh. Preserving identity is not pro
 that the login is valid or that simultaneous access with the existing service has
 been accepted. Native plugins, hooks and automatic activity also need review before
 claiming a startup cannot invoke a provider. No such launch or inference is authorized
-by this passive review, and the ORQST native factory remains unimplemented.
+by this passive review, and was not authorized by that review. The subsequent [Desktop factory](opencode-desktop-terminal.md) now implements a blocked-by-default manifest and explicit startup opt-in with fixture-only evidence.
 
 If shared-state startup writes remain prohibited, no functional embedded existing-login
 route has been established for 2.2.5. Attaching to the existing server changes the
@@ -148,11 +153,11 @@ only MCP revision `2025-11-25`; native provider negotiation remains unmeasured.
 
 ## Required real acceptance for the three providers
 
-| Provider            | Implemented                                                                | Still required                                                                                                                                                                                                                                         |
-| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Codex 0.162.1       | Explicit native-login PTY/Desktop and scoped MCP opt-in                    | Unlocked macOS focus/modal/input acceptance; exact installed startup/login/new session; native MCP handshake/tools/timeouts; approved bounded inference and A → B → A; owned stop/exit and external-session preservation                               |
-| Claude Code 2.1.178 | Explicit native-login PTY/Desktop, one-dispatch UUID and strict MCP opt-in | Same native focus/login/interaction and owned lifecycle acceptance; strict project/enterprise MCP approval; native handshake/tools/timeouts and separately approved inference/delegation                                                               |
-| OpenCode 2.2.5      | Passive standalone/native-identity/MCP candidate and real relay fixtures   | An explicit owner decision permitting native shared-state startup, or a reviewed no-write alternative; then a native factory and descendant-lifecycle/new-session validation, followed by focus/login/MCP and separately approved inference/delegation |
+| Provider            | Implemented                                                                                   | Still required                                                                                                                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex 0.162.1       | Explicit native-login PTY/Desktop and scoped MCP opt-in                                       | Unlocked macOS focus/modal/input acceptance; exact installed startup/login/new session; native MCP handshake/tools/timeouts; approved bounded inference and A → B → A; owned stop/exit and external-session preservation                                            |
+| Claude Code 2.1.178 | Explicit native-login PTY/Desktop, one-dispatch UUID and strict MCP opt-in                    | Same native focus/login/interaction and owned lifecycle acceptance; strict project/enterprise MCP approval; native handshake/tools/timeouts and separately approved inference/delegation                                                                            |
+| OpenCode 2.2.5      | Passive candidate, explicit opt-in Desktop factory/lifecycle and synthetic relay/PTY fixtures | An explicit owner decision permitting native shared-state startup, or a reviewed no-write alternative; then descendant-lifecycle/new-session validation of the implemented opt-in factory, followed by focus/login/MCP and separately approved inference/delegation |
 
 Do not run native OpenCode for this review. Login/config/MCP commands may select or
 start a server and open shared state. The official CLI guide separately documents
@@ -167,4 +172,4 @@ The new command and pure candidate do not participate in application startup.
 Observer APIs, WebSocket/cookies/static serving, ingestion and schemas are unchanged.
 No credentials are exported, no global configuration is written, no native database
 is opened and no process/service is adopted. Existing native gestures, signatures,
-ownership checks, sticky admission and OpenCode factory/RPC refusal are retained.
+ownership checks, sticky admission and OpenCode real launch refusal for unapproved manifests is retained. The subsequent Desktop opt-in expands private RPC/profile composition only.
