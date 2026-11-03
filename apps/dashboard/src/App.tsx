@@ -17,6 +17,9 @@ import {
   Globe2,
   Layers3,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  BarChart3,
   Plus,
   Radio,
   Search,
@@ -42,10 +45,22 @@ import { ArtifactPanel, type ArtifactCloseGuard } from './ArtifactPanel';
 import { LiveMetrics } from './LiveMetrics';
 import { ModelHistory } from './ModelHistory';
 import { ObservedTools } from './ObservedTools';
-import { useSessionMetrics } from './use-session-metrics';
+import { useSessionMetrics, type LiveMetricsState } from './use-session-metrics';
+import { SessionTokenBadge } from './SessionTokenBadge';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 import { sessionFromHash } from './session-link';
+import { Agents } from './Agents';
+import { Workspaces } from './Workspaces';
+import { CommandPalette } from './CommandPalette';
+import { Modal } from './Modal';
+import {
+  appViews,
+  readShellPreferences,
+  shellStorageKey,
+  viewFromHash,
+  type AppView,
+} from './shell-preferences';
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -227,6 +242,7 @@ function SessionDetail({
   snapshotError,
   onClose,
   onSave,
+  onMetrics,
 }: {
   session: SessionView;
   snapshot: Snapshot;
@@ -234,6 +250,7 @@ function SessionDetail({
   snapshotError: boolean;
   onClose: () => void;
   onSave: () => void;
+  onMetrics: (sessionId: string, metrics: LiveMetricsState) => void;
 }) {
   const { t } = useTranslation();
   const f = useFormatting();
@@ -246,6 +263,18 @@ function SessionDetail({
   const [tokenThreshold, setTokenThreshold] = useState<number>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
   const metrics = useSessionMetrics(session, snapshot, connection, snapshotError);
+  useEffect(() => {
+    onMetrics(session.id, metrics);
+  }, [
+    session.id,
+    metrics.confirmed,
+    metrics.result,
+    metrics.pending,
+    metrics.failed,
+    metrics.stale,
+    metrics.offline,
+    onMetrics,
+  ]);
   useEffect(() => {
     let active = true;
     setEvents([]);
@@ -483,20 +512,40 @@ function SessionDetail({
 export function App() {
   const { t, i18n } = useTranslation();
   const f = useFormatting();
-  const [workspaceId, setWorkspaceId] = useState('');
-  const [view, setView] = useState<'overview' | 'models'>(
-    location.hash === '#models' ? 'models' : 'overview',
+  const [shell, setShell] = useState(readShellPreferences);
+  const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
+  const [view, setView] = useState<AppView>(
+    location.hash ? (viewFromHash(location.hash) ?? 'overview') : shell.view,
   );
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState(shell.status);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   useEffect(() => {
-    const navigate = () => setView(location.hash === '#models' ? 'models' : 'overview');
+    const navigate = () => setView(viewFromHash(location.hash) ?? 'overview');
     window.addEventListener('hashchange', navigate);
     return () => window.removeEventListener('hashchange', navigate);
   }, []);
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('');
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        shellStorageKey,
+        JSON.stringify({ ...shell, view, workspaceId, status }),
+      );
+    } catch {
+      // Disabled or full browser storage must not prevent observation.
+    }
+  }, [shell, view, workspaceId, status]);
   const [selected, setSelected] = useState<string>();
+  const [headerMetrics, setHeaderMetrics] = useState<{
+    sessionId: string;
+    metrics: LiveMetricsState;
+  }>();
+  const updateHeaderMetrics = useCallback((sessionId: string, metrics: LiveMetricsState) => {
+    setHeaderMetrics({ sessionId, metrics });
+  }, []);
   const nativeDesktop = navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState('all');
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [notice, setNotice] = useState('');
@@ -575,7 +624,10 @@ export function App() {
       const id = sessionFromHash(location.hash, snapshot?.sessions.map((value) => value.id) ?? []);
       if (!id) return;
       setView('overview');
-      setSelected(id);
+      setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
+      setQuery('');
+      setStatus('');
+      selectSession(id);
       history.replaceState(null, '', location.pathname);
     };
     selectLinkedSession();
@@ -591,6 +643,52 @@ export function App() {
   useEffect(() => {
     document.documentElement.lang = i18n.resolvedLanguage ?? 'en-US';
   }, [i18n.resolvedLanguage]);
+  useEffect(() => {
+    if (
+      snapshot &&
+      workspaceId &&
+      !snapshot.workspaces.some((workspace) => workspace.id === workspaceId)
+    ) {
+      setWorkspaceId('');
+    }
+  }, [snapshot, workspaceId]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k' || event.altKey)
+        return;
+      // Existing modal workflows keep their own keyboard/focus ownership.
+      if (document.querySelector('dialog[open]') && !paletteOpen) return;
+      event.preventDefault();
+      setPaletteOpen((open) => !open);
+    };
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [paletteOpen]);
+  function selectSession(id: string | undefined) {
+    if (id !== selected) setHeaderMetrics(undefined);
+    setSelected(id);
+  }
+  function navigate(page: AppView) {
+    setView(page);
+    location.hash = page;
+    setMenuOpen(false);
+  }
+  function openWorkspace(id: string, page: AppView = view) {
+    setWorkspaceId(id);
+    selectSession(undefined);
+    setQuery('');
+    setStatus('');
+    navigate(page);
+  }
+  function openSession(id: string) {
+    const session = snapshot?.sessions.find((item) => item.id === id);
+    if (!session) return;
+    setWorkspaceId(session.workspaceId);
+    setQuery('');
+    setStatus('');
+    selectSession(id);
+    navigate('overview');
+  }
   const sessions =
     snapshot?.sessions.filter((session) => !workspaceId || session.workspaceId === workspaceId) ??
     [];
@@ -659,8 +757,18 @@ export function App() {
     }
   }
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
+    <div className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}`}>
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('main-content')?.focus();
+        }}
+      >
+        {t('shell.skip')}
+      </a>
+      <aside id="app-sidebar" className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
         <a className="brand" href="/" aria-label={t('brand')}>
           <span className="brand-mark">
             <i />
@@ -671,20 +779,37 @@ export function App() {
           <span>{t('brand')}</span>
         </a>
         <p className="brand-tagline">{t('tagline')}</p>
+        <button
+          className="icon-button sidebar-collapse"
+          aria-label={t(shell.collapsed ? 'shell.expand' : 'shell.collapse')}
+          aria-expanded={!shell.collapsed}
+          onClick={() => setShell((value) => ({ ...value, collapsed: !value.collapsed }))}
+        >
+          {shell.collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        </button>
         <nav aria-label={t('analytics.navigation')}>
-          {(['overview', 'models'] as const).map((page) => (
+          {appViews.map((page) => (
             <a
               key={page}
               className={`workspace-link ${view === page ? 'active' : ''}`}
-              href={page === 'models' ? '#models' : '#overview'}
+              href={`#${page}`}
+              title={t(`shell.views.${page}`)}
+              aria-label={t(`shell.views.${page}`)}
               aria-current={view === page ? 'page' : undefined}
               onClick={() => {
-                setView(page);
-                setMenuOpen(false);
+                navigate(page);
               }}
             >
-              <Activity size={16} />
-              <span>{t(page === 'models' ? 'analytics.title' : 'overview')}</span>
+              {page === 'models' ? (
+                <BarChart3 size={16} />
+              ) : page === 'workspaces' ? (
+                <Folder size={16} />
+              ) : page === 'agents' ? (
+                <Terminal size={16} />
+              ) : (
+                <Activity size={16} />
+              )}
+              <span>{t(`shell.views.${page}`)}</span>
             </a>
           ))}
         </nav>
@@ -700,10 +825,11 @@ export function App() {
         </div>
         <nav aria-label={t('workspaceNav')}>
           <button
+            aria-label={t('allWorkspaces')}
+            title={t('allWorkspaces')}
             className={`workspace-link ${!workspaceId ? 'active' : ''}`}
             onClick={() => {
-              setWorkspaceId('');
-              setMenuOpen(false);
+              openWorkspace('');
             }}
           >
             <Layers3 size={16} />
@@ -715,9 +841,9 @@ export function App() {
               key={workspace.id}
               className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
               title={workspace.path}
+              aria-label={workspace.name}
               onClick={() => {
-                setWorkspaceId(workspace.id);
-                setMenuOpen(false);
+                openWorkspace(workspace.id);
               }}
             >
               <Folder size={16} />
@@ -731,13 +857,7 @@ export function App() {
           {snapshot?.adapters.map((adapter) => (
             <div className="integration-item" key={adapter.id}>
               <span className={`tiny-dot ${adapter.implemented ? 'green' : ''}`} />
-              <span>
-                {adapter.id === 'codex'
-                  ? 'Codex CLI'
-                  : adapter.id === 'claude'
-                    ? 'Claude Code'
-                    : 'OpenCode'}
-              </span>
+              <span>{t(`shell.adapters.${adapter.id}`, { defaultValue: adapter.id })}</span>
               <small>{t(adapter.implemented ? 'implemented' : 'planned')}</small>
             </div>
           ))}
@@ -754,6 +874,8 @@ export function App() {
             <button
               className="icon-button menu-toggle"
               aria-label={t('workspaceNav')}
+              aria-controls="app-sidebar"
+              aria-expanded={menuOpen}
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <Menu size={18} />
@@ -761,9 +883,19 @@ export function App() {
             <Command size={15} />
             <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
             <ChevronRight size={14} />
-            <strong>{t(view === 'models' ? 'analytics.title' : 'overview')}</strong>
+            <strong>{t(`shell.views.${view}`)}</strong>
           </div>
           <div className="topbar-actions">
+            <button
+              className="button command-trigger"
+              aria-label={t('shell.palette.title')}
+              aria-keyshortcuts="Meta+K Control+K"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search size={15} />
+              <span>{t('shell.palette.shortLabel')}</span>
+              <kbd>{t('shell.palette.shortcut')}</kbd>
+            </button>
             <span className={`connection connection-${connection}`} role="status">
               <span className="tiny-dot" />
               {t(connection)}
@@ -790,7 +922,48 @@ export function App() {
             </button>
           </div>
         </header>
-        <main>
+        {selectedSession && view === 'overview' && (
+          <div
+            className="session-context-bar"
+            aria-label={t('shell.metrics.context')}
+            role="region"
+          >
+            <span className="session-context-name" title={selectedSession.agentName}>
+              {selectedSession.agentName}
+            </span>
+            <span className="session-context-model" title={t('modelObservation.availabilityNote')}>
+              {selectedSession.adapter} · {t('modelObservation.identifier')}:{' '}
+              <code>{selectedSession.model ?? t('modelObservation.notRecorded')}</code>
+            </span>
+            <Status status={selectedSession.status} />
+            <SessionTokenBadge
+              state={
+                headerMetrics?.sessionId === selectedSession.id ? headerMetrics.metrics : undefined
+              }
+              offline={connection !== 'connected' || error}
+            />
+          </div>
+        )}
+        <main id="main-content" tabIndex={-1}>
+          {(error || saveError) && view !== 'overview' && (
+            <p className="notice" role="alert">
+              {t(saveError ? 'savedError' : 'error')}
+            </p>
+          )}
+          {!snapshot && !error && view !== 'models' && (
+            <p className="notice" role="status">
+              {t('shell.loading')}
+            </p>
+          )}
+          {notice && !notificationOpen && (
+            <div className="notice" role="status">
+              {t(notice)}
+              <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
           {view === 'models' ? (
             <ModelAnalytics
               workspaceId={workspaceId}
@@ -798,6 +971,24 @@ export function App() {
               connection={connection}
               snapshotError={error}
             />
+          ) : view === 'workspaces' ? (
+            snapshot && (
+              <Workspaces
+                snapshot={snapshot}
+                activeId={workspaceId}
+                layout={shell.workspaceLayout}
+                sort={shell.workspaceSort}
+                onLayout={(value) =>
+                  setShell((previous) => ({ ...previous, workspaceLayout: value }))
+                }
+                onSort={(value) => setShell((previous) => ({ ...previous, workspaceSort: value }))}
+                onOpen={(id) => openWorkspace(id, 'overview')}
+                onAnalytics={(id) => openWorkspace(id, 'models')}
+                onCreate={() => setWorkspaceOpen(true)}
+              />
+            )
+          ) : view === 'agents' ? (
+            snapshot && <Agents snapshot={snapshot} />
           ) : (
             <>
               <div className="page-heading">
@@ -817,18 +1008,6 @@ export function App() {
                 <p className="notice" role="alert">
                   {t(saveError ? 'savedError' : 'error')}
                 </p>
-              )}
-              {notice && (
-                <div className="notice" role="status">
-                  {t(notice)}
-                  <button
-                    className="icon-button"
-                    aria-label={t('close')}
-                    onClick={() => setNotice('')}
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
               )}
               <section className="stats" aria-label={t('overview')}>
                 <div className="stat">
@@ -949,7 +1128,7 @@ export function App() {
                             <td>
                               <button
                                 className="agent-cell"
-                                onClick={() => setSelected(session.id)}
+                                onClick={() => selectSession(session.id)}
                               >
                                 <span
                                   className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
@@ -978,7 +1157,7 @@ export function App() {
                               <button
                                 className="icon-button"
                                 aria-label={`${t('viewSession')} ${session.agentName}`}
-                                onClick={() => setSelected(session.id)}
+                                onClick={() => selectSession(session.id)}
                               >
                                 <ChevronRight size={16} />
                               </button>
@@ -1002,7 +1181,8 @@ export function App() {
                   snapshot={snapshot}
                   connection={connection}
                   snapshotError={error}
-                  onClose={() => setSelected(undefined)}
+                  onMetrics={updateHeaderMetrics}
+                  onClose={() => selectSession(undefined)}
                   onSave={() => {
                     void refresh();
                   }}
@@ -1034,7 +1214,7 @@ export function App() {
                       {attention.length ? (
                         <div className="attention-list">
                           {attention.slice(0, 10).map((session) => (
-                            <button onClick={() => setSelected(session.id)} key={session.id}>
+                            <button onClick={() => selectSession(session.id)} key={session.id}>
                               <span>
                                 <strong>{session.agentName}</strong>
                                 <Status status={session.status} />
@@ -1102,123 +1282,195 @@ export function App() {
           </span>
         </footer>
       </div>
+      {paletteOpen && (
+        <CommandPalette
+          snapshot={snapshot}
+          onNavigate={navigate}
+          onWorkspace={(id) => openWorkspace(id, 'overview')}
+          onSession={openSession}
+          onNotifications={() => setNotificationOpen(true)}
+          onCreate={() => setWorkspaceOpen(true)}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
       {notificationOpen && (
-        <div className="drawer-backdrop" onClick={() => setNotificationOpen(false)}>
-          <aside
-            className="notification-drawer"
-            aria-label={t('notifications')}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="panel-heading">
-              <h2>
-                <Bell size={18} />
-                {t('notifications')}
-              </h2>
+        <Modal
+          label={t('notifications')}
+          className="notification-drawer shell-dialog"
+          onClose={() => setNotificationOpen(false)}
+        >
+          <div className="panel-heading">
+            <h2>
+              <Bell size={18} />
+              {t('notifications')}
+            </h2>
+            <button
+              className="icon-button"
+              aria-label={t('close')}
+              onClick={() => setNotificationOpen(false)}
+            >
+              <X size={18} />
+            </button>
+          </div>
+          <div className="drawer-body">
+            {notice && (
+              <p className="notice" role="status">
+                {t(notice)}
+              </p>
+            )}
+            {saveError && (
+              <p className="notice" role="alert">
+                {t('savedError')}
+              </p>
+            )}
+            <div className="drawer-subheading">
+              <span>{t('notificationCounts', { count: unread })}</span>
               <button
-                className="icon-button"
-                aria-label={t('close')}
-                onClick={() => setNotificationOpen(false)}
+                className="text-button"
+                onClick={() => {
+                  void api('/api/notifications/read', { method: 'POST' })
+                    .then(() => refresh())
+                    .then(() => setSaveError(false))
+                    .catch(() => setSaveError(true));
+                }}
               >
-                <X size={18} />
+                {t('markRead')}
               </button>
             </div>
-            <div className="drawer-body">
-              <div className="drawer-subheading">
-                <span>{t('notificationCounts', { count: unread })}</span>
-                <button
-                  className="text-button"
-                  onClick={() => {
-                    void api('/api/notifications/read', { method: 'POST' })
-                      .then(() => refresh())
-                      .catch(() => setSaveError(true));
-                  }}
-                >
-                  {t('markRead')}
-                </button>
-              </div>
-              {snapshot?.notifications.length ? (
-                snapshot.notifications.map((item) => (
+            <label className="notification-filter">
+              {t('shell.notifications.filter')}
+              <select
+                value={notificationFilter}
+                onChange={(event) => setNotificationFilter(event.target.value)}
+              >
+                <option value="all">{t('shell.notifications.all')}</option>
+                <option value="unread">{t('shell.notifications.unread')}</option>
+                <option value="agent.completed">{t('events.agent.completed')}</option>
+                <option value="agent.failed">{t('events.agent.failed')}</option>
+                <option value="agent.intervention.required">
+                  {t('events.agent.intervention.required')}
+                </option>
+              </select>
+            </label>
+            {snapshot?.notifications.some(
+              (item) =>
+                notificationFilter === 'all' ||
+                (notificationFilter === 'unread' ? !item.read : item.type === notificationFilter),
+            ) ? (
+              snapshot.notifications
+                .filter(
+                  (item) =>
+                    notificationFilter === 'all' ||
+                    (notificationFilter === 'unread'
+                      ? !item.read
+                      : item.type === notificationFilter),
+                )
+                .map((item) => (
                   <button
-                    className={`notification-item ${item.read ? 'read' : ''}`}
+                    className={`notification-item notification-${item.type.replaceAll('.', '-')} ${item.read ? 'read' : ''}`}
+                    disabled={!snapshot.sessions.some((session) => session.id === item.sessionId)}
+                    title={
+                      snapshot.sessions.some((session) => session.id === item.sessionId)
+                        ? t('viewSession')
+                        : t('shell.notifications.sourceMissing')
+                    }
                     key={item.id}
                     onClick={() => {
-                      setSelected(item.sessionId);
+                      openSession(item.sessionId);
                       setNotificationOpen(false);
                     }}
                   >
-                    <span className="tiny-dot green" />
+                    <span className="tiny-dot" />
                     <span>
                       <strong>{t(`events.${item.type}`)}</strong>
                       <small>
                         {snapshot.sessions.find((session) => session.id === item.sessionId)
                           ?.agentName ?? item.sessionId.slice(0, 8)}
                       </small>
-                      <time>{f.date(item.timestamp)}</time>
+                      <small>
+                        {snapshot.workspaces.find(
+                          (workspace) =>
+                            workspace.id ===
+                            snapshot.sessions.find((session) => session.id === item.sessionId)
+                              ?.workspaceId,
+                        )?.name ?? t('unknown')}
+                      </small>
+                      <time dateTime={item.timestamp}>{f.date(item.timestamp)}</time>
                     </span>
                     <ExternalLink size={14} />
                   </button>
                 ))
-              ) : (
-                <p className="empty-copy">{t('notificationEmpty')}</p>
-              )}
-              <div className="preferences">
-                <h3>{t('preferences')}</h3>
-                {(['completed', 'failed', 'intervention', 'sound'] as const).map((key) => (
-                  <label className="preference" key={key}>
-                    <span>
-                      {t(
-                        key === 'completed'
-                          ? 'notificationCompleted'
-                          : key === 'failed'
-                            ? 'notificationFailed'
-                            : key === 'intervention'
-                              ? 'notificationIntervention'
-                              : 'sound',
-                      )}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={localPrefs[key]}
-                      disabled={prefsSaving}
-                      onChange={(event) => {
-                        if (snapshot) {
-                          void preferences({ ...localPrefs, [key]: event.target.checked });
-                          if (key === 'sound' && event.target.checked) void sound(true);
-                        }
-                      }}
-                    />
-                  </label>
-                ))}
+            ) : (
+              <p className="empty-copy">
+                {t(
+                  snapshot?.notifications.length
+                    ? 'shell.notifications.noMatches'
+                    : 'notificationEmpty',
+                )}
+              </p>
+            )}
+            <div className="preferences">
+              <h3>{t('preferences')}</h3>
+              {(['completed', 'failed', 'intervention', 'sound'] as const).map((key) => (
+                <label className="preference" key={key}>
+                  <span>
+                    {t(
+                      key === 'completed'
+                        ? 'notificationCompleted'
+                        : key === 'failed'
+                          ? 'notificationFailed'
+                          : key === 'intervention'
+                            ? 'notificationIntervention'
+                            : 'sound',
+                    )}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={localPrefs[key]}
+                    disabled={prefsSaving}
+                    onChange={(event) => {
+                      if (snapshot) {
+                        void preferences({ ...localPrefs, [key]: event.target.checked });
+                        if (key === 'sound' && event.target.checked) void sound(true);
+                      }
+                    }}
+                  />
+                </label>
+              ))}
+              <button
+                className="button"
+                onClick={() => {
+                  void sound(true);
+                }}
+              >
+                <Volume2 size={14} />
+                {t('audioTest')}
+              </button>
+              {!nativeDesktop && (
                 <button
                   className="button"
                   onClick={() => {
-                    void sound(true);
+                    void desktop();
                   }}
                 >
-                  <Volume2 size={14} />
-                  {t('audioTest')}
+                  <Bell size={14} />
+                  {t('desktop')}
                 </button>
-                {!nativeDesktop && (
-                  <button
-                    className="button"
-                    onClick={() => {
-                      void desktop();
-                    }}
-                  >
-                    <Bell size={14} />
-                    {t('desktop')}
-                  </button>
-                )}
-                <p className="fine-print">
-                  {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
-                </p>
-              </div>
+              )}
+              <p className="fine-print">
+                {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
+              </p>
             </div>
-          </aside>
-        </div>
+          </div>
+        </Modal>
       )}
       {workspaceOpen && (
-        <div className="modal-backdrop">
+        <Modal
+          label={t('createWorkspace')}
+          className="workspace-dialog shell-dialog"
+          initialFocus="input"
+          onClose={() => setWorkspaceOpen(false)}
+        >
           <form
             className="workspace-modal panel"
             onSubmit={(event) => {
@@ -1240,6 +1492,11 @@ export function App() {
               </button>
             </div>
             <div className="modal-body">
+              {saveError && (
+                <p className="notice" role="alert">
+                  {t('savedError')}
+                </p>
+              )}
               <label>
                 {t('workspaceName')}
                 <input name="name" required maxLength={100} />
@@ -1258,7 +1515,7 @@ export function App() {
               </div>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -487,3 +487,28 @@ ORQST_BROWSER_PORT=4387 pnpm test:browser tests/browser/model-analytics.spec.ts 
 The complete suite was not rerun; its earlier 85/89 result is retained above.
 Previously valid Node/build/lint checks and focused evolution cases were reused;
 only the fixture correction and the affected sequence needed additional validation.
+
+## Navigation and existing-data screens
+
+After building, run the shell and threshold cases together on an exclusive port:
+
+```bash
+ORQST_BROWSER_PORT=4395 pnpm test:browser tests/browser/shell-navigation.spec.ts tests/browser/token-threshold.spec.ts tests/browser/token-threshold-qa.spec.ts --output=/tmp/orqst-shell-check
+```
+
+The new shell cases exercise scope/layout/filter persistence, browser history,
+Cmd/Ctrl+K search and keyboard focus, observed adapter capabilities, en-US/pt-BR,
+modal Escape, notification filtering/source navigation, viewport containment and
+compact metrics with confirmed/stale/unavailable readings. The badge must reuse
+one inspector query, show exact input/output/cache/total and never use missing
+summary usage as zero. Screenshots use synthetic data at desktop/laptop/mobile
+widths and remain generated output. No installed listener, storage or provider
+session is used.
+
+The complete browser suite currently has a pre-existing order dependency: the
+live-update case in `dashboard.spec.ts` advances the shared baseline from 120 to
+170 tokens, while three threshold cases still assert the initial 120. Those cases
+must also be run in a fresh fixture, retaining their assertions. Do not change
+production accounting or weaken assertions to hide shared-fixture contamination.
+See the [screen matrix](../design/ui-ux-specification.md) for remaining product and
+manual/native acceptance gaps.
