@@ -61,6 +61,7 @@ class SyntheticTransport implements CodexTransport {
   stallMethod?: string;
   rejectMethod?: string;
   threadStartDelayMs = 0;
+  initializeDelayMs = 0;
   listen(data: (bytes: Uint8Array) => void, lost: () => void) {
     this.data = data;
     this.lost = lost;
@@ -119,7 +120,9 @@ class SyntheticTransport implements CodexTransport {
         if (!this.startedBeforeReply) queueMicrotask(() => this.event('turn/started'));
       }
     };
-    if (request.method === 'thread/start' && this.threadStartDelayMs)
+    if (request.method === 'initialize' && this.initializeDelayMs)
+      setTimeout(respond, this.initializeDelayMs);
+    else if (request.method === 'thread/start' && this.threadStartDelayMs)
       setTimeout(respond, this.threadStartDelayMs);
     else queueMicrotask(respond);
   }
@@ -186,6 +189,7 @@ function fixture(
     stallMethod?: string;
     rejectMethod?: string;
     threadStartDelayMs?: number;
+    initializeDelayMs?: number;
     neverStarted?: boolean;
   } = {},
 ) {
@@ -232,6 +236,7 @@ function fixture(
       transport.stallMethod = options.stallMethod;
       transport.rejectMethod = options.rejectMethod;
       transport.threadStartDelayMs = options.threadStartDelayMs ?? 0;
+      transport.initializeDelayMs = options.initializeDelayMs ?? 0;
       transports.push(transport);
       exits.push(events.exit);
       if (!options.neverStarted) queueMicrotask(events.started);
@@ -1307,7 +1312,11 @@ for (const method of ['initialize', 'account/read', 'thread/start'] as const) {
       );
       await tick();
       t.mock.timers.tick(
-        method === 'thread/start' ? codexChannelLimits.threadStartMs : codexChannelLimits.requestMs,
+        method === 'initialize'
+          ? codexChannelLimits.nativeAuthInitializeMs
+          : method === 'thread/start'
+            ? codexChannelLimits.threadStartMs
+            : codexChannelLimits.requestMs,
       );
       await rejected;
       const snapshot = f.runtime.snapshot(prepared.instanceId);
@@ -1344,6 +1353,121 @@ for (const method of ['initialize', 'account/read', 'thread/start'] as const) {
     }
   });
 }
+
+test('native-auth initialization can exceed the task RPC budget without dispatching a task', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ initializeDelayMs: 9000 });
+  try {
+    const prepared = f.prepare(
+      f.config('synthetic-delayed-native-auth', false, true).file,
+      'Synthetic native auth delay',
+    );
+    const launching = f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge));
+    await tick();
+    t.mock.timers.tick(codexChannelLimits.requestMs + 1);
+    const waiting = f.runtime.snapshot(prepared.instanceId);
+    assert.equal(waiting.state, 'running');
+    assert.equal(waiting.startupPhase, 'initialize');
+    assert.equal(waiting.channelDiagnostic, null);
+    assert.deepEqual(
+      f.transports[0]!.requests.map((request) => request.method),
+      ['initialize'],
+    );
+    t.mock.timers.tick(1000);
+    await launching;
+    assert.equal(f.runtime.snapshot(prepared.instanceId).startupPhase, 'ready');
+    assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    f.close();
+  }
+});
+
+test('separate-login initialization keeps its eight-second deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ initializeDelayMs: 9000 });
+  try {
+    const prepared = f.prepare(f.config('synthetic-legacy-init').file, 'Synthetic legacy init');
+    const rejected = assert.rejects(
+      f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+    );
+    await tick();
+    t.mock.timers.tick(codexChannelLimits.requestMs);
+    await rejected;
+    t.mock.timers.tick(1000);
+    const snapshot = f.runtime.snapshot(prepared.instanceId);
+    assert.equal(snapshot.state, 'ownership_lost');
+    assert.deepEqual(snapshot.channelDiagnostic, {
+      reason: 'request_timeout',
+      method: 'initialize',
+    });
+    assert.deepEqual(f.transports[0]!.signals, []);
+    assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'account/read'));
+  } finally {
+    f.close();
+  }
+});
+
+test('late native-auth initialization cannot revive ownership after its bounded deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ initializeDelayMs: codexChannelLimits.nativeAuthInitializeMs + 1000 });
+  try {
+    const prepared = f.prepare(
+      f.config('synthetic-late-native-auth', false, true).file,
+      'Synthetic late native auth',
+    );
+    const rejected = assert.rejects(
+      f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+    );
+    await tick();
+    t.mock.timers.tick(codexChannelLimits.nativeAuthInitializeMs);
+    await rejected;
+    t.mock.timers.tick(1000);
+    const snapshot = f.runtime.snapshot(prepared.instanceId);
+    assert.equal(snapshot.state, 'ownership_lost');
+    assert.equal(snapshot.nativeExit, null);
+    assert.deepEqual(snapshot.channelDiagnostic, {
+      reason: 'request_timeout',
+      method: 'initialize',
+    });
+    assert.deepEqual(
+      f.transports[0]!.requests.map((request) => request.method),
+      ['initialize'],
+    );
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    f.close();
+  }
+});
+
+test('native-auth initialization and thread delays still share the overall startup deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ initializeDelayMs: 26000, threadStartDelayMs: 26000 });
+  try {
+    const prepared = f.prepare(
+      f.config('synthetic-combined-startup', false, true).file,
+      'Synthetic combined startup delay',
+    );
+    const rejected = assert.rejects(
+      f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+    );
+    await tick();
+    t.mock.timers.tick(26000);
+    await tick();
+    assert.equal(f.runtime.snapshot(prepared.instanceId).startupPhase, 'thread_start');
+    t.mock.timers.tick(24000);
+    await rejected;
+    t.mock.timers.tick(2000);
+    const snapshot = f.runtime.snapshot(prepared.instanceId);
+    assert.equal(snapshot.launchFailure, 'startup_deadline');
+    assert.equal(snapshot.state, 'ownership_lost');
+    assert.equal(snapshot.nativeExit, null);
+    assert.deepEqual(f.transports[0]!.signals, []);
+    assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+  } finally {
+    f.close();
+  }
+});
 
 test('slow required-MCP thread preparation has a separate bounded budget without task dispatch', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });

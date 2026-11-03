@@ -236,12 +236,17 @@ prints these fields for each cleanup attempt. The phase identifies the local awa
 boundary; it is not proof of provider delivery, authentication or task acceptance.
 A null/`detached` channel diagnostic does not establish why a response was rejected.
 
-Initialization, account read and task-admission RPCs retain their 8-second deadline.
-Thread preparation has a separate 30-second deadline, and total startup is bounded
-by 50 seconds (covering the serial 8 + 8 + 30 second phases plus spawn overhead).
+Existing-login initialization has a separate 30-second deadline because native
+auth/config loading can refresh credentials before answering the first RPC.
+Separate-login initialization, account read and task-admission RPCs retain their
+8-second deadline. Thread preparation retains its 30-second deadline. Total startup
+is still bounded by 50 seconds, including spawn and all serial phases: this shared
+cap can expire before an individual phase's remaining budget.
 Only the total 50-second startup policy is included in the signed manifest. The
-8/30-second per-RPC limits are code constants, not individually bound into that
-manifest. Review both the new manifest and the runtime code before a future real
+8/30/30-second limits (default RPC, native-auth initialization, thread preparation)
+are code constants, not individually bound into that manifest. In particular,
+`codexChannelLimits.nativeAuthInitializeMs` is not bound into the signed manifest.
+Review both the new manifest and the runtime code before a future real
 launch; this change is not an extension of an old grant.
 Timeout fixtures at initialization, account read and thread start reproduce
 `ownership_lost` without signaling or retrying. That conservative state is intentional

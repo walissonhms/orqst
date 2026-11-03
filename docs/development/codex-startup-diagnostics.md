@@ -4,6 +4,87 @@ Implemented for future explicit structured starts only. No normal observer start
 public API, WebSocket or dashboard behavior changes. Historical initialize timeouts
 remain unexplained: these counters did not exist for them and cannot be reconstructed.
 
+## Bounded native-auth initialization latency mitigation — 2026-11-03
+
+The previous comparison used the wrong refresh redirect variable. Official Codex
+0.162.1, tag `rust-v0.162.1`, resolves to commit
+`092d3acd6bec3e3a14bdc7e7a2810ab628ab759d`. Its
+[auth manager](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/login/src/auth/manager.rs)
+uses `CODEX_REFRESH_TOKEN_URL_OVERRIDE`, not `CODEX_REFRESH_TOKEN_URL`.
+The [startup path](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/app-server/src/lib.rs)
+loads auth and configuration before processing RPCs. The
+[cloud configuration loader](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/cloud-config/src/service.rs)
+calls `auth().await` before checking plan eligibility, under its own 20-second
+startup fetch timeout. Expired ChatGPT tokens can therefore trigger refresh before
+`initialize`, even for the synthetic free-plan identity used here. Source inspection
+does not attest the installed binary; the controlled native measurements below
+independently establish that binary's behavior.
+
+A bounded follow-up used the same recorded 0.162.1 binary hash, production backend,
+host, pipes and channel, new disposable homes/projects, file storage and false expired
+tokens. A test-only host injected the redirect; production never inherits it. Only
+the fixture's selected loopback port was reachable. The listener counted a fixed
+`POST /oauth/token` classification without recording headers, body or credentials.
+No account, thread, turn, login or inference request was sent.
+
+| Synthetic control                                                       | Initialize result                              | Refresh requests/replies |
+| ----------------------------------------------------------------------- | ---------------------------------------------- | ------------------------ |
+| Redirect absent, endpoint silent                                        | 42 ms                                          | 0 / 0                    |
+| Previous wrong variable, endpoint silent                                | 42 ms                                          | 0 / 0                    |
+| Correct variable, endpoint silent                                       | Old 8-second timeout, 8.198 s after host start | 1 / 0                    |
+| Correct variable, reply after 1.5 s per refresh                         | 3.069 s                                        | 2 / 2                    |
+| Correct variable, reply after 9 s per refresh, old channel policy       | Old 8-second timeout, 8.227 s after host start | 1 / 0                    |
+| Correct variable, reply after 9 s per refresh, 30-second channel policy | 18.066 s                                       | 2 / 2                    |
+
+Fixture replies were synthetic HTTP 400 failures. Successful initialization does not
+mean that credentials refreshed successfully or an account became available. Other
+loopback connections occurred in the absent/wrong-variable controls; total connection
+counts alone had incorrectly suggested refresh coverage in the earlier probe.
+All six runs retained actual owned direct exits and matching durable receipts.
+Timeout rows measure host-start through failure; success rows measure the RPC await.
+The outer driver deadline/owned cleanup are separate from both measurements.
+The old/new late-reply pair used the same 35-second outer deadline; only the
+channel initialization budget differed. An exploratory old-budget run with a
+12-second outer deadline is excluded from this final comparison.
+The direct transport probe retained its own handle for bounded shutdown; it did not
+exercise signed runtime admission or authorize signals after runtime ownership loss.
+
+The controlled comparison proves that the 8-second first-response budget interrupts
+this delayed native-auth startup and that a 30-second budget permits its handshake.
+The adjustment mitigates startup latency; it does not repair token refresh or establish
+why historical attempts failed. Existing-login initialization now permits 30 seconds; account
+read/task RPCs remain at 8 seconds, separate-login initialization remains at 8 seconds,
+thread preparation remains at 30 seconds, and the overall 50-second startup deadline
+still caps all serial work. This is bounded tolerance for native startup, not a
+guarantee of readiness under every network or credential-store failure. No auth
+backend, native policy, required MCP, framing, ownership or retry rule changes.
+The compiled synthetic process regression delays initialization beyond 8 seconds
+then requires complete signed startup, owned stop and a durable exit receipt.
+Mock-clock regressions cover the new limit, late replies, legacy limits and the
+shared overall deadline. Automatic tests never execute Codex or token refresh.
+The 30-second value covers the measured 18.066-second handshake with bounded
+headroom, matching the existing thread-preparation budget. It is a policy choice,
+not a measured maximum or a guarantee: upstream's 20-second cloud-config timeout
+does not bound every serial native-auth/config operation. A slow or silent native
+process can now remain in initialization up to 22 seconds longer before ownership
+loss. An uncertain admission reservation remains held after loss under either budget.
+Channel timeout or the overall deadline still detaches, clears pending request timers
+and prevents late replies from restoring ownership; neither path signals after loss
+or releases an uncertain reservation. The existing independent host lifetime remains
+30 minutes before TERM, followed by KILL after 5 more seconds if necessary; this
+policy owns eventual direct-child cleanup, with no descendant containment claim. The six direct-probe exit receipts do not prove that runtime
+timeout cleanup, because that probe kept its own transport handle.
+
+This reproduces one timeout path; it does **not** identify the cause of preparation
+604 or run 598. Their missing native/hop evidence remains missing. Historical
+quarantines and reservations remain unchanged, and real-provider acceptance stays
+blocked. Keyring/auto was inspected in source only: startup can call synchronous
+credential-store reads; auto fallback runs only after that read returns. No Keychain
+was accessed. Temporary HOME alone would not isolate the same macOS user's Keychain.
+DNS/VPN/mDNS and fixed remote endpoints remain untested; no DNS settings, proxy or
+system network configuration was changed. No additional matrix or native retry is
+needed to review this mitigation.
+
 ## Installed-binary comparison and causal limits
 
 Local investigation on 2026-11-03 retained an initialize-only probe of Codex 0.162.1
@@ -14,6 +95,10 @@ or existing-login acceptance. The driver invoked that transport directly; it did
 not exercise signed runtime admission, account availability, thread creation, model
 entitlement or delegation.
 
+The following comparison predates the mitigation: its 8-second initialize deadline
+was the policy measured at that time, not the current native-auth initialization
+budget.
+
 | Boundary              | Isolated probe                                                                                                                                           | Preparation 604 (retained initialize diagnostic)                                                                                            |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | Executable            | Installed 0.162.1, recorded binary hash                                                                                                                  | Same version/hash in the sanitized report                                                                                                   |
@@ -23,7 +108,7 @@ entitlement or delegation.
 | Configuration allowed | Empty temporary native home except file credential-backend setting; OS sandbox denies network, user-home data reads and writes outside binary exceptions | Existing native auth/config shared by explicit contract; configured MCP startup and native refresh/network effects permitted and unverified |
 | Transport             | Real stdin/stdout pipes, LF JSONL, base64 slices over Node JSON IPC; stderr drained/count-only                                                           | Same pipe/IPC/framing recipe; historical stderr ignored; no hop counters retained                                                           |
 | Order                 | Wait for host started, send initialize with experimental API requested, await response, send initialized, stop owned child                               | Production order is initialize response, initialized, account/read, thread/start; failed during initialize, so later requests never sent    |
-| Time budget           | Unchanged 8-second initialize deadline; 38 ms measured after started, excludes pre-RPC launch work and later startup stages                              | 8-second initialize deadline expired despite a separate 50-second overall startup budget; 30-second thread/start budget never reached       |
+| Time budget           | Pre-mitigation 8-second initialize deadline; 38 ms measured after started, excludes pre-RPC launch work and later startup stages                         | 8-second initialize deadline expired despite a separate 50-second overall startup budget; 30-second thread/start budget never reached       |
 | Outcome               | 465 stdout bytes, two complete lines, one notification, one correlated response; owned exit code 0 plus bound durable exit receipt                       | request_timeout/initialize, ownership_lost, no confirmed native exit in the retained report                                                 |
 
 The probe's outer sandbox had a separate 10-second driver deadline. Its total
@@ -52,9 +137,10 @@ blackhole accepts TCP connections and withholds responses; other network access 
 denied. This matters because immediate network denial can conceal a blocking-network
 failure. The authentication variant additionally redirects the native refresh URL in
 its test-only host; that environment difference is explicit, not production behavior.
-The redirect variable was found in binary strings, not established by an upstream
-contract. Observed loopback traffic does not prove token refresh: the refresh path
-remains inconclusive without an otherwise identical redirect-removal control.
+The redirect variable in that earlier comparison was found in binary strings, not
+established by an upstream contract. Its loopback traffic did not prove refresh.
+The corrected-variable/removal control above supersedes that experiment's refresh
+coverage, without expanding its historical conclusions.
 No account, thread, turn, login or inference request is sent.
 
 Those configurations have not reproduced the historical initialize timeout. Required
@@ -155,7 +241,7 @@ pnpm exec tsx --test tests/codex-startup-diagnostics.test.ts tests/codex-native-
 These test metadata injection/version rejection, saturation, immutability, bounded
 reporting under blocked/error/throwing send callbacks, timer cleanup, withheld/final
 LF and late response, secret sentinels including stderr, real fake-process pipes/IPC,
-unchanged request deadlines and lost ownership. A real stderr Readable error is
+bounded method deadlines and lost ownership. A real stderr Readable error is
 injected into the compiled host: startup and the still-owned exit plus durable
 receipt must survive, without retaining the error payload. Fake cleanup still
 requires genuine durable exits and preserves uncertain disposable state. They do not execute Codex,

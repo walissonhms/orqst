@@ -420,7 +420,10 @@ export class CodexStructuredRuntime {
           },
         ),
       );
-      const channel = new CodexChannel(attempt.transport);
+      const channel = new CodexChannel(
+        attempt.transport,
+        attempt.config.authentication !== undefined,
+      );
       attempt.channel = channel;
       const adapter = new CodexCommunicationAdapter(
         channel,

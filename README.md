@@ -67,6 +67,13 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Bounded Codex initialization latency mitigation:** a controlled false-token,
+  loopback-only comparison confirmed native refresh can delay the first response
+  beyond 8 seconds. Existing-login initialization now permits 30 seconds inside the
+  unchanged overall 50-second startup cap. Legacy initialization and other RPC
+  limits remain scoped; the historical failure is still unproven and real-provider
+  acceptance remains blocked. See [controlled evidence and limits](docs/development/codex-startup-diagnostics.md#bounded-native-auth-initialization-latency-mitigation--2026-11-03).
+
 - **Future structured startup diagnostics:** explicit starts now retain bounded,
   payload-free in-memory counters across parent/host/pipes/IPC/parser. Missing or
   lagging host samples remain qualified; old timeouts cannot be diagnosed

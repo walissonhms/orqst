@@ -7,6 +7,8 @@ export const codexChannelLimits = Object.freeze({
   sessionBytes: 8 * 1024 * 1024,
   pendingRequests: 4,
   requestMs: 8000,
+  // Native auth/config loading can refresh credentials before the first RPC response.
+  nativeAuthInitializeMs: 30000,
   threadStartMs: 30000,
 });
 const messageSchema = z.object({
@@ -89,7 +91,10 @@ export class CodexChannel {
   private listeners = new Set<(message: CodexNotification) => void>();
   private lostListeners = new Set<() => void>();
 
-  constructor(private transport: CodexTransport) {
+  constructor(
+    private transport: CodexTransport,
+    private readonly reuseExistingAuthentication = false,
+  ) {
     this.unsubscribe = transport.listen(
       (chunk) => this.receive(chunk),
       () => this.fail('transport_lost'),
@@ -125,9 +130,11 @@ export class CodexChannel {
         reject,
         timer: setTimeout(
           () => this.fail('request_timeout', method),
-          method === 'thread/start'
-            ? codexChannelLimits.threadStartMs
-            : codexChannelLimits.requestMs,
+          method === 'initialize' && this.reuseExistingAuthentication
+            ? codexChannelLimits.nativeAuthInitializeMs
+            : method === 'thread/start'
+              ? codexChannelLimits.threadStartMs
+              : codexChannelLimits.requestMs,
         ),
       });
       try {

@@ -108,6 +108,7 @@ test(
     const scenarios = [
       'compatible',
       'stderr-error',
+      'delayed-initialize',
       'silent',
       'unterminated',
       'events-only',
@@ -119,8 +120,8 @@ test(
       for (const mode of scenarios) {
         const area = join(root, mode);
         mkdirSync(area, { mode: 0o700 });
-        const compatible = mode === 'compatible' || mode === 'stderr-error';
-        const project = join(area, compatible ? 'compatible' : mode);
+        const compatible = ['compatible', 'stderr-error', 'delayed-initialize'].includes(mode);
+        const project = join(area, mode === 'stderr-error' ? 'compatible' : mode);
         const state = join(area, 'state');
         for (const directory of [
           project,
@@ -141,12 +142,16 @@ test(
           },
           project,
           state,
-          authentication: {
-            mode: 'reuse-existing',
-            home: area,
-            codexHome: area,
-            sharedNativeConfiguration: true,
-          },
+          ...(compatible
+            ? {
+                authentication: {
+                  mode: 'reuse-existing',
+                  home: area,
+                  codexHome: area,
+                  sharedNativeConfiguration: true,
+                },
+              }
+            : {}),
         };
         writeFileSync(join(state, 'codex/config.toml'), managedCodexSettings(config), {
           mode: 0o600,

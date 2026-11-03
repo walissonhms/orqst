@@ -48,6 +48,7 @@ int main(void) {
     if (!length || length >= sizeof(id)) return 39;
     memcpy(id, start, length); id[length] = 0;
     if (!strcmp(name, "initialize")) {
+      if (!strcmp(mode, "delayed-initialize")) sleep(9);
       if (!strcmp(mode, "events-only")) {
         puts("{\"method\":\"SYNTHETIC/startup\",\"params\":{}}");
         sleep(9); return 0;
