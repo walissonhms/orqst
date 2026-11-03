@@ -42,7 +42,8 @@ an empty disposable project, explicit shared-identity consent and optional MCP.
 Creation starts nothing; OpenCode stays blocked. Proven pre-admission/Core view
 failures permit a fresh review, while uncertain effects/reservations remain fixed.
 N-member teams, model selection, durable reconnect and real CLI delegation remain
-pending. Full PTY acceptance remains intermittently failing; it is not approved.
+pending. Synthetic pair checks cover polling/gesture races and native focus ordering;
+full real-provider PTY acceptance is not approved.
 See [client creation, recovery and real-acceptance blockers](docs/development/cli-team-recovery.md).
 
 The updated Desktop native menu can select/review existing manifests in memory,
@@ -64,9 +65,16 @@ native CLI compatibility, existing-login TUI and idle-worker delivery remain unv
 [the interactive CLI/MCP boundary](docs/development/interactive-cli-mcp.md).
 Native focus refusals now have localized client feedback in both structured and PTY
 views. Pair acceptance detects a locked macOS console before creating fixtures;
-positive native-modal/focus acceptance requires an unlocked session and remains pending. `pnpm accept:managed-agents --authorize-synthetic-agents`
+human native-modal acceptance requires an unlocked session and remains pending. `pnpm accept:managed-agents --authorize-synthetic-agents`
 checks two disposable synthetic native processes and the signed A-to-B-to-A transport,
 without a provider or credentials. It does not accept the two-real-agent milestone.
+Interactive terminal polling now defers background requests during action-button
+press/release, preventing a poll from disabling the button and discarding its click.
+Buttons remain available during a background read; one active gesture can finish
+that read before a freshly guarded dispatch, and blur/expiry discards it.
+`pnpm accept:terminal-gestures --authorize-synthetic-pty` exercises this with a disposable
+Electron/Core/PTY and synthetic CLI. Native focus/dialogs are explicit test doubles;
+the unchanged native pair acceptance and real-provider milestone remain separate.
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
 panel per slot inside the main ORQST Desktop window for up to two new owned Codex processes, with separate login,

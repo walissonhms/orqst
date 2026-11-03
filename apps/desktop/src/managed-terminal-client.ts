@@ -35,14 +35,45 @@ let sequence = 0;
 let attached = false;
 let input = false;
 let busy = false;
+let polling = false;
+let pollInFlight: Promise<void> | undefined;
+let actionPending = false;
+let interactionGeneration = 0;
 let gap = false;
 let pending = '';
 let live = false;
+let gesture = false;
+let gestureEnd: ReturnType<typeof setTimeout> | undefined;
 const actions = ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const;
+// Finish a button gesture before starting another background request on the shared transport.
+const beginGesture = () => {
+  clearTimeout(gestureEnd);
+  gesture = true;
+};
+const endGesture = () => {
+  clearTimeout(gestureEnd);
+  // Space activates on keyup, and pointerup precedes click. Let that same gesture finish first.
+  gestureEnd = setTimeout(() => {
+    gesture = false;
+  }, 0);
+};
+window.addEventListener('pointerup', endGesture);
+window.addEventListener('pointercancel', endGesture);
+window.addEventListener('keyup', endGesture);
+window.addEventListener('blur', endGesture);
+// A release in another native view need not reach this document.
+document.addEventListener('pointerleave', endGesture);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    endGesture();
+    revoke();
+  }
+});
 const updateButtons = () => {
   for (const action of actions) {
     let disabled =
-      busy ||
+      (busy && !polling) ||
+      actionPending ||
       status.dataset.blocked === 'true' ||
       document.getElementById(action)!.dataset.unavailable === 'true';
     if (action === 'login' || action === 'start')
@@ -60,6 +91,7 @@ const show = (key: string) => {
   status.textContent = status.dataset[key] ?? '';
 };
 const revoke = () => {
+  interactionGeneration++;
   input = false;
   pending = '';
   show('revoked');
@@ -172,33 +204,54 @@ container.addEventListener(
 );
 container.addEventListener('drop', (event) => event.preventDefault(), true);
 for (const action of actions) {
-  document.getElementById(action)!.addEventListener('click', () => {
-    if (busy) {
+  const button = document.getElementById(action)!;
+  button.addEventListener('pointerdown', (event) => {
+    if (event.isPrimary && event.button === 0) beginGesture();
+  });
+  button.addEventListener('keydown', (event) => {
+    if (event.key === ' ' || event.key === 'Enter') beginGesture();
+  });
+  button.addEventListener('blur', endGesture);
+  button.addEventListener('click', async () => {
+    if (actionPending || (busy && !polling)) {
       show('busy');
       return;
     }
-    if (action === 'start' || action === 'login') {
-      if (!live)
-        void send({
+    const generation = interactionGeneration;
+    const target = instanceId;
+    actionPending = true;
+    updateButtons();
+    try {
+      // Finish only the already dispatched background read before handling this gesture.
+      // There is no native request queue/retry; activation and native focus are checked anew.
+      await pollInFlight;
+      if (generation !== interactionGeneration || target !== instanceId) return;
+      if (action === 'start' || action === 'login') {
+        if (!live)
+          await send({
+            version: 1,
+            action: 'start',
+            profileId:
+              action === 'login'
+                ? 'codex-login-v1'
+                : document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
+          });
+        return;
+      }
+      if (!instanceId) return;
+      if (action === 'input' && gap) return;
+      if (action === 'stop' || action === 'kill')
+        await send({
           version: 1,
-          action: 'start',
-          profileId:
-            action === 'login'
-              ? 'codex-login-v1'
-              : document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
+          action: 'stop',
+          instanceId,
+          signal: action === 'kill' ? 'SIGKILL' : 'SIGTERM',
         });
-      return;
+      else await send({ version: 1, action, instanceId });
+    } finally {
+      actionPending = false;
+      updateButtons();
     }
-    if (!instanceId) return;
-    if (action === 'input' && gap) return;
-    if (action === 'stop' || action === 'kill')
-      void send({
-        version: 1,
-        action: 'stop',
-        instanceId,
-        signal: action === 'kill' ? 'SIGKILL' : 'SIGTERM',
-      });
-    else void send({ version: 1, action, instanceId });
   });
 }
 window.addEventListener('blur', revoke);
@@ -212,8 +265,19 @@ window.addEventListener('resize', () => {
 let ticks = 0;
 let lastColumns = 80;
 let lastRows = 24;
+const poll = (request: TerminalNativeRequest) => {
+  polling = true;
+  pollInFlight = send(request)
+    .then(() => {})
+    .catch(revoke)
+    .finally(() => {
+      polling = false;
+      pollInFlight = undefined;
+      updateButtons();
+    });
+};
 const timer = setInterval(() => {
-  if (busy || !instanceId) return;
+  if (busy || actionPending || gesture || !instanceId) return;
   if (pending) {
     void flush();
     return;
@@ -223,11 +287,11 @@ const timer = setInterval(() => {
   if (attached && live && (columns !== lastColumns || rows !== lastRows)) {
     lastColumns = columns;
     lastRows = rows;
-    void send({ version: 1, action: 'resize', instanceId, columns, rows });
+    poll({ version: 1, action: 'resize', instanceId, columns, rows });
     return;
   }
-  if (++ticks % 5 === 0) void send({ version: 1, action: 'snapshot', instanceId });
-  else if (attached && !gap) void send({ version: 1, action: 'read', instanceId, cursor });
+  if (++ticks % 5 === 0) poll({ version: 1, action: 'snapshot', instanceId });
+  else if (attached && !gap) poll({ version: 1, action: 'read', instanceId, cursor });
 }, 100);
 window.addEventListener(
   'pagehide',

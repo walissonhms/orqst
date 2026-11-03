@@ -249,3 +249,80 @@ The unchanged full-unit repeat subsequently passed all 506 cases, including that
 initialization test. Both logs are retained; the timeout is not erased or claimed
 fixed by the repeat. This final unit result does not approve the separate PTY
 acceptance or real-provider milestone.
+
+## Action gestures and background polling
+
+The interactive renderer previously disabled every action button for each background
+read, snapshot or resize. A request beginning between press and release could disable
+an initially enabled Attach or Stop button before Chromium dispatched its click.
+That loses the gesture without a request, confirmation, attachment or signal. A
+running process with missing initial output therefore does not alone prove lost PTY
+bytes; it can also have no successful attachment.
+
+Polling now defers new background requests while an action-button pointer or
+Space/Enter gesture finishes. Release defers resumption to the next task so the same
+gesture's click can run first. Cancellation, blur, leaving the document and hiding it
+also resume polling; no pointer capture changes drag activation. Background requests
+keep action buttons enabled. One active click can wait for the current background
+reply before dispatch, with controls disabled for that active action; another click
+cannot accumulate work. Blur, hiding, navigation or identity change discard that
+waiting gesture. The actual dispatch still requires unexpired renderer activation
+and current native focus; waiting neither renews consent nor retries a request.
+Direct concurrent preload/IPC/Core requests still return busy according to the
+original contract, with no native request queue. Native focus,
+activation, one-in-flight admission, confirmation, lease and gap guards are unchanged.
+This fixes a demonstrated mechanism, not every possible historical failure or loss
+of native focus. A busy reply remains unsuccessful, including busy-before-denied
+after lease revocation.
+
+After `pnpm build:desktop`, explicitly run these disposable regressions:
+
+```bash
+pnpm accept:terminal-gestures --authorize-synthetic-pty attach-pointer
+pnpm accept:terminal-gestures --authorize-synthetic-pty stop-pointer
+pnpm accept:terminal-gestures --authorize-synthetic-pty attach-space
+pnpm accept:terminal-gestures --authorize-synthetic-pty stop-space
+pnpm accept:terminal-gestures --authorize-synthetic-pty attach-inflight-pointer
+pnpm accept:terminal-gestures --authorize-synthetic-pty stop-inflight-pointer
+pnpm accept:terminal-gestures --authorize-synthetic-pty attach-inflight-space
+pnpm accept:terminal-gestures --authorize-synthetic-pty stop-inflight-space
+```
+
+The harness uses the production renderer, preload, runtime, broker, Core and PTY
+backend with the compiled synthetic fixture. It controls only the polling clock,
+holds selected background replies, and explicitly substitutes native focus/dialogs
+inside its temporary Desktop. It waits for the native menu to become enabled before
+opening the view; document creation alone is not initialization readiness. It checks
+one click and one confirmation per gesture, no background request during the gesture,
+the initial fixture marker, confirmed owned exit and durable lifecycle receipt.
+Negative native-focus predicates deny start/attach/stop without extra confirmation;
+cancel/blur/leave resume polling without an action. The same controlled press/release
+against the previous renderer produces zero clicks and zero new confirmations for
+both actions and both input methods. Raw local comparison logs stay outside Git.
+The in-flight variants hold a read before press, verify that only the active gesture
+waits and that no privileged request precedes the read reply, then require one action
+and one confirmation. A waiting gesture is discarded on blur; activation expiry
+also denies dispatch without a native request or new confirmation. Direct concurrent
+requests retain their busy reply and never acquire a retry or offline queue.
+
+These checks distinguish scheduling from native focus. A locked console fails the
+unchanged pair preflight before fixtures start. A synthetic positive focus predicate
+only validates the transport path; it never accepts actual macOS focus. The original
+`pnpm accept:terminal-pair --authorize-synthetic-pty` retains all assertions and
+deadlines and requires an unlocked native environment. Even a passing synthetic
+pair does not validate human native dialogs, installed provider authentication,
+model availability, real A-to-B processing/return, durable reconnect or the full
+Desktop milestone. Do not restart an existing Desktop with drafts or owned work
+merely to load the rebuilt renderer.
+
+The native harness also waits for an enabled terminal menu before opening a view,
+then observes parent focus before invoking the opener, leaving the native child
+focus last. Menu readiness, parent activation and exact-child focus share the
+original five-second focus budget. Previously it called `BrowserWindow.focus()` after the child opener; a failed
+post-Stop run had the parent/dashboard focused and both terminal views unfocused,
+despite both owned SIGTERM exits being confirmed in their journals and receipts.
+The acceptance now explicitly focuses the dashboard, proves that a focused parent
+alone leaves both terminal predicates false, then requires the existing opener to
+recover the exact child. No focus predicate, original assertion or deadline is
+weakened, and no failed action is retried. Actual OS focus loss can still refuse a
+gesture and remains distinct from transport or process exit.

@@ -161,29 +161,60 @@ try {
     .click();
   await draft.fill(draftText);
   const focus = async (slot: number) => {
-    await desktop!.evaluate(({ app, Menu, BrowserWindow }, index) => {
+    // All focus phases share the original 5-second budget; never retry an opener/action.
+    const deadline = Date.now() + 5000;
+    const remaining = () => Math.max(1, deadline - Date.now());
+    await expect
+      .poll(
+        () =>
+          desktop!.evaluate(
+            ({ Menu }, index) =>
+              Menu.getApplicationMenu()!.getMenuItemById(
+                index === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open',
+              )!.enabled,
+            slot,
+          ),
+        { timeout: remaining() },
+      )
+      .toBe(true);
+    await desktop!.evaluate(({ app, BrowserWindow }) => {
       app.show();
       app.focus({ steal: true });
-      Menu.getApplicationMenu()!
-        .getMenuItemById(index === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open')!
-        .click();
       const w = BrowserWindow.getAllWindows()[0]!;
       w.show();
       w.focus();
+    });
+    await expect
+      .poll(
+        () =>
+          desktop!.evaluate(({ BrowserWindow }) => {
+            const w = BrowserWindow.getAllWindows()[0]!;
+            return w.isVisible() && w.isFocused();
+          }),
+        { timeout: remaining() },
+      )
+      .toBe(true);
+    await desktop!.evaluate(({ Menu }, index) => {
+      // The opener focuses the native child last, as a real menu gesture does.
+      Menu.getApplicationMenu()!
+        .getMenuItemById(index === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open')!
+        .click();
     }, slot);
     await expect
-      .poll(() =>
-        desktop!.evaluate(({ BrowserWindow }, index) => {
-          const w = BrowserWindow.getAllWindows()[0]!;
-          const view = w.contentView.children.find(
-            (view) =>
-              'webContents' in view &&
-              (view as Electron.WebContentsView).webContents
-                .getTitle()
-                .includes(index === 0 ? 'T-001' : 'T-002'),
-          ) as Electron.WebContentsView | undefined;
-          return !!view && w.isFocused() && view.webContents.isFocused();
-        }, slot),
+      .poll(
+        () =>
+          desktop!.evaluate(({ BrowserWindow }, index) => {
+            const w = BrowserWindow.getAllWindows()[0]!;
+            const view = w.contentView.children.find(
+              (view) =>
+                'webContents' in view &&
+                (view as Electron.WebContentsView).webContents
+                  .getTitle()
+                  .includes(index === 0 ? 'T-001' : 'T-002'),
+            ) as Electron.WebContentsView | undefined;
+            return !!view && w.isFocused() && view.webContents.isFocused();
+          }, slot),
+        { timeout: remaining() },
       )
       .toBe(true)
       .catch(async (error) => {
@@ -217,6 +248,28 @@ try {
   const terminals = ['T-001', 'T-002'].map(
     (id) => indexed.find((entry) => entry.header.includes(id))!.page,
   );
+  // A focused parent/dashboard is insufficient. Recover the exact native child via its opener.
+  await focus(0);
+  await desktop.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.webContents.focus(),
+  );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(({ BrowserWindow }) => {
+        const w = BrowserWindow.getAllWindows()[0]!;
+        return (
+          w.isFocused() &&
+          w.webContents.isFocused() &&
+          w.contentView.children.every(
+            (view) =>
+              !('webContents' in view) ||
+              !(view as Electron.WebContentsView).webContents.isFocused(),
+          )
+        );
+      }),
+    )
+    .toBe(true);
+  await focus(0);
   for (const [slot, page] of terminals.entries()) {
     await focus(slot);
     await expect(page.locator('#terminal .xterm')).toBeVisible();
