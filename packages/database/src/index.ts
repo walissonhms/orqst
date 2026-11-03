@@ -25,6 +25,8 @@ import {
 import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
+import { openTerminalJournal } from './terminal-journal.js';
+export { TERMINAL_JOURNAL_LIMITS } from './terminal-journal.js';
 export { SESSION_METRICS_LIMITS } from './live-metrics.js';
 import {
   analyticsEvidenceMigration,
@@ -182,6 +184,15 @@ export class Store {
         failed: true,
         intervention: true,
       }),
+    );
+  }
+  /** Experimental owned-terminal composition only. Never exposed by Bridge. */
+  terminalJournal(epoch: string, options: { recover: boolean }) {
+    return openTerminalJournal(
+      this.db,
+      (action) => this.transaction(action),
+      epoch,
+      options.recover,
     );
   }
   checkpoint(source: string): Checkpoint | undefined {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { terminalStateSchema } from './terminal-journal.js';
 
 // Experimental native-only contract. Never exposed by the observer Bridge or preload.
 const instance = { instanceId: z.string().uuid() };
@@ -40,14 +41,7 @@ export const terminalNativeReplySchema = z.union([
       .strictObject({
         instanceId: z.string().uuid(),
         epoch: z.string().uuid(),
-        state: z.enum([
-          'prepared',
-          'starting',
-          'running',
-          'exited',
-          'start_failed',
-          'ownership_lost',
-        ]),
+        state: terminalStateSchema,
         exit: z
           .strictObject({
             exitCode: z.number().int().safe(),

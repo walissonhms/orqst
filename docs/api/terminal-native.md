@@ -1,5 +1,9 @@
 # Experimental native terminal client boundary
 
+The later [durable recovery increment](../development/terminal-recovery.md) adds an
+optional private Store journal to the supervisor. It does not change this wire
+contract, compose a provider or enable a production control surface.
+
 Implemented engineering code, **not an application API**. No `/api` route, WebSocket
 message, normal Desktop IPC listener, observer preload or dashboard registers this contract. Core's
 public entry point does not export the experimental supervisor or broker. There is
@@ -92,9 +96,10 @@ without a signal. Unstarted preparations become `start_failed`. It is idempotent
 late callbacks cannot erase uncertainty. This conservative teardown policy is not
 durable crash recovery, descendant cleanup or a guarantee that work survives.
 
-There is no immutable executable/cwd binding, durable journal, resource sandbox,
-lifetime timer, safe relaunch, signed packaging or credential provisioning in this
-increment. These production gates still prevent runtime composition. Automatic tests
+The optional [metadata journal](../development/terminal-recovery.md) now provides
+conservative epoch recovery outside this lab. There is no immutable executable/cwd
+binding, resource sandbox, lifetime timer, safe relaunch, signed packaging or credential
+provisioning. These production gates still prevent runtime composition. Automatic tests
 use only in-memory doubles; the explicit synthetic PTY lab now exercises this broker
 against a real fixed Node PTY with a synthetic confirmation host. That host is not
 a genuine native user gesture and no real CLI is exercised.

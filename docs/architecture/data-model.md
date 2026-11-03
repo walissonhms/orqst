@@ -408,3 +408,20 @@ snapshots remain separately undistributed; null windows never imply zero. The fo
 usage components reconcile to the accompanying aggregate from the same WAL snapshot.
 This projection changes no table, migration, checkpoint, retention or token admission
 rule. Window timing is not a measured daily consumption distribution.
+
+## Opt-in owned-terminal metadata journal — 2026-11-03
+
+Explicit trusted `Store.terminalJournal` composition initializes `terminal_schema`
+(feature version 1), `terminal_owner` (one epoch) and `terminal_attempts` in the
+existing SQLite writer. Observer schema version 2, events, checkpoints, canonical
+usage and Analytics remain unchanged. Normal startup does not create these tables.
+Strict runtime metadata and SQL consistency checks retain instance/epoch/client/project
+references, manifest digest, lifecycle/timestamps and confirmed exit metadata only.
+No source session, process PID, transcript, input, argv, credential or grant is stored.
+
+Preparation and atomic admission commit before the backend start. Recovery fences
+the old epoch, fails unstarted preparations and retains started/live work as
+`ownership_lost`; it never adopts, signals or restarts. Lost rows reserve the two-global,
+one-per-project admission budget. Only exited/start-failed rows older than 30 days
+can be pruned on preparation; at 10,000 attempts preparation fails. Existing
+supervisor memory bounds remain. See [contract, tests and limitations](../development/terminal-recovery.md).

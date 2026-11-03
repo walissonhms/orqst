@@ -1,5 +1,7 @@
 // Not composed into ObserverCore/Bridge/Desktop. The only backend is a developer fixture.
 import { randomUUID } from 'node:crypto';
+import type { TerminalJournal, TerminalState } from '@orqst/protocol';
+export type { TerminalState } from '@orqst/protocol';
 import { TerminalAuthority, terminalDigest, type TerminalBinding } from './authority.js';
 import { TerminalOutput } from './output.js';
 
@@ -31,8 +33,6 @@ export interface TerminalProfile {
   environmentProfile: string;
   permissions: string;
 }
-export type TerminalState =
-  'prepared' | 'starting' | 'running' | 'exited' | 'start_failed' | 'ownership_lost';
 export interface TerminalEvents {
   started(): void;
   data(text: string): void;
@@ -67,6 +67,8 @@ interface Attachment {
 }
 interface Attempt {
   id: string;
+  clientId: string;
+  startExpiresAt: number;
   attachmentGeneration: number;
   rateAt: number;
   inputBytes: number;
@@ -91,7 +93,11 @@ export class TerminalSupervisor {
     private readonly authority: TerminalAuthority,
     private readonly backend: TerminalBackend,
     profiles: readonly TerminalProfile[],
+    private readonly journal?: TerminalJournal,
   ) {
+    if (journal && journal.epoch !== authority.epoch)
+      throw new Error('Terminal journal epoch mismatch');
+    journal?.assertOwner();
     if (profiles.length > 16) throw new Error('Terminal profile limit exceeded');
     for (const profile of profiles) {
       if (
@@ -114,15 +120,24 @@ export class TerminalSupervisor {
 
   prepare(clientId: string, profileId: string) {
     if (this.closed) throw new Error('Terminal supervisor is closed');
+    this.journal?.assertOwner();
     const profile = this.profiles.get(profileId);
     if (!profile || !this.validProfile(profile)) throw new Error('Terminal profile unavailable');
-    // Metadata remains bounded; no unreviewed persistence/retention migration.
+    // In-memory metadata remains bounded independently of optional durable retention.
     if (this.attempts.size >= 128) throw new Error('Terminal attempt limit exceeded');
     const id = randomUUID();
     const digest = terminalDigest(JSON.stringify([profile, terminalPolicy]));
     const challenge = this.authority.prepare(clientId, { operation: 'start', target: id, digest });
+    this.journal?.prepare({
+      instanceId: id,
+      clientId,
+      projectId: profile.projectId,
+      manifestDigest: digest,
+    });
     this.attempts.set(id, {
       id,
+      clientId,
+      startExpiresAt: challenge.expiresAt,
       profile,
       digest,
       state: 'prepared',
@@ -137,6 +152,7 @@ export class TerminalSupervisor {
 
   snapshot(id: string) {
     const attempt = this.get(id);
+    this.owned(attempt);
     return {
       instanceId: id,
       epoch: this.authority.epoch,
@@ -160,45 +176,61 @@ export class TerminalSupervisor {
     const valid = this.validProfile(attempt.profile);
     this.authority.consume(proof, { operation: 'start', target: id, digest: attempt.digest });
     if (!valid) {
+      this.journal?.transition(id, 'start_failed');
       attempt.state = 'start_failed';
       return;
     }
+    // Durable admission commits before a backend can have side effects. Never retry a proof.
+    this.journal?.transition(id, 'starting');
     attempt.state = 'starting';
     try {
       attempt.startupTimer = setTimeout(() => this.lose(attempt), terminalPolicy.startupMs);
       attempt.startupTimer.unref();
-      const handle = this.backend.start(attempt.profile, {
-        lost: () => this.lose(attempt),
-        started: () => {
-          if (attempt.state === 'starting') {
-            attempt.state = 'running';
+      const start = () => {
+        // Durable I/O may have delayed dispatch beyond the original one-use consent.
+        if (
+          !this.authority.isEnrolled(attempt.clientId) ||
+          this.authority.now() >= attempt.startExpiresAt
+        )
+          throw new Error('Terminal start authorization expired');
+        return this.backend.start(attempt.profile, {
+          lost: () => this.lose(attempt),
+          started: () => {
+            if (attempt.state === 'starting') {
+              if (!this.record(attempt, 'running')) return;
+              attempt.state = 'running';
+              clearTimeout(attempt.startupTimer);
+            }
+          },
+          data: (text) => {
+            if (!['starting', 'running'].includes(attempt.state)) return;
+            if (!this.owned(attempt)) return;
+            // A backend event is bounded too; no arbitrary allocation from an untrusted chunk.
+            if (text.length > terminalPolicy.backendEventCodeUnits) return this.lose(attempt);
+            try {
+              attempt.output.append(Buffer.from(text));
+            } catch {
+              this.lose(attempt);
+            }
+          },
+          exit: (exitCode, signal) => {
+            if (!['starting', 'running'].includes(attempt.state)) return;
+            if (
+              !Number.isSafeInteger(exitCode) ||
+              (signal !== undefined && !Number.isSafeInteger(signal))
+            )
+              return this.lose(attempt);
+            const exit = { exitCode, ...(signal === undefined ? {} : { signal }) };
+            if (!this.record(attempt, 'exited', exit)) return;
+            attempt.state = 'exited';
+            attempt.exit = exit;
             clearTimeout(attempt.startupTimer);
-          }
-        },
-        data: (text) => {
-          if (!['starting', 'running'].includes(attempt.state)) return;
-          // A backend event is bounded too; no arbitrary allocation from an untrusted chunk.
-          if (text.length > terminalPolicy.backendEventCodeUnits) return this.lose(attempt);
-          try {
-            attempt.output.append(Buffer.from(text));
-          } catch {
-            this.lose(attempt);
-          }
-        },
-        exit: (exitCode, signal) => {
-          if (!['starting', 'running'].includes(attempt.state)) return;
-          if (
-            !Number.isSafeInteger(exitCode) ||
-            (signal !== undefined && !Number.isSafeInteger(signal))
-          )
-            return this.lose(attempt);
-          attempt.state = 'exited';
-          attempt.exit = { exitCode, ...(signal === undefined ? {} : { signal }) };
-          clearTimeout(attempt.startupTimer);
-          if (attempt.attachment) attempt.attachment.lease = undefined;
-          this.releaseHandle(attempt);
-        },
-      });
+            if (attempt.attachment) attempt.attachment.lease = undefined;
+            this.releaseHandle(attempt);
+          },
+        });
+      };
+      const handle = this.journal ? this.journal.withOwner(start) : start();
       attempt.handle = handle;
       if (['exited', 'ownership_lost'].includes(attempt.state)) this.releaseHandle(attempt);
     } catch {
@@ -209,6 +241,7 @@ export class TerminalSupervisor {
 
   requestAttach(clientId: string, id: string) {
     if (this.closed) throw new Error('Terminal supervisor is closed');
+    this.journal?.assertOwner();
     const attempt = this.get(id);
     if (!['running', 'exited'].includes(attempt.state)) throw new Error('Terminal unavailable');
     return this.authority.prepare(
@@ -219,6 +252,7 @@ export class TerminalSupervisor {
 
   attach(id: string, proof: unknown): string {
     if (this.closed) throw new Error('Terminal supervisor is closed');
+    this.journal?.assertOwner();
     const attempt = this.get(id);
     if (!['running', 'exited'].includes(attempt.state)) throw new Error('Terminal unavailable');
     if (attempt.attachment && this.authority.isEnrolled(attempt.attachment.clientId))
@@ -362,8 +396,15 @@ export class TerminalSupervisor {
     this.closed = true;
     for (const attempt of this.attempts.values()) {
       attempt.attachment = undefined;
-      if (attempt.state === 'prepared') attempt.state = 'start_failed';
-      else if (['starting', 'running'].includes(attempt.state)) this.lose(attempt);
+      if (attempt.state === 'prepared') {
+        this.record(attempt, 'start_failed');
+        attempt.state = 'start_failed';
+      } else if (['starting', 'running'].includes(attempt.state)) this.lose(attempt);
+    }
+    try {
+      this.journal?.release();
+    } catch {
+      // An unavailable/fenced journal must not turn teardown into an implicit signal.
     }
   }
 
@@ -449,12 +490,14 @@ export class TerminalSupervisor {
 
   private live(id: string): Attempt {
     const attempt = this.get(id);
+    if (!this.owned(attempt)) throw new Error('Terminal journal ownership lost');
     if (attempt.state !== 'running' || !attempt.handle)
       throw new Error('Terminal is not owned and running');
     return attempt;
   }
 
   private attachment(attempt: Attempt, id: string): Attachment {
+    if (!this.owned(attempt)) throw new Error('Terminal journal ownership lost');
     const attachment = attempt.attachment;
     if (!attachment || attachment.id !== id || !this.authority.isEnrolled(attachment.clientId))
       throw new Error('Terminal attachment unavailable');
@@ -463,7 +506,8 @@ export class TerminalSupervisor {
 
   private effect(attempt: Attempt, operation: () => void): void {
     try {
-      operation();
+      if (this.journal) this.journal.withOwner(operation);
+      else operation();
     } catch {
       this.lose(attempt);
       throw new Error('Terminal effect uncertain; input revoked');
@@ -472,10 +516,37 @@ export class TerminalSupervisor {
 
   private lose(attempt: Attempt): void {
     if (['exited', 'start_failed'].includes(attempt.state)) return;
+    if (attempt.state !== 'ownership_lost') {
+      try {
+        this.journal?.transition(attempt.id, 'ownership_lost');
+      } catch {
+        // Keep the last durable state uncertain; recovery must never infer an exit.
+      }
+    }
     attempt.state = 'ownership_lost';
     attempt.attachment = undefined;
     clearTimeout(attempt.startupTimer);
     this.releaseHandle(attempt);
+  }
+
+  private owned(attempt: Attempt): boolean {
+    try {
+      this.journal?.assertOwner();
+      return true;
+    } catch {
+      this.lose(attempt);
+      return false;
+    }
+  }
+
+  private record(attempt: Attempt, state: TerminalState, exit?: Attempt['exit']): boolean {
+    try {
+      this.journal?.transition(attempt.id, state, exit);
+      return true;
+    } catch {
+      this.lose(attempt);
+      return false;
+    }
   }
 
   private releaseHandle(attempt: Attempt): void {

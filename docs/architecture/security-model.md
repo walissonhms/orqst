@@ -4,7 +4,9 @@ The experimental [owned terminal library](../development/terminal-owned-lab.md)
 is not composed into the application. Its signed one-use grants and leased,
 sequenced owned-handle I/O are tested with in-memory doubles and an explicit
 synthetic fixture. No native gesture/signing service, enrollment, IPC, execution
-endpoint, durable audit or recovery is implemented. Existing read authentication
+endpoint or production recovery is implemented. The later optional
+[metadata journal](../development/terminal-recovery.md) provides synthetic-tested
+epoch recovery outside normal startup. Existing read authentication
 and observer behavior are unchanged; laboratory signatures cannot establish native
 consent or production execution safety.
 
@@ -575,3 +577,22 @@ exit. The fixture's lifetime bounds are not a production process sandbox/recover
 policy. Real transport checks passed with intercepted dialogs; genuine human
 consent, immutable provider admission, independent authentication, containment and
 durable Core ownership remain gates before enabling Codex.
+
+## Opt-in terminal journal review — 2026-11-03
+
+The [experimental recovery library](../development/terminal-recovery.md) uses the
+existing Store writer, owner-only database permissions, feature-scoped schema and
+strict metadata-only records. Normal Core/Bridge/Desktop and the native lab do not
+open it. No API, WS, cookie, static-file policy, credential or external-session
+authority changes. Signed native operation grants are still required; epoch
+ownership is an additional fence, not authentication or consent.
+
+Admission is committed before backend start and checked atomically across retained
+uncertain work. Synchronous effects serialize with owner replacement; foreign
+uncommitted transactions are refused. Explicit recovery changes only durable facts
+and the owner epoch. It cannot grant attachment, signal a PID, adopt or retry work.
+Pending preparations fail; previously started work stays ownership_lost even after
+late callbacks. Retention removes only old reconciled terminal records, never lost
+ownership. Storage errors revoke local effects without claiming that side effects
+were undone. Synthetic crash/restart evidence is not production containment,
+immutable executable/cwd admission, provider credential isolation or live recovery.

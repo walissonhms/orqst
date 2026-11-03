@@ -118,6 +118,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   contracts. Read the [native contract](docs/api/terminal-native.md) and
   [dated primary-source CLI research](docs/adapters/managed-terminal-research.md).
 
+- **Terminal durable recovery increment (2026-11-03):** the experimental supervisor
+  can use the existing SQLite writer for metadata-only attempts, commit-before-start
+  admission and explicit epoch recovery. Lost ownership keeps admission capacity;
+  old owners cannot send input or signals. The journal is opt-in and absent from
+  normal observer startup and the native lab. Synthetic restart/crash tests do not
+  establish managed Codex support. Immutable executable/cwd binding, isolated
+  authentication, containment and provider acceptance remain required; Claude Code
+  and OpenCode remain contracts. See [recovery and concrete gates](docs/development/terminal-recovery.md).
+
 - **Native Terminal integration lab (2026-11-03):** an explicit developer command
   now builds a disposable Electron document, separate session/preload and bounded
   IPC runtime connected to an owned synthetic PTY in a separate Node host. Native

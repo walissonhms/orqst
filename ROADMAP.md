@@ -304,3 +304,15 @@ are native gesture/restricted-document acceptance, independently authenticated
 transport/enrollment, immutable executable/cwd admission, containment/lifetime and
 durable ownership recovery, followed by disposable per-provider acceptance. No
 external-session adoption or production activation is authorized by library tests.
+
+### Terminal durable recovery increment — 2026-11-03
+
+The optional [metadata journal](docs/development/terminal-recovery.md) now records
+attempts through the existing Store, commits admission before backend start and
+fences prior epochs on explicit recovery. Lost ownership retains capacity; no PID,
+input/output, credential, automatic signal or retry is persisted or inferred.
+Synthetic abrupt-writer-exit and negative authorization/recovery tests validate
+these library semantics. Normal observer startup and the native lab do not open it.
+Codex remains the first managed target, not an enabled provider. Immutable OS
+binding, isolated authentication, native enrollment, containment and individual
+provider acceptance are still required; Claude Code/OpenCode remain contracts.
