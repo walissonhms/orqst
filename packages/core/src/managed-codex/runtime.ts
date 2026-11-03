@@ -220,8 +220,6 @@ export class CodexStructuredRuntime {
         projectId: terminalDigest(attempt.config.project),
         manifestDigest: attempt.digest,
       });
-      journal.transition(id, 'starting');
-      attempt.state = 'starting';
       attempt.pane = this.communication.registerPane({
         workspaceId: attempt.input.workspaceId,
         name: attempt.input.name,
@@ -248,6 +246,9 @@ export class CodexStructuredRuntime {
       this.validate(attempt);
       if (!this.authority.isEnrolled(attempt.clientId) || this.authority.now() >= attempt.expiresAt)
         throw new Error('Codex start authorization expired');
+      // Admission is durable immediately before the first possibly effectful backend call.
+      journal.transition(id, 'starting');
+      attempt.state = 'starting';
       let confirmStarted: () => void;
       const started = new Promise<void>((resolve) => {
         confirmStarted = resolve;
@@ -332,6 +333,13 @@ export class CodexStructuredRuntime {
           /* No process was dispatched. */
         }
         attempt.state = 'start_failed';
+        if (attempt.pane) {
+          try {
+            this.communication.setPaneState(attempt.pane.paneId, 'closed');
+          } catch {
+            /* No process was dispatched. */
+          }
+        }
       }
       this.lose(attempt);
       throw new Error('Codex native start unavailable or uncertain; no automatic retry');
@@ -424,7 +432,7 @@ export class CodexStructuredRuntime {
       }
       a.state = 'ownership_lost';
     }
-    if (a.pane && a.state !== 'exited') {
+    if (a.pane && !['exited', 'start_failed'].includes(a.state)) {
       try {
         this.communication.setPaneState(a.pane.paneId, 'unavailable');
       } catch {

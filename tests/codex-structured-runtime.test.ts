@@ -649,3 +649,64 @@ test('a native host exit without an owned-provider exit report does not invent p
     f.close();
   }
 });
+
+for (const failure of ['registry-full', 'manifest-drift-after-registry'] as const) {
+  test(`pre-dispatch ${failure} does not reserve capacity for a process that was never opened`, async () => {
+    const f = fixture();
+    try {
+      const slot = f.config('predispatch');
+      const original = f.communication.registerPane.bind(f.communication);
+      f.communication.registerPane = (input) => {
+        if (failure === 'registry-full') throw new Error('SYNTHETIC registry capacity');
+        const pane = original(input);
+        writeFileSync(
+          slot.file,
+          JSON.stringify({ ...slot.config, executableVersion: 'SYNTHETIC DRIFT' }),
+        );
+        return pane;
+      };
+      const prepared = f.prepare(slot.file, 'Never dispatched');
+      await assert.rejects(
+        f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+        /unavailable|uncertain/,
+      );
+      assert.equal(f.runtime.snapshot(prepared.instanceId).state, 'start_failed');
+      assert.equal(f.transports.length, 0);
+      if (failure === 'manifest-drift-after-registry') {
+        assert.equal(f.communication.resolvePane('synthetic-workspace', 'T-001').state, 'closed');
+        writeFileSync(slot.file, JSON.stringify(slot.config));
+      }
+      f.communication.registerPane = original;
+      const next = await f.launch(slot.file, 'Authorized fresh start');
+      assert.equal(next.pane.state, 'ready');
+      assert.equal(f.transports.length, 1);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('legacy explicit journal recovery fences structured control but does not permit a second process in its home', async () => {
+  const f = fixture();
+  let legacy: Store | undefined;
+  try {
+    const slot = f.config('fenced');
+    const a = await f.launch(slot.file, 'Still potentially alive');
+    legacy = new Store(join(slot.config.state, 'terminal.sqlite'));
+    const recovered = legacy.terminalJournal(randomUUID(), { recover: true });
+    const next = randomUUID();
+    recovered.prepare({
+      instanceId: next,
+      projectId: a.pane.binding!.projectId,
+      clientId: 'SYNTHETIC-legacy',
+      manifestDigest: terminalDigest('synthetic'),
+    });
+    assert.throws(() => recovered.transition(next, 'starting'), /admission/);
+    assert.equal(f.runtime.snapshot(a.prepared.instanceId).state, 'ownership_lost');
+    assert.equal(f.transports.length, 1);
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    legacy?.close();
+    f.close();
+  }
+});
