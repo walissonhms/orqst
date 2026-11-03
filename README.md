@@ -2,6 +2,10 @@
 
 **One place. Every agent.**
 
+The shared dashboard uses the approved ORQST logo in navigation and a static mascot
+in its empty-session welcome. See [brand assets](docs/design/brand-assets.md) for
+artwork provenance, accessibility and safe SVG handling.
+
 ORQST is an open-source, local-first platform for intelligent AI agent
 observability, evolving toward managed execution and structured orchestration.
 Its primary experience is understanding agent activity, delivery, intervention,
