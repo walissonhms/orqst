@@ -102,7 +102,11 @@ references, depth, timestamps and independent state fields.
 No arbitrary agent can submit provider evidence. Only the callback passed to the
 injected adapter can do so. Adapters must independently verify readiness and
 provider-native events; mocks do not establish provider support. The Core requires
-send/queue/ack/completion capabilities for admission. Busy panes queue locally;
+source `canSend` to originate a task and target `canSend` for structured submission, plus target queue/ack/completion capabilities for admission.
+Source `canCancel` permits cancellation of its own never-dispatched queue only; it
+is not provider cancellation support. Provider acceptance/receipt callbacks require
+target `canAcknowledge`; task callbacks require `canReportTaskCompletion`, checked
+again when evidence arrives. Busy panes queue locally;
 provider-native queueing and cancellation are not enabled. Missing adapter/readiness
 leaves work queued without creating an attempt. Capability declarations are supplied
 by trusted enrollment, not inferred from CLI installation or a PTY prompt.
@@ -128,8 +132,9 @@ Idempotency scope is workspace + target + logical operation key. Exact duplicate
 admission returns the original message/status. Changed task, content, authority or
 logical envelope conflicts; UUID reuse cannot overwrite an existing message/task.
 There is one dispatch attempt and **no automatic retry** or exactly-once execution
-claim. A transport exception becomes `delivery_unknown` / `outcome_unknown` unless
-an authoritative outcome was already committed. Acceptance remains acceptance if
+claim. A submit that resolves without accepted evidence, a timeout or a transport exception
+becomes `delivery_unknown` / `outcome_unknown` unless an authoritative outcome was
+already committed. Acceptance remains acceptance if
 known; uncertainty never erases confirmed evidence.
 
 Confirmed closure before dispatch yields `target_closed` + failed task. Closure
@@ -146,7 +151,13 @@ attempts conservatively. Grants/adapters are memory-only; queued work needs expl
 fresh authorization for each message plus independent exact-binding re-enrollment
 and confirmed readiness. Unknown attempts cannot be reauthorized/retried. There is
 no ownership adoption, PID signaling, process survival, resume or reconciliation
-implementation. An old binding must never be attached to a new process.
+implementation. **There is no capacity reclamation API.** Four unresolved outcomes
+exhaust the global dispatch limit even after their panes close or new panes are
+registered. Restart preserves that block; it cannot establish that work stopped.
+The library deliberately fails closed until a separately reviewed, evidence-backed
+reconciliation design can release capacity without inventing task outcomes. Do not
+reset, delete or replace a journal to bypass uncertainty. This is an explicit gate
+before enabling real-provider dispatch in normal runtime. An old binding must never be attached to a new process.
 
 There are hard history caps: 128 panes, 1,024 messages and 16,384 append-only audit
 events. Reaching a cap fails closed; records are not silently evicted. No retention,

@@ -27,7 +27,7 @@ const capabilities = {
   canQueueWhileBusy: true,
   canAcknowledge: true,
   canReportTaskCompletion: true,
-  canCancel: false,
+  canCancel: true,
 };
 function setup(file = ':memory:') {
   const store = new Store(file);
@@ -688,3 +688,104 @@ test('a hung structured submission times out as uncertain without cancellation, 
     f.store.close();
   }
 });
+
+test(
+  'capabilities constrain source delegation and local cancellation separately from private grants',
+  withFixture((f) => {
+    const client = f.authorize();
+    f.journal.transaction((tx) =>
+      tx.savePane({ ...f.a, capabilities: { ...f.a.capabilities, canSend: false } }),
+    );
+    assert.throws(() => client.send(f.request()), /capabilities/);
+    f.journal.transaction((tx) =>
+      tx.savePane({ ...f.a, capabilities: { ...f.a.capabilities, canCancel: false } }),
+    );
+    const r = f.request();
+    client.send(r);
+    assert.throws(() => client.cancelQueued(r.messageId), /cancellation capability/);
+    assert.equal(client.status(r.messageId).taskState, 'pending');
+  }),
+);
+
+test(
+  'provider evidence is rejected when acknowledgement or task-reporting capability is withdrawn',
+  withFixture(async (f) => {
+    const client = f.authorize();
+    const r = f.request();
+    client.send(r);
+    f.service.enrollAdapter(f.b.paneId, f.b.binding!, {
+      ready: () => true,
+      submit: async (m, _bytes, report) => {
+        const change = (patch: Partial<CommunicationPane['capabilities']>) =>
+          f.journal.transaction((tx) =>
+            tx.savePane({
+              ...f.b,
+              capabilities: { ...f.b.capabilities, ...patch },
+            }),
+          );
+        change({ canAcknowledge: false });
+        assert.throws(() => report(f.event(m, f.b, 'accepted')), /capability/);
+        change({});
+        report(f.event(m, f.b, 'accepted'));
+        report(f.event(m, f.b, 'started'));
+        change({ canReportTaskCompletion: false });
+        assert.throws(
+          () => report(f.event(m, f.b, 'completed', { result: f.content('synthetic result') })),
+          /capability/,
+        );
+      },
+    });
+    await f.service.dispatchNext(f.b.paneId);
+    assert.equal(client.status(r.messageId).deliveryState, 'accepted');
+    assert.equal(client.status(r.messageId).taskState, 'running');
+  }),
+);
+
+test(
+  'resolved submission without native acceptance is uncertain and cannot receive late evidence or retry',
+  withFixture(async (f) => {
+    const client = f.authorize();
+    const r = f.request();
+    client.send(r);
+    let claim!: CommunicationMessage;
+    let report!: (event: PaneProviderEvidence) => void;
+    f.service.enrollAdapter(f.b.paneId, f.b.binding!, {
+      ready: () => true,
+      submit: async (m, _bytes, callback) => {
+        claim = m;
+        report = callback;
+      },
+    });
+    await f.service.dispatchNext(f.b.paneId);
+    assert.equal(client.status(r.messageId).deliveryState, 'delivery_unknown');
+    assert.equal(client.status(r.messageId).taskState, 'outcome_unknown');
+    assert.throws(() => report(f.event(claim, f.b, 'accepted')), /correlation/);
+    assert.equal(await f.service.dispatchNext(f.b.paneId), undefined);
+  }),
+);
+
+test(
+  'four unknown outcomes retain global capacity after pane closure; new panes cannot bypass reconciliation',
+  withFixture(async (f) => {
+    const targets = [f.b, ...Array.from({ length: 4 }, (_, n) => f.register(`capacity-${n}`))];
+    const client = f.authorize(f.a, targets);
+    let sends = 0;
+    for (let n = 0; n < targets.length; n++) {
+      const pane = targets[n]!;
+      f.service.enrollAdapter(pane.paneId, pane.binding!, {
+        ready: () => true,
+        submit: async () => {
+          sends++;
+        },
+      });
+      const r = f.request(f.a, pane);
+      client.send(r);
+      await f.service.dispatchNext(pane.paneId);
+      if (n < communicationLimits.activeTasks) {
+        assert.equal(client.status(r.messageId).taskState, 'outcome_unknown');
+        f.service.setPaneState(pane.paneId, 'closed');
+      } else assert.equal(client.status(r.messageId).deliveryState, 'queued');
+    }
+    assert.equal(sends, communicationLimits.activeTasks);
+  }),
+);

@@ -206,6 +206,8 @@ export class PaneCommunication {
       cancelQueued: (id) => {
         const message = this.operation(grant, (tx) => {
           const m = this.visible(tx, grant, id);
+          if (!this.pane(tx, grant.sourcePaneId).capabilities.canCancel)
+            throw new Error('Queued cancellation capability unavailable');
           if (m.deliveryState !== 'queued' || m.taskState !== 'pending')
             throw new Error('Cancellation requires undispatched work');
           return this.save(tx, m, { taskState: 'cancelled', reason: 'cancelled_before_dispatch' });
@@ -283,12 +285,16 @@ export class PaneCommunication {
       if (
         source.state === 'closed' ||
         source.ownership !== 'managed' ||
+        !source.capabilities.canSend ||
         !grant ||
         !this.valid(grant) ||
         !this.canRead(grant, next) ||
         pane.state !== 'ready' ||
         !adapter ||
         !pane.capabilities.canSend ||
+        !pane.capabilities.canQueueWhileBusy ||
+        !pane.capabilities.canAcknowledge ||
+        !pane.capabilities.canReportTaskCompletion ||
         !adapter.ready(pane) ||
         messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
         messages.filter(active).length >= communicationLimits.activeTasks
@@ -332,6 +338,14 @@ export class PaneCommunication {
           );
         }),
       ]);
+      const missingAcceptance = this.journal.transaction((tx) =>
+        tx
+          .messages()
+          .some(
+            (m) => m.messageId === claim.message.messageId && m.deliveryState === 'dispatching',
+          ),
+      );
+      if (missingAcceptance) this.uncertain(claim.message.messageId);
     } catch {
       // The provider may have acted before throwing or timing out. Never retry from this exception.
       this.uncertain(claim.message.messageId);
@@ -362,6 +376,12 @@ export class PaneCommunication {
         event.terminalEpoch !== pane.binding.terminalEpoch
       )
         throw new Error('Provider correlation or ownership denied');
+      if (
+        ['accepted', 'delivered'].includes(event.event)
+          ? !pane.capabilities.canAcknowledge
+          : !pane.capabilities.canReportTaskCompletion
+      )
+        throw new Error('Provider evidence capability unavailable');
       const patch: Partial<CommunicationMessage> = {
         evidenceId: event.evidenceId,
         reason: 'provider_evidence',
@@ -429,6 +449,7 @@ export class PaneCommunication {
       target.workspaceId !== grant.workspaceId ||
       source.state === 'closed' ||
       source.ownership !== 'managed' ||
+      !source.capabilities.canSend ||
       target.ownership !== 'managed' ||
       target.state === 'closed' ||
       !target.capabilities.canSend ||
