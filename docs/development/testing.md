@@ -684,6 +684,31 @@ an invalid expectation that unchanged defaults must rewrite storage. The existin
 Vite chunk-size warning remains. No installed services or source data were changed
 by this increment, and no native/provider or release acceptance is implied.
 
+## Workspace pinning
+
+The workspace directory supports local profile pins, pinned-first directory/sidebar
+ordering, a pinned-only filter composed with search and a scoped Unpin all action.
+`tests/workspace-pins.test.ts` covers malformed/oversized input, exact bounded IDs,
+deduplication/capacity and stable priority without mutating or fabricating records.
+
+Run the browser checks after `pnpm build`:
+
+```bash
+pnpm test:browser tests/browser/workspace-pins.spec.ts tests/browser/shell-navigation.spec.ts tests/browser/path-navigation.spec.ts tests/browser/artifact-navigation.spec.ts tests/browser/overview-layout.spec.ts
+```
+
+The eight new synthetic Chromium cases passed on 2026-11-03. They cover keyboard
+pressed state/focus during reordering and filtered removal, grid/list and route/reload
+persistence, active-scope preservation, cross-tab synchronization without echo writes,
+missing identities, malformed/removal recovery, read/write storage denial, offline
+edits without API mutations, capacity/clear recovery, exact draft preservation and
+existing discard confirmation after a cross-tab pin update. pt-BR captures cover dark
+and light themes at 320/1440px with maximum reading sizes/comfortable spacing.
+Manual screen-reader, other-browser and native Desktop visual acceptance remain
+pending. No API, ingestion, database, session-source or terminal behavior changed;
+real-source ingestion and native-provider acceptance were not repeated for this UI
+increment. All browser data lives in the disposable synthetic fixture.
+
 ## Explicit native Terminal transport acceptance
 
 `pnpm accept:terminal-native --authorize-synthetic-pty` builds and opens an isolated
@@ -694,3 +719,10 @@ isolation, cancellation/start, attach/read, exact leased paste, blur revocation,
 confirmed stop/exit and permanent reload revocation. Dialog responses are
 intercepted; this does not accept a real human/modal gesture or provider behavior.
 See [reproduction, lifetime and remaining gates](terminal-native-acceptance.md).
+
+After incorporating the concurrent native Terminal changes through `8fbe7cd`, the
+combined tree passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (289 cases),
+`pnpm build` and the five-suite Chromium command above (43 cases). The existing
+Vite bundle-size warning remains. This validates compatibility of the shared
+renderer increment; it does not repeat native Terminal/provider acceptance or
+approve a release. No installed service was restarted and no push was performed.
