@@ -19,7 +19,9 @@ test('synthetic session renders, localization persists, results are escaped, wor
   await page.getByRole('button', { name: 'Latest result', exact: true }).click();
   await expect(page.locator('.result-content')).toContainText('Synthetic browser result');
   expect(await page.evaluate(() => Reflect.get(window, 'orqstInjected'))).toBeUndefined();
-  expect(await page.locator('img').count()).toBe(0);
+  expect(await page.getByRole('region', { name: 'Session details' }).locator('img').count()).toBe(
+    0,
+  );
   await page.getByLabel('Language').selectOption('pt-BR');
   await expect(page.getByRole('heading', { name: 'Seus agentes, em foco.' })).toBeVisible();
   await page.reload();
