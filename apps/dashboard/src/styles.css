@@ -1930,6 +1930,7 @@ th:nth-last-child(2) {
 
 .artifact-discard-dialog {
   width: 430px;
+  margin: auto;
   max-width: calc(100% - 30px);
   max-height: calc(100% - 30px);
   overflow: auto;

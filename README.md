@@ -45,6 +45,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Artifact navigation protection:** changed memory-only drafts now require a
+  decision before switching sessions/workspaces or leaving Overview, including
+  Search & commands, notification source links and same-document session links.
+  Cancel preserves exact text and context; confirmation performs only the requested
+  transition. Pending native saves keep the panel open with explicit feedback.
+  Browser reload/exit uses a best-effort browser warning while edits remain; Desktop
+  window close/quit, native reloads and crash recovery remain unprotected. Nothing is
+  autosaved. See [Artifacts limits](docs/api/artifacts.md#panel-preview-and-clipboard).
+
 - **Settings and accessibility increment:** open **Settings** in navigation, the
   header or Cmd/Ctrl+K (`/#settings`). General, Appearance & accessibility,
   Notifications and Privacy & storage group working controls and explain their
@@ -460,6 +469,17 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The Artifact navigation increment after `cb5bc12` passed lint, typecheck, all 254
+Node cases and full build. A full Chromium run passed 119 cases; final modal
+centering and save-status consolidation were then covered by 19 focused cases
+against the rebuilt final bundle. The final checks cover the shared guard, modal focus handoff, browser reload warning,
+pending-save blocking and a single save-status announcement. A synthetic pt-BR
+screenshot was inspected at 320px with maximum reading sizes. The existing bundle-size
+warning remains. No ingestion or native contract changed: local/live provider checks,
+Electron smoke, other-browser, manual screen-reader and native visual acceptance were
+not repeated. Installed services, Desktop, storage and source sessions were preserved
+without restart. See the [test scope](docs/development/testing.md#artifact-navigation-protection).
 
 The reading accessibility increment was checked on top of `b92c971`, preserving
 its isolated live-session fixtures and explicit Desktop navigation. Targeted checks

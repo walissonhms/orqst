@@ -12,7 +12,7 @@ import { artifactBlocks, readableArtifact } from './artifact-preview';
 import { LiveMetrics } from './LiveMetrics';
 import type { LiveMetricsState } from './use-session-metrics';
 
-export type ArtifactCloseGuard = (close: () => void) => void;
+export type ArtifactCloseGuard = (close: () => void, navigation?: boolean) => void;
 
 export function ArtifactPanel({
   request,
@@ -38,7 +38,11 @@ export function ArtifactPanel({
   const cancelDiscardButton = useRef<HTMLButtonElement>(null);
   const confirmDiscardButton = useRef<HTMLButtonElement>(null);
   const closeTrigger = useRef<HTMLElement | null>(null);
-  const [closeAction, setCloseAction] = useState<(() => void) | null>(null);
+  const [closeAction, setCloseAction] = useState<{
+    execute: () => void;
+    navigation: boolean;
+  } | null>(null);
+  const [navigationBlocked, setNavigationBlocked] = useState(false);
   const [result, setResult] = useState<ArtifactExtractionResult>();
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState('');
@@ -107,6 +111,7 @@ export function ArtifactPanel({
   async function save(openAfterSave: boolean) {
     if (!desktop || saving) return;
     setSaving(true);
+    setNavigationBlocked(false);
     setSaveState(undefined);
     try {
       const response = await desktop.saveMarkdown(
@@ -130,8 +135,22 @@ export function ArtifactPanel({
   const artifact = result?.availability === 'available' ? result.value : undefined;
   const reference = artifact?.reference;
   const draftChanged = artifact !== undefined && draft !== artifact.original.text;
-  function requestClose(close: () => void) {
-    if (saving) return;
+  useEffect(() => {
+    // Electron window/quit policy remains owned by the native host.
+    if ((!draftChanged && !saving) || navigator.userAgent.includes(' ORQSTDesktop/0.1')) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [draftChanged, saving]);
+  function requestClose(close: () => void, navigation = false) {
+    if (saving) {
+      setNavigationBlocked(true);
+      return;
+    }
+    if (closeAction) return;
     if (!draftChanged) {
       close();
       return;
@@ -139,7 +158,7 @@ export function ArtifactPanel({
     closeTrigger.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setRestoring(false);
-    setCloseAction(() => close);
+    setCloseAction({ execute: close, navigation });
   }
   useEffect(() => {
     closeGuard.current = requestClose;
@@ -151,11 +170,20 @@ export function ArtifactPanel({
     if (closeAction) {
       discardDialog.current?.showModal();
       cancelDiscardButton.current?.focus();
+      // A closing palette/drawer may restore its trigger after this effect.
+      // Recover only escaped focus; never undo a user's Tab inside the dialog.
+      const frame = requestAnimationFrame(() => {
+        if (!discardDialog.current?.contains(document.activeElement))
+          cancelDiscardButton.current?.focus();
+      });
+      return () => cancelAnimationFrame(frame);
     }
   }, [closeAction]);
   function cancelDiscard() {
     setCloseAction(null);
-    requestAnimationFrame(() => closeTrigger.current?.focus());
+    requestAnimationFrame(() => {
+      (closeTrigger.current?.isConnected ? closeTrigger.current : heading.current)?.focus();
+    });
   }
   function cancelRestore() {
     setRestoring(false);
@@ -193,13 +221,17 @@ export function ArtifactPanel({
           }}
         >
           <h3 id={discardId}>{t('artifacts.discardTitle')}</h3>
-          <p id={`${discardId}-warning`}>{t('artifacts.discardWarning')}</p>
+          <p id={`${discardId}-warning`}>
+            {t(closeAction.navigation ? 'artifacts.navigationWarning' : 'artifacts.discardWarning')}
+          </p>
           <div className="artifact-actions">
             <button className="button" ref={cancelDiscardButton} onClick={cancelDiscard}>
               {t('cancel')}
             </button>
-            <button className="button" ref={confirmDiscardButton} onClick={closeAction}>
-              {t('artifacts.confirmDiscard')}
+            <button className="button" ref={confirmDiscardButton} onClick={closeAction.execute}>
+              {t(
+                closeAction.navigation ? 'artifacts.confirmNavigation' : 'artifacts.confirmDiscard',
+              )}
             </button>
           </div>
         </dialog>
@@ -383,7 +415,11 @@ export function ArtifactPanel({
           ) : (
             <p className="fine-print">{t('artifacts.desktopOnly')}</p>
           )}
-          {saving && <p role="status">{t('artifacts.saving')}</p>}
+          {saving && (
+            <p role="status">
+              {t(navigationBlocked ? 'artifacts.navigationBlocked' : 'artifacts.saving')}
+            </p>
+          )}
           {saveState && (
             <p
               role={

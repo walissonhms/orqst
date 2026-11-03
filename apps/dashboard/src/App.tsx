@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
@@ -245,6 +245,7 @@ function SessionDetail({
   onClose,
   onSave,
   onMetrics,
+  artifactCloseGuard,
 }: {
   session: SessionView;
   snapshot: Snapshot;
@@ -253,6 +254,7 @@ function SessionDetail({
   onClose: () => void;
   onSave: () => void;
   onMetrics: (sessionId: string, metrics: LiveMetricsState) => void;
+  artifactCloseGuard: RefObject<ArtifactCloseGuard | null>;
 }) {
   const { t } = useTranslation();
   const f = useFormatting();
@@ -260,7 +262,6 @@ function SessionDetail({
   const [hasOlder, setHasOlder] = useState(true);
   const [error, setError] = useState(false);
   const [tab, setTab] = useState<'activity' | 'results' | 'usage' | 'observedTools'>('activity');
-  const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const [tokenThreshold, setTokenThreshold] = useState<number>();
   const sessionHeading = useRef<HTMLHeadingElement>(null);
@@ -347,14 +348,7 @@ function SessionDetail({
             {session.agentName}
           </h2>
         </div>
-        <button
-          className="icon-button"
-          aria-label={t('close')}
-          onClick={() => {
-            if (artifactCloseGuard.current) artifactCloseGuard.current(onClose);
-            else onClose();
-          }}
-        >
+        <button className="icon-button" aria-label={t('close')} onClick={onClose}>
           <X size={18} />
         </button>
       </div>
@@ -523,11 +517,8 @@ export function App() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  useEffect(() => {
-    const navigate = () => setView(viewFromHash(location.hash) ?? 'overview');
-    window.addEventListener('hashchange', navigate);
-    return () => window.removeEventListener('hashchange', navigate);
-  }, []);
+  const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
+  const acceptedHash = useRef(location.hash);
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -623,20 +614,46 @@ export function App() {
   );
   const { snapshot, connection, error, refresh } = useObservatory(onLive);
   useEffect(() => {
-    const selectLinkedSession = () => {
-      const id = sessionFromHash(location.hash, snapshot?.sessions.map((value) => value.id) ?? []);
-      if (!id) return;
-      setView('overview');
-      setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
-      setQuery('');
-      setStatus('');
-      selectSession(id);
-      history.replaceState(null, '', location.pathname);
+    const selectLinkedDestination = () => {
+      const targetHash = location.hash;
+      const id = sessionFromHash(targetHash, snapshot?.sessions.map((value) => value.id) ?? []);
+      // Initial session links wait for their source-backed snapshot.
+      if (targetHash.startsWith('#session=') && !snapshot) return;
+      const page = viewFromHash(targetHash) ?? 'overview';
+      const transition = () => {
+        if (id) {
+          applySession(id);
+          setWorkspaceId(
+            snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '',
+          );
+          setQuery('');
+          setStatus('');
+        }
+        setView(id ? 'overview' : page);
+        acceptedHash.current = id ? '#overview' : targetHash;
+        history.replaceState(
+          null,
+          '',
+          `${location.pathname}${location.search}${acceptedHash.current}`,
+        );
+        setMenuOpen(false);
+      };
+      if ((id && id !== selected) || (!id && page !== view)) {
+        // Hash traversal has already changed the URL. Keep the current view/URL
+        // until the user decides; do not add another history entry on confirmation.
+        history.replaceState(
+          null,
+          '',
+          `${location.pathname}${location.search}${acceptedHash.current}`,
+        );
+        requestNavigation(transition);
+      } else transition();
     };
-    selectLinkedSession();
-    window.addEventListener('hashchange', selectLinkedSession);
-    return () => window.removeEventListener('hashchange', selectLinkedSession);
-  }, [snapshot]);
+    // Snapshot refreshes must not replay a pending or cancelled navigation.
+    if (location.hash.startsWith('#session=')) selectLinkedDestination();
+    window.addEventListener('hashchange', selectLinkedDestination);
+    return () => window.removeEventListener('hashchange', selectLinkedDestination);
+  }, [snapshot, selected, view]);
   useEffect(() => {
     if (snapshot && !prefsSaving) setLocalPrefs(snapshot.preferences);
   }, [snapshot, prefsSaving]);
@@ -667,30 +684,51 @@ export function App() {
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
   }, [paletteOpen]);
-  function selectSession(id: string | undefined) {
+  function requestNavigation(action: () => void, navigation = true) {
+    if (artifactCloseGuard.current) artifactCloseGuard.current(action, navigation);
+    else action();
+  }
+  function applySession(id: string | undefined) {
     if (id !== selected) setHeaderMetrics(undefined);
     setSelected(id);
   }
-  function navigate(page: AppView) {
+  function selectSession(id: string | undefined) {
+    if (id === selected) return;
+    requestNavigation(() => applySession(id), id !== undefined);
+  }
+  function applyView(page: AppView) {
     setView(page);
-    location.hash = page;
+    acceptedHash.current = `#${page}`;
+    if (location.hash !== acceptedHash.current)
+      history.pushState(null, '', `${location.pathname}${location.search}${acceptedHash.current}`);
     setMenuOpen(false);
   }
+  function navigate(page: AppView) {
+    if (page === view) return;
+    requestNavigation(() => applyView(page));
+  }
   function openWorkspace(id: string, page: AppView = view) {
-    setWorkspaceId(id);
-    selectSession(undefined);
-    setQuery('');
-    setStatus('');
-    navigate(page);
+    if (id === workspaceId && page === view) return;
+    requestNavigation(() => {
+      setWorkspaceId(id);
+      applySession(undefined);
+      setQuery('');
+      setStatus('');
+      applyView(page);
+    });
   }
   function openSession(id: string) {
     const session = snapshot?.sessions.find((item) => item.id === id);
     if (!session) return;
-    setWorkspaceId(session.workspaceId);
-    setQuery('');
-    setStatus('');
-    selectSession(id);
-    navigate('overview');
+    const transition = () => {
+      setWorkspaceId(session.workspaceId);
+      setQuery('');
+      setStatus('');
+      applySession(id);
+      applyView('overview');
+    };
+    if (id === selected && view === 'overview') transition();
+    else requestNavigation(transition);
   }
   const sessions =
     snapshot?.sessions.filter((session) => !workspaceId || session.workspaceId === workspaceId) ??
@@ -795,7 +833,15 @@ export function App() {
         {t('shell.skip')}
       </a>
       <aside id="app-sidebar" className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
-        <a className="brand" href="/" aria-label={t('brand')}>
+        <a
+          className="brand"
+          href="#overview"
+          aria-label={t('brand')}
+          onClick={(event) => {
+            event.preventDefault();
+            navigate('overview');
+          }}
+        >
           <span className="brand-mark">
             <i />
             <i />
@@ -822,7 +868,8 @@ export function App() {
               title={t(`shell.views.${page}`)}
               aria-label={t(`shell.views.${page}`)}
               aria-current={view === page ? 'page' : undefined}
-              onClick={() => {
+              onClick={(event) => {
+                event.preventDefault();
                 navigate(page);
               }}
             >
@@ -1225,6 +1272,7 @@ export function App() {
                   connection={connection}
                   snapshotError={error}
                   onMetrics={updateHeaderMetrics}
+                  artifactCloseGuard={artifactCloseGuard}
                   onClose={() => selectSession(undefined)}
                   onSave={() => {
                     void refresh();

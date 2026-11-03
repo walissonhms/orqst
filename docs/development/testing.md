@@ -452,8 +452,9 @@ return, confirmed close/reextraction, pt-BR mobile modal bounds and keyboard con
 The existing synthetic Desktop save capability checks that pending native saving
 blocks details closing and a successful save does not suppress draft confirmation.
 These use a disposable synthetic observer/API/dashboard; no real session, database,
-service or native dialog is required. Browser window close, reload, session/view
-navigation and crash recovery are outside this bounded guard. Native Electron visual
+service or native dialog is required. At that increment, browser window close, reload, session/view navigation and crash
+recovery were outside the bounded guard; the navigation extension below covers the
+renderer paths and browser-controlled reload warning. Native Electron visual
 acceptance is not established by Chromium or the mocked save capability.
 
 ## Observed usage evolution
@@ -542,3 +543,40 @@ before the final build/browser run. The existing bundle-size warning remains.
 The earlier 252 Node / 97 Chromium / Electron validation was preserved rather than
 repeated. The entire Node/browser suites and Electron smoke were not rerun for this
 presentation-only increment.
+
+## Artifact navigation protection
+
+`tests/browser/artifact-navigation.spec.ts` extends the synthetic extraction workflow
+with exact changed-draft preservation, current view/session/workspace no-ops,
+confirmed session/workspace/view transitions, Search/notification modal handoff,
+source-linked hashes, Back/Forward cancellation, pending-save blocking without replay,
+browser reload cancellation and restored-handler removal. It checks no draft content
+enters local/session storage, preserves inert text and exercises pt-BR focus trapping
+and 320px containment at maximum reading sizes. Native save capability stubs test
+renderer behavior only; no real native dialog or file write is claimed.
+
+```bash
+ORQST_BROWSER_PORT=44970 pnpm exec playwright test tests/browser/artifact-navigation.spec.ts tests/browser/artifact-draft.spec.ts tests/browser/artifacts.spec.ts tests/browser/shell-navigation.spec.ts --output=/tmp/orqst-artifact-navigation-check
+```
+
+Use an exclusive nonproduction port/output. The fixture owns disposable synthetic
+storage and never uses the installed Bridge, Desktop profile or source sessions.
+Browser `beforeunload` delivery depends on browser policy; native close/quit and
+native document loads are explicitly excluded. Real-provider, other-browser, manual
+screen-reader and native visual acceptance remain separate. Ingestion/API/IPC and
+native grants are unchanged, so `validate:local`, live provider tests and an Electron
+smoke are not required for this renderer-only increment.
+
+The final focused run passed all 19 draft/navigation Chromium cases with Node24.22.2
+and pnpm10.34.9, after build. Lint, typecheck and all 254 Node cases passed; the build
+retains its existing chunk-size warning. Initial attempts exposed test selector and
+cancelled-reload wait assumptions, a focus-recovery race and overlapping save-status
+announcements; the final tests retain exact-text and keyboard checks after correction.
+The final synthetic screenshot was inspected at maximum reading sizes in pt-BR/320px.
+No other-browser, manual screen-reader or native visual acceptance is claimed.
+
+The full Chromium run also passed 119/119 on isolated port 44976. It began before
+final modal centering and save-status consolidation; those refinements passed the
+19-case draft/navigation rerun on port 44978 against the rebuilt final bundle.
+Both use exclusive output/state and synthetic data. The full browser suite was not
+repeated again after those scoped refinements.
