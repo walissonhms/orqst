@@ -11,7 +11,7 @@ observability, evolving toward managed execution and structured orchestration.
 Its primary experience is understanding agent activity, delivery, intervention,
 usage and cost uncertainty across workspaces and, eventually, machines.
 
-**The current 0.1.0 runtime observes Codex sessions started outside ORQST.** It
+**The default 0.1.0 runtime observes Codex sessions started outside ORQST.** It
 normalizes their activity, persists local observations in SQLite and streams them
 to a React browser dashboard. It does not launch agents, control processes, send
 prompts or write into observed sessions.
@@ -49,13 +49,28 @@ acceptance. Normal startup and external sessions remain observation-only. See
 | OpenCode adapter                                                             | Contract only, not implemented                       |
 | Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added    |
 | Embedded managed Codex Terminal                                              | Opt-in native path; real-provider acceptance pending |
-| Structured delegation and automatic task results                             | Planned, not implemented                             |
+| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence    |
+| Agent-to-agent delegation and automatic return inside a CLI                  | Not delivered or validated                           |
 | ORQST Cloud, accounts, billing                                               | Not implemented                                      |
 | Multi-machine observability and remote connectivity                          | Planned, not implemented                             |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 
 ## Delivery status and roadmap
+
+- **Terminal and communication boundaries (2026-11-03):** the embedded Desktop
+  Terminal is an explicit native opt-in for newly owned processes. Separately,
+  [pane communication](docs/api/pane-communication.md) provides stable scoped IDs,
+  grants, durable FIFO admission, independent delivery/task evidence and a result
+  inbox/subscriptions to a Core client. Queue admission is not provider acceptance;
+  a Core notification is not a result delivered inside an agent CLI. There is no
+  public communication endpoint, Communication Inspector or verified two-agent
+  workflow. Unknown outcomes retain capacity and are never retried automatically;
+  four unresolved outcomes block all dispatch even after restart. No capacity
+  reclamation exists, so normal-runtime provider dispatch remains gated.
+  The dated Terminal engineering entries below record earlier stages; current
+  setup and native trust limits are in the
+  [managed Terminal guide](docs/development/managed-codex-terminal.md).
 
 - **Observation guide:** Settings, Search & commands and the empty-session welcome
   open a three-step guide using the existing Bridge snapshot: connection, source
@@ -147,8 +162,9 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Terminal native-boundary increment (2026-11-03):** a strict native-client
   broker now connects fixed profiles, private signed consent, input leases and
   owned lifecycle in the explicit synthetic PTY lab. Electron sender, native
-  confirmation and lifecycle helpers are implemented and unit-tested. The later
-  native lab below composes them outside normal Desktop startup; no provider is enabled.
+  confirmation and lifecycle helpers were unit-tested before the
+  native lab below composed them. This historical lab uses synthetic processes;
+  the current embedded opt-in is described above.
   Codex is still the only implemented observer; Claude Code and OpenCode remain
   contracts. Read the [native contract](docs/api/terminal-native.md) and
   [dated primary-source CLI research](docs/adapters/managed-terminal-research.md).
@@ -156,22 +172,22 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 - **Terminal durable recovery increment (2026-11-03):** the experimental supervisor
   can use the existing SQLite writer for metadata-only attempts, commit-before-start
   admission and explicit epoch recovery. Lost ownership keeps admission capacity;
-  old owners cannot send input or signals. The journal is opt-in and absent from
-  normal observer startup and the native lab. Synthetic restart/crash tests do not
-  establish managed Codex support. Immutable executable/cwd binding, isolated
-  authentication, containment and provider acceptance remain required; Claude Code
-  and OpenCode remain contracts. See [recovery and concrete gates](docs/development/terminal-recovery.md).
+  old owners cannot send input or signals. The journal remains absent from
+  normal observer startup; the later embedded Terminal explicitly opens its own
+  private journal. Synthetic restart/crash tests do not establish provider support.
+  The selected native mode and remaining acceptance limits are described above;
+  Claude Code and OpenCode remain contracts. See [recovery and concrete gates](docs/development/terminal-recovery.md).
 
 - **Native Terminal integration lab (2026-11-03):** an explicit developer command
-  now builds a disposable Electron document, separate session/preload and bounded
+  builds a disposable Electron document, separate session/preload and bounded
   IPC runtime connected to an owned synthetic PTY in a separate Node host. Native
   cancellation, private grants, leased exact paste, focus revocation, confirmed
   exit and permanent reload revocation are exercised through real Electron/IPC.
   Dialog answers are intercepted in acceptance, not evidence of a human native
   gesture. Run only the [explicit synthetic acceptance](docs/development/terminal-native-acceptance.md).
-  The normal Desktop/Bridge has no terminal execution channel. Codex is the first
-  managed-provider candidate, but executable/cwd binding, independent credentials,
-  containment/lifetime and durable ownership recovery still prevent enabling it.
+  At that lab stage, Desktop/Bridge had no terminal execution channel. The later
+  embedded opt-in above composes the native path with separate state and owned
+  lifetime; its real-provider acceptance remains pending.
   No real provider is launched; Claude Code/OpenCode remain unvalidated contracts.
 
 - **Terminal mechanics increment:** an opt-in developer command now checks a real
@@ -182,15 +198,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   [proposed managed terminal design](docs/architecture/managed-terminal-design.md).
   An additional [owned terminal library](docs/development/terminal-owned-lab.md)
   now exercises signed one-use grants, owned lifecycle, leased input, exact paste,
-  detach/reattach and scoped stop against the same fixed fixture. It is not composed
-  into the application. Native gesture/enrollment, provider, isolation/recovery and
-  packaging acceptance remain pending.
+  detach/reattach and scoped stop against the same fixed fixture. This records the earlier
+  uncomposed stage; the embedded opt-in above now composes those mechanisms.
+  Real-provider, human native-dialog and packaging acceptance remain pending.
 
 - **Observed tools increment:** session details group uniquely correlated retained
   Codex invocation/return records, with inert bounded text and per-record sources.
-  This is partial historical tool evidence, not a terminal connection; interactive
-  Terminal remains blocked on managed ownership, authorization and provider/PTY
-  validation. See [terminal boundary](docs/development/terminal-boundary.md).
+  This is partial historical tool evidence, not a terminal connection; the separate
+  embedded Terminal opt-in uses its own ownership/authorization path and still
+  lacks real-provider acceptance. See [terminal boundary](docs/development/terminal-boundary.md).
 
 - **Observed usage evolution:** **Most used models** can request a bounded chronological
   chart/table with the current filters, confirmed aggregate reconciliation, explicit
@@ -289,7 +305,9 @@ or open source paths. Those metadata queries remain local-only. A separate bound
 and session panel are now available, with a separate narrow Desktop Markdown save capability described below.
 See [lifecycle contracts](docs/api/lifecycle-contracts.md).
 
-There is one long-running process. Analytics queries use one disposable Node worker
+The observer has one long-running Bridge process. Optional Desktop Terminal
+execution uses separate owned Node/PTY processes and private storage, outside the
+observer API and session reader. Analytics queries use one disposable Node worker
 thread at a time with a separate read-only SQLite WAL connection. The bridge
 composes `@orqst/core`, which owns
 the observer, single SQLite store and retention lifecycle; the bridge owns REST,
@@ -419,7 +437,9 @@ pnpm desktop
 reopen and quitting Desktop preserve the service/observer. If the service is unavailable,
 the client shows an honest offline state and retries. A single isolated preload and
 `saveMarkdown` IPC channel support the native [Artifacts save contract](docs/api/artifacts.md#native-desktop-save-contract);
-there is no generic filesystem/shell method, Node renderer access or agent control.
+there is no generic filesystem/shell method or Node renderer access. The shared
+dashboard has no agent control; the separate opt-in Terminal uses its own restricted
+document and native grants.
 Browser permissions and external navigation remain denied.
 The menu bar opens/restores the window and quits only Desktop. It displays Bridge
 availability and unread history (latest 200), with an opt-in native alert switch for
@@ -498,8 +518,9 @@ Invalid numeric values fail startup instead of silently falling back.
 
 ## Data and privacy
 
-- Session files are opened read-only. ORQST never writes to Codex session
-  files and never launches Codex.
+- Observed session files are opened read-only and never modified. The observer
+  never launches Codex. Explicit managed Terminal login/start uses a new owned
+  process and separate private home; the provider can write its own state there.
 - Captured text is treated as untrusted. It is rendered as plain text, never as
   HTML or Markdown, and is never executed.
 - A best-effort redaction pass removes common credential shapes before text is
@@ -550,12 +571,13 @@ and [SECURITY.md](SECURITY.md).
 
 - **Codex only.** Claude Code and OpenCode do not collect data yet. Their
   capability flags are all `false` until an implementation is validated. Codex intervention detection also remains unvalidated against real logs.
-- **Observation, not orchestration.** ORQST cannot answer an intervention,
-  approve a tool call, stop a run, or send a message to an agent. Intervention
-  alerts tell the user to continue in the original terminal.
-- **Control is planned.** Managed execution, terminal input and delegation require
-  validated adapters, operation-specific authorization and a reviewed control boundary.
-  No current API can deliver them.
+- **External sessions stay read-only.** Observation APIs cannot answer interventions,
+  approve tool calls, stop runs or deliver prompts. Alerts direct users to the original
+  terminal. Managed Terminal input/signals apply only to separately owned instances.
+- **Agentic communication is incomplete.** The private Core queue/inbox is a library,
+  not an agent-accessible transport. Real correlated delegation and return to a CLI,
+  concurrent multi-agent UI and additional providers remain undelivered. The native
+  Terminal is not hard containment, and provider UI can change its initial defaults.
 - **macOS-first.** Linux and Windows/WSL behavior is unvalidated.
 - **Node 24 only.** Older Node versions are rejected by `engine-strict`.
 - **No encryption at rest** and no multi-user access control. The local API is

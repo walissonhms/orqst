@@ -16,13 +16,28 @@ incomplete. See the
 [Analytics design](model-usage-analytics.md) and [ADR-026](decisions.md#adr-026--six-phase-desktop-delivery-and-mandatory-local-analytics).
 The current-runtime sections describe the integrated observer; target sections remain planned.
 
+## Optional managed paths — 2026-11-03
+
+The process model and read-only boundary below describe the observer. The explicit
+[embedded Terminal opt-in](../development/managed-codex-terminal.md) adds a separate
+restricted Desktop document, native grants and independent Node supervisor/PTY
+processes with their own private state. It never adopts observed sessions. Native
+trusted/same-user execution is not hard containment; real Codex acceptance is pending.
+
+The [pane communication library](../api/pane-communication.md) separately implements
+scoped identities, durable queue admission and correlated result evidence. It is
+not constructed by ObserverCore, Bridge or normal Desktop startup and exposes no
+public agent transport. A Core result subscription does not prove return inside
+an initiating CLI. Claude Code/OpenCode and the real two-agent milestone remain
+unvalidated; no observer cookie gains execution or delegation authority.
+
 ## Current purpose
 
 ORQST gives a developer one place to observe AI coding agents that are running
 in other tools, terminals or IDEs. The current runtime supports a single
 machine and a single provider: OpenAI Codex CLI.
 
-The product boundary is deliberate:
+The observer product boundary is deliberate:
 
 - ORQST **observes** sessions. It does not start, wrap, resume, or control them.
 - ORQST **normalizes** provider records into one event protocol.
@@ -67,8 +82,8 @@ In development, Vite serves the dashboard on `127.0.0.1:5173` and proxies
 `/api` and `/ws` to the bridge on `127.0.0.1:4317`. In production, the bridge
 serves `apps/dashboard/dist` itself, so the dashboard and API are same-origin.
 
-There is no separate `apps/server` package. A second process would add
-deployment and failure modes without adding a capability in the MVP.
+There is no separate `apps/server` package. Optional managed Node/PTY processes
+serve the independent Terminal boundary, not another observation server.
 
 ## Components
 

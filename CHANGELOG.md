@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-03 — Pane communication foundation
+
+- Add an opt-in Core registry with immutable pane IDs, workspace display IDs and
+  exact managed-terminal bindings, scoped private grants and a durable SQLite FIFO.
+- Keep queue admission, provider acceptance, task start and verified result separate,
+  with deduplication, epoch fencing, capability revalidation and no automatic retry.
+  Missing acceptance after submission becomes uncertain; four unresolved outcomes
+  retain all global capacity even after restart, without a reclamation mechanism.
+- Add a durable result inbox and post-commit Core subscriptions, validated with
+  synthetic transports. These do not deliver results inside an agent CLI. Normal
+  observer startup exposes no communication endpoint or new control authority; real
+  two-agent delegation, Inspector/MCP UI and additional providers remain undelivered.
+
 ## 2026-11-03 — Embedded managed Codex Terminal
 
 - Add opt-in Desktop xterm Terminal with independent Node-owned supervisor/journal,

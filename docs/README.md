@@ -28,8 +28,8 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
   residual risks.
 - [Architecture decisions](architecture/decisions.md) — product and engineering
   decisions.
-- [Managed terminal design](architecture/managed-terminal-design.md) — proposed
-  authorization and owned-process boundary; no runtime execution is implemented.
+- [Managed terminal design](architecture/managed-terminal-design.md) — design and
+  historical gates; the opt-in embedded implementation and limits are linked below.
 
 - [Token Optimizer](architecture/token-optimizer.md) — planned Core boundary,
   modes, permissions, integration interfaces and evidence-gated activation.
@@ -58,6 +58,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## API and protocol
 
+- [Pane communication](api/pane-communication.md) — opt-in Core identity, scoped
+  authorization, durable queue and result evidence; no public agent transport or
+  validated two-agent delegation.
+
 - [REST API](api/rest.md) — bootstrap, snapshot, history, preferences,
   notifications, workspaces.
 - [WebSocket API](api/websocket.md) — handshake, replay, resync, live delivery.
@@ -69,6 +73,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## Development
 
+- [Embedded managed Codex Terminal](development/managed-codex-terminal.md) — explicit
+  checkout setup, separate state/login, native trust, owned lifecycle and synthetic
+  acceptance; real Codex acceptance remains pending.
+
 - [Setup](development/setup.md) — prerequisites, install, run, build.
 - [Testing](development/testing.md) — suites, coverage, synthetic data policy,
   real-data validation.
@@ -79,7 +87,7 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Native Terminal integration acceptance](development/terminal-native-acceptance.md) —
   explicit isolated Electron/preload/IPC/Node-host synthetic path; no provider activation.
 - [Owned terminal engineering library](development/terminal-owned-lab.md) — tested
-  operation grants, owned lifecycle and I/O; not composed into the application.
+  operation grants, owned lifecycle and I/O; historical library stage before the embedded opt-in.
 - [Repository layout](development/repository-layout.md) — packages and
   responsibilities.
 
