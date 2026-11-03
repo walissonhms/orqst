@@ -1,10 +1,13 @@
 // Separate Node owner keeps its fixed deadline if Core/IPC disappears. Never part of observer startup.
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
+import { terminalDigest } from '../terminal/authority.js';
+import { armLifecycleReceipt } from './lifecycle-receipt.js';
 import {
   managedCodexEnvironment,
   readManagedCodexConfig,
   structuredCodexArguments,
+  terminalFile,
 } from '../terminal/codex-profile.js';
 
 process.umask(0o077);
@@ -18,12 +21,14 @@ if (
 )
   throw new Error('Private managed Codex host only');
 const config = readManagedCodexConfig(process.argv[2]!);
+const receipt = armLifecycleReceipt(4, terminalDigest(terminalFile(process.argv[2]!, true)));
 const child = spawn(config.executable.path, structuredCodexArguments(config), {
   cwd: config.project,
   env: managedCodexEnvironment(config),
   stdio: ['pipe', 'pipe', 'ignore'],
 });
 let exited = false;
+let spawned = false;
 let escalation: ReturnType<typeof setTimeout> | undefined;
 const send = (value: object) => {
   if (!process.connected) return;
@@ -33,18 +38,38 @@ const send = (value: object) => {
     child.stdout.resume();
   }
 };
-child.on('spawn', () => send({ type: 'started', processId: child.pid }));
+async function persist(value: Parameters<typeof receipt.record>[0]): Promise<boolean> {
+  try {
+    await receipt.record(value);
+    return true;
+  } catch {
+    send({ type: 'lost' });
+    return false;
+  }
+}
+child.on('spawn', async () => {
+  spawned = true;
+  if (await persist({ type: 'started' }))
+    send({ type: 'started', lifecycleVersion: 1, processId: child.pid });
+});
 child.stdout.on('data', (bytes: Buffer) => {
   for (let offset = 0; offset < bytes.length; offset += 32 * 1024)
     send({ type: 'data', base64: bytes.subarray(offset, offset + 32 * 1024).toString('base64') });
 });
 child.stdin.on('error', () => send({ type: 'lost' }));
-child.on('error', () => {
+child.on('error', async () => {
   send({ type: 'lost' });
-  finish();
+  if (!spawned) {
+    await persist({ type: 'spawn_failed' });
+    finish();
+  }
 });
-child.on('exit', (code, signal) => {
-  if (code !== null || signal !== null) send({ type: 'exit', code, signal });
+child.on('exit', async (code, signal) => {
+  exited = true;
+  clearTimeout(lifetime);
+  clearTimeout(escalation);
+  if ((code !== null || signal !== null) && (await persist({ type: 'exit', code, signal })))
+    send({ type: 'exit', lifecycleVersion: 1, code, signal });
   finish();
 });
 function finish() {

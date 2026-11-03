@@ -1,4 +1,6 @@
 import { fork } from 'node:child_process';
+import { closeSync } from 'node:fs';
+import { createLifecycleReceipt, type LifecycleBinding } from './lifecycle-receipt.js';
 import { randomUUID } from 'node:crypto';
 import { join, relative } from 'node:path';
 import { z } from 'zod';
@@ -22,6 +24,7 @@ import { CodexChannel, type CodexTransport } from './channel.js';
 import { CodexCommunicationAdapter, type CodexResultWriter } from './adapter.js';
 
 export const codexRuntimePolicy = Object.freeze({
+  lifecycleReceiptVersion: 1,
   activeInstances: 2,
   attempts: 128,
   lifetimeMs: 30 * 60 * 1000,
@@ -59,7 +62,12 @@ interface RuntimeEvents {
 }
 /** Private trusted test/composition seam; never select a backend through user/agent content. */
 export interface CodexRuntimeBackend {
-  open(configFile: string, config: ManagedCodexConfig, events: RuntimeEvents): CodexTransport;
+  open(
+    configFile: string,
+    config: ManagedCodexConfig,
+    events: RuntimeEvents,
+    binding: LifecycleBinding,
+  ): CodexTransport;
 }
 interface Attempt {
   id: string;
@@ -87,15 +95,21 @@ const overlaps = (a: string, b: string): boolean => {
 
 export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
   return {
-    open(file, config, events) {
-      const child = fork(hostFile, [file], {
-        execPath: config.node.path,
-        execArgv: [],
-        cwd: config.state,
-        env: managedCodexEnvironment(config),
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-        serialization: 'json',
-      });
+    open(file, config, events, binding) {
+      const receipt = createLifecycleReceipt(config.state, binding);
+      let child: ReturnType<typeof fork>;
+      try {
+        child = fork(hostFile, [file], {
+          execPath: config.node.path,
+          execArgv: [],
+          cwd: config.state,
+          env: managedCodexEnvironment(config),
+          stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
+          serialization: 'json',
+        });
+      } finally {
+        closeSync(receipt);
+      }
       let data: ((chunk: Uint8Array) => void) | undefined;
       let lost: (() => void) | undefined;
       let disposed = false;
@@ -110,11 +124,16 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
         if (disposed) return;
         const parsed = z
           .discriminatedUnion('type', [
-            z.strictObject({ type: z.literal('started'), processId: z.number().int().positive() }),
+            z.strictObject({
+              type: z.literal('started'),
+              lifecycleVersion: z.literal(1),
+              processId: z.number().int().positive(),
+            }),
             z.strictObject({ type: z.literal('lost') }),
             z.strictObject({ type: z.literal('data'), base64: z.string().max(44 * 1024) }),
             z.strictObject({
               type: z.literal('exit'),
+              lifecycleVersion: z.literal(1),
               code: z.number().int().safe().nullable(),
               signal: z.string().max(32).nullable(),
             }),
@@ -196,6 +215,7 @@ export class CodexStructuredRuntime {
     const sourceHash = terminalDigest(terminalFile(configFile, true));
     const manifest = {
       config,
+      configDigest: sourceHash,
       ...options,
       slotId: terminalDigest(config.state),
       policy: codexRuntimePolicy,
@@ -292,35 +312,44 @@ export class CodexStructuredRuntime {
         confirmStarted = resolve;
       });
       attempt.transport = journal.withOwner(() =>
-        this.backend.open(attempt.file, attempt.config, {
-          started: (processId) => {
-            if (attempt.state !== 'starting') return;
-            try {
-              journal.transition(id, 'running');
-              attempt.state = 'running';
-              attempt.nativeProcessId = processId;
-              confirmStarted();
-            } catch {
-              this.lose(attempt);
-            }
-          },
-          exit: (code, signal) => {
-            if (!['starting', 'running'].includes(attempt.state)) return;
-            attempt.nativeExit = { code, signal };
-            // The existing journal cannot encode a null exit code; never invent one.
-            try {
-              if (code === null) this.lose(attempt);
-              else {
-                journal.transition(id, 'exited', { exitCode: code });
-                attempt.state = 'exited';
+        this.backend.open(
+          attempt.file,
+          attempt.config,
+          {
+            started: (processId) => {
+              if (attempt.state !== 'starting') return;
+              try {
+                journal.transition(id, 'running');
+                attempt.state = 'running';
+                attempt.nativeProcessId = processId;
+                confirmStarted();
+              } catch {
+                this.lose(attempt);
               }
-              if (attempt.pane) this.communication.setPaneState(attempt.pane.paneId, 'closed');
-              attempt.channel?.detach();
-            } catch {
-              this.lose(attempt);
-            }
+            },
+            exit: (code, signal) => {
+              if (!['starting', 'running'].includes(attempt.state)) return;
+              attempt.nativeExit = { code, signal };
+              try {
+                journal.transition(id, 'exited', {
+                  exitCode: code,
+                  ...(signal === null ? {} : { signal }),
+                });
+                attempt.state = 'exited';
+                if (attempt.pane) this.communication.setPaneState(attempt.pane.paneId, 'closed');
+                attempt.channel?.detach();
+              } catch {
+                this.lose(attempt);
+              }
+            },
           },
-        }),
+          {
+            instanceId: id,
+            epoch: this.authority.epoch,
+            manifestDigest: attempt.digest,
+            configDigest: attempt.sourceHash,
+          },
+        ),
       );
       const channel = new CodexChannel(attempt.transport);
       attempt.channel = channel;

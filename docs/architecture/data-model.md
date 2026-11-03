@@ -412,7 +412,7 @@ rule. Window timing is not a measured daily consumption distribution.
 ## Opt-in owned-terminal metadata journal — 2026-11-03
 
 Explicit trusted `Store.terminalJournal` composition initializes `terminal_schema`
-(feature version 1), `terminal_owner` (one epoch) and `terminal_attempts` in the
+(feature version 2; version 1 upgrades without rewriting attempt metadata), `terminal_owner` (one epoch) and `terminal_attempts` in the
 existing SQLite writer. Observer schema version 2, events, checkpoints, canonical
 usage and Analytics remain unchanged. Normal startup does not create these tables.
 Strict runtime metadata and SQL consistency checks retain instance/epoch/client/project
@@ -441,3 +441,14 @@ Epoch fencing and explicit recovery preserve unknown outcomes, invalidate in-mem
 authority and prevent blind retries. Hard history caps reject further writes rather
 than silently evicting records; automatic retention/deletion is not implemented.
 See [contracts, limits and recovery](../api/pane-communication.md).
+
+## Future structured lifecycle receipts — 2026-11-03
+
+The explicit structured backend stores a separate exclusive private JSONL receipt
+per future instance, bounded to four records/4 KiB. Its header binds instance, epoch,
+manifest and config digests. Host-synced armed/start/exit metadata survives IPC loss
+when the host and storage survive. No provider content or PID is persisted. Journal
+schema 2 additionally permits null exit code with explicit signal, preserving legacy
+numeric exits. Receipt inspection never mutates the journal or frees lost capacity;
+there is no automatic receipt pruning or retrospective reconciliation. See the
+[format and recovery limitations](../development/codex-lifecycle-receipts.md).

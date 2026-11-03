@@ -9,7 +9,7 @@ import {
 
 const terminalJournalMigration = `
 CREATE TABLE terminal_schema (singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL);
-INSERT INTO terminal_schema VALUES (1,1);
+INSERT INTO terminal_schema VALUES (1,2);
 CREATE TABLE terminal_owner (singleton INTEGER PRIMARY KEY CHECK(singleton=1), epoch TEXT NOT NULL);
 CREATE TABLE terminal_attempts (
  instance_id TEXT PRIMARY KEY, epoch TEXT NOT NULL, project_id TEXT NOT NULL,
@@ -103,7 +103,10 @@ export function openTerminalJournal(
       !db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='terminal_schema'").get()
     )
       db.exec(terminalJournalMigration);
-    if (db.prepare('SELECT version FROM terminal_schema WHERE singleton=1').get()?.version !== 1)
+    // Version 2 preserves v1 metadata and adds nullable-code/string-signal exit evidence.
+    if (db.prepare('SELECT version FROM terminal_schema WHERE singleton=1').get()?.version === 1)
+      db.exec('UPDATE terminal_schema SET version=2 WHERE singleton=1');
+    if (db.prepare('SELECT version FROM terminal_schema WHERE singleton=1').get()?.version !== 2)
       throw new Error('Unsupported terminal journal schema');
     if (
       Number(db.prepare('SELECT COUNT(*) AS count FROM terminal_attempts').get()?.count) >

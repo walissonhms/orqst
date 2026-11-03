@@ -447,3 +447,17 @@ tools are outside that sandbox. The explicit acceptance rejects observed command
 file, MCP or other unexpected item types; it cannot prevent their side effects.
 The reuse canary config is not the active user config. Remote catalog disabling
 is not a global installed-plugin deny policy; no hard isolation is claimed.
+
+## Future structured lifecycle receipt review — 2026-11-03
+
+The explicit structured backend creates a private exclusive receipt before fork,
+syncs its directory and inherits only its descriptor to the host. The host syncs
+lifecycle metadata before IPC and continues after disconnect. Bounded read-only
+inspection checks identity, ordering, permissions and file type; it never opens
+journal ownership or grants process authority. No credential/content/PID is stored.
+Signal-only exits preserve the observed signal without fabricating a code. Feature
+journal schema 2 fences old writers, preserving existing lost reservations and
+attempt metadata. No public API, WebSocket, cookie or static-serving path changes.
+Same-user tampering, storage/host failure, hard containment and descendant cleanup
+remain outside this evidence guarantee. Earlier lost attempts cannot be repaired
+retroactively. See [the detailed contract](docs/development/codex-lifecycle-receipts.md).

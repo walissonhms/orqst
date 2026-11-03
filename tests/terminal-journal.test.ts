@@ -133,7 +133,7 @@ test('observer startup does not initialize the opt-in journal; explicit journal 
       const version = raw.prepare('PRAGMA user_version').get()?.user_version;
       const journal = store.terminalJournal(randomUUID(), { recover: false });
       assert.equal(raw.prepare('PRAGMA user_version').get()?.user_version, version);
-      assert.equal(raw.prepare('SELECT version FROM terminal_schema').get()?.version, 1);
+      assert.equal(raw.prepare('SELECT version FROM terminal_schema').get()?.version, 2);
       assert.equal(statSync(file).mode & 0o777, 0o600);
       const input = record();
       journal.prepare(input);
@@ -386,10 +386,10 @@ test('failed schema/recovery validation rolls back takeover and retains the old 
     journal.prepare(input);
     const raw = new DatabaseSync(file);
     try {
-      raw.prepare('UPDATE terminal_schema SET version=2').run();
+      raw.prepare('UPDATE terminal_schema SET version=3').run();
       assert.throws(() => store.terminalJournal(randomUUID(), { recover: true }), /schema/);
       journal.assertOwner();
-      raw.prepare('UPDATE terminal_schema SET version=1').run();
+      raw.prepare('UPDATE terminal_schema SET version=2').run();
       assert.throws(
         () =>
           raw
@@ -469,3 +469,50 @@ test('retention prunes only expired terminal facts; capacity never prunes lost o
     raw.close();
   }
 });
+
+test('v1 upgrade preserves historical metadata and owner fencing while v2 retains signal-only exits', () =>
+  fixture((file, store) => {
+    const first = store.terminalJournal(randomUUID(), { recover: false });
+    const lost = record();
+    first.prepare(lost);
+    first.transition(lost.instanceId, 'starting');
+    first.release();
+    const raw = new DatabaseSync(file);
+    try {
+      const before = raw
+        .prepare('SELECT metadata FROM terminal_attempts WHERE instance_id=?')
+        .get(lost.instanceId)?.metadata;
+      raw.prepare('UPDATE terminal_schema SET version=1').run();
+      const current = store.terminalJournal(randomUUID(), { recover: false });
+      assert.equal(raw.prepare('SELECT version FROM terminal_schema').get()?.version, 2);
+      assert.equal(
+        raw
+          .prepare('SELECT metadata FROM terminal_attempts WHERE instance_id=?')
+          .get(lost.instanceId)?.metadata,
+        before,
+      );
+      raw.prepare('UPDATE terminal_schema SET version=1').run();
+      assert.throws(() => store.terminalJournal(randomUUID(), { recover: false }), /owned/);
+      assert.equal(raw.prepare('SELECT version FROM terminal_schema').get()?.version, 1);
+      current.assertOwner();
+      raw.prepare('UPDATE terminal_schema SET version=2').run();
+      const exited = { ...record(), projectId: 'synthetic-other-project' };
+      current.prepare(exited);
+      current.transition(exited.instanceId, 'starting');
+      assert.throws(() => current.transition(exited.instanceId, 'exited', { exitCode: null }));
+      assert.throws(() =>
+        current.transition(exited.instanceId, 'exited', { exitCode: null, signal: 0 }),
+      );
+      current.transition(exited.instanceId, 'exited', { exitCode: null, signal: 'SIGTERM' });
+      current.release();
+      const reopened = store.terminalJournal(randomUUID(), { recover: false });
+      assert.deepEqual(reopened.read(exited.instanceId)?.exit, {
+        exitCode: null,
+        signal: 'SIGTERM',
+      });
+      assert.equal(reopened.read(lost.instanceId)?.state, 'ownership_lost');
+      reopened.release();
+    } finally {
+      raw.close();
+    }
+  }));

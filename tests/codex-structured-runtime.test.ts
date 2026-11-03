@@ -570,12 +570,12 @@ test('a lost turn/start receipt is never accepted or automatically retried', asy
   }
 });
 
-test('signal-only process exit preserves the journal limitation without inventing a numeric exit code', async () => {
+test('signal-only owned process exit is journaled without inventing a numeric exit code', async () => {
   const f = fixture();
   try {
     const a = await f.launch(f.config('a').file, 'A');
     f.exits[0]!(null, 'SIGTERM');
-    assert.equal(f.runtime.snapshot(a.prepared.instanceId).state, 'ownership_lost');
+    assert.equal(f.runtime.snapshot(a.prepared.instanceId).state, 'exited');
     assert.equal(f.communication.resolvePane(a.pane.workspaceId, a.pane.paneId).state, 'closed');
     assert.deepEqual(f.transports[0]!.signals, []);
   } finally {
@@ -709,7 +709,7 @@ test('private native transport uses isolated Node IPC and distinguishes host los
     writeFileSync(
       host,
       `
-      process.send({type:'started',processId:process.pid});
+      process.send({type:'started',lifecycleVersion:1,processId:process.pid});
       process.on('message', request => {
         if (request.action === 'send') {
           const rpc = JSON.parse(request.line);
@@ -717,7 +717,7 @@ test('private native transport uses isolated Node IPC and distinguishes host los
           process.send({type:'data',base64:Buffer.from(JSON.stringify(response)+'\\n').toString('base64')});
         }
         if (request.action === 'signal') {
-          process.send({type:'exit',code:0,signal:null}, () => process.disconnect());
+          process.send({type:'exit',lifecycleVersion:1,code:0,signal:null}, () => process.disconnect());
         }
       });
       process.on('disconnect', () => process.exit(0));
@@ -732,18 +732,29 @@ test('private native transport uses isolated Node IPC and distinguishes host los
     const exitPromise = new Promise<void>((resolve) => {
       exit = resolve;
     });
-    transport = nativeCodexBackend(host).open(slot.file, slot.config, {
-      started: (processId) => {
-        assert.ok(Number.isSafeInteger(processId) && processId! > 0);
-        assert.notEqual(processId, process.pid);
-        started();
+    const binding = {
+      instanceId: randomUUID(),
+      epoch: randomUUID(),
+      manifestDigest: 'a'.repeat(64),
+      configDigest: 'b'.repeat(64),
+    };
+    transport = nativeCodexBackend(host).open(
+      slot.file,
+      slot.config,
+      {
+        started: (processId) => {
+          assert.ok(Number.isSafeInteger(processId) && processId! > 0);
+          assert.notEqual(processId, process.pid);
+          started();
+        },
+        exit: (code, signal) => {
+          assert.equal(code, 0);
+          assert.equal(signal, null);
+          exit();
+        },
       },
-      exit: (code, signal) => {
-        assert.equal(code, 0);
-        assert.equal(signal, null);
-        exit();
-      },
-    });
+      binding,
+    );
     const channel = new CodexChannel(transport);
     await startedPromise;
     assert.deepEqual(await channel.request('initialize', {}), {
@@ -767,14 +778,25 @@ test('a native host exit without an owned-provider exit report does not invent p
     const host = join(f.root, 'SYNTHETIC-lost-host.cjs');
     writeFileSync(
       host,
-      "process.send({type:'started',processId:process.pid}, () => process.exit(0));",
+      "process.send({type:'started',lifecycleVersion:1,processId:process.pid}, () => process.exit(0));",
       { mode: 0o600 },
     );
     let exits = 0;
-    transport = nativeCodexBackend(host).open(slot.file, slot.config, {
-      started: () => {},
-      exit: () => exits++,
-    });
+    const binding = {
+      instanceId: randomUUID(),
+      epoch: randomUUID(),
+      manifestDigest: 'a'.repeat(64),
+      configDigest: 'b'.repeat(64),
+    };
+    transport = nativeCodexBackend(host).open(
+      slot.file,
+      slot.config,
+      {
+        started: () => {},
+        exit: () => exits++,
+      },
+      binding,
+    );
     const channel = new CodexChannel(transport);
     const lost = new Promise<void>((resolve) => channel.onLost(resolve));
     await lost;
@@ -1213,11 +1235,11 @@ test('native IPC backpressure preserves accepted writes without retry or false o
       host,
       `
       process.on('disconnect', () => process.exit(0));
-      process.send({type:'started',processId:process.pid});
+      process.send({type:'started',lifecycleVersion:1,processId:process.pid});
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,300);
       process.on('message', request => {
         if(request.action==='send') process.send({type:'data',base64:Buffer.from('ACK').toString('base64')});
-        if(request.action==='signal') process.send({type:'exit',code:0,signal:null},()=>process.disconnect());
+        if(request.action==='signal') process.send({type:'exit',lifecycleVersion:1,code:0,signal:null},()=>process.disconnect());
       });
       setTimeout(()=>process.exit(0),5000).unref();
       `,
@@ -1233,10 +1255,21 @@ test('native IPC backpressure preserves accepted writes without retry or false o
     });
     let lost = 0;
     let acknowledgments = 0;
-    transport = nativeCodexBackend(host).open(slot.file, slot.config, {
-      started: () => start(),
-      exit: () => {},
-    });
+    const binding = {
+      instanceId: randomUUID(),
+      epoch: randomUUID(),
+      manifestDigest: 'a'.repeat(64),
+      configDigest: 'b'.repeat(64),
+    };
+    transport = nativeCodexBackend(host).open(
+      slot.file,
+      slot.config,
+      {
+        started: () => start(),
+        exit: () => {},
+      },
+      binding,
+    );
     transport.listen(
       () => {
         if (++acknowledgments === 4) done();
@@ -1367,5 +1400,43 @@ test('runtime method allowlist rejects untrusted names before dispatch or diagno
     assert.equal(channel.available, true);
   } finally {
     channel.detach();
+  }
+});
+
+test('legacy host lifecycle without receipt version is rejected without provider-exit evidence', async () => {
+  const f = fixture();
+  let transport: CodexTransport | undefined;
+  try {
+    const slot = f.config('synthetic-stale-host', true);
+    const host = join(f.root, 'SYNTHETIC-legacy-host.cjs');
+    writeFileSync(
+      host,
+      "process.send({type:'started',processId:process.pid}); process.on('disconnect',()=>process.exit(0));",
+      { mode: 0o600 },
+    );
+    let started = 0;
+    let exited = 0;
+    transport = nativeCodexBackend(host).open(
+      slot.file,
+      slot.config,
+      {
+        started: () => started++,
+        exit: () => exited++,
+      },
+      {
+        instanceId: randomUUID(),
+        epoch: randomUUID(),
+        manifestDigest: 'a'.repeat(64),
+        configDigest: 'b'.repeat(64),
+      },
+    );
+    const channel = new CodexChannel(transport);
+    await new Promise<void>((resolve) => channel.onLost(resolve));
+    assert.equal(started, 0);
+    assert.equal(exited, 0);
+    assert.equal(channel.available, false);
+  } finally {
+    transport?.detach();
+    f.close();
   }
 });

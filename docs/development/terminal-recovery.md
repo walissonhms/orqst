@@ -1,6 +1,10 @@
 # Experimental Terminal recovery — 2026-11-03
 
-Current update: the owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
+Current update: future structured hosts add [durable lifecycle receipts](codex-lifecycle-receipts.md)
+and private journal feature schema 2 for signal-only exits. Receipt reading never
+changes lost reservations. The historical schema-1 details below predate that update.
+
+The owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
 selects a trusted/same-user contract and composes the library behind a private Node
 Core. It supersedes the blanket immutable-binding/container gate in this historical
 engineering note; it does not claim hard isolation or real-provider acceptance.

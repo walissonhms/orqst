@@ -67,6 +67,13 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Future structured lifecycle evidence (2026-11-03):** private host receipts now
+  sync start/exit metadata independently of IPC. Explicit read-only inspection
+  preserves lost reservations; it cannot reconcile the previous native attempt.
+  Signal-only owned exits retain their actual null code and signal. Disposable
+  fixture validation does not establish real-provider or two-agent acceptance. See
+  [receipt/recovery limits](docs/development/codex-lifecycle-receipts.md).
+
 - **Codex existing-login implementation (2026-11-03):** explicit structured setup can
   retain native HOME/CODEX_HOME without copying credentials or initiating login.
   Native `account/read` gates new ephemeral threads; two slots keep separate IDs,

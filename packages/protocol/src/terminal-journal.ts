@@ -23,15 +23,20 @@ export const terminalAttemptSchema = z
     updatedAt: timestamp,
     exit: z
       .strictObject({
-        exitCode: z.number().int().safe(),
-        signal: z.number().int().safe().optional(),
+        exitCode: z.number().int().safe().nullable(),
+        signal: z
+          .union([z.number().int().safe(), z.string().regex(/^SIG[A-Z0-9]{1,29}$/)])
+          .optional(),
       })
       .optional(),
   })
   .superRefine((record, context) => {
     if (
       (record.state === 'exited') !== (record.exit !== undefined) ||
-      record.updatedAt < record.createdAt
+      record.updatedAt < record.createdAt ||
+      (record.exit?.exitCode === null &&
+        (record.exit.signal === undefined ||
+          (typeof record.exit.signal === 'number' && record.exit.signal <= 0)))
     )
       context.addIssue({ code: 'custom', message: 'Invalid terminal lifecycle evidence' });
   });

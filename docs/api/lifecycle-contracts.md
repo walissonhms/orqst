@@ -387,3 +387,12 @@ control protocol. See the [integration gate](../../ROADMAP.md#phase-1-compatibil
 and [Analytics design](../architecture/model-usage-analytics.md). The six-phase
 sequence and incremental-development authorization supersede the original phase
 gating; individual control operations still require scopes and provider evidence.
+
+## Future structured host evidence — 2026-11-03
+
+Private version-1 lifecycle receipts bind instance, original epoch, signed manifest
+and config digests; records are prepared/armed/started/exit or spawn_failed. Their
+read-only inspection is not a public API and cannot restore ownership or mutate
+observed events. Journal feature schema 2 retains nullable numeric exit code with
+an explicit signal for signal-only exits. Observer protocol and statuses are
+unchanged. See [receipt semantics and limits](../development/codex-lifecycle-receipts.md).

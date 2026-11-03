@@ -163,9 +163,12 @@ unknown outcomes are never automatically retried.
   detaches controls and closes journals, preserving active attempts as ownership
   lost. The host's disclosed lifetime remains. No stored PID is signaled, resumed or
   adopted. Process exit is reported only by the exact owned host.
-- The existing terminal journal requires a numeric exit code. Signal-only native
-  exits have null code: the pane closes on explicit host evidence, while the journal
-  conservatively retains ownership-lost capacity. No numeric exit is invented.
+- Feature journal schema 2 preserves signal-only owned exits as null code plus the
+  original signal. Future structured hosts also sync a private lifecycle receipt
+  before lifecycle IPC, even after disconnect. Receipt inspection is read-only:
+  it cannot reclaim ownership-lost capacity or reconcile earlier attempts. See
+  [receipt format, inspection and limitations](codex-lifecycle-receipts.md).
+
 - A previous crash/dirty slot journal fails closed (`recover:false`). Graceful
   shutdown still retains lost-ownership reservations. There is no reclamation or
   reconciliation API and no promise to restore control after reboot. Do not reset,

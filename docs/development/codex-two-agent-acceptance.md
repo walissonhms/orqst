@@ -265,10 +265,12 @@ capability/call/receipt or any uncertain result fails; no synthetic fallback is 
 
 The cleanup flag authorizes TERM to each still-owned handle, followed by a distinct
 signed KILL after two seconds if needed. Each wait is bounded. No PID is adopted or
-signaled after ownership loss. Signal-only exit is recorded honestly in the live
-snapshot; the journal may still reserve lost capacity because its older exit schema
-requires a numeric code. A lost process remains uncertain and retains its disclosed
-host lifetime; inspect/reconcile before retrying or deleting state.
+signaled after ownership loss. Future still-owned signal-only exits persist as null
+code plus signal in journal schema 2. Future structured hosts also retain private
+[lifecycle receipts](codex-lifecycle-receipts.md) across IPC loss. Receipts do not
+release lost capacity or reconcile historical attempts. A lost process remains
+uncertain and retains its disclosed host lifetime; preserve state and obtain a
+reviewed capacity disposition before any separately authorized future execution.
 
 The script retains private state and new credentials (`0700` directories/`0600`
 files) so failures are reviewable. Once **both owned exits are confirmed**, the owner
