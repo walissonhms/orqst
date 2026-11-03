@@ -10,6 +10,11 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [macOS Desktop checkout client](development/desktop.md) — setup, verified Electron
   runtime, trust/lifetime, offline behavior and distribution limits.
 
+## Design
+
+- [Official design system](design/design-system.md) — shared palette, typography,
+  spacing, components, evidence-backed motion and planned mascot states.
+
 ## Architecture
 
 - [Overview](architecture/overview.md) — components, process model, data flow,

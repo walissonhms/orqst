@@ -203,7 +203,12 @@ grant and replacement confirmation; see the [native save contract](../api/artifa
 ### `apps/dashboard`
 
 A React single-page application built with Vite, styled with Tailwind CSS v4,
-and translated with i18next/react-i18next.
+and translated with i18next/react-i18next. `src/styles.css` defines shared
+`--orqst-*` custom properties for the official
+[Minimal Dark + Developer Studio system](../design/design-system.md). Browser and
+Electron reuse the same tokens and responsive component stylesheet; no separate
+frontend theme runtime or backend dependency is introduced. The system also
+specifies planned module/mascot behavior without implementing those capabilities.
 
 - `use-observatory.ts` — bootstrap, initial snapshot, WebSocket connection,
   cursor deduplication, reconnect with backoff, five-second snapshot fallback.
