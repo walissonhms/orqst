@@ -24,8 +24,16 @@ const send = async (request: TerminalNativeRequest) => {
   busy = true;
   try {
     const reply = await client.request(request);
-    status.textContent = status.dataset[reply.status] ?? '';
+    if (request.action !== 'read' || reply.status !== 'ok')
+      status.textContent = status.dataset[reply.status] ?? '';
     if (reply.status !== 'ok') return;
+    if (reply.instanceId !== instanceId) {
+      attached = false;
+      cursor = 0;
+      sequence = 0;
+      output.textContent = '';
+      decoder.decode();
+    }
     instanceId = reply.instanceId;
     status.dataset.instanceId = reply.instanceId;
     if (reply.snapshot) status.dataset.state = reply.snapshot.state;
