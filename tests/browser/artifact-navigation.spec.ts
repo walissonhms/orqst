@@ -68,7 +68,7 @@ test('view navigation waits for confirmation; cancellation preserves exact text 
   await settings.click();
   const dialog = discardDialog(page);
   await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(settings).toBeFocused();
@@ -82,7 +82,7 @@ test('view navigation waits for confirmation; cancellation preserves exact text 
   expect(await page.evaluate(() => Reflect.get(window, 'orqstInjected'))).toBeUndefined();
   await settings.click();
   await confirmNavigation(page);
-  await expect(page).toHaveURL(/#settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await expect(panel).toHaveCount(0);
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await page
@@ -175,7 +175,7 @@ for (const query of ['Settings', 'Synthetic navigation agent', 'Synthetic naviga
     await page.keyboard.press('Enter');
     await confirmNavigation(page);
     await expect(panel).toHaveCount(0);
-    if (query === 'Settings') await expect(page).toHaveURL(/#settings$/);
+    if (query === 'Settings') await expect(page).toHaveURL(/\/settings$/);
     else if (query === 'Synthetic navigation agent')
       await expect(
         page.getByRole('region', { name: 'Session details', exact: true }),
@@ -202,7 +202,7 @@ test('session hashes, Back and Forward keep current context until a decision wit
   await panel.getByRole('textbox').fill(draftText);
   await page.evaluate(() => history.back());
   await expect(discardDialog(page)).toBeVisible();
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
   await page.keyboard.press('Escape');
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
   await page.evaluate(() => history.forward());
@@ -212,7 +212,7 @@ test('session hashes, Back and Forward keep current context until a decision wit
     location.hash = `session=${id}`;
   }, otherId);
   await expect(discardDialog(page)).toBeVisible();
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
   await page.keyboard.press('Escape');
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
   await page.evaluate((id) => {
@@ -222,7 +222,7 @@ test('session hashes, Back and Forward keep current context until a decision wit
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toContainText(
     otherId,
   );
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL(`/overview/sessions/${otherId}`);
 });
 
 test('pending save blocks view, session and hash changes without replaying a delayed navigation', async ({
@@ -251,7 +251,7 @@ test('pending save blocks view, session and hash changes without replaying a del
   await page.evaluate(() => {
     location.hash = 'agents';
   });
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
   await expect(discardDialog(page)).toHaveCount(0);
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
   await page.evaluate(() => window.dispatchEvent(new Event('synthetic-navigation-save')));

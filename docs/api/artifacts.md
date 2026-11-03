@@ -99,7 +99,7 @@ both explicit close actions leave the panel open without a discard prompt.
 
 The same guard now covers session selection, workspace changes and leaving Overview
 through sidebar/header links, Search & commands, notification source links and
-same-document hash/history navigation. The URL, workspace, filters, selected session
+same-document path/hash/history navigation. The URL, workspace, filters, selected session
 and view change only after confirmation. Cancel preserves exact text and context.
 If the initiating palette/notification button has unmounted, focus returns to the
 Artifact heading; otherwise it returns to that control. Same-view/session/workspace
@@ -117,12 +117,16 @@ Desktop close/quit, native reloads/notification-driven document loads, process/O
 failure and source disappearance remain outside this renderer protection. No native
 IPC/grant, filesystem authority or lifecycle behavior changes.
 
-Hash traversal has already changed the history entry before the renderer sees it.
-Cancellation restores the accepted URL in that entry without adding another entry;
-the exact prior history stack is not restored and may contain duplicate current-view
-entries. Accepted traversal applies its target in the traversed entry. Snapshot
-refreshes do not replay pending or cancelled navigation. Drafts are never written to
-local/session storage or sent to the Bridge; explicitly copy/save important edits.
+Dashboard path/hash traversal restores the accepted history entry before asking
+the guard. Confirmation traverses once to the requested entry; cancellation preserves
+both history directions instead of rewriting the target entry. Legacy view hashes
+canonicalize to the five public paths, and valid representable session links become
+`/overview/sessions/<encoded-id>`. Unsafe path identities retain their legacy hash
+form; no alternate identity is invented. This guarantee covers entries managed by the same
+dashboard document; external document loads and arbitrary script-written history
+state remain outside it. Snapshot refreshes do not replay pending or cancelled
+navigation. Drafts are never written to local/session storage or sent to the Bridge;
+explicitly copy/save important edits.
 
 The React preview supports only heading lines, bullet lists and fenced code blocks.
 Other syntax, including inline Markdown, HTML, links, images and URLs, stays literal.

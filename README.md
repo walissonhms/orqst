@@ -49,6 +49,31 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Configurable Overview panels:** **Customize overview** shows/hides and reorders
+  the existing timeline, attention, token usage and source-health panels. The first
+  visible panel uses the wide column; narrow windows keep the same reading order.
+  Keyboard arrow buttons, immediate changes, scoped default restoration and an
+  all-hidden recovery action work without the Bridge. Layout persists locally and
+  synchronizes between same-origin tabs; storage denial reports visit-only scope.
+  Summary, sessions, open details/drafts and notification delivery keep their existing
+  behavior. No new metrics, data deletion, drag-and-drop or panel resizing is added.
+  See the [interface guide](docs/design/ui-ux-specification.md#customize-overview-panels).
+
+- **Clean dashboard routes:** use `/overview`, `/workspaces`, `/agents`, `/models`
+  and `/settings`, including direct entry and reload. `/` restores the last view;
+  explicit routes take precedence over that preference. Legacy `/#overview` (and
+  the other four view hashes) still work and replace the current URL without an
+  extra history entry. Legacy `/#session=<encoded-id>` opens a session only after
+  validation against the Bridge snapshot and becomes `/overview/sessions/<encoded-id>`.
+  Safe session paths use one canonical encoded segment; IDs containing separators,
+  residual percent escapes, controls or dot-only segments retain their historical
+  hash representation. Session links remain reloadable. Browser Back/Forward and
+  same-document hash links share draft confirmation; cancellation preserves both history directions.
+  Desktop permits only the root, these five exact paths and the strictly validated
+  session-path shape at its configured loopback origin. Unknown extensionless
+  Bridge paths return 404. See
+  [navigation and limits](docs/design/ui-ux-specification.md#navigate-real-observations).
+
 - **Light and system theme increment:** Settings now offers dark, light and
   follow-system themes across the shared dashboard. Dark remains the default;
   older appearance choices keep their values. Light mode includes semantic status
@@ -70,7 +95,7 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   autosaved. See [Artifacts limits](docs/api/artifacts.md#panel-preview-and-clipboard).
 
 - **Settings and accessibility increment:** open **Settings** in navigation, the
-  header or Cmd/Ctrl+K (`/#settings`). General, Appearance & accessibility,
+  header or Cmd/Ctrl+K (`/settings`). General, Appearance & accessibility,
   Notifications and Privacy & storage group working controls and explain their
   scope. Choose standard/higher contrast, compact/comfortable spacing and
   system/reduced motion. Appearance persists in this browser/Desktop profile;
@@ -160,7 +185,7 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   retained-message extraction, source/preview/draft editing and explicit copying; file
   saving and optional opening in the system default application are implemented for Desktop only. This does not complete Phase 1.
 - **Browser Analytics increment delivered:** open **Most used models** in the sidebar
-  or `/#models`. Rank covered observations by reported tokens or observed sessions;
+  or `/models`. Rank covered observations by reported tokens or observed sessions;
   filter local calendar periods, workspace, exact agent/model IDs and implemented
   CLI adapter. Unknown models, missing usage and incomplete coverage stay explicit.
   CSV/Markdown export now projects the current aggregate with bounded validation,
@@ -505,6 +530,32 @@ and [SECURITY.md](SECURITY.md).
 - **Distribution is incomplete.** A macOS user-service helper is available; there is no standalone installer, container image, Linux/Windows service installer or published package.
 
 ## Validation status
+
+The configurable Overview increment started after `39eaf4d` and preserves the
+concurrent brand, native-boundary and clean-route work through `f0ef4eb`. Final combined
+checks passed lint, typecheck, all 282 Node cases, full build and 69 focused Chromium
+cases on isolated port 4591. A broader 132-case Chromium run passed before the final rebase.
+The final selection covers layout-only persistence/synchronization, keyboard moves/
+focus (including recovery when a trigger disappears), offline/storage denial, exact
+active drafts, clean routes/history, brand assets, Settings, reading comfort and themes.
+Synthetic images were inspected at desktop and 320px pt-BR with maximum reading sizes.
+The existing Vite bundle-size warning remains. No ingestion or native contract was
+changed by this increment; local/live provider validation, Electron smoke, other-browser,
+native visual and manual screen-reader acceptance were not repeated. This delivery
+neither restarts services nor changes stored observations/source sessions. See
+[Overview testing](docs/development/testing.md#configurable-overview-panels).
+
+The clean-route increment on 2026-11-03 passed lint, typecheck, 279 Node tests,
+build, 36 focused Chromium navigation/draft/preference cases and the separate
+brand-layout Chromium case after integration with the current brand and native
+terminal-boundary work. A disposable Electron 45.2.1/macOS arm64 smoke passed
+real clean-route/reload, source-session selection, isolated IPC and native-save
+revocation checks; dialogs, editor dispatch and native alert delivery were
+intercepted as described below. The historical-hash address-bar regression and
+duplicate navigation events are covered deterministically. No installed service,
+owner data or real provider sessions were changed; ingestion is unchanged and no
+new `validate:local` run was performed. Native close/quit/reload draft recovery and
+other browser/OS acceptance remain outside this evidence.
 
 The Artifact navigation increment after `cb5bc12` passed lint, typecheck, all 254
 Node cases and full build. A full Chromium run passed 119 cases; final modal

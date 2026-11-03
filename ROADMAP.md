@@ -240,7 +240,13 @@ preferences with storage-denial feedback and a scoped confirmed reset. Language
 and reading comfort work offline; delivery preferences reuse the existing Bridge
 contract. This does not implement provider configuration or storage management.
 
-Remaining frontend work includes configurable Overview panels, project tabs/splits,
+The configurable Overview increment now supports visibility and keyboard reordering
+of the four existing secondary panels, a locally persisted/synchronized profile-wide
+layout and scoped default restoration. Summary, sessions, inspector/drafts and
+notification delivery retain their contracts. No new metrics or runtime controls
+are introduced; resizing and a separate Observability screen remain planned.
+
+Remaining frontend work includes project tabs/splits,
 a searchable artifact library, terminal fonts, broader Settings and
 onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration
 require real Core/provider and

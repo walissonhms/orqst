@@ -11,7 +11,7 @@ test('Settings navigation, appearance persistence and scoped reset preserve keyb
 }) => {
   await page.goto('/#workspaces');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/#settings$/);
+  await expect(page).toHaveURL(/\/settings$/);
   await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption('high');
   await page.getByRole('combobox', { name: 'Spacing', exact: true }).selectOption('comfortable');
   await page.getByRole('combobox', { name: 'Motion', exact: true }).selectOption('reduced');

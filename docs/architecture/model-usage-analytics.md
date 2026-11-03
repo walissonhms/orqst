@@ -80,7 +80,7 @@ and source identity. They do not establish real-provider ranking or full Desktop
 
 ## Implemented browser increment
 
-Open **Most used models** in the existing dashboard sidebar, or `/#models`. The view
+Open **Most used models** in the existing dashboard sidebar, or `/models`. The view
 uses the bounded summary API, with token ranking by default and a separate observed
 session order. It shows leader, reported total and distinct-session cards, share bars,
 input/output/cache columns, unidentified models, unavailable values and coverage gaps.

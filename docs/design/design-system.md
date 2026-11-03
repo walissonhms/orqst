@@ -126,7 +126,7 @@ This table is a visual requirement, not a declaration that a module is shipped.
 
 | Area                                   | Application and current boundary                                                                                                                                                        |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; implemented                                                                                           |
+| Dashboard / Overview and observability | Surface cards and timeline, exact counts, semantic statuses, readable provenance; four secondary panels support local visibility/order and keyboard controls                            |
 | Workspaces and tabs                    | Directory search, grid/list, sort and scoped navigation use shared surfaces; open project tabs remain planned                                                                           |
 | Agent and model selectors              | Descriptor capability matrix and current filters use shared controls; observed models remain historical identifiers, not execution pickers                                              |
 | Model Analytics                        | Shared filters/cards, neon share/evolution bars, explicit coverage and unavailable values; current bounded views remain intact                                                          |

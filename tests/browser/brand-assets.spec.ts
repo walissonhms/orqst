@@ -64,7 +64,7 @@ test('approved artwork loads locally, preserves proportions and remains accessib
   await home.focus();
   await expect(home).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/#overview$/);
+  await expect(page).toHaveURL('/overview');
   await expect(page.getByRole('img', { name: 'ORQST', exact: true })).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('brand-light-desktop.png'),

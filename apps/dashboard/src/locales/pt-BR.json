@@ -580,6 +580,19 @@
     "cancel": "Cancelar",
     "confirm": "Autorizar uma vez"
   },
+  "overviewLayout": {
+    "title": "Personalizar visão geral",
+    "help": "As alterações são imediatas. Exiba ou oculte painéis e mova-os pelos botões de seta. O primeiro painel visível ocupa a coluna larga; os demais seguem na ordem. Em telas estreitas, eles ficam empilhados na mesma ordem de leitura.",
+    "scope": "Apenas o layout deste perfil do navegador/Desktop muda, em todos os workspaces. Resumo, sessões e detalhes da sessão continuam disponíveis. Ocultar Atenção não silencia notificações nem altera estados observados. Nenhum histórico ou rascunho é excluído.",
+    "moveUp": "Mover {{panel}} para cima",
+    "moveDown": "Mover {{panel}} para baixo",
+    "moved": "{{panel}} movido para a posição {{position}} de {{count}}.",
+    "reset": "Restaurar layout padrão",
+    "restored": "Layout padrão da visão geral restaurado.",
+    "done": "Concluir",
+    "empty": "Os painéis opcionais da visão geral estão ocultos. Personalize o layout para exibi-los novamente.",
+    "storageUnavailable": "O layout vale para esta visita. O armazenamento local está indisponível e as escolhas podem não permanecer após recarregar."
+  },
   "terminalLab": {
     "title": "Laboratório sintético do Terminal nativo",
     "scope": "Aceitação de engenharia descartável. Não usa projeto do usuário, sessão externa, credencial ou provider real. O processo encerra após oito segundos.",

@@ -200,6 +200,20 @@ Module._load = load;
     })),
     { require: 'undefined', process: 'undefined' },
   );
+  // Exact clean routes must pass real Electron navigation, reload and sender policy.
+  for (const route of ['overview', 'workspaces', 'agents', 'models', 'settings']) {
+    await page.goto(`${origin}/${route}`);
+    await expect(page.locator('nav a[aria-current="page"]')).toHaveAttribute('href', `/${route}`);
+    await page.reload();
+    await expect(page.locator('nav a[aria-current="page"]')).toHaveAttribute('href', `/${route}`);
+  }
+  const sessionURL = `${origin}/overview/sessions/synthetic-desktop-smoke`;
+  await page.goto(sessionURL);
+  await expect(page.locator('.session-detail')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.session-detail')).toBeVisible();
+  await expect(page).toHaveURL(sessionURL);
+  await page.goto(`${origin}/overview`);
   // Exercise the real shared Artifacts UI; clipboard permission remains denied.
   await page.getByRole('button', { name: /Synthetic Desktop Smoke Disposable/ }).click();
   const metrics = page.locator('.session-detail > .live-metrics');
@@ -347,8 +361,8 @@ Module._load = load;
     Reflect.get(globalThis, 'syntheticSaveOptions'),
   );
   assert.match(JSON.stringify(nativeSaveOptions), /showOverwriteConfirmation/);
-  // A hashless URL restores the persisted view, which becomes Analytics below.
-  const beforeRevocationURL = origin + '/#overview';
+  // The root restores the persisted view, which becomes Analytics below.
+  const beforeRevocationURL = origin + '/overview';
   await artifact.getByRole('textbox').fill('Synthetic revoked overwrite must never be saved');
   await desktop.evaluate(({ dialog }) => {
     dialog.showMessageBox = async () =>

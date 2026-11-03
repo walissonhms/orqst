@@ -1,3 +1,5 @@
+import { dashboardPathSchema } from '@orqst/protocol';
+
 export const offlineURL = 'orqst-desktop://offline/';
 
 /** A port, rather than an arbitrary URL, keeps the trust boundary on IPv4 loopback. */
@@ -21,7 +23,7 @@ export function allowedNavigation(value: string, origin: string): boolean {
       (url.origin === origin &&
         !url.username &&
         !url.password &&
-        url.pathname === '/' &&
+        dashboardPathSchema.safeParse(url.pathname).success &&
         !url.search)
     );
   } catch {
