@@ -348,3 +348,22 @@ permission prompt, installation check, saved progress or runtime control is adde
 Broader onboarding and manual assistive-technology/native visual acceptance remain
 pending; Terminal and provider development retain their separate gates. See the
 [interface guide](docs/design/ui-ux-specification.md#first-observation-guide).
+
+### Agentic Mode communication foundation — 2026-11-03
+
+[ADR-033](docs/architecture/decisions.md#adr-033--opt-in-durable-pane-communication-without-terminal-injection)
+adds a private Core pane registry and bounded durable structured queue, explicit
+workspace/actor grants, independent delivery/task evidence, idempotency, result
+inbox/subscriptions and conservative epoch recovery. These are library capabilities
+validated with synthetic transports, not enabled provider communication.
+
+The first useful Agentic Mode milestone remains two real managed CLIs in separate
+stable identified panes: A delegates a bounded task to B, acceptance remains separate
+from completion and a verified correlated result returns automatically into A.
+Dependencies: persistent identity joined to native ownership admission, independent
+per-terminal managed state/concurrency, trusted authorization, one verified structured
+provider interface, narrow authenticated MCP/response transport and explicit task
+budgets. Subsequent work includes Inspector/notifications, native queue/result UX,
+CLI/model discovery, typed intent planning, safe worktree allocation and opt-in cleanup.
+No observed external session is controllable and no PTY input channel is exposed.
+See [implemented vs missing capabilities](docs/api/pane-communication.md).

@@ -608,3 +608,18 @@ in renderer memory; excerpts and provenance stay inert plain text. Opening a sou
 the existing session navigation and independently identity-checked extraction contract.
 Capacity, partial coverage, stale/offline/error data and retention remain explicit. See the
 [contract review](../api/artifacts.md#source-library-security-review--2026-11-03).
+
+## Experimental structured communication boundary
+
+The optional Core library has no public API, socket, IPC or MCP transport and is not
+constructed by observer startup. Trusted composition alone may register ownership,
+issue/revoke clients and enroll structured adapters. Private clients scope actor,
+workspace, source/targets and expiry; observation cookies and provider output cannot
+create authority. Content resolution must authorize the exact scope and is limited
+to opaque local IDs with byte/hash validation, without a file/URL implementation.
+Provider evidence must match task/message/correlation/attempt and managed instance/
+epoch. Queue admission never implies execution; uncertainty blocks unsafe retries.
+Recovery fences old writers and does not restore grants or adopt processes. Existing
+HTTP/WS protections and external read-only boundaries are unchanged. No runtime
+activation or real-provider security claim follows from synthetic tests.
+See [the threat boundary and missing gates](../api/pane-communication.md).

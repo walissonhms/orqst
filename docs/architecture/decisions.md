@@ -579,3 +579,27 @@ history may omit alerts; at most three attempts per cycle avoid bursts. Unread c
 is the bounded history, not inferred agent attention. API support is not OS delivery;
 signed app identity, permission/Focus and real native visual acceptance remain pending.
 See [Desktop details](../development/desktop.md) for exact evidence gates and limits.
+
+## ADR-033 — Opt-in durable pane communication without terminal injection
+
+**Status:** Implemented as a private Core library with synthetic tests; real-provider
+integration and public transports are not enabled.
+
+The Core owns stable workspace-scoped pane identity, strict task/message contracts,
+private scoped authorization, durable local FIFO and separate delivery/task facts.
+The existing SQLite writer opens an optional, separately versioned metadata journal;
+normal observation is unchanged. Display IDs are never recycled. Native terminal
+instance/project/epoch bindings remain distinct from workspace and observed sessions.
+Trusted native enrollment must verify those bindings; text, names and PIDs cannot.
+
+Use structured provider callbacks with explicit message/task/correlation/attempt and
+instance/epoch evidence. A PTY is not the messaging protocol. Persist references and
+audit metadata rather than prompts/results. Queue admission is not acceptance or
+completion. Unknown side effects hold capacity and cannot automatically retry.
+Restart fences old writers, invalidates authorizations and requires explicit
+re-enrollment/reauthorization of undispatched work.
+
+The library notifies the initiating Core client after a committed result and retains
+an inbox, but this does not prove delivery into a real initiating agent. No runtime,
+provider, MCP, planner, UI Inspector or two-agent acceptance is claimed. See the
+[versioned contract and integration gates](../api/pane-communication.md).

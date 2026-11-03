@@ -817,3 +817,13 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before changing the repository. Contribu
 intentionally submitted for inclusion are governed by Apache-2.0 section 5. Report vulnerabilities
 according to [SECURITY.md](SECURITY.md); do not open a public issue for a
 security problem.
+
+### Experimental structured pane communication
+
+The [private Core communication library](docs/api/pane-communication.md) now has
+stable pane IDs, explicit workspace/actor authorization, a bounded durable SQLite
+queue, separate acceptance/start/result evidence and a local result inbox with
+post-commit notifications. Tests use synthetic adapters; normal observer startup
+has no communication endpoint. The first real two-agent delegation/automatic CLI
+response milestone remains incomplete until native ownership, per-terminal state,
+structured provider and authenticated agent transport are validated together.
