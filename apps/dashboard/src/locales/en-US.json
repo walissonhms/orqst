@@ -475,7 +475,19 @@
       "open": "Open sessions",
       "noMatches": "No workspaces match this search.",
       "empty": "No workspaces recorded. Use Codex outside ORQST or add a local workspace label.",
-      "localNote": "Workspace paths are labels and observed working directories. Opening a workspace filters observations; it does not open files, launch a CLI or resume a process."
+      "localNote": "Workspace paths are labels and observed working directories. Opening a workspace filters observations; it does not open files, launch a CLI or resume a process.",
+      "pin": "Pin workspace {{name}}",
+      "pinnedName": "{{name}} (pinned)",
+      "pinnedOnly": "Pinned only",
+      "pinned": "{{name}} pinned. Pinned workspaces appear first.",
+      "unpinned": "{{name}} unpinned.",
+      "pinScope": "Pins are local to this browser/Desktop profile. Pinned workspaces appear first, using the selected sort within each group. Pinning does not change the active workspace.",
+      "pinStorageUnavailable": "Pins apply for this visit. Local storage is unavailable; changes may be lost when you leave.",
+      "pinLimit": "Up to {{count}} workspaces can be pinned. Unpin one to add another.",
+      "noPinnedMatches": "No pinned workspaces match. Show all workspaces to find and pin a project.",
+      "clearPins": "Unpin all workspaces",
+      "clearedPins": "All workspace pins cleared. Only this profile preference changed.",
+      "unpin": "Unpin workspace {{name}}"
     },
     "agents": {
       "description": "Inspect the capabilities declared by the local observation adapters.",

@@ -237,6 +237,13 @@ layout and scoped default restoration. Summary, sessions, inspector/drafts and
 notification delivery retain their contracts. No new metrics or runtime controls
 are introduced; resizing and a separate Observability screen remain planned.
 
+Workspace pinning now prioritizes recorded projects in the directory/sidebar, with
+keyboard toggles, a composable pinned-only filter, empty recovery and local profile
+persistence/synchronization. It preserves routes, active scope and drafts. Missing
+snapshot identities remain hidden without erasing their preference; storage denial
+reports visit-only scope. This does not add archive/rename, filesystem or process
+restoration. See the [interface guide](docs/design/ui-ux-specification.md#pin-workspaces).
+
 Remaining frontend work includes project tabs/splits,
 a searchable artifact library, terminal fonts, broader Settings and
 onboarding. Studio/PTY controls, CLI/model discovery, task Kanban and orchestration

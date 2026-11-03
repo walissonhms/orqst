@@ -49,6 +49,15 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Pinned workspaces:** pin/unpin recorded workspaces in the directory, filter to
+  pinned projects and find them first in both directory and sidebar. The selected
+  recent/name ordering applies within directory groups. Pins persist locally and
+  synchronize across same-origin tabs; storage denial keeps visit-only changes with
+  an explicit notice. Pinning preserves the active scope, routes and Artifact drafts.
+  This is a browser/Desktop-profile preference, not a project file operation or
+  process/tab restoration. **Unpin all workspaces** clears only those pins, including
+  absent identities. See the [interface guide](docs/design/ui-ux-specification.md#pin-workspaces).
+
 - **Configurable Overview panels:** **Customize overview** shows/hides and reorders
   the existing timeline, attention, token usage and source-health panels. The first
   visible panel uses the wide column; narrow windows keep the same reading order.

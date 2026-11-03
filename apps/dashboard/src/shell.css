@@ -726,3 +726,16 @@
     max-width: 100%;
   }
 }
+
+.workspace-pin[aria-pressed='true'],
+.workspace-pin-filter[aria-pressed='true'] {
+  color: var(--orqst-lavender);
+  background: var(--orqst-accent-soft);
+}
+.workspace-pin {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.workspace-pin-recovery {
+  margin: 0 var(--orqst-space-5) var(--orqst-space-4);
+}

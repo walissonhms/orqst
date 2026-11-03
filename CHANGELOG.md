@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Local workspace pinning in the directory, pinned-first directory/sidebar ordering
+  and a pinned-only search filter with keyboard focus recovery. Pins synchronize
+  across same-origin tabs, retain absent identities without fabricating projects and
+  disclose visit-only storage failure. Active scope, routes, drafts, Bridge and
+  observed sessions retain their contracts.
+
 - Experimental strict native-terminal broker with private proofs/leases, exact
   native-confirmation binding, focus/document revalidation, lifecycle revocation
   and explicit conservative supervisor teardown. Electron sender/dialog/lifecycle
