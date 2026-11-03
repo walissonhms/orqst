@@ -837,3 +837,21 @@ are not extra published references. The backup and obsolete local references are
 excluded from publication. The source-equivalent global checks and focused tests
 above remain valid; documentation formatting and the entire outgoing history were
 reviewed again after reconstruction.
+
+## Dashboard visual integration — 2026-11-03
+
+The visual contributor validated the exact frontend/test content with lint,
+typecheck, 331 Node cases and build. The complete Chromium run passed 169/173:
+four observation-guide fixtures assumed one session despite other suites retaining
+additional synthetic sessions. The follow-up commit scopes those fixture readings
+without weakening assertions; dashboard plus guide retesting passed 11/11. The
+visual matrix passed 6/6, and brand/system/alpha and dark/light contrast checks passed.
+No single all-green 173-case run is claimed. The integrator compared the applied
+files with that delivered tree, repeated the three pinned asset cases and checked
+global documentation formatting/links. Independent runtime source was preserved.
+
+Evidence is Chromium/synthetic at 320/390/768/1440 in both languages and palettes.
+Native Desktop, Safari/Firefox and manual screen-reader acceptance remain unvalidated.
+The existing Vite bundle advisory remains. Publication does not itself replace the
+installed static bundle; that separately authorized action is coordinated with the
+visual contributor, without a Bridge/Desktop restart or schema migration.

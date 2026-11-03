@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-03 — Dashboard visual refinement
+
+- Remove the logo's CSS white backing and add a documented transparent dark-theme
+  derivative while preserving the original light artwork, geometry and accent.
+- Refine typography, responsive header/sidebar, mobile session cards, focus/Escape,
+  Analytics spacing and Settings layout using existing real data/actions.
+- Show the running indicator only for explicit running evidence. Isolate guide
+  fixtures after shared synthetic sessions exposed four browser assumptions.
+  Full browser evidence is 169/173 followed by 11/11 focused corrected cases;
+  native Desktop, other browsers and manual screen-reader acceptance remain pending.
+
 ## 2026-11-03 — Structured Codex runtime library
 
 - Add a separate opt-in signed native-start/app-server path with per-slot private

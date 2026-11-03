@@ -274,6 +274,13 @@ complete Phase 2 or authorize a release.
 
 ## UI/UX screen delivery
 
+The visual refinement now adds transparent theme-aware branding, responsive
+header/sidebar/session cards, clearer type/focus and consistent Analytics/Settings
+spacing. All fields/actions reuse current observation contracts, and the running
+indicator requires explicit running evidence. Synthetic palette/layout coverage
+is recorded in [visual checks](docs/development/dashboard-visual-checks.md); this
+is not native Desktop or manual assistive-technology acceptance.
+
 The [public interface specification](docs/design/ui-ux-specification.md) tracks each
 screen as Implemented / Partial / Planned / Blocked, with component/test pointers.
 The navigation foundation now includes a collapsible sidebar, Cmd/Ctrl+K search,

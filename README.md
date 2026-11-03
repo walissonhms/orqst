@@ -59,6 +59,14 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Dashboard visual refinement:** the logo now follows the resolved light/dark
+  theme without a white CSS backing, with the original artwork retained and a
+  documented transparent dark derivative. Responsive headers/sidebar, mobile
+  session cards and labeled fields preserve real actions, focus and observation
+  semantics. Palette contrast and synthetic layout checks cover both languages;
+  native Desktop and manual screen-reader acceptance remain pending. See the
+  [visual check scope](docs/development/dashboard-visual-checks.md).
+
 - **Terminal and communication boundaries (2026-11-03):** the embedded Desktop
   Terminal is an explicit native opt-in for newly owned processes. Separately,
   [pane communication](docs/api/pane-communication.md) provides stable scoped IDs,

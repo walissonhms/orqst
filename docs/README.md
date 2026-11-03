@@ -73,6 +73,9 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 
 ## Development
 
+- [Dashboard visual checks](development/dashboard-visual-checks.md) — synthetic
+  responsive/locale/theme/contrast/brand matrix and native acceptance limits.
+
 - [Structured Codex runtime](development/codex-structured-runtime.md) — opt-in signed
   native ownership, separate slots and app-server/queue integration; synthetic
   transports only, without normal-runtime or real agent-to-agent acceptance.
