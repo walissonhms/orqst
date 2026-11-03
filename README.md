@@ -24,13 +24,23 @@ reuse native authentication with new ephemeral threads and private SQLite/log st
 native auth/config remain shared. The Desktop **Managed agents** surface now connects
 two explicitly signed structured terminals and scoped delegation; one authorized native acceptance attempt failed
 before readiness, so real-provider acceptance remains blocked. See [existing CLI integration](docs/development/local-cli-integration.md).
+Two interactive xterm/PTY windows now share one Node Core and sticky capacity with
+Managed agents; each slot has independent ownership and metadata-only lifecycle
+receipts. The explicit separate-login fixture path has earlier two-window transport evidence;
+final native-focus acceptance remains pending.
+Existing-login PTY and Claude/OpenCode remain blocked. See
+[two-window setup and limits](docs/development/managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
+A separate native-signed MCP stdio/Unix-socket library now completes synthetic
+A-to-B-to-A transport without PTY task injection. It is not installed into any CLI;
+existing-login TUI and idle-worker delivery remain unvalidated per provider. See
+[the interactive CLI/MCP boundary](docs/development/interactive-cli-mcp.md).
 Native focus refusals now have localized client feedback; active native-modal/focus
 acceptance remains pending. `pnpm accept:managed-agents --authorize-synthetic-agents`
 checks two disposable synthetic native processes and the signed A-to-B-to-A transport,
 without a provider or credentials. It does not accept the two-real-agent milestone.
 
 An explicit legacy checkout-only **Managed Terminal** opt-in adds a real xterm.js
-window inside ORQST Desktop for a new owned Codex process, with separate login,
+window per slot inside ORQST Desktop for up to two new owned Codex processes, with separate login,
 private state and native confirmations. It uses the selected native trusted/same-user
 contract; it is not hard containment. The real provider has not been executed for
 acceptance. Normal startup and external sessions remain observation-only. See

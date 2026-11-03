@@ -705,7 +705,16 @@
     "start_failed": "Start failed before execution",
     "ownership_lost": "Ownership lost; no safe control or retry",
     "keyboard": "Owned Terminal keyboard input",
-    "tooMuch": "Too much terminal output. Read the remaining output visually."
+    "tooMuch": "Too much terminal output. Read the remaining output visually.",
+    "retire": "Retire exited Terminal pair",
+    "retired": "Terminal pair retired; restart Desktop with fresh manifests",
+    "retireConfirm": "Release this pair only after every owned process has exited. The metadata archive will be preserved.",
+    "retireDenied": "Pair cannot retire. Every dispatched process needs a confirmed owned exit; lost ownership and changed reservations remain blocked.",
+    "quitNotice": "Disconnect Desktop? Terminal processes may continue until their authorized deadline. Unresolved reservations remain blocked after restart.",
+    "reuse_unavailable": "Blocked: existing native login reuse has not been validated for interactive PTY. No Core, journal or provider was started.",
+    "existing_state": "Blocked: this state already has a journal. Existing reservations will not be adopted, reset or removed.",
+    "capacity_reserved": "Blocked: capacity is reserved or its private admission state cannot be verified. No process was started; existing reservations are preserved.",
+    "terminalIdentity": "Core Terminal UUID"
   },
   "managedAgents": {
     "title": "Managed agents",

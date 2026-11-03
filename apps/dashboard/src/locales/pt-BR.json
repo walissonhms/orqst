@@ -705,7 +705,16 @@
     "start_failed": "Falha antes de executar",
     "ownership_lost": "Ownership perdido; sem controle ou repetição seguros",
     "keyboard": "Entrada de teclado do Terminal próprio",
-    "tooMuch": "Saída excessiva no terminal. Leia o restante da saída visualmente."
+    "tooMuch": "Saída excessiva no terminal. Leia o restante da saída visualmente.",
+    "retire": "Retirar par de Terminais encerrados",
+    "retired": "Par de Terminais retirado; reinicie o Desktop com manifests novos",
+    "retireConfirm": "Liberar este par somente após a saída confirmada de todos os processos próprios. O arquivo de metadados será preservado.",
+    "retireDenied": "O par não pode ser retirado. Cada processo iniciado exige saída própria confirmada; ownership perdido e reservas alteradas continuam bloqueados.",
+    "quitNotice": "Desconectar o Desktop? Os processos dos Terminais podem continuar até o prazo autorizado. Reservas não resolvidas continuam bloqueadas após reiniciar.",
+    "reuse_unavailable": "Bloqueado: reuso do login nativo existente não validado para PTY interativo. Nenhum Core, journal ou provider foi iniciado.",
+    "existing_state": "Bloqueado: este estado já tem um journal. Reservas existentes não serão adotadas, redefinidas ou removidas.",
+    "capacity_reserved": "Bloqueado: a capacidade está reservada ou seu estado privado de admissão não pôde ser verificado. Nenhum processo foi iniciado; reservas existentes foram preservadas.",
+    "terminalIdentity": "UUID do Terminal no Core"
   },
   "managedAgents": {
     "title": "Agentes gerenciados",

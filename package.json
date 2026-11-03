@@ -34,7 +34,8 @@
     "terminal:setup": "tsx scripts/setup-managed-terminal.ts",
     "terminal:discover": "tsx scripts/discover-local-clis.ts",
     "accept:managed-agents": "tsx scripts/accept-managed-agents.ts",
-    "accept:managed-terminal": "tsx scripts/accept-managed-terminal.ts"
+    "accept:managed-terminal": "tsx scripts/accept-managed-terminal.ts",
+    "accept:terminal-pair": "tsx scripts/accept-terminal-pair.ts"
   },
   "devDependencies": {
     "@orqst/core": "workspace:*",

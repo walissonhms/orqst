@@ -7,20 +7,27 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   terminalRPCReplySchema,
+  terminalPairReadySchema,
+  terminalPairRPCSchema,
   terminalRPCOutputSchema,
   terminalRPCSchema,
 } from '../../../packages/core/src/terminal/rpc.js';
 
 /** Electron is a client: Node owns SQLite, lifecycle, grants and PTYs across view hide/detach. */
 export async function connectManagedTerminalCore(
-  file: string,
+  files: string[],
   host: string,
   publicKey: KeyObject,
-): Promise<{ supervisor: TerminalNativeSupervisor; close(): void }> {
-  const config = readManagedCodexConfig(file);
+  admissionDirectory: string,
+) {
+  const config = readManagedCodexConfig(files[0]!);
   const child = fork(
     host,
-    [file, publicKey.export({ type: 'spki', format: 'der' }).toString('base64url')],
+    [
+      JSON.stringify(files),
+      publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+      admissionDirectory,
+    ],
     {
       execPath: config.node.path,
       execArgv: [],
@@ -32,6 +39,7 @@ export async function connectManagedTerminalCore(
   );
   let closed = false;
   let initialized = false;
+  let identities: Array<{ slot: number; terminalId: string; provider: 'codex' }> = [];
   let ready: () => void;
   let failed: (error: Error) => void;
   const startup = new Promise<void>((resolve, reject) => {
@@ -65,12 +73,14 @@ export async function connectManagedTerminalCore(
   child.on('disconnect', close);
   child.on('message', (raw: unknown) => {
     if (closed) return;
-    if (
-      !initialized &&
-      typeof raw === 'object' &&
-      raw !== null &&
-      Reflect.get(raw, 'type') === 'ready'
-    ) {
+    const started = terminalPairReadySchema.safeParse(raw);
+    if (!initialized && started.success) {
+      if (
+        started.data.identities.length !== files.length ||
+        started.data.identities.some((identity, slot) => identity.slot !== slot)
+      )
+        return close();
+      identities = started.data.identities;
       initialized = true;
       clearTimeout(startupTimer);
       ready();
@@ -85,34 +95,49 @@ export async function connectManagedTerminalCore(
     if (parsed.data.ok) request.resolve(parsed.data.value);
     else request.reject(new Error('Managed Terminal operation denied'));
   });
-  const call = (operation: string, args: unknown[]) =>
+  const call = (body: Record<string, unknown>, selectedId: string = randomUUID()) =>
     new Promise<unknown>((resolve, reject) => {
       if (closed || !initialized || pending.size >= 16)
         return reject(new Error('Managed Terminal unavailable'));
-      const id = randomUUID();
-      const request = terminalRPCSchema.parse({ id, operation, args });
+      const id = selectedId;
+      const request = terminalPairRPCSchema.parse({
+        ...body,
+        ...(body.kind === 'terminal' ? {} : { id }),
+      });
       pending.set(id, { resolve, reject, timer: setTimeout(close, 12000) });
-      if (
-        !child.send(request, (error) => {
+      try {
+        child.send(request, (error) => {
           if (error) close();
-        })
-      )
+        });
+      } catch {
         close();
+      }
     });
   await startup;
-  const supervisor = Object.fromEntries(
-    terminalRPCSchema.options.map((schema) => {
-      const operation = schema.shape.operation.value;
-      return [
-        operation,
-        async (...args: unknown[]) => {
-          const result = await call(operation, args);
-          if (operation !== 'read') return result;
-          const output = terminalRPCOutputSchema.parse(result);
-          return { ...output, bytes: Uint8Array.from(output.bytes) };
-        },
-      ];
-    }),
-  ) as TerminalNativeSupervisor;
-  return { supervisor, close };
+  const supervisors = files.map(
+    (_file, slot) =>
+      Object.fromEntries(
+        terminalRPCSchema.options.map((schema) => {
+          const operation = schema.shape.operation.value;
+          return [
+            operation,
+            async (...args: unknown[]) => {
+              const request = terminalRPCSchema.parse({ id: randomUUID(), operation, args });
+              const result = await call({ kind: 'terminal', slot, request }, request.id);
+              if (operation !== 'read') return result;
+              const output = terminalRPCOutputSchema.parse(result);
+              return { ...output, bytes: Uint8Array.from(output.bytes) };
+            },
+          ];
+        }),
+      ) as TerminalNativeSupervisor,
+  );
+  return {
+    identities,
+    supervisors,
+    close,
+    closeSlot: (slot: number) => call({ kind: 'closeSlot', slot }),
+    prepareRetire: () => call({ kind: 'prepareRetire' }),
+    retire: (proof: unknown) => call({ kind: 'retire', proof }),
+  };
 }

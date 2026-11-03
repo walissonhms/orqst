@@ -14,7 +14,7 @@ import {
 import { join } from 'node:path';
 import { ArtifactSaver, readSaveOriginal } from './artifacts.js';
 import { AnalyticsSaver, readNativeAnalytics } from './analytics.js';
-import { createManagedTerminal } from './managed-terminal.js';
+import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
 import { authorizedArtifactSender } from './artifact-sender.js';
@@ -82,11 +82,11 @@ async function start(): Promise<void> {
       },
     );
   });
-  const terminalConfig = process.argv
-    .find((value) => value.startsWith('--terminal-config='))
-    ?.slice('--terminal-config='.length);
-  const openTerminal = terminalConfig
-    ? await createManagedTerminal(terminalConfig, (key) => i18n.t(key))
+  const terminalConfigs = process.argv
+    .filter((value) => value.startsWith('--terminal-config='))
+    .map((value) => value.slice('--terminal-config='.length));
+  const terminals = terminalConfigs.length
+    ? await createManagedTerminals(terminalConfigs, (key) => i18n.t(key))
     : undefined;
   let managedLifetime = 'idle';
   let refreshManagedTray: () => void = () => undefined;
@@ -112,11 +112,17 @@ async function start(): Promise<void> {
             label: i18n.t('managedAgents.title'),
             click: openManagedAgents,
           },
+          ...(terminals?.openers ?? [undefined]).map((open, slot) => ({
+            id: slot === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open',
+            label: `${i18n.t('managedTerminal.open')} ${slot === 0 ? 'A' : 'B'}`,
+            enabled: !!open,
+            click: () => open?.(),
+          })),
           {
-            id: 'managed-terminal-open',
-            label: i18n.t('managedTerminal.open'),
-            enabled: !!openTerminal,
-            click: () => openTerminal?.(),
+            id: 'managed-terminal-retire',
+            label: i18n.t('managedTerminal.retire'),
+            enabled: !!terminals,
+            click: () => void terminals?.retire(),
           },
         ],
       },
@@ -544,7 +550,7 @@ async function start(): Promise<void> {
   updateTray();
   void poll();
   app.prependListener('before-quit', (event) => {
-    if (!openManagedAgents.confirmQuit()) {
+    if (!openManagedAgents.confirmQuit() || (terminals && !terminals.confirmQuit())) {
       event.preventDefault();
       return;
     }

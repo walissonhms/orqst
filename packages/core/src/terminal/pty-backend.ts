@@ -1,6 +1,8 @@
 import { fork } from 'node:child_process';
 import { join } from 'node:path';
-import { lstatSync } from 'node:fs';
+import { closeSync, lstatSync } from 'node:fs';
+import { terminalDigest } from './authority.js';
+import { createLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import type { TerminalBackend, TerminalProfile } from './supervisor.js';
 import {
   managedCodexEnvironment,
@@ -33,16 +35,26 @@ export function managedTerminalBackend(file: string, host: string): TerminalBack
       }
       return true;
     },
-    start(profile: Readonly<TerminalProfile>, events) {
+    start(profile: Readonly<TerminalProfile>, events, identity) {
       // Repeat at the last synchronous dispatch boundary. Same-user races remain disclosed.
       if (!this.validate(profile)) throw new Error('Managed profile changed');
-      const child = fork(host, [file, profile.id], {
-        execPath: config.node.path,
-        execArgv: [],
-        cwd: config.state,
-        env: managedCodexEnvironment(config),
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      if (!identity) throw new Error('PTY lifecycle identity required');
+      const receipt = createLifecycleReceipt(config.state, {
+        ...identity,
+        configDigest: terminalDigest(source),
       });
+      let child;
+      try {
+        child = fork(host, [file, profile.id], {
+          execPath: config.node.path,
+          execArgv: [],
+          cwd: config.state,
+          env: managedCodexEnvironment(config),
+          stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
+        });
+      } finally {
+        closeSync(receipt);
+      }
       let exited = false;
       let disposed = false;
       const lost = () => {

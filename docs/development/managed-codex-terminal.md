@@ -2,13 +2,14 @@
 
 **Current direction:** reuse installed CLIs/native authentication by default. This
 guide describes the earlier optional separate-login profile; it does not implement
-credential reuse. `terminal:setup` now fails without an explicit separate-login
-choice and creates no default state. Start with the
+credential reuse. `terminal:setup` defaults to reuse-existing with an explicit
+shared-config acknowledgment for the structured path; those manifests are blocked
+in this PTY surface. The legacy PTY path requires an explicit separate-login choice. Start with the
 [passive existing-CLI preflight](local-cli-integration.md). Do not create two new
 homes/logins as the default next acceptance step.
 
-This opt-in checkout feature adds a real xterm.js terminal in a dedicated ORQST
-Desktop window, opened from the **Managed Terminal** menu. It is not an external
+This opt-in checkout feature adds a real xterm.js terminal in each of up to two identified ORQST
+Desktop windows, opened from the **Managed Terminal** menu. It is not an external
 terminal window or an inert transcript. Normal observer startup still launches no
 provider. Codex is the first fixed managed profile; Claude Code and OpenCode are
 not enabled. Real Codex/provider acceptance remains pending specific authorization.
@@ -102,8 +103,10 @@ The private SQLite journal uses the existing Store in its own terminal state,
 never the observer database. It stores metadata only; input, terminal output,
 prompts and credentials are excluded. Codex may retain its own history/authentication
 inside its dedicated home. Existing journal caps and epoch fencing apply, including
-permanent reservation of unresolved ownership slots. This initial native UI selects
-one configured project and instance at a time; concurrent multi-agent UI is pending.
+permanent reservation of unresolved ownership slots. The native client accepts one or two manifests as one pair, with one independently
+owned slot/journal per window. Both slots may use the same workspace; their provider
+permissions and any approved project writes can still conflict. Structured Managed
+agents is a different surface and is not a TUI terminal.
 
 Output drains into the bounded 1 MiB memory ring and a 2,000-line emulator scrollback.
 Reads are bounded and acknowledged after emulator parsing. A ring gap visibly stops
@@ -140,3 +143,68 @@ Revoking/destroying the native Terminal document also disconnects the dedicated
 Core channel. Core then revokes its enrolled public key and closes its journal;
 revocation is not confined to Electron's local signer. A normal view hide only
 revokes input, preserving that live document/Core. Proposed xterm APIs are disabled.
+
+## Two interactive windows and shared admission
+
+Repeat the explicit option with two **fresh** separate-login manifests to configure
+Terminal A / T-001 and Terminal B / T-002:
+
+```bash
+pnpm desktop -- --terminal-config=/absolute/new-slot-a/terminal.json \
+  --terminal-config=/absolute/new-slot-b/terminal.json
+pnpm accept:terminal-pair --authorize-synthetic-pty
+```
+
+Each window has its own native session, document, broker, input lease, buffer and
+instance identity. One IPC handler routes by the exact native main frame, never a
+renderer slot; a document cannot address the other slot's instances. A single Node
+Core owns the pair, with a supervisor/journal per slot and one active process per
+slot. Navigation/reload fences that slot; it does not revoke the other slot.
+There is no third window, independent second pair or shared input stream.
+Duplicate manifests/states (including hard links), nested state roots and more than
+two manifests are rejected before opening Core/journals. Existing journals are not
+opened for recovery by this surface. Existing-login manifests instead display a
+blocked xterm view without creating Core, journals, admission or a provider.
+If either selected manifest is blocked, the entire pair opens blocked without Core.
+No duplicate installation/login is performed automatically.
+
+The PTY pair and structured Managed agents share the same sticky `active-pair.json`
+in the Desktop profile's `managed-agents` directory. Claim occurs only at the signed
+provider-dispatch boundary. A pre-existing or changed reservation blocks dispatch;
+no timeout, PID probe, old receipt, manual evidence disposition or new manifest
+bypasses it. Reservations from earlier runs remain untouched. Window close hides
+the view and revokes input; it does not release capacity or signal a process.
+
+After every dispatched attempt has an owned exit, focus either terminal and select
+**Retire exited Terminal pair**. A native confirmation signs the complete current
+metadata evidence. Core archives it and fences both supervisors before removing
+only its own unchanged marker. An attempt prepared but never dispatched remains
+prepared; no exit is invented. Failed archive/finalization preserves the reservation.
+Host/channel loss, late exit after lost ownership and pending processes cannot
+retire. Reload/navigation closes that slot supervisor and releases its journal
+ownership; the pair then cannot retire, even if that slot had already exited.
+Keep both live documents open until retirement. Restart with fresh manifests after retirement. Desktop quit discloses that
+processes can continue and that unresolved reservations remain blocked.
+
+Future PTY starts also create exclusive metadata-only lifecycle receipts before
+spawn. The PTY host inherits only the receipt descriptor, synchronizes armed/start
+and exit records independently of IPC, and reports exit only after its receipt
+write completes. Receipts contain identity/config hashes and lifecycle timestamps,
+not output, input, credentials or tasks. They support explicit evidence inspection;
+they never adopt a survivor, rewrite an old journal or release lost capacity.
+
+The two-window acceptance uses the real Electron/Node/PTY/xterm path with two C
+fixtures and synthetic authentication in temporary state. Native dialogs are
+intercepted. It checks simultaneous terminals in one workspace, independent keyboard
+input, cross-instance denial, sticky reservation, signed retirement and durable
+receipts. Provider startup/login, manual modal/focus behavior, accessibility, two
+real-agent delegation and Claude/OpenCode compatibility remain unvalidated. The
+normal observer/browser/Bridge continues to provide no execution authority.
+
+A repeated acceptance on the final increment can stop at the native focus
+precondition before any CLI start. In the observed refusal, Electron reported the
+app visible but every native window and web contents unfocused after bounded
+show/focus attempts. The gate was preserved. An earlier two-window transport run
+passed; that does not accept the final additional reload/blocked-view checks or
+human focus/modals. Final native acceptance remains pending in an available focused
+macOS session, separately from the passing synthetic Node/MCP tests.

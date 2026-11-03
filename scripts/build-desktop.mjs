@@ -30,6 +30,7 @@ for (const [entry, outfile, platform] of [
   ['apps/desktop/src/terminal-preload.ts', 'terminal-preload.cjs', 'node'],
   ['packages/core/src/terminal/host.ts', 'managed-terminal-core.cjs', 'node'],
   ['packages/core/src/terminal/pty-host.ts', 'managed-terminal-host.cjs', 'node'],
+  ['packages/core/src/terminal/mcp-relay.ts', 'orqst-mcp-relay.cjs', 'node'],
   ['apps/desktop/src/managed-terminal-client.ts', 'managed-terminal-client.js', 'browser'],
 ]) {
   await build({

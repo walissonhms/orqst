@@ -498,3 +498,31 @@ the client never bypasses them or automatically retries. Native reopening can
 restore a minimized view without process authority. Active OS focus/modal acceptance
 and post-crash reconciliation remain unvalidated; see
 [managed client limits](docs/development/managed-agents-client.md).
+
+### Native interactive pair admission
+
+The explicit checkout PTY client routes a single restricted Electron IPC channel by
+native main-frame identity to at most two independent documents. Renderer slot or
+instance claims cannot select another document's broker. A single private Node Core
+owns separate per-slot supervisors/journals; the observer HTTP/WebSocket/cookie is
+not an execution grant. Existing-login PTY remains blocked. The PTY and structured
+surfaces share a sticky reservation, claimed after signed start admission. Signed
+retirement requires all dispatched owned exits and fences both slots before releasing
+only the unchanged marker; old/lost ownership is never reconciled automatically.
+Metadata-only PTY receipts use an exclusive private file and inherited descriptor;
+receipt or IPC failure is uncertainty. Native same-user execution is not hard
+containment or protection from a malicious process running as the same OS user.
+
+### Experimental per-instance MCP transport
+
+The explicit synthetic library can create per-role Unix sockets, mode `0600` in a
+new canonical `0700` directory. It binds no TCP/HTTP port and is absent from observer
+startup, Bridge and provider invocation. Independent capability secrets live only in
+private single-link files and the private stream, never argv/environment/diagnostics.
+The relay validates capability/socket path, owner, permissions and identity; frames,
+connections, attempts, pending calls and deadlines are bounded. An enrolled native
+signature binds the exact source/target/epoch and one-use delegation scope. The
+worker can wait/submit only for its fixed task; transport loss is unknown task outcome,
+never process exit or permission to retry. No MCP method writes task text into a PTY.
+Same-user malicious replacement is outside this contract. See the
+[security review and provider gates](docs/development/interactive-cli-mcp.md).

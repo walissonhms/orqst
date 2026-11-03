@@ -94,6 +94,7 @@ try {
     .find((page) => page.url() === 'orqst-terminal://local/index.html')!;
   await expect(terminal.locator('#terminal .xterm')).toBeVisible();
   await desktop.evaluate(({ dialog }) => {
+    dialog.showMessageBoxSync = () => 1;
     Reflect.set(globalThis, 'syntheticConfirm', false);
     Reflect.set(globalThis, 'syntheticConfirmDetails', []);
     dialog.showMessageBox = async (

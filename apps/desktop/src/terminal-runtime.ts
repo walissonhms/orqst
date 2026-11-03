@@ -1,4 +1,4 @@
-import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, Session } from 'electron';
+import type { BrowserWindow, IpcMain, IpcMainInvokeEvent, Session, WebFrameMain } from 'electron';
 import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
 import type { TerminalNativeReply } from '../../../packages/core/src/terminal/native-broker.js';
 import { authorizedTerminalSender, type TerminalDocumentBinding } from './terminal-sender.js';
@@ -10,12 +10,64 @@ interface Broker {
   close(): void;
 }
 
+type Dispatch = (event: IpcMainInvokeEvent, raw: unknown) => Promise<unknown>;
+type CreateBroker = (
+  document: TerminalDocumentBinding,
+  current: (focus: boolean) => boolean,
+) => Broker;
+
+/** One IPC handler; routing authority is the native frame, never a renderer-supplied slot. */
+export function createTerminalRuntimeRouter(ipc: Pick<IpcMain, 'handle' | 'removeHandler'>) {
+  const documents = new Map<WebFrameMain, Dispatch>();
+  const bindings = new Set<() => void>();
+  let closed = false;
+  ipc.handle(
+    'orqst:terminal-native',
+    (event, raw: unknown) =>
+      documents.get(event.senderFrame!)?.(event, raw) ?? { status: 'denied' },
+  );
+  return {
+    bind(window: BrowserWindow, session: Session, create: CreateBroker) {
+      if (closed || bindings.size >= 2) throw new Error('Terminal document capacity exceeded');
+      const dispose = bindRuntime(window, session, create, (frame, dispatch) => {
+        if (documents.has(frame)) throw new Error('Terminal document already bound');
+        documents.set(frame, dispatch);
+        return () => documents.delete(frame);
+      });
+      const unbind = () => {
+        dispose();
+        bindings.delete(unbind);
+      };
+      bindings.add(unbind);
+      return unbind;
+    },
+    close() {
+      if (closed) return;
+      closed = true;
+      for (const dispose of [...bindings]) dispose();
+      documents.clear();
+      ipc.removeHandler('orqst:terminal-native');
+    },
+  };
+}
+
 /** One dedicated window/document; reload permanently closes it. No recovery/adoption shortcut. */
 export function bindTerminalRuntime(
   ipc: Pick<IpcMain, 'handle' | 'removeHandler'>,
   window: BrowserWindow,
   session: Session,
-  create: (document: TerminalDocumentBinding, current: (focus: boolean) => boolean) => Broker,
+  create: CreateBroker,
+): () => void {
+  const router = createTerminalRuntimeRouter(ipc);
+  router.bind(window, session, create);
+  return () => router.close();
+}
+
+function bindRuntime(
+  window: BrowserWindow,
+  session: Session,
+  create: CreateBroker,
+  register: (frame: WebFrameMain, dispatch: Dispatch) => () => void,
 ): () => void {
   let generation = 0;
   let initialized = false;
@@ -24,6 +76,7 @@ export function bindTerminalRuntime(
   let broker: Broker | undefined;
   let active: IpcMainInvokeEvent | undefined;
   let busy = false;
+  let unregister: (() => void) | undefined;
   const current = (focus: boolean) =>
     !disposed &&
     !!binding &&
@@ -32,6 +85,7 @@ export function bindTerminalRuntime(
   const navigate = (_event: unknown, _url: string, _inPlace: boolean, mainFrame: boolean) => {
     if (!mainFrame) return;
     generation++;
+    unregister?.();
     broker?.close();
   };
   const initialize = () => {
@@ -40,6 +94,7 @@ export function bindTerminalRuntime(
     binding = Object.freeze({ frame: window.webContents.mainFrame, generation });
     // Sender validation below still rejects any initial URL except the reserved document.
     broker = create(binding, current);
+    unregister = register(binding.frame, dispatch);
   };
   const client = {
     revokeInput: () => broker?.revokeInput(),
@@ -48,7 +103,7 @@ export function bindTerminalRuntime(
   const unbind = bindTerminalNativeLifecycle(window, client);
   window.webContents.on('did-start-navigation', navigate);
   window.webContents.on('did-finish-load', initialize);
-  ipc.handle('orqst:terminal-native', async (event, raw: unknown) => {
+  const dispatch: Dispatch = async (event, raw: unknown) => {
     // Reject identity and shape before reserving state; never retain a request queue.
     if (
       disposed ||
@@ -81,13 +136,13 @@ export function bindTerminalRuntime(
       active = undefined;
       busy = false;
     }
-  });
+  };
   return () => {
     if (disposed) return;
     disposed = true;
     unbind();
     active = undefined;
-    ipc.removeHandler('orqst:terminal-native');
+    unregister?.();
     window.webContents.removeListener('did-start-navigation', navigate);
     window.webContents.removeListener('did-finish-load', initialize);
   };

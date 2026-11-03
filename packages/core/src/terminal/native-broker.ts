@@ -255,7 +255,7 @@ export class TerminalNativeBroker<Document extends object> {
     detail: Pick<TerminalConfirmation, 'signal' | 'paste'> = {},
   ): Promise<'confirmed' | 'denied' | 'cancelled'> {
     if (generation !== this.generation || !this.current(document, true)) return 'denied';
-    if (challenge.operation === 'retire') return 'denied'; // Dedicated structured client only.
+    if (challenge.operation === 'retire' || challenge.operation === 'delegate') return 'denied';
     const accepted = await this.host.confirm(
       document,
       Object.freeze({

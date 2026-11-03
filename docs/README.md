@@ -86,6 +86,9 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
   native ownership, separate slots and app-server/queue integration; synthetic
   transports only, without normal-runtime or real agent-to-agent acceptance.
 
+- [Interactive CLI and MCP boundary](development/interactive-cli-mcp.md) — two owned
+  PTY/xterm slots, synthetic per-instance stdio relay, signed delegation and honest
+  provider/version gates; no real-provider compatibility or automatic-delivery claim.
 - [Embedded managed Codex Terminal](development/managed-codex-terminal.md) — explicit
   checkout setup, separate state/login, native trust, owned lifecycle and synthetic
   acceptance; real Codex acceptance remains pending.

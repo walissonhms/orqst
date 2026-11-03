@@ -1,6 +1,7 @@
 // Passive executable discovery only. Never execute a CLI or inspect provider state.
 import { accessSync, constants, lstatSync, realpathSync } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
+import { interactiveCliStatus } from './interactive-adapters.js';
 
 export const localCliProviders = ['codex', 'claude', 'opencode'] as const;
 export type LocalCliProvider = (typeof localCliProviders)[number];
@@ -80,6 +81,7 @@ export function localCliIntegrationPlan(discovery: LocalCliDiscovery) {
     automaticInstall: false,
     automaticLogin: false,
     execution: 'blocked' as const,
+    interactive: interactiveCliStatus(discovery.provider),
     blockers: [
       ...(discovery.lookup === 'not_found' ? ['executable_not_found'] : []),
       ...(discovery.inspection === 'limited' ? ['discovery_incomplete'] : []),

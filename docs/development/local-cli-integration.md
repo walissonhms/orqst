@@ -144,3 +144,15 @@ drift is not hashed or inspected. A same-user read-only process can still read
 credentials and MCP tools are outside the command sandbox; prompt prohibitions
 and observed item checks are evidence gates, not prevention of credential reads.
 No credential file is hashed to prove immutability, since that would read it.
+
+## Interactive pair boundary
+
+The native Desktop now supports up to two identified xterm/PTY windows through one
+Node Core, separate per-slot journals and a shared sticky reservation with structured
+Managed agents. This is implemented and synthetic-fixture validated for the explicit
+legacy Codex separate-login path only. Existing-login PTY manifests open blocked
+views without Core/journals or automatic login. Claude/OpenCode remain unavailable.
+See [pair admission and receipts](managed-codex-terminal.md#two-interactive-windows-and-shared-admission).
+PTY interaction and a future per-instance MCP task/result channel are distinct:
+MCP does not create a TUI or prove that an idle CLI will accept/execute a task. No
+terminal output parser or programmatic task text injection is used for delegation.

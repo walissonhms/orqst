@@ -140,3 +140,13 @@ dialogs. This is not genuine human-consent acceptance or a production Core contr
 transport. The lab cannot enable Codex, Claude Code or OpenCode. Immutable
 executable/cwd admission, separately provisioned credentials, containment/lifetime
 and durable long-lived ownership recovery still block provider activation.
+
+## Interactive pair transport
+
+The native Terminal request/reply schema remains document-scoped: a renderer never
+supplies a slot, executable, cwd, environment or proof. A single main-process handler
+routes by the exact bound native frame to one broker per document. The private Node
+pair RPC separately binds slot 0/1 and supports signed retirement; it is not an
+HTTP/WebSocket or renderer capability. Core-issued terminal identities are separate
+from process-instance UUIDs. See [interactive MCP boundary](../development/interactive-cli-mcp.md)
+for the independent synthetic-only stdio task/result contract.

@@ -51,7 +51,11 @@ export interface TerminalBackend {
   /** Revalidate the frozen profile before grant consumption; never launch or modify a process. */
   validate(profile: Readonly<TerminalProfile>): boolean;
   /** Must report started from backend evidence, never from arbitrary provider prose. */
-  start(profile: Readonly<TerminalProfile>, events: TerminalEvents): OwnedTerminalHandle;
+  start(
+    profile: Readonly<TerminalProfile>,
+    events: TerminalEvents,
+    identity?: { instanceId: string; epoch: string; manifestDigest: string },
+  ): OwnedTerminalHandle;
 }
 interface Lease {
   id: string;
@@ -193,42 +197,46 @@ export class TerminalSupervisor {
           this.authority.now() >= attempt.startExpiresAt
         )
           throw new Error('Terminal start authorization expired');
-        return this.backend.start(attempt.profile, {
-          lost: () => this.lose(attempt),
-          started: () => {
-            if (attempt.state === 'starting') {
-              if (!this.record(attempt, 'running')) return;
-              attempt.state = 'running';
+        return this.backend.start(
+          attempt.profile,
+          {
+            lost: () => this.lose(attempt),
+            started: () => {
+              if (attempt.state === 'starting') {
+                if (!this.record(attempt, 'running')) return;
+                attempt.state = 'running';
+                clearTimeout(attempt.startupTimer);
+              }
+            },
+            data: (text) => {
+              if (!['starting', 'running'].includes(attempt.state)) return;
+              if (!this.owned(attempt)) return;
+              // A backend event is bounded too; no arbitrary allocation from an untrusted chunk.
+              if (text.length > terminalPolicy.backendEventCodeUnits) return this.lose(attempt);
+              try {
+                attempt.output.append(Buffer.from(text));
+              } catch {
+                this.lose(attempt);
+              }
+            },
+            exit: (exitCode, signal) => {
+              if (!['starting', 'running'].includes(attempt.state)) return;
+              if (
+                !Number.isSafeInteger(exitCode) ||
+                (signal !== undefined && !Number.isSafeInteger(signal))
+              )
+                return this.lose(attempt);
+              const exit = { exitCode, ...(signal === undefined ? {} : { signal }) };
+              if (!this.record(attempt, 'exited', exit)) return;
+              attempt.state = 'exited';
+              attempt.exit = exit;
               clearTimeout(attempt.startupTimer);
-            }
+              if (attempt.attachment) attempt.attachment.lease = undefined;
+              this.releaseHandle(attempt);
+            },
           },
-          data: (text) => {
-            if (!['starting', 'running'].includes(attempt.state)) return;
-            if (!this.owned(attempt)) return;
-            // A backend event is bounded too; no arbitrary allocation from an untrusted chunk.
-            if (text.length > terminalPolicy.backendEventCodeUnits) return this.lose(attempt);
-            try {
-              attempt.output.append(Buffer.from(text));
-            } catch {
-              this.lose(attempt);
-            }
-          },
-          exit: (exitCode, signal) => {
-            if (!['starting', 'running'].includes(attempt.state)) return;
-            if (
-              !Number.isSafeInteger(exitCode) ||
-              (signal !== undefined && !Number.isSafeInteger(signal))
-            )
-              return this.lose(attempt);
-            const exit = { exitCode, ...(signal === undefined ? {} : { signal }) };
-            if (!this.record(attempt, 'exited', exit)) return;
-            attempt.state = 'exited';
-            attempt.exit = exit;
-            clearTimeout(attempt.startupTimer);
-            if (attempt.attachment) attempt.attachment.lease = undefined;
-            this.releaseHandle(attempt);
-          },
-        });
+          { instanceId: id, epoch: this.authority.epoch, manifestDigest: attempt.digest },
+        );
       };
       const handle = this.journal ? this.journal.withOwner(start) : start();
       attempt.handle = handle;

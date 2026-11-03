@@ -40,7 +40,7 @@ let live = false;
 const actions = ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const;
 const updateButtons = () => {
   for (const action of actions) {
-    let disabled = busy;
+    let disabled = busy || status.dataset.blocked === 'true';
     if (action === 'login' || action === 'start')
       disabled ||= live || status.dataset.state === 'ownership_lost';
     else if (action === 'attach')

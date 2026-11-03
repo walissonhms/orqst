@@ -43,3 +43,30 @@ export const terminalRPCReplySchema = z.union([
   z.strictObject({ id, ok: z.literal(true), value: z.unknown() }),
   z.strictObject({ id, ok: z.literal(false) }),
 ]);
+
+/** Private Node pair transport. Renderer requests never select this slot or carry proofs. */
+export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('terminal'),
+    slot: z.number().int().min(0).max(1),
+    request: terminalRPCSchema,
+  }),
+  z.strictObject({ kind: z.literal('closeSlot'), id, slot: z.number().int().min(0).max(1) }),
+  z.strictObject({ kind: z.literal('prepareRetire'), id }),
+  z.strictObject({ kind: z.literal('retire'), id, proof }),
+]);
+
+export const terminalPairReadySchema = z.strictObject({
+  type: z.literal('ready'),
+  epoch: id,
+  identities: z
+    .array(
+      z.strictObject({
+        slot: z.number().int().min(0).max(1),
+        terminalId: id,
+        provider: z.literal('codex'),
+      }),
+    )
+    .min(1)
+    .max(2),
+});
