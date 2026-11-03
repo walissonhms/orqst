@@ -116,15 +116,21 @@ test('reduced motion keeps static translated cues and a newly opened artifact st
   await expect(header.getByText('Valor confirmado atualizado', { exact: true })).toHaveCount(2);
   const style = await cue.evaluate((node) => {
     const css = getComputedStyle(node);
+    const expected = document.createElement('span');
+    expected.style.backgroundColor = 'color-mix(in srgb, #b45cff 12%, #141329)';
+    document.body.append(expected);
+    const expectedBackground = getComputedStyle(expected).backgroundColor;
+    expected.remove();
     return {
       animation: css.animationName,
       outline: css.outlineStyle,
       background: css.backgroundColor,
+      expectedBackground,
     };
   });
   expect(style.animation).toBe('none');
   expect(style.outline).toBe('solid');
-  expect(style.background).toBe('rgb(39, 72, 62)');
+  expect(style.background).toBe(style.expectedBackground);
 
   await page
     .getByRole('region', { name: 'Detalhes da sessão', exact: true })

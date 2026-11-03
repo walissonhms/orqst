@@ -357,6 +357,7 @@ and [SECURITY.md](SECURITY.md).
 - [Planned lifecycle contracts](docs/api/lifecycle-contracts.md)
 
 - [Documentation index](docs/README.md)
+- [Official design system](docs/design/design-system.md) — Minimal Dark + Developer Studio, shared tokens and accessibility.
 - [Architecture overview](docs/architecture/overview.md)
 - [Data model](docs/architecture/data-model.md)
 - [Security model](docs/architecture/security-model.md)

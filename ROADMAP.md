@@ -174,6 +174,27 @@ inactive throughout current Core/Analytics development.
 - Remote pairing/encryption/metadata retention, forecasts and bounded delegation remain
   separate future decisions, outside the functional local Desktop MVP.
 
+## Official visual identity — Desktop MVP requirement
+
+**Minimal Dark + Developer Studio** is mandatory for the functional Desktop MVP.
+The [official design system](docs/design/design-system.md) defines the approved
+palette, shared CSS tokens, typography, spacing, borders, component coverage and
+reduced-motion behavior. The current shared browser/Electron dashboard applies
+these tokens to implemented views without changing observation or API behavior.
+
+All future Studio/terminal, agent/model selector, workspace/tab, observability,
+Analytics, notification/attention, Artifacts, collaboration/orchestration, Kanban,
+settings and onboarding views must follow the same system when supported. Their
+visual specification does not implement execution or relax capability gates.
+The logo/mascot remain the references; mascot eye/state reactions and Fast lightning
+are planned and require explicit evidence, while exact token updates and the
+configured static threshold flame retain their current evidence rules.
+
+Acceptance requires consistent semantic colors, readable contrast, keyboard focus,
+responsive desktop/mobile layouts and reduced motion with no lost information.
+Record real-machine visual acceptance separately; palette adoption alone does not
+complete Phase 2 or authorize a release.
+
 ## Global Desktop MVP acceptance
 
 A user opens a project, selects a supported agent/model, starts an authorized session
