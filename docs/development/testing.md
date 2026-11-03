@@ -407,3 +407,34 @@ with either motion preference. This does not validate native visual delivery or 
 provider usage. The full Node/browser suites, Electron smoke and `validate:local`
 were not rerun: ingestion, persistence, API, IPC and native grants are unchanged.
 No installed service, database, client or source sessions were changed or restarted.
+
+## Artifact draft comparison and restoration
+
+`tests/browser/artifact-draft.spec.ts` checks the real synthetic extraction-to-panel
+flow: exact original/draft comparison, whitespace and empty edits, original/provenance
+preservation, confirmation/cancellation, rejected oversized UTF-8 edits, exact restored
+clipboard text and no reextraction. It covers pt-BR, keyboard focus/Escape and narrow
+layout. A synthetic native capability verifies save/restore mutual exclusion and that
+comparison remains independent of save success; delayed clipboard success/failure
+cannot restore obsolete feedback after reset. These capability stubs do not validate
+native IPC, file writing or dialog delivery.
+
+Run with an exclusive disposable port/output:
+
+```bash
+ORQST_BROWSER_PORT=4358 pnpm exec playwright test tests/browser/artifact-draft.spec.ts tests/browser/artifacts.spec.ts tests/browser/live-metrics.spec.ts tests/browser/token-threshold-qa.spec.ts --output=/tmp/orqst-artifact-draft-example
+```
+
+The existing Artifacts and shared metrics/threshold suites verify that restoration
+preserves source/preview behavior and the single metrics announcer. Ingestion,
+persistence, transport and native grants are unchanged; `validate:local`, live provider
+acceptance and Electron smoke are unnecessary for this UI-only increment. No installed
+service, database, client or observed source session is used or restarted.
+
+The increment passed `pnpm lint`, `pnpm typecheck`, `pnpm test` (222 Node cases),
+`pnpm build` and the 14 Chromium cases above on isolated port 4358 with Node24.22.2
+and pnpm10.34.9. Initial worktree dependency-resolution failures were resolved by an
+offline frozen-lockfile install; initial browser failures led to preserving the single
+metrics announcer and correcting an innerText/textContent assertion. Final affected
+browser checks passed after those fixes. Build emitted the nonblocking >500-kB chunk
+warning. Full browser/real-provider/native visual acceptance was not repeated.

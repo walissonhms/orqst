@@ -74,6 +74,17 @@ rejected with a visible error. Closing the panel, switching sessions or reloadin
 discards the draft. No artifact persistence, draft history or document versions exist.
 Close the current panel before extracting another message.
 
+Every view indicates whether the draft exactly matches the retained original, including
+whitespace. This comparison is independent of copying or saving; it never verifies a
+saved file or source completeness. **Restore draft from original** is available only
+when the text differs. It first asks for confirmation, focuses Cancel and permits
+Escape cancellation without losing edits. Confirming replaces only the memory draft
+with the already loaded retained text, clears draft copy/save feedback and edit errors,
+and returns focus to Edit draft. It does not reextract content, alter provenance,
+update the retained original or touch saved files. Draft editing, view changes and
+native saving are disabled during confirmation; restoration is disabled during a
+native save. Closing or leaving the panel retains the existing discard behavior.
+
 The React preview supports only heading lines, bullet lists and fenced code blocks.
 Other syntax, including inline Markdown, HTML, links, images and URLs, stays literal.
 No `innerHTML`, HTML parser, active anchors/media, remote loads, execution, navigation,

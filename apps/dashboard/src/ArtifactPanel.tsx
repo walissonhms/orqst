@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   artifactExtractionResultSchema,
@@ -25,16 +25,25 @@ export function ArtifactPanel({
 }) {
   const { t } = useTranslation();
   const heading = useRef<HTMLHeadingElement>(null);
+  const restoreButton = useRef<HTMLButtonElement>(null);
+  const cancelRestoreButton = useRef<HTMLButtonElement>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const restoreId = useId();
   const [result, setResult] = useState<ArtifactExtractionResult>();
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState('');
   const [mode, setMode] = useState<'source' | 'preview' | 'edit'>('source');
   const [copyState, setCopyState] = useState<'copied' | 'copyFailed'>();
+  const copyGeneration = useRef(0);
   const [limitError, setLimitError] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveState, setSaveState] = useState<ArtifactSaveResult['status']>();
   const desktop = window.orqstArtifacts?.contractVersion === 1 ? window.orqstArtifacts : undefined;
   const mounted = useRef(true);
+  useEffect(() => {
+    if (restoring) cancelRestoreButton.current?.focus();
+  }, [restoring]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -76,12 +85,13 @@ export function ArtifactPanel({
   }, [request]);
 
   async function copy(text: string) {
+    const generation = ++copyGeneration.current;
     setCopyState(undefined);
     try {
       await navigator.clipboard.writeText(text);
-      setCopyState('copied');
+      if (mounted.current && generation === copyGeneration.current) setCopyState('copied');
     } catch {
-      setCopyState('copyFailed');
+      if (mounted.current && generation === copyGeneration.current) setCopyState('copyFailed');
     }
   }
   async function save(openAfterSave: boolean) {
@@ -109,6 +119,11 @@ export function ArtifactPanel({
   }
   const artifact = result?.availability === 'available' ? result.value : undefined;
   const reference = artifact?.reference;
+  const draftChanged = artifact !== undefined && draft !== artifact.original.text;
+  function cancelRestore() {
+    setRestoring(false);
+    requestAnimationFrame(() => restoreButton.current?.focus());
+  }
   return (
     <section className="artifact-panel" aria-labelledby="artifact-heading">
       <div className="panel-heading">
@@ -163,15 +178,20 @@ export function ArtifactPanel({
           </dl>
           <p className="fine-print">{t('artifacts.provenanceNote')}</p>
           <p className="notice">{t('artifacts.retainedNote')}</p>
+          <p className="fine-print">
+            {t(draftChanged ? 'artifacts.draftChanged' : 'artifacts.draftUnchanged')}
+          </p>
           <div className="artifact-modes" role="group" aria-label={t('artifacts.views')}>
             {(['source', 'preview', 'edit'] as const).map((value) => (
               <button
                 className="button"
-                disabled={saving}
+                ref={value === 'edit' ? editButton : undefined}
+                disabled={saving || restoring}
                 key={value}
                 aria-pressed={mode === value}
                 onClick={() => {
                   setMode(value);
+                  copyGeneration.current++;
                   setCopyState(undefined);
                 }}
               >
@@ -207,14 +227,16 @@ export function ArtifactPanel({
               <textarea
                 id="artifact-draft"
                 value={draft}
-                disabled={saving}
+                disabled={saving || restoring}
                 onChange={(event) => {
                   const value = event.target.value;
                   const tooLarge = new TextEncoder().encode(value).byteLength > artifactTextLimit;
                   setLimitError(tooLarge);
                   if (!tooLarge) {
                     setDraft(value);
+                    copyGeneration.current++;
                     setCopyState(undefined);
+                    setSaveState(undefined);
                   }
                 }}
               />
@@ -222,12 +244,66 @@ export function ArtifactPanel({
           )}
           {limitError && <p role="alert">{t('artifacts.limit')}</p>}
           <p className="fine-print">{t('artifacts.draftNote')}</p>
+          <div className="artifact-actions">
+            <button
+              className="button"
+              ref={restoreButton}
+              disabled={!draftChanged || saving || restoring}
+              onClick={() => setRestoring(true)}
+            >
+              {t('artifacts.restoreDraft')}
+            </button>
+          </div>
+          {restoring && (
+            <div
+              role="group"
+              aria-labelledby={restoreId}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  cancelRestore();
+                }
+              }}
+            >
+              <p className="notice" id={restoreId}>
+                {t('artifacts.restoreWarning')}
+              </p>
+              <div className="artifact-actions">
+                <button className="button" ref={cancelRestoreButton} onClick={cancelRestore}>
+                  {t('cancel')}
+                </button>
+                <button
+                  className="button"
+                  onClick={() => {
+                    setDraft(artifact.original.text);
+                    setLimitError(false);
+                    copyGeneration.current++;
+                    setCopyState(undefined);
+                    setSaveState(undefined);
+                    setRestoring(false);
+                    requestAnimationFrame(() => editButton.current?.focus());
+                  }}
+                >
+                  {t('artifacts.confirmRestore')}
+                </button>
+              </div>
+            </div>
+          )}
           {desktop ? (
             <div className="artifact-actions">
-              <button className="button" disabled={saving} onClick={() => void save(false)}>
+              <button
+                className="button"
+                disabled={saving || restoring}
+                onClick={() => void save(false)}
+              >
                 {t(mode === 'source' ? 'artifacts.saveOriginal' : 'artifacts.saveDraft')}
               </button>
-              <button className="button" disabled={saving} onClick={() => void save(true)}>
+              <button
+                className="button"
+                disabled={saving || restoring}
+                onClick={() => void save(true)}
+              >
                 {t(mode === 'source' ? 'artifacts.saveOpenOriginal' : 'artifacts.saveOpenDraft')}
               </button>
             </div>

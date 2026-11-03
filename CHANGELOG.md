@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Manual Artifacts draft comparison and confirmed restoration from the already loaded
+  retained original. English/Portuguese text, Cancel-first keyboard focus and Escape
+  cancellation preserve explicit editing. Native save and restore cannot overlap;
+  source/provenance and saved files are untouched. Comparison does not imply a saved
+  file or complete provider response; drafts remain memory-only.
+
 - Exact confirmed-total distance from the temporary session token threshold, with
   explicit equality and a static flame at or above it. Session/Artifacts text and
   the existing single announcer share the comparison; stale states hide the distance

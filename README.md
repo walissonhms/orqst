@@ -45,6 +45,11 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
 
 ## Delivery status and roadmap
 
+- **Artifact draft editing increment:** the manual panel indicates whether its draft
+  exactly matches the retained original and can restore that text after explicit
+  confirmation. Cancel/Escape preserve edits. This memory-only comparison does not
+  verify saved files; restoration never alters the original or saved files.
+
 - **Session token alert increment:** configure a temporary total-token threshold in
   the confirmed metrics header. The session and manual Artifacts views compare only
   a current confirmed cumulative reading; stale/pending/error/offline readings leave
