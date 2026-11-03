@@ -46,7 +46,7 @@ export interface OwnedTerminalHandle {
   dispose(): void;
 }
 export interface TerminalBackend {
-  /** Trusted backend revalidates the exact frozen profile before any launch. */
+  /** Revalidate the frozen profile before grant consumption; never launch or modify a process. */
   validate(profile: Readonly<TerminalProfile>): boolean;
   /** Must report started from backend evidence, never from arbitrary provider prose. */
   start(profile: Readonly<TerminalProfile>, events: TerminalEvents): OwnedTerminalHandle;

@@ -17,6 +17,12 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ### Added
 
+- Experimental owned-terminal engineering library with signed one-use grants,
+  separate attachment/input leases, conservative owned-handle lifecycle and bounded
+  inert I/O. It is exercised by in-memory tests and the explicit synthetic PTY lab,
+  without Core exports or application composition. Native consent/enrollment,
+  provider terminals, durable recovery and production controls remain unavailable.
+
 - Explicit developer-only synthetic PTY acceptance on macOS/arm64 with locked
   `node-pty@1.1.0`, a fixed Node fixture, private staging, minimal environment,
   bounded output/deadlines and confirmed handle-owned exit/signal checks. This is

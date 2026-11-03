@@ -31,8 +31,10 @@ The profile identifies the executable path/hash/version, argv, project/cwd,
 environment profile and permissions. Only registered profile IDs can be selected;
 there is no command-string/environment override API. The trusted backend validates
 the profile at preparation and again before consuming the start grant and spawning.
-The library does not itself prove filesystem identity, sandbox enforcement or the
-truth of a supplied profile. The synthetic backend checks the executable and fixed
+Validation must be side-effect-free inspection: it cannot launch or modify a process
+and runs before authorization is consumed. The library does not itself prove
+filesystem identity, sandbox enforcement or the truth of a supplied profile.
+The synthetic backend checks the executable and fixed
 fixture hashes; hash/check/path-based spawn still has a replacement race and is
 not a production immutable-executable admission mechanism.
 
@@ -57,7 +59,10 @@ proves a pre-spawn failure. A thrown spawn, missing startup evidence after ten
 seconds, malformed backend evidence, oversized backend event or uncertain write
 loses ownership. It revokes input and disposes listeners without signaling, retrying,
 looking up a PID or claiming exit. Uncertain instances retain admission slots.
-An explicit owned exit event alone supplies exit code/signal and frees capacity.
+An explicit owned exit event while `starting` or `running` supplies exit code/signal
+and frees capacity. After `ownership_lost`, late startup/exit events are discarded;
+the slot remains held for the lifetime of that supervisor instance. No reconciliation
+or release of uncertain capacity is implemented.
 
 An independently signed attach action creates one read attachment. Detach removes
 it and its lease without killing work. Revoked clients cannot read or write; an
@@ -95,9 +100,13 @@ must not be replayed as a complete terminal screen. The chosen pull model avoids
 an unbounded client backlog; future IPC/network backpressure still needs review.
 The original mechanics probe separately exercises native PTY pause/resume.
 
-At most 128 attempt records are retained for the lifetime of this library instance;
-admission fails at that cap. The maximum ring storage across them is 128 MiB, plus
-bounded event/read copies and metadata. A backend event larger than 64 Ki code units
+At most 128 attempt records are retained for the lifetime of each supervisor instance,
+including expired preparations, exits and lost ownership; records are never removed
+and admission fails at that cap. The admission and memory limits are per instance,
+not shared across supervisors. Replacing a supervisor cannot establish that its
+previous processes exited and is not a safe recovery mechanism. The maximum ring
+storage within one instance is 128 MiB, plus bounded event/read copies and metadata.
+A backend event larger than 64 Ki code units
 fails closed; the library does not impose a native CPU/memory/output-rate sandbox.
 There is no attempt erasure, persistent journal, crash reconciliation, grant extension,
 lifetime stop timer, graceful Core shutdown policy or process-tree containment.
