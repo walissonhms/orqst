@@ -54,6 +54,9 @@ class SyntheticTransport implements CodexTransport {
   approvalPolicy = 'on-request';
   startedBeforeReply = true;
   replyToTurn = true;
+  stallMethod?: string;
+  rejectMethod?: string;
+  threadStartDelayMs = 0;
   listen(data: (bytes: Uint8Array) => void, lost: () => void) {
     this.data = data;
     this.lost = lost;
@@ -76,7 +79,12 @@ class SyntheticTransport implements CodexTransport {
       return;
     }
     this.requests.push(request);
-    queueMicrotask(() => {
+    const respond = () => {
+      if (request.method === this.stallMethod) return;
+      if (request.method === this.rejectMethod) {
+        this.emit({ id: request.id, error: { message: 'SYNTHETIC-PRIVATE-NATIVE-ERROR' } });
+        return;
+      }
       if (request.method === 'initialize')
         this.emit({ id: request.id, result: { userAgent: 'SYNTHETIC' } });
       if (request.method === 'account/read')
@@ -106,7 +114,10 @@ class SyntheticTransport implements CodexTransport {
         this.emit({ id: request.id, result: { turn: { id: this.turnId, status: 'inProgress' } } });
         if (!this.startedBeforeReply) queueMicrotask(() => this.event('turn/started'));
       }
-    });
+    };
+    if (request.method === 'thread/start' && this.threadStartDelayMs)
+      setTimeout(respond, this.threadStartDelayMs);
+    else queueMicrotask(respond);
   }
   event(method: string, status = 'inProgress', threadId = this.threadId, turnId = this.turnId) {
     this.emit({ method, params: { threadId, turn: { id: turnId, status } } });
@@ -168,6 +179,10 @@ function fixture(
     ephemeral?: boolean;
     sandbox?: string;
     approvalPolicy?: string;
+    stallMethod?: string;
+    rejectMethod?: string;
+    threadStartDelayMs?: number;
+    neverStarted?: boolean;
   } = {},
 ) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-structured-')));
@@ -210,9 +225,12 @@ function fixture(
       if (options.ephemeral !== undefined) transport.ephemeral = options.ephemeral;
       if (options.sandbox !== undefined) transport.sandbox = options.sandbox;
       if (options.approvalPolicy !== undefined) transport.approvalPolicy = options.approvalPolicy;
+      transport.stallMethod = options.stallMethod;
+      transport.rejectMethod = options.rejectMethod;
+      transport.threadStartDelayMs = options.threadStartDelayMs ?? 0;
       transports.push(transport);
       exits.push(events.exit);
-      queueMicrotask(events.started);
+      if (!options.neverStarted) queueMicrotask(events.started);
       return transport;
     },
   };
@@ -1184,3 +1202,170 @@ for (const type of ['commandExecution', 'fileChange', 'mcpToolCall', 'unknownFut
     }
   });
 }
+
+test('native IPC backpressure preserves accepted writes without retry or false ownership loss', async () => {
+  const f = fixture();
+  let transport: CodexTransport | undefined;
+  try {
+    const slot = f.config('synthetic-backpressure', true);
+    const host = join(f.root, 'SYNTHETIC-backpressure-host.cjs');
+    writeFileSync(
+      host,
+      `
+      process.on('disconnect', () => process.exit(0));
+      process.send({type:'started',processId:process.pid});
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,300);
+      process.on('message', request => {
+        if(request.action==='send') process.send({type:'data',base64:Buffer.from('ACK').toString('base64')});
+        if(request.action==='signal') process.send({type:'exit',code:0,signal:null},()=>process.disconnect());
+      });
+      setTimeout(()=>process.exit(0),5000).unref();
+      `,
+      { mode: 0o600 },
+    );
+    let start: () => void;
+    const started = new Promise<void>((resolve) => {
+      start = resolve;
+    });
+    let done: () => void;
+    const completed = new Promise<void>((resolve) => {
+      done = resolve;
+    });
+    let lost = 0;
+    let acknowledgments = 0;
+    transport = nativeCodexBackend(host).open(slot.file, slot.config, {
+      started: () => start(),
+      exit: () => {},
+    });
+    transport.listen(
+      () => {
+        if (++acknowledgments === 4) done();
+      },
+      () => lost++,
+    );
+    await started;
+    for (let index = 0; index < 4; index++) transport.send('SYNTHETIC'.padEnd(96 * 1024, 'x'));
+    await completed;
+    assert.equal(acknowledgments, 4);
+    assert.equal(lost, 0);
+    assert.throws(() => transport!.send('SYNTHETIC'.padEnd(513 * 1024, 'x')), /unavailable/);
+    assert.equal(lost, 1);
+    assert.equal(acknowledgments, 4);
+    transport.signal('SIGTERM');
+  } finally {
+    transport?.detach();
+    f.close();
+  }
+});
+
+for (const method of ['initialize', 'account/read', 'thread/start'] as const) {
+  test(`startup ${method} timeout reports safe diagnostics and retains uncertainty without signals`, async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const f = fixture({ stallMethod: method });
+    try {
+      const slot = f.config('synthetic-stalled', false, true);
+      const prepared = f.prepare(slot.file, 'Synthetic stalled startup');
+      const rejected = assert.rejects(
+        f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+      );
+      await tick();
+      t.mock.timers.tick(
+        method === 'thread/start' ? codexChannelLimits.threadStartMs : codexChannelLimits.requestMs,
+      );
+      await rejected;
+      const snapshot = f.runtime.snapshot(prepared.instanceId);
+      assert.equal(snapshot.state, 'ownership_lost');
+      assert.equal(snapshot.launchFailure, 'startup_failed');
+      assert.equal(snapshot.startupPhase, method.replace('/', '_'));
+      assert.deepEqual(snapshot.channelDiagnostic, { reason: 'request_timeout', method });
+      assert.deepEqual(f.transports[0]!.signals, []);
+      assert.equal(snapshot.nativeExit, null);
+      assert.throws(() =>
+        f.runtime.requestStop('synthetic-native', prepared.instanceId, 'SIGTERM'),
+      );
+      assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+    } finally {
+      f.close();
+    }
+  });
+
+  test(`startup ${method} native rejection never retains its private error`, async () => {
+    const f = fixture({ rejectMethod: method });
+    try {
+      const prepared = f.prepare(
+        f.config('synthetic-rejected', false, true).file,
+        'Synthetic rejection',
+      );
+      await assert.rejects(f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)));
+      const snapshot = f.runtime.snapshot(prepared.instanceId);
+      assert.deepEqual(snapshot.channelDiagnostic, { reason: 'native_request_rejected', method });
+      assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-PRIVATE'));
+      assert.equal(snapshot.nativeExit, null);
+      assert.deepEqual(f.transports[0]!.signals, []);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('slow required-MCP thread preparation has a separate bounded budget without task dispatch', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ threadStartDelayMs: 9000 });
+  try {
+    const prepared = f.prepare(
+      f.config('synthetic-slow-thread', false, true).file,
+      'Synthetic slow MCP',
+    );
+    const launching = f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge));
+    await tick();
+    t.mock.timers.tick(codexChannelLimits.requestMs + 1);
+    assert.equal(f.runtime.snapshot(prepared.instanceId).state, 'running');
+    assert.equal(f.runtime.snapshot(prepared.instanceId).startupPhase, 'thread_start');
+    assert.equal(f.runtime.snapshot(prepared.instanceId).channelDiagnostic, null);
+    t.mock.timers.tick(1000);
+    await launching;
+    assert.equal(f.runtime.snapshot(prepared.instanceId).startupPhase, 'ready');
+    assert.ok(!f.transports[0]!.requests.some((request) => request.method === 'turn/start'));
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    f.close();
+  }
+});
+
+test('overall startup deadline remains bounded when the native spawn callback never arrives', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const f = fixture({ neverStarted: true });
+  try {
+    const prepared = f.prepare(f.config('synthetic-never-started').file, 'Synthetic missing spawn');
+    const rejected = assert.rejects(
+      f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
+    );
+    t.mock.timers.tick(50000);
+    await rejected;
+    const snapshot = f.runtime.snapshot(prepared.instanceId);
+    assert.equal(snapshot.launchFailure, 'startup_deadline');
+    assert.equal(snapshot.startupPhase, 'not_started');
+    assert.equal(snapshot.nativeExit, null);
+    assert.equal(snapshot.state, 'ownership_lost');
+    assert.deepEqual(f.transports[0]!.requests, []);
+    assert.deepEqual(f.transports[0]!.signals, []);
+  } finally {
+    f.close();
+  }
+});
+
+test('runtime method allowlist rejects untrusted names before dispatch or diagnostic retention', async () => {
+  const transport = new SyntheticTransport();
+  const channel = new CodexChannel(transport);
+  try {
+    await assert.rejects(
+      Reflect.apply(channel.request, channel, ['SYNTHETIC-PRIVATE-METHOD', {}]),
+      /method unavailable/,
+    );
+    assert.deepEqual(transport.requests, []);
+    assert.equal(channel.diagnostic(), null);
+    assert.equal(channel.available, true);
+  } finally {
+    channel.detach();
+  }
+});

@@ -77,7 +77,10 @@ This is version 0.1.0. Earlier macOS baseline evidence covers build, type checki
   acceptance. After independent QA and 389 passing tests, the single authorized
   native attempt failed during the first startup, before either task was submitted.
   The protocol did not confirm that process exit; no retry or service restart was
-  performed. Headless real-provider acceptance remains blocked. See [the contract and limitations](docs/development/local-cli-integration.md).
+  performed. Follow-up disposable probes reproduced required-MCP startup timeout
+  and a separate IPC backpressure defect; both paths are corrected with bounded
+  budgets and safe diagnostics. The original cause remains unproven and headless
+  real-provider acceptance remains blocked. See [the contract and limitations](docs/development/local-cli-integration.md).
 
 - **Existing CLI direction (2026-11-03):** bounded PATH/realpath discovery and
   provider-specific blocked reuse plans are implemented without executing providers

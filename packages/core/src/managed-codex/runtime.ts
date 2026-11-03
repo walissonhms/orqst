@@ -26,7 +26,7 @@ export const codexRuntimePolicy = Object.freeze({
   attempts: 128,
   lifetimeMs: 30 * 60 * 1000,
   killAfterMs: 5000,
-  startupMs: 10000,
+  startupMs: 50000,
   permissions:
     'Native same-user; authentication/state paths are specified in the signed config, with shared native config/auth for reuse-existing; read-only/on-request defaults; no provider approvals exposed; network for provider. 30 minute owned-process lifetime then TERM/KILL. No descendant containment, resume, PID adoption or automatic retry.',
 });
@@ -73,6 +73,7 @@ interface Attempt {
   state: TerminalState;
   nativeExit?: { code: number | null; signal: string | null };
   nativeProcessId?: number;
+  launchFailure?: 'admission_failed' | 'startup_failed' | 'startup_deadline';
   pane?: CommunicationPane;
   transport?: CodexTransport;
   channel?: CodexChannel;
@@ -98,6 +99,7 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
       let data: ((chunk: Uint8Array) => void) | undefined;
       let lost: (() => void) | undefined;
       let disposed = false;
+      let pendingBytes = 0;
       const fail = () => {
         if (!disposed) lost?.();
       };
@@ -129,13 +131,21 @@ export function nativeCodexBackend(hostFile: string): CodexRuntimeBackend {
         }
       });
       const send = (message: object) => {
-        if (
-          disposed ||
-          !child.connected ||
-          !child.send(message, (error) => {
+        const bytes = Buffer.byteLength(JSON.stringify(message));
+        if (disposed || !child.connected || pendingBytes + bytes > 512 * 1024) {
+          fail();
+          throw new Error('Codex private transport unavailable');
+        }
+        pendingBytes += bytes;
+        try {
+          // false reports backpressure, not rejection: the message is already queued.
+          // Never retry it; only the completion callback reports a failed send.
+          child.send(message, (error) => {
+            pendingBytes -= bytes;
             if (error) fail();
-          })
-        ) {
+          });
+        } catch {
+          pendingBytes -= bytes;
           fail();
           throw new Error('Codex private transport unavailable');
         }
@@ -223,6 +233,7 @@ export class CodexStructuredRuntime {
       throw new Error('Codex state isolation or runtime capacity denied');
     this.validate(attempt);
     this.authority.consume(proof, { operation: 'start', target: id, digest: attempt.digest });
+    let startupDeadline = false;
     // Every slot has its own metadata journal. A dirty/crashed owner fails closed, with no takeover.
     try {
       let slot = this.slots.get(attempt.config.state);
@@ -358,10 +369,10 @@ export class CodexStructuredRuntime {
             );
           })(),
           new Promise<never>((_resolve, reject) => {
-            timer = setTimeout(
-              () => reject(new Error('Codex startup deadline')),
-              codexRuntimePolicy.startupMs,
-            );
+            timer = setTimeout(() => {
+              startupDeadline = true;
+              reject(new Error('Codex startup deadline'));
+            }, codexRuntimePolicy.startupMs);
           }),
         ]);
       } finally {
@@ -373,6 +384,11 @@ export class CodexStructuredRuntime {
       this.communication.setPaneState(attempt.pane.paneId, 'ready');
       return this.communication.resolvePane(attempt.input.workspaceId, attempt.pane.paneId);
     } catch {
+      attempt.launchFailure = startupDeadline
+        ? 'startup_deadline'
+        : attempt.state === 'prepared'
+          ? 'admission_failed'
+          : 'startup_failed';
       if (attempt.state === 'prepared') {
         try {
           attempt.journal?.transition(id, 'start_failed');
@@ -409,10 +425,13 @@ export class CodexStructuredRuntime {
       state: a.state,
       nativeExit: a.nativeExit ?? null,
       nativeProcessId: a.nativeProcessId ?? null,
+      launchFailure: a.launchFailure ?? null,
+      channelDiagnostic: a.channel?.diagnostic() ?? null,
       paneId: a.pane?.paneId ?? null,
       requestedModel: a.input.model,
       ...(a.adapter?.snapshot() ?? {
         authentication: 'unknown' as const,
+        startupPhase: 'not_started' as const,
         unexpectedToolUse: false,
         dynamicTools: a.input.dynamicTools ? 'requested' : 'disabled',
         delegationReturned: false,

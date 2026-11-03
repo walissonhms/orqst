@@ -214,7 +214,14 @@ try {
     );
   }
 } finally {
-  const cleanup: Array<{ instanceId: string; confirmedExit: boolean }> = [];
+  const cleanup: Array<{
+    instanceId: string;
+    confirmedExit: boolean;
+    diagnostic: Pick<
+      ReturnType<CodexStructuredRuntime['snapshot']>,
+      'launchFailure' | 'startupPhase' | 'channelDiagnostic'
+    >;
+  }> = [];
   for (const id of instances) {
     try {
       for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
@@ -228,7 +235,16 @@ try {
     } catch {
       /* Transport loss is uncertainty; never signal a stored PID. */
     }
-    cleanup.push({ instanceId: id, confirmedExit: runtime.snapshot(id).nativeExit !== null });
+    const snapshot = runtime.snapshot(id);
+    cleanup.push({
+      instanceId: id,
+      confirmedExit: snapshot.nativeExit !== null,
+      diagnostic: {
+        launchFailure: snapshot.launchFailure,
+        startupPhase: snapshot.startupPhase,
+        channelDiagnostic: snapshot.channelDiagnostic,
+      },
+    });
   }
   runtime.shutdown();
   store.close();

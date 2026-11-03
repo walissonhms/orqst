@@ -73,6 +73,8 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
   private toolReturned = false;
   private unexpectedToolUse = false;
   private authentication: 'unknown' | 'existing-native-login' = 'unknown';
+  private startupPhase: 'not_started' | 'initialize' | 'account_read' | 'thread_start' | 'ready' =
+    'not_started';
 
   constructor(
     private channel: CodexChannel,
@@ -95,6 +97,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     reuseExistingAuthentication = false,
   ): Promise<void> {
     if (!this.owns()) throw new Error('Codex owner is not confirmed');
+    this.startupPhase = 'initialize';
     await this.channel.request('initialize', {
       clientInfo: { name: 'orqst', title: 'ORQST', version: '0.1.0' },
       ...(this.dynamicTools ? { capabilities: { experimentalApi: true } } : {}),
@@ -102,6 +105,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     if (!this.owns()) throw new Error('Codex owner was revoked during initialization');
     this.channel.initialized();
     if (reuseExistingAuthentication) {
+      this.startupPhase = 'account_read';
       // Strip account identity/plan fields immediately; never log or persist the response.
       const status = z
         .object({ account: z.object({ type: z.enum(['chatgpt', 'apiKey']) }).nullable() })
@@ -110,6 +114,7 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
       this.authentication = 'existing-native-login';
       if (!this.owns()) throw new Error('Codex owner revoked during authentication check');
     }
+    this.startupPhase = 'thread_start';
     const reply = threadResponseSchema.parse(
       await this.channel.request('thread/start', {
         cwd,
@@ -134,10 +139,12 @@ export class CodexCommunicationAdapter implements CommunicationAdapter {
     if (!this.channel.available || this.closed) throw new Error('Codex initialization lost');
     this.threadId = reply.thread.id;
     this.observedModel = reply.model ?? null;
+    this.startupPhase = 'ready';
   }
   snapshot() {
     return {
       authentication: this.authentication,
+      startupPhase: this.startupPhase,
       unexpectedToolUse: this.unexpectedToolUse,
       delegationReturned: this.toolReturned,
       dynamicTools: this.dynamicTools

@@ -328,3 +328,43 @@ outside Git and must not be deleted/reused to bypass uncertainty. Tokens and act
 cost remain unavailable; no claim of zero billing or completed A-to-B-to-A is made.
 Further real execution needs diagnosis and explicit authorization for another attempt.
 Browser/Desktop acceptance and `validate:local` were not run; ingestion is unchanged.
+
+## Reconciling the blocked attempt before another real run
+
+1. Keep the original root and `ownership_lost` journal unchanged and quarantined.
+   Read only allowlisted journal metadata when needed. Do not reopen it as an owner,
+   recover/reset it, remove it, delete source state or use another root to silently
+   bypass unresolved capacity. Never inspect credentials to diagnose a timeout.
+2. Seek lifecycle evidence tied to that original instance, manifest and native host
+   epoch. A genuine exit report from its original owned handle would be relevant;
+   absence in `ps`, elapsed lifetime, an empty project, closed UI or startup SQLite
+   files are not proof of exit. Do not adopt or signal a PID to obtain such evidence.
+3. This host version did not persist an independent exit receipt. If no authentic
+   original lifecycle evidence survives, automatic reconciliation is unavailable:
+   retain `ownership_lost`, report that limit, and ask the owner/root to decide an
+   explicit quarantine/capacity policy. Do not rewrite the record as exited. A future
+   receipt/reconciliation feature needs a separate reviewed design, tests, provenance
+   and authorization before use; this diagnosis change implements none.
+4. Only after the root resolves that policy and explicitly authorizes another attempt
+   may a new empty project/private root be considered. Review the exact binary/hash,
+   native shared-config/MCP effects, two processes/two submissions, no-fallback model,
+   advisory cost, owned cleanup and the new diagnostic fields. Configuration/account
+   readiness remains unvalidated by no-credential probes; do not infer it from them.
+5. Request **explicit root authorization before any new real inference**. This
+   investigation authorizes synthetic tests and disposable no-credential/no-inference
+   probes only. It neither repeats the acceptance nor authorizes native-account
+   preflights, another provider/model, or signaling external sessions. The revised
+   total startup policy (50 seconds) is in the newly signed manifest; the
+   per-RPC 8/30-second limits are separate code constants. Both need review and
+   neither amends an old authorization.
+
+The new diagnostics cannot retroactively identify the failed run's RPC phase. The
+reproduced backpressure defect is fixed independently; claiming it caused that
+8.329-second startup would exceed the available evidence.
+
+The investigation additionally reproduced an 8-second `thread/start` timeout with
+a synthetic required MCP whose initialization took 9 seconds, without credentials
+or inference. A separate bounded thread budget fixed that controlled scenario;
+other RPC deadlines stay unchanged. Optional MCP startup behaved differently.
+This strengthens a timing hypothesis, but no native user config was inspected and
+the original log lacks the method, so no historical causal conclusion follows.

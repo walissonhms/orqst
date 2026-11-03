@@ -142,7 +142,8 @@ unknown outcomes are never automatically retried.
   guarantee across
   independently constructed owners. Slot journals prevent concurrent ownership of
   the same state; communication has its own durable global active-task cap.
-- Initialization/RPC deadlines are 10 seconds overall/8 seconds per request.
+- Startup is bounded by 50 seconds overall; thread preparation has a 30-second
+  budget, while initialization/account/task-admission RPCs retain 8 seconds.
   Communication's 10-second dispatch/submit timeout remains authoritative. Task
   observation
   expires at its own grant-bounded deadline (at most 15 minutes); expiry revokes
@@ -212,3 +213,53 @@ Protocol reference, reviewed 2026-11-03: [official Codex app-server documentatio
 Moving documentation is design evidence, not proof of compatibility with the
 owner-admitted executable. Validate generated schemas/observed events for that
 exact CLI version under separate execution authorization before enabling it.
+
+## Startup diagnosis and IPC backpressure — 2026-11-03
+
+The private native transport treats `child.send()` returning `false` as backpressure:
+the write is already queued and is never retried. Only a thrown send, callback error,
+disconnection or a 512 KiB pending serialized-message budget denies the transport.
+The pending budget includes the IPC envelope and is released by the send callback.
+This fixes a synthetic reproducer in which four accepted bounded writes previously
+caused false transport loss. It does not establish the cause of the earlier real run.
+
+`snapshot` now includes `launchFailure` (`admission_failed`, `startup_failed`,
+`startup_deadline`, or null), `startupPhase` (`not_started`, `initialize`,
+`account_read`, `thread_start`, or `ready`) and an optional `channelDiagnostic`.
+The diagnostic retains the first fixed reason and at most a fixed RPC method name;
+no native error message/code/data, account value, prompt, output or configuration is
+retained. The returned diagnostic is a defensive copy. The explicit acceptance
+prints these fields for each cleanup attempt. The phase identifies the local await
+boundary; it is not proof of provider delivery, authentication or task acceptance.
+A null/`detached` channel diagnostic does not establish why a response was rejected.
+
+Initialization, account read and task-admission RPCs retain their 8-second deadline.
+Thread preparation has a separate 30-second deadline, and total startup is bounded
+by 50 seconds (covering the serial 8 + 8 + 30 second phases plus spawn overhead).
+Only the total 50-second startup policy is included in the signed manifest. The
+8/30-second per-RPC limits are code constants, not individually bound into that
+manifest. Review both the new manifest and the runtime code before a future real
+launch; this change is not an extension of an old grant.
+Timeout fixtures at initialization, account read and thread start reproduce
+`ownership_lost` without signaling or retrying. That conservative state is intentional
+when dispatched process ownership/result evidence is unresolved. No diagnostic
+restores authority, frees capacity or confirms exit. The earlier real journal's
+8.329-second interval is consistent with a request timeout, but the older artifact
+contains no phase/reason to distinguish it from other failures. An isolated compiled
+host probe with no credentials/inference succeeded and confirmed its own exit;
+this does not validate the native user's configuration or account.
+
+A disposable native Codex 0.162.1 probe with empty file-auth home and no inference
+reproduced `thread/start` timing out at 8.216 seconds when a synthetic **required**
+MCP delayed initialization for 9 seconds within its own 15-second startup timeout.
+With the separate thread budget, the same controlled scenario completed thread
+preparation in 9.284 seconds; the native host reported exit code 0 through owned
+IPC and the synthetic MCP recorded its own exit. An optional slow MCP did not
+block thread creation in that probe. These are compatibility fixtures, not the
+user's configuration/account or proof of the historical cause. No timeout, model,
+MCP requirement or account policy is silently disabled to obtain readiness.
+
+This follow-up passed lint, typecheck, 399 Node tests and full build on
+Node 24.22.2/pnpm 10.34.9. The only native probes used new empty file-auth homes
+and no inference. The real acceptance was not repeated, the old uncertain state
+was not reused/removed, and no user process/service was signaled or restarted.

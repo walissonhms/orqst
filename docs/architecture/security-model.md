@@ -713,3 +713,10 @@ unexpected native tool items in acceptance do not prevent those effects. The
 slot config is only an admission canary for reuse, not the native active config.
 Remote catalog disabling does not disable every installed plugin. Shared auth
 refresh can race other CLI instances; ORQST never closes them to avoid a race.
+
+Structured startup diagnostics are allowlisted local phase/reason/method labels,
+not native error payloads or account/configuration fields. IPC backpressure does
+not authorize retransmission; queued writes retain a 512 KiB budget. Diagnostic
+visibility does not restore lost authority, release journals or establish process
+exit. Uncertain historical state stays quarantined pending a separate reviewed
+reconciliation decision; absent OS listings are not exit evidence.
