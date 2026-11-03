@@ -1,7 +1,7 @@
 # Experimental native terminal client boundary
 
 Implemented engineering code, **not an application API**. No `/api` route, WebSocket
-message, IPC listener, preload method or terminal UI registers this contract. Core's
+message, normal Desktop IPC listener, observer preload or dashboard registers this contract. Core's
 public entry point does not export the experimental supervisor or broker. There is
 no enabled provider, generic shell, external-session adoption or credential import.
 See [provider research](../adapters/managed-terminal-research.md) and the
@@ -110,3 +110,21 @@ HTML interpretation or persisted transcript is introduced. A compromised rendere
 with an active keyboard lease can still abuse typed input; it cannot be prevented
 by a schema. Restricted documents, trusted event classification, isolated signing
 and production transport/enrollment must be validated before enabling any control.
+
+## Native integration lab — 2026-11-03
+
+The [explicit acceptance application](../development/terminal-native-acceptance.md)
+now composes these helpers with a dedicated document/session/preload and
+`orqst:terminal-native` handler. Normal Desktop/Bridge startup remains unchanged.
+Replies use a strict bounded wire schema (output bytes as at most 64 KiB integer
+arrays); unknown fields and backend diagnostics are denied. One request is in
+flight; preload adds transient-activation checks and has no generic IPC or queue.
+Enrollment/signing stays in the disposable native main process, with a separate
+Node host owning only the fixed synthetic PTY. Host transport loss now invokes
+`lost()` and preserves `ownership_lost`, including after late exit callbacks.
+
+Real Electron/preload/IPC/Node-host/PTY acceptance passed with intercepted native
+dialogs. This is not genuine human-consent acceptance or a production Core control
+transport. The lab cannot enable Codex, Claude Code or OpenCode. Immutable
+executable/cwd admission, separately provisioned credentials, containment/lifetime
+and durable long-lived ownership recovery still block provider activation.

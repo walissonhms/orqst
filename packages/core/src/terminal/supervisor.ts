@@ -37,6 +37,8 @@ export interface TerminalEvents {
   started(): void;
   data(text: string): void;
   exit(exitCode: number, signal?: number): void;
+  /** Private transport loss is uncertainty, never process exit evidence. */
+  lost(): void;
 }
 export interface OwnedTerminalHandle {
   write(text: string): void;
@@ -166,6 +168,7 @@ export class TerminalSupervisor {
       attempt.startupTimer = setTimeout(() => this.lose(attempt), terminalPolicy.startupMs);
       attempt.startupTimer.unref();
       const handle = this.backend.start(attempt.profile, {
+        lost: () => this.lose(attempt),
         started: () => {
           if (attempt.state === 'starting') {
             attempt.state = 'running';

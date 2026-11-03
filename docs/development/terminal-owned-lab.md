@@ -150,3 +150,12 @@ lab directory sequentially, with no provider configuration or credentials. Nativ
 confirmation is deliberately simulated there; the real Electron dialog, document,
 focus/accessibility behavior and independent IPC enrollment/transport remain pending.
 There is still no application terminal or provider control to enable.
+
+## Native transport integration lab — 2026-11-03
+
+The [explicit native acceptance application](terminal-native-acceptance.md) now
+composes the library with a dedicated Electron document/preload/IPC and a separate
+Node-host PTY for the fixed synthetic fixture. Normal application startup is
+unchanged. The additional `TerminalEvents.lost()` reports transport uncertainty,
+without claiming exit or authorizing retry. Real Electron transport is exercised
+with intercepted native dialogs; provider/human-consent/recovery gates remain.

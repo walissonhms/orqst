@@ -579,5 +579,23 @@
     "stop": "Enviar este sinal a este processo próprio? O encerramento não é garantido.",
     "cancel": "Cancelar",
     "confirm": "Autorizar uma vez"
+  },
+  "terminalLab": {
+    "title": "Laboratório sintético do Terminal nativo",
+    "scope": "Aceitação de engenharia descartável. Não usa projeto do usuário, sessão externa, credencial ou provider real. O processo encerra após oito segundos.",
+    "provider": "Codex é o primeiro candidato; execução gerenciada está indisponível. Claude Code e OpenCode continuam sem validação.",
+    "start": "Iniciar processo de teste",
+    "attach": "Anexar saída",
+    "input": "Habilitar entrada",
+    "detach": "Desanexar",
+    "stop": "Parar processo de teste",
+    "paste": "Entrada exata do processo de teste (ping, size ou exit seguidos de uma quebra de linha)",
+    "send": "Confirmar colagem exata",
+    "denied": "Solicitação negada ou entrada revogada.",
+    "cancelled": "Confirmação nativa cancelada.",
+    "busy": "Outra solicitação está pendente.",
+    "ok": "Solicitação processada; saída exige evidência explícita.",
+    "idle": "Nenhum processo próprio foi iniciado.",
+    "output": "Saída inerte do processo sintético"
   }
 }

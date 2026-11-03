@@ -353,3 +353,15 @@ actual native gesture, independent enrollment/transport, immutable admission,
 containment and durable recovery remain acceptance gates. External sessions are
 never adopted. Explicit supervisor teardown retains uncertain live ownership
 without signaling, retrying or claiming process exit.
+
+## Isolated native Terminal acceptance application — 2026-11-03
+
+The [explicit synthetic native lab](docs/development/terminal-native-acceptance.md)
+now exercises a dedicated sandboxed document/session/preload, native IPC and private
+Node-host PTY. It is never loaded by the normal observer Desktop/Bridge. No existing
+API/WS/cookie/route authority changes. Keys/proofs/leases stay native; strict bounded
+messages, exact native sender/document checks, blur revocation and permanent reload
+revocation protect the lab path. Host loss retains ownership uncertainty. Acceptance
+intercepts native dialogs and starts only a watchdog-bounded credential-free fixture.
+It proves neither a human native grant nor immutable provider admission, containment,
+durable recovery or Codex execution; those gates continue blocking activation.
