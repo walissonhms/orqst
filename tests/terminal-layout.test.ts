@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   parseTerminalViewAction,
   terminalPaneBounds,
+  terminalGridBounds,
+  terminalGridPage,
   terminalViewActions,
 } from '../apps/desktop/src/terminal-layout.js';
 
@@ -79,4 +81,61 @@ test('N tab actions are bounded data and cannot carry process operations or extr
     { tab: 2, percent: 50 },
   ])
     assert.equal(parseTerminalViewAction(raw), undefined);
+});
+
+test('visual commands reject process identities, injected names and arbitrary grid values', () => {
+  for (const columns of [0, 1, 2, 3])
+    assert.deepEqual(parseTerminalViewAction({ columns }), { columns });
+  assert.deepEqual(parseTerminalViewAction({ name: '  Frontend  ' }), { name: 'Frontend' });
+  assert.deepEqual(parseTerminalViewAction({ moveTo: 7 }), { moveTo: 7 });
+  for (const raw of [
+    { columns: '2' },
+    { columns: 4 },
+    { columns: NaN },
+    { moveTo: 8 },
+    { moveTo: 1, command: 'stop' },
+    { name: '' },
+    { name: ' ' },
+    { name: 'x'.repeat(49) },
+    { name: 'hidden\u202e' },
+    { name: 'line\nbreak' },
+    { name: 'ok', terminalId: 'other' },
+  ])
+    assert.equal(parseTerminalViewAction(raw), undefined);
+});
+
+test('grid covers each pixel once for 1–8 panes, uneven rows, both axes and odd dimensions', () => {
+  for (const count of [1, 2, 3, 6, 8])
+    for (const columns of [1, 2, 3])
+      for (const axis of ['columns', 'rows'] as const) {
+        const bounds = Array.from({ length: count }, (_, index) =>
+          terminalGridBounds(1441, 1201, index, count, axis, 37, axis === 'rows' ? 1 : columns),
+        );
+        assert.equal(
+          bounds.reduce((area, rect) => area + rect.width * rect.height, 0),
+          1441 * 1201,
+        );
+        for (const [index, a] of bounds.entries()) {
+          assert.ok(a.x >= 0 && a.y >= 0 && a.x + a.width <= 1441 && a.y + a.height <= 1201);
+          for (const b of bounds.slice(index + 1))
+            assert.ok(
+              a.x + a.width <= b.x ||
+                b.x + b.width <= a.x ||
+                a.y + a.height <= b.y ||
+                b.y + b.height <= a.y,
+            );
+        }
+      }
+});
+
+test('compact paging keeps selected documents reachable without modifying the group', () => {
+  const shown = [0, 1, 2, 3, 4, 5, 6, 7];
+  for (const selected of shown) {
+    assert.deepEqual(terminalGridPage(600, 700, shown, selected, 3, 'columns').visible, [selected]);
+    assert.ok(
+      terminalGridPage(1440, 900, shown, selected, 2, 'columns').visible.includes(selected),
+    );
+  }
+  assert.equal(terminalGridPage(1440, 900, shown, 0, 0, 'columns').columns, 3);
+  assert.deepEqual(shown, [0, 1, 2, 3, 4, 5, 6, 7]);
 });

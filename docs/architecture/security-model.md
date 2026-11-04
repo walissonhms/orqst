@@ -1151,3 +1151,23 @@ No HTTP/WS/cookie/static-file-serving contract, network listener or credential a
 changes. The refactored native document keeps the same isolated protocol/CSP and
 escapes localized labels. Synthetic Chromium consent is not native-modal acceptance;
 real-provider and Tauri managed-terminal parity remain unvalidated.
+
+## Retained terminal workspace layout — 2026-11-04
+
+The existing dedicated `orqst:terminal-view` channel now accepts bounded column,
+reorder and display-name data in addition to local view actions. Main still binds
+requests to the actual reserved, focused and visible native document; the observer
+preload receives no layout or execution capability. Extra fields, process commands,
+arbitrary slots, control/bidi characters and names above 48 characters are rejected.
+Names are rendered using textContent/HTML escaping and are never routing identities.
+Hiding, paging and layout changes retain documents and revoke keyboard permission;
+none of these operations start, adopt, signal, retire or authorize a process.
+
+Main alone chooses a private preferences path keyed by sorted reviewed UUIDs.
+Strict bounded reads, canonical/private directory checks, O_NOFOLLOW and exclusive
+0600 temp creation plus atomic rename preserve containment and permissions. No
+executable, session content, input, credentials or recovery authority is serialized.
+An invalid store falls back to defaults; failed saves report memory-only operation.
+Same-user malicious ancestor replacement remains outside the existing filesystem
+contract. HTTP, WebSocket, cookies, CSP, provider grants and observer ingestion
+are unchanged. See the [layout guide](../development/terminal-workspace-layout.md).

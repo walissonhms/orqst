@@ -32,3 +32,10 @@ Modified by ORQST to return normalized handles, retain unknown/oversized handles
 for explicit rejection, and remove Tucano application-specific Agent dependencies.
 The upstream tree at this commit contains LICENSE and no NOTICE file.
 See LICENSE and docs/research/mention-communication.md for provenance and changes.
+
+Additional Anywh source adapted at the same commit:
+Source: client/src/components/terminal/TerminalView.tsx (ResizeObserver lifecycle)
+Destination: apps/desktop/src/managed-terminal-client.ts
+Modified by ORQST to debounce container fitting and retain the existing bounded,
+permission-checked Core/PTY resize path; no WebSocket, tmux or WebGL code copied.
+See docs/research/terminal-workspace-layout.md for component scope and changes.

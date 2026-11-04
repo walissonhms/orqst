@@ -168,6 +168,10 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
     if (request.action === 'attach') {
       attached = true;
       fit.fit();
+      // Compact chrome can place output below the outer scroll viewport. xterm pauses
+      // painting/accessibility updates while off-screen; explicit attach reveals it
+      // without changing the emulator's own scrollback position or buffer.
+      container.scrollIntoView({ block: 'nearest' });
     }
     if (request.action === 'detach') {
       attached = false;
@@ -289,12 +293,16 @@ for (const action of actions) {
 }
 window.addEventListener('blur', revoke);
 let resize: ReturnType<typeof setTimeout> | undefined;
-window.addEventListener('resize', () => {
+// Adapted from Anywh TerminalView.tsx at 546f189c04415c3c5af5f40e3931a0a90b9aba31
+// (Apache-2.0). Observe the container, debounce fitting, and retain ORQST's bounded
+// native resize polling instead of the upstream WebSocket/tmux resize operation.
+const resizeObserver = new ResizeObserver(() => {
   clearTimeout(resize);
   resize = setTimeout(() => {
     fit.fit();
   }, 150);
 });
+resizeObserver.observe(container);
 let ticks = 0;
 let lastColumns = 80;
 let lastRows = 24;
@@ -330,6 +338,8 @@ window.addEventListener(
   'pagehide',
   () => {
     clearInterval(timer);
+    clearTimeout(resize);
+    resizeObserver.disconnect();
     revoke();
     terminal.dispose();
   },
@@ -355,6 +365,9 @@ const layoutActions = [
   ['maximize', 'maximize'],
   ['restore', 'restore'],
   ['focus-other', 'focus-other'],
+  ['show-all', 'show-all'],
+  ['move-earlier', 'move-earlier'],
+  ['move-later', 'move-later'],
 ] as const;
 const changeLayout = (action: TerminalViewAction) => {
   revoke();
@@ -367,25 +380,90 @@ const changeLayout = (action: TerminalViewAction) => {
 };
 for (const [id, action] of layoutActions)
   document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
-for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]'))
+const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-tab]')];
+const slot = Number(document.querySelector<HTMLElement>('main')!.dataset.slot);
+const heading = document.getElementById('pane-title')!;
+const nameInput = document.getElementById('pane-name') as HTMLInputElement;
+const columnChoice = document.getElementById('column-choice') as HTMLSelectElement;
+const feedback = document.getElementById('layout-feedback')!;
+let draggingOwnPane = false;
+heading.addEventListener('dragstart', (event) => {
+  draggingOwnPane = true;
+  event.dataTransfer?.setData('text/plain', String(slot));
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+});
+heading.addEventListener('dragend', () => {
+  draggingOwnPane = false;
+});
+for (const tab of tabs) {
+  tab.dataset.provider = tab.textContent ?? '';
   tab.addEventListener('click', () => changeLayout({ tab: Number(tab.dataset.tab) }));
+  tab.addEventListener('dragover', (event) => {
+    if (draggingOwnPane) event.preventDefault();
+  });
+  tab.addEventListener('drop', (event) => {
+    if (!draggingOwnPane) return;
+    event.preventDefault();
+    draggingOwnPane = false;
+    changeLayout({ moveTo: Number(tab.dataset.tab) });
+  });
+}
+columnChoice.addEventListener('change', () =>
+  changeLayout({ columns: Number(columnChoice.value) as TerminalLayoutState['columns'] }),
+);
+document.getElementById('rename-pane')!.addEventListener('submit', (event) => {
+  event.preventDefault();
+  changeLayout({ name: nameInput.value });
+});
 const splitSize = document.getElementById('split-size') as HTMLInputElement;
 splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
 const unsubscribeLayout = pane.onLayout((state) => {
-  for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]'))
-    tab.setAttribute(
-      'aria-pressed',
-      String(state.visible.length === 1 && state.visible[0] === Number(tab.dataset.tab)),
-    );
+  const strip = document.querySelector('.pane-tabs')!;
+  const order = state.order.map((index) => tabs.find((tab) => Number(tab.dataset.tab) === index)!);
+  const currentOrder = [...strip.children];
+  if (order.some((tab, index) => tab !== currentOrder[index])) {
+    const focused = document.activeElement;
+    for (const tab of order) strip.appendChild(tab);
+    if (focused instanceof HTMLButtonElement && tabs.includes(focused)) focused.focus();
+  }
+  for (const tab of tabs) {
+    const index = Number(tab.dataset.tab);
+    tab.setAttribute('aria-pressed', String(state.visible.includes(index)));
+    tab.dataset.active = String(index === state.active);
+    tab.textContent = state.names[index]
+      ? `${state.names[index]} · ${tab.dataset.provider}`
+      : tab.dataset.provider!;
+  }
+  heading.textContent = `${state.names[slot] || heading.dataset.slotName} · ${heading.dataset.provider}`;
+  if (document.activeElement !== nameInput) nameInput.value = state.names[slot] ?? '';
+  columnChoice.value = String(state.columns);
   splitSize.value = String(state.percent);
-  splitSize.disabled = state.visible.length !== 2;
+  splitSize.disabled =
+    state.visible.length !== 2 || (state.axis === 'columns' && state.columns === 1);
   document.getElementById('split-value')!.textContent = `${state.percent}%`;
   for (const axis of ['columns', 'rows'])
     document
       .getElementById(`split-${axis}`)!
-      .setAttribute('aria-pressed', String(state.visible.length === 2 && state.axis === axis));
-  (document.getElementById('maximize') as HTMLButtonElement).disabled = state.visible.length === 1;
-  (document.getElementById('restore') as HTMLButtonElement).disabled =
-    state.count < 2 || state.visible.length === 2;
+      .setAttribute('aria-pressed', String(state.axis === axis));
+  const focused = document.activeElement as HTMLElement | null;
+  (document.getElementById('maximize') as HTMLButtonElement).hidden = state.maximized === slot;
+  (document.getElementById('restore') as HTMLButtonElement).hidden = state.maximized === null;
+  if (focused?.hidden && ['maximize', 'restore'].includes(focused.id))
+    document.getElementById(focused.id === 'maximize' ? 'restore' : 'maximize')!.focus();
+  const position = state.order.indexOf(slot);
+  (document.getElementById('move-earlier') as HTMLButtonElement).disabled = position === 0;
+  (document.getElementById('move-later') as HTMLButtonElement).disabled =
+    position === state.count - 1;
+  if (
+    focused instanceof HTMLButtonElement &&
+    focused.disabled &&
+    ['move-earlier', 'move-later'].includes(focused.id)
+  )
+    document.getElementById(focused.id === 'move-earlier' ? 'move-later' : 'move-earlier')!.focus();
+  feedback.textContent = (state.persisted ? feedback.dataset.summary! : feedback.dataset.memory!)
+    .replaceAll('{{visible}}', String(state.visible.length))
+    .replaceAll('{{shown}}', String(state.shown.length))
+    .replaceAll('{{position}}', String(position + 1))
+    .replaceAll('{{count}}', String(state.count));
 });
 window.addEventListener('pagehide', unsubscribeLayout, { once: true });

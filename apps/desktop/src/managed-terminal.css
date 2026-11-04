@@ -291,3 +291,63 @@ button:disabled {
     flex-basis: 280px;
   }
 }
+
+.pane-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.pane-header .lifecycle {
+  grid-column: 1 / -1;
+}
+.pane-primary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pane-primary button {
+  font-size: 12px;
+}
+#pane-title[draggable] {
+  cursor: grab;
+}
+#pane-title:active {
+  cursor: grabbing;
+}
+.pane-tabs [data-active='true'] {
+  border-color: var(--orqst-neon);
+}
+#rename-pane {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-block: 8px;
+}
+#rename-pane label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+#pane-name,
+#column-choice {
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 6px;
+  min-height: 36px;
+  padding: 6px;
+  font: inherit;
+  max-width: 100%;
+}
+#column-choice:focus-visible {
+  outline: 2px solid var(--orqst-neon);
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .pane-header {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pane-primary {
+    grid-row: 2;
+  }
+}

@@ -25,6 +25,9 @@ import {
   terminalStyleURL,
 } from './terminal-policy.js';
 import { TerminalPanels } from './terminal-panels.js';
+import { terminalLayoutStore } from './terminal-layout-store.js';
+import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
+import type { TerminalLayoutPreferences } from './terminal-layout.js';
 import { authorizedTerminalSender } from './terminal-sender.js';
 import { terminalDocument } from './terminal-document.js';
 import { TerminalPreCoreFailure } from './terminal-selection.js';
@@ -49,7 +52,24 @@ export async function createManagedTerminals(
   let retiring = false;
   let retired = false;
   let initialized = false;
-  const panels = new TerminalPanels(window);
+  let layoutStore: ReturnType<typeof terminalLayoutStore> | undefined;
+  let initialLayout: TerminalLayoutPreferences | undefined;
+  try {
+    layoutStore = terminalLayoutStore(
+      app.getPath('userData'),
+      selection.map(({ config }) => terminalIdentity(config).terminalId),
+    );
+    initialLayout = layoutStore.load();
+  } catch {
+    /* Invalid/unavailable preferences never block owned terminals. */
+  }
+  const panels = new TerminalPanels(window, {
+    initial: initialLayout,
+    save(state) {
+      if (!layoutStore) throw new Error('Layout storage unavailable');
+      layoutStore.save(state);
+    },
+  });
   const views: WebContentsView[] = [];
   const viewActions = new Map<
     number,

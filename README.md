@@ -12,6 +12,17 @@ the Tauri observer preview. Native provider acceptance remains pending. See the
 [workflow and limits](docs/development/managed-agents-client.md#explicit-mentions-and-directed-permissions--2026-11-04)
 and [pinned component review](docs/research/mention-communication.md).
 
+## Retained multi-terminal workspace — 2026-11-04
+
+The existing Electron Terminal workspace now supports a retained 1–8-pane grid,
+one/two/three/adaptive columns, plain-text display names, heading drag reorder
+with keyboard alternatives, maximize/restore, hide/show and compact-window paging.
+Layout preferences persist privately by stable terminal UUID; changing layout
+preserves the live documents and scrollback and starts no CLI. Reopening preferences
+does not recover or duplicate a process. Tauri managed-terminal parity remains
+pending. See [workflow and exact limits](docs/development/terminal-workspace-layout.md)
+and the [pinned reuse decisions](docs/research/terminal-workspace-layout.md).
+
 ## Tauri 2 migration preview — 2026-11-04
 
 A separate Tauri 2 application now runs the existing React dashboard with a bundled

@@ -28,20 +28,24 @@ export function terminalDocument(options: {
   return `<!doctype html>
 <html lang="${escapeHTML(options.language)}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${text('title')} ${alias} · ${escapeHTML(options.provider)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head>
-<body><main data-start-profile="${escapeHTML(options.startProfile)}">
+<body><main data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}">
 <header class="pane-header">
-  <div class="pane-heading"><span class="eyebrow">${text('studioLabel')}</span><h1 title="${alias}">${slotName(options.slot)} · ${escapeHTML(options.provider)}</h1></div>
+  <div class="pane-heading"><span class="eyebrow">${text('studioLabel')}</span><h1 id="pane-title" data-provider="${escapeHTML(options.provider)}" data-slot-name="${slotName(options.slot)}" title="${alias}" draggable="true">${slotName(options.slot)} · ${escapeHTML(options.provider)}</h1></div>
+  <div class="pane-primary"><button id="maximize">${text('maximize')}</button><button id="restore">${text('restore')}</button><button id="hide-pane" title="${text('hideHelp')}">${text('hidePane')}</button></div>
   <p id="lifecycle" class="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}"`).join(' ')}>${text('prepared')}</p>
 </header>
 <p class="project" title="${escapeHTML(options.project)}"><span>${text('projectLabel')}</span> <bdi>${escapeHTML(options.project)}</bdi></p>
 <nav class="pane-navigation" aria-label="${text('navigation')}">
   <div class="pane-tabs">${options.providers.map((provider, slot) => `<button id="tab-${String.fromCharCode(97 + slot)}" data-tab="${slot}" aria-pressed="${slot === options.slot}">${slotName(slot)} · ${escapeHTML(provider)}</button>`).join('')}</div>
-  <button id="dashboard">${text('dashboard')}</button><button id="hide-pane" title="${text('hideHelp')}">${text('hidePane')}</button>
+  <button id="dashboard">${text('dashboard')}</button>
 </nav>
-<div class="layout-toolbar"><nav aria-label="${text('layout')}">${['split-columns', 'split-rows'].map((action) => `<button id="${action}"${!pair ? ' disabled' : ''}>${text(action)}</button>`).join('')}</nav>
+<div class="layout-toolbar"><nav aria-label="${text('layout')}">${['split-columns', 'split-rows', 'show-all'].map((action) => `<button id="${action}"${!pair ? ' disabled' : ''}>${text(action)}</button>`).join('')}</nav>
 <details class="layout-options"><summary>${text('layout')}</summary>
-  <nav aria-label="${text('layout')}">${['maximize', 'restore', 'focus-other'].map((action) => `<button id="${action}"${!pair && action !== 'maximize' ? ' disabled' : ''}>${text(action)}</button>`).join('')}
+  <nav aria-label="${text('layout')}">${['focus-other', 'move-earlier', 'move-later'].map((action) => `<button id="${action}"${!pair && action !== 'maximize' ? ' disabled' : ''}>${text(action)}</button>`).join('')}
   <label class="split-size">${text('splitSize')}<input id="split-size" type="range" min="25" max="75" step="1" value="50"${!pair ? ' disabled' : ''}><output id="split-value">50%</output></label></nav>
+  <label class="column-choice">${text('columns')} <select id="column-choice">${[0, 1, 2, 3].map((value) => `<option value="${value}"${value === 2 ? ' selected' : ''}>${value === 0 ? text('adaptive') : value}</option>`).join('')}</select></label>
+  <form id="rename-pane"><label>${text('displayName')} <input id="pane-name" maxlength="48" required autocomplete="off"></label><button type="submit">${text('rename')}</button></form>
+  <p id="layout-feedback" role="status" data-summary="${text('layoutSummary')}" data-memory="${text('layoutMemoryOnly')}"></p>
   <p class="muted">${text('layoutHelp')}</p>
 </details></div>
 <section class="process-controls" aria-label="${text('processControls')}">

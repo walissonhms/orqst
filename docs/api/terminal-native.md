@@ -293,3 +293,21 @@ canCreate/canSelect and busy. It exposes no filesystem paths, grant or CLI opera
 Native sender/focus/gesture validation and the existing native review chain are mandatory.
 See [Studio preparation security review](../development/studio-preparation.md#security-review).
 This is not an HTTP or WebSocket execution API.
+
+## Layout-only native IPC — 2026-11-04
+
+The dedicated terminal preload exposes `orqstTerminalPane.show` only to the reserved
+native document. Its existing user-activation, exact-sender, main-frame, native-focus
+and visibility guards still precede `orqst:terminal-view`. New layout-only messages
+are `show-all`, `move-earlier`, `move-later`, `{columns:0|1|2|3}` (0 = adaptive),
+`{moveTo:slot}` and `{name:string}` (trimmed, 1–48 characters, no Unicode control,
+format or surrogate characters). Objects accept exactly one field. Slots remain
+integers 0–7 and must exist; move changes only the sender's place in the display
+order. It accepts no path, process operation, identity or authorization proof.
+
+`orqst:terminal-layout` now reports the display projection: axis, percent, column
+preference, slot order, open group (`shown`), physically visible page (`visible`),
+selected slot (`active`), maximized slot or null, display names, prepared-document
+count and whether preferences were saved. These are view facts, never agent task
+states. A false save result is shown as memory-only operation. No REST/WS shape,
+terminal-native execution request or Core ownership contract changes.
