@@ -39,7 +39,7 @@ export const terminalPreparationCatalogSchema = z.strictObject({
             z.strictObject({
               id: digest,
               label: z.string().min(1).max(160),
-              source: z.enum(['cli-default', 'native-config', 'cli-cache']),
+              source: z.enum(['cli-default', 'native-config', 'cli-cache', 'official-alias']),
               isDefault: z.boolean(),
               availability: z.literal('unverified'),
             }),
