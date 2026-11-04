@@ -93,6 +93,24 @@ export class TauriFeatureService {
     this.activeFeatureId = featureId;
   }
 
+  /** Refresh the retained view after native creation, fenced by the original presentation. */
+  async enrolled(slot: number, presentation: number): Promise<boolean> {
+    if (this.busy || !this.initialized) return false;
+    this.busy = true;
+    try {
+      await this.refresh();
+      await this.present(this.activeFeatureId, !this.layout.snapshot().suspended, presentation);
+      if (presentation + 1 !== this.layout.presentationRevision()) return false;
+      this.generation++;
+      this.changed(this.snapshot());
+      return this.layout.open(slot);
+    } catch {
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
   private snapshot(): FeatureNativeSnapshot {
     const value = featureNativeSnapshotSchema.parse({
       contractVersion: 1,

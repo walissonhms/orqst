@@ -450,7 +450,7 @@ heading.addEventListener('dragstart', (event) => {
 heading.addEventListener('dragend', () => {
   draggingOwnPane = false;
 });
-for (const tab of tabs) {
+function bindTab(tab: HTMLButtonElement) {
   tab.dataset.provider = tab.textContent ?? '';
   tab.addEventListener('click', () => changeLayout({ tab: Number(tab.dataset.tab) }));
   tab.addEventListener('dragover', (event) => {
@@ -463,6 +463,7 @@ for (const tab of tabs) {
     changeLayout({ moveTo: Number(tab.dataset.tab) });
   });
 }
+for (const tab of tabs) bindTab(tab);
 columnChoice.addEventListener('change', () =>
   changeLayout({ columns: Number(columnChoice.value) as TerminalLayoutState['columns'] }),
 );
@@ -475,6 +476,18 @@ splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSi
 const unsubscribeLayout = pane.onLayout((state) => {
   if (!state.visible.includes(slot)) revoke();
   const strip = document.querySelector('.pane-tabs')!;
+  // Add navigation controls in place; never reload an existing xterm document.
+  for (const index of state.order) {
+    if (tabs.some((tab) => Number(tab.dataset.tab) === index)) continue;
+    const tab = document.createElement('button');
+    tab.dataset.tab = String(index);
+    tab.textContent = `T-${String(index + 1).padStart(3, '0')}`;
+    bindTab(tab);
+    tabs.push(tab);
+  }
+  for (const id of ['split-columns', 'split-rows', 'focus-other', 'show-all'])
+    (document.getElementById(id) as HTMLButtonElement).disabled = state.order.length < 2;
+
   const order = state.order.map((index) => tabs.find((tab) => Number(tab.dataset.tab) === index)!);
   const currentOrder = [...strip.children];
   if (order.some((tab, index) => tab !== currentOrder[index])) {

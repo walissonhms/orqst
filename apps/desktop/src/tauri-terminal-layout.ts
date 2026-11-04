@@ -23,7 +23,7 @@ export class TauriTerminalLayout {
   private saveError = false;
 
   constructor(
-    private readonly count: number,
+    private count: number,
     private preferences: {
       initial?: TerminalLayoutPreferences;
       save(state: TerminalLayoutPreferences): void | Promise<void>;
@@ -41,6 +41,13 @@ export class TauriTerminalLayout {
       maximized: null,
       names: Array.from({ length: count }, () => ''),
     };
+  }
+
+  /** Reserve the confirmed slot without publishing before its native Webview exists. */
+  append(slot: number): void {
+    if (slot !== this.count || slot >= 8) throw new Error('Invalid layout append');
+    this.count++;
+    this.state.names.push('');
   }
 
   snapshot(): TerminalLayoutState {

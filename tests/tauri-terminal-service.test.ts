@@ -66,7 +66,7 @@ function setup() {
     await pending;
     return terminalNativeReplySchema.parse(messages.findLast((m) => m.id === id)?.value);
   }
-  return { service, messages, starts, writes, signals, request };
+  return { service, supervisors, messages, starts, writes, signals, request };
 }
 
 test('Tauri pipe reuses signed native start/attach/input and exposes only public replies', async () => {
@@ -427,4 +427,68 @@ test('selected operational Open uses one native confirmation and distinct broker
   } finally {
     s.service.close();
   }
+});
+
+test('confirmed append retains old signed grants and process identities; new pane has no authority', async () => {
+  const s = setup();
+  try {
+    const started = await s.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    assert.equal(started.status, 'ok');
+    if (started.status !== 'ok' || !started.instanceId)
+      throw new Error('Missing original instance');
+    const instanceId = started.instanceId;
+    for (const action of ['attach', 'input'] as const)
+      assert.equal((await s.request(0, { version: 1, action, instanceId })).status, 'ok');
+    assert.throws(() => s.service.append(2, s.supervisors[1]!), /Invalid/);
+    assert.equal(s.service.beginMetadata(), true);
+    const confirmations = s.messages.filter((m) => m.kind === 'confirm').length;
+    s.service.append(2, s.supervisors[1]!);
+    assert.throws(() => s.service.append(2, s.supervisors[1]!), /Invalid/);
+    s.service.endMetadata();
+    assert.equal(s.messages.filter((m) => m.kind === 'confirm').length, confirmations);
+    assert.deepEqual(s.starts, [1, 0]);
+    assert.equal(
+      (
+        await s.request(0, {
+          version: 1,
+          action: 'write',
+          instanceId,
+          sequence: 0,
+          text: 'preserved lease',
+        })
+      ).status,
+      'ok',
+    );
+    assert.deepEqual(s.writes[0], ['preserved lease']);
+    assert.equal(
+      (
+        await s.request(2, {
+          version: 1,
+          action: 'write',
+          instanceId,
+          sequence: 1,
+          text: 'cross-slot',
+        })
+      ).status,
+      'denied',
+    );
+    assert.deepEqual(s.signals, []);
+    await s.service.receive({ kind: 'close', slot: 2 });
+    assert.equal(
+      (
+        await s.request(0, {
+          version: 1,
+          action: 'write',
+          instanceId,
+          sequence: 1,
+          text: 'old pane survives',
+        })
+      ).status,
+      'ok',
+    );
+    assert.deepEqual(s.starts, [1, 0]);
+  } finally {
+    s.service.close();
+  }
+  assert.throws(() => s.service.append(3, s.supervisors[1]!), /Invalid/);
 });
