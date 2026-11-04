@@ -1129,6 +1129,7 @@
     "finalized": "The old administrative operation committed and its exact old controls were removed. This does not guarantee global capacity or authorize automatic Open.",
     "finalized_controls_preserved": "The old administrative operation committed. Different or future controls were preserved; global capacity is not declared available.",
     "aborted": "Administrative abort completed. The original reservation and every journal remain preserved.",
-    "unconfirmed": "The requested phase is blocked or its effects are uncertain. Preserve the reservation and all signed evidence. No automatic retry occurred."
+    "unconfirmed": "The requested phase is blocked or its effects are uncertain. Preserve the reservation and all signed evidence. No automatic retry occurred.",
+    "enrollment_binding_changed": "The frozen source binding of an enrolled member no longer matches enrollment (inspection/enrollment_binding_changed). Preserve the reservation and all signed evidence. No automatic retry occurred."
   }
 }

@@ -4,7 +4,7 @@ import {
   ADMIN_FRAME_BYTES,
   ADMIN_SESSION_BYTES,
 } from './offline-recovery-wire.js';
-import { TauriOfflineRecovery } from './tauri-offline-recovery.js';
+import { administrativeBlockedOutcome, TauriOfflineRecovery } from './tauri-offline-recovery.js';
 
 process.umask(0o077);
 async function main() {
@@ -67,13 +67,12 @@ async function main() {
               status: 'done',
               outcome,
             }),
-          () =>
+          (error: unknown) =>
             send({
               kind: 'complete',
               session: pipe.session,
               id: 'id' in value ? value.id : null,
-              status: 'blocked',
-              outcome: 'unconfirmed',
+              ...administrativeBlockedOutcome(error),
             }),
         )
         .finally(() => {

@@ -36,6 +36,16 @@ import { managedOpenCodeConfigSchema } from './opencode-profile.js';
 import { terminalEnrollmentFile } from './enrollment-files.js';
 
 export const RECOVERY_LIMIT = 64 * 1024 * 1024;
+
+/** A frozen enrollment cannot be rebound to today's source identities. No private detail. */
+export class OfflineEnrollmentBindingChanged extends Error {
+  readonly stage = 'inspection';
+  readonly code = 'enrollment_binding_changed';
+  constructor() {
+    super('Recovery manifest enrollment binding');
+  }
+}
+
 function directoryNames(directory: string) {
   terminalDirectory(directory, true);
   const handle = opendirSync(directory);
@@ -330,10 +340,11 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
       throw new Error('Recovery lifecycle/rollback uncertainty');
     const binding = terminalEnrollmentFile(path, config);
     const intent = intents.find((entry) => entry.member.slot === slot);
+    if (intent && intent.member.bindingDigest !== binding.bindingDigest)
+      throw new OfflineEnrollmentBindingChanged();
     if (
       intent &&
-      (intent.member.bindingDigest !== binding.bindingDigest ||
-        intent.member.terminalId !== config.identity.terminalId ||
+      (intent.member.terminalId !== config.identity.terminalId ||
         intent.member.provider !== (config.version === 1 ? 'codex' : config.provider) ||
         intent.member.workspaceId !== stableId('workspace', config.project) ||
         intent.member.workspaceId !== config.preparation?.workspaceId ||

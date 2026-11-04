@@ -2,6 +2,7 @@ import { sign } from 'node:crypto';
 import { dirname, basename } from 'node:path';
 import { z } from 'zod';
 import { terminalDirectory } from '../../../packages/core/src/terminal/codex-profile.js';
+import { OfflineEnrollmentBindingChanged } from '../../../packages/core/src/terminal/offline-recovery-files.js';
 import {
   administrativeRecoveryBytes,
   administrativeIntentBytes,
@@ -30,6 +31,17 @@ export type AdministrativeOutcome =
   | 'finalized'
   | 'finalized_controls_preserved'
   | 'aborted';
+
+/** Only a typed local refusal can contribute diagnostic fields; never serialize an error. */
+export function administrativeBlockedOutcome(error: unknown) {
+  return {
+    status: 'blocked' as const,
+    outcome: 'unconfirmed' as const,
+    ...(error instanceof OfflineEnrollmentBindingChanged
+      ? { failure: { stage: 'inspection' as const, code: 'enrollment_binding_changed' as const } }
+      : {}),
+  };
+}
 
 /** Fixed native composition; deliberately imports neither managed Core nor observer Store. */
 export class TauriOfflineRecovery {

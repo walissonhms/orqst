@@ -373,8 +373,21 @@ fn challenge_frame(frame: &Value, action: &str) -> bool {
             .all(|key| challenge[*key] == binding["intent"][*key])
 }
 fn completion_outcome(value: &Value, action: &str) -> bool {
+    let fields = ["kind", "session", "id", "status", "outcome"];
+    let mut diagnosed = fields.to_vec();
+    diagnosed.push("failure");
+    if !exact(value, &fields) && !exact(value, &diagnosed) {
+        return false;
+    }
     if value["status"] == "blocked" {
-        return value["outcome"] == "unconfirmed";
+        return value["outcome"] == "unconfirmed"
+            && (exact(value, &fields)
+                || (exact(&value["failure"], &["stage", "code"])
+                    && value["failure"]["stage"] == "inspection"
+                    && value["failure"]["code"] == "enrollment_binding_changed"));
+    }
+    if !exact(value, &fields) {
+        return false;
     }
     value["status"] == "done"
         && match action {
@@ -613,8 +626,7 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                     if let Some(child) = state.child.as_mut() {
                         child.write(format!("{answer}\n").as_bytes())?;
                     }
-                } else if exact(&value, &["kind", "session", "id", "status", "outcome"])
-                    && value["kind"] == "complete"
+                } else if value["kind"] == "complete"
                     && value["session"] == session
                     && value["id"] == id
                     && completion_outcome(&value, &action)
@@ -630,9 +642,19 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                         },
                         Effects::Possible,
                     );
+                    let message = if value["failure"]["code"] == "enrollment_binding_changed" {
+                        diagnostic.record(
+                            Stage::Inspection,
+                            Outcome::EnrollmentBindingChanged,
+                            Effects::Possible,
+                        );
+                        text("enrollment_binding_changed")
+                    } else {
+                        text(value["outcome"].as_str().unwrap())
+                    };
                     if current(app, window, generation, deadline) {
                         app.dialog()
-                            .message(text(value["outcome"].as_str().unwrap()))
+                            .message(message)
                             .title(text("title"))
                             .parent(window)
                             .blocking_show();
@@ -699,8 +721,34 @@ mod tests {
 
 #[cfg(test)]
 mod approval_wire_tests {
-    use super::{challenge_frame, review_frame};
+    use super::{challenge_frame, completion_outcome, review_frame};
     use serde_json::{json, Value};
+    #[test]
+    fn completion_diagnostics_are_exact_allowlisted_and_never_success() {
+        let base = json!({"kind":"complete","session":"SYNTHETIC","id":1,
+            "status":"blocked","outcome":"unconfirmed"});
+        assert!(completion_outcome(&base, "capture"));
+        let mut diagnosed = base.clone();
+        diagnosed["failure"] = json!({"stage":"inspection","code":"enrollment_binding_changed"});
+        assert!(completion_outcome(&diagnosed, "capture"));
+        for key in ["stage", "code", "extra"] {
+            let mut changed = diagnosed.clone();
+            changed["failure"][key] = json!("/SYNTHETIC/private-error");
+            assert!(!completion_outcome(&changed, "capture"));
+        }
+        for failure in [Value::Null, json!({}), json!("SYNTHETIC")] {
+            let mut changed = diagnosed.clone();
+            changed["failure"] = failure;
+            assert!(!completion_outcome(&changed, "capture"));
+        }
+        diagnosed["status"] = json!("done");
+        diagnosed["outcome"] = json!("captured");
+        assert!(!completion_outcome(&diagnosed, "capture"));
+        diagnosed.as_object_mut().unwrap().remove("failure");
+        assert!(completion_outcome(&diagnosed, "capture"));
+        diagnosed["extra"] = json!("SYNTHETIC");
+        assert!(!completion_outcome(&diagnosed, "capture"));
+    }
     fn frame() -> Value {
         let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
         let intent = json!({"domain":"orqst.administrative-recovery","version":2,

@@ -1129,6 +1129,7 @@
     "finalized": "A operação administrativa antiga foi commitada e seus controles antigos exatos foram removidos. Isso não garante capacidade global nem autoriza Open automático.",
     "finalized_controls_preserved": "A operação administrativa antiga foi commitada. Controles diferentes ou futuros foram preservados; a capacidade global não é declarada disponível.",
     "aborted": "O cancelamento administrativo foi concluído. A reserva original e todos os journals permanecem preservados.",
-    "unconfirmed": "A fase solicitada está bloqueada ou seus efeitos são incertos. Preserve a reserva e todas as evidências assinadas. Não houve repetição automática."
+    "unconfirmed": "A fase solicitada está bloqueada ou seus efeitos são incertos. Preserve a reserva e todas as evidências assinadas. Não houve repetição automática.",
+    "enrollment_binding_changed": "O vínculo congelado das fontes de um membro inscrito não corresponde mais ao enrollment (inspection/enrollment_binding_changed). Preserve a reserva e todas as evidências assinadas. Não houve repetição automática."
   }
 }

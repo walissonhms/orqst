@@ -82,6 +82,15 @@ safe integers; no pipelining, queued second action or respawn is accepted.
   `finalized_controls_preserved`; `unconfirmed` accompanies a blocked result.
   Finalization concerns the old operation only, never global capacity.
   No raw error, path, captured content or key is logged.
+  A typed frozen-enrollment source mismatch adds only
+  `failure:{stage:'inspection',code:'enrollment_binding_changed'}` to the blocked
+  completion. Native accepts exactly that pair and those keys, records
+  `inspection/enrollment_binding_changed` in the bounded allowlisted diagnostic
+  vocabulary, and displays the localized reason. Unknown exceptions keep the
+  generic completion; error messages, stacks and arbitrary error fields never
+  enter the pipe or diagnostic sink. A diagnosed completion remains blocked with
+  unconfirmed effects; it grants no retry, adoption, release or source rebinding.
+  Completion with a failure attached can never be accepted as success.
 
 Complete detail is at most **64 KiB UTF-8**, frame **128 KiB**, cumulative output
 **512 KiB**, queued output **128 KiB**. Input buffering is **16 KiB**, with a
