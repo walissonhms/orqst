@@ -158,19 +158,44 @@ export function discoverTerminalModels(
         const value = z.object({ model: z.unknown().optional() }).parse(JSON.parse(text));
         add(value.model, 'native-config');
         if (provider === 'opencode') {
+          const group = z.record(
+            z.string(),
+            z.object({
+              models: z
+                .record(z.string(), z.object({ disabled: z.boolean().optional() }))
+                .optional(),
+            }),
+          );
           const configured = z
             .object({
-              provider: z
-                .record(
+              // 2.2.5 accepts native V2 fields and migrates legacy provider maps.
+              providers: group.optional(),
+              provider: group.optional(),
+              model: z
+                .union([
                   z.string(),
-                  z.object({ models: z.record(z.string(), z.unknown()).optional() }),
-                )
+                  z.object({
+                    providerID: z.string(),
+                    model: z.string(),
+                    variant: z.string().optional(),
+                  }),
+                ])
                 .optional(),
             })
             .parse(JSON.parse(text));
-          for (const [providerId, configuration] of Object.entries(configured.provider ?? {}))
-            for (const modelId of Object.keys(configuration.models ?? {}))
-              add(`${providerId}/${modelId}`, 'native-config');
+          if (configured.model && typeof configured.model !== 'string') {
+            const chosen = configured.model;
+            add(
+              `${chosen.providerID}/${chosen.model}${chosen.variant ? `#${chosen.variant}` : ''}`,
+              'native-config',
+            );
+          }
+          for (const [providerId, configuration] of Object.entries({
+            ...configured.provider,
+            ...configured.providers,
+          }))
+            for (const [modelId, model] of Object.entries(configuration.models ?? {}))
+              if (!model.disabled) add(`${providerId}/${modelId}`, 'native-config');
         }
       }
     } catch {

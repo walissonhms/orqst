@@ -31,6 +31,8 @@ workspace/Feature binding, opaque catalogue/model schemas, bounded passive sourc
 reader and model evidence extensions to profiles. Existing legacy manifests omit
 these optional extensions and retain their prior contract.
 
+OpenCode's [config schema](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/schema/src/config.ts), [model reference](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/schema/src/config/model.ts), [discovery](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config/discovery.ts) and [normalizer](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config/normalize.ts) were also inspected: V2 `providers`, string/object `model` references and legacy `provider` migration are distinct. The passive reader accepts their explicit bounded identifiers, excludes configured disabled models, and leaves dynamic policy/credential resolution to the native CLI.
+
 No new dependency, runtime/session manager, credential backend, automatic login,
 provider execution or provider DB access is introduced. New tests use synthetic
 source files and pin substitutions confined to test bundles; they never execute
