@@ -408,3 +408,10 @@ same app/Core/process/listener preserved. Real NSApp deactivation was not execut
 before the runner deadline; final both-affirmative shutdown and integrated V6
 acceptance remain pending. Build/clippy and executable tests do not promote those
 unobserved native steps.
+
+The native increment is now integrated over V6 `d79745f` through `ee4e9be`,
+with an additional attempt/parent-bound focus-sample regression. Integrated checks
+passed: 717 Node tests, 18 Rust tests, lint/typecheck/build, Clippy with warnings
+denied and the reduced-symbol native executable build. These are code/automated
+checks; no new native UI/provider acceptance was run. Feature facade/UI integration
+and the final native deactivation/Quit steps remain open.

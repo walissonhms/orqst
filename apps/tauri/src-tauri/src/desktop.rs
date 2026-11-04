@@ -44,7 +44,10 @@ struct QuitReview {
     revoked: bool,
 }
 impl QuitReview {
-    fn observe(&mut self, owns_key: bool, owns_sheet: bool) {
+    fn observe(&mut self, token: u64, parent: &str, owns_key: bool, owns_sheet: bool) {
+        if self.token != token || self.parent != parent {
+            return;
+        }
         self.revoked |= !owns_key;
         self.shown |= !self.revoked && owns_sheet;
     }
@@ -263,8 +266,8 @@ pub(crate) fn quit_key_changed(app: &tauri::AppHandle) {
         .unwrap()
         .quit_review
         .as_ref()
-        .map(|review| review.parent.clone());
-    let Some(parent) = parent else { return };
+        .map(|review| (review.review.token, review.parent.clone()));
+    let Some((token, parent)) = parent else { return };
     let focus = crate::terminal::quit_window_focus(&parent);
     if let Some(review) = app
         .state::<Desktop>()
@@ -275,7 +278,12 @@ pub(crate) fn quit_key_changed(app: &tauri::AppHandle) {
         .as_mut()
     {
         let review = &mut review.review;
-        review.observe(focus.is_some_and(|f| f.0), focus.is_some_and(|f| f.1));
+        review.observe(
+            token,
+            parent.label(),
+            focus.is_some_and(|f| f.0),
+            focus.is_some_and(|f| f.1),
+        );
         if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
             eprintln!(
                 "ORQST_QUIT_PRESENTATION token={} shown={} revoked={}",
@@ -723,13 +731,31 @@ mod quit_tests {
             revoked: false,
         };
         assert!(!review.accepted(7, "terminal-workspace"));
-        review.observe(true, true);
+        review.observe(7, "terminal-workspace", true, true);
         assert!(review.accepted(7, "terminal-workspace"));
         assert!(!review.accepted(8, "terminal-workspace"));
         assert!(!review.accepted(7, "main"));
-        review.observe(false, false); // App deactivation, unrelated key window or unavailable metadata.
-        review.observe(true, true); // Returning to the same sheet cannot restore it.
+        review.observe(7, "terminal-workspace", false, false); // App deactivation, unrelated key window or unavailable metadata.
+        review.observe(7, "terminal-workspace", true, true); // Returning cannot restore it.
         assert!(!review.accepted(7, "terminal-workspace"));
+    }
+
+    #[test]
+    fn a_focus_sample_cannot_cross_quit_attempts_or_parent_windows() {
+        let mut review = super::QuitReview {
+            token: 8,
+            parent: "managed-agents".into(),
+            shown: false,
+            revoked: false,
+        };
+        // Native sampling releases the state lock; an old callback cannot mark a
+        // replacement review as presented or revoke it using the old window.
+        review.observe(7, "managed-agents", true, true);
+        review.observe(8, "terminal-workspace", false, false);
+        assert!(!review.shown);
+        assert!(!review.revoked);
+        review.observe(8, "managed-agents", true, true);
+        assert!(review.accepted(8, "managed-agents"));
     }
 
     #[test]

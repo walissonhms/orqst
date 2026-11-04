@@ -23,7 +23,8 @@
 - Expose Managed agents through a submenu and route app-menu Quit through the
   existing two-host consent gates, preserving tray and close/background policy.
 - Bind both Quit gates to visible owned windows, deny unknown/default results and
-  fence late layout presentation until both reviews finish.
+  fence late layout presentation until both reviews finish. Bind native focus samples
+  to the captured attempt and parent before updating presentation evidence.
 - Record owned fixture launch metadata and bounded private focus evidence. Native
   synthetic acceptance remains separate from real providers and integrated V6.
 

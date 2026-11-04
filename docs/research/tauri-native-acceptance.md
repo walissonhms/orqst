@@ -169,3 +169,14 @@ alone therefore does not close the observed defect. The native notification obse
 now also fences each Quit review by its own token and exact parent/sheet presentation;
 revocation survives return. The origin of the unsolicited NSAlert result remains
 unproven, and the latest fence must receive native revalidation before Quit acceptance.
+
+### Integration review — 2026-11-04
+
+The integrated review keeps that existing presentation guard. The native key-window
+callback samples AppKit outside the Desktop state lock; it now captures the attempt
+token along with its retained parent and applies the sample only to that same pair.
+A regression covers a sample from an older attempt or different parent without
+marking the replacement review shown or revoked. This is a guard found by source
+review, not a reproduced native failure. The Anywh confirmation reviewed above has
+no equivalent attempt-bound authority to transplant. No dependency or copied source
+is added, and this unit coverage does not close the pending native Quit checks.

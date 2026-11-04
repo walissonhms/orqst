@@ -102,3 +102,10 @@ the [reuse review](../research/v6-feature-foundation.md).
       on the prior baseline does not accept Workspace/Feature workflows.
 
 See [the exact native evidence boundaries](../development/tauri-native-coexistence.md).
+
+Integration over V6 `d79745f` retained both sets of changes. A native focus sample
+is additionally bound to its captured attempt and parent before updating Quit
+presentation. Integrated checks passed: 717 Node tests, 29 focused broker/service
+tests, 18 Rust tests, lint/typecheck/build, Clippy and native executable compilation.
+No new native UI, packaged or real-provider acceptance is claimed. The unchecked
+items above remain open; Feature UI hooks are the next isolated integration.

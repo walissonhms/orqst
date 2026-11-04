@@ -1349,3 +1349,8 @@ parent deny exit. Input authority is revoked before review, without stopping an
 owned process; Cancel resets both partial authorizations and renews no authority.
 Late layout presentation is fenced while either gate is pending/authorized.
 This does not prove Dock/logout or final integrated native acceptance.
+
+The native focus callback captures the Quit token and retained parent before
+sampling AppKit outside the state lock. Applying that sample requires the same
+token and parent, so a delayed sample cannot mark a replacement gate as presented
+or revoke it using another window's metadata. This adds no retry or authority.

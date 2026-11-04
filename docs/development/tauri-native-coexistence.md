@@ -419,3 +419,22 @@ attempt/parent, missing presentation, default/unknown results and irreversible
 revocation; these are unit evidence. All 17 final Rust tests passed after the last native fixture ended. `cargo fmt --check` was also attempted and failed on existing
 inline Rust style and changed blocks; no repository-wide formatting rewrite was
 made. No real observer ingestion was changed or validated.
+
+### Integrated V6 base checks — 2026-11-04
+
+Sources `13f511c`, `129718b`, `ce0fbb3` and `499d089` were integrated over V6
+main `d79745f` as `5d68f20`, `60e180f`, `2b29cfb` and `ee4e9be`. Both V6
+documentation and native evidence were retained when resolving documentation
+conflicts. The terminal and broker source blobs remain `aa2b23dc` and `38ea9794`.
+The integration review additionally binds a focus sample to the token and retained
+parent captured before native sampling; the regression rejects stale samples from
+another attempt/window. This review guard is not a reproduced native failure.
+
+On this integrated source, 717 Node tests passed with file concurrency two,
+including the 29 broker/service cases also run separately. All 18 Rust tests,
+Clippy with warnings denied, lint, typecheck, the regular build and a reduced-symbol
+`cargo build --locked --features custom-protocol` passed. The existing target was
+reused with the flags above. No new app bundle, native UI run, packaged acceptance,
+real provider or quarantine reconciliation was performed in this integration.
+The earlier `cargo fmt --check` failure remains recorded above. Feature facade/UI
+hooks and the final native deactivation/Quit steps remain incomplete.
