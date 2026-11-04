@@ -1,3 +1,4 @@
+import { terminalPreparationContextSchema } from '../../../packages/core/src/terminal/preparation-context.js';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
@@ -96,6 +97,10 @@ async function main() {
           })) === true,
         commit: async () => (await ask({ kind: 'commit' })) === true,
       },
+      Date.now,
+      process.argv[4]
+        ? terminalPreparationContextSchema.parse(JSON.parse(process.argv[4]))
+        : undefined,
     );
     if (live) send({ kind: 'complete', ...result });
   } finally {
