@@ -486,6 +486,8 @@ test('crash recovery preserves identities and queued work; fences stale writer a
   const f = setup(file);
   let recovered: Store | undefined;
   try {
+    f.b.terminalId = randomUUID();
+    f.journal.transaction((tx) => tx.savePane(f.b));
     const client = f.authorize();
     const one = f.request();
     const two = f.request();
@@ -509,6 +511,7 @@ test('crash recovery preserves identities and queued work; fences stale writer a
     const panes = journal.transaction((tx) => tx.panes());
     assert.equal(panes[1]?.paneId, f.b.paneId);
     assert.equal(panes[1]?.displayId, f.b.displayId);
+    assert.equal(panes[1]?.terminalId, f.b.terminalId);
     assert.equal(panes[1]?.state, 'unavailable');
     const service = new PaneCommunication(journal, f.resolver, f.now);
     const regrant = service.authorize({
@@ -789,3 +792,55 @@ test(
     assert.equal(sends, communicationLimits.activeTasks);
   }),
 );
+
+test('stable terminal metadata cannot enroll twice, recover an unavailable binding or become a message target', () => {
+  const f = setup();
+  try {
+    const terminalId = randomUUID();
+    const enroll = () =>
+      f.service.registerPane({
+        ...f.a,
+        terminalId,
+        binding: { ...f.a.binding!, instanceId: randomUUID() },
+      });
+    const first = enroll();
+    assert.equal(first.terminalId, terminalId);
+    assert.throws(enroll, /already registered/);
+    f.service.setPaneState(first.paneId, 'unavailable');
+    assert.throws(enroll, /already registered/);
+    assert.throws(() => f.service.resolvePane(first.workspaceId, terminalId));
+    assert.throws(() =>
+      f.service.authorize({
+        actorId: 'synthetic-agent',
+        workspaceId: first.workspaceId,
+        sourcePaneId: terminalId,
+        targetPaneIds: [f.b.paneId],
+        expiresAt: 200000,
+      }),
+    );
+    f.service.setPaneState(first.paneId, 'closed'); // Explicit synthetic owner exit; never inferred.
+    const next = enroll();
+    assert.equal(next.terminalId, first.terminalId);
+    assert.notEqual(next.paneId, first.paneId);
+    assert.notEqual(next.binding?.instanceId, first.binding?.instanceId);
+    assert.throws(
+      () => f.service.enrollAdapter(next.paneId, first.binding!, {} as CommunicationAdapter),
+      /ownership binding/,
+    );
+    assert.throws(
+      () =>
+        f.service.registerPane({
+          ...f.b,
+          terminalId: randomUUID(),
+          ownership: 'external',
+          binding: null,
+          capabilities: Object.fromEntries(
+            Object.keys(capabilities).map((key) => [key, false]),
+          ) as typeof capabilities,
+        }),
+      /managed ownership/,
+    );
+  } finally {
+    f.store.close();
+  }
+});

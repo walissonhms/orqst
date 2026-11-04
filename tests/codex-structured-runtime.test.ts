@@ -33,6 +33,7 @@ import {
   terminalDigest,
   type TerminalChallenge,
 } from '../packages/core/src/terminal/authority.js';
+import { terminalIdentity } from '../packages/core/src/terminal/identity.js';
 import {
   managedCodexSettings,
   terminalExecutableSha256,
@@ -412,11 +413,14 @@ test('native starts require exact one-use proof, distinct state and capacity; st
   const f = fixture();
   try {
     const slot = f.config('slot-a');
+    slot.config.identity = { terminalId: randomUUID() };
+    writeFileSync(slot.file, JSON.stringify(slot.config), { mode: 0o600 });
     const prepared = f.prepare(slot.file, 'A');
     await assert.rejects(f.runtime.launch(prepared.instanceId, {}), /authorization|proof/);
     assert.equal(f.transports.length, 0);
     const pane = await f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge));
     assert.ok(pane.binding);
+    assert.equal(pane.terminalId, terminalIdentity(slot.config).terminalId);
     await assert.rejects(
       f.runtime.launch(prepared.instanceId, f.proof(prepared.challenge)),
       /already used/,
@@ -440,6 +444,9 @@ test('native starts require exact one-use proof, distinct state and capacity; st
     const next = await f.launch(slot.file, 'A-new-process');
     assert.equal(next.pane.displayId, 'T-003');
     assert.notEqual(next.pane.paneId, pane.paneId);
+    assert.equal(next.pane.terminalId, pane.terminalId);
+    assert.notEqual(next.pane.binding?.instanceId, pane.binding?.instanceId);
+    assert.deepEqual(next.pane.routing?.allowedTargetPaneIds ?? [], []);
   } finally {
     f.close();
   }

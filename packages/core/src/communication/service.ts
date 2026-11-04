@@ -103,6 +103,13 @@ export class PaneCommunication {
         (value.binding || Object.values(value.capabilities).some(Boolean) || adapter)
       )
         throw new Error('External panes are read-only');
+      if (value.terminalId && value.ownership !== 'managed')
+        throw new Error('Stable terminal identity requires managed ownership');
+      if (
+        value.terminalId &&
+        panes.some((pane) => pane.terminalId === value.terminalId && pane.state !== 'closed')
+      )
+        throw new Error('Stable terminal identity already registered');
       if (value.ownership === 'managed' && !value.binding)
         throw new Error('Managed ownership binding required');
       if (value.binding && panes.some((p) => p.binding?.instanceId === value.binding?.instanceId))

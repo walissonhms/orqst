@@ -233,3 +233,18 @@ WebSocket, generic MCP or observer capability. This path is enabled only through
 explicit Electron managed client. The earlier capability table describes the original
 library milestone; the current implementation and remaining acceptance boundary are
 recorded in [the component review](../research/mention-communication.md).
+
+## Stable terminal metadata link — 2026-11-04
+
+Communication pane v1 accepts optional `terminalId: UUID`, supplied by the trusted
+structured adapter from the reviewed terminal manifest via `terminalIdentity`.
+Legacy rows without it retain their original meaning. This immutable metadata link
+is distinct from `paneId` and the live `binding`: messages/grants still require
+current pane IDs, actor/workspace scope and source-backed instance/epoch ownership.
+No endpoint resolves a terminal UUID into a live target or adapter automatically.
+
+Registration rejects a stable terminal link on an external pane and rejects a second
+non-closed pane with that terminal UUID, including an unavailable pane. A new
+explicitly authorized instance after confirmed exit may keep the UUID with fresh
+pane/instance IDs; old bindings/routes do not transfer. See
+[identity evidence and remaining unification work](../development/terminal-identity-link.md).

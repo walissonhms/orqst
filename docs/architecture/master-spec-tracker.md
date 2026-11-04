@@ -293,3 +293,15 @@ See [delivery checklist and checks](../development/terminal-layout-sqlite.md).
 The complete criterion 13 remains partial: team configuration, unified communication,
 process recovery, native/provider acceptance and distribution remain open. No existing
 quarantine, process, reservation, source session or shared main checkout was changed.
+
+## Stable terminal identity link — 2026-11-04
+
+Structured Codex pane snapshots now retain the same reviewed terminal UUID used by
+PTY layout metadata, without replacing current pane/instance/epoch bindings. Legacy
+rows are compatible. Duplicate live/unavailable identities and external identity
+claims fail closed. See [implementation, checks and remaining catalog/team work](../development/terminal-identity-link.md).
+Lint, typecheck, build, resource staging and the complete 678-test Node suite passed,
+as did packaged synthetic Tauri structured communication with explicit manifest UUID
+assertions. Rust/native/real-provider/platform checks were not run for this increment.
+Criteria 4/7/8 remain partial: this link does not unify all editing/permissions or
+remove the fixed structured pair, and metadata does not recover processes.
