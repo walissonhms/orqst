@@ -53,6 +53,7 @@ const result = await build({
 const terminalResult = await build({
   entryPoints: {
     'tauri-terminal-host': 'apps/desktop/src/tauri-terminal-host.ts',
+    'tauri-terminal-preparation-host': 'apps/desktop/src/tauri-terminal-preparation-host.ts',
     'managed-terminal-core': 'packages/core/src/terminal/host.ts',
     'managed-terminal-host': 'packages/core/src/terminal/pty-host.ts',
     'orqst-mcp-relay': 'packages/core/src/terminal/mcp-relay.ts',

@@ -253,9 +253,25 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         return Ok(());
     };
     let paths: Vec<String> = serde_json::from_str(&files)?;
+    start_selected(app, paths).await
+}
+
+pub fn is_running(app: &tauri::AppHandle) -> bool {
+    app.state::<Terminals>().0.lock().unwrap().is_some()
+}
+
+/// Paths originate only from startup configuration or the native provisioning review.
+pub async fn start_selected(
+    app: &tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if is_running(app) {
+        return Err("Managed terminals already open".into());
+    }
     if paths.is_empty() || paths.len() > 8 || paths.iter().any(|p| p.len() > 2048) {
         return Err("Invalid explicit managed terminal selection".into());
     }
+    let files = serde_json::to_string(&paths)?;
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");
     let admission = app.path().app_data_dir()?.join("managed-agents");
@@ -327,7 +343,10 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         confirming_quit: false,
         exit_authorized: false,
     });
-    let menu = Menu::default(app)?;
+    let menu = match app.menu() {
+        Some(menu) => menu,
+        None => Menu::default(app)?,
+    };
     let submenu = Submenu::new(app, ready["title"].as_str().unwrap_or("ORQST"), true)?;
     for (slot, pane) in panes.iter().enumerate() {
         let label = format!("terminal-{slot}");

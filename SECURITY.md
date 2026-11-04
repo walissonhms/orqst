@@ -21,6 +21,17 @@ See [implementation and remaining parity](docs/development/tauri.md) and the
 [private process contract](docs/api/desktop-sidecar.md). Complete native dependency
 redistribution notices and signed installers remain release prerequisites.
 
+Native-menu preparation also reuses the existing passive manifest provisioner and
+full selection review for 1–8 same-provider Codex/Claude terminals. It uses a fixed
+short-lived bundled Node helper with a bounded private pipe, no renderer capability
+or public API. Native pickers and separate Cancel-default reviews bind configuration,
+shared native effects and opening; CLI startup remains independently signed. A
+document-generation/visibility/expiry check fences navigation and reload. A native
+latch precedes possible writes, and a distinct single-attempt latch precedes Core
+admission. Cancellation preserves completed files for fresh review; uncertain state
+and reservations are never removed to retry. See the
+[component and security review](docs/research/tauri-terminal-preparation.md).
+
 ## Codex/OpenCode pair security review — 2026-11-03
 
 The only heterogeneous selection allowed is exactly one Codex and one OpenCode in

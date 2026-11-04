@@ -2,6 +2,17 @@
 
 ## Tauri preview process boundary — 2026-11-04
 
+The native terminal preparation menu adds only a fixed passive Node helper, not a
+renderer execution API. It reuses the existing reviewed provisioner/selection for
+bounded Codex/Claude manifests; native pickers, paged Cancel-default consent, binary
+and directory revalidation, private state and separate write/open latches remain
+authoritative. The original visible dashboard URL and page-load generation plus
+bounded deadlines fence preparation; modal dialog focus is not provider authority.
+Starting a CLI retains the existing stricter native document/focus/signature checks.
+Cancelled opening can review the same completed files; uncertain effects cannot
+automatically retry or release reservations. New profiles disable ORQST MCP. See
+[the exact private-pipe contract and limits](../research/tauri-terminal-preparation.md).
+
 The native shell owns a fixed bundled Node executable and Bridge entry. The observer
 has no Tauri capability, execution endpoint or signing-key exposure. The shell plugin is used exclusively from
 Rust. The Core receives an allowlisted environment, separate private application
