@@ -10,6 +10,7 @@
   fresh visible Codex picker-cache entries from account entitlement.
 - Pass eight integrated session-free tests and TypeScript. Native UI composition,
   provider acceptance and adding terminals to an existing Core remain separate.
+
 ## 2026-11-04 — CLI/model/Open first increment
 
 - Use the selected workspace and passive native catalog for Codex, Claude Code

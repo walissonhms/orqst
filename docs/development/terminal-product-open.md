@@ -37,12 +37,12 @@ keyboard. Hide, detach and terminate remain separate operations.
 
 ## Explicit remaining product gap
 
-This first increment still admits only one selection per app launch. **A second
-
-- Terminal with another CLI/model while the selected host exists is not supported.**
-  The UI states this limitation; it is not complete delivery of independent V6
-  terminal creation. `State.begin`, `is_running` and the durable selection latch stay
-  closed. Their removal alone would bypass ownership rather than add enrollment.
+This first increment still admits only one selection per app launch. **Adding a
+second terminal with another CLI/model while the selected host exists is not
+supported.** The UI states this limitation; it is not complete delivery of
+independent V6 terminal creation. `State.begin`, `is_running` and the durable
+selection latch stay closed. Their removal alone would bypass ownership rather
+than add enrollment.
 
 The next required increment must append a reviewed member to the existing Pair,
 admission reservation, private RPC/client, terminal service, retained native
@@ -69,6 +69,10 @@ Preview, active dist, runtime/data, providers and quarantines are untouched.
   intent invalidation before/during focus, expiry and late partial replies.
   Cargo tests/clippy/build were not run: available space fell below the coordinated
   4GiB margin. No resource staging or new target/runtime was started.
+
+Integration on main reran the 54 focused cases, repository lint, TypeScript and
+both EN/PT renderer scripts successfully. No broad test suite, general build,
+Cargo command or native/provider run was included in that verification.
 
 The renderer scripts run headless Chromium without a Core, host, PTY, native app or
 network server. To reuse existing compiled CSS without rebuilding the active app:

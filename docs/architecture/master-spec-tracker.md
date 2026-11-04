@@ -511,9 +511,31 @@ the five source commits. The source front additionally reported 57 focused check
 and repository lint/typecheck. No broad suite/build/native/provider check was run
 for this integration while disk margin is constrained.
 
-The normal UI/native opening composition is a separate pending integration. The
+The normal UI/native opening composition is integrated in source as described below. The
 existing fixed selection does not yet admit a second terminal: incremental Pair,
 admission and IPC work is explicitly underway in the same Core. Unlocking the UI,
 creating another Core or restarting the app per terminal does not close that gap.
 OpenCode dynamic catalogue and provider acceptance remain unverified. See
 [contract and limits](../api/terminal-preparation.md).
+
+## CLI/model/Open source integration — 2026-11-04
+
+Integrated the signed broker composition, Studio CLI/model picker and retained
+native-document wiring (`61296fd`, `cd4b00d`, `0a40c61`, `acd9a82`). Finder is
+confined to explicit Advanced configuration. The selected-flow native intent is
+one-use, bound to document/presentation/deadline; incomplete opening retains the
+attempt instead of relaunching it. Electron and legacy Start remain separate.
+
+On integrated main, 54 focused broker/service/document/Studio tests, TypeScript
+and repository lint passed. The actual xterm renderer with a synthetic facade
+passed EN/PT output, keyboard and partial-attempt continuation. Studio EN/PT
+responsive renderer checks also passed on main, including catalog failure, no
+mutation retry, retained shell and widths down to 320px. These checks start no
+Core, PTY or provider.
+
+Rust tests/clippy/build, native WebKit/dialog/provider/model application and a new
+package remain unchecked for this increment. Heavy loads remain paused with about
+3.1GiB free; the owner's running Preview and its packaged resources are preserved.
+Live enrollment is still required in the existing Core/Pair: admission alone must
+grant no startup/input authority, and rejected/uncertain results must preserve old
+members and receipts. See [workflow and limits](../development/terminal-product-open.md).

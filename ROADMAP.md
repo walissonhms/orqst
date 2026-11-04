@@ -4,8 +4,9 @@
 
 The CLI/model preparation Core now resolves existing workspaces and forwards actual
 model arguments without a normal file picker. Integration checks cover source
-drift before Start. Finish the native **CLI → Model → Open** composition and
-incremental admission into the same Core; restarting the app per terminal is not
+drift before Start. The native **CLI → Model → Open** wiring is integrated in
+source. Compile and accept it, then finish incremental admission into the same
+Core; restarting the app per terminal is not
 accepted as the normal workflow. Dynamic OpenCode catalogue, providers and native
 execution remain acceptance gaps. See [contract and limits](docs/api/terminal-preparation.md).
 

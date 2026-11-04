@@ -239,13 +239,17 @@ The earlier uncertain fixture remains preserved, without adoption or cleanup.
       versioned Claude aliases and CLI default; availability/entitlement unverified.
 - [x] Integrate five Core commits and pass eight focused session-free tests and
       TypeScript on main. The source front also passed 57 focused checks and lint.
-- [ ] Integrate and compile the complete native quick-launch UI and real xterm flow.
+- [x] Integrate the native quick-launch UI and real xterm source flow; 54 focused
+      tests and TypeScript pass on main. Real xterm with a synthetic facade passes
+      EN/PT output, keyboard and partial-attempt continuation.
+- [ ] Compile and accept the integrated native quick-launch flow on this machine.
 - [ ] Admit another CLI/model into the same running Core without replacing original
       Pair/PTY/documents, relaunching the app or starting a second Core.
 - [ ] Accept dynamic OpenCode catalogue, actual native/provider execution and cleanup.
 
 Cargo, resource staging and broad build/test loads remain paused at approximately
 3.1GiB free. No native/provider acceptance is inferred from these source checks.
+
 ## CLI/model/Open first increment — 2026-11-04
 
 - [x] Normal source path uses current workspace/Feature IDs and the Core catalog;
