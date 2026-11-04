@@ -79,7 +79,10 @@ unchanged. Authority stays in native document/focus fences and the existing brok
 Core admission and PTY backend. Metadata-only discovery adds no remote execution
 endpoint. Private provider state is shared only under the existing explicit native
 acknowledgements; provider-owned session writes, credential refresh and OpenCode
-startup/migration effects remain disclosed. No credentials are read or logged.
+startup/migration effects remain disclosed. The reader selects model metadata from
+bounded configuration files; their complete bytes may contain private values and
+are transient inputs to hashing/parsing. Configuration bodies and authentication
+files are not returned as catalogue data or written to logs.
 
 Synthetic tests verify all three providers' selected identifiers reach the actual
 launch profile argv and the exact selected nonempty project reaches `cwd`, without

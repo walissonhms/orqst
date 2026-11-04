@@ -1,5 +1,14 @@
 # ORQST roadmap
 
+## Normal terminal opening — 2026-11-04
+
+The CLI/model preparation Core now resolves existing workspaces and forwards actual
+model arguments without a normal file picker. Integration checks cover source
+drift before Start. Finish the native **CLI → Model → Open** composition and
+incremental admission into the same Core; restarting the app per terminal is not
+accepted as the normal workflow. Dynamic OpenCode catalogue, providers and native
+execution remain acceptance gaps. See [contract and limits](docs/api/terminal-preparation.md).
+
 ## Approved V6 feature architecture — 2026-11-04
 
 The [V6 reference](docs/design/v6/README.md) supersedes earlier product/UI directions

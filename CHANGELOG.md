@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — CLI/model preparation Core
+
+- Resolve the selected workspace from the native-owned observer database in
+  read-only mode; reuse the existing provisioning without a normal file picker.
+- Apply selected Codex, Claude and OpenCode model identifiers to actual profile
+  arguments and revalidate their sources and workspace/Feature binding at Start.
+- Distinguish CLI defaults, configured values, versioned official aliases and
+  fresh visible Codex picker-cache entries from account entitlement.
+- Pass eight integrated session-free tests and TypeScript. Native UI composition,
+  provider acceptance and adding terminals to an existing Core remain separate.
+
 ## 2026-11-04 — Full-window Studio shell
 
 - Use one viewport-sized Workspace/Feature shell in native Studio, without the

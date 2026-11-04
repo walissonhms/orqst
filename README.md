@@ -6,6 +6,13 @@ AgentSession. See the [V6 inventory and checklist](docs/architecture/v6-feature-
 for implementation gaps and acceptance. The preserved prototype contains simulated
 content and is never a production terminal.
 
+The [CLI/model preparation Core](docs/api/terminal-preparation.md) now discovers
+reviewed local executables and resolves workspace IDs without a file picker.
+Selected models reach the existing launch profiles and are revalidated before
+process creation. This is a source delivery: the quick-launch native UI and live
+enrollment of additional terminals are still being integrated; the open Preview
+does not acquire these changes automatically.
+
 Studio now uses one full-window Feature workspace when the native Feature bridge
 is available. **+ Terminal** opens preparation in a dismissible side panel;
 the back arrow returns to Overview. This removes the nested dashboard frame,

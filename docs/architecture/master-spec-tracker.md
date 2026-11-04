@@ -499,3 +499,21 @@ No preparation mutation or CLI Start was exercised. Actual native provisioning,
 Settings reload → SPA Studio, provider communication, terminal input and final Quit
 remain unchecked; earlier uncertainty is unchanged. See the
 [integrated workflow and limits](../development/tauri-studio-preparation.md#integrated-full-window-package--2026-11-04).
+
+## CLI/model preparation Core — 2026-11-04
+
+The Core source now resolves workspace IDs from the native-owned read-only observer
+SQLite, reuses reviewed CLI discovery, prepares selected models without a normal
+file picker and preserves actual `--model` arguments through the existing profiles.
+Model/config/Feature/project evidence is revalidated before launch and again in the
+PTY host. Eight focused session-free tests and TypeScript passed after integrating
+the five source commits. The source front additionally reported 57 focused checks
+and repository lint/typecheck. No broad suite/build/native/provider check was run
+for this integration while disk margin is constrained.
+
+The normal UI/native opening composition is a separate pending integration. The
+existing fixed selection does not yet admit a second terminal: incremental Pair,
+admission and IPC work is explicitly underway in the same Core. Unlocking the UI,
+creating another Core or restarting the app per terminal does not close that gap.
+OpenCode dynamic catalogue and provider acceptance remain unverified. See
+[contract and limits](../api/terminal-preparation.md).

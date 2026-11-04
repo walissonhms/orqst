@@ -226,3 +226,23 @@ The earlier uncertain fixture remains preserved, without adoption or cleanup.
 - [ ] Complete actual native picker/provisioning/opening, CLI Start/output/input,
       Settings reload → SPA Studio and final Quit acceptance.
 - [ ] Accept real providers and communication; preserve all earlier quarantines.
+
+## CLI/model preparation Core integration — 2026-11-04
+
+- [x] Resolve the selected workspace by ID using the native-owned observer database
+      read-only, with no observer Store migration or renderer-provided project path.
+- [x] Reuse reviewed executable discovery and provisioning without a normal file
+      picker; selected models affect Codex/Claude/OpenCode launch profile argv.
+- [x] Revalidate model-source digest/expiry and workspace/Feature binding at real
+      backend validation boundaries; synthetic drift tests reach zero backend starts.
+- [x] Preserve model provenance: fresh visible Codex cache entries, configured IDs,
+      versioned Claude aliases and CLI default; availability/entitlement unverified.
+- [x] Integrate five Core commits and pass eight focused session-free tests and
+      TypeScript on main. The source front also passed 57 focused checks and lint.
+- [ ] Integrate and compile the complete native quick-launch UI and real xterm flow.
+- [ ] Admit another CLI/model into the same running Core without replacing original
+      Pair/PTY/documents, relaunching the app or starting a second Core.
+- [ ] Accept dynamic OpenCode catalogue, actual native/provider execution and cleanup.
+
+Cargo, resource staging and broad build/test loads remain paused at approximately
+3.1GiB free. No native/provider acceptance is inferred from these source checks.
