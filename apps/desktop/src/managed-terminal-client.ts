@@ -12,6 +12,7 @@ const status = document.querySelector<HTMLElement>('#status')!;
 const container = document.querySelector<HTMLElement>('#terminal')!;
 Terminal.strings.promptLabel = container.dataset.keyboard ?? '';
 Terminal.strings.tooMuchOutput = container.dataset.toomuch ?? '';
+const palette = getComputedStyle(document.documentElement);
 const terminal = new Terminal({
   allowProposedApi: false,
   scrollback: 2000,
@@ -19,7 +20,11 @@ const terminal = new Terminal({
   screenReaderMode: true,
   linkHandler: { activate: () => {} },
   windowOptions: {},
-  theme: { background: '#080B1E', foreground: '#D9C9FF', cursor: '#B45CFF' },
+  theme: {
+    background: palette.getPropertyValue('--orqst-background').trim(),
+    foreground: palette.getPropertyValue('--orqst-text').trim(),
+    cursor: palette.getPropertyValue('--orqst-neon').trim(),
+  },
 });
 const fit = new FitAddon();
 terminal.loadAddon(fit);
@@ -89,6 +94,8 @@ const updateGuidance = () => {
                 : input
                   ? 'typing'
                   : 'input';
+  const main = document.querySelector('main');
+  if (main) main.dataset.next = key;
   const message = guidance.dataset[key] ?? '';
   if (guidance.textContent !== message) guidance.textContent = message;
 };
@@ -151,6 +158,7 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
       status.dataset.state = reply.snapshot.state;
       const lifecycle = document.getElementById('lifecycle')!;
       lifecycle.textContent = lifecycle.dataset[reply.snapshot.state] ?? '';
+      lifecycle.dataset.state = reply.snapshot.state;
       live = ['starting', 'running'].includes(reply.snapshot.state);
       if (!live) {
         input = false;

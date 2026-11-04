@@ -18,7 +18,7 @@ specification does not enable terminals, agent execution or orchestration.
 
 ## Shared colors
 
-The source of truth for implemented tokens is `apps/dashboard/src/styles.css`.
+The source of truth for implemented tokens is `apps/dashboard/src/tokens.css` (base) and `styles.css` (light overrides).
 Use CSS custom properties rather than component-specific color literals. The table
 below describes the default dark palette; light overrides follow below.
 
@@ -212,3 +212,13 @@ Record actual outcomes separately from requirements. Do not publish captured
 sessions, private briefs, generated screenshots or local acceptance reports.
 Native Desktop, other-browser and manual assistive-technology acceptance require
 separate evidence; automated Chromium checks alone do not establish them.
+
+## Native Studio chrome
+
+Native interactive documents import the same base tokens as the dashboard; xterm
+reads the resolved canvas/text/cursor colors. Slot/provider headings stay compact,
+full internal identity stays in session details, member navigation scrolls, split
+orientation stays visible and advanced layout is collapsible. The next available
+process step has primary emphasis; Stop remains visible and permission/error copy
+never relies on color alone. Narrow panes wrap controls, retain 44px targets and
+scroll vertically instead of clipping their terminal. Reduced-motion rules remain.

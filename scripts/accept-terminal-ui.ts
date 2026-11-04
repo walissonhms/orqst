@@ -27,7 +27,7 @@ try {
       language,
       slot: 0,
       provider: 'SYNTHETIC Codex',
-      providers: ['SYNTHETIC Codex', 'SYNTHETIC Codex'],
+      providers: ['SYNTHETIC Codex', 'SYNTHETIC OpenCode'],
       project: '/synthetic-only/disposable/project-with-a-long-name-for-responsive-review',
       version: 'SYNTHETIC-NOT-A-PROVIDER',
       startProfile: 'codex-terminal-v1',

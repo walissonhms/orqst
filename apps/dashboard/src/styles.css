@@ -2,47 +2,8 @@
 @theme {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-:root {
-  --orqst-topbar-height: 64px;
-  --orqst-background: #080b1e;
-  --orqst-surface: #141329;
-  --orqst-elevated: #241a3e;
-  --orqst-primary: #8424e8;
-  --orqst-neon: #b45cff;
-  --orqst-lavender: #d9c9ff;
-  --orqst-text: #f5f3ff;
-  --orqst-on-primary: #f5f3ff;
-  --orqst-muted: #9994b2;
-  --orqst-success: #53d6a0;
-  --orqst-warning: #f5b95e;
-  --orqst-danger: #f17890;
-  --orqst-border: color-mix(in srgb, var(--orqst-lavender) 16%, var(--orqst-surface));
-  --orqst-border-strong: color-mix(in srgb, var(--orqst-muted) 80%, var(--orqst-surface));
-  --orqst-accent-soft: color-mix(in srgb, var(--orqst-neon) 12%, var(--orqst-surface));
-  --orqst-success-soft: color-mix(in srgb, var(--orqst-success) 12%, var(--orqst-surface));
-  --orqst-warning-soft: color-mix(in srgb, var(--orqst-warning) 10%, var(--orqst-surface));
-  --orqst-danger-soft: color-mix(in srgb, var(--orqst-danger) 12%, var(--orqst-surface));
-  --orqst-primary-hover: color-mix(in srgb, var(--orqst-primary) 85%, var(--orqst-neon));
-  --orqst-backdrop: rgb(8 11 30 / 75%);
-  --orqst-shadow: rgb(0 0 0 / 30%);
-  --orqst-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  --orqst-space-1: 4px;
-  --orqst-space-2: 8px;
-  --orqst-space-3: 12px;
-  --orqst-space-4: 16px;
-  --orqst-space-5: 20px;
-  --orqst-space-6: 24px;
-  --orqst-radius-control: 5px;
-  --orqst-radius-panel: 9px;
-  --orqst-motion-fast: 150ms;
-  font-family: var(--font-sans);
-  color: var(--orqst-text);
-  background: var(--orqst-background);
-  font-size: 100%;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  color-scheme: dark;
-}
+@import './tokens.css';
+
 /* The shared light palette also supplies native form controls through color-scheme. */
 :root[data-theme='light'] {
   --orqst-background: #f7f5fc;
