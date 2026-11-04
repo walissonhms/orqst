@@ -22,8 +22,36 @@ Update this file in every V6 delivery with implementation and verification.
 | Native acceptance                       | Blocked; diagnostics improved                                                                 | Explain `cgWindowNotFound`, verify focus after consent, actual WebKit/input/dialog/lifecycle flow    |
 | Real provider communication             | Blocked by preserved quarantine and outstanding native reviews                                | Explicit capacity decision and verified Codex↔OpenCode task/result                                   |
 
-The data/configuration front is assigned to pane-696; assignment is not completion.
-Work in separate worktrees and deliver code, tests and checklist evidence.
+## Integrated foundation and chrome — 2026-11-04
+
+Sources `3a3d250` / `dd2cbfd` (Core) and `ba848ba` (chrome) are integrated as
+`452d4b0` / `e352d26` / `c2f7bfc`. The inventory above records the pre-V6 baseline;
+the following list records this increment, separately from end-to-end acceptance.
+
+- [x] Persist Feature UUID/name/description/status/revision, exclusive terminal
+      assignments and bounded validated metadata audit using the existing Store.
+- [x] Persist team proposals and layouts under Feature scope; preserve unassigned
+      legacy data and never restore grants or processes from configuration.
+- [x] Enforce Feature-local aliases and guards at grant/admission/dispatch/result
+      boundaries. Qualified and cross-Feature traffic is currently denied.
+- [x] Exercise six reviewed terminal configurations through real private Core IPC
+      with no agent launch or execution reservation.
+- [x] Deliver compact 31px chrome, pane menu, retained xterm, lifecycle, localized
+      controls, visible refusals and minimize/maximize/restore.
+
+See [Core contracts and limits](../development/v6-feature-core.md) and
+[chrome behavior and limits](../development/v6-terminal-chrome.md).
+The native facade, Feature UI, runtime enrollment/switching, authorized cross-Feature
+traffic and Floating layout remain incomplete. The native structured composition
+still has two Codex members; metadata for eight members does not prove N-member
+execution. The actual UI/sidebar remains a next integration step.
+
+The integrated run passed 710 Node tests, lint, typecheck, build, Tauri resource
+staging, EN/PT Chromium renderer acceptance and eight synthetic packaged PTYs.
+The latter includes layout, resize, signed operations, revocation and retirement
+with simulated native focus/dialogs. It establishes no real provider/native UI
+acceptance. Electron pair/team runners were adapted to menu navigation but were
+not run during concurrent native focus investigation.
 
 ## Required end-to-end acceptance
 

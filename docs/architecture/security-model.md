@@ -1312,3 +1312,21 @@ immutably, refuses pending WAL frames, reads allowlisted metadata and never clai
 ownership, checkpoints or releases capacity. It refuses a linked or group/world
 writable journal file. Neither diagnostic proves safe process adoption or native
 acceptance. See [quarantine](../development/codex-quarantine-capacity.md).
+
+## V6 Feature configuration and communication — 2026-11-04
+
+Feature/team/layout writes are private inherited Core IPC, not a dashboard HTTP
+execution surface. The host derives workspace and terminal UUIDs from its reviewed
+selection; strict commands accept no arbitrary path, process ID or proof. The
+existing private SQLite permission checks and bounded transactions are reused.
+Saved routes are proposals requiring fresh native review and task grants, never
+restored authority.
+
+Optional `featureId` preserves legacy v1 records but never falls back from explicit
+Feature to legacy scope. Exact Feature equality is checked for routing, grants,
+admission, dispatch, ancestry, results/visibility and audit. Repeated handles in
+different Features are allowed; qualified mentions are rejected as whole tokens
+until cross-Feature authorization is implemented. Feature assignment alone does
+not validate runtime enrollment. No public listener, CSP/cookie/WebSocket change,
+provider launch or quarantine release is introduced. See
+[contracts and required native composition](../development/v6-feature-core.md).

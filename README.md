@@ -6,6 +6,13 @@ AgentSession. See the [V6 inventory and checklist](docs/architecture/v6-feature-
 for implementation gaps and acceptance. The preserved prototype contains simulated
 content and is never a production terminal.
 
+The [private V6 Core foundation](docs/development/v6-feature-core.md) now persists
+Features, team proposals and layouts in SQLite, with Feature-local communication
+guards. The [shared terminal chrome](docs/development/v6-terminal-chrome.md) uses a
+compact header and pane menu while retaining actual xterm and signed controls.
+Native Feature CRUD/selection, runtime enrollment, Floating layout and real-provider
+acceptance remain incomplete; saved configuration restores no execution authority.
+
 For the current master-specification checklist, evidence, blockers and update rules,
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
 roadmap and acceptance records remain available for their original scope and date.

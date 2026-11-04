@@ -448,3 +448,14 @@ The UI preserves existing confirmation, process ownership and source boundaries;
 it adds no model selector or inferred usage. Narrow layouts wrap controls and offer
 single-tab/maximize guidance with keyboard focus and reduced-motion support.
 See [the actual workflow, validation and remaining capabilities](../development/studio-terminal-ux.md).
+
+## Approved V6 chrome and private Feature foundation — 2026-11-04
+
+The [V6 approved inputs](v6/README.md) supersede earlier visual directions where
+changed. The shared terminal renderer now provides compact headers/menu, real
+lifecycle/error feedback, retained xterm and localized signed controls. Private
+Core/SQLite Feature configuration and scoped communication guards are implemented;
+the native facade, Feature sidebar/CRUD/context switching and Floating layout are
+not yet connected. Earlier screen rows retain their original dated scope. Current
+acceptance is in the [V6 checklist](../architecture/v6-feature-checklist.md); renderer
+fixtures do not establish WebKit/provider acceptance.

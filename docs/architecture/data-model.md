@@ -483,3 +483,20 @@ backfill. Structured Codex supplies the reviewed terminal identity; old rows may
 omit it. It is never a message/grant target, native thread ID or process binding.
 Non-closed managed panes reserve the link uniquely; external panes cannot claim it.
 See [identity limits](../development/terminal-identity-link.md).
+
+## Private V6 Feature configuration — 2026-11-04
+
+The existing Store has opt-in additive `feature_configuration_schema`, `features`,
+`feature_terminal_assignments` and `feature_configuration_events` tables. Feature
+UUIDs are immutable; names/descriptions/status/revision are explicit metadata, not
+observed task/process outcomes. Assignment is exclusive by terminal UUID and does
+not enroll a process or migrate existing sessions. Updates use expected revisions;
+metadata audit is bounded and validates its own versioned schema. Observer
+`user_version`, source-backed events and native histories are unchanged.
+
+Team configurations reuse `terminal_teams`, namespaced by exact workspace/Feature
+and reviewed terminal selection. Existing `terminal_layouts` gains a separate
+Feature key namespace; unscoped layouts/JSON remain intact and unassigned. Private
+Core IPC fixes workspace from the reviewed project and derives terminal UUID from
+selected slots. Loading metadata never restores routes/grants/ownership. See
+[Feature contracts, bounds and rollback limits](../development/v6-feature-core.md).

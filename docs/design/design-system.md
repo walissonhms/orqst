@@ -222,3 +222,16 @@ orientation stays visible and advanced layout is collapsible. The next available
 process step has primary emphasis; Stop remains visible and permission/error copy
 never relies on color alone. Narrow panes wrap controls, retain 44px targets and
 scroll vertically instead of clipping their terminal. Reduced-motion rules remain.
+
+## Shared V6 terminal chrome increment — 2026-11-04
+
+The owner-approved [V6 reference](v6/README.md) governs the terminal surface. Shared
+Electron/Tauri documents now use a compact 31px fine-pointer header, restrained
+graphite/purple styling, actual provider/identity/process state, visual minimize/
+maximize/restore and a keyboard-accessible pane disclosure. Native process controls
+and relevant errors remain reachable; no simulated model/usage/orchestrator badges
+are imported. Coarse pointers retain 44px targets and reduced motion is respected.
+
+The four-frame Chromium comparison is a test harness, not implemented Feature
+sidebar/CRUD or native docked workspace acceptance. See
+[behavior and limits](../development/v6-terminal-chrome.md).

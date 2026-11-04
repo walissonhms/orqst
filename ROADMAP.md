@@ -10,6 +10,15 @@ acceptance in the [V6 checklist](docs/architecture/v6-feature-checklist.md).
 Earlier A/B and pane-count limits describe subsets, not product scope. Native and
 provider acceptance remain release gates; preserve Electron until Tauri parity.
 
+First V6 increment: Feature identity/metadata/assignments, scoped team/layout
+configuration, private Core IPC and fail-closed alias/grant isolation are implemented.
+The shared terminal renderer now has compact chrome and an accessible pane menu.
+Next wire the native metadata facade and actual Feature sidebar/CRUD/selection,
+then prove process continuity and per-Feature docked/floating layout. Larger
+structured teams, model capability controls and authorized cross-Feature routes
+remain separate dependencies. See [Core](docs/development/v6-feature-core.md) and
+[chrome](docs/development/v6-terminal-chrome.md) for exact evidence and limits.
+
 For current master-specification acceptance and outstanding work, start with the
 [delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain
 their original dates and may have been superseded by later increments.

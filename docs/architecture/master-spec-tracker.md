@@ -63,7 +63,7 @@ Links to older records preserve their original dates and scope.
 | 10  | Message states represent real events                                | **Partial** — existing managed communication distinguishes acceptance, execution, result and unknown outcomes; see [mention research](../research/mention-communication.md).                                                                               | Demonstrate correct evidence and failure/unknown states end to end with real providers, including mixed pairs.                                                                                                  |
 | 11  | Claude startup failure does not block Codex or a new terminal       | **Partial** — synthetic tests cover preparation cancellation/drift and preserve existing runtimes.                                                                                                                                                         | Prove independent failure and retry with real CLIs in Tauri.                                                                                                                                                    |
 | 12  | Recovery/reconnect avoids duplicate processes                       | **Partial** — journals fence uncertain ownership; persisted Electron layouts do not reconnect processes. See [recovery](../development/cli-team-recovery.md).                                                                                              | Implement and validate scoped reconnect/recovery with real owned process evidence; do not reset uncertain reservations.                                                                                         |
-| 13  | Layout, teams and settings persist in SQLite                        | **Partial** — Electron and Tauri layouts use [private SQLite with preserved JSON import](../development/terminal-layout-sqlite.md); execution metadata remains in existing journals.                                                                       | Complete team/handle/permission/settings persistence and native restart behavior; metadata restoration grants no process ownership.                                                                             |
+| 13  | Layout, teams and settings persist in SQLite                        | **Partial** — Electron and Tauri layouts use [private SQLite with preserved JSON import](../development/terminal-layout-sqlite.md); execution metadata remains in existing journals.                                                                       | Connect persisted Feature/team proposals to native editing/enrollment and validate restart/settings; restoration grants no ownership.                                                                           |
 | 14  | Protect local Core and minimize desktop permissions                 | **Partial** — loopback/authentication and constrained Tauri terminal IPC are documented in the [security model](security-model.md) and [Tauri guide](../development/tauri.md).                                                                             | Complete security review and native/packaged acceptance of the final composition.                                                                                                                               |
 | 15  | Identify reused third-party code and honor licenses                 | **Partial** — source pins, adaptations and notices are recorded in [reuse audit](../research/reuse-first-audit.md), [Tauri reuse](../research/tauri-core-reuse.md), [mentions](../research/mention-communication.md) and root `NOTICE`.                    | Complete the transitive redistribution and platform-specific notice audit before distribution.                                                                                                                  |
 | 16  | Document automated tests and manual real-CLI tests                  | **Partial** — synthetic, build and limited native evidence exists.                                                                                                                                                                                         | Complete and document genuine human/native tests with real Codex, Claude and OpenCode, including communication and failures.                                                                                    |
@@ -132,6 +132,25 @@ diagnostics and explicit-refspec precautions. An intermittent success does not
 establish that GitHub's server edge is the cause.
 
 ## Verification log
+
+V6 Core sources `3a3d250` / `dd2cbfd` and chrome source `ba848ba` are integrated as
+`452d4b0` / `e352d26` / `c2f7bfc`. Feature configuration, scoped aliases/grants and
+layout/team persistence are implemented over existing SQLite/private IPC; native
+Feature enrollment and UI are not. Compact shared chrome/menu preserves real xterm
+and signed operations. The [V6 checklist](v6-feature-checklist.md) records the subset.
+
+The combined Node run passed 710 tests (`--test-concurrency=2`); lint, typecheck,
+build, resource staging, EN/PT Chromium renderer and packaged eight-PTY acceptance
+passed. The first renderer attempt used new HTML with pre-build assets and failed
+on header text; rebuilding before rerunning resolved that mismatch. Native focus
+and dialogs remain simulated in these checks. Electron pair/team selectors were
+adapted but their headful runs were deferred to avoid disturbing the concurrent
+native focus investigation. No real provider or ingestion validation ran.
+
+Native pane-698 reports an owned authorization sheet invalidating its pending
+generation and Cmd-Q exiting a fixture without confirmation. Both remain under
+investigation/correction in its isolated worktree, outside this integration; no
+native acceptance or fixed quit behavior is claimed here.
 
 | Date       | Scope and result                                                                                                                                                                                                                                                                                                                    | Boundary                                                                                                                                                      |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -363,3 +382,8 @@ behavior changed, so `validate:local` was not run. No Rust build, native Tauri
 workflow, real provider inference or quarantine reconciliation was run. The V6
 source hashes were verified 6/6; inspecting its rendered prototype does not count
 as runtime implementation or native acceptance.
+
+The V6 menu integration also preserves header drag-to-tab reorder: outside-click
+dismissal waits for click, so a drag does not hide its drop targets at pointerdown.
+The updated EN/PT renderer test verifies the actual drag/request after rebuilding.
+This is a browser interaction regression check, not native window acceptance.

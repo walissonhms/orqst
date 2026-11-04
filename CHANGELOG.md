@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-04 — Feature-scoped Core and compact V6 terminal chrome
+
+- Add persistent Feature metadata/assignments/audit, scoped team proposals and
+  layout keys to the existing SQLite Store, with revision checks and preserved
+  legacy data. Private Core IPC derives terminal UUIDs from reviewed selections.
+- Scope communication aliases, grants, delivery and result visibility by Feature;
+  deny cross-Feature/legacy traffic and qualified aliases until explicitly supported.
+  Saved configuration does not activate routes, restore grants or start agents.
+- Add 31px terminal headers and an accessible pane menu, preserving xterm, lifecycle,
+  signed controls, localized errors and retained documents. Update acceptance
+  navigation for controls moved into the disclosure.
+- Pass 710 integrated Node tests, EN/PT renderer checks and eight synthetic packaged
+  PTYs. Feature UI/Floating, native acceptance and real-provider delivery remain open.
+
 ## 2026-11-04 — Native diagnostics and approved V6 reference
 
 - Preserve the approved V6 specifications/prototype with hashes and an explicit
