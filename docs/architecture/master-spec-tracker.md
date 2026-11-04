@@ -482,3 +482,20 @@ windows, EN/PT navigation and focus restoration. Build, TypeScript and focused
 ESLint and full repository lint passed. No native/provider acceptance or broad-suite/Rust rerun is claimed.
 The open Preview remains preserved; native packaging and the functional Tauri
 preparation bridge are still outstanding. See the [workflow](../development/v6-feature-ui.md#full-window-studio-correction--2026-11-04).
+
+## Integrated native Studio drawer — 2026-11-04
+
+The narrow Tauri preparation bridge and 1–8 Codex/Claude component are integrated
+with the full-window Studio. The caller's integrated checks passed TypeScript,
+repository lint, 26 session-free Node tests, renderer EN/PT, three App/drawer browser
+tests, dashboard build and 17-notice native staging. The worker's frozen native
+binary has 30 Rust tests, Clippy and custom-protocol compilation evidence; all 13
+source/configuration hashes and the binary were independently matched before
+packaging. The new local app's 109 resources and ad hoc signature were verified.
+
+The new Preview is now open. Actual WebKit observation confirms the full-window
+shell and an enabled preparation drawer backed by a successful native snapshot.
+No preparation mutation or CLI Start was exercised. Actual native provisioning,
+Settings reload → SPA Studio, provider communication, terminal input and final Quit
+remain unchecked; earlier uncertainty is unchanged. See the
+[integrated workflow and limits](../development/tauri-studio-preparation.md#integrated-full-window-package--2026-11-04).

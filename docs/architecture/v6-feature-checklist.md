@@ -212,3 +212,17 @@ strict local ad hoc signature verification; this does not accept native executio
 
 See [delivery checks and limits](../development/tauri-studio-preparation.md).
 The earlier uncertain fixture remains preserved, without adoption or cleanup.
+
+## Integrated Studio package and native observation — 2026-11-04
+
+- [x] Integrate the Tauri facade/component into the full-window drawer; omit the
+      provisional legacy Studio composition and all unsupported mixed-preset UI.
+- [x] Pass integrated TypeScript/lint, 26 session-free Node tests, renderer EN/PT
+      and three focused App/drawer browser tests, including compact geometry.
+- [x] Package the checked native binary and current resources; verify 109 resource
+      files and the local signature without modifying the earlier Preview.
+- [x] Open the new native Preview and observe the full-window shell, successful
+      preparation snapshot, enabled provider/count/prepare controls and drawer close.
+- [ ] Complete actual native picker/provisioning/opening, CLI Start/output/input,
+      Settings reload → SPA Studio and final Quit acceptance.
+- [ ] Accept real providers and communication; preserve all earlier quarantines.

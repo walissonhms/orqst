@@ -577,3 +577,13 @@ This is a baseline description, not a previously published release entry.
 - Validate with synthetic transports and disposable SQLite; no real provider,
   PTY injection, MCP/HTTP endpoint, planner or Inspector is enabled. Two-real-agent
   acceptance remains pending. See `docs/api/pane-communication.md` and ADR-033.
+
+## 2026-11-04 — Integrated full-window Tauri preparation package
+
+- Connect the native preparation component to Studio's explicit drawer opening;
+  retain the workspace and preparation state when dismissing the drawer.
+- Pass integrated App/drawer EN/PT and compact-layout checks, then package the
+  verified native binary/resources with a valid local signature.
+- Open the new native Preview and observe a successful preparation snapshot with
+  enabled controls. Actual provisioning, CLI Start/input, providers and final Quit
+  remain pending; earlier apps, data and uncertain executions are preserved.

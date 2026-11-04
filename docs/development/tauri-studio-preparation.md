@@ -120,3 +120,37 @@ mounts the preparation fragment independently of the separately coordinated
 composition check; the isolated legacy `Studio.tsx` adaptation is an optional,
 separate commit and should be omitted when integrating the new full-window shell.
 There is no new persisted schema or data migration.
+
+## Integrated full-window package — 2026-11-04
+
+The caller integrated the native bridge and standalone component while omitting
+its provisional legacy `Studio.tsx` composition. `StudioWorkspace` now mounts
+`TauriStudioPreparation` on the first explicit drawer opening and keeps it mounted
+when the drawer closes; the workspace is never remounted by preparation. There is
+no Electron mixed preset or old-Desktop warning in this Tauri drawer.
+
+On the integrated source, TypeScript, repository lint, 26 session-free Studio/broker
+Node tests, the explicit renderer EN/PT command and three focused Playwright tests
+passed. The latter includes the actual App/drawer composition, provider/count
+choices, 390px drawer geometry and Overview navigation. Dashboard build and native
+resource staging passed with 17 notices. No broad Node suite rerun is claimed.
+
+The frozen worker binary was checked against all 13 recorded Rust/configuration
+file hashes and its SHA-256 before bundling. The existing native compile was reused;
+no second Cargo target was created. All 109 staged resource files were checked
+against the resulting app and its local ad hoc signature passed deep strict
+verification. Both the executable and previous Preview's recorded resources were
+preserved. The local artifact is:
+
+```text
+dist/native-preview-studio/ORQST Preview.app
+```
+
+After the previous Preview was no longer running, this new package was opened.
+Actual WebKit observation confirmed one full-window Studio shell, **+ Terminal**
+opening its preparation drawer, a successful native snapshot showing **Ready to
+prepare**, enabled prepare/provider/count controls, and closing the drawer back
+to the full workspace. No create/review mutation, picker selection, profile write,
+provider Start, login or task was performed in this check. The app remains open
+for owner testing. Native Settings reload → SPA Studio, the actual provisioning/
+opening flow, terminal input, provider behavior and final Quit remain unaccepted.
