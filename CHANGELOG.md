@@ -10,6 +10,15 @@
 - Add disposable two-cycle Electron/PTY acceptance and consent cancellation cases;
   reject filesystem roots in reviewed tool PATHs. Preserve existing UI/gesture work.
 
+## 2026-11-03 — Clearer Studio terminal workflow
+
+- Separate terminal navigation/layout from process controls, show project and owned
+  lifecycle, and guide Start → Connect output → Enable keyboard with native feedback.
+- Keep Stop visible and collapse force stop, legacy login and internal diagnostics;
+  explain local A/B aliases, input revocation and memory-only draft/layout limits.
+- Improve narrow panels, keyboard focus, localized creation constraints and tab state;
+  add disposable renderer screenshots and preserve existing Core/PTY authorization.
+
 ## 2026-11-03 — GUI tool precedence and explicit path failures
 
 - For a minimal GUI PATH, review selected native tool directories before installer

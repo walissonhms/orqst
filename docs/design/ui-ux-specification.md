@@ -436,3 +436,15 @@ and unsaved drafts. External top-level terminal windows are not accepted as this
 requirement. This is a subset: boundary drag handles, tab rename/reordering, search/clear, dynamic
 model controls, terminal inspectors, notifications and durable layout restoration
 remain pending. See [item-by-item coverage](../development/embedded-terminal-panels.md#original-specification-coverage).
+
+## Studio terminal clarity increment — 2026-11-03
+
+The native fixed A/B workflow now has compact trusted headers, visible project and
+owned-process state, paired tab selection, collapsible layout controls and staged
+Start → Connect output → Enable keyboard guidance. Stop stays visible; force stop,
+legacy separate login and internal UUIDs are under session details. Aliases explicitly
+remain scoped to this pair, separate from durable communication-registry addresses.
+The UI preserves existing confirmation, process ownership and source boundaries;
+it adds no model selector or inferred usage. Narrow layouts wrap controls and offer
+single-tab/maximize guidance with keyboard focus and reduced-motion support.
+See [the actual workflow, validation and remaining capabilities](../development/studio-terminal-ux.md).

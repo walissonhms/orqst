@@ -301,7 +301,7 @@ try {
     await expect(page.locator('#terminal')).toContainText('SYNTHETIC:PONG');
     await expect(page.locator('#terminal')).not.toContainText('SYNTHETIC:UNEXPECTED_AUTO_REPLY');
   }
-  const ids = await Promise.all(terminals.map((page) => page.locator('#instance').innerText()));
+  const ids = await Promise.all(terminals.map((page) => page.locator('#instance').textContent()));
   assert.notEqual(ids[0], ids[1]);
   const cross = await terminals[0]!.evaluate(
     async (id) =>
@@ -349,6 +349,7 @@ try {
       };
     });
   await focus(0);
+  await terminals[0]!.locator('.layout-options summary').click();
   await terminals[0]!.locator('#split-rows').click();
   await expect
     .poll(async () => {
@@ -401,6 +402,7 @@ try {
     ).orqstTerminalPane.show('restore'),
   );
   assert.equal(hidden, false);
+  await terminals[1]!.locator('.layout-options summary').click();
   await terminals[1]!.locator('#restore').click();
   await expect
     .poll(async () => (await geometry()).panes.map((p) => p.visible))
@@ -430,7 +432,7 @@ try {
     )
     .toBe(true);
   assert.deepEqual(
-    await Promise.all(terminals.map((p) => p.locator('#instance').innerText())),
+    await Promise.all(terminals.map((p) => p.locator('#instance').textContent())),
     ids,
   );
   assert.equal(

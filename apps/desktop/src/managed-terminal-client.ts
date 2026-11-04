@@ -69,7 +69,31 @@ document.addEventListener('visibilitychange', () => {
     revoke();
   }
 });
+const updateGuidance = () => {
+  const guidance = document.getElementById('guidance');
+  if (!guidance) return;
+  const state = status.dataset.state;
+  const key =
+    status.dataset.blocked === 'true'
+      ? 'blocked'
+      : state === 'ownership_lost'
+        ? 'uncertain'
+        : gap
+          ? 'gap'
+          : state === 'exited' || state === 'start_failed'
+            ? 'exited'
+            : !live
+              ? 'start'
+              : !attached
+                ? 'attach'
+                : input
+                  ? 'typing'
+                  : 'input';
+  const message = guidance.dataset[key] ?? '';
+  if (guidance.textContent !== message) guidance.textContent = message;
+};
 const updateButtons = () => {
+  updateGuidance();
   for (const action of actions) {
     let disabled =
       (busy && !polling) ||
@@ -95,6 +119,7 @@ const revoke = () => {
   input = false;
   pending = '';
   show('revoked');
+  updateGuidance();
 };
 
 async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireReply | undefined> {
@@ -327,13 +352,25 @@ const layoutActions = [
 ] as const;
 const changeLayout = (action: TerminalViewAction) => {
   revoke();
-  void pane.show(action);
+  void pane
+    .show(action)
+    .then((accepted) => {
+      if (!accepted) show('focus_required');
+    })
+    .catch(() => show('denied'));
 };
 for (const [id, action] of layoutActions)
   document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
 const splitSize = document.getElementById('split-size') as HTMLInputElement;
 splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
 const unsubscribeLayout = pane.onLayout((state) => {
+  for (const [slot, id] of ['tab-a', 'tab-b'].entries())
+    document
+      .getElementById(id)
+      ?.setAttribute(
+        'aria-pressed',
+        String(state.visible.length === 1 && state.visible[0] === slot),
+      );
   splitSize.value = String(state.percent);
   splitSize.disabled = state.visible.length !== 2;
   document.getElementById('split-value')!.textContent = `${state.percent}%`;

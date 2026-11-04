@@ -517,3 +517,14 @@ and provenance in NOTICE. Existing source ingestion, journals, managed ownership
 and task queue are retained. No provider is executed for this increment; this
 does not validate native A/B delivery, reconnect, N-member teams or new adapters.
 Next reuse requires another closed dependency/license and per-version audit.
+
+## Studio terminal clarity — 2026-11-03
+
+Implemented the fixed A/B client presentation: project and owned-process state,
+local slot identities, Start/Connect/Keyboard guidance, distinct hide/disconnect/stop,
+visible Stop and collapsed force-stop/diagnostics, responsive controls and layout
+selection feedback. Reuses the existing isolated native panels and Core/PTY operations.
+Creation copy explains the actual same-provider, reviewed-version, empty-project
+constraints; no fake discovery, model/team selector or native login verification.
+Dynamic teams, durable display IDs/layouts and real provider/delegation acceptance
+remain pending. See [Studio workflow and verification](docs/development/studio-terminal-ux.md).

@@ -1058,3 +1058,13 @@ post-commit notifications. Tests use synthetic adapters; normal observer startup
 has no communication endpoint. The first real two-agent delegation/automatic CLI
 response milestone remains incomplete until native ownership, per-terminal state,
 structured provider and authenticated agent transport are validated together.
+
+### Studio terminal workflow
+
+The fixed Desktop A/B panels show the project, provider and owned-process status,
+with a guided **Start CLI → Connect output → Enable keyboard input** sequence.
+Tabs and collapsible layout controls reuse the same two interactive documents in
+one window. Stop remains visible; detailed permissions, UUIDs and force stop are
+under session details. View switching keeps loaded drafts in memory. T-001/T-002
+remain pair-local slot aliases, not durable message targets. See
+[Studio terminal workflow and limits](docs/development/studio-terminal-ux.md).
