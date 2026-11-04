@@ -111,17 +111,20 @@ export class TerminalNativeBroker<Document extends object> {
             const attach = await this.supervisor.requestAttach(this.clientId, prepared.attemptId);
             view.attachment = await this.supervisor.attach(
               prepared.attemptId,
-              this.proof(attach, generation),
+              this.proof(attach, generation, prepared.challenge.expiresAt),
             );
             const input = await this.supervisor.requestInput(prepared.attemptId, view.attachment);
             view.lease = await this.supervisor.enableInput(
               prepared.attemptId,
               view.attachment,
-              this.proof(input, generation),
+              this.proof(input, generation, prepared.challenge.expiresAt),
             );
-            // Async transports can lose the document after the final effect too.
-            this.assertCurrent(input, generation);
-            return { ...(await this.result(prepared.attemptId)), opening: 'ready' };
+            const result = await this.result(prepared.attemptId);
+            // The final snapshot is asynchronous too. Neither it nor fresh later
+            // challenges may renew the original combined review's deadline.
+            this.assertCurrent(input, generation, prepared.challenge.expiresAt);
+            if (!view.attachment || !view.lease) throw new Error('Native grants revoked');
+            return { ...result, opening: 'ready' };
           } catch {
             // Launch may have succeeded. Keep its identity/receipt; never retry,
             // signal, or adopt it. Remove only this document's output/input grants.
@@ -140,7 +143,7 @@ export class TerminalNativeBroker<Document extends object> {
                 /* Already unavailable. */
               }
             }
-            return { ...(await this.result(prepared.attemptId)), opening: 'incomplete' };
+            return { status: 'ok', instanceId: prepared.attemptId, opening: 'incomplete' };
           }
         }
         await this.supervisor.launch(
@@ -340,18 +343,22 @@ export class TerminalNativeBroker<Document extends object> {
     return 'confirmed';
   }
 
-  private assertCurrent(challenge: TerminalChallenge, generation: number): void {
+  private assertCurrent(
+    challenge: TerminalChallenge,
+    generation: number,
+    consentExpiresAt = challenge.expiresAt,
+  ): void {
     // Recheck synchronously at the effect boundary, after the asynchronous dialog.
     if (
       generation !== this.generation ||
       !this.current(this.document, true) ||
-      challenge.expiresAt <= this.authority.now()
+      Math.min(challenge.expiresAt, consentExpiresAt) <= this.authority.now()
     )
       throw new Error('Native grant revoked');
   }
 
-  private proof(challenge: TerminalChallenge, generation: number) {
-    this.assertCurrent(challenge, generation);
+  private proof(challenge: TerminalChallenge, generation: number, consentExpiresAt?: number) {
+    this.assertCurrent(challenge, generation, consentExpiresAt);
     return {
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), this.privateKey).toString(

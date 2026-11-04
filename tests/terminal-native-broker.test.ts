@@ -620,3 +620,70 @@ test('native Open cancellation and expired consent never start a process', async
     assert.deepEqual(s.signals, []);
   }
 });
+
+for (const fault of ['blur', 'throw', 'expiry'] as const) {
+  test(`native Open keeps the attempt and cannot report ready after final snapshot ${fault}`, async () => {
+    let invalidate = () => {};
+    const s = setup(
+      (supervisor) =>
+        new Proxy(supervisor, {
+          get(target, property) {
+            if (property === 'snapshot')
+              return async (id: string) => {
+                const snapshot = target.snapshot(id);
+                invalidate();
+                if (fault === 'throw') throw new Error('SYNTHETIC unavailable snapshot');
+                return snapshot;
+              };
+            const value: unknown = Reflect.get(target, property);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }) as unknown as TerminalNativeSupervisor,
+    );
+    invalidate = () => (fault === 'expiry' ? s.advance() : s.focus(false));
+    const reply = await s.send('open', { profileId: 'synthetic' });
+    assert.equal(reply.status, 'ok');
+    if (reply.status !== 'ok') throw new Error('Expected retained attempt');
+    assert.equal(reply.opening, 'incomplete');
+    assert.ok(reply.instanceId);
+    assert.equal(reply.snapshot, undefined);
+    assert.equal(s.starts(), 1);
+    s.focus(true);
+    assert.equal(
+      (await s.send('write', { instanceId: reply.instanceId, sequence: 0, text: 'never' })).status,
+      'denied',
+    );
+    assert.deepEqual(s.signals, []);
+  });
+}
+
+test('fresh attach and input challenges never renew the combined native consent deadline', async () => {
+  for (const stage of ['requestAttach', 'requestInput'] as const) {
+    let expire = () => {};
+    const s = setup(
+      (supervisor) =>
+        new Proxy(supervisor, {
+          get(target, property) {
+            const value: unknown = Reflect.get(target, property);
+            if (property === stage)
+              return async (...args: unknown[]) => {
+                expire(); // The new challenge itself will still have a fresh expiry.
+                return Reflect.apply(value as (...args: unknown[]) => unknown, target, args);
+              };
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }) as unknown as TerminalNativeSupervisor,
+    );
+    expire = s.advance;
+    const reply = await s.send('open', { profileId: 'synthetic' });
+    assert.equal(reply.status, 'ok');
+    if (reply.status !== 'ok') throw new Error('Expected retained attempt');
+    assert.equal(reply.opening, 'incomplete');
+    assert.equal(s.starts(), 1);
+    assert.equal(
+      (await s.send('write', { instanceId: reply.instanceId, sequence: 0, text: 'never' })).status,
+      'denied',
+    );
+    assert.deepEqual(s.signals, []);
+  }
+});
