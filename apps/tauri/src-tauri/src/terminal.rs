@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
 use tauri::webview::WebviewBuilder;
@@ -27,6 +27,7 @@ struct Running {
     generations: Vec<u64>,
     loaded: Vec<bool>,
     revoked: Vec<bool>,
+    pending_open: Vec<Option<OpeningIntent>>,
     pending: HashMap<String, oneshot::Sender<Value>>,
     metadata_pending: HashMap<String, MetadataPending>,
     metadata_mutating: Option<String>,
@@ -48,6 +49,41 @@ struct Running {
     retiring: bool,
     retire_denied: String,
     retired_notice: String,
+}
+
+struct OpeningIntent {
+    profile: String,
+    document: u64,
+    presentation: u64,
+    expires: Instant,
+}
+impl OpeningIntent {
+    fn current(&self, document: u64, presentation: u64, now: Instant) -> bool {
+        self.document == document && self.presentation == presentation && now < self.expires
+    }
+}
+
+fn invalidate_opening(document: &mut u64, pending: &mut Option<OpeningIntent>) {
+    *document = document.wrapping_add(1);
+    *pending = None;
+}
+fn take_opening(
+    pending: &mut Option<OpeningIntent>,
+    expected: (u64, u64, Instant),
+    current: (u64, u64),
+    now: Instant,
+) -> Option<String> {
+    let valid = current == (expected.0, expected.1)
+        && now < expected.2
+        && pending
+            .as_ref()
+            .is_some_and(|intent| intent.current(current.0, current.1, now));
+    let taken = pending.take(); // Invalid intents are consumed too, never rearmed on focus.
+    if valid {
+        taken.map(|intent| intent.profile)
+    } else {
+        None
+    }
 }
 
 struct MetadataPending {
@@ -494,7 +530,7 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
         let mut guard = state.0.lock().unwrap();
         if let Some(running) = guard.as_mut() {
             if let Some(generation) = running.generations.get_mut(slot) {
-                *generation += 1;
+                invalidate_opening(generation, &mut running.pending_open[slot]);
             }
         }
     }
@@ -506,6 +542,13 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
 
 #[tauri::command]
 pub async fn terminal_request(window: Webview, request: Value) -> Value {
+    dispatch_terminal_request(window, request, None).await
+}
+async fn dispatch_terminal_request(
+    window: Webview,
+    request: Value,
+    expected: Option<(u64, u64, Instant)>,
+) -> Value {
     let denied = || json!({"status": "denied"});
     let Some(slot) = slot(&window) else {
         return denied();
@@ -536,6 +579,11 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
             || running.revoked[slot]
             || running.busy[slot]
             || (running.metadata_mutating.is_some() && !passive)
+            || expected.is_some_and(|(document, presentation, expires)| {
+                running.generations[slot] != document
+                    || running.layout_generation != presentation
+                    || Instant::now() >= expires
+            })
         {
             return denied();
         }
@@ -547,6 +595,9 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
             return json!({"status": "focus_required"});
         }
         running.sequence += 1;
+        if request["action"] == "open" {
+            running.pending_open[slot] = None;
+        }
         let id = format!("00000000-0000-4000-8000-{:012x}", running.sequence);
         let bytes = format!(
             "{}\n",
@@ -579,7 +630,34 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         running.reviewing[slot] = false;
         running.generations[slot] == generation && running.loaded[slot]
     };
-    if !valid || presentation_blocked(&app) || self::slot(&window) != Some(slot) {
+    let open = request["action"] == "open";
+    let focused_after = !open || focused(&window).await;
+    let current_document = self::slot(&window) == Some(slot)
+        && app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|r| r.loaded[slot] && !r.revoked[slot]);
+    let current_generation = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| r.generations[slot] == generation);
+    if !valid
+        || !focused_after
+        || !current_generation
+        || presentation_blocked(&app)
+        || !current_document
+    {
+        if open && current_document {
+            if let Ok(Ok(ref value)) = result {
+                return incomplete_open(value);
+            }
+        }
         return denied();
     }
     match result {
@@ -590,6 +668,72 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
             denied()
         }
     }
+}
+
+fn incomplete_open(value: &Value) -> Value {
+    if value["status"] == "ok" && crate::features::uuid(&value["instanceId"]) {
+        json!({"status":"ok", "instanceId":value["instanceId"], "opening":"incomplete"})
+    } else {
+        json!({"status":"denied"})
+    }
+}
+
+/// A single native-held intent from create-selected. No renderer path, profile or proof.
+#[tauri::command]
+pub async fn terminal_open_prepared(window: Webview) -> Value {
+    let idle = || json!({"attempted":false});
+    let Some(slot) = slot(&window) else {
+        return idle();
+    };
+    let app = window.app_handle().clone();
+    let epoch = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return idle();
+        };
+        let Some(intent) = r.pending_open[slot].as_ref() else {
+            return idle();
+        };
+        if !intent.current(r.generations[slot], r.layout_generation, Instant::now()) {
+            r.pending_open[slot] = None;
+            return idle();
+        }
+        (r.generations[slot], r.layout_generation, intent.expires)
+    };
+    if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
+        return idle();
+    }
+    let profile = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return idle();
+        };
+        if r.busy[slot]
+            || r.revoked[slot]
+            || !r.loaded[slot]
+            || r.metadata_mutating.is_some()
+            || r.confirming_quit
+            || r.exit_authorized
+            || r.retiring
+            || r.mcp_request.is_some()
+        {
+            return idle();
+        }
+        let current = (r.generations[slot], r.layout_generation);
+        take_opening(&mut r.pending_open[slot], epoch, current, Instant::now())
+    };
+    let Some(profile) = profile else {
+        return idle();
+    };
+    let value = dispatch_terminal_request(
+        window,
+        json!({"version":1,"action":"open","profileId":profile}),
+        Some(epoch),
+    )
+    .await;
+    json!({"attempted":true,"value":value})
 }
 
 #[tauri::command]
@@ -1075,6 +1219,14 @@ pub async fn start_selected(
     app: &tauri::AppHandle,
     paths: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    start_selected_with_open(app, paths, false).await
+}
+
+pub async fn start_selected_with_open(
+    app: &tauri::AppHandle,
+    paths: Vec<String>,
+    operational_open: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if is_running(app) {
         return Err("Managed terminals already open".into());
     }
@@ -1095,6 +1247,7 @@ pub async fn start_selected(
             script.as_os_str(),
             std::ffi::OsStr::new(&files),
             admission.as_os_str(),
+            std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
@@ -1139,6 +1292,24 @@ pub async fn start_selected(
         .map(|p| p["html"].as_str().unwrap_or("").to_owned())
         .collect();
     let count = documents.len();
+    let selected_profiles: Vec<Option<String>> = panes
+        .iter()
+        .map(|pane| {
+            operational_open
+                .then_some(&pane["profileId"])
+                .and_then(|profile| {
+                    profile
+                        .as_str()
+                        .filter(|id| {
+                            matches!(
+                                *id,
+                                "codex-terminal-v1" | "claude-terminal-v1" | "opencode-terminal-v1"
+                            )
+                        })
+                        .map(str::to_owned)
+                })
+        })
+        .collect();
     let exited = Arc::new(Notify::new());
     *app.state::<Terminals>().0.lock().unwrap() = Some(Running {
         child,
@@ -1147,6 +1318,7 @@ pub async fn start_selected(
         generations: vec![0; count],
         loaded: vec![false; count],
         revoked: vec![false; count],
+        pending_open: (0..count).map(|_| None).collect(),
         pending: HashMap::new(),
         metadata_pending: HashMap::new(),
         metadata_mutating: None,
@@ -1333,6 +1505,7 @@ pub async fn start_selected(
             send(app, json!({"kind":"layout-open", "slot":slot}));
         }
     });
+    let opening_app = app.clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
@@ -1403,6 +1576,22 @@ pub async fn start_selected(
         }
         stop(&app);
     });
+    if operational_open {
+        metadata_view_begin(&opening_app);
+        if let Some(r) = opening_app.state::<Terminals>().0.lock().unwrap().as_mut() {
+            r.presentation_suspended = false;
+            let expires = Instant::now() + Duration::from_secs(60);
+            for (slot, profile) in selected_profiles.into_iter().enumerate() {
+                r.pending_open[slot] = profile.map(|profile| OpeningIntent {
+                    profile,
+                    document: r.generations[slot],
+                    presentation: r.layout_generation,
+                    expires,
+                });
+            }
+        }
+        send(&opening_app, json!({"kind":"layout-open", "slot":0}));
+    }
     Ok(())
 }
 
@@ -1578,4 +1767,73 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
             }
         });
     true
+}
+
+#[cfg(test)]
+mod opening_tests {
+    use super::{incomplete_open, invalidate_opening, take_opening, OpeningIntent};
+    use serde_json::json;
+    use std::time::{Duration, Instant};
+    fn intent(now: Instant) -> Option<OpeningIntent> {
+        Some(OpeningIntent {
+            profile: "codex-terminal-v1".into(),
+            document: 3,
+            presentation: 9,
+            expires: now + Duration::from_secs(60),
+        })
+    }
+    #[test]
+    fn deliberate_transition_opens_the_bound_document_once_without_reminting() {
+        let now = Instant::now();
+        let mut pending = intent(now);
+        let epoch = (3, 9, now + Duration::from_secs(60));
+        assert_eq!(
+            take_opening(&mut pending, epoch, (3, 9), now),
+            Some("codex-terminal-v1".into())
+        );
+        assert!(take_opening(&mut pending, epoch, (3, 9), now).is_none());
+    }
+    #[test]
+    fn blur_deactivation_dashboard_quit_and_reload_consume_pending_intent_before_first_focus() {
+        let now = Instant::now();
+        for _event in ["blur", "deactivation", "dashboard", "quit", "reload"] {
+            let mut pending = intent(now);
+            let mut document = 3;
+            invalidate_opening(&mut document, &mut pending);
+            assert!(take_opening(
+                &mut pending,
+                (3, 9, now + Duration::from_secs(60)),
+                (document, 9),
+                now
+            )
+            .is_none());
+            assert!(pending.is_none());
+        }
+    }
+    #[test]
+    fn async_focus_cannot_rebind_document_presentation_or_extend_expiry() {
+        let now = Instant::now();
+        let expires = now + Duration::from_secs(60);
+        for (document, presentation, at) in [(4, 9, now), (3, 10, now), (3, 9, expires)] {
+            let mut pending = intent(now);
+            assert!(
+                take_opening(&mut pending, (3, 9, expires), (document, presentation), at).is_none()
+            );
+            assert!(pending.is_none());
+        }
+    }
+    #[test]
+    fn late_open_reply_only_retains_public_attempt_identity() {
+        let id = "00000000-0000-4000-8000-000000000001";
+        assert_eq!(
+            incomplete_open(
+                &json!({"status":"ok","instanceId":id,"opening":"ready","lease":"forbidden"})
+            ),
+            json!({"status":"ok","instanceId":id,"opening":"incomplete"})
+        );
+        assert_eq!(
+            incomplete_open(&json!({"status":"ok","instanceId":"forged"})),
+            json!({"status":"denied"})
+        );
+    }
 }

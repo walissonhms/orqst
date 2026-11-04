@@ -29,7 +29,7 @@ fn exact(value: &Value, keys: &[&str]) -> bool {
 fn safe(value: &Value) -> Option<u64> {
     value.as_u64().filter(|n| *n <= 9_007_199_254_740_991)
 }
-fn uuid(value: &Value) -> bool {
+pub(crate) fn uuid(value: &Value) -> bool {
     value.as_str().is_some_and(|s| {
         s.len() == 36
             && s.bytes().enumerate().all(|(i, b)| {
@@ -168,7 +168,7 @@ pub(crate) fn valid_envelope(value: &Value) -> bool {
         && text(&value["source"], 4096, true)
         && valid_request(&value["request"])
 }
-fn workspace_id(value: &Value) -> bool {
+pub(crate) fn workspace_id(value: &Value) -> bool {
     value.as_str().is_some_and(|s| {
         !s.is_empty()
             && s.len() <= 128

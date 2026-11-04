@@ -30,6 +30,7 @@ async function start() {
     .max(8)
     .parse(JSON.parse(process.argv[2]!));
   const directory = process.argv[3];
+  const operationalOpen = process.argv[4] === 'true';
   if (!directory) throw new Error('Private native admission directory required');
   const selection = inspectManagedTerminalFiles(files, files.length);
   if (selection.some((p) => p.blocker)) throw new Error('Blocked terminal profile');
@@ -236,6 +237,7 @@ async function start() {
     mcpAuthorize: translate('managedTerminal.mcpAuthorize'),
     mcpDenied: translate('managedTerminal.mcpDenied'),
     panes: selection.map(({ config }, slot) => ({
+      profileId: `${interactiveProvider(config)}-terminal-v1`,
       title: `${slot + 1} · ${providers[slot]}`,
       html: terminalDocument({
         language,
@@ -245,6 +247,7 @@ async function start() {
         project: config.project,
         version: config.executableVersion,
         startProfile: `${interactiveProvider(config)}-terminal-v1`,
+        operationalOpen,
         nativeAuthentication: !!config.authentication,
         scope: config.authentication ? 'reuseScope' : 'scope',
         terminalId: core.identities[slot]!.terminalId,

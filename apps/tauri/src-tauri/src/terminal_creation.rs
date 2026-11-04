@@ -121,7 +121,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         if let Some(generation) = begin(app, &request, None) {
             let app = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
-                execute(&app, &window, request, source.as_str(), generation);
+                let _ = execute(&app, &window, request, source.as_str(), generation);
             });
         }
     });
@@ -139,6 +139,32 @@ fn valid_request(value: &Value) -> bool {
         .is_some_and(|n| n <= 9_007_199_254_740_991);
     match value["action"].as_str() {
         Some("snapshot") => exact(value, &["action"]),
+        Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
+        Some("create-selected") => {
+            exact(
+                value,
+                &[
+                    "action",
+                    "generation",
+                    "workspaceId",
+                    "featureId",
+                    "catalogId",
+                    "provider",
+                    "modelId",
+                    "count",
+                ],
+            ) && generation
+                && scope(value)
+                && digest(&value["catalogId"])
+                && digest(&value["modelId"])
+                && matches!(
+                    value["provider"].as_str(),
+                    Some("codex" | "claude" | "opencode")
+                )
+                && value["count"]
+                    .as_u64()
+                    .is_some_and(|n| (1..=8).contains(&n))
+        }
         Some("review") => exact(value, &["action", "generation"]) && generation,
         Some("create") => {
             exact(value, &["action", "generation", "provider", "count"])
@@ -150,6 +176,75 @@ fn valid_request(value: &Value) -> bool {
         }
         _ => false,
     }
+}
+fn scope(value: &Value) -> bool {
+    crate::features::workspace_id(&value["workspaceId"])
+        && (value["featureId"].is_null() || crate::features::uuid(&value["featureId"]))
+}
+fn digest(value: &Value) -> bool {
+    value.as_str().is_some_and(|s| {
+        s.len() == 64
+            && s.bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    })
+}
+fn valid_catalog(value: &Value, request: &Value) -> bool {
+    exact(
+        value,
+        &[
+            "contractVersion",
+            "workspaceId",
+            "featureId",
+            "catalogId",
+            "providers",
+        ],
+    ) && value["contractVersion"] == 1
+        && scope(value)
+        && value["workspaceId"] == request["workspaceId"]
+        && value["featureId"] == request["featureId"]
+        && digest(&value["catalogId"])
+        && value["providers"].as_array().is_some_and(|providers| {
+            providers.len() == 3
+                && ["codex", "claude", "opencode"]
+                    .iter()
+                    .all(|id| providers.iter().filter(|p| p["provider"] == *id).count() == 1)
+                && providers.iter().all(|p| {
+                    exact(p, &["provider", "status", "reason", "models"])
+                        && matches!(p["status"].as_str(), Some("available" | "unavailable"))
+                        && matches!(
+                            p["reason"].as_str(),
+                            Some(
+                                "ready"
+                                    | "executable_not_found"
+                                    | "ambiguous_executable"
+                                    | "catalog_limited"
+                            )
+                        )
+                        && p["models"].as_array().is_some_and(|models| {
+                            models.len() <= 128
+                                && models.iter().all(|m| {
+                                    exact(
+                                        m,
+                                        &["id", "label", "source", "isDefault", "availability"],
+                                    ) && digest(&m["id"])
+                                        && m["label"].as_str().is_some_and(|s| {
+                                            !s.is_empty() && s.encode_utf16().count() <= 160
+                                        })
+                                        && matches!(
+                                            m["source"].as_str(),
+                                            Some(
+                                                "cli-default"
+                                                    | "native-config"
+                                                    | "cli-cache"
+                                                    | "official-alias"
+                                            )
+                                        )
+                                        && m["isDefault"].is_boolean()
+                                        && m["availability"] == "unverified"
+                                })
+                        })
+                })
+        })
 }
 fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
     let Ok(url) = tauri::Url::parse(source) else {
@@ -190,7 +285,13 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let state = app.state::<Preparation>();
     let mut guard = state.0.lock().unwrap();
     if expected.is_some_and(|generation| generation != guard.generation)
-        || !guard.begin(request["action"] == "create", running)
+        || !guard.begin(
+            matches!(
+                request["action"].as_str(),
+                Some("create" | "create-selected")
+            ),
+            running,
+        )
     {
         return None;
     }
@@ -202,8 +303,9 @@ fn execute(
     request: Value,
     source: &str,
     generation: u64,
-) -> bool {
-    let succeeded = run(app, window, request, source, generation).is_ok();
+) -> Option<Value> {
+    let result = run(app, window, request, source, generation);
+    let succeeded = result.is_ok();
     if !succeeded
         && window.is_visible().unwrap_or(false)
         && window.is_focused().unwrap_or(false)
@@ -216,7 +318,7 @@ fn execute(
     }
     stop(app);
     app.state::<Preparation>().0.lock().unwrap().busy = false;
-    succeeded
+    result.ok()
 }
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
@@ -232,11 +334,11 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return json!({"status":"ok", "snapshot":snapshot(&app)});
     }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
-    if !crate::features::focused(&window).await {
+    if request["action"] != "catalog" && !crate::features::focused(&window).await {
         return json!({"status":"focus_required"});
     }
     if identity(&window) != Some((source.clone(), generation))
-        || request["generation"].as_u64() != Some(generation)
+        || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
     {
         return denied();
     }
@@ -255,6 +357,13 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
             return denied();
         }
         json!({"action":"review", "files":files})
+    } else if matches!(
+        request["action"].as_str(),
+        Some("catalog" | "create-selected")
+    ) {
+        let mut native = request.clone();
+        native.as_object_mut().unwrap().remove("generation");
+        native
     } else {
         json!({"action":"create", "provider":request["provider"], "count":request["count"]})
     };
@@ -278,7 +387,11 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     if identity(&window) != Some((source, generation)) {
         return denied();
     }
-    json!({"status":if matches!(result, Ok(true)) { "ok" } else { "unavailable" }, "snapshot":snapshot(&app)})
+    match result {
+        Ok(Some(value)) if value["status"] == "catalog" => value,
+        Ok(Some(_)) => json!({"status":"ok", "snapshot":snapshot(&app)}),
+        _ => json!({"status":"unavailable", "snapshot":snapshot(&app)}),
+    }
 }
 pub fn configure(
     app: &tauri::AppHandle,
@@ -324,7 +437,7 @@ fn run(
     request: Value,
     source: &str,
     generation: u64,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
     // Native modal dialogs temporarily receive focus. Bind to the original visible
     // document and expiry, not the dialog's focus transition. CLI starts retain the
@@ -345,6 +458,18 @@ fn run(
         .resource_dir()?
         .join("core/tauri-terminal-preparation-host.cjs");
     let parent = app.path().app_data_dir()?;
+    // Both paths come from the owned bootstrap, never from a renderer-provided cwd.
+    let trusted = json!({"observerDatabase":parent.join("core/orqst.db"), "preferencesDirectory":preferences_directory(&parent)?}).to_string();
+    let unsupported_opencode = [
+        "OPENCODE_CONFIG",
+        "OPENCODE_CONFIG_CONTENT",
+        "OPENCODE_TEST_HOME",
+    ]
+    .iter()
+    .any(|key| std::env::var_os(key).is_some());
+    if request["provider"] == "opencode" && unsupported_opencode {
+        return Err("Unsupported native OpenCode configuration selector".into());
+    }
     let (mut rx, child) = app
         .shell()
         .sidecar("orqst-node")?
@@ -352,12 +477,26 @@ fn run(
             script.as_os_str(),
             std::ffi::OsStr::new(&request.to_string()),
             parent.as_os_str(),
+            std::ffi::OsStr::new(&trusted),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
             matches!(
                 key.to_str(),
-                Some("HOME" | "PATH" | "TMPDIR" | "LANG" | "CODEX_HOME" | "CLAUDE_CONFIG_DIR")
+                Some(
+                    "HOME"
+                        | "PATH"
+                        | "TMPDIR"
+                        | "LANG"
+                        | "CODEX_HOME"
+                        | "CLAUDE_CONFIG_DIR"
+                        | "XDG_CONFIG_HOME"
+                        | "XDG_DATA_HOME"
+                        | "XDG_STATE_HOME"
+                        | "XDG_CACHE_HOME"
+                        | "OPENCODE_CONFIG_DIR"
+                        | "OPENCODE_DB"
+                )
             )
         }))
         .spawn()?;
@@ -425,7 +564,12 @@ fn run(
                             matches!(result, MessageDialogResult::Custom(ref text) if text == approve)
                         )
                     }
-                    Some("commit") if request["action"] == "create" => {
+                    Some("commit")
+                        if matches!(
+                            request["action"].as_str(),
+                            Some("create" | "create-selected")
+                        ) =>
+                    {
                         let valid = current();
                         let state = app.state::<Preparation>();
                         let mut guard = state.0.lock().unwrap();
@@ -449,12 +593,29 @@ fn run(
             _ => return Err("Preparation host unavailable".into()),
         }
     }
-    let result = complete.ok_or("Incomplete preparation")?;
+    let mut result = complete.ok_or("Incomplete preparation")?;
+    if request["action"] == "catalog" {
+        if result["status"] != "catalog" || !valid_catalog(&result["catalog"], &request) {
+            return Err("Invalid scoped catalog".into());
+        }
+        if unsupported_opencode {
+            // Do not forward config content/test-home or silently ignore their
+            // presence. Other providers remain independently usable.
+            for provider in result["catalog"]["providers"].as_array_mut().unwrap() {
+                if provider["provider"] == "opencode" {
+                    provider["status"] = json!("unavailable");
+                    provider["reason"] = json!("catalog_limited");
+                    provider["models"] = json!([]);
+                }
+            }
+        }
+        return Ok(json!({"status":"catalog", "catalog":result["catalog"]}));
+    }
     let files = result["files"]
         .as_array()
         .ok_or("Invalid preparation result")?;
     if result["status"] == "cancelled" && files.is_empty() {
-        return Ok(());
+        return Ok(json!({"status":"ok"}));
     }
     if files.is_empty() || files.len() > 8 {
         return Err("Invalid preparation count".into());
@@ -474,7 +635,11 @@ fn run(
         // Latch before entering Core. Never retry uncertain admission, even on failure.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
         if let Err(error) =
-            tauri::async_runtime::block_on(crate::terminal::start_selected(app, files))
+            tauri::async_runtime::block_on(crate::terminal::start_selected_with_open(
+                app,
+                files,
+                request["action"] == "create-selected",
+            ))
         {
             crate::terminal::stop(app);
             return Err(error);
@@ -482,7 +647,7 @@ fn run(
     } else if result["status"] != "prepared" {
         return Err("Invalid preparation status".into());
     }
-    Ok(())
+    Ok(json!({"status":"ok"}))
 }
 
 fn field<'a>(value: &'a Value, key: &str, limit: usize) -> Result<&'a str, &'static str> {
@@ -490,6 +655,40 @@ fn field<'a>(value: &'a Value, key: &str, limit: usize) -> Result<&'a str, &'sta
         .as_str()
         .filter(|text| text.len() <= limit)
         .ok_or("Invalid native preparation field")
+}
+
+fn preferences_directory(
+    parent: &std::path::Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let path = parent.join("managed-agents");
+    let mut builder = std::fs::DirBuilder::new();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        builder.mode(0o700);
+    }
+    match builder.create(&path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(error) => return Err(error.into()),
+    }
+    let metadata = std::fs::symlink_metadata(&path)?;
+    if !metadata.is_dir()
+        || metadata.file_type().is_symlink()
+        || std::fs::canonicalize(&path)? != path
+    {
+        return Err("Unsafe native preferences directory".into());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
+        if metadata.permissions().mode() & 0o077 != 0
+            || metadata.uid() != std::fs::metadata(parent)?.uid()
+        {
+            return Err("Unsafe native preferences ownership".into());
+        }
+    }
+    Ok(path)
 }
 
 /// Any selection entering Core, including startup configuration, is single-use.
@@ -663,5 +862,43 @@ mod tests {
         ] {
             assert!(create_action(id).is_none());
         }
+    }
+}
+
+#[cfg(test)]
+mod catalog_tests {
+    use super::{valid_catalog, valid_request};
+    use serde_json::json;
+    #[test]
+    fn selected_requests_bind_scope_and_opaque_models_without_native_paths() {
+        let mut selected = json!({"action":"create-selected","generation":3,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"provider":"opencode","modelId":"b".repeat(64),"count":1});
+        assert!(valid_request(&selected));
+        selected["project"] = json!("/SYNTHETIC/forged");
+        assert!(!valid_request(&selected));
+        assert!(valid_request(
+            &json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null})
+        ));
+    }
+    #[test]
+    fn catalogs_accept_all_reviewed_sources_but_never_entitlement_or_cross_scope() {
+        let request =
+            json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
+        let providers: Vec<_>=["codex","claude","opencode"].iter().map(|provider|json!({"provider":provider,"status":"available","reason":"ready","models":[{"id":"b".repeat(64),"label":"SYNTHETIC model","source":"official-alias","isDefault":false,"availability":"unverified"}]})).collect();
+        let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers});
+        assert!(valid_catalog(&catalog, &request));
+        for source in [
+            "cli-default",
+            "native-config",
+            "cli-cache",
+            "official-alias",
+        ] {
+            catalog["providers"][0]["models"][0]["source"] = json!(source);
+            assert!(valid_catalog(&catalog, &request));
+        }
+        catalog["providers"][0]["models"][0]["availability"] = json!("entitled");
+        assert!(!valid_catalog(&catalog, &request));
+        catalog["providers"][0]["models"][0]["availability"] = json!("unverified");
+        catalog["workspaceId"] = json!("another-workspace");
+        assert!(!valid_catalog(&catalog, &request));
     }
 }
