@@ -3,6 +3,7 @@ import {
   type TerminalPreparationFailure,
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
+  terminalMcpPairRequestSchema,
   type TerminalPreparationCatalog,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
@@ -19,6 +20,7 @@ import { TerminalSelection } from './terminal-selection.js';
 export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
+  terminalMcpPairRequestSchema,
   z.strictObject({
     action: z.literal('create'),
     provider: z.enum(['codex', 'claude']),
@@ -33,7 +35,10 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 export interface TauriPreparationPorts {
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
-  confirm(key: 'create' | 'acknowledge' | 'open' | 'selected', detail: string): Promise<boolean>;
+  confirm(
+    key: 'create' | 'acknowledge' | 'open' | 'selected' | 'mcpPair',
+    detail: string,
+  ): Promise<boolean>;
   /** Native latch precedes the first possible write, including an uncertain partial write. */
   commit(): Promise<boolean>;
 }
@@ -79,7 +84,11 @@ export async function prepareTauriTerminals(
     const current = () => now() < expires && ports.current();
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
-    if (request.action === 'catalog' || request.action === 'create-selected') {
+    if (
+      request.action === 'catalog' ||
+      request.action === 'create-selected' ||
+      request.action === 'create-mcp-pair'
+    ) {
       stage = 'catalog';
       if (!trusted) throw new Error('Native workspace catalogue required');
       const discovered = terminalPreparationCatalog(
@@ -94,11 +103,30 @@ export async function prepareTauriTerminals(
       if (request.action === 'catalog') return { status: 'catalog', catalog: discovered.catalog };
       if (request.catalogId !== discovered.catalog.catalogId) fail('catalog_changed');
       stage = 'selection';
-      const provider = discovered.providers.find((entry) => entry.provider === request.provider);
-      const selected = provider?.models?.options.find((entry) => entry.id === request.modelId);
-      if (!provider || provider.executables.length !== 1 || !selected)
-        throw new TauriPreparationError({ stage, code: 'selection_unavailable', effects });
-      if ((discovered.workspace.feature?.terminalIds.length ?? 0) + request.count > 8)
+      const pair = request.action === 'create-mcp-pair';
+      const count = pair ? 2 : request.count;
+      const sourceProvider = pair ? request.sourceProvider : request.provider;
+      const select = (name: typeof sourceProvider, modelId: string) => {
+        const provider = discovered.providers.find((entry) => entry.provider === name);
+        const model = provider?.models?.options.find((entry) => entry.id === modelId);
+        if (!provider || provider.executables.length !== 1 || !model)
+          return fail('selection_unavailable');
+        return { provider: name, executable: provider.executables[0]!, model: model.selection };
+      };
+      const source = select(
+        sourceProvider,
+        pair
+          ? sourceProvider === 'codex'
+            ? request.codexModelId
+            : request.openCodeModelId
+          : request.modelId,
+      );
+      const companion = pair
+        ? sourceProvider === 'codex'
+          ? select('opencode', request.openCodeModelId)
+          : select('codex', request.codexModelId)
+        : undefined;
+      if ((discovered.workspace.feature?.terminalIds.length ?? 0) + count > 8)
         fail('capacity_exceeded');
       stage = 'plan';
       const preparation = terminalPreparationBindingSchema.parse({
@@ -109,24 +137,29 @@ export async function prepareTauriTerminals(
       });
       const plan = prepareTerminalCreation({
         ...context,
-        provider: request.provider,
-        count: request.count,
+        ...source,
+        ...(companion ? { companion } : {}),
+        count,
         limit: 8,
-        executable: provider.executables[0]!,
         project: discovered.workspace.project,
-        model: selected.selection,
         preparation,
-        mcp: false,
-        ...(request.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
+        mcp: pair,
+        ...(pair || sourceProvider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
       // One exact native selection review includes shared-state/provider startup acknowledgement.
       // Runtime execution remains a separate signed native Open operation.
-      if (plan.pages.length !== 1) fail('review_too_large');
+      if (!pair && plan.pages.length !== 1) fail('review_too_large');
       stage = 'review';
       const expires = now() + 60_000;
       const reviewed = () => current() && now() < expires;
-      if (!(await ports.confirm('selected', plan.pages[0]!)) || !reviewed())
-        return { status: 'cancelled', files: [] };
+      for (const page of plan.pages) {
+        if (
+          !reviewed() ||
+          !(await ports.confirm(pair ? 'mcpPair' : 'selected', page)) ||
+          !reviewed()
+        )
+          return { status: 'cancelled', files: [] };
+      }
       stage = 'revalidation';
       const rechecked = terminalPreparationCatalog(
         { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },

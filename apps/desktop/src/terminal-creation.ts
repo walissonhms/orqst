@@ -49,7 +49,11 @@ export interface TerminalCreationInput {
   limit?: number;
   provider: LocalCliProvider;
   executable: string;
-  companion?: { provider: LocalCliProvider; executable: string };
+  companion?: {
+    provider: LocalCliProvider;
+    executable: string;
+    model?: TerminalModelSelection;
+  };
   node: string;
   project: string;
   parent: string;
@@ -85,7 +89,10 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   terminalDirectory(input.project);
   if (!input.preparation && readdirSync(input.project).length)
     throw new Error('Select an empty disposable project');
-  validateTerminalModelSelection(input.model);
+  const validateModels = () => {
+    for (const member of members) validateTerminalModelSelection(member.model);
+  };
+  validateModels();
   validateTerminalPreparationBinding(input.preparation, input.project);
   const root = join(input.parent, `terminal-pair-${randomUUID()}`);
   const executables = members.map(({ executable }) => ({
@@ -109,7 +116,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   };
   const toolIdentities = JSON.stringify(toolDirectoryIdentities());
-  const configs: InteractiveTerminalConfig[] = members.map(({ provider }, index) => {
+  const configs: InteractiveTerminalConfig[] = members.map(({ provider, model }, index) => {
     const slot = String.fromCharCode(65 + index);
     const executable = executables[index]!;
     const common = {
@@ -119,7 +126,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       node,
       toolPath,
       project: input.project,
-      ...(input.model ? { model: input.model } : {}),
+      ...(model ? { model } : {}),
       ...(input.preparation ? { preparation: input.preparation } : {}),
       state: join(root, slot),
     };
@@ -218,8 +225,18 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   const identities = JSON.stringify(directoryIdentities());
   const snapshot = JSON.stringify(configs);
+  const communication = input.mcp
+    ? {
+        communication: {
+          sourceTerminalId: configs[0]!.identity!.terminalId,
+          workerTerminalId: configs[1]!.identity!.terminalId,
+          separateTaskGrantRequired: true,
+        },
+      }
+    : {};
   // The common PATH is disclosed once; both persisted manifests contain the exact reviewed value.
   const review = JSON.stringify({
+    ...communication,
     toolPath,
     terminals: configs.map((config) => {
       const terminal = { ...config };
@@ -233,7 +250,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     detail.length <= 4096
       ? [detail]
       : configs.map((config) =>
-          JSON.stringify({ toolPath, terminals: [config] }).replace(
+          JSON.stringify({ ...communication, toolPath, terminals: [config] }).replace(
             /\p{Cf}/gu,
             (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
           ),
@@ -255,7 +272,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       if (JSON.stringify(toolDirectoryIdentities()) !== toolIdentities)
         throw new Error('Tool PATH directory identity changed');
       if (JSON.stringify(configs) !== snapshot || !current()) throw new Error('Creation changed');
-      validateTerminalModelSelection(input.model);
+      validateModels();
       validateTerminalPreparationBinding(input.preparation, input.project);
       if (!input.preparation && readdirSync(input.project).length)
         throw new Error('Project is no longer empty');
@@ -289,7 +306,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
-      validateTerminalModelSelection(input.model);
+      validateModels();
       validateTerminalPreparationBinding(input.preparation, input.project);
       if (
         !current() ||

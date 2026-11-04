@@ -413,3 +413,240 @@ test('unknown model capabilities and changed source/view are refused before prov
     f.close();
   }
 });
+
+for (const sourceProvider of ['codex', 'opencode'] as const) {
+  test(`product MCP pair with ${sourceProvider} source reviews both selected models and preserves bilateral opt-in without a session`, async () => {
+    const f = fixture(true);
+    try {
+      const features = featureConfigurationDatabase(f.trusted.preferencesDirectory, f.workspaceId);
+      const feature = features.create({ name: 'Synthetic communication Feature' });
+      features.saveView({ expectedRevision: 0, featureId: feature.featureId });
+      const scope = { workspaceId: f.workspaceId, featureId: feature.featureId };
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', ...scope },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      const codex = catalog.catalog.providers.find((entry) => entry.provider === 'codex')!;
+      const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+      const reviews: Array<{
+        communication: {
+          sourceTerminalId: string;
+          workerTerminalId: string;
+          separateTaskGrantRequired: boolean;
+        };
+        terminals: Array<{ identity: { terminalId: string }; model: { value: string } }>;
+      }> = [];
+      f.ports.confirm = async (key, detail) => {
+        assert.equal(key, 'mcpPair');
+        assert.ok(detail.length <= 4096);
+        reviews.push(JSON.parse(detail));
+        return true;
+      };
+      const prepared = await prepareTauriTerminals(
+        {
+          action: 'create-mcp-pair',
+          ...scope,
+          catalogId: catalog.catalog.catalogId,
+          sourceProvider,
+          codexModelId: codex.models.find((entry) => entry.label === 'synthetic-model')!.id,
+          openCodeModelId: opencode.models.find((entry) => entry.label === 'synthetic/model')!.id,
+        },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(prepared.status, 'open');
+      assert.equal(prepared.files.length, 2);
+      const configs = prepared.files.map(readInteractiveTerminalConfig);
+      assert.equal(configs[0]!.version, sourceProvider === 'codex' ? 1 : 3);
+      assert.equal(configs[1]!.version, sourceProvider === 'codex' ? 3 : 1);
+      assert.deepEqual(
+        reviews.flatMap((page) => page.terminals).map((entry) => entry.identity),
+        configs.map((config) => config.identity),
+      );
+      for (const page of reviews)
+        assert.deepEqual(page.communication, {
+          sourceTerminalId: configs[0]!.identity!.terminalId,
+          workerTerminalId: configs[1]!.identity!.terminalId,
+          separateTaskGrantRequired: true,
+        });
+      assert.deepEqual(
+        features.read(feature.featureId).terminalIds,
+        configs.map((config) => config.identity!.terminalId),
+      );
+      const relay = { path: binary, sha256: hash };
+      for (const config of configs) {
+        assert.equal(config.interactive?.mcp, true);
+        assert.equal(config.project, f.project);
+        assert.equal(config.preparation?.featureId, feature.featureId);
+        assert.deepEqual(
+          readdirSync(config.state).sort(),
+          config.version === 1
+            ? ['codex', 'home', 'terminal.json', 'tmp']
+            : ['terminal.json', 'tmp'],
+        );
+        const launch = {
+          serverName: 'orqst_' + 'a'.repeat(32),
+          socketPath: '/SYNTHETIC/socket',
+          capabilityFile: '/SYNTHETIC/cap',
+          relay,
+        };
+        assert.throws(() => interactiveTerminalProfiles(config), /MCP/);
+        const profile = interactiveTerminalProfiles(config, launch)[0]!;
+        if (config.version === 1) {
+          assert.equal(config.model?.value, 'synthetic-model');
+          assert.equal(profile.argv[profile.argv.indexOf('--model') + 1], 'synthetic-model');
+        } else {
+          assert.equal(config.version, 3);
+          assert.equal(config.interactive.mergedMcpAcknowledged, true);
+          assert.equal(config.interactive.nativeStartupAuthorized, true);
+          assert.deepEqual(profile.argv, ['--standalone']);
+          const inline = JSON.parse(
+            interactiveTerminalEnvironment(config, launch).OPENCODE_CONFIG_CONTENT!,
+          );
+          assert.deepEqual(inline.model, { providerID: 'synthetic', model: 'model' });
+          assert.ok(inline.mcp.servers[launch.serverName]);
+        }
+      }
+      assert.deepEqual(readdirSync(f.project), ['SYNTHETIC-EXISTING-SOURCE']);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+for (const fault of [
+  'codex-model',
+  'opencode-model',
+  'cancel',
+  'cancel-second',
+  'expiry',
+  'surface',
+  'commit',
+  'codex-drift',
+  'opencode-drift',
+  'companion-commit-drift',
+] as const) {
+  test(`product MCP pair refuses ${fault} without publishing a partial pair or starting a session`, async () => {
+    const f = fixture();
+    try {
+      const scope = { workspaceId: f.workspaceId, featureId: null };
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', ...scope },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      const request = {
+        action: 'create-mcp-pair',
+        ...scope,
+        catalogId: catalog.catalog.catalogId,
+        sourceProvider: 'codex',
+        codexModelId: catalog.catalog.providers.find((entry) => entry.provider === 'codex')!
+          .models[0]!.id,
+        openCodeModelId: catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!
+          .models[0]!.id,
+      };
+      if (fault === 'codex-model') request.codexModelId = request.openCodeModelId;
+      if (fault === 'opencode-model') request.openCodeModelId = request.codexModelId;
+      let now = 1;
+      let current = true;
+      let commits = 0;
+      let reviews = 0;
+      const drift = (codex: boolean) =>
+        writeFileSync(
+          join(f.home, codex ? '.codex/config.toml' : '.config/opencode/opencode.json'),
+          'SYNTHETIC-CHANGED',
+          { mode: 0o600 },
+        );
+      f.ports.current = () => current;
+      f.ports.confirm = async () => {
+        reviews++;
+        if (fault === 'expiry') now += 60_000;
+        if (fault === 'surface') current = false;
+        if (fault === 'codex-drift' || fault === 'opencode-drift') drift(fault === 'codex-drift');
+        return fault !== 'cancel' && !(fault === 'cancel-second' && reviews === 2);
+      };
+      f.ports.commit = async () => {
+        commits++;
+        if (fault === 'companion-commit-drift') drift(false);
+        return fault !== 'commit';
+      };
+      const attempt = prepareTauriTerminals(request, f.context, f.ports, () => now, f.trusted);
+      if (['cancel', 'cancel-second', 'expiry', 'surface', 'commit'].includes(fault)) {
+        const result = await attempt;
+        assert.equal(result.status, 'cancelled');
+      } else {
+        await assert.rejects(attempt, (error: unknown) => {
+          const failure = Reflect.get(error as object, 'failure');
+          assert.equal(
+            failure.stage,
+            fault.endsWith('-model')
+              ? 'selection'
+              : fault === 'companion-commit-drift'
+                ? 'provision'
+                : 'revalidation',
+          );
+          assert.equal(
+            failure.effects,
+            fault === 'companion-commit-drift' ? 'possible' : 'not_started',
+          );
+          return true;
+        });
+      }
+      assert.equal(commits, fault === 'commit' || fault === 'companion-commit-drift' ? 1 : 0);
+      if (fault === 'cancel-second') assert.equal(reviews, 2);
+      assert.deepEqual(readdirSync(f.context.parent), []);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+for (const provider of ['codex', 'claude', 'opencode'] as const) {
+  test(`product independent ${provider} opening remains MCP-disabled without a session`, async () => {
+    const f = fixture();
+    try {
+      const scope = { workspaceId: f.workspaceId, featureId: null };
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', ...scope },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      const cli = catalog.catalog.providers.find((entry) => entry.provider === provider)!;
+      const prepared = await prepareTauriTerminals(
+        {
+          action: 'create-selected',
+          ...scope,
+          catalogId: catalog.catalog.catalogId,
+          provider,
+          modelId: cli.models[0]!.id,
+          count: 1,
+        },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(prepared.status, 'open');
+      assert.equal(prepared.files.length, 1);
+      assert.deepEqual(f.confirmations, ['selected']);
+      const config = readInteractiveTerminalConfig(prepared.files[0]!);
+      assert.equal(config.interactive?.mcp, undefined);
+      assert.equal(config.project, f.project);
+      assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
+    } finally {
+      f.close();
+    }
+  });
+}

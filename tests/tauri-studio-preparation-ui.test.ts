@@ -53,6 +53,9 @@ test('EN/PT preparation keeps CLI, model and Open primary and technical detail i
       assert.ok(primary.includes(`aria-label="${cli}"`));
       assert.ok(primary.includes(`aria-label="${model}"`));
       assert.ok(primary.includes(`>${open}</button>`));
+      assert.match(primary, /type="checkbox" disabled=""/);
+      assert.ok(!primary.includes('checked=""'));
+      assert.ok(!primary.includes('worker model'));
       assert.ok(details.includes(advanced!));
       assert.ok(details.startsWith(' class="studio-advanced">'));
       assert.ok(details.includes('Terminal count') || details.includes('Quantidade de terminais'));

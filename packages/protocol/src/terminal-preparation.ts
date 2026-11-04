@@ -19,6 +19,15 @@ export const terminalSelectedRequestSchema = z.strictObject({
   modelId: digest,
   count: z.number().int().min(1).max(8),
 });
+// Fresh bilateral opt-in only. Neither member, model nor direction is inferred.
+export const terminalMcpPairRequestSchema = z.strictObject({
+  action: z.literal('create-mcp-pair'),
+  ...scope,
+  catalogId: digest,
+  sourceProvider: z.enum(['codex', 'opencode']),
+  codexModelId: digest,
+  openCodeModelId: digest,
+});
 export const terminalPreparationCatalogSchema = z.strictObject({
   contractVersion: z.literal(1),
   ...scope,

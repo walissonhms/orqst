@@ -975,7 +975,12 @@
       "modelUnverified": "Login, acesso ao modelo e disponibilidade do provedor são verificados pelo CLI nativo ao abrir; nenhum login ou consulta ao provedor é executado aqui.",
       "cliDefault": "Padrão do CLI",
       "defaultModel": "{{model}} (padrão do CLI)",
-      "enrollmentLimit": "Novos terminais selecionados entram no mesmo Core em execução. Rejeição ou incerteza preserva os anteriores; resultado incerto bloqueia novas adições."
+      "enrollmentLimit": "Novos terminais selecionados entram no mesmo Core em execução. Rejeição ou incerteza preserva os anteriores; resultado incerto bloqueia novas adições.",
+      "mcpPairOptIn": "Preparar par experimental Codex/OpenCode com comunicação",
+      "mcpPairHelp": "{{source}} é a origem; {{worker}} é o executor. Escolha ambos os modelos e revise as duas configurações nativas. Depois autorize uma tarefa MCP no menu nativo Terminal gerenciado. Peça ao executor para usar wait_task e submit_result e à origem para usar delegate_task. Abrir não envia tarefa; suporte às ferramentas CLI e modelos efetivos seguem sem validação. Delegação N-membros e por Feature continua pendente.",
+      "mcpWorkerModel": "Modelo do executor {{provider}}",
+      "mcpInitialOnly": "Pares com comunicação exigem uma seleção inicial nova. Adicionar MCP a um Core existente está indisponível.",
+      "openMcpPair": "Revisar e abrir par com comunicação"
     }
   },
   "tauriPreparation": {
@@ -994,6 +999,8 @@
     "denied": "Não foi possível confirmar a preparação ou abertura do terminal. Preserve os arquivos e reservas existentes e investigue antes de outra tentativa. Não há repetição automática.",
     "selected": "Revise este CLI, modelo e workspace antes de criar os arquivos privados do terminal e abrir seu runtime próprio. Login, configuração, hooks, plugins, MCPs e gravações de sessão nativos compartilhados podem causar atividade ou custos. A confirmação Abrir seguinte autoriza inicialização, saída e teclado em conjunto. Nenhuma tarefa ou login será enviado automaticamente. Resultados incertos são preservados.",
     "selectedApprove": "Continuar para Abrir terminal",
+    "mcpPair": "Revise cada página completa de configuração deste par experimental Codex/OpenCode. sourceTerminalId delega; workerTerminalId espera e retorna o mesmo taskId. Ambos habilitam explicitamente o MCP ORQST neste workspace. Codex reutiliza login/configuração/sessões nativas; OpenCode mescla a configuração MCP e reconhece migrações do banco nativo, hooks, plugins, MCPs, atividade inicial e possíveis custos. O Abrir assinado posterior é separado para cada CLI. Comunicação ainda exige um grant nativo separado para uma tarefa (até 120 segundos, 4096 bytes de tarefa, 8192 bytes de resultado). Preparar não envia tarefa, não aprova ferramentas do provedor nem comprova entrega, modelo efetivo ou aceite do provedor. Resultados incertos permanecem preservados.",
+    "mcpPairApprove": "Aceitar configuração do par; continuar para Abrir",
     "stage_bootstrap": "Helper nativo",
     "stage_request": "Validação do pedido",
     "stage_catalog": "Catálogo de CLI e modelos",

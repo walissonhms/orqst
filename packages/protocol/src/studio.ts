@@ -3,6 +3,7 @@ import { TERMINAL_SLOT_CEILING } from './terminal-capacity.js';
 import {
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
+  terminalMcpPairRequestSchema,
   terminalPreparationCatalogSchema,
 } from './terminal-preparation.js';
 
@@ -26,11 +27,14 @@ export const studioReplySchema = z.strictObject({
   snapshot: studioSnapshotSchema.optional(),
 });
 export type StudioReply = z.infer<typeof studioReplySchema>;
-// Tauri exposes only its existing homogeneous native preparation flow.
+// Native preparation choices carry no paths, launch proofs or task grants.
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema.extend({
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
+  terminalMcpPairRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   }),
   z.strictObject({

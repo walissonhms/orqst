@@ -975,7 +975,12 @@
       "modelUnverified": "Login, model access and provider availability are checked by the native CLI when opened; no login or probe runs here.",
       "cliDefault": "CLI default",
       "defaultModel": "{{model}} (CLI default)",
-      "enrollmentLimit": "Additional selected terminals join the same running Core. A rejected or uncertain addition preserves earlier terminals; an uncertain result blocks further additions."
+      "enrollmentLimit": "Additional selected terminals join the same running Core. A rejected or uncertain addition preserves earlier terminals; an uncertain result blocks further additions.",
+      "mcpPairOptIn": "Prepare an experimental Codex/OpenCode communication pair",
+      "mcpPairHelp": "{{source}} is the source; {{worker}} is the worker. Choose both models and review both native configurations. Then authorize one MCP task in the native Managed Terminal menu. Ask the worker to use wait_task and submit_result, and the source to use delegate_task. Opening sends no task; CLI tool support and effective models remain unverified. N-member and Feature delegation remain pending.",
+      "mcpWorkerModel": "{{provider}} worker model",
+      "mcpInitialOnly": "Communication pairs require a fresh initial selection. Adding MCP to an existing Core is unavailable.",
+      "openMcpPair": "Review and open communication pair"
     }
   },
   "tauriPreparation": {
@@ -994,6 +999,8 @@
     "denied": "Terminal preparation or opening could not be confirmed. Preserve any files and reservations and inspect before another attempt. No automatic retry is performed.",
     "selected": "Review this CLI, model and workspace before creating private terminal files and opening their owned runtime. Shared native login, configuration, hooks, plugins, MCPs and session writes can cause activity or costs. The subsequent Open confirmation authorizes startup, output and keyboard together. No task or login is submitted automatically. Unknown outcomes remain preserved.",
     "selectedApprove": "Continue to Open terminal",
+    "mcpPair": "Review every complete configuration page for this experimental Codex/OpenCode pair. sourceTerminalId delegates; workerTerminalId waits and returns the same taskId. Both members explicitly enable ORQST MCP in this workspace. Codex reuses native login/configuration/sessions; OpenCode merges MCP configuration and acknowledges native database migrations, hooks, plugins, MCPs, startup activity and possible costs. Subsequent signed Open is separate for each CLI. Communication still requires a separate native one-use task grant (at most 120 seconds, 4096 task bytes, 8192 result bytes). Preparation sends no task, grants no provider approval and proves no delivery, effective model or provider acceptance. Unknown outcomes remain preserved.",
+    "mcpPairApprove": "Accept pair configuration; continue to Open",
     "stage_bootstrap": "Native helper",
     "stage_request": "Request validation",
     "stage_catalog": "CLI and model catalog",
