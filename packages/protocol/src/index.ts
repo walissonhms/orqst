@@ -175,3 +175,5 @@ export * from './terminal-workspace.js';
 
 export * from './terminal-team.js';
 export * from './features.js';
+
+export * from './feature-native.js';

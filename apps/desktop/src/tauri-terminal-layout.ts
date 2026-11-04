@@ -15,10 +15,16 @@ export class TauriTerminalLayout {
   private persisted = true;
   private saveRevision = 0;
   private firstOpen = true;
+  private chrome = false;
+  private readonly pendingSaves = new Set<Promise<void>>();
+  private presentation = 0;
+  private layoutRevision = 0;
+  private nativeGeneration = 0;
+  private saveError = false;
 
   constructor(
     private readonly count: number,
-    private readonly preferences: {
+    private preferences: {
       initial?: TerminalLayoutPreferences;
       save(state: TerminalLayoutPreferences): void | Promise<void>;
     },
@@ -38,10 +44,13 @@ export class TauriTerminalLayout {
   }
 
   snapshot(): TerminalLayoutState {
+    const left = this.chrome ? (this.width <= 720 ? 46 : 155) : 0;
+    const width = Math.max(1, this.width - left);
+    const height = Math.max(1, this.height - (this.chrome ? 79 : 0));
     const shown = this.state.order.filter((slot) => this.state.shown.includes(slot));
     const page = terminalGridPage(
-      this.width,
-      this.height,
+      width,
+      height,
       this.state.maximized === null ? shown : shown.filter((slot) => slot === this.state.maximized),
       this.state.active,
       this.state.columns,
@@ -55,14 +64,21 @@ export class TauriTerminalLayout {
       visible: this.suspended ? [] : page.visible,
       count: this.count,
       persisted: this.persisted,
+      suspended: this.suspended,
+      workspaceChrome: this.chrome,
     };
   }
 
   private publish(focus: number | null = null): void {
     const state = this.snapshot();
+    const left = this.chrome ? (this.width <= 720 ? 46 : 155) : 0;
+    const top = this.chrome ? 45 : 0;
+    const bottom = this.chrome ? 34 : 0;
+    const width = Math.max(1, this.width - left);
+    const height = Math.max(1, this.height - top - bottom);
     const columns = terminalGridPage(
-      this.width,
-      this.height,
+      width,
+      height,
       state.visible,
       state.active,
       state.columns,
@@ -70,23 +86,31 @@ export class TauriTerminalLayout {
     ).columns;
     this.send({
       kind: 'layout',
+      generation: this.nativeGeneration,
+      revision: ++this.layoutRevision,
+      viewport: { width: this.width, height: this.height },
       state,
+      insets: { left, top, bottom },
       focus,
-      bounds: state.order.map((slot) => {
+      bounds: Array.from({ length: this.count }, (_, slot) => {
         const position = state.visible.indexOf(slot);
         return {
           slot,
           rect:
             position === -1
               ? null
-              : terminalGridBounds(
-                  this.width,
-                  this.height,
-                  position,
-                  state.visible.length,
-                  state.axis,
-                  state.percent,
-                  columns,
+              : this.offset(
+                  terminalGridBounds(
+                    width,
+                    height,
+                    position,
+                    state.visible.length,
+                    state.axis,
+                    state.percent,
+                    columns,
+                  ),
+                  left,
+                  top,
                 ),
         };
       }),
@@ -99,27 +123,72 @@ export class TauriTerminalLayout {
     this.publish(focus);
   }
 
+  private offset(
+    rect: { x: number; y: number; width: number; height: number },
+    left: number,
+    top: number,
+  ) {
+    return { ...rect, x: rect.x + left, y: rect.y + top };
+  }
+
   private persist(): void {
     const revision = ++this.saveRevision;
+    const finished = (saved: boolean) => {
+      if (revision !== this.saveRevision) return;
+      this.saveError = !saved;
+      this.persisted = saved;
+      this.publish();
+    };
     try {
       const pending = this.preferences.save(structuredClone(this.state));
       this.persisted = !pending;
-      if (pending)
-        void pending.then(
-          () => {
-            if (revision !== this.saveRevision) return;
-            this.persisted = true;
-            this.publish();
-          },
-          () => {
-            if (revision !== this.saveRevision) return;
-            this.persisted = false;
-            this.publish();
-          },
+      this.saveError = false;
+      if (pending) {
+        const tracked = pending.then(
+          () => finished(true),
+          () => finished(false),
         );
+        this.pendingSaves.add(tracked);
+        void tracked.finally(() => this.pendingSaves.delete(tracked));
+      }
     } catch {
       this.persisted = false;
+      this.saveError = true;
     }
+  }
+
+  async flush(): Promise<void> {
+    await Promise.all(this.pendingSaves);
+    if (this.saveError) throw new Error('Layout save unconfirmed');
+  }
+
+  setNativeGeneration(generation: number): void {
+    if (generation <= this.nativeGeneration) return;
+    this.nativeGeneration = generation;
+    this.presentation++;
+  }
+
+  presentationRevision(): number {
+    return this.presentation;
+  }
+
+  /** Replaces only visual metadata. Documents, supervisors and input authority stay external. */
+  context(
+    initial: TerminalLayoutPreferences,
+    save: (state: TerminalLayoutPreferences) => void | Promise<void>,
+    open = true,
+  ): void {
+    for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
+    this.presentation++;
+    this.saveRevision++;
+    this.preferences = { initial, save };
+    this.state = structuredClone(initial);
+    this.saveError = false;
+    this.persisted = true;
+    this.firstOpen = false;
+    this.chrome = true;
+    this.suspended = !open;
+    this.publish();
   }
 
   resize(width: number, height: number): void {
@@ -132,6 +201,7 @@ export class TauriTerminalLayout {
   }
 
   suspend(): void {
+    this.presentation++;
     this.suspended = true;
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
     this.publish();
@@ -160,13 +230,15 @@ export class TauriTerminalLayout {
     const action = parseTerminalViewAction(raw);
     if (!action || !this.snapshot().visible.includes(slot)) return false;
     const state = this.state;
-    if (action === 'dashboard') this.suspended = true;
-    else if (action === 'hide') {
+    if (action === 'dashboard') {
+      this.presentation++;
+      this.suspended = true;
+    } else if (action === 'hide') {
       state.shown = state.shown.filter((index) => index !== slot);
       state.maximized = null;
       state.active = state.order.find((index) => state.shown.includes(index)) ?? slot;
     } else if (action === 'focus-other') {
-      return this.open(state.order[(state.order.indexOf(slot) + 1) % this.count]!);
+      return this.open(state.order[(state.order.indexOf(slot) + 1) % state.order.length]!);
     } else if (
       action === 'tab-a' ||
       action === 'tab-b' ||
@@ -185,8 +257,8 @@ export class TauriTerminalLayout {
       } else if (action === 'split-columns' || action === 'split-rows') {
         state.axis = action === 'split-columns' ? 'columns' : 'rows';
         state.maximized = null;
-        if (state.shown.length === 1 && this.count > 1)
-          state.shown.push(state.order[(state.order.indexOf(slot) + 1) % this.count]!);
+        if (state.shown.length === 1 && state.order.length > 1)
+          state.shown.push(state.order[(state.order.indexOf(slot) + 1) % state.order.length]!);
       } else if (typeof action === 'object' && 'percent' in action) state.percent = action.percent;
       else if (typeof action === 'object' && 'columns' in action) {
         state.columns = action.columns;
@@ -198,7 +270,7 @@ export class TauriTerminalLayout {
           typeof action === 'object' && 'moveTo' in action
             ? state.order.indexOf(action.moveTo)
             : position + (action === 'move-earlier' ? -1 : 1);
-        if (target < 0 || target >= this.count) return false;
+        if (target < 0 || target >= state.order.length) return false;
         state.order.splice(position, 1);
         state.order.splice(target, 0, slot);
       }

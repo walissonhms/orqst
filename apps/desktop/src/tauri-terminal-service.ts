@@ -48,6 +48,7 @@ export class TauriTerminalService {
   private closed = false;
   private generation = 0;
   private mcpBusy = false;
+  private metadataBusy = false;
   private readonly retirement?: TauriTerminalRetirement;
 
   constructor(
@@ -89,6 +90,26 @@ export class TauriTerminalService {
     });
   }
 
+  /** Bilateral exclusion with the existing reviews; no new execution permission. */
+  beginMetadata(): boolean {
+    if (
+      this.closed ||
+      this.metadataBusy ||
+      this.mcpBusy ||
+      this.retirement?.busy ||
+      this.retirement?.fenced ||
+      this.confirmations.size ||
+      this.panes.some((pane) => pane.state.busy)
+    )
+      return false;
+    this.metadataBusy = true;
+    return true;
+  }
+
+  endMetadata(): void {
+    this.metadataBusy = false;
+  }
+
   async receive(raw: unknown): Promise<void> {
     const parsed = tauriTerminalMessageSchema.safeParse(raw);
     if (this.closed || !parsed.success) throw new Error('Invalid private terminal message');
@@ -116,6 +137,16 @@ export class TauriTerminalService {
         // Reload/destruction invalidates the shared MCP grant, never just the view's lease.
         await this.mcp?.closeSlot(message.slot);
       } else pane.broker.revokeInput();
+      return;
+    }
+    if (this.metadataBusy) {
+      this.send({
+        kind: message.kind === 'retire' ? 'retirement' : 'reply',
+        id: message.id,
+        value: { status: 'busy' },
+        status: 'denied',
+        fenced: false,
+      });
       return;
     }
     if (message.kind === 'retire') {

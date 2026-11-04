@@ -205,6 +205,68 @@ test('Tauri pipe denies unfocused and malformed requests before producing native
   }
 });
 
+test('metadata mutations and native execution reviews exclude each other in both directions', async () => {
+  const s = setup();
+  try {
+    assert.equal(s.service.beginMetadata(), true);
+    assert.equal(s.service.beginMetadata(), false);
+    const id = randomUUID();
+    await s.service.receive({
+      kind: 'request',
+      id,
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    assert.equal(
+      s.messages.findLast((message) => message.id === id)?.value &&
+        Reflect.get(s.messages.findLast((message) => message.id === id)!.value as object, 'status'),
+      'busy',
+    );
+    assert.equal(s.starts[0], 0);
+    s.service.endMetadata();
+    const pending = s.service.receive({
+      kind: 'request',
+      id: randomUUID(),
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    await setImmediate();
+    assert.equal(s.service.beginMetadata(), false);
+    await s.service.receive({ kind: 'revoke', slot: 0 });
+    await pending;
+    assert.equal(s.starts[0], 0);
+    assert.equal(s.service.beginMetadata(), true);
+    s.service.endMetadata();
+  } finally {
+    s.service.close();
+  }
+});
+
+test('metadata edits keep passive state reads available while new input reviews stay blocked', async () => {
+  const s = setup();
+  try {
+    const start = await s.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    assert.equal(start.status, 'ok');
+    if (start.status !== 'ok') throw new Error('Missing synthetic instance');
+    assert.equal(s.service.beginMetadata(), true);
+    assert.equal(
+      (await s.request(0, { version: 1, action: 'snapshot', instanceId: start.instanceId })).status,
+      'ok',
+    );
+    assert.equal(
+      (await s.request(0, { version: 1, action: 'input', instanceId: start.instanceId })).status,
+      'busy',
+    );
+    assert.deepEqual(s.starts, [1, 0]);
+    assert.deepEqual(s.signals, []);
+    s.service.endMetadata();
+  } finally {
+    s.service.close();
+  }
+});
+
 test('an owned sheet preserves its exact signed review while suspending keyboard leases', async () => {
   const s = setup();
   try {
