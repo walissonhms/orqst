@@ -51,7 +51,11 @@ fn document(language: &str) -> String {
 
 pub fn response(request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
     // An exact in-memory resource, never a filesystem path or a wildcard origin.
-    let valid = request.method() == tauri::http::Method::GET && request.uri().to_string() == URL;
+    let uri = request.uri();
+    let valid = request.method() == tauri::http::Method::GET
+        && uri.scheme_str() == Some("orqst-unavailable")
+        && uri.authority().map(|authority| authority.as_str()) == Some("local")
+        && uri.path_and_query().map(|path| path.as_str()) == Some("/index.html");
     let body = if valid {
         document(&std::env::var("LANG").unwrap_or_default()).into_bytes()
     } else {
@@ -139,6 +143,33 @@ mod tests {
         assert_eq!(response.status(), 200);
         assert_eq!(response.headers()["Content-Security-Policy"], CSP);
         assert_eq!(response.headers()["Cache-Control"], "no-store");
+    }
+
+    #[test]
+    fn response_keeps_exact_components_instead_of_permissive_uri_equivalence() {
+        for url in [
+            "orqst-unavailable://LOCAL/index.html",
+            "ORQST-UNAVAILABLE://local/index.html",
+            "orqst-unavailable://local/INDEX.html",
+            "orqst-unavailable://local/./index.html",
+            "orqst-unavailable://local/%69ndex.html",
+            "orqst-unavailable://local/index.html?",
+        ] {
+            let request = tauri::http::Request::builder()
+                .uri(url)
+                .body(Vec::new())
+                .unwrap();
+            assert_eq!(response(&request).status(), 404, "{url}");
+            assert!(response(&request).body().is_empty());
+        }
+        for method in ["HEAD", "OPTIONS", "get"] {
+            let request = tauri::http::Request::builder()
+                .method(method)
+                .uri(URL)
+                .body(Vec::new())
+                .unwrap();
+            assert_eq!(response(&request).status(), 404, "{method}");
+        }
     }
 
     #[test]

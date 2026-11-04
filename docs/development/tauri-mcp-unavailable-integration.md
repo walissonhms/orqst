@@ -4,8 +4,8 @@ Base `28a03a2dd977dcb4324cef1785cc312a0433cc07` was clean and matched published
 main before integration. Delivery `90509ca9a847da1e5d973947eeece414cdcc0dd6`
 was integrated as `86a29cb`; `8c458de454679ef129341e90230103f306c3e970` as
 `49e5322`. Both locale merges were additive and conflict-free. Existing tests and
-all previous EN/PT values are preserved. No additional implementation correction
-was required by the combined review.
+all previous EN/PT values are preserved. The initial source review required no correction; the native Clippy check
+subsequently found the allocation described below.
 
 ## Reviewed contracts
 
@@ -61,7 +61,24 @@ preceding terminal-fixes manifest:
 
 ## Frozen build and preservation
 
-The integration tag is `delivery/2026-11-04-tauri-mcp-unavailable-integration`.
+The initial integration tag is
+`delivery/2026-11-04-tauri-mcp-unavailable-integration` (`68dec9d`), preserved as
+history. Its two Rust configurations passed the same 47 tests, but Clippy
+`-D warnings` failed with `clippy::cmp_owned` at `unavailable.rs:54`. No
+dashboard/resource/native build or package ran from that initial freeze.
+
+The corrected package freeze uses
+`delivery/2026-11-04-tauri-mcp-unavailable-uri-fix`. The minimal correction compares
+borrowed scheme, authority and path-and-query strings exactly, retaining exact
+GET and rejecting query/port/case/path variants without permissive URI equality.
+The pinned `http` 1.5.0 source implements case-insensitive URI/authority equality;
+its suggested direct URI comparison would not retain this strict contract.
+A new response regression covers uppercase authority/scheme/path, dot and encoded
+paths, empty query and non-GET methods; existing port/authority/query/CSP tests
+remain. No CSP, capability, navigation, ownership or uncertainty guard changes.
+The original failed Clippy log and both freeze records remain in the generated
+manifest. Corrected source checks precede the new commit/push/tag; Clippy and
+appropriate Rust tests are repeated from that published freeze before build.
 Commit/push and a clean-source notification to the coordinating pane precede any
 build. Actual Rust counts, Clippy and build/package outcomes are recorded in the
 new generated local
