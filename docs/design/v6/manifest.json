@@ -1,0 +1,37 @@
+{
+  "archive": "ORQST_V6_FEATURES_PACOTE_CODEX.zip",
+  "archiveSha256": "d381a7b3fceecef04c4f61750866248a29352d59ecf44ad83cbf15825acb47c6",
+  "approvedOn": "2026-11-04",
+  "sources": [
+    {
+      "file": "ORQST_workspace_v6_features.html",
+      "bytes": 25898,
+      "sha256": "64533c7003a67839102bb8836d3838d964362675399d58de7f6c5bd52ad25c73"
+    },
+    {
+      "file": "ORQST_MASTER_SPEC_FEATURES_ATUALIZADO.md",
+      "bytes": 28605,
+      "sha256": "4d1cb0beb8b482e10af27fafdedb8ba3d0c6139f22cae50018a1dafb668b3939"
+    },
+    {
+      "file": "ORQST_V5_MCP_FEATURES_ATUALIZADO.md",
+      "bytes": 25037,
+      "sha256": "a12e7d48e6f94984b6438599d769f066e5dc9ed89b8b17159e0d6382a544c2f6"
+    },
+    {
+      "file": "ORQST_UI_UX_FEATURES_ATUALIZADO.md",
+      "bytes": 40942,
+      "sha256": "154dcd628e1f24c392f222479afef9072858704155b83f41b126d3b7e089b101"
+    },
+    {
+      "file": "ORQST_AGENTIC_FEATURES_ATUALIZADO.md",
+      "bytes": 18750,
+      "sha256": "69ac7f0294d049db32f0d7e5a58ef2c6374ac1f32dcd115407f7e5e985b9d8f8"
+    },
+    {
+      "file": "ORQST_PANE_COMMUNICATION_FEATURES_ATUALIZADO.md",
+      "bytes": 38324,
+      "sha256": "9501c4a1a0a5c033c4ee171ddd2cd85bda831034a9afd142fb44d7f08a8a1599"
+    }
+  ]
+}

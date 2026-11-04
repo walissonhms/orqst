@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Native diagnostics and approved V6 reference
+
+- Preserve the approved V6 specifications/prototype with hashes and an explicit
+  Workspace → Feature → TerminalPane → AgentSession delivery checklist.
+- Add metadata-only native window evidence and immutable capacity inspection.
+  Preserve unknown ownership and original journals; inspection grants no capacity.
+- Subscribe to fixture exit before asynchronous window inspection, preventing a
+  lost exit event; a missing probe fails the acceptance runner explicitly.
+- V6 runtime, real provider communication and native Tauri acceptance remain
+  incomplete. Prototype inspection is design evidence only.
+
 ## 2026-11-04 — Explicit managed-agent mentions and permissions
 
 - Adapt Tucano's pure mention parser with pinned Apache-2.0 attribution; retain

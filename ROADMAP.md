@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Approved V6 feature architecture — 2026-11-04
+
+The [V6 reference](docs/design/v6/README.md) supersedes earlier product/UI directions
+where changed. Deliver persistent Features, scoped identity/routes/layout, context
+switching that preserves Core processes, the approved docked/floating surface and
+real multiagent communication using the existing Core. Track dependencies and
+acceptance in the [V6 checklist](docs/architecture/v6-feature-checklist.md).
+Earlier A/B and pane-count limits describe subsets, not product scope. Native and
+provider acceptance remain release gates; preserve Electron until Tauri parity.
+
 For current master-specification acceptance and outstanding work, start with the
 [delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain
 their original dates and may have been superseded by later increments.

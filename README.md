@@ -1,5 +1,11 @@
 # ORQST
 
+The [approved V6 package](docs/design/v6/README.md) is now the official UI/UX and
+functional architecture reference: Workspace → Feature → TerminalPane →
+AgentSession. See the [V6 inventory and checklist](docs/architecture/v6-feature-checklist.md)
+for implementation gaps and acceptance. The preserved prototype contains simulated
+content and is never a production terminal.
+
 For the current master-specification checklist, evidence, blockers and update rules,
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
 roadmap and acceptance records remain available for their original scope and date.

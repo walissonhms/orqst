@@ -1,5 +1,10 @@
 # Master specification delivery tracker
 
+The [approved V6 package](../design/v6/README.md) now supersedes earlier UI/functional
+requirements where changed. Track Workspace → Feature → TerminalPane → AgentSession
+in the [V6 capability matrix and checklist](v6-feature-checklist.md). Existing rows
+below preserve their original scope and evidence; they do not establish V6 acceptance.
+
 **Tracking date:** 2026-11-04. Initial baseline: `ee08ecb`; subsequent deliveries and
 their evidence are recorded below. This is the entry point for tracking the owner's
 Tauri, Node Core and multi-agent terminal specification. It is not a release approval.
@@ -60,7 +65,7 @@ Links to older records preserve their original dates and scope.
 | 12  | Recovery/reconnect avoids duplicate processes                       | **Partial** — journals fence uncertain ownership; persisted Electron layouts do not reconnect processes. See [recovery](../development/cli-team-recovery.md).                                                                                              | Implement and validate scoped reconnect/recovery with real owned process evidence; do not reset uncertain reservations.                                                                                         |
 | 13  | Layout, teams and settings persist in SQLite                        | **Partial** — Electron and Tauri layouts use [private SQLite with preserved JSON import](../development/terminal-layout-sqlite.md); execution metadata remains in existing journals.                                                                       | Complete team/handle/permission/settings persistence and native restart behavior; metadata restoration grants no process ownership.                                                                             |
 | 14  | Protect local Core and minimize desktop permissions                 | **Partial** — loopback/authentication and constrained Tauri terminal IPC are documented in the [security model](security-model.md) and [Tauri guide](../development/tauri.md).                                                                             | Complete security review and native/packaged acceptance of the final composition.                                                                                                                               |
-| 15  | Identify reused third-party code and honor licenses                 | **Partial** — source pins, adaptations and notices are recorded in [reuse audit](../research/reuse-first-audit.md), [Tauri reuse](../research/tauri-core-reuse.md), [mentions](../research/mention-communication.md) and root `NOTICE`.                    | Complete the transitive redistribution and platform-specific notice audit before distribution; resolve the instruction conflict noted below.                                                                    |
+| 15  | Identify reused third-party code and honor licenses                 | **Partial** — source pins, adaptations and notices are recorded in [reuse audit](../research/reuse-first-audit.md), [Tauri reuse](../research/tauri-core-reuse.md), [mentions](../research/mention-communication.md) and root `NOTICE`.                    | Complete the transitive redistribution and platform-specific notice audit before distribution.                                                                                                                  |
 | 16  | Document automated tests and manual real-CLI tests                  | **Partial** — synthetic, build and limited native evidence exists.                                                                                                                                                                                         | Complete and document genuine human/native tests with real Codex, Claude and OpenCode, including communication and failures.                                                                                    |
 
 ## Required scenario checklist
@@ -85,21 +90,46 @@ described workflow. A partial synthetic test does not check the box.
   `ownership_lost` reservation without an authentic exit receipt. Preserve it and
   follow the [reconciliation record](../development/codex-two-agent-acceptance.md#reconciling-the-blocked-attempt-before-another-real-run).
   Do not remove or silently bypass its capacity. The owner must decide an explicit
-  quarantine/capacity policy. A real mixed test additionally needs the native
+  quarantine/capacity policy. The immutable
+  [capacity inspector](../development/codex-quarantine-capacity.md) reports retained
+  reservations without releasing them. A real mixed test additionally needs the native
   per-provider startup/effects reviews and the separate task grant. OpenCode native
   database/activity effects and descendant retirement are documented in the
   [mixed pair workflow](../development/codex-opencode-pair.md).
 - **Tauri parity:** prepared PTYs now share a retained workspace; creation,
   interactive PTY MCP, retirement/reselection, exports, notifications and
   full native lifecycle are not yet accepted. See [Tauri limits](../development/tauri.md).
-- **Current instruction conflict:** the supplied repository rules prohibit copying
-  third-party code and describe an observer-only runtime, while the owner's master
-  specification calls for compatible code reuse and managed agent execution. Existing
-  attribution documents record adaptations already present. Before further changes
-  in those areas, resolve the applicable boundary with the owner; do not erase history
-  or assume a licensing decision overrides a project instruction.
+- **Instruction precedence resolved by V6:** the owner's later explicit V6 direction
+  authorizes compatible licensed reuse and managed owned-agent execution. The default
+  observer remains read-only and cannot control external sessions. Existing notices,
+  source-specific license checks, exact grants and private runtime boundaries remain
+  mandatory; this does not authorize arbitrary adoption or quarantine reclamation.
 - **Distribution:** macOS Intel, Windows and Linux, signed/notarized installers,
   PTY dependencies and the complete transitive license/notice review remain open.
+
+## Native window and capacity diagnostics — 2026-11-04
+
+Integrated source commits `7d33f46`, `9d2e2c9`, `8a00259` and `2833715` from pane-695.
+The developer runner records bounded WindowServer metadata for its owned PID in
+`window.json`; it captures no pixels or titles and grants no automation authority.
+Absent, offscreen or uninspectable windows fail the run. Exit is subscribed before
+the window wait so an early process exit cannot be missed. See
+[native coexistence](../development/tauri-native-coexistence.md).
+
+The capacity inspector opens a selected journal immutably and refuses pending WAL
+frames. It reads allowlisted metadata and never takes ownership or releases
+capacity. The contributor confirmed one preserved `ownership_lost` reservation,
+without exit evidence or a lifecycle receipt; it consumes the configured per-project
+slot. Options and the outstanding owner decision are in
+[quarantine and capacity](../development/codex-quarantine-capacity.md).
+
+The contributor reports an AppKit metadata-probe check; it is not Tauri acceptance.
+`cgWindowNotFound` remains unexplained and a post-dialog focus race is only a
+hypothesis. No Rust/Tauri build or actual native/provider run was performed for this
+increment. SSH publication succeeded in prior integrations, but authentication has
+been intermittent; [publishing](../development/repository-publishing.md) records
+diagnostics and explicit-refspec precautions. An intermittent success does not
+establish that GitHub's server edge is the cause.
 
 ## Verification log
 
@@ -322,3 +352,14 @@ is not confirmed while awaiting the asynchronous acknowledgment. Both locales no
 avoid prematurely asserting a write failure. Integration passed 26 focused locale,
 layout and retained-view tests, formatting and build; the preceding 678-test run
 was not repeated for this text-only follow-up.
+
+## Integrated diagnostics verification — 2026-11-04
+
+The integrated Node run passed 695 tests with `tsx --test --test-concurrency=2
+tests/*.test.ts`; the three diagnostic test files passed 18 focal cases, including
+actual disposable Node child exit/spawn failure. `pnpm lint`, `pnpm typecheck` and
+`pnpm build` passed; Vite retains its existing large-chunk warning. No ingestion
+behavior changed, so `validate:local` was not run. No Rust build, native Tauri
+workflow, real provider inference or quarantine reconciliation was run. The V6
+source hashes were verified 6/6; inspecting its rendered prototype does not count
+as runtime implementation or native acceptance.

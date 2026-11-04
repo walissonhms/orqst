@@ -6,3 +6,6 @@ pnpm-lock.yaml
 .opencode
 playwright-report
 test-results
+
+# Preserve owner-approved V6 reference bytes and hashes.
+docs/design/v6/source
