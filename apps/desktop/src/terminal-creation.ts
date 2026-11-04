@@ -44,6 +44,7 @@ export interface TerminalCreationInput {
   home: string;
   environment: NodeJS.ProcessEnv;
   mcp: boolean;
+  openCodeStartupAuthorized?: boolean;
 }
 
 function overlaps(a: string, b: string): boolean {
@@ -52,6 +53,8 @@ function overlaps(a: string, b: string): boolean {
 
 /** Complete pre-write plan. Version labels are reviewed contracts, never --version evidence. */
 export function prepareTerminalCreation(input: TerminalCreationInput) {
+  if (input.openCodeStartupAuthorized && input.provider !== 'opencode')
+    throw new Error('OpenCode startup consent is provider-specific');
   terminalDirectory(input.project);
   if (readdirSync(input.project).length) throw new Error('Select an empty disposable project');
   const root = join(input.parent, `terminal-pair-${randomUUID()}`);
@@ -153,7 +156,13 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       authentication: { mode: 'reuse-existing', nativeIdentity, sharedNativeConfiguration: true },
       interactive: {
         sharedNativeSessions: true,
-        nativeStartupAuthorized: false,
+        nativeStartupAuthorized: input.openCodeStartupAuthorized === true,
+        ...(input.openCodeStartupAuthorized
+          ? {
+              nativeDatabaseMigrationsAcknowledged: true,
+              nativeStartupActivityAcknowledged: true,
+            }
+          : {}),
         ...(input.mcp ? { mcp: true, mergedMcpAcknowledged: true } : {}),
       },
     });

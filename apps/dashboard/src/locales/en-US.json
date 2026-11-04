@@ -691,10 +691,10 @@
     "createProject": "Choose an existing empty disposable project directory",
     "createMcp_codex": "Configure optional ORQST A→B→A MCP? Codex retains native MCP definitions. This prepares configuration only; native compatibility and idle delivery are unvalidated. Delegation requires a separate task grant after both signed starts.",
     "createMcp_claude": "Configure optional ORQST A→B→A MCP? Strict selection EXCLUDES native MCP definitions for these new processes only. Native project/policy approvals can block startup. Compatibility and idle delivery are unvalidated; a separate task grant remains required.",
-    "createMcp_opencode": "Prepare optional ORQST MCP configuration? It MERGES with native MCP definitions. Both OpenCode manifests remain launch-blocked. Native startup may migrate shared SQLite or trigger provider/network activity; it is not authorized by this creation.",
+    "createMcp_opencode": "Prepare optional ORQST MCP configuration? It MERGES with native definitions. MCP configuration does not authorize writable native SQLite, possible migrations or provider/network startup activity. The next review can keep startup blocked or require a separate explicit acknowledgment of these effects.",
     "createWithoutMcp": "Prepare without ORQST MCP",
     "createWithMcp": "Acknowledge and prepare ORQST MCP",
-    "createReview": "Create these two private manifests and skeletons? Review the entire configuration. This writes only new ORQST state under this Desktop profile. No Core, journal, admission claim, CLI, login or task starts. OpenCode stays blocked. Creation is separate from selection, opening and signed startup; reservations are preserved. One write attempt per run; incomplete state is retained inert. Cancelling the next selection review keeps completed files.",
+    "createReview": "Create these two private manifests and skeletons? Review the entire configuration. This writes only new ORQST state under this Desktop profile. No Core, journal, admission claim, CLI, login or task starts. OpenCode stays blocked. Creation is separate from selection, opening and signed startup; reservations are preserved. One write attempt per selection until safe retirement; incomplete state is retained inert. Cancelling the next selection review keeps completed files.",
     "createAcknowledgment": "I declare the selected CLI version and Node 24, and acknowledge SHARED native login/configuration/session writes after separately authorized startup. Native hooks/plugins/MCPs may cause activity or costs; real-provider acceptance remains pending.",
     "createFiles": "Create files only",
     "creationDenied": "Creation refused or incomplete: use canonical trusted binaries, the reviewed version/hash and an empty project. No CLI was started. Any newly written partial state is retained; do not delete reservations or retry uncertain state. Completed files can be selected through the existing native review. No credentials or native database were inspected.",
@@ -706,7 +706,6 @@
     "restore": "Restore split",
     "focus-other": "Focus other pane",
     "splitSize": "Pane A size",
-
     "dashboard": "Show dashboard",
     "hidePane": "Hide pane",
     "details": "Session details",
@@ -750,7 +749,7 @@
     "mcpConfirm": "Authorize one task and correlated result between these two running Terminal instances for up to 120 seconds. This does not prompt either agent or grant provider tools. Native login/configuration and session writes remain shared. Codex and OpenCode merge other MCPs; Claude strict selection excludes them. MCP disconnection leaves an unknown outcome and does not stop either process.",
     "mcpDenied": "MCP authorization was refused or its outcome is unknown. Both opted-in Terminal instances must still be owned and running. Do not retry uncertain work.",
     "retire": "Retire exited Terminal pair",
-    "retired": "Terminal pair retired; restart Desktop with fresh manifests",
+    "retired": "Terminal pair retired; create or review fresh manifests in this window",
     "retireConfirm": "Release this pair only after every owned process has exited. The metadata archive will be preserved.",
     "retireDenied": "Pair cannot retire. Every dispatched process needs a confirmed owned exit; lost ownership and changed reservations remain blocked.",
     "quitNotice": "Disconnect Desktop? Terminal processes may continue until their authorized deadline. Unresolved reservations remain blocked after restart.",
@@ -760,7 +759,12 @@
     "terminalIdentity": "Core Terminal UUID",
     "claudeScope": "Experimental Claude Code native login reuse. HOME/config/Keychain selection, hooks, plugins, policies and native session writes stay shared; the CLI may refresh credentials. No sandbox. New UUID, one dispatch per manifest; no automatic task, login or resume. With MCP opt-in, strict selection excludes other MCP definitions and native approval can block startup. Native focus, login, MCP and provider acceptance remain pending. OpenCode has a separate explicit startup opt-in.",
     "opencodeScope": "Experimental OpenCode 2.2.5 standalone with existing login identity. HOME/XDG/config/database stay native and shared. Startup opens writable SQLite, may change permissions/WAL and apply pending migrations or refresh credentials. Database and migration ledger were not inspected; pending migrations are unknown and rollback is not guaranteed. Native plugins, hooks and MCPs may execute code or provider requests at startup. No ORQST task, automatic login or resume. Not a sandbox. TUI exit does not prove descendant exit; login, session routing, MCP and provider acceptance remain unvalidated. Inline MCP merges with native definitions.",
-    "opencode_startup_required": "OpenCode startup is blocked. Provision a new manifest only after explicitly authorizing shared native database writes/possible migrations and native startup activity. No database was inspected or opened."
+    "opencode_startup_required": "OpenCode startup is blocked. Provision a new manifest only after explicitly authorizing shared native database writes/possible migrations and native startup activity. No database was inspected or opened.",
+    "openCodeStartupReview": "Review OpenCode native startup effects for these exact identity selectors and binaries. Startup uses the existing writable credential/session SQLite database: it may change permissions/WAL, apply pending migrations and refresh credentials. Native plugins, hooks and MCPs may execute code, network or provider requests automatically. Pending migrations and startup activity are UNKNOWN; no rollback or descendant-exit guarantee is established. Capacity stays reserved even after TUI exit. This step starts nothing. Keep the manifests blocked unless you explicitly authorize these effects; terminal start and task grants remain separate.",
+    "openCodeStartupAcknowledgment": "I explicitly authorize shared native SQLite writes, possible migrations, credential refresh and native startup activity for these new processes.",
+    "openCodeKeepBlocked": "Keep startup blocked",
+    "openCodeAuthorizeStartup": "Authorize native startup effects",
+    "createOpenCodeAuthorizedReview": "Create these two private OpenCode manifests with the reviewed native startup effects authorized? This writes ORQST skeletons only; no Core, provider, migration or task starts now. Startup still requires a separate native start confirmation. Native database/session/config effects may occur then. Existing reservations remain protected; OpenCode descendant exit and safe capacity retirement remain unvalidated."
   },
   "managedAgents": {
     "title": "Managed agents",

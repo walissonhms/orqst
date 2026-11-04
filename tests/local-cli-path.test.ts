@@ -197,7 +197,7 @@ test('explicitly selected missing, writable, noncanonical or unrepresentable too
     symlinkSync(f.env, alias);
     const colon = join(f.home, 'synthetic:delimiter');
     mkdirSync(colon, { mode: 0o700 });
-    for (const selected of [join(f.home, 'missing'), alias, colon, 'relative'])
+    for (const selected of [join(f.home, 'missing'), alias, colon, 'relative', '/'])
       assert.throws(
         () => localCliPathDirectories('/usr/bin:/bin', f.home, [selected]),
         /Selected CLI tool directory is unavailable or unsafe/,
@@ -231,6 +231,8 @@ test('untrusted directories, changed aliases and exceeded budgets cannot become 
     assert.equal(localCliPathDirectories(excess).inspection, 'limited');
     assert.throws(() => localCliPathDirectories('x'.repeat(32769)), /budget/);
     assert.throws(() => terminalToolPath(''));
+    assert.throws(() => terminalToolPath('/'), /filesystem root/);
+    assert.equal(localCliPathDirectories('/').directories.length, 0);
     const unrepresentable = join(f.home, 'synthetic:delimiter');
     mkdirSync(unrepresentable, { mode: 0o700 });
     const alias = join(f.home, 'delimiter-alias');

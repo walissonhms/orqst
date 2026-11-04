@@ -94,14 +94,15 @@ export async function createManagedTerminals(
     if (!effectsPossible) throw new TerminalPreCoreFailure('No admission or Core entered');
     throw error;
   }
-  app.on('before-quit', (event) => {
+  const beforeQuit = (event: Electron.Event) => {
     if (event.defaultPrevented) return;
     quitting = true;
     router.close();
     core?.close();
     panels.close();
     ipcMain.removeHandler('orqst:terminal-view');
-  });
+  };
+  app.on('before-quit', beforeQuit);
   return {
     openers,
     showDashboard: () => panels.showDashboard(),
@@ -111,7 +112,10 @@ export async function createManagedTerminals(
       retiring = true;
       const target = window;
       const focused = views.find(
-        (view, slot) => panels.visible(slot) && view.webContents.isFocused(),
+        (view, slot) =>
+          panels.visible(slot) &&
+          view.webContents?.isDestroyed() === false &&
+          view.webContents.isFocused(),
       );
       const frame = focused?.webContents.mainFrame;
       const current = () =>
@@ -119,6 +123,7 @@ export async function createManagedTerminals(
         !target.isDestroyed() &&
         target.isFocused() &&
         !!focused &&
+        focused.webContents?.isDestroyed() === false &&
         panels.visible(views.indexOf(focused)) &&
         focused.webContents.isFocused() &&
         focused.webContents.mainFrame === frame &&
@@ -163,23 +168,27 @@ export async function createManagedTerminals(
       }
     },
     async retire() {
-      if (!core || retiring || retired) return;
+      if (!core || retiring || retired) return false;
       retiring = true;
       const target = window;
       const focused = views.find(
-        (view, slot) => panels.visible(slot) && view.webContents.isFocused(),
+        (view, slot) =>
+          panels.visible(slot) &&
+          view.webContents?.isDestroyed() === false &&
+          view.webContents.isFocused(),
       );
       const frame = focused?.webContents.mainFrame;
       const current = () =>
         !target.isDestroyed() &&
         target.isFocused() &&
         !!focused &&
+        focused.webContents?.isDestroyed() === false &&
         panels.visible(views.indexOf(focused)) &&
         focused.webContents.isFocused() &&
         focused.webContents.mainFrame === frame &&
         focused.webContents.getURL() === terminalDocumentURL;
       try {
-        if (!current()) return;
+        if (!current()) return false;
         const prepared = (await core.prepareRetire()) as {
           challenge: TerminalChallenge;
           evidence: unknown;
@@ -196,7 +205,7 @@ export async function createManagedTerminals(
           cancelId: 0,
           noLink: true,
         });
-        if (result.response !== 1 || !current()) return;
+        if (result.response !== 1 || !current()) return false;
         await core.retire({
           challengeId: prepared.challenge.challengeId,
           signature: sign(
@@ -205,11 +214,36 @@ export async function createManagedTerminals(
             keys.privateKey,
           ).toString('base64url'),
         });
+        // The correlated successful RPC proves signed retirement, fencing and capacity archival.
+        // Any uncertain reply or cleanup below keeps the main-process selection latch closed.
         retired = true;
-        router.close();
-        core.close();
+        initialized = false;
         viewActions.clear();
+        router.close();
+        ipcMain.removeHandler('orqst:terminal-view');
+        const destroyed = views.map(
+          ({ webContents }) =>
+            new Promise<void>((resolve, reject) => {
+              if (!webContents || webContents.isDestroyed()) return resolve();
+              const timer = setTimeout(
+                () => reject(new Error('Terminal view cleanup unconfirmed')),
+                5000,
+              );
+              webContents.once('destroyed', () => {
+                clearTimeout(timer);
+                resolve();
+              });
+            }),
+        );
+        const allDestroyed = Promise.all(destroyed);
+        void allDestroyed.catch(() => {}); // Cleanup refusal remains fenced even if panel close throws.
         panels.close();
+        await allDestroyed;
+        for (const terminalSession of terminalSessions)
+          terminalSession.protocol.unhandle('orqst-terminal');
+        await core.closeAndWait();
+        app.removeListener('before-quit', beforeQuit);
+        return true;
       } catch {
         if (target && !target.isDestroyed())
           await dialog.showMessageBox(target, {
@@ -218,6 +252,7 @@ export async function createManagedTerminals(
             buttons: [translate('terminalNative.cancel')],
             noLink: true,
           });
+        return false;
       } finally {
         retiring = false;
       }

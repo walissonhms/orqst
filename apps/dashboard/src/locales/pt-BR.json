@@ -691,10 +691,10 @@
     "createProject": "Escolha um diretório de projeto descartável existente e vazio",
     "createMcp_codex": "Configurar MCP ORQST A→B→A opcional? Codex mantém as definições MCP nativas. Apenas configura; compatibilidade nativa e entrega ao agente ocioso não foram validadas. Delegação exige autorização separada de tarefa após os dois starts assinados.",
     "createMcp_claude": "Configurar MCP ORQST A→B→A opcional? A seleção estrita EXCLUI definições MCP nativas apenas nesses novos processos. Aprovações nativas de projeto/política podem bloquear o startup. Compatibilidade e entrega ao agente ocioso não foram validadas; a autorização separada de tarefa continua necessária.",
-    "createMcp_opencode": "Preparar configuração MCP ORQST opcional? Ela se COMBINA com definições MCP nativas. Os dois manifests OpenCode permanecem bloqueados para execução. O startup nativo pode migrar SQLite compartilhado ou disparar atividade de provider/rede; esta criação não o autoriza.",
+    "createMcp_opencode": "Preparar configuração MCP ORQST opcional? Ela se COMBINA com definições nativas. Configurar MCP não autoriza SQLite nativo gravável, possíveis migrações nem atividade de provider/rede no startup. A próxima revisão permite manter o startup bloqueado ou exige reconhecimento explícito separado desses efeitos.",
     "createWithoutMcp": "Preparar sem MCP ORQST",
     "createWithMcp": "Reconhecer e preparar MCP ORQST",
-    "createReview": "Criar estes dois manifests privados e estruturas? Revise toda a configuração. Grava apenas novo estado ORQST neste perfil Desktop. Não inicia Core, journal, reserva, CLI, login ou tarefa. OpenCode permanece bloqueado. Criação, seleção, abertura e startup assinado são separados; reservas são preservadas. Uma tentativa de gravação por execução; estado incompleto permanece inerte. Cancelar a próxima revisão mantém os arquivos completos.",
+    "createReview": "Criar estes dois manifests privados e estruturas? Revise toda a configuração. Grava apenas novo estado ORQST neste perfil Desktop. Não inicia Core, journal, reserva, CLI, login ou tarefa. OpenCode permanece bloqueado. Criação, seleção, abertura e startup assinado são separados; reservas são preservadas. Uma tentativa de gravação por seleção até retirement seguro; estado incompleto permanece inerte. Cancelar a próxima revisão mantém os arquivos completos.",
     "createAcknowledgment": "Declaro a versão do CLI e Node 24 selecionados e reconheço login/configuração/gravações de sessões nativas COMPARTILHADOS após startup autorizado separadamente. Hooks/plugins/MCPs nativos podem gerar atividade ou custos; aceite real de providers continua pendente.",
     "createFiles": "Criar somente arquivos",
     "creationDenied": "Criação recusada ou incompleta: use binários canônicos confiáveis, versão/hash revisados e projeto vazio. Nenhum CLI foi iniciado. Novo estado parcial é preservado; não apague reservas nem repita estado incerto. Arquivos completos podem ser selecionados pela revisão nativa existente. Nenhuma credencial ou banco nativo foi inspecionado.",
@@ -706,7 +706,6 @@
     "restore": "Restaurar divisão",
     "focus-other": "Focar outro painel",
     "splitSize": "Tamanho do painel A",
-
     "dashboard": "Mostrar painel de observação",
     "hidePane": "Ocultar painel",
     "details": "Detalhes da sessão",
@@ -750,7 +749,7 @@
     "mcpConfirm": "Autorizar uma tarefa e seu resultado correlacionado entre estas duas instâncias de Terminal em execução por até 120 segundos. Isso não envia prompt aos agentes nem concede ferramentas do provedor. Login/configuração e gravações de sessões nativas ficam compartilhados. Codex e OpenCode mesclam outros MCPs; a seleção estrita do Claude os exclui. A desconexão MCP deixa resultado desconhecido e não encerra nenhum processo.",
     "mcpDenied": "A autorização MCP foi recusada ou seu resultado é desconhecido. As duas instâncias de Terminal devem manter a adesão explícita, a posse e a execução. Não repita trabalho com resultado incerto.",
     "retire": "Retirar par de Terminais encerrados",
-    "retired": "Par de Terminais retirado; reinicie o Desktop com manifests novos",
+    "retired": "Par de Terminais retirado; crie ou revise manifests novos nesta janela",
     "retireConfirm": "Liberar este par somente após a saída confirmada de todos os processos próprios. O arquivo de metadados será preservado.",
     "retireDenied": "O par não pode ser retirado. Cada processo iniciado exige saída própria confirmada; ownership perdido e reservas alteradas continuam bloqueados.",
     "quitNotice": "Desconectar o Desktop? Os processos dos Terminais podem continuar até o prazo autorizado. Reservas não resolvidas continuam bloqueadas após reiniciar.",
@@ -760,7 +759,12 @@
     "terminalIdentity": "UUID do Terminal no Core",
     "claudeScope": "Reuso experimental do login nativo Claude Code. HOME/config/Keychain, hooks, plugins, políticas e gravações de sessões nativas ficam compartilhados; o CLI pode renovar credenciais. Sem sandbox. Novo UUID, um disparo por manifesto; sem tarefa, login ou retomada automática. No opt-in MCP, a seleção estrita exclui outros MCPs e a aprovação nativa pode bloquear a inicialização. Aceite de foco, login, MCP e provider pendente. OpenCode possui opt-in de startup separado.",
     "opencodeScope": "OpenCode 2.2.5 standalone experimental com identidade do login existente. HOME/XDG/config/banco permanecem nativos e compartilhados. O startup abre SQLite gravável, pode alterar permissões/WAL, aplicar migrações pendentes ou renovar credenciais. Banco e ledger não foram inspecionados; migrações pendentes são desconhecidas e não há garantia de reversão. Plugins, hooks e MCPs nativos podem executar código ou chamadas ao provider no startup. Sem tarefa ORQST, login automático ou retomada. Sem sandbox. Saída do TUI não comprova saída dos descendentes; login, roteamento de sessão, MCP e aceite do provider não validados. MCP inline mescla com definições nativas.",
-    "opencode_startup_required": "Startup OpenCode bloqueado. Provisione um novo manifesto apenas após autorizar explicitamente gravações no banco nativo/possíveis migrações e atividade nativa no startup. Nenhum banco foi inspecionado ou aberto."
+    "opencode_startup_required": "Startup OpenCode bloqueado. Provisione um novo manifesto apenas após autorizar explicitamente gravações no banco nativo/possíveis migrações e atividade nativa no startup. Nenhum banco foi inspecionado ou aberto.",
+    "openCodeStartupReview": "Revise os efeitos do startup nativo OpenCode para estes seletores de identidade e binários exatos. O startup usa o SQLite existente e gravável de credenciais/sessões: pode mudar permissões/WAL, aplicar migrações pendentes e atualizar credenciais. Plugins, hooks e MCPs nativos podem executar código, rede ou requisições ao provider automaticamente. Migrações pendentes e atividade de startup são DESCONHECIDAS; não há garantia de rollback nem de saída de descendentes. A capacidade permanece reservada mesmo após a saída da TUI. Esta etapa não inicia nada. Mantenha os manifests bloqueados sem autorizar explicitamente esses efeitos; startup do terminal e tarefas têm grants separados.",
+    "openCodeStartupAcknowledgment": "Autorizo explicitamente gravações no SQLite nativo compartilhado, possíveis migrações, atualização de credenciais e atividade nativa de startup destes novos processos.",
+    "openCodeKeepBlocked": "Manter startup bloqueado",
+    "openCodeAuthorizeStartup": "Autorizar efeitos do startup nativo",
+    "createOpenCodeAuthorizedReview": "Criar estes dois manifests privados OpenCode com os efeitos nativos de startup revisados e autorizados? Grava apenas estruturas ORQST; nenhum Core, provider, migração ou tarefa inicia agora. O startup ainda exige confirmação nativa separada. Efeitos no banco/sessões/configuração nativos podem ocorrer então. Reservas existentes continuam protegidas; a saída de descendentes e o retirement seguro de capacidade OpenCode não foram validados."
   },
   "managedAgents": {
     "title": "Agentes gerenciados",

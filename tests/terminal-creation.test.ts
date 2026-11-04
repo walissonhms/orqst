@@ -200,6 +200,10 @@ test('canonical selectors, private ancestry and exact provider pins are enforced
   const f = fixture();
   try {
     assert.throws(() => prepareProductionCreation(f.input), /reviewed Codex/);
+    assert.throws(
+      () => prepareTerminalCreation({ ...f.input, openCodeStartupAuthorized: true }),
+      /provider-specific/,
+    );
     const alias = join(f.root, 'node-alias');
     symlinkSync(f.input.node, alias);
     assert.throws(() => prepareTerminalCreation({ ...f.input, node: alias }), /Noncanonical/);

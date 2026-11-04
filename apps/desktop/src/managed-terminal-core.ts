@@ -37,6 +37,13 @@ export async function connectManagedTerminalCore(
       serialization: 'json',
     },
   );
+  let exited = false;
+  const exit = new Promise<void>((resolve) =>
+    child.once('exit', () => {
+      exited = true;
+      resolve();
+    }),
+  );
   let closed = false;
   let initialized = false;
   let identities: Array<{
@@ -140,6 +147,17 @@ export async function connectManagedTerminalCore(
     identities,
     supervisors,
     close,
+    async closeAndWait(): Promise<void> {
+      close();
+      if (exited) return;
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('Terminal Core exit unconfirmed')), 5000);
+        void exit.then(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    },
     closeSlot: (slot: number) => call({ kind: 'closeSlot', slot }),
     prepareRetire: () => call({ kind: 'prepareRetire' }),
     retire: (proof: unknown) => call({ kind: 'retire', proof }),

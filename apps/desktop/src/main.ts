@@ -90,7 +90,7 @@ async function start(): Promise<void> {
     .filter((value) => value.startsWith('--terminal-config='))
     .map((value) => value.slice('--terminal-config='.length));
   let terminals: Awaited<ReturnType<typeof createManagedTerminals>> | undefined;
-  const terminalSelection = new TerminalSelection();
+  let terminalSelection = new TerminalSelection();
   let terminalOpening = false;
   let managedLifetime = 'idle';
   let refreshManagedTray: () => void = () => undefined;
@@ -150,7 +150,7 @@ async function start(): Promise<void> {
             id: 'managed-terminal-retire',
             label: i18n.t('managedTerminal.retire'),
             enabled: !!terminals,
-            click: () => void terminals?.retire(),
+            click: () => void retireTerminalSelection(),
           },
         ],
       },
@@ -187,7 +187,27 @@ async function start(): Promise<void> {
     const mcp = menu?.getMenuItemById('managed-terminal-mcp');
     if (mcp) mcp.enabled = !!terminals?.mcpEnabled;
     const retire = menu?.getMenuItemById('managed-terminal-retire');
-    if (retire) retire.enabled = !!terminals;
+    if (retire) retire.enabled = !!terminals && !terminalOpening && !nativeFileBusy;
+  }
+
+  async function retireTerminalSelection(): Promise<void> {
+    const active = terminals;
+    if (!active || terminalOpening || nativeFileBusy) return;
+    terminalOpening = true;
+    nativeFileBusy = true;
+    updateTerminalMenu();
+    try {
+      if (!(await active.retire()) || terminals !== active || quitting) return;
+      // Fresh review is possible only after signed Core retirement and complete old-surface cleanup.
+      terminals = undefined;
+      terminalSelection = new TerminalSelection();
+      terminalCreationAttempted = false;
+      terminalCreationCompleted = false;
+    } finally {
+      terminalOpening = false;
+      nativeFileBusy = false;
+      updateTerminalMenu();
+    }
   }
 
   // The native menu is the sole entry. There is no renderer/IPC path or second-instance import.
@@ -307,7 +327,7 @@ async function start(): Promise<void> {
         noLink: true,
       });
       if (!current() || ![1, 2].includes(mcpResult.response)) return;
-      const plan = prepareTerminalCreation({
+      const creationInput = {
         provider,
         executable,
         node,
@@ -316,13 +336,42 @@ async function start(): Promise<void> {
         home: process.env.HOME ?? app.getPath('home'),
         environment: process.env,
         mcp: mcpResult.response === 2,
-      });
+      };
+      let plan = prepareTerminalCreation(creationInput);
+      let openCodeStartupAuthorized = false;
+      if (provider === 'opencode') {
+        const consent = await dialog.showMessageBox(context.target!, {
+          type: 'warning',
+          title: i18n.t('managedTerminal.createPair'),
+          message: i18n.t('managedTerminal.openCodeStartupReview'),
+          detail: plan.detail,
+          checkboxLabel: i18n.t('managedTerminal.openCodeStartupAcknowledgment'),
+          checkboxChecked: false,
+          buttons: [
+            i18n.t('terminalNative.cancel'),
+            i18n.t('managedTerminal.openCodeKeepBlocked'),
+            i18n.t('managedTerminal.openCodeAuthorizeStartup'),
+          ],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (!current() || ![1, 2].includes(consent.response)) return;
+        if (consent.response === 2 && !consent.checkboxChecked) return;
+        openCodeStartupAuthorized = consent.response === 2;
+        if (openCodeStartupAuthorized)
+          plan = prepareTerminalCreation({ ...creationInput, openCodeStartupAuthorized: true });
+      }
       const reviewExpires = Date.now() + 60000;
       const reviewed = () => current() && Date.now() < reviewExpires;
       const result = await dialog.showMessageBox(context.target!, {
         type: 'warning',
         title: i18n.t('managedTerminal.createPair'),
-        message: i18n.t('managedTerminal.createReview'),
+        message: i18n.t(
+          openCodeStartupAuthorized
+            ? 'managedTerminal.createOpenCodeAuthorizedReview'
+            : 'managedTerminal.createReview',
+        ),
         detail: plan.detail,
         checkboxLabel: i18n.t('managedTerminal.createAcknowledgment'),
         checkboxChecked: false,

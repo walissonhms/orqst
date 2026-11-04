@@ -46,7 +46,10 @@ Desktop confirmation are required. See [OpenCode setup and effects](docs/develop
 The native **Create and review terminal pair A/B…** wizard now prepares private
 Codex/Claude/OpenCode manifests entirely in the client, using exact binary pins,
 an empty disposable project, explicit shared-identity consent and optional MCP.
-Creation starts nothing; OpenCode stays blocked. Proven pre-admission/Core view
+Creation starts nothing; OpenCode stays blocked unless its separate native effects
+review is explicitly acknowledged. Proved signed retirement plus complete view/handler/Core
+cleanup permits fresh creation/selection in the same Desktop process; unknown ownership
+stays reserved. Proven pre-admission/Core view
 failures permit a fresh review, while uncertain effects/reservations remain fixed.
 N-member teams, model selection, durable reconnect and real CLI delegation remain
 pending. Synthetic pair checks cover polling/gesture races and native focus ordering;

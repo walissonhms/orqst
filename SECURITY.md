@@ -680,3 +680,23 @@ trusted replacement at the same canonical path is not detected. Native provider 
 Node hashes are separate content pins; subordinate tools have no continuity or hash
 guarantee. Drift diagnostics are specific but path-free. Existing same-user trust,
 provider consent, environment whitelist and no-auto-retry boundaries remain.
+
+## Fresh native selection after signed retirement — 2026-11-03
+
+The Desktop selection latch now resets only after the existing signed Core retirement
+success, verified owned exits, archival/fencing/capacity release, destruction of every
+old view, action/router/IPC/protocol cleanup and confirmed Core exit. Cleanup uncertainty
+keeps the latch closed. Closed journals, lost ownership and unknown reservations cannot
+be reclaimed; a late exit receipt does not repair ownership. New selections use fresh
+identities/state; no journal reset, PID adoption or signal to an unknown process exists.
+OpenCode descendant retirement remains refused. Two-cycle Electron acceptance uses only
+synthetic processes and intercepted dialogs/focus, not native-provider acceptance.
+
+A separate Cancel-default OpenCode creation review explicitly names shared SQLite/WAL,
+permissions, possible migrations, credential refresh and configured native startup
+hooks/plugins/MCP/network/provider activity. Only its checked affirmative choice adds
+the existing three startup acknowledgments to a fresh manifest, followed by a second
+complete review. Generic CLI/login consent is insufficient. This flow starts nothing;
+real native effects were neither authorized nor run. Focus/expiry and later signed
+start/task gates remain. Filesystem roots are now refused as tool PATH entries.
+No HTTP, WebSocket, cookie, static-serving or environment-whitelist authority changes.

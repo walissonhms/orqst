@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-03 — Fresh pairs after proved retirement and explicit OpenCode review
+
+- Unlock fresh native creation/selection only after signed retirement, proved owned
+  exits, archive/fence/release and confirmed view/handler/Core cleanup. Unknown or
+  lost ownership remains reserved, including after a late exit receipt.
+- Prepare a separate native OpenCode startup-effects acknowledgment and final full
+  review; default remains blocked. No real OpenCode startup/migration/inference ran.
+- Add disposable two-cycle Electron/PTY acceptance and consent cancellation cases;
+  reject filesystem roots in reviewed tool PATHs. Preserve existing UI/gesture work.
+
 ## 2026-11-03 — GUI tool precedence and explicit path failures
 
 - For a minimal GUI PATH, review selected native tool directories before installer

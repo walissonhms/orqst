@@ -63,6 +63,7 @@ export function localCliPathDirectories(
   for (const path of selectedDirectories) {
     try {
       if (
+        path === parse(path).root ||
         !isAbsolute(path) ||
         path.includes('\0') ||
         path.includes(delimiter) ||
@@ -104,7 +105,7 @@ export function localCliPathDirectories(
     try {
       const path = realpathSync(input.path);
       // A canonical target containing the PATH delimiter cannot be represented safely.
-      if (path.includes(delimiter)) {
+      if (path === parse(path).root || path.includes(delimiter)) {
         rejected.push({ ...input, reason: 'unsafe_directory' });
         continue;
       }
@@ -147,6 +148,8 @@ export function terminalToolPath(reviewed?: string): string {
     throw new Error('Reviewed terminal PATH exceeds the directory budget');
   const identities = new Set<string>();
   for (const path of entries) {
+    if (path === parse(path).root)
+      throw new Error('Reviewed terminal PATH cannot contain filesystem root');
     if (!isAbsolute(path) || path.includes('\0'))
       throw new Error('Reviewed terminal PATH contains an empty or nonabsolute directory');
     let canonical: string;

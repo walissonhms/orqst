@@ -65,13 +65,18 @@ try {
     ],
   });
   const require = createRequire(resolve('apps/desktop/package.json'));
-  for (const [index, provider] of ['codex', 'claude', 'opencode'].entries()) {
-    const profile = join(root, `profile-${provider}`);
+  for (const { provider, startupAuthorized } of [
+    { provider: 'codex', startupAuthorized: false },
+    { provider: 'claude', startupAuthorized: false },
+    { provider: 'opencode', startupAuthorized: false },
+    { provider: 'opencode', startupAuthorized: true },
+  ]) {
+    const profile = join(root, `profile-${provider}-${startupAuthorized}`);
     await mkdir(join(profile, 'managed-agents'), { recursive: true, mode: 0o700 });
     const marker = join(profile, 'managed-agents/active-pair.json');
     const reservation = 'SYNTHETIC-UNKNOWN-DO-NOT-RECONCILE\n';
     await writeFile(marker, reservation, { mode: 0o600 });
-    const bootstrap = join(root, `bootstrap-${provider}.cjs`);
+    const bootstrap = join(root, `bootstrap-${provider}-${startupAuthorized}.cjs`);
     await writeFile(
       bootstrap,
       `require('electron').app.setPath('userData', ${JSON.stringify(profile)}); require(${JSON.stringify(join(output, 'main.cjs'))});`,
@@ -91,7 +96,7 @@ try {
     const observer = await desktop.firstWindow();
     await expect.poll(() => observer.url()).toBe(`http://127.0.0.1:${port}/`);
     await desktop.evaluate(
-      ({ BrowserWindow, dialog }, { project, binary, providerIndex }) => {
+      ({ BrowserWindow, dialog }, { project, binary, providerIndex, startupAuthorized }) => {
         const window = BrowserWindow.getAllWindows()[0]!;
         window.isFocused = () => Boolean(Reflect.get(globalThis, 'syntheticFocus'));
         window.webContents.isFocused = window.isFocused;
@@ -125,13 +130,15 @@ try {
           const stage =
             options!.buttons!.length === 4
               ? 'provider'
-              : options!.buttons!.length === 3
-                ? 'mcp'
-                : options!.checkboxLabel
-                  ? 'creation'
-                  : options!.detail
-                    ? 'selection'
-                    : 'denied';
+              : options!.buttons!.length === 3 && options!.checkboxLabel
+                ? 'opencode-startup'
+                : options!.buttons!.length === 3
+                  ? 'mcp'
+                  : options!.checkboxLabel
+                    ? 'creation'
+                    : options!.detail
+                      ? 'selection'
+                      : 'denied';
           const cancel = Reflect.get(globalThis, 'syntheticCancel');
           (Reflect.get(globalThis, 'syntheticStages') as unknown[]).push({
             stage,
@@ -141,15 +148,21 @@ try {
           });
           if (
             stage === cancel ||
-            (stage === 'creation' && ['checkbox', 'blur', 'navigation'].includes(String(cancel)))
+            (stage === 'creation' && ['checkbox', 'blur', 'navigation'].includes(String(cancel))) ||
+            (stage === 'opencode-startup' &&
+              ['startup-checkbox', 'startup-blur', 'startup-navigation'].includes(String(cancel)))
           ) {
-            if (cancel === 'blur') window.emit('blur');
-            if (cancel === 'navigation') window.webContents.emit('did-start-navigation');
+            if (cancel === 'blur' || cancel === 'startup-blur') window.emit('blur');
+            if (cancel === 'navigation' || cancel === 'startup-navigation')
+              window.webContents.emit('did-start-navigation');
             Reflect.set(globalThis, 'syntheticStep', 'cancelled');
             return {
-              response:
-                cancel === 'checkbox' || cancel === 'blur' || cancel === 'navigation' ? 1 : 0,
-              checkboxChecked: cancel !== 'checkbox',
+              response: String(cancel).startsWith('startup-')
+                ? 2
+                : cancel === 'checkbox' || cancel === 'blur' || cancel === 'navigation'
+                  ? 1
+                  : 0,
+              checkboxChecked: cancel !== 'checkbox' && cancel !== 'startup-checkbox',
             };
           }
           if (stage === 'creation') Reflect.set(globalThis, 'syntheticPreview', options!.detail);
@@ -158,16 +171,26 @@ try {
             response:
               stage === 'provider'
                 ? providerIndex + 1
-                : stage === 'mcp'
-                  ? 2
-                  : stage === 'denied'
-                    ? 0
-                    : 1,
-            checkboxChecked: stage === 'creation',
+                : stage === 'opencode-startup'
+                  ? startupAuthorized
+                    ? 2
+                    : 1
+                  : stage === 'mcp'
+                    ? 2
+                    : stage === 'denied'
+                      ? 0
+                      : 1,
+            checkboxChecked:
+              stage === 'creation' || (stage === 'opencode-startup' && startupAuthorized),
           };
         };
       },
-      { project, binary, providerIndex: index },
+      {
+        project,
+        binary,
+        providerIndex: ['codex', 'claude', 'opencode'].indexOf(provider),
+        startupAuthorized,
+      },
     );
     const create = () =>
       desktop!.evaluate(({ Menu }) =>
@@ -193,7 +216,9 @@ try {
           'blur',
           'navigation',
         ]
-      : []) {
+      : provider === 'opencode' && startupAuthorized
+        ? ['opencode-startup', 'startup-checkbox', 'startup-blur', 'startup-navigation']
+        : []) {
       await desktop.evaluate((_electron, cancellation) => {
         Reflect.set(globalThis, 'syntheticCancel', cancellation);
         Reflect.set(globalThis, 'syntheticStep', '');
@@ -261,7 +286,11 @@ try {
       assert.equal(configs[0].interactive.strictMcpAcknowledged, true);
     }
     if (provider === 'opencode')
-      assert.equal(configs[0].interactive.nativeStartupAuthorized, false);
+      assert.equal(configs[0].interactive.nativeStartupAuthorized, startupAuthorized);
+    if (provider === 'opencode' && startupAuthorized) {
+      assert.equal(configs[0].interactive.nativeDatabaseMigrationsAcknowledged, true);
+      assert.equal(configs[0].interactive.nativeStartupActivityAcknowledged, true);
+    }
     assert.equal(await readFile(marker, 'utf8'), reservation);
     const nextView = desktop.context().waitForEvent('page', { timeout: 15000 });
     await desktop.evaluate(({ Menu }) =>
@@ -271,7 +300,7 @@ try {
     await expect(terminal.locator('#status')).toHaveAttribute('data-blocked', 'true');
     await expect(terminal.locator('#start')).toBeDisabled();
     await expect(terminal.locator('#login')).toBeDisabled();
-    if (provider !== 'opencode')
+    if (provider !== 'opencode' || startupAuthorized)
       await expect(terminal.locator('#status')).toContainText(/reconciliation|reconciliação/);
     await expect
       .poll(() =>
@@ -300,7 +329,8 @@ try {
   console.log(
     JSON.stringify({
       result: 'passed',
-      scope: 'native-create-review-three-synthetic-pins-preserved-reservations',
+      scope:
+        'native-create-review-three-synthetic-pins-explicit-opencode-consent-preserved-reservations',
       providerExecution: 'NOT RUN',
       nativeFocusAndDialogs: 'INTERCEPTED',
     }),

@@ -36,8 +36,10 @@ and the observer preload receive no creation or execution authority.
 7. Separately choose **Open interactive terminal A/B**. Existing validation, Core,
    journals and the original shared admission domain apply. Each CLI still needs
    its separate focused signed start. MCP needs both starts and a separate task grant.
-   OpenCode manifests created here always remain `nativeStartupAuthorized:false`;
-   this wizard does not authorize native SQLite migrations/startup activity.
+   OpenCode defaults to `nativeStartupAuthorized:false`. Its separate native
+   startup-effects review can keep that block or explicitly acknowledge shared
+   database migrations and native startup activity before the final full review.
+   Creation and consent alone start nothing.
 
 Creation preserves the current process's native HOME and applicable CODEX_HOME,
 CLAUDE_CONFIG_DIR or OpenCode HOME/XDG/config/DB selectors. Only directory metadata
@@ -57,6 +59,45 @@ explicitly opened. Common trusted project/home directories do not require `0700`
 only newly private state does. Canonical checks and `O_NOFOLLOW` remain in the shared
 file helper. The trusted same-user model does not promise immutable OS binding
 against a malicious same-user replacement race.
+
+## Signed retirement and fresh selection — 2026-11-03
+
+After both owned processes exit (or no dispatch occurred), the existing native
+**Retire pair** review can retire that pair. Core verifies its one-use signed proof,
+owned exit evidence, journals and admission ownership, then archives and fences the
+old runtime before releasing capacity. Desktop unlocks creation/selection only after
+the correlated success reply, router/action/IPC cleanup, destruction of all old views,
+protocol-handler removal and confirmed Core process exit. A new pair uses new manifests,
+identities, partitions and journals in the same Desktop process; old journals are never
+reopened or reset. Initialization/creation latches reset only after this complete proof.
+
+Running processes, `ownership_lost`, closed journals, unknown reservations, transport
+loss and partial cleanup remain blocked. A later exit receipt cannot restore lost
+ownership. No TTL, PID adoption or unknown-process signal is added. OpenCode retirement
+still fails closed because descendant exit is unvalidated. Hidden/detached views do
+not imply retirement. Pre-Core failure recovery below remains a separate narrow path.
+
+`pnpm accept:terminal-cycles --authorize-synthetic-pty` exercises two consecutive
+create/start/owned-stop/signed-retire cycles in one Electron process, then destroys
+one attachment and verifies capacity remains reserved even after the synthetic
+process ends itself. It uses a compiled synthetic executable, temporary profiles and
+intercepted native dialogs/focus, not real login/provider or human-modal acceptance.
+
+## OpenCode-specific client consent — 2026-11-03
+
+The native creation flow presents the complete blocked manifest plus a separate,
+Cancel-default startup-effects choice: keep blocked, or check the acknowledgment
+and authorize those effects for a new manifest. Authorization adds all three existing
+startup/database/activity fields to the subsequent complete final review. Cancel,
+unchecked authorization, blur or navigation creates no files. Generic existing-login
+consent never substitutes for this decision. The scope includes shared writable SQLite,
+permissions/WAL, possible pending migrations, native credential refresh and configured
+hooks/plugins/MCP/network/provider activity; the pending work and rollback safety remain
+unknown. A later focused signed start and separate task/MCP grants are still required.
+
+Only synthetic dialog/provisioning tests exercised this new choice. No real OpenCode
+startup, database inspection/migration, credential read or inference was performed.
+The owner has not granted these native effects in the running application.
 
 ## Early failure, capacity and retry
 

@@ -64,9 +64,10 @@ path field, drag/drop, second-instance argv import or HTTP endpoint is added.
    An executable selection initializes the existing Node Core and new journals;
    it still starts no CLI. The existing user-data admission domain and sticky
    capacity are used. A reservation refusal is not bypassed or reconciled.
-5. Once pair initialization is attempted, selection is fixed for this Desktop run,
-   including deterministic blockers, failures and retirement. No slots are appended,
-   no live pair is replaced and no new state/profile is offered as a retry. Opening
+5. Once pair initialization is attempted, selection is fixed until a fully proved
+   native signed retirement and old-surface/Core cleanup. OpenCode still cannot
+   retire because descendant exits are unvalidated. Deterministic blockers and
+   uncertain failures keep selection fixed; no live slots are replaced. Opening
    an already loaded terminal only shows its existing window. Actual CLI startup
    still requires the separate focused native broker confirmation and one-use
    signature. A review does not change any manifest authorization flags.
@@ -93,8 +94,15 @@ the owner's running windows/hosts/drafts. See [safe build freshness](desktop.md#
 
 ## What starting can change and what requires authorization
 
-Only after the owner explicitly accepts native startup, provision a **new**
-manifest using the command above plus all three flags:
+The native creation wizard now offers a separate Cancel-default review of the
+complete blocked plan: keep blocked, or explicitly acknowledge startup/database/activity
+effects before the final full-manifest review. This prepares files only; it does not
+start OpenCode. Generic login consent does not authorize this choice. The choice has
+synthetic intercepted-dialog evidence only; real effects have not been authorized or run.
+See [client consent and safe retirement](cli-team-recovery.md).
+
+Alternatively, only after the owner explicitly accepts native startup, provision a
+**new** manifest using the command above plus all three flags:
 
 ```text
 --authorize-native-startup
