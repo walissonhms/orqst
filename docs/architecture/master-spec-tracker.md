@@ -415,3 +415,28 @@ passed: 717 Node tests, 18 Rust tests, lint/typecheck/build, Clippy with warning
 denied and the reduced-symbol native executable build. These are code/automated
 checks; no new native UI/provider acceptance was run. Feature facade/UI integration
 and the final native deactivation/Quit steps remain open.
+
+## Feature UI and native metadata integration — 2026-11-04
+
+Source commits `64bbd2a` through `7a939df` are integrated over `241cb03` through
+`d7816c2`. Compact Feature CRUD/selection, reviewed-slot assignment, versioned Core
+view and retained docked layout are connected. Exact native document/epoch/layout
+validation and whole-command metadata/review exclusion are implemented. The final
+focus sample is followed by source/document/epoch/Quit revalidation before cache,
+publication or return. Existing own-sheet and signed lifecycle guards remain.
+
+This is a partial implementation delivery, not a newly accepted full criterion.
+EN reached 15 synthetic six-PTY switches 3/2/1 with stable IDs/documents/history and
+six Starts, then failed on editor reopening. The editor-version, signed cleanup and
+deadline corrections remain without a full rerun; PT is paused. All six original
+exit receipts are absent, so cleanup is uncertain despite a later empty process
+snapshot. Preserve the fixture and reservations, including the separate earlier
+real-provider quarantine. New fixtures/Starts and the broad suite stay paused until
+specific review/authorization. Native WebKit, real providers, final Quit, Floating
+and the other V6 gaps remain open. See the [current checklist](v6-feature-checklist.md)
+and [Feature UI evidence](../development/v6-feature-ui.md).
+
+Integrated verification passed 53 session-free Node tests, 28 Rust tests,
+lint/typecheck, regular/native executable builds, Clippy and 17-notice resource
+staging. The broad suite and EN/PT remain paused. These checks do not accept the
+unexecuted cleanup/deadline correction or native/provider workflow.

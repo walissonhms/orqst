@@ -10,8 +10,13 @@ The [private V6 Core foundation](docs/development/v6-feature-core.md) now persis
 Features, team proposals and layouts in SQLite, with Feature-local communication
 guards. The [shared terminal chrome](docs/development/v6-terminal-chrome.md) uses a
 compact header and pane menu while retaining actual xterm and signed controls.
-Native Feature CRUD/selection, runtime enrollment, Floating layout and real-provider
-acceptance remain incomplete; saved configuration restores no execution authority.
+The [native Feature UI](docs/development/v6-feature-ui.md) now connects metadata
+CRUD, reviewed-slot assignment and selection to the retained terminal view and
+per-Feature SQLite layout. Automated acceptance is partial: 15 synthetic six-PTY
+switches preserved identities/history, then EN failed on editor reopening; its
+correction has no rerun and PT is paused. Cleanup lacks six exit receipts and remains
+uncertain. Native/provider acceptance, runtime enrollment and Floating remain open;
+saved configuration restores no execution authority.
 
 For the current master-specification checklist, evidence, blockers and update rules,
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical

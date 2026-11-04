@@ -113,6 +113,7 @@ const lines = createInterface({ input: child.stdout });
 const pending = new Map<string, (value: unknown) => void>();
 const send = (value: object) => child.stdin.write(JSON.stringify(value) + '\n');
 let acceptReady!: (value: { panes: Array<{ html: string }>; layout: TerminalLayoutState }) => void;
+let rejectReady!: (reason: Error) => void;
 let layout!: TerminalLayoutState;
 const frames: Frame[] = [];
 let workspace: Page | undefined;
@@ -122,8 +123,9 @@ const layoutMessages: unknown[] = [];
 let layoutWork = Promise.resolve();
 let layoutError: unknown;
 const ready = new Promise<{ panes: Array<{ html: string }>; layout: TerminalLayoutState }>(
-  (resolve) => {
+  (resolve, reject) => {
     acceptReady = resolve;
+    rejectReady = reject;
   },
 );
 const confirmations: string[] = [];
@@ -222,7 +224,14 @@ async function featureRequest(request: FeatureNativeRequest) {
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 let retiredAndClosed = false;
 const ids: string[] = [];
-const deadline = setTimeout(() => child.stdin.end('shutdown\n'), 150000);
+let deadlineExpired = false;
+const deadline = setTimeout(() => {
+  deadlineExpired = true;
+  rejectReady(new Error('Synthetic visual acceptance deadline exceeded'));
+  // Interrupt UI work, retaining the original host for the signed cleanup below.
+  // Closing its stdin here would discard that cleanup path before observing exits.
+  void browser?.close().catch(() => {});
+}, 150000);
 const artifacts = await mkdtemp(join(tmpdir(), 'orqst-feature-screens-'));
 async function retireSelection() {
   const id = randomUUID();
@@ -284,6 +293,7 @@ try {
     }),
   ]);
   browser = await chromium.launch();
+  if (deadlineExpired) throw new Error('Synthetic visual acceptance deadline exceeded');
   const approved = await browser.newPage({
     viewport: { width: 1440, height: 900 },
     reducedMotion: 'reduce',

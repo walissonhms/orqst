@@ -13,11 +13,15 @@ provider acceptance remain release gates; preserve Electron until Tauri parity.
 First V6 increment: Feature identity/metadata/assignments, scoped team/layout
 configuration, private Core IPC and fail-closed alias/grant isolation are implemented.
 The shared terminal renderer now has compact chrome and an accessible pane menu.
-Next wire the native metadata facade and actual Feature sidebar/CRUD/selection,
-then prove process continuity and per-Feature docked/floating layout. Larger
+The native metadata facade and actual Feature sidebar/CRUD/selection are now
+connected to retained per-Feature docked layouts. Finish EN/PT acceptance and
+confirmed cleanup before claiming process continuity for the complete workflow;
+15 synthetic switches passed before EN failed on editor reopening. Floating, larger
 structured teams, model capability controls and authorized cross-Feature routes
 remain separate dependencies. See [Core](docs/development/v6-feature-core.md) and
 [chrome](docs/development/v6-terminal-chrome.md) for exact evidence and limits.
+The [Feature UI increment](docs/development/v6-feature-ui.md) records the corrected
+editor/runner/native guards, pending reruns and preserved uncertain fixture.
 
 For current master-specification acceptance and outstanding work, start with the
 [delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain

@@ -50,3 +50,20 @@ no exact licensed source revision is available for copying code/assets.
   Webview URL/parent/document checks remain mandatory in the command.
 - Existing signed native consent/lifecycle/retirement and Feature-local grants.
   Metadata never enrolls/adopts a session or reapplies a persisted permission.
+
+## Acceptance deadline review
+
+The existing explicit runner's signed Stop/retirement path is retained. Source
+review found that its deadline closed the original host's stdin before that cleanup
+could run. The deadline now interrupts Chromium work (or the pending ready wait),
+then uses the existing cleanup while that original host remains valid. It adds no
+PID signalling, reconnection, process adoption or retry. A deadline during browser
+launch is checked before any visual Start interaction.
+
+Anywh's pinned
+[`relay/src/lifecycle.ts::gracefulShutdown`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/lifecycle.ts)
+was re-inspected: it waits/stops existing turns before disposing drivers and exiting.
+Keep that ordering principle and ORQST's existing signed lifecycle; its SessionManager
+and provider-specific SIGINT fallback do not match this runner's owned-instance
+receipt/retirement contract. No upstream fragment or dependency is copied. The
+deadline correction remains unexecuted while the acceptance pause is in force.

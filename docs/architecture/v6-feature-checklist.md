@@ -109,3 +109,35 @@ presentation. Integrated checks passed: 717 Node tests, 29 focused broker/servic
 tests, 18 Rust tests, lint/typecheck/build, Clippy and native executable compilation.
 No new native UI, packaged or real-provider acceptance is claimed. The unchecked
 items above remain open; Feature UI hooks are the next isolated integration.
+
+## Integrated Feature UI and native facade — 2026-11-04
+
+Sources through `7a939df` are integrated through `d7816c2`, superseding the earlier
+"next integration" status above. Code delivery and complete acceptance are separate.
+
+- [x] Connect actual React Feature metadata CRUD, reviewed-slot assignment and
+      selection to Core SQLite, CAS and per-Feature retained docked layout.
+- [x] Authenticate the actual native Webview; derive source/document/UUID and native
+      epoch without renderer-controlled execution fields.
+- [x] Validate complete layouts before changing visibility/geometry; preserve
+      empty-Feature chrome and dashboard/navigation/close/Quit presentation fences.
+- [x] Revalidate context after the final focus await and retain UUID-owned metadata
+      exclusion through success/error/timeout/cancellation, without a mutex across await.
+- [x] Implement the editor-version fix and separate signed cleanup/deadline correction.
+- [ ] Complete EN/PT and screenshot acceptance on those corrections. The earlier EN
+      run preserved IDs/documents/scrollback and six Starts over 15 switches 3/2/1,
+      then failed while reopening the editor. PT was not executed.
+- [ ] Resolve the review/authorization gate for further runs: all six prior receipts
+      end at `started`; no exit receipt exists and `active-pair.json` remains. Cleanup
+      is uncertain even though the last process snapshot found no matching processes.
+- [ ] Finish native WebKit/provider acceptance and the broader V6 items above.
+
+Preserve the original fixture, journals and reservations. No adoption, signalling,
+reconciliation, deletion or restart is authorized by this code integration. EN/PT,
+new fixtures/Starts and the broad suite remain paused pending specific review.
+See [workflow, exact evidence and limits](../development/v6-feature-ui.md).
+
+Integrated checks passed: 53 session-free Node tests, 28 Rust tests, lint,
+typecheck, regular/native executable builds, Clippy and resource staging with 17
+notices. The broad suite and EN/PT were not rerun. A first Rust check lacked staged
+Feature resources; it passed after staging, without changing the check.

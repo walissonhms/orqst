@@ -123,6 +123,12 @@ never reconnects/adopts/signals. Failure artifacts remain even after a confirmed
 cleanup. Node/Core fixture copies use copy-on-write and verify their hashes before
 startup. This correction has not been executed during the pause.
 
+Integration review also corrected the acceptance deadline: it interrupts the
+Chromium/ready wait instead of closing the original host before signed cleanup.
+If the deadline expires during browser launch, the run fails before any UI Start.
+The existing host transport is retained for the bounded signed cleanup attempt;
+failure still records uncertainty. This path has not been executed during the pause.
+
 Checks that start no sessions passed on the integrated branch: 53 focused
 SQLite/mock/layout/broker tests; lint, TypeScript and the regular dashboard/bridge/
 desktop build; Tauri resources with 17 dependency notices; 28 Rust unit tests,
@@ -132,7 +138,7 @@ application/bundle was launched, and no full native bundle or provider acceptanc
 is claimed. An initial Rust type error and runner lint errors were corrected;
 the subsequent listed checks passed without weakening rules.
 
-Static owner review found that the final focus await could cross native
+Integration review found that the final focus await could cross native
 invalidation after the earlier epoch/document check. A separate fix now awaits
 focus first and then jointly rechecks source/document, native epoch and both Quit
 fences before cache mutation, publication or returning metadata. Its pure Rust
@@ -151,6 +157,24 @@ two cancelled. ENOSPC is established only for the logs that report it; the 55s
 startup-counter timeout has no established cause. That interrupted run is not a
 successful suite. Native WebKit, provider, NSApp deactivation and final Quit
 acceptance remain untested in this increment.
+
+### Main integration checks
+
+The eight non-merge source commits through `7a939df` were integrated over published
+`241cb03` through `d7816c2`. Test conflicts retained both the own-sheet cases and
+metadata exclusion cases; the resulting source tree matched the delivered branch
+before the additional deadline correction described above.
+
+On the integrated tree, all 53 session-free Node tests and 28 Rust unit tests
+passed. Lint, TypeScript, the regular build, resource staging with 17 notices and
+Clippy with all targets/warnings denied and native executable compilation passed.
+The first Rust attempt failed
+because the new `dist/features` resources had not been staged in the main workspace;
+after staging them the same test command passed. Stage Tauri resources before
+standalone Rust checks: `build.rs` requires the declared native resource paths.
+The broad suite, EN/PT, runner deadline/cleanup execution and native/provider UI
+acceptance were not run during this integration pause. Earlier broad-suite counts
+belong only to their documented source revisions.
 
 ## Fragments for central integration
 

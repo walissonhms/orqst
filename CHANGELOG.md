@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-04 — Native Feature UI and retained view integration
+
+- Connect compact Workspace/Feature chrome and Studio metadata editing to private
+  Core SQLite, reviewed-slot assignments and versioned preferred context.
+- Select and organize per-Feature docked layouts using retained terminal documents;
+  never issue Start, restore input authority or adopt unavailable members.
+- Authenticate the actual native Webview and fence metadata replies/layouts by
+  document, native epoch, CAS and Quit. Retain UUID-owned review exclusion through
+  final focus validation and cancellation.
+- Correct the editor save race and acceptance cleanup/deadline code. Their full
+  rerun is pending: EN failed after 15 synthetic switches; PT is paused and six
+  exit receipts remain absent. No native/provider or complete V6 acceptance claimed.
+
 ## 2026-11-04 — Feature-scoped Core and compact V6 terminal chrome
 
 - Add persistent Feature metadata/assignments/audit, scoped team proposals and
