@@ -26,27 +26,32 @@ await cp(`apps/tauri/src-tauri/binaries/orqst-node-${runtime.target}`, node);
 const executable = join(fixture, 'synthetic-pty');
 execFileSync('cc', ['-O2', resolve('tests/helpers/managed-terminal-fixture.c'), '-o', executable]);
 const project = join(fixture, 'project');
-const state = join(fixture, 'state');
-for (const directory of [project, state, ...['home', 'codex', 'tmp'].map((p) => join(state, p))])
-  await mkdir(directory, { mode: 0o700 });
-const config: ManagedCodexConfig = {
-  version: 1,
-  trust: 'native-same-user',
-  executable: { path: executable, sha256: terminalExecutableSha256(executable) },
-  executableVersion: 'SYNTHETIC-NOT-A-PROVIDER',
-  node: { path: node, sha256: terminalExecutableSha256(node) },
-  project,
-  state,
-};
-const manifest = join(fixture, 'manifest.json');
-await writeFile(manifest, JSON.stringify(config), { mode: 0o600 });
-await writeFile(join(state, 'codex/config.toml'), managedCodexSettings(config), { mode: 0o600 });
-await writeFile(join(state, 'codex/auth.json'), '{"synthetic":true}', { mode: 0o600 });
+await mkdir(project, { mode: 0o700 });
+const manifests: string[] = [];
+for (const slot of [0, 1]) {
+  const state = join(fixture, `state-${slot}`);
+  for (const directory of [state, ...['home', 'codex', 'tmp'].map((p) => join(state, p))])
+    await mkdir(directory, { mode: 0o700 });
+  const config: ManagedCodexConfig = {
+    version: 1,
+    trust: 'native-same-user',
+    executable: { path: executable, sha256: terminalExecutableSha256(executable) },
+    executableVersion: 'SYNTHETIC-NOT-A-PROVIDER',
+    node: { path: node, sha256: terminalExecutableSha256(node) },
+    project,
+    state,
+  };
+  const manifest = join(fixture, `manifest-${slot}.json`);
+  await writeFile(manifest, JSON.stringify(config), { mode: 0o600 });
+  await writeFile(join(state, 'codex/config.toml'), managedCodexSettings(config), { mode: 0o600 });
+  await writeFile(join(state, 'codex/auth.json'), '{"synthetic":true}', { mode: 0o600 });
+  manifests.push(manifest);
+}
 const child = spawn(
   node,
   [
     join(fixture, 'core/tauri-terminal-host.cjs'),
-    JSON.stringify([manifest]),
+    JSON.stringify(manifests),
     join(fixture, 'admission'),
   ],
   {
@@ -82,7 +87,7 @@ lines.on('line', (line) => {
     send({ kind: 'confirm', id: value.id, accepted: true }); // Synthetic native consent only.
   } else pending.get(value.id)?.(value.value);
 });
-async function request(request: TerminalNativeRequest) {
+async function request(request: TerminalNativeRequest, slot = 0) {
   const id = randomUUID();
   return new Promise<unknown>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -94,7 +99,7 @@ async function request(request: TerminalNativeRequest) {
       pending.delete(id);
       resolve(value);
     });
-    send({ kind: 'request', id, slot: 0, focused: true, request });
+    send({ kind: 'request', id, slot, focused: true, request });
   });
 }
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
@@ -111,6 +116,7 @@ try {
   await page.exposeFunction(
     'syntheticNativeInvoke',
     (command: string, args: { request: TerminalNativeRequest }) => {
+      if (command === 'terminal_view') return true; // Native window behavior is simulated.
       assert.equal(command, 'terminal_request');
       return request(args.request);
     },
@@ -140,6 +146,12 @@ try {
   });
   await page.goto('https://synthetic.orqst.invalid/0/index.html');
   await expect(page.locator('#terminal .xterm')).toBeVisible();
+  await expect(page.locator('[data-tab="0"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-tab="1"]')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('#maximize').click();
+  await expect(page.locator('#restore')).toBeVisible();
+  await page.locator('#restore').click();
+  await expect(page.locator('#maximize')).toBeVisible();
   await page.locator('#start').click();
   await expect(page.locator('#status'))
     .toHaveAttribute('data-state', 'running')
@@ -159,6 +171,48 @@ try {
   await expect(page.locator('#terminal')).toContainText('SYNTHETIC:PONG');
   const id = await page.locator('#status').getAttribute('data-instance-id');
   assert.ok(id);
+  const second = await browser.newPage();
+  second.on('pageerror', (error) => errors.push(error.message));
+  await second.exposeFunction(
+    'syntheticNativeInvoke',
+    (command: string, args: { request: TerminalNativeRequest }) => {
+      if (command === 'terminal_view') return true;
+      assert.equal(command, 'terminal_request');
+      return request(args.request, 1);
+    },
+  );
+  await second.addInitScript(() => {
+    const native = Reflect.get(window, 'syntheticNativeInvoke') as (
+      command: string,
+      args: unknown,
+    ) => Promise<unknown>;
+    Reflect.set(window, '__TAURI_INTERNALS__', { invoke: native });
+  });
+  await second.route('**/*', (route) => {
+    const path = new URL(route.request().url()).pathname;
+    assert.ok(['/1/index.html', '/1/client.js', '/1/style.css'].includes(path));
+    return route.fulfill({
+      contentType: path.endsWith('.js')
+        ? 'text/javascript'
+        : path.endsWith('.css')
+          ? 'text/css'
+          : 'text/html',
+      body: path.endsWith('.js') ? client : path.endsWith('.css') ? style : value.panes[1]!.html,
+    });
+  });
+  await second.goto('https://synthetic.orqst.invalid/1/index.html');
+  await expect(second.locator('#terminal .xterm')).toBeVisible();
+  await expect(second.locator('[data-tab="1"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(second.locator('[data-tab="0"]')).toHaveAttribute('aria-pressed', 'false');
+  await second.locator('#start').click();
+  await expect(second.locator('#status')).toHaveAttribute('data-state', 'running');
+  await second.locator('#attach').click();
+  await expect(second.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
+  const secondId = await second.locator('#status').getAttribute('data-instance-id');
+  assert.ok(secondId && secondId !== id);
+  await second.locator('#stop').click();
+  await expect(second.locator('#status')).toHaveAttribute('data-state', 'exited');
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
   const resized = terminalNativeReplySchema.parse(
     await request({ version: 1, action: 'resize', instanceId: id, columns: 91, rows: 31 }),
   );
@@ -177,7 +231,7 @@ try {
   assert.equal(code, 0);
   assert.equal(signal, null);
   console.log(
-    'PASS: packaged Node hosts + real synthetic PTY + Tauri xterm bundle, signed start/attach/input/stop, output, resize and revocation outside checkout. Native IPC/focus/dialogs simulated; no real provider.',
+    'PASS: packaged Node hosts + two independent synthetic PTYs + Tauri xterm bundle, signed start/attach/input/stop, output, resize and revocation outside checkout. Native IPC/focus/dialogs simulated; no real provider.',
   );
 } finally {
   clearTimeout(deadline);

@@ -130,6 +130,12 @@ resize reaches the existing xterm fit and PTY resize transport. Reload permanent
 fences that document; it does not adopt or restart anything. Quitting asks to disconnect
 owned work, then closes the private Node hosts; arbitrary descendants are not contained.
 
+The shared terminal document also serves the Electron workspace grid. The Tauri adapter
+supplies its complete layout state for each independent native window and supports
+native maximize/restore. Tauri does not yet provide the Electron grid, layout editing,
+persisted terminal names or drag reorder. These actions are not exposed in its layout
+toolbar, and the document heading is not draggable there.
+
 The Tauri frontend reuses Electron's terminal document, xterm client, schemas and
 Node hosts without importing the Electron runtime. Its two commands are available
 only to the dedicated custom-protocol windows. The dashboard stays a remote observer

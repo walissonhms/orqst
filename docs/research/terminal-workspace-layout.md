@@ -115,3 +115,25 @@ clipboard, Tauri managed execution or cross-platform package acceptance was run.
 Ingestion is unchanged; validate:local/validate:live were not run for this layout
 increment. No user sessions, service, installed application or global toolchain
 was modified.
+
+## Integration with Tauri and mention routing — 2026-11-04
+
+The combined tree adds the Tauri prepared-terminal adapter and Electron's separate
+structured mention/permission work. The shared terminal document now expects the
+extended grid state. The Tauri adapter supplies a complete per-window state, rejects
+unsupported grid actions and disables heading drag; it updates maximize/restore
+controls after successful native responses. This preserves independent native windows;
+it does not claim that the Electron grid or persisted names run in Tauri.
+
+On the combined tree, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`
+passed; 594 Node tests passed without failures, cancellations or skips. Synthetic
+Electron terminal-team acceptance passed for two and eight PTYs, with real PTY
+resize and retained document identity; native dialogs/focus were doubled.
+
+The rebuilt Tauri resources passed `pnpm accept:tauri-terminals --authorize-synthetic`
+with two independent owned synthetic PTYs, distinct terminal IDs, correct active tabs,
+start/attach/input/stop, resize and revocation. The renderer's maximize/restore
+controls were checked through a simulated native response. Native IPC, focus and
+dialogs, real providers, human accessibility acceptance and a fresh native Tauri
+build of this combined tree remain unvalidated. No output in the test represents a
+provider response or captured user activity.
