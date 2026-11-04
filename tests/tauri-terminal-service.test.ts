@@ -204,3 +204,119 @@ test('Tauri pipe denies unfocused and malformed requests before producing native
     s.service.close();
   }
 });
+
+test('an owned sheet preserves its exact signed review while suspending keyboard leases', async () => {
+  const s = setup();
+  try {
+    const id = randomUUID();
+    const pending = s.service.receive({
+      kind: 'request',
+      id,
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    await setImmediate();
+    const confirmation = s.messages.findLast((m) => m.kind === 'confirm')!;
+    await s.service.receive({ kind: 'suspend-input', slot: 0 });
+    assert.equal(s.starts[0], 0);
+    await s.service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+    await pending;
+    const start = terminalNativeReplySchema.parse(s.messages.findLast((m) => m.id === id)?.value);
+    assert.equal(start.status, 'ok');
+    if (start.status !== 'ok') throw new Error('Missing synthetic instance');
+    const instanceId = start.instanceId;
+    for (const action of ['attach', 'input'] as const)
+      assert.equal((await s.request(0, { version: 1, action, instanceId })).status, 'ok');
+    await s.service.receive({ kind: 'suspend-input', slot: 0 });
+    assert.equal((await s.request(0, { version: 1, action: 'snapshot', instanceId })).status, 'ok');
+    assert.equal(
+      (
+        await s.request(0, {
+          version: 1,
+          action: 'write',
+          instanceId,
+          sequence: 0,
+          text: 'suspended',
+        })
+      ).status,
+      'denied',
+    );
+    assert.deepEqual(s.writes[0], []);
+    assert.equal((await s.request(0, { version: 1, action: 'input', instanceId })).status, 'ok');
+    assert.equal(
+      (
+        await s.request(0, {
+          version: 1,
+          action: 'write',
+          instanceId,
+          sequence: 0,
+          text: 'explicit renewal',
+        })
+      ).status,
+      'ok',
+    );
+    assert.deepEqual(s.writes[0], ['explicit renewal']);
+  } finally {
+    s.service.close();
+  }
+});
+
+test('cancel and real blur remain final after returning to an owned sheet', async () => {
+  for (const blur of [false, true]) {
+    const s = setup();
+    try {
+      const id = randomUUID();
+      const pending = s.service.receive({
+        kind: 'request',
+        id,
+        slot: 0,
+        focused: true,
+        request: { version: 1, action: 'start', profileId: 'synthetic' },
+      });
+      await setImmediate();
+      const confirmation = s.messages.findLast((m) => m.kind === 'confirm')!;
+      await s.service.receive({ kind: 'suspend-input', slot: 0 });
+      if (blur) await s.service.receive({ kind: 'revoke', slot: 0 });
+      await s.service.receive({ kind: 'confirm', id: confirmation.id, accepted: blur });
+      await pending;
+      // A late affirmative result after cancellation/revocation cannot resurrect this nonce.
+      await s.service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+      assert.equal(s.starts[0], 0);
+      assert.equal(
+        terminalNativeReplySchema.parse(s.messages.findLast((m) => m.id === id)?.value).status,
+        'cancelled',
+      );
+    } finally {
+      s.service.close();
+    }
+  }
+});
+
+test('a suspended sheet never renews an expired signed approval', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 10_000 });
+  const s = setup();
+  try {
+    const id = randomUUID();
+    const pending = s.service.receive({
+      kind: 'request',
+      id,
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    await setImmediate();
+    const confirmation = s.messages.findLast((m) => m.kind === 'confirm')!;
+    await s.service.receive({ kind: 'suspend-input', slot: 0 });
+    t.mock.timers.tick(30_001);
+    await s.service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+    await pending;
+    assert.equal(s.starts[0], 0);
+    assert.equal(
+      terminalNativeReplySchema.parse(s.messages.findLast((m) => m.id === id)?.value).status,
+      'denied',
+    );
+  } finally {
+    s.service.close();
+  }
+});

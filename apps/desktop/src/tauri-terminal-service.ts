@@ -26,6 +26,7 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('retire'), id: z.uuid(), slot, focused: z.boolean() }),
   z.strictObject({ kind: z.literal('revoke'), slot }),
+  z.strictObject({ kind: z.literal('suspend-input'), slot }),
   z.strictObject({ kind: z.literal('close'), slot }),
   z.strictObject({ kind: z.literal('confirm'), id: z.uuid(), accepted: z.boolean() }),
   z.strictObject({ kind: z.literal('authorizeMcp'), id: z.uuid(), slot, focused: z.boolean() }),
@@ -98,6 +99,11 @@ export class TauriTerminalService {
     }
     const pane = this.panes[message.slot];
     if (!pane) throw new Error('Unknown native terminal document');
+    if (message.kind === 'suspend-input') {
+      // An owned native sheet keeps its exact review, but never its keyboard lease.
+      pane.broker.suspendInput();
+      return;
+    }
     if (message.kind === 'revoke' || message.kind === 'close') {
       this.generation++;
       pane.state.focused = false;
