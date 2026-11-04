@@ -181,3 +181,10 @@ The final `cargo test` passed four tests and `cargo clippy -- -D warnings` passe
 application (159.96 MiB). It was built, not accepted through native dialogs or real
 providers. `pnpm build`, resource staging and both packaged Tauri acceptances passed
 earlier in this same increment. The existing Vite chunk advisory remains.
+
+Integrated as `e115c27` after the Tauri workspace and structured-agent increments:
+lint, typecheck, build and resource staging passed; the complete Node suite passed
+623 tests with `--test-concurrency=2`, and five Rust tests passed in an external
+target directory. Separate packaged synthetic structured-agent and eight-PTY
+acceptances passed. Native menu interaction, combined native coexistence, real CLI
+execution and the earlier quarantine decision remain unvalidated.
