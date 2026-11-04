@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { TERMINAL_SLOT_CEILING } from './terminal-capacity.js';
+import {
+  terminalCatalogRequestSchema,
+  terminalSelectedRequestSchema,
+  terminalPreparationCatalogSchema,
+} from './terminal-preparation.js';
 
 // Local Desktop chrome only: no paths, process operations, provider prompts or grants.
 export const studioRequestSchema = z.strictObject({
@@ -24,6 +29,10 @@ export type StudioReply = z.infer<typeof studioReplySchema>;
 // Tauri exposes only its existing homogeneous native preparation flow.
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
+  terminalCatalogRequestSchema,
+  terminalSelectedRequestSchema.extend({
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
   z.strictObject({
     action: z.literal('create'),
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -46,12 +55,15 @@ export const tauriStudioSnapshotSchema = z.strictObject({
   selectionLocked: z.boolean(),
 });
 export type TauriStudioSnapshot = z.infer<typeof tauriStudioSnapshotSchema>;
-export const tauriStudioReplySchema = z
-  .strictObject({
-    status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),
-    snapshot: tauriStudioSnapshotSchema.optional(),
-  })
-  .refine((reply) => reply.status !== 'ok' || reply.snapshot !== undefined);
+export const tauriStudioReplySchema = z.union([
+  z.strictObject({ status: z.literal('catalog'), catalog: terminalPreparationCatalogSchema }),
+  z
+    .strictObject({
+      status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),
+      snapshot: tauriStudioSnapshotSchema.optional(),
+    })
+    .refine((reply) => reply.status !== 'ok' || reply.snapshot !== undefined),
+]);
 export interface TauriStudio {
   readonly contractVersion: 1;
   request(request: TauriStudioRequest): Promise<z.infer<typeof tauriStudioReplySchema>>;

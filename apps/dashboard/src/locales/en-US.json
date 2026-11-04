@@ -592,7 +592,8 @@
     "paste": "Send this exact quoted text to this owned process?",
     "stop": "Send this exact signal to this owned process? Exit is not guaranteed.",
     "cancel": "Cancel",
-    "confirm": "Authorize once"
+    "confirm": "Authorize once",
+    "open": "Open this exact CLI and model in this workspace, connect its output and enable keyboard input for up to two minutes?"
   },
   "overviewLayout": {
     "title": "Customize overview",
@@ -722,7 +723,7 @@
     "reuseIdle": "No owned process started. Start requires native confirmation. Separate login is disabled for this native reuse profile.",
     "focus_required": "Bring this terminal panel to the foreground with macOS unlocked, then retry the action. No operation was authorized.",
     "title": "Managed Terminal",
-    "open": "Open interactive terminal",
+    "open": "Open terminal",
     "scope": "Legacy separate-login opt-in with your macOS user privileges; not a container. Read-only/on-request startup defaults; provider UI may change permissions. Closing hides this view; process lifetime is 30 minutes. Real Codex acceptance is pending; OpenCode requires its separate explicit startup opt-in.",
     "login": "Separate Codex login",
     "start": "Start CLI",
@@ -811,7 +812,9 @@
     "state_exited": "Exited",
     "state_start_failed": "Start failed",
     "state_ownership_lost": "Ownership lost",
-    "unavailable": "Native transport unavailable. Keyboard input is disabled; process state is unconfirmed."
+    "unavailable": "Native transport unavailable. Keyboard input is disabled; process state is unconfirmed.",
+    "openingIncomplete": "Opening is incomplete. The process attempt is retained. Inspect its state and connect output or keyboard for this same instance; no new Start was attempted.",
+    "guide_openingIncomplete": "The attempt identity was retained but its current state is unavailable. Refresh this instance; do not start another process or remove its reservation."
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",
@@ -939,7 +942,7 @@
       "state_locked": "Selection locked for this launch",
       "state_blocked": "Preparation needs attention",
       "next_unavailable": "Refresh preparation or use the native Prepare Tauri terminals menu.",
-      "next_empty": "Choose a provider and 1–8 terminals, then complete the native reviews. Preparation starts no CLI.",
+      "next_empty": "Choose CLI and model, then Open. No Finder picker is used in this flow.",
       "next_prepared": "{{count}} prepared files are kept. Continue their native opening review; creation is not repeated.",
       "next_locked": "A selection has entered opening or is already open. Use its native terminal window. Fresh selection requires confirmed retirement and a later launch; uncertain effects stay reserved.",
       "next_blocked": "A creation attempt may have written files. Automatic creation retry is blocked. Preserve the files and inspect the native preparation result.",
@@ -950,7 +953,28 @@
       "step_start": "Authorize each CLI separately",
       "step_start_help": "Use the native terminal panel for Start CLI, output connection and keyboard input, with their existing signed confirmations. Preparation submits no task or login.",
       "boundary": "Tauri preparation supports same-provider Codex or Claude Code teams only, with ORQST MCP disabled. Model choice, mixed presets and real-provider acceptance are not available through this flow.",
-      "denied": "The native preparation context changed or this action was refused. Refresh to inspect the current selection. Prepared files and uncertain writes or openings remain preserved; no mutation was retried."
+      "denied": "The selected workspace, model or native context changed, or the action was refused. Refresh the CLI/model catalog and review the selected project. Existing files and uncertain attempts are preserved; no action is retried.",
+      "openTitle": "Open terminal",
+      "open": "Open",
+      "openHelp": "Choose the CLI and model for the selected workspace. Review the concrete native configuration, then confirm Open to start the CLI, connect its output and enable keyboard input.",
+      "chooseWorkspace": "Select an existing workspace in the sidebar first. Its folder is validated by the native Core.",
+      "model": "Model",
+      "chooseModel": "Choose a model",
+      "advanced": "Advanced · folder and executable",
+      "advancedHelp": "Use the legacy native wizard only to explicitly choose another executable and an empty test folder. This path prepares files; startup remains separate.",
+      "choosePaths": "Choose folder and executable…",
+      "catalog_ready": "The installed executable matches the reviewed version. Choose a model to continue.",
+      "catalog_executable_not_found": "No installation matching the reviewed CLI binary was found. The CLI may be absent or its version/hash may be unsupported. Install the reviewed version or inspect the executable in Advanced.",
+      "catalog_ambiguous_executable": "Multiple installations were found. Choose the reviewed native executable explicitly in Advanced.",
+      "catalog_catalog_limited": "This installation or model source could not be fully validated. Refresh the catalog, inspect the selected project, or use Advanced to review the executable.",
+      "source_cli-default": "CLI default",
+      "source_native-config": "Native configuration",
+      "source_cli-cache": "Native CLI cache",
+      "source_official-alias": "Official CLI alias",
+      "modelUnverified": "Login, model access and provider availability are checked by the native CLI when opened; no login or probe runs here.",
+      "cliDefault": "CLI default",
+      "defaultModel": "{{model}} (CLI default)",
+      "enrollmentLimit": "This increment opens one selected terminal per app launch. Adding another CLI/model while it is running is not implemented yet; existing terminals are preserved."
     }
   },
   "tauriPreparation": {
@@ -966,7 +990,9 @@
     "acknowledgeApprove": "Acknowledge shared native effects",
     "open": "Open these reviewed terminals in the Tauri runtime? Review every complete manifest page. This initializes the existing Core, journals and private admission for the entire selection. It does not start a CLI; each start still requires separate signed native confirmation. Opening is a single attempt; uncertain admission remains reserved.",
     "openApprove": "Open reviewed terminals",
-    "denied": "Terminal preparation or opening was refused or remains uncertain. Use a canonical reviewed native binary and an empty disposable project. No CLI is started by preparation. Partial files and reservations are preserved. A cancelled opening can be reviewed again from this menu; an uncertain write or opening requires investigation before another attempt."
+    "denied": "Terminal preparation or opening was refused or remains uncertain. Use a canonical reviewed native binary and an empty disposable project. No CLI is started by preparation. Partial files and reservations are preserved. A cancelled opening can be reviewed again from this menu; an uncertain write or opening requires investigation before another attempt.",
+    "selected": "Review this CLI, model and workspace before creating private terminal files and opening their owned runtime. Shared native login, configuration, hooks, plugins, MCPs and session writes can cause activity or costs. The subsequent Open confirmation authorizes startup, output and keyboard together. No task or login is submitted automatically. Unknown outcomes remain preserved.",
+    "selectedApprove": "Continue to Open terminal"
   },
   "tauriDesktop": {
     "connected": "Core connected",

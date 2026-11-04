@@ -592,7 +592,8 @@
     "paste": "Enviar exatamente este texto entre aspas a este processo próprio?",
     "stop": "Enviar este sinal a este processo próprio? O encerramento não é garantido.",
     "cancel": "Cancelar",
-    "confirm": "Autorizar uma vez"
+    "confirm": "Autorizar uma vez",
+    "open": "Abrir este CLI e modelo neste workspace, conectar sua saída e habilitar o teclado por até dois minutos?"
   },
   "overviewLayout": {
     "title": "Personalizar visão geral",
@@ -722,7 +723,7 @@
     "reuseIdle": "Nenhum processo próprio iniciado. Iniciar exige confirmação nativa. Login separado fica desabilitado neste perfil de reuso nativo.",
     "focus_required": "Traga este painel de terminal ao primeiro plano com o macOS desbloqueado e repita a ação. Nenhuma operação foi autorizada.",
     "title": "Terminal gerenciado",
-    "open": "Abrir terminal interativo",
+    "open": "Abrir terminal",
     "scope": "Opção legada de login separado com privilégios do seu usuário macOS; não é um container. Início em read-only/on-request; a UI do provider pode alterar permissões. Fechar oculta esta janela; duração de 30 minutos. Aceite real Codex pendente; OpenCode exige seu opt-in explícito de startup separado.",
     "login": "Login Codex separado",
     "start": "Iniciar CLI",
@@ -811,7 +812,9 @@
     "state_exited": "Encerrado",
     "state_start_failed": "Falha ao iniciar",
     "state_ownership_lost": "Posse perdida",
-    "unavailable": "Transporte nativo indisponível. Entrada de teclado desativada; estado do processo não confirmado."
+    "unavailable": "Transporte nativo indisponível. Entrada de teclado desativada; estado do processo não confirmado.",
+    "openingIncomplete": "A abertura ficou incompleta. A tentativa do processo foi preservada. Confira o estado e conecte a saída ou teclado desta mesma instância; nenhum novo Start foi tentado.",
+    "guide_openingIncomplete": "A identidade da tentativa foi preservada, mas o estado atual está indisponível. Atualize esta instância; não inicie outro processo nem remova sua reserva."
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
@@ -939,7 +942,7 @@
       "state_locked": "Seleção bloqueada nesta execução",
       "state_blocked": "Preparação precisa de atenção",
       "next_unavailable": "Atualize a preparação ou use o menu nativo Preparar terminais Tauri.",
-      "next_empty": "Escolha um provedor e de 1 a 8 terminais; conclua as revisões nativas. A preparação não inicia nenhum CLI.",
+      "next_empty": "Escolha CLI e modelo e clique em Abrir. Este fluxo não abre o Finder.",
       "next_prepared": "{{count}} arquivos preparados foram mantidos. Continue a revisão nativa de abertura; a criação não será repetida.",
       "next_locked": "Uma seleção entrou na abertura ou já está aberta. Use sua janela nativa de terminais. Uma nova seleção exige encerramento confirmado e uma execução posterior; efeitos incertos continuam reservados.",
       "next_blocked": "Uma tentativa de criação pode ter gravado arquivos. A repetição automática está bloqueada. Preserve os arquivos e verifique o resultado da preparação nativa.",
@@ -950,7 +953,28 @@
       "step_start": "Autorizar cada CLI separadamente",
       "step_start_help": "Use o painel nativo para Iniciar CLI, conectar a saída e habilitar entrada, com as confirmações assinadas existentes. A preparação não envia tarefa nem login.",
       "boundary": "A preparação Tauri suporta apenas equipes Codex ou Claude Code do mesmo provedor, com MCP do ORQST desativado. Escolha de modelo, presets mistos e aceite com provedores reais estão indisponíveis neste fluxo.",
-      "denied": "O contexto da preparação nativa mudou ou esta ação foi recusada. Atualize para consultar a seleção atual. Arquivos preparados e gravações ou aberturas incertas foram preservados; nenhuma alteração foi repetida."
+      "denied": "O workspace, modelo ou contexto nativo mudou, ou a ação foi recusada. Atualize o catálogo de CLI/modelo e revise o projeto selecionado. Arquivos e tentativas incertas são preservados; nenhuma ação é repetida.",
+      "openTitle": "Abrir terminal",
+      "open": "Abrir",
+      "openHelp": "Escolha o CLI e o modelo para o workspace selecionado. Revise a configuração nativa concreta e confirme Abrir para iniciar o CLI, conectar a saída e habilitar o teclado.",
+      "chooseWorkspace": "Selecione primeiro um workspace existente na barra lateral. A pasta será validada pelo Core nativo.",
+      "model": "Modelo",
+      "chooseModel": "Escolha um modelo",
+      "advanced": "Avançado · pasta e executável",
+      "advancedHelp": "Use o assistente nativo antigo apenas para escolher explicitamente outro executável e uma pasta de teste vazia. Este caminho prepara arquivos; a inicialização continua separada.",
+      "choosePaths": "Escolher pasta e executável…",
+      "catalog_ready": "O executável instalado corresponde à versão revisada. Escolha um modelo para continuar.",
+      "catalog_executable_not_found": "Nenhuma instalação corresponde ao binário de CLI revisado. O CLI pode estar ausente ou sua versão/hash não ser compatível. Instale a versão revisada ou confira o executável em Avançado.",
+      "catalog_ambiguous_executable": "Foram encontradas várias instalações. Escolha explicitamente o executável nativo revisado em Avançado.",
+      "catalog_catalog_limited": "Não foi possível validar totalmente esta instalação ou fonte de modelos. Atualize o catálogo, revise o projeto selecionado ou use Avançado para revisar o executável.",
+      "source_cli-default": "Padrão do CLI",
+      "source_native-config": "Configuração nativa",
+      "source_cli-cache": "Cache nativo do CLI",
+      "source_official-alias": "Alias oficial do CLI",
+      "modelUnverified": "Login, acesso ao modelo e disponibilidade do provedor são verificados pelo CLI nativo ao abrir; nenhum login ou consulta ao provedor é executado aqui.",
+      "cliDefault": "Padrão do CLI",
+      "defaultModel": "{{model}} (padrão do CLI)",
+      "enrollmentLimit": "Esta etapa abre um terminal selecionado por inicialização do app. Adicionar outro CLI/modelo enquanto ele está aberto ainda não foi implementado; os terminais existentes são preservados."
     }
   },
   "tauriPreparation": {
@@ -966,7 +990,9 @@
     "acknowledgeApprove": "Reconhecer efeitos nativos compartilhados",
     "open": "Abrir estes terminais revisados no runtime Tauri? Revise cada página completa dos manifests. Isso inicializa Core, journals e admissão privada existentes para toda a seleção. Não inicia uma CLI; cada início ainda exige confirmação nativa assinada separada. A abertura tem uma única tentativa; admissões incertas continuam reservadas.",
     "openApprove": "Abrir terminais revisados",
-    "denied": "A preparação ou abertura dos terminais foi recusada ou permanece incerta. Use um executável nativo canônico revisado e um projeto descartável vazio. A preparação não inicia CLI. Arquivos parciais e reservas são preservados. Uma abertura cancelada pode ser revisada novamente neste menu; escrita ou abertura incerta exige investigação antes de outra tentativa."
+    "denied": "A preparação ou abertura dos terminais foi recusada ou permanece incerta. Use um executável nativo canônico revisado e um projeto descartável vazio. A preparação não inicia CLI. Arquivos parciais e reservas são preservados. Uma abertura cancelada pode ser revisada novamente neste menu; escrita ou abertura incerta exige investigação antes de outra tentativa.",
+    "selected": "Revise este CLI, modelo e workspace antes de criar os arquivos privados do terminal e abrir seu runtime próprio. Login, configuração, hooks, plugins, MCPs e gravações de sessão nativos compartilhados podem causar atividade ou custos. A confirmação Abrir seguinte autoriza inicialização, saída e teclado em conjunto. Nenhuma tarefa ou login será enviado automaticamente. Resultados incertos são preservados.",
+    "selectedApprove": "Continuar para Abrir terminal"
   },
   "tauriDesktop": {
     "connected": "Core conectado",

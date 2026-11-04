@@ -1131,7 +1131,12 @@ export function App() {
 
           {view === 'studio' ? (
             window.orqstFeatures?.contractVersion === 1 ? (
-              <StudioWorkspace onOverview={() => navigate('overview')} />
+              <StudioWorkspace
+                onOverview={() => navigate('overview')}
+                workspaces={snapshot?.workspaces ?? []}
+                workspaceId={workspaceId}
+                onWorkspace={setWorkspaceId}
+              />
             ) : (
               <Studio />
             )

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-04 — CLI/model/Open first increment
+
+- Use the selected workspace and passive native catalog for Codex, Claude Code
+  and OpenCode; send opaque model IDs and keep Finder under explicit Advanced.
+- Compose native Open with independent signed startup/output/input challenges,
+  bounded native intent, retained xterm and honest partial-attempt handling.
+- Preserve Electron/legacy Start, observed sessions and the running Preview.
+- Keep one-selection-per-launch restrictions explicit: adding a second independently
+  selected CLI/model to the existing host remains required, not completed.
+- Pure and headless renderer evidence does not accept Cargo/native/provider execution
+  or packaging. See [workflow and verification](docs/development/terminal-product-open.md).
+
 ## 2026-11-04 — Full-window Studio shell
 
 - Use one viewport-sized Workspace/Feature shell in native Studio, without the

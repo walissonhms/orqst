@@ -18,10 +18,16 @@ export function FeatureWorkspace({
   nativeWorkspace = false,
   navigation,
   onPrepare,
+  workspaces = [],
+  workspaceId = '',
+  onWorkspace,
 }: {
   nativeWorkspace?: boolean;
   navigation?: ReactNode;
-  onPrepare?: () => void;
+  onPrepare?: (context: { workspaceId: string; featureId: string | null }) => void;
+  workspaces?: ReadonlyArray<{ id: string; name: string }>;
+  workspaceId?: string;
+  onWorkspace?: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
@@ -132,6 +138,11 @@ export function FeatureWorkspace({
     if (result === 'ok' && version === editorVersion.current) closeEditor();
   }
   const unavailable = !native || !snapshot;
+  const prepare = () =>
+    onPrepare?.({
+      workspaceId: snapshot?.workspace.id ?? workspaceId,
+      featureId: snapshot?.activeFeatureId ?? null,
+    });
   return (
     <section
       className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
@@ -153,6 +164,22 @@ export function FeatureWorkspace({
             ▣ <strong>{snapshot.workspace.name}</strong>
             <small>{snapshot.features.length}</small>
           </div>
+        ) : workspaces.length > 0 ? (
+          <label className="feature-project feature-project-select">
+            <span>{t('features.workspace')}</span>
+            <select
+              aria-label={t('features.workspace')}
+              value={workspaceId}
+              onChange={(event) => onWorkspace?.(event.target.value)}
+            >
+              <option value="">{t('features.choose')}</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </select>
+          </label>
         ) : null}
         <h2>{t('features.heading')}</h2>
         <nav aria-label={t('features.heading')}>
@@ -339,8 +366,10 @@ export function FeatureWorkspace({
       <header className="feature-topbar">
         {navigation}
         <strong title={selected?.featureId}>
-          {snapshot?.workspace.name ?? t('features.workspace')} /{' '}
-          {selected?.name ?? t('features.unassigned')}
+          {snapshot?.workspace.name ??
+            workspaces.find((workspace) => workspace.id === workspaceId)?.name ??
+            t('features.workspace')}{' '}
+          / {selected?.name ?? t('features.unassigned')}
         </strong>
         <div>
           <button
@@ -369,7 +398,7 @@ export function FeatureWorkspace({
           </button>
           <button
             disabled={!onPrepare}
-            onClick={onPrepare}
+            onClick={prepare}
             title={t(onPrepare ? 'studio.setupTitle' : 'features.creationUnavailable')}
           >
             ＋ {t('features.terminal')}
@@ -381,7 +410,7 @@ export function FeatureWorkspace({
           <div className="feature-empty">
             <h1>{t('studio.setupTitle')}</h1>
             <p>{t('features.noUnassigned')}</p>
-            <button onClick={onPrepare}>{t('studio.prepareTerminals')}</button>
+            <button onClick={prepare}>{t('studio.prepareTerminals')}</button>
           </div>
         ) : !available.length ? (
           <p>

@@ -1,5 +1,9 @@
 # Tauri Studio preparation — 2026-11-04
 
+The current normal source flow is [CLI/model/Open](terminal-product-open.md).
+The picker-based wizard described below is retained under explicit Advanced;
+its original verification record remains historical evidence for that path.
+
 Studio's Tauri preparation source now calls the same native wizard as **Prepare
 Tauri terminals**. Choose Codex or Claude Code and 1–8 terminals in one empty test
 project. Native executable/project pickers, complete configuration review, shared

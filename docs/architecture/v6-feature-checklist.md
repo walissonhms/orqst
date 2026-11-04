@@ -226,3 +226,20 @@ The earlier uncertain fixture remains preserved, without adoption or cleanup.
 - [ ] Complete actual native picker/provisioning/opening, CLI Start/output/input,
       Settings reload → SPA Studio and final Quit acceptance.
 - [ ] Accept real providers and communication; preserve all earlier quarantines.
+
+## CLI/model/Open first increment — 2026-11-04
+
+- [x] Normal source path uses current workspace/Feature IDs and the Core catalog;
+      Codex, Claude Code and OpenCode model choice sends opaque IDs, never paths.
+- [x] Finder is available only through the explicit Advanced manual wizard.
+- [x] Operational native Open reuses one broker and three distinct signed grants;
+      partial launch retains its attempt identity and never retries Start.
+- [x] Pure and renderer-only EN/PT cases cover the shared shell, catalog errors,
+      model choice, keyboard/focus, overflow and partial continuation.
+- [ ] Run new Rust tests/clippy/build after coordinated disk margin permits Cargo.
+- [ ] Complete native WebKit/dialog/provider/model/packaging acceptance.
+- [ ] Add a second independently selected CLI/model to the same live Core/Pair,
+      retaining old processes/documents and uncertain admission evidence. Current
+      selection remains one-shot per app launch; no second runtime is created.
+
+See [workflow, evidence and pending live enrollment](../development/terminal-product-open.md).
