@@ -36,6 +36,8 @@ export interface TerminalLayoutState extends TerminalLayoutPreferences {
   visible: number[];
   count: number;
   persisted: boolean;
+  suspended?: boolean;
+  workspaceChrome?: boolean;
 }
 export function terminalDisplayName(value: unknown): value is string {
   return (

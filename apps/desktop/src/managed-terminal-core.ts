@@ -1,6 +1,10 @@
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
   terminalSlotLimit,
+  workspaceFeatureSchema,
+  featureViewStateSchema,
+  type FeatureUpdate,
+  type FeatureCreate,
   terminalLayoutRecordSchema,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
@@ -161,6 +165,28 @@ export async function connectManagedTerminalCore(
   );
   return {
     identities,
+    features: {
+      list: async () => workspaceFeatureSchema.array().parse(await call({ kind: 'featureList' })),
+      read: async (featureId: string) =>
+        workspaceFeatureSchema.parse(await call({ kind: 'featureRead', featureId })),
+      create: async (input: Omit<FeatureCreate, 'workspaceId'>) =>
+        workspaceFeatureSchema.parse(await call({ kind: 'featureCreate', input })),
+      update: async (featureId: string, input: FeatureUpdate) =>
+        workspaceFeatureSchema.parse(await call({ kind: 'featureUpdate', featureId, input })),
+      assign: async (featureId: string, slot: number, expectedRevision: number) =>
+        workspaceFeatureSchema.parse(
+          await call({ kind: 'featureAssign', featureId, slot, expectedRevision }),
+        ),
+      readView: async () => featureViewStateSchema.parse(await call({ kind: 'featureViewRead' })),
+      saveView: async (input: { featureId: string | null; expectedRevision: number }) =>
+        featureViewStateSchema.parse(await call({ kind: 'featureViewSave', input })),
+      readLayout: async (featureId: string) => {
+        const value = await call({ kind: 'featureLayoutRead', featureId });
+        return value === null ? null : terminalLayoutRecordSchema.parse(value);
+      },
+      saveLayout: (featureId: string, record: TerminalLayoutRecord) =>
+        call({ kind: 'featureLayoutSave', featureId, record }),
+    },
     layouts: {
       read: async () => {
         const value = await call({ kind: 'layoutRead' });

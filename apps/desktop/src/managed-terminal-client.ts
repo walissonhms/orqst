@@ -434,6 +434,7 @@ document.getElementById('rename-pane')!.addEventListener('submit', (event) => {
 const splitSize = document.getElementById('split-size') as HTMLInputElement;
 splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
 const unsubscribeLayout = pane.onLayout((state) => {
+  if (!state.visible.includes(slot)) revoke();
   const strip = document.querySelector('.pane-tabs')!;
   const order = state.order.map((index) => tabs.find((tab) => Number(tab.dataset.tab) === index)!);
   const currentOrder = [...strip.children];
@@ -444,6 +445,8 @@ const unsubscribeLayout = pane.onLayout((state) => {
   }
   for (const tab of tabs) {
     const index = Number(tab.dataset.tab);
+    tab.hidden = !state.order.includes(index);
+    tab.disabled = !state.order.includes(index);
     tab.setAttribute('aria-pressed', String(state.visible.includes(index)));
     tab.dataset.active = String(index === state.active);
     tab.textContent = state.names[index]
@@ -470,7 +473,7 @@ const unsubscribeLayout = pane.onLayout((state) => {
   const position = state.order.indexOf(slot);
   (document.getElementById('move-earlier') as HTMLButtonElement).disabled = position === 0;
   (document.getElementById('move-later') as HTMLButtonElement).disabled =
-    position === state.count - 1;
+    position < 0 || position === state.order.length - 1;
   if (
     focused instanceof HTMLButtonElement &&
     focused.disabled &&
@@ -481,7 +484,7 @@ const unsubscribeLayout = pane.onLayout((state) => {
     .replaceAll('{{visible}}', String(state.visible.length))
     .replaceAll('{{shown}}', String(state.shown.length))
     .replaceAll('{{position}}', String(position + 1))
-    .replaceAll('{{count}}', String(state.count));
+    .replaceAll('{{count}}', String(state.order.length));
 });
 window.addEventListener('pagehide', unsubscribeLayout, { once: true });
 

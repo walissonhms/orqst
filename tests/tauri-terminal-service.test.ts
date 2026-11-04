@@ -204,3 +204,42 @@ test('Tauri pipe denies unfocused and malformed requests before producing native
     s.service.close();
   }
 });
+
+test('metadata mutations and native execution reviews exclude each other in both directions', async () => {
+  const s = setup();
+  try {
+    assert.equal(s.service.beginMetadata(), true);
+    assert.equal(s.service.beginMetadata(), false);
+    const id = randomUUID();
+    await s.service.receive({
+      kind: 'request',
+      id,
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    assert.equal(
+      s.messages.findLast((message) => message.id === id)?.value &&
+        Reflect.get(s.messages.findLast((message) => message.id === id)!.value as object, 'status'),
+      'busy',
+    );
+    assert.equal(s.starts[0], 0);
+    s.service.endMetadata();
+    const pending = s.service.receive({
+      kind: 'request',
+      id: randomUUID(),
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'start', profileId: 'synthetic' },
+    });
+    await setImmediate();
+    assert.equal(s.service.beginMetadata(), false);
+    await s.service.receive({ kind: 'revoke', slot: 0 });
+    await pending;
+    assert.equal(s.starts[0], 0);
+    assert.equal(s.service.beginMetadata(), true);
+    s.service.endMetadata();
+  } finally {
+    s.service.close();
+  }
+});

@@ -10,6 +10,8 @@ import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { terminalDocument } from './terminal-document.js';
 import { terminalLayoutStore } from './terminal-layout-store.js';
 import { TauriTerminalLayout } from './tauri-terminal-layout.js';
+import { featureNativeReplySchema, featureNativeRequestSchema } from '@orqst/protocol';
+import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 
 process.umask(0o077);
@@ -49,7 +51,9 @@ async function start() {
   });
   const translate = (key: string) => String(i18n.t(key));
   let closed = false;
+  let readySent = false;
   const send = (value: object) => {
+    if (!readySent && 'kind' in value && value.kind === 'layout') return;
     const line = JSON.stringify(value) + '\n';
     // A slow native consumer must not create an unbounded output queue.
     if (Buffer.byteLength(line) > 512 * 1024 || process.stdout.writableLength > 1024 * 1024)
@@ -84,6 +88,24 @@ async function start() {
       void service.receive({ kind: 'revoke', slot }).catch(shutdown);
     },
   );
+  const features = new TauriFeatureService(
+    core,
+    layout,
+    store,
+    selection[0]!.config.project,
+    async () => {
+      await Promise.all(selection.map((_, slot) => service.receive({ kind: 'revoke', slot })));
+    },
+    () => {},
+  );
+  await features.initialize();
+  const metadata = z.strictObject({
+    kind: z.literal('feature-request'),
+    id: z.uuid(),
+    document: z.number().int().nonnegative().safe(),
+    source: z.string().min(1).max(4096),
+    request: featureNativeRequestSchema,
+  });
   function shutdown() {
     if (closed) return;
     closed = true;
@@ -104,6 +126,10 @@ async function start() {
       action: z.unknown(),
     }),
     z.strictObject({ kind: z.literal('layout-suspend') }),
+    z.strictObject({
+      kind: z.literal('layout-generation'),
+      generation: z.number().int().nonnegative().safe(),
+    }),
     z.strictObject({
       kind: z.literal('layout-focus'),
       slot: z
@@ -138,10 +164,35 @@ async function start() {
       if (line === 'shutdown') return shutdown();
       try {
         const raw: unknown = JSON.parse(line);
+        const feature = metadata.safeParse(raw);
+        if (feature.success) {
+          const message = feature.data;
+          const mutable = message.request.action !== 'snapshot';
+          const allowed = !mutable || service.beginMetadata();
+          void (
+            allowed
+              ? features.request(message.request)
+              : Promise.resolve({ status: 'busy' as const })
+          )
+            .then((value) =>
+              send({
+                kind: 'feature-reply',
+                id: message.id,
+                document: message.document,
+                value: featureNativeReplySchema.parse(value),
+              }),
+            )
+            .catch(shutdown)
+            .finally(() => {
+              if (allowed && mutable) service.endMetadata();
+            });
+          continue;
+        }
         const visual = visualMessageSchema.safeParse(raw);
         if (visual.success) {
           const message = visual.data;
-          if (message.kind === 'layout-action') layout.act(message.slot, message.action);
+          if (message.kind === 'layout-generation') layout.setNativeGeneration(message.generation);
+          else if (message.kind === 'layout-action') layout.act(message.slot, message.action);
           else if (message.kind === 'layout-open') layout.open(message.slot);
           else if (message.kind === 'layout-focus') layout.focus(message.slot);
           else if (message.kind === 'layout-suspend') layout.suspend();
@@ -161,6 +212,7 @@ async function start() {
   const providers = selection.map(({ config }) =>
     translate(`shell.adapters.${interactiveProvider(config)}`),
   );
+  readySent = true;
   send({
     kind: 'ready',
     layout: layout.snapshot(),
