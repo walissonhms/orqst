@@ -503,3 +503,42 @@ test('native blur during asynchronous input grant revokes the returned lease bef
   assert.deepEqual(s.writes, []);
   s.supervisor.shutdown();
 });
+
+test('owned-sheet suspension revokes input without granting or renewing signed authority', async () => {
+  const s = setup();
+  s.answer(async () => {
+    s.broker.suspendInput();
+    return true;
+  });
+  const instanceId = await s.start();
+  await s.input(instanceId);
+  s.broker.suspendInput();
+  assert.equal(
+    (await s.send('write', { instanceId, sequence: 0, text: 'blocked' })).status,
+    'denied',
+  );
+  assert.deepEqual(s.writes, []);
+  assert.equal((await s.send('input', { instanceId })).status, 'ok');
+  assert.equal((await s.send('write', { instanceId, sequence: 0, text: 'explicit' })).status, 'ok');
+  assert.deepEqual(s.writes, ['explicit']);
+  assert.equal(s.starts(), 1);
+  s.supervisor.shutdown();
+});
+
+for (const invalidation of ['cancel', 'blur', 'expiry'] as const) {
+  test(`owned-sheet suspension preserves ${invalidation} denial and the original proof deadline`, async () => {
+    const s = setup();
+    s.answer(async () => {
+      s.broker.suspendInput();
+      if (invalidation === 'blur') s.broker.revokeInput();
+      if (invalidation === 'expiry') s.advance();
+      return invalidation !== 'cancel';
+    });
+    assert.equal(
+      (await s.send('start', { profileId: 'synthetic' })).status,
+      invalidation === 'cancel' ? 'cancelled' : 'denied',
+    );
+    assert.equal(s.starts(), 0);
+    s.supervisor.shutdown();
+  });
+}

@@ -23,6 +23,15 @@ For current master-specification acceptance and outstanding work, start with the
 [delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain
 their original dates and may have been superseded by later increments.
 
+## Native consent and menu correction — 2026-11-04
+
+The own-sheet correction preserves the exact reviewed operation while revoking input.
+Real application/window changes still invalidate its generation. Managed agents uses
+an accessible native submenu; app-menu Quit enters the existing host consent gates.
+See [native evidence and remaining acceptance](docs/development/tauri-native-coexistence.md).
+This contributes to the native migration gate; integrated V6, real-provider tasks,
+Dock/logout and other-platform acceptance remain open.
+
 ## Codex/OpenCode pair — 2026-11-03
 
 Native manifest selection and Core preflight now permit exactly two mixed members:
