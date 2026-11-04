@@ -533,3 +533,12 @@ order, sizing and hidden state remain visual metadata, never execution authority
 Rejected/uncertain enrollment may retain assigned metadata with no usable native
 slot; no rollback or automatic process adoption is performed. No schema migration
 is introduced. See [workflow](../development/terminal-native-enrollment.md).
+
+## Reservation epoch binding — 2026-11-04
+
+New interactive Core `active-pair.json` markers retain version 1, owner and original
+manifest set, and add that Core's UUID `epoch`. The passive bounded inspector accepts
+legacy marker shape only as evidence of reserved capacity; it does not rewrite it
+or transfer ownership. Same-Core append compares owner/epoch/original manifest set
+from private ready. Per-owner enrollment/receipt files, prior bytes and SQLite
+schemas are unchanged. See [admission diagnostics](../development/terminal-admission-diagnostics.md).

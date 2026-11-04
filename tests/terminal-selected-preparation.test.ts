@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import test, { after } from 'node:test';
+import { randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Store } from '../packages/database/src/index.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
@@ -1239,6 +1240,89 @@ for (const change of ['unrelated', 'removed', 'variant'] as const) {
         assert.equal(commits, 0);
         assert.deepEqual(readdirSync(f.context.parent), []);
       }
+    } finally {
+      f.close();
+    }
+  });
+}
+
+for (const phase of ['before', 'review', 'commit', 'same-owner-replaced', 'same-core'] as const) {
+  test(`admission preflight ${phase} preserves reservation and never provisions a blocked selection`, async () => {
+    const f = fixture();
+    const file = join(f.trusted.preferencesDirectory, 'active-pair.json');
+    const currentCore = {
+      owner: randomUUID(),
+      epoch: randomUUID(),
+      initialFiles: ['/synthetic/original.json'],
+    };
+    const bytes = JSON.stringify({
+      version: 1,
+      owner: currentCore.owner,
+      epoch: currentCore.epoch,
+      manifests: currentCore.initialFiles,
+    });
+    try {
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      const cli = catalog.catalog.providers.find((entry) => entry.provider === 'codex')!;
+      const selected = {
+        action: 'create-selected',
+        workspaceId: f.workspaceId,
+        featureId: null,
+        catalogId: catalog.catalog.catalogId,
+        provider: 'codex',
+        modelId: cli.models[0]!.id,
+        count: 1,
+      };
+      if (phase === 'before' || phase === 'same-core' || phase === 'same-owner-replaced')
+        writeFileSync(file, bytes, { mode: 0o600 });
+      let commits = 0;
+      const confirm = f.ports.confirm;
+      f.ports.confirm = async (...args) => {
+        if (phase === 'review') writeFileSync(file, bytes, { mode: 0o600 });
+        if (phase === 'same-owner-replaced') {
+          const replacement = file + '.synthetic-replacement';
+          writeFileSync(replacement, bytes, { mode: 0o600 });
+          renameSync(replacement, file);
+        }
+        return confirm(...args);
+      };
+      f.ports.commit = async () => {
+        commits++;
+        if (phase === 'commit') writeFileSync(file, bytes, { mode: 0o600 });
+        return true;
+      };
+      const operation = prepareTauriTerminals(
+        selected,
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+        phase === 'same-core' || phase === 'same-owner-replaced' ? currentCore : undefined,
+      );
+      if (phase === 'same-core') {
+        assert.equal((await operation).status, 'open');
+        assert.equal(commits, 1);
+      } else {
+        await assert.rejects(operation, (error: unknown) => {
+          assert.deepEqual(Reflect.get(error as object, 'failure'), {
+            stage: 'admission_preflight',
+            code: phase === 'same-owner-replaced' ? 'admission_invalid' : 'capacity_reserved',
+            effects: 'not_started', // Native commit independently upgrades this to possible.
+          });
+          return true;
+        });
+        assert.equal(commits, phase === 'commit' ? 1 : 0);
+        assert.deepEqual(readdirSync(f.context.parent), []);
+      }
+      assert.equal(readFileSync(file, 'utf8'), bytes);
+      if (phase === 'before') assert.equal(f.confirmations.length, 0);
     } finally {
       f.close();
     }

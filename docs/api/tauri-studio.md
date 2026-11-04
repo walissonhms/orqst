@@ -84,3 +84,16 @@ retains three independently signed grants and incomplete attempt identity.
 Current source still fences fresh selection while a host exists. A second
 independently chosen terminal requires live enrollment into the same Core; it is
 not implemented or accepted by this increment. See [workflow and checks](../development/terminal-product-open.md).
+
+## Passive admission and startup failure extension — 2026-11-04
+
+The public request union is unchanged and rejects owner/epoch/files/Core context.
+Native argv5 alone supplies optional `{owner,epoch,initialFiles}` from the current
+owned Core. The inherited ready additionally binds `id`, `admissionOwner` and
+`initialFiles`; none of these private fields is forwarded to Studio. New failure
+stages/codes and effect rules are specified in the
+[admission diagnostic contract](../development/terminal-admission-diagnostics.md).
+Previous reservations require evidence-backed review, never automatic clearing.
+Studio uses its existing in-window notice with optional stage details; native-menu
+error notices are nonblocking. Completion only releases transient busy state, not
+uncertain commit/open/ownership latches. No new renderer capability is introduced.

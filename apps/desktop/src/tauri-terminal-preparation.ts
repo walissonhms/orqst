@@ -20,6 +20,12 @@ import {
   type TerminalCreationOverview,
 } from './terminal-creation.js';
 import { TerminalSelection } from './terminal-selection.js';
+import { join } from 'node:path';
+import {
+  inspectDesktopAdmission,
+  DesktopAdmissionRefused,
+  type DesktopAdmissionContext,
+} from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 
 export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalCatalogRequestSchema,
@@ -70,6 +76,7 @@ export async function prepareTauriTerminals(
   ports: TauriPreparationPorts,
   now: () => number = Date.now,
   trusted?: TerminalPreparationContext,
+  currentCore?: DesktopAdmissionContext,
 ): Promise<
   | {
       status: 'cancelled' | 'prepared' | 'open';
@@ -87,8 +94,24 @@ export async function prepareTauriTerminals(
     const request = tauriPreparationSchema.parse(raw);
     const expires = now() + 300_000;
     const current = () => now() < expires && ports.current();
+    let admissionFence: string | undefined;
+    const preflight = () => {
+      stage = 'admission_preflight';
+      try {
+        const fence = inspectDesktopAdmission(
+          trusted?.preferencesDirectory ?? join(context.parent, 'managed-agents'),
+          currentCore,
+        );
+        if (admissionFence !== undefined && fence !== admissionFence) fail('admission_invalid');
+        admissionFence = fence;
+      } catch (error) {
+        if (error instanceof DesktopAdmissionRefused) fail(error.code);
+        throw error;
+      }
+    };
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
+    if (request.action !== 'catalog') preflight();
     if (
       request.action === 'catalog' ||
       request.action === 'create-selected' ||
@@ -190,10 +213,12 @@ export async function prepareTauriTerminals(
           fail('catalog_changed');
       };
       revalidate();
+      preflight();
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
       stage = 'revalidation';
       revalidate();
+      preflight();
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
       files = plan.provision(reviewed);
@@ -240,8 +265,10 @@ export async function prepareTauriTerminals(
       }
       if (!(await ports.confirm('acknowledge', '')) || !reviewed())
         return { status: 'cancelled', files: [] };
+      preflight();
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
+      preflight();
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
       files = plan.provision(reviewed);

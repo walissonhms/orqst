@@ -1,5 +1,14 @@
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
+  inspectDesktopAdmission,
+  DesktopAdmissionRefused,
+} from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
+import {
+  TerminalStartupError,
+  terminalStartupFailureSchema,
+  terminalStartupIdSchema,
+} from '../../../packages/core/src/terminal/startup-failure.js';
+import {
   terminalSlotLimit,
   workspaceFeatureSchema,
   featureViewStateSchema,
@@ -39,7 +48,19 @@ export async function connectManagedTerminalCore(
   publicKey: KeyObject,
   admissionDirectory: string,
   limit?: number,
+  startupId: string = randomUUID(),
 ) {
+  terminalStartupIdSchema.parse(startupId);
+  // Passive before fork, with authoritative admission repeated in the child against races.
+  try {
+    inspectDesktopAdmission(admissionDirectory);
+  } catch (error) {
+    throw new TerminalStartupError({
+      stage: 'core_admission',
+      code: error instanceof DesktopAdmissionRefused ? error.code : 'admission_invalid',
+      effects: 'possible',
+    });
+  }
   const config = readInteractiveTerminalConfig(files[0]!);
   const child = fork(
     host,
@@ -48,6 +69,7 @@ export async function connectManagedTerminalCore(
       publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
       admissionDirectory,
       String(terminalSlotLimit(limit)),
+      startupId,
     ],
     {
       execPath: config.node.path,
@@ -68,6 +90,7 @@ export async function connectManagedTerminalCore(
   let closed = false;
   let initialized = false;
   let epoch = '';
+  let admissionOwner = '';
   let identities: Array<{
     slot: number;
     terminalId: string;
@@ -90,11 +113,17 @@ export async function connectManagedTerminalCore(
   >();
   // A timed-out enrollment is never replayed. Its late transport ACK cannot close old panes.
   const enrollmentTimeouts = new Set<string>();
-  const close = () => {
+  const close = (
+    cause: Error = new TerminalStartupError({
+      stage: 'core_startup',
+      code: 'startup_eof',
+      effects: 'possible',
+    }),
+  ) => {
     if (closed) return;
     closed = true;
     clearTimeout(startupTimer);
-    const error = new Error('Managed Terminal Core unavailable; no retry');
+    const error = cause;
     failed(error);
     for (const request of pending.values()) {
       clearTimeout(request.timer);
@@ -103,15 +132,40 @@ export async function connectManagedTerminalCore(
     pending.clear();
     if (child.connected) child.disconnect();
   };
-  const startupTimer = setTimeout(close, 10000);
-  child.on('error', close);
-  child.on('exit', close);
-  child.on('disconnect', close);
+  const protocolError = () =>
+    close(
+      new TerminalStartupError({
+        stage: 'core_startup',
+        code: 'startup_protocol',
+        effects: 'possible',
+      }),
+    );
+  const startupTimer = setTimeout(
+    () =>
+      close(
+        new TerminalStartupError({
+          stage: 'core_startup',
+          code: 'startup_timeout',
+          effects: 'possible',
+        }),
+      ),
+    10000,
+  );
+  child.on('error', () => close());
+  child.on('exit', () => close());
+  child.on('disconnect', () => close());
   child.on('message', (raw: unknown) => {
     if (closed) return;
+    const refusal = terminalStartupFailureSchema.safeParse(raw);
+    if (!initialized && refusal.success) {
+      if (refusal.data.id !== startupId) return protocolError();
+      return close(new TerminalStartupError(refusal.data.failure));
+    }
     const started = terminalPairReadySchema.safeParse(raw);
     if (!initialized && started.success) {
       if (
+        started.data.id !== startupId ||
+        JSON.stringify(started.data.initialFiles) !== JSON.stringify(files) ||
         started.data.identities.length !== files.length ||
         started.data.identities.some((identity, slot) => {
           const expected = terminalIdentity(readInteractiveTerminalConfig(files[slot]!));
@@ -122,16 +176,17 @@ export async function connectManagedTerminalCore(
           );
         })
       )
-        return close();
+        return protocolError();
       identities = started.data.identities;
       epoch = started.data.epoch;
+      admissionOwner = started.data.admissionOwner;
       initialized = true;
       clearTimeout(startupTimer);
       ready();
       return;
     }
     const parsed = terminalRPCReplySchema.safeParse(raw);
-    if (!parsed.success) return close();
+    if (!initialized || !parsed.success) return protocolError();
     const request = pending.get(parsed.data.id);
     if (!request && enrollmentTimeouts.delete(parsed.data.id)) return;
     if (!request) return close();
@@ -215,6 +270,8 @@ export async function connectManagedTerminalCore(
   >();
   return {
     identities,
+    admissionOwner,
+    initialFiles: [...files],
     get epoch() {
       return epoch;
     },

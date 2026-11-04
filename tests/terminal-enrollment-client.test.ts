@@ -53,7 +53,10 @@ const client = (await import(
   pathToFileURL(join(bundle, 'client.mjs')).href
 )) as typeof import('../apps/desktop/src/managed-terminal-core.js');
 
-async function fixture() {
+async function fixture(
+  mode: 'ready' | 'refused' | 'wrong-id' | 'eof' | 'timeout' | 'reserved' = 'ready',
+  probe?: { peer?: EventEmitter; forks?: number },
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-enrollment-client-')));
   const project = join(root, 'project');
   const state = join(root, 'state');
@@ -163,25 +166,70 @@ async function fixture() {
     });
     return true;
   };
-  Reflect.set(globalThis, Symbol.for('orqst.synthetic.enrollment.fork'), () => {
-    forks++;
-    queueMicrotask(() =>
-      peer.emit('message', {
-        type: 'ready',
-        epoch,
-        identities: [{ slot: 0, terminalId, alias: `P-${terminalId}`, provider: 'codex' }],
-      }),
+  Reflect.set(
+    globalThis,
+    Symbol.for('orqst.synthetic.enrollment.fork'),
+    (_host: string, args: string[]) => {
+      forks++;
+      if (probe) {
+        probe.peer = peer;
+        probe.forks = forks;
+      }
+      queueMicrotask(() => {
+        if (mode === 'timeout') return;
+        if (mode === 'eof') return void peer.emit('disconnect');
+        if (mode === 'refused' || mode === 'wrong-id') {
+          // Simulate the authoritative child finding a reservation after the parent preflight.
+          mkdirSync(join(root, 'admission'), { mode: 0o700 });
+          writeFileSync(
+            join(root, 'admission/active-pair.json'),
+            JSON.stringify({ version: 1, owner: randomUUID(), manifests: [manifest] }),
+            { mode: 0o600 },
+          );
+          return void peer.emit('message', {
+            type: 'startup-failure',
+            id: mode === 'wrong-id' ? randomUUID() : args[4],
+            failure: { stage: 'core_admission', code: 'capacity_reserved', effects: 'possible' },
+          });
+        }
+        peer.emit('message', {
+          type: 'ready',
+          id: args[4],
+          admissionOwner: randomUUID(),
+          initialFiles: [manifest],
+          epoch,
+          identities: [{ slot: 0, terminalId, alias: `P-${terminalId}`, provider: 'codex' }],
+        });
+      });
+      return peer;
+    },
+  );
+  if (mode === 'reserved') {
+    mkdirSync(join(root, 'admission'), { mode: 0o700 });
+    writeFileSync(
+      join(root, 'admission/active-pair.json'),
+      JSON.stringify({ version: 1, owner: randomUUID(), manifests: [manifest] }),
+      { mode: 0o600 },
     );
-    return peer;
-  });
+  }
   const keys = generateKeyPairSync('ed25519');
-  const core = await client.connectManagedTerminalCore(
+  const connection = client.connectManagedTerminalCore(
     [manifest],
     '/synthetic/never-forked',
     keys.publicKey,
     join(root, 'admission'),
     3,
   );
+  let core: Awaited<typeof connection>;
+  try {
+    core = await connection;
+  } catch (error) {
+    assert.equal(forks, mode === 'reserved' ? 0 : 1);
+    assert.ok(disconnects <= 1);
+    Reflect.deleteProperty(globalThis, Symbol.for('orqst.synthetic.enrollment.fork'));
+    rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
   const input = (): TerminalEnrollmentInput => ({
     version: 1,
     epoch,
@@ -308,4 +356,46 @@ test('wrong epoch is refused before IPC; mismatched ACK cannot replace old ident
   } finally {
     f.close();
   }
+});
+
+for (const [mode, stage, code] of [
+  ['reserved', 'core_admission', 'capacity_reserved'],
+  ['refused', 'core_admission', 'capacity_reserved'],
+  ['wrong-id', 'core_startup', 'startup_protocol'],
+  ['eof', 'core_startup', 'startup_eof'],
+] as const) {
+  test(`startup ${mode} remains bounded and uncertain without another fork`, async () => {
+    await assert.rejects(fixture(mode), (error: unknown) => {
+      assert.deepEqual(Reflect.get(error as object, 'failure'), {
+        stage,
+        code,
+        effects: 'possible',
+      });
+      return true;
+    });
+  });
+}
+
+test('startup timeout cannot be downgraded or revived by a late ready/refusal ACK', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const probe: { peer?: EventEmitter; forks?: number } = {};
+  const startup = fixture('timeout', probe);
+  const rejected = assert.rejects(startup, (error: unknown) => {
+    assert.deepEqual(Reflect.get(error as object, 'failure'), {
+      stage: 'core_startup',
+      code: 'startup_timeout',
+      effects: 'possible',
+    });
+    return true;
+  });
+  await Promise.resolve();
+  t.mock.timers.tick(10_000);
+  await rejected;
+  probe.peer!.emit('message', { type: 'ready', id: randomUUID(), epoch: randomUUID() });
+  probe.peer!.emit('message', {
+    type: 'startup-failure',
+    id: randomUUID(),
+    failure: { stage: 'admission_preflight', code: 'capacity_reserved', effects: 'not_started' },
+  });
+  assert.equal(probe.forks, 1);
 });

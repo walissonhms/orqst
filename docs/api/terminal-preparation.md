@@ -181,3 +181,12 @@ Node checks, 62 custom-protocol Rust tests, full lint/types/rustfmt and all-targ
 Clippy. Its separate local package verifies 115 resources, the complete distributed
 MIT notice, original Node/license and deep/strict signatures; native/provider visual
 and runtime acceptance remain pending. See the current delivery evidence linked above.
+
+## Passive reservation preflight — 2026-11-04
+
+Before terminal selection provisioning, the native helper passively inspects the
+private `active-pair.json`. Existing or invalid evidence fails closed before commit
+and repeats at the effect boundary. Only exact private evidence for the same live
+Core permits append; renderer data cannot exempt an attempt. Core admission still
+checks authoritatively against races. See the
+[bounded startup/preflight contract](../development/terminal-admission-diagnostics.md).

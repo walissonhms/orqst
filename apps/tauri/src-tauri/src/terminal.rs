@@ -2,7 +2,7 @@
 //! The observer webview has no capability for these commands or this private pipe.
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -19,13 +19,22 @@ use tokio::sync::Notify;
 #[path = "terminal_focus.rs"]
 mod native_focus;
 
+#[path = "terminal_admission.rs"]
+mod terminal_admission;
+use terminal_admission::{
+    owns_enrollment, preparation_matches, take_host, AdmissionIdentity, PreparationSnapshot,
+};
+
 #[derive(Default)]
 pub struct Terminals(Mutex<Option<Running>>);
 struct Running {
     child: CommandChild,
     epoch: String,
+    admission_owner: String,
+    initial_files: Vec<String>,
     capacity: usize,
     enrollment_pending: bool,
+    enrollment_request: Option<String>,
     enrollment_fenced: bool,
     documents: Vec<String>,
     layout: Value,
@@ -1307,6 +1316,75 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
     start_selected(app, paths).await
 }
 
+/// Native evidence for passive preparation only, never launch or admission authority.
+#[derive(Clone, PartialEq)]
+pub(crate) struct PreparationAdmission {
+    owner: String,
+    epoch: String,
+    initial_files: Vec<String>,
+    presentation: u64,
+    revision: u64,
+    count: usize,
+}
+impl PreparationAdmission {
+    pub(crate) fn context(&self) -> Value {
+        json!({"owner":self.owner, "epoch":self.epoch, "initialFiles":self.initial_files})
+    }
+    fn snapshot(&self) -> PreparationSnapshot<'_> {
+        PreparationSnapshot {
+            identity: AdmissionIdentity {
+                owner: &self.owner,
+                epoch: &self.epoch,
+                initial_files: &self.initial_files,
+            },
+            presentation: self.presentation,
+            revision: self.revision,
+            count: self.count,
+        }
+    }
+}
+fn preparation_available(r: &Running) -> bool {
+    !r.enrollment_fenced
+        && !r.enrollment_pending
+        && r.documents.len() < r.capacity
+        && !r.retiring
+        && r.metadata_mutating.is_none()
+        && r.native_dialog.is_none()
+        && r.mcp_request.is_none()
+        && !r.reviewing.iter().any(|busy| *busy)
+        && !r.confirming_quit
+        && !r.exit_authorized
+}
+fn admission_snapshot(r: &Running) -> PreparationAdmission {
+    PreparationAdmission {
+        owner: r.admission_owner.clone(),
+        epoch: r.epoch.clone(),
+        initial_files: r.initial_files.clone(),
+        presentation: r.layout_generation,
+        revision: r.layout_revision,
+        count: r.documents.len(),
+    }
+}
+pub(crate) fn preparation_admission(
+    app: &tauri::AppHandle,
+) -> Result<Option<PreparationAdmission>, Box<dyn std::error::Error>> {
+    if presentation_blocked(app) {
+        return Err("Native preparation unavailable".into());
+    }
+    let state = app.state::<Terminals>();
+    let guard = state.0.lock().unwrap();
+    match guard.as_ref() {
+        Some(r) if preparation_available(r) => Ok(Some(admission_snapshot(r))),
+        Some(_) => Err("Native enrollment unavailable".into()),
+        None => Ok(None),
+    }
+}
+pub(crate) fn preparation_admission_current(
+    app: &tauri::AppHandle,
+    expected: &Option<PreparationAdmission>,
+) -> bool {
+    preparation_admission(app).is_ok_and(|current| current == *expected)
+}
 /// Capacity is fixed by the original native host ready; renderer cannot increase it.
 pub fn enrollment_available(app: &tauri::AppHandle) -> bool {
     !presentation_blocked(app)
@@ -1316,16 +1394,7 @@ pub fn enrollment_available(app: &tauri::AppHandle) -> bool {
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|r| {
-                !r.enrollment_fenced
-                    && !r.enrollment_pending
-                    && r.documents.len() < r.capacity
-                    && !r.retiring
-                    && r.metadata_mutating.is_none()
-                    && r.native_dialog.is_none()
-                    && r.mcp_request.is_none()
-                    && !r.reviewing.iter().any(|busy| *busy)
-            })
+            .is_some_and(preparation_available)
 }
 
 fn create_terminal_view(
@@ -1405,17 +1474,33 @@ fn enrollment_creation_allowed(
     !cancelled && !receiver_closed && now < deadline && context_current && !blocked
 }
 
+fn running_identity(r: &Running) -> AdmissionIdentity<'_> {
+    AdmissionIdentity {
+        owner: &r.admission_owner,
+        epoch: &r.epoch,
+        initial_files: &r.initial_files,
+    }
+}
+fn enrollment_owner(r: &Running, expected: &PreparationAdmission, id: &str) -> bool {
+    owns_enrollment(
+        running_identity(r),
+        expected.snapshot().identity,
+        r.enrollment_request.as_deref(),
+        id,
+    )
+}
+
 /// Consume only this attempt; a newer Core/view must not be suspended by an old failure.
 fn fence_enrollment_presentation(
     app: &tauri::AppHandle,
-    epoch: &str,
+    expected: &PreparationAdmission,
     generation: u64,
     id: &str,
     slot: usize,
 ) {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
-    let Some(r) = guard.as_mut().filter(|r| r.epoch == epoch) else {
+    let Some(r) = guard.as_mut().filter(|r| enrollment_owner(r, expected, id)) else {
         return;
     };
     r.pending.remove(id);
@@ -1433,6 +1518,7 @@ pub(crate) async fn enroll_selected(
     app: &tauri::AppHandle,
     manifest: &str,
     previous_layout: Value,
+    expected: &PreparationAdmission,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !enrollment_available(app) {
         return Err("Native enrollment unavailable".into());
@@ -1441,14 +1527,11 @@ pub(crate) async fn enroll_selected(
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let r = guard.as_mut().ok_or("Original Core unavailable")?;
-        if r.enrollment_fenced
-            || r.enrollment_pending
-            || r.documents.len() >= r.capacity
-            || r.retiring
-            || r.metadata_mutating.is_some()
-            || r.confirming_quit
-            || r.exit_authorized
-        {
+        if !preparation_matches(
+            admission_snapshot(r).snapshot(),
+            expected.snapshot(),
+            preparation_available(r),
+        ) {
             return Err("Native enrollment busy".into());
         }
         r.sequence += 1;
@@ -1456,6 +1539,7 @@ pub(crate) async fn enroll_selected(
         let (sender, receiver) = oneshot::channel();
         r.pending.insert(id.clone(), sender);
         r.enrollment_pending = true;
+        r.enrollment_request = Some(id.clone());
         // Once a mutation may have reached Core, uncertainty never unlocks enrollment.
         r.enrollment_fenced = true;
         let message = json!({"kind":"enroll", "id":id, "epoch":r.epoch,
@@ -1479,17 +1563,29 @@ pub(crate) async fn enroll_selected(
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        if !enrollment_owner(r, expected, &id) {
+            return Err("Enrollment owner changed".into());
+        }
         r.pending.remove(&id); // Late ACK has no consumer and cannot materialize a document.
         r.enrollment_pending = false;
         let value = result
             .ok()
             .and_then(Result::ok)
             .ok_or("Enrollment result uncertain")?;
-        if value["status"] == "rejected" {
+        if value["kind"] == "enrollment-reply"
+            && value["id"] == id
+            && value["status"] == "rejected"
+            && r.layout_generation == generation
+            && r.documents.len() == slot
+            && !r.confirming_quit
+            && !r.exit_authorized
+        {
             r.enrollment_fenced = false;
+            r.enrollment_request = None;
             return Err("Enrollment rejected; prepared metadata preserved".into());
         }
-        if r.epoch != epoch
+        if !enrollment_owner(r, expected, &id)
+            || r.epoch != epoch
             || r.layout_generation != generation
             || r.confirming_quit
             || r.exit_authorized
@@ -1511,7 +1607,8 @@ pub(crate) async fn enroll_selected(
     };
     let (sender, receiver) = oneshot::channel();
     let handle = app.clone();
-    let creation_epoch = epoch.clone();
+    let creation_owner = expected.clone();
+    let creation_id = id.clone();
     let creation_cancelled = Arc::new(AtomicBool::new(false));
     let callback_cancelled = creation_cancelled.clone();
     let creation_deadline = Instant::now() + Duration::from_secs(5);
@@ -1522,7 +1619,10 @@ pub(crate) async fn enroll_selected(
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|r| r.epoch == creation_epoch && r.layout_generation == generation);
+            .is_some_and(|r| {
+                enrollment_owner(r, &creation_owner, &creation_id)
+                    && r.layout_generation == generation
+            });
         let current = enrollment_creation_allowed(
             callback_cancelled.load(Ordering::Acquire),
             sender.is_closed(),
@@ -1544,7 +1644,7 @@ pub(crate) async fn enroll_selected(
     });
     if scheduled.is_err() {
         creation_cancelled.store(true, Ordering::Release);
-        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
+        fence_enrollment_presentation(app, expected, generation, &id, slot);
         return Err("Native document creation unavailable".into());
     }
     let created =
@@ -1552,20 +1652,21 @@ pub(crate) async fn enroll_selected(
     // A queued UI callback observes cancellation/closed receiver even after this wait ends.
     creation_cancelled.store(true, Ordering::Release);
     if !created.is_ok_and(|r| matches!(r, Ok(true))) {
-        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
+        fence_enrollment_presentation(app, expected, generation, &id, slot);
         return Err("Native document creation incomplete".into());
     }
     {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let r = guard.as_mut().ok_or("Original Core unavailable")?;
-        if r.epoch != epoch
+        if !enrollment_owner(r, expected, &id)
+            || r.epoch != epoch
             || r.layout_generation != generation
             || r.confirming_quit
             || r.exit_authorized
         {
             drop(guard);
-            fence_enrollment_presentation(app, &epoch, generation, &id, slot);
+            fence_enrollment_presentation(app, expected, generation, &id, slot);
             return Err("Enrollment presentation expired".into());
         }
         r.pending_open[slot] = Some(OpeningIntent {
@@ -1580,18 +1681,25 @@ pub(crate) async fn enroll_selected(
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        if !enrollment_owner(r, expected, &id) || r.layout_generation != generation {
+            return Err("Enrollment owner changed".into());
+        }
         let (sender, receiver) = oneshot::channel();
         r.pending.insert(id.clone(), sender);
+        let message = json!({"kind":"enrollment-present", "id":id, "generation":generation});
+        if r.child.write(format!("{message}\n").as_bytes()).is_err() {
+            r.pending.remove(&id);
+            return Err("Enrollment presentation uncertain".into());
+        }
         receiver
     };
-    send(
-        app,
-        json!({"kind":"enrollment-present", "id":id, "generation":generation}),
-    );
     let presented = tokio::time::timeout(Duration::from_secs(10), receiver).await;
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
     let r = guard.as_mut().ok_or("Original Core unavailable")?;
+    if !enrollment_owner(r, expected, &id) {
+        return Err("Enrollment owner changed".into());
+    }
     r.pending.remove(&id);
     if !matches!(presented, Ok(Ok(ref value)) if value["kind"] == "enrollment-presented" && value["ready"] == true)
         || r.epoch != epoch
@@ -1600,10 +1708,11 @@ pub(crate) async fn enroll_selected(
         || r.exit_authorized
     {
         drop(guard);
-        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
+        fence_enrollment_presentation(app, expected, generation, &id, slot);
         return Err("Enrollment presentation incomplete".into());
     }
     r.enrollment_fenced = false;
+    r.enrollment_request = None;
     Ok(())
 }
 
@@ -1637,6 +1746,11 @@ pub async fn start_selected_with_open(
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");
     let admission = app.path().app_data_dir()?.join("managed-agents");
+    static STARTUP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+    let startup_id = format!(
+        "startup-{}",
+        STARTUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    );
     let (mut rx, child) = app
         .shell()
         .sidecar("orqst-node")?
@@ -1645,6 +1759,7 @@ pub async fn start_selected_with_open(
             std::ffi::OsStr::new(&files),
             admission.as_os_str(),
             std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
+            std::ffi::OsStr::new(&startup_id),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
@@ -1658,27 +1773,38 @@ pub async fn start_selected_with_open(
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) if bytes.len() <= 512 * 1024 => {
-                    return serde_json::from_slice::<Value>(&bytes).ok()
+                    return serde_json::from_slice::<Value>(&bytes).map_err(|_| "startup_protocol")
                 }
                 CommandEvent::Stderr(_) => {}
-                _ => return None,
+                CommandEvent::Terminated(_) => return Err("startup_eof"),
+                _ => return Err("startup_protocol"),
             }
         }
-        None
+        Err("startup_eof")
     })
     .await;
     let ready = match ready {
-        Ok(Some(v))
+        Ok(Ok(v))
             if v["kind"] == "ready"
+                && v["id"] == startup_id
+                && crate::features::uuid(&v["admissionOwner"])
+                && crate::features::uuid(&v["epoch"])
+                && v["initialFiles"] == json!(paths)
                 && v["panes"]
                     .as_array()
                     .is_some_and(|p| p.len() == paths.len()) =>
         {
             v
         }
-        _ => {
+        outcome => {
+            let error = match outcome {
+                Err(_) => crate::terminal_creation::startup_error("startup_timeout"),
+                Ok(Err(code)) => crate::terminal_creation::startup_error(code),
+                Ok(Ok(value)) => crate::terminal_creation::startup_failure(&value, &startup_id)
+                    .unwrap_or_else(|| crate::terminal_creation::startup_error("startup_protocol")),
+            };
             let _ = child.kill();
-            return Err("Managed terminal startup refused".into());
+            return Err(error);
         }
     };
     let panes = ready["panes"]
@@ -1710,6 +1836,8 @@ pub async fn start_selected_with_open(
     let exited = Arc::new(Notify::new());
     *app.state::<Terminals>().0.lock().unwrap() = Some(Running {
         child,
+        admission_owner: ready["admissionOwner"].as_str().unwrap().into(),
+        initial_files: paths.clone(),
         epoch: ready["epoch"]
             .as_str()
             .filter(|_| crate::features::uuid(&ready["epoch"]))
@@ -1720,6 +1848,7 @@ pub async fn start_selected_with_open(
             .filter(|n| *n >= count as u64 && *n <= 8)
             .ok_or("Missing native Core capacity")? as usize,
         enrollment_pending: false,
+        enrollment_request: None,
         enrollment_fenced: false,
         documents,
         layout: ready["layout"].clone(),
@@ -1889,6 +2018,9 @@ pub async fn start_selected_with_open(
     });
     let opening_app = app.clone();
     let reply_epoch = ready["epoch"].as_str().map(str::to_owned);
+    let host_epoch = ready["epoch"].as_str().unwrap().to_owned();
+    let host_owner = ready["admissionOwner"].as_str().unwrap().to_owned();
+    let host_initial_files = paths.clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
@@ -1928,7 +2060,25 @@ pub async fn start_selected_with_open(
                         || value["kind"] == "enrollment-presented"
                     {
                         if let Some(id) = value["id"].as_str() {
-                            if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+                            if let Some(r) = app
+                                .state::<Terminals>()
+                                .0
+                                .lock()
+                                .unwrap()
+                                .as_mut()
+                                .filter(|r| {
+                                    owns_enrollment(
+                                        running_identity(r),
+                                        AdmissionIdentity {
+                                            owner: &host_owner,
+                                            epoch: &host_epoch,
+                                            initial_files: &host_initial_files,
+                                        },
+                                        r.enrollment_request.as_deref(),
+                                        id,
+                                    )
+                                })
+                            {
                                 if let Some(sender) = r.pending.remove(id) {
                                     let _ = sender.send(value.clone());
                                 }
@@ -1972,7 +2122,20 @@ pub async fn start_selected_with_open(
                 _ => break,
             }
         }
-        stop(&app);
+        let running = {
+            let state = app.state::<Terminals>();
+            let mut guard = state.0.lock().unwrap();
+            take_host(
+                &mut *guard,
+                AdmissionIdentity {
+                    owner: &host_owner,
+                    epoch: &host_epoch,
+                    initial_files: &host_initial_files,
+                },
+                running_identity,
+            )
+        };
+        stop_running(running);
     });
     if operational_open {
         metadata_view_begin(&opening_app);
@@ -2033,6 +2196,10 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 
 pub fn stop(app: &tauri::AppHandle) {
     let running = app.state::<Terminals>().0.lock().unwrap().take();
+    stop_running(running);
+}
+
+fn stop_running(running: Option<Running>) {
     if let Some(mut running) = running {
         // EOF fences all brokers and closes only the owned Node Core/PTY transports.
         let _ = running.child.write(b"shutdown\n");

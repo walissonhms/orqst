@@ -12,9 +12,14 @@ import {
 import { join } from 'node:path';
 import { terminalDirectory, terminalFile } from '../terminal/codex-profile.js';
 import type { TerminalPairAdmission } from '../terminal/managed-pair.js';
+import { inspectDesktopAdmission } from './desktop-admission-inspection.js';
 
 /** Sticky process admission across client restarts. No TTL, PID probe or automatic takeover. */
-export function desktopAgentsAdmission(directory: string, manifests: readonly string[] = []) {
+export function desktopAgentsAdmission(
+  directory: string,
+  manifests: readonly string[] = [],
+  epoch?: string,
+) {
   try {
     mkdirSync(directory, { mode: 0o700 });
   } catch (error) {
@@ -33,13 +38,10 @@ export function desktopAgentsAdmission(directory: string, manifests: readonly st
       closeSync(fd);
     }
   };
-  try {
-    lstatSync(file); // Includes dangling symlinks; never treat those as an empty slot.
-    throw new Error('Previous Desktop pair requires evidence-backed reconciliation');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
-  const owner = JSON.stringify({ version: 1, owner: randomUUID(), manifests }) + '\n';
+  inspectDesktopAdmission(directory);
+  const identity = randomUUID();
+  const owner =
+    JSON.stringify({ version: 1, owner: identity, manifests, ...(epoch ? { epoch } : {}) }) + '\n';
   let claimed = false;
   let retired = false;
   const enrollmentFiles = new Map<string, string>();
@@ -51,6 +53,7 @@ export function desktopAgentsAdmission(directory: string, manifests: readonly st
         throw new Error('Desktop enrollment admission changed');
   };
   return {
+    owner: identity,
     assertOwner,
     preflight() {
       terminalDirectory(directory, true);

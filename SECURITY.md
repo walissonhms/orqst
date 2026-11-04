@@ -1073,3 +1073,13 @@ Node checks, 62 custom-protocol Rust tests, full lint/types/rustfmt and all-targ
 Clippy. Its separate local package verifies 115 resources, the complete distributed
 MIT notice, original Node/license and deep/strict signatures; native/provider visual
 and runtime acceptance remain pending. See the current delivery evidence linked above.
+
+## Passive terminal admission diagnostics — 2026-11-04
+
+Reservation inspection is read-only, canonical, O_NOFOLLOW, owner/mode/inode checked
+and bounded to 16 KiB. Existing reservations are preserved; inspection never claims,
+reconciles or frees capacity. Same-Core evidence stays in native private argv/IPC.
+Startup errors expose fixed stage/code/effects only; unknown/EOF/timeout remains
+possible. Native commit/open evidence cannot be downgraded, and old append replies
+cannot release another owner/request's latch. No HTTP/WS, cookie, CSP or execution
+authority is added. See [scope and verification limits](docs/development/terminal-admission-diagnostics.md).

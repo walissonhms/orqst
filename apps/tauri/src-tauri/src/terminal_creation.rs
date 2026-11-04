@@ -145,7 +145,7 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         if let Some(generation) = begin(app, &request, None) {
             let app = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
-                let _ = execute(&app, &window, request, source.as_str(), generation);
+                let _ = execute(&app, &window, request, source.as_str(), generation, true);
             });
         }
     });
@@ -414,6 +414,9 @@ fn preparation_failure(value: &Value, committed: bool) -> Option<PreparationFail
                     | "inspection"
                     | "feature_assignment"
                     | "opening"
+                    | "admission_preflight"
+                    | "core_admission"
+                    | "core_startup"
             )
         )
         || !matches!(
@@ -425,13 +428,31 @@ fn preparation_failure(value: &Value, committed: bool) -> Option<PreparationFail
                     | "capacity_exceeded"
                     | "review_too_large"
                     | "selection_blocked"
+                    | "capacity_reserved"
+                    | "admission_invalid"
+                    | "startup_failed"
+                    | "startup_timeout"
+                    | "startup_eof"
+                    | "startup_protocol"
             )
         )
         || !matches!(value["effects"].as_str(), Some("not_started" | "possible"))
         || (value["effects"] == "not_started"
+            && value["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("startup_")))
+        || (value["effects"] == "not_started"
             && matches!(
                 value["stage"].as_str(),
-                Some("bootstrap" | "provision" | "inspection" | "feature_assignment" | "opening")
+                Some(
+                    "bootstrap"
+                        | "provision"
+                        | "inspection"
+                        | "feature_assignment"
+                        | "opening"
+                        | "core_admission"
+                        | "core_startup"
+                )
             ))
     {
         return None;
@@ -448,12 +469,46 @@ fn unknown_failure(stage: &str) -> PreparationFailure {
     PreparationFailure(json!({"stage":stage,"code":"failed","effects":"possible"}))
 }
 
+/// Strict private-host failure: no raw errors, paths, ownership or stderr cross to Studio.
+pub(crate) fn startup_failure(value: &Value, id: &str) -> Option<Box<dyn std::error::Error>> {
+    if !exact(value, &["kind", "id", "failure"])
+        || value["kind"] != "failure"
+        || value["id"] != id
+        || !matches!(
+            value["failure"]["stage"].as_str(),
+            Some("core_admission" | "core_startup")
+        )
+        || value["failure"]["effects"] != "possible"
+        || !matches!(
+            value["failure"]["code"].as_str(),
+            Some(
+                "capacity_reserved"
+                    | "admission_invalid"
+                    | "startup_failed"
+                    | "startup_timeout"
+                    | "startup_eof"
+                    | "startup_protocol"
+            )
+        )
+    {
+        return None;
+    }
+    preparation_failure(&value["failure"], true)
+        .map(|failure| Box::new(failure) as Box<dyn std::error::Error>)
+}
+pub(crate) fn startup_error(code: &str) -> Box<dyn std::error::Error> {
+    Box::new(PreparationFailure(
+        json!({"stage":"core_startup", "code":code, "effects":"possible"}),
+    ))
+}
+
 fn execute(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
     request: Value,
     source: &str,
     generation: u64,
+    native_notice: bool,
 ) -> Value {
     let mut stage = "bootstrap";
     let result = run(app, window, request, source, generation, &mut stage);
@@ -464,7 +519,12 @@ fn execute(
             .unwrap_or_else(|| unknown_failure(stage))
     });
     let succeeded = result.is_ok();
-    if !succeeded
+    // Completion never waits for dismissal of an informational error sheet. Sticky
+    // committed/opened and Core ownership remain untouched.
+    stop(app);
+    app.state::<Preparation>().0.lock().unwrap().busy = false;
+    if native_notice
+        && !succeeded
         && window.is_visible().unwrap_or(false)
         && window.is_focused().unwrap_or(false)
         && app.state::<Preparation>().0.lock().unwrap().generation == generation
@@ -492,10 +552,8 @@ fn execute(
                     .unwrap_or_else(|| translate("tauriPreparation.denied")),
             )
             .parent(window)
-            .blocking_show();
+            .show(|_| {});
     }
-    stop(app);
-    app.state::<Preparation>().0.lock().unwrap().busy = false;
     match result {
         Ok(value) => value,
         Err(_) => json!({"status":"denied", "failure":failure.unwrap().0}),
@@ -562,6 +620,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
             native_request,
             &native_source,
             generation,
+            false,
         )
     })
     .await;
@@ -624,6 +683,7 @@ fn run(
     stage: &mut &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
+    let admission = crate::terminal::preparation_admission(app)?;
     // Native modal dialogs temporarily receive focus. Bind to the original visible
     // document and expiry, not the dialog's focus transition. CLI starts retain the
     // separate existing exact-document/focus/one-shot signed authorization.
@@ -638,6 +698,7 @@ fn run(
                     Some("catalog" | "create-selected")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
+            && crate::terminal::preparation_admission_current(app, &admission)
     };
     if !window.is_focused().unwrap_or(false) || !current() {
         return Err("Preparation document unavailable".into());
@@ -649,6 +710,11 @@ fn run(
     let parent = app.path().app_data_dir()?;
     // Both paths come from the owned bootstrap, never from a renderer-provided cwd.
     let trusted = json!({"observerDatabase":parent.join("core/orqst.db"), "preferencesDirectory":preferences_directory(&parent)?}).to_string();
+    let admission_context = admission
+        .as_ref()
+        .map(|value| value.context())
+        .unwrap_or(Value::Null)
+        .to_string();
     let unsupported_opencode = [
         "OPENCODE_CONFIG",
         "OPENCODE_CONFIG_CONTENT",
@@ -669,6 +735,7 @@ fn run(
             std::ffi::OsStr::new(&request.to_string()),
             parent.as_os_str(),
             std::ffi::OsStr::new(&trusted),
+            std::ffi::OsStr::new(&admission_context),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
@@ -903,11 +970,14 @@ fn run(
         })
         .collect::<Result<_, _>>()?;
     app.state::<Preparation>().0.lock().unwrap().prepared = files.clone();
+    if result["status"] == "open" && !current() {
+        return Err("Preparation context changed; no runtime dispatched".into());
+    }
     if result["status"] == "open" && current() {
         *stage = "opening";
         // Latch before entering Core. Never retry uncertain admission, even on failure.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
-        let live_enrollment = crate::terminal::is_running(app);
+        let live_enrollment = admission.is_some();
         let opened = if live_enrollment {
             if request["action"] != "create-selected" || files.len() != 1 {
                 return Err("Native enrollment requires one selected member".into());
@@ -916,6 +986,7 @@ fn run(
                 app,
                 &files[0],
                 result["previousLayout"].clone(),
+                admission.as_ref().unwrap(),
             ))
         } else {
             tauri::async_runtime::block_on(crate::terminal::start_selected_with_open(
@@ -930,7 +1001,7 @@ fn run(
         if let Err(error) = opened {
             // Only a confirmed pre-effect refusal may release the creation latch.
             // Files/Feature metadata remain as evidence; no original operation is retried.
-            if live_enrollment && crate::terminal::enrollment_available(app) {
+            if live_enrollment && crate::terminal::preparation_admission_current(app, &admission) {
                 let state = app.state::<Preparation>();
                 let mut guard = state.0.lock().unwrap();
                 guard.committed = false;
@@ -1068,6 +1139,26 @@ mod tests {
             assert_eq!(failure.0["effects"], "possible");
             assert_eq!(failure.0["code"], "failed");
         }
+    }
+
+    #[test]
+    fn startup_reason_is_correlated_and_never_downgrades_unknown_effects() {
+        let id = "startup-1";
+        let value = json!({"kind":"failure", "id":id, "failure":{"stage":"core_admission", "code":"capacity_reserved", "effects":"possible"}});
+        assert!(super::startup_failure(&value, id).is_some());
+        assert!(super::startup_failure(&value, "startup-2").is_none());
+        let mut invalid = value.clone();
+        invalid["failure"]["effects"] = json!("not_started");
+        assert!(super::startup_failure(&invalid, id).is_none());
+        invalid = value.clone();
+        invalid["failure"]["message"] = json!("SYNTHETIC PRIVATE");
+        assert!(super::startup_failure(&invalid, id).is_none());
+        assert!(super::preparation_failure(&json!({"stage":"admission_preflight","code":"startup_timeout","effects":"not_started"}), false).is_none());
+        let preflight = json!({"stage":"admission_preflight","code":"capacity_reserved","effects":"not_started"});
+        assert_eq!(
+            super::preparation_failure(&preflight, true).unwrap().0["effects"],
+            "possible"
+        );
     }
 
     #[test]

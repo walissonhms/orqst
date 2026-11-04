@@ -48,6 +48,10 @@ test('Tauri Studio rejects paths, execution, mixed presets, Core methods and for
     { ...valid, proof: {} },
     { ...valid, source: 'https://forged.invalid' },
     { ...valid, mcp: true },
+    ...['currentCore', 'admissionOwner', 'initialFiles', 'epoch'].map((key) => ({
+      ...valid,
+      [key]: 'SYNTHETIC',
+    })),
     { action: 'createMixed' },
     { action: 'start' },
     { action: 'login' },

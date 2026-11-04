@@ -27,7 +27,14 @@ test('ready identity arrays enforce the shared ceiling and strict metadata', () 
     terminalId: randomUUID(),
     provider: 'codex',
   }));
-  const ready = { type: 'ready', epoch: randomUUID(), identities };
+  const ready = {
+    type: 'ready',
+    id: randomUUID(),
+    admissionOwner: randomUUID(),
+    initialFiles: ['/synthetic/initial.json'],
+    epoch: randomUUID(),
+    identities,
+  };
   assert.ok(terminalPairReadySchema.safeParse(ready).success);
   assert.equal(
     terminalPairReadySchema.safeParse({
