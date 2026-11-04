@@ -316,3 +316,9 @@ Integrated as `746a345` (source `db3a34a`): 678 Node tests
 (`--test-concurrency=2`), lint, typecheck, build, staged Tauri resources and the
 synthetic structured-agent acceptance passed in the main checkout. No real-provider
 or native WebKit acceptance was performed for this metadata change.
+
+The follow-up wording correction (`529f93a`, source `c515f35`) says layout saving
+is not confirmed while awaiting the asynchronous acknowledgment. Both locales now
+avoid prematurely asserting a write failure. Integration passed 26 focused locale,
+layout and retained-view tests, formatting and build; the preceding 678-test run
+was not repeated for this text-only follow-up.
