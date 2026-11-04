@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Preparation diagnostics source — 2026-11-04
+
+Bounded stage/code/effects and the simpler normal picker are implemented with
+synthetic/static checks and integrated with the OpenCode catalogue/default correction
+below. Compile and accept the combined native source without replaying uncertain attempts. See
+[diagnostic boundaries](docs/development/terminal-preparation-diagnostics.md).
+
 ## OpenCode equivalent installations — 2026-11-04
 
 Resolve the normal catalogue's false ambiguity for separate copies of the exact

@@ -250,3 +250,40 @@ test('native live-enrollment capability is optional metadata and carries no path
       false,
     );
 });
+
+test('preparation failures carry only bounded stage/code/effects and no retry authority', async () => {
+  const failure = { stage: 'revalidation', code: 'catalog_changed', effects: 'not_started' };
+  const reply = { status: 'denied', failure };
+  let calls = 0;
+  const client = createTauriStudioClient(
+    async () => {
+      calls++;
+      return reply;
+    },
+    () => true,
+  );
+  assert.deepEqual(await client.request({ action: 'review', generation: 1 }), reply);
+  assert.equal(calls, 1);
+  for (const extra of ['stderr', 'message', 'path', 'config', 'proof', 'token', 'retry']) {
+    assert.equal(
+      tauriStudioReplySchema.safeParse({ ...reply, failure: { ...failure, [extra]: 'SYNTHETIC' } })
+        .success,
+      false,
+    );
+  }
+  for (const invalid of [
+    { ...failure, stage: 'unknown' },
+    { ...failure, code: 'SYNTHETIC arbitrary text' },
+    { ...failure, effects: 'none' },
+    ...['bootstrap', 'provision', 'inspection', 'feature_assignment', 'opening'].map((stage) => ({
+      ...failure,
+      stage,
+    })),
+  ])
+    assert.equal(tauriStudioReplySchema.safeParse({ ...reply, failure: invalid }).success, false);
+  for (const status of ['ok', 'busy', 'focus_required'])
+    assert.equal(
+      tauriStudioReplySchema.safeParse({ status, snapshot: empty, failure }).success,
+      false,
+    );
+});

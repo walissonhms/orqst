@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Bounded preparation failure diagnostics
+
+- Carry strict stage/code/effects across the passive helper, native shell and UI;
+  preserve uncertainty after possible effects and on unknown transport failures.
+- Keep CLI → model → Open primary, with technical details in Advanced and EN/PT
+  diagnostics; remove the empty-project prescription from normal refusal text.
+- Cover synthetic drift before commit and static EN/PT rendering. Historical
+  Codex cause and actual native opening remain unaccepted.
+- Integrate the OpenCode drift regression with the typed failure contract and
+  verify zero commit calls for changed or removed reviewed executables.
+
 ## 2026-11-04 — OpenCode equivalent native installations
 
 - Treat independently hash-checked copies of the exact reviewed OpenCode native

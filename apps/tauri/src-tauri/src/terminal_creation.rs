@@ -324,14 +324,82 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     }
     Some(guard.generation)
 }
+/// Only fixed identifiers cross back to the renderer/dialog. No raw host or Core error is shown.
+#[derive(Clone, Debug)]
+struct PreparationFailure(Value);
+impl std::fmt::Display for PreparationFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Terminal preparation failed")
+    }
+}
+impl std::error::Error for PreparationFailure {}
+
+fn preparation_failure(value: &Value, committed: bool) -> Option<PreparationFailure> {
+    if !exact(value, &["stage", "code", "effects"])
+        || !matches!(
+            value["stage"].as_str(),
+            Some(
+                "bootstrap"
+                    | "request"
+                    | "catalog"
+                    | "selection"
+                    | "plan"
+                    | "review"
+                    | "revalidation"
+                    | "commit"
+                    | "provision"
+                    | "inspection"
+                    | "feature_assignment"
+                    | "opening"
+            )
+        )
+        || !matches!(
+            value["code"].as_str(),
+            Some(
+                "failed"
+                    | "catalog_changed"
+                    | "selection_unavailable"
+                    | "capacity_exceeded"
+                    | "review_too_large"
+                    | "selection_blocked"
+            )
+        )
+        || !matches!(value["effects"].as_str(), Some("not_started" | "possible"))
+        || (value["effects"] == "not_started"
+            && matches!(
+                value["stage"].as_str(),
+                Some("bootstrap" | "provision" | "inspection" | "feature_assignment" | "opening")
+            ))
+    {
+        return None;
+    }
+    let mut safe = value.clone();
+    // Native evidence wins over helper claims after a possible write/open boundary.
+    if committed {
+        safe["effects"] = json!("possible");
+    }
+    Some(PreparationFailure(safe))
+}
+
+fn unknown_failure(stage: &str) -> PreparationFailure {
+    PreparationFailure(json!({"stage":stage,"code":"failed","effects":"possible"}))
+}
+
 fn execute(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
     request: Value,
     source: &str,
     generation: u64,
-) -> Option<Value> {
-    let result = run(app, window, request, source, generation);
+) -> Value {
+    let mut stage = "bootstrap";
+    let result = run(app, window, request, source, generation, &mut stage);
+    let failure = result.as_ref().err().map(|error| {
+        error
+            .downcast_ref::<PreparationFailure>()
+            .cloned()
+            .unwrap_or_else(|| unknown_failure(stage))
+    });
     let succeeded = result.is_ok();
     if !succeeded
         && window.is_visible().unwrap_or(false)
@@ -339,13 +407,40 @@ fn execute(
         && app.state::<Preparation>().0.lock().unwrap().generation == generation
     {
         app.dialog()
-            .message(translate("tauriPreparation.denied"))
+            .message(
+                failure
+                    .as_ref()
+                    .map(|failure| {
+                        format!(
+                            "{}\n\n{}: {}\n{}: {}",
+                            translate(if failure.0["effects"] == "not_started" {
+                                "tauriPreparation.failure_not_started"
+                            } else {
+                                "tauriPreparation.failure_possible"
+                            }),
+                            translate("tauriPreparation.failureStage"),
+                            translate(&format!(
+                                "tauriPreparation.stage_{}",
+                                failure.0["stage"].as_str().unwrap()
+                            )),
+                            translate("tauriPreparation.failureReason"),
+                            translate(&format!(
+                                "tauriPreparation.code_{}",
+                                failure.0["code"].as_str().unwrap()
+                            )),
+                        )
+                    })
+                    .unwrap_or_else(|| translate("tauriPreparation.denied")),
+            )
             .parent(window)
             .blocking_show();
     }
     stop(app);
     app.state::<Preparation>().0.lock().unwrap().busy = false;
-    result.ok()
+    match result {
+        Ok(value) => value,
+        Err(_) => json!({"status":"denied", "failure":failure.unwrap().0}),
+    }
 }
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
@@ -415,8 +510,11 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return denied();
     }
     match result {
-        Ok(Some(value)) if value["status"] == "catalog" => value,
-        Ok(Some(_)) => json!({"status":"ok", "snapshot":snapshot(&app)}),
+        Ok(value) if value["status"] == "catalog" => value,
+        Ok(value) if value["status"] == "denied" => {
+            json!({"status":"denied", "failure":value["failure"], "snapshot":snapshot(&app)})
+        }
+        Ok(_) => json!({"status":"ok", "snapshot":snapshot(&app)}),
         _ => json!({"status":"unavailable", "snapshot":snapshot(&app)}),
     }
 }
@@ -464,6 +562,7 @@ fn run(
     request: Value,
     source: &str,
     generation: u64,
+    stage: &mut &str,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
     // Native modal dialogs temporarily receive focus. Bind to the original visible
@@ -532,6 +631,7 @@ fn run(
         }))
         .spawn()?;
     app.state::<Preparation>().0.lock().unwrap().child = Some(child);
+    *stage = "request";
     let mut complete = None;
     let mut sequence = 0;
     let mut received = 0usize;
@@ -546,6 +646,19 @@ fn run(
                     return Err("Preparation pipe refused".into());
                 }
                 let value: Value = serde_json::from_slice(&bytes)?;
+                if value["kind"] == "failure" {
+                    if !exact(&value, &["kind", "failure"]) {
+                        return Err("Invalid preparation failure".into());
+                    }
+                    let state = app.state::<Preparation>();
+                    let guard = state.0.lock().unwrap();
+                    return Err(preparation_failure(
+                        &value["failure"],
+                        guard.committed || guard.opened,
+                    )
+                    .ok_or("Invalid preparation failure")?
+                    .into());
+                }
                 if value["kind"] == "complete" {
                     complete = Some(value);
                     continue;
@@ -574,6 +687,7 @@ fn run(
                             .unwrap_or(Value::Null)
                     }
                     Some("confirm") => {
+                        *stage = "review";
                         let approve = field(&value, "approve", 1024)?;
                         let cancel = field(&value, "cancel", 1024)?;
                         let result = app
@@ -605,6 +719,9 @@ fn run(
                         let state = app.state::<Preparation>();
                         let mut guard = state.0.lock().unwrap();
                         let allowed = valid && guard.commit();
+                        if allowed {
+                            *stage = "provision";
+                        }
                         json!(allowed)
                     }
                     _ => return Err("Unknown preparation request".into()),
@@ -624,6 +741,11 @@ fn run(
             _ => return Err("Preparation host unavailable".into()),
         }
     }
+    *stage = if request["action"] == "catalog" {
+        "catalog"
+    } else {
+        "inspection"
+    };
     let mut result = complete.ok_or("Incomplete preparation")?;
     if request["action"] == "catalog" {
         if result["status"] != "catalog" || !valid_catalog(&result["catalog"], &request) {
@@ -663,6 +785,7 @@ fn run(
         .collect::<Result<_, _>>()?;
     app.state::<Preparation>().0.lock().unwrap().prepared = files.clone();
     if result["status"] == "open" && current() {
+        *stage = "opening";
         // Latch before entering Core. Never retry uncertain admission, even on failure.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
         let live_enrollment = crate::terminal::is_running(app);
@@ -788,6 +911,42 @@ mod tests {
     use super::{create_action, document_matches, invalidates_preparation, valid_request, State};
     use serde_json::json;
     use tauri::WindowEvent;
+
+    #[test]
+    fn failure_contract_is_bounded_and_native_commit_evidence_cannot_be_downgraded() {
+        let before =
+            json!({"stage":"revalidation","code":"catalog_changed","effects":"not_started"});
+        assert_eq!(
+            super::preparation_failure(&before, false).unwrap().0,
+            before
+        );
+        assert_eq!(
+            super::preparation_failure(&before, true).unwrap().0["effects"],
+            "possible"
+        );
+        for stage in [
+            "bootstrap",
+            "provision",
+            "inspection",
+            "feature_assignment",
+            "opening",
+        ] {
+            let invalid = json!({"stage":stage,"code":"failed","effects":"not_started"});
+            assert!(super::preparation_failure(&invalid, false).is_none());
+        }
+        for key in [
+            "stderr", "message", "path", "config", "proof", "token", "retry",
+        ] {
+            let mut extra = before.clone();
+            extra[key] = json!("SYNTHETIC");
+            assert!(super::preparation_failure(&extra, false).is_none());
+        }
+        for stage in ["bootstrap", "request", "review", "provision", "opening"] {
+            let failure = super::unknown_failure(stage);
+            assert_eq!(failure.0["effects"], "possible");
+            assert_eq!(failure.0["code"], "failed");
+        }
+    }
 
     #[test]
     fn studio_requests_are_strict_bounded_and_cannot_supply_native_authority() {

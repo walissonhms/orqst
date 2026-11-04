@@ -1,5 +1,12 @@
 # ORQST
 
+The [bounded native preparation diagnostics](docs/development/terminal-preparation-diagnostics.md)
+now preserve the failing stage and possible effects without exposing raw errors.
+The normal picker keeps CLI → model → Open primary. Synthetic/static checks do
+not establish the cause of the historical Codex refusal or native opening acceptance.
+These diagnostics are integrated with the OpenCode correction below; see the
+[combined source checks](docs/development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04).
+
 OpenCode copies with the same exact reviewed native SHA-256 now share one CLI/model
 catalog option, preserving existing PATH precedence and exact native path/hash
 review. No CLI probe or reinstall is needed. Synthetic preparation/profile checks

@@ -122,3 +122,20 @@ validators → `validateTerminalModelSelection` / `validateTerminalPreparationBi
 `node-pty.spawn`. Synthetic tests sign the prepared challenge, change source bytes,
 and call the actual supervisor launch method: `start_failed` occurs with zero
 backend starts. This is admission evidence, not successful provider startup.
+
+## Bounded preparation failure reply
+
+Native Studio `denied`/`unavailable` replies may carry `failure`, with exactly:
+
+- `stage`: `bootstrap`, `request`, `catalog`, `selection`, `plan`, `review`,
+  `revalidation`, `commit`, `provision`, `inspection`, `feature_assignment`, `opening`.
+- `code`: `failed`, `catalog_changed`, `selection_unavailable`, `capacity_exceeded`,
+  `review_too_large`, `selection_blocked`.
+- `effects`: `not_started` or `possible`.
+
+Bootstrap/provision/inspection/Feature assignment/opening cannot claim
+`not_started`. Native commit/open evidence promotes any earlier helper claim to
+`possible`. Unknown transport/exit outcomes are always `possible`. Codes are
+stable identifiers, not exception text or retry permission. Extra fields are
+rejected. The helper sends the same object as `{kind:'failure',failure}` over its
+private pipe. See [boundaries and checks](../development/terminal-preparation-diagnostics.md).

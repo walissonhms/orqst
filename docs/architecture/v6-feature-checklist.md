@@ -5,6 +5,21 @@ Authority: the [approved V6 package](../design/v6/README.md). This extends the
 Unchecked acceptance items remain incomplete even when a subset is implemented.
 Update this file in every V6 delivery with implementation and verification.
 
+## Combined preparation source integration — 2026-11-04
+
+- [x] Integrate Codex diagnostic source `dc92dd9` with OpenCode source `2db2ed0`
+      (already integrated as `7253c90`), retaining both documentation histories.
+- [x] Preserve strict helper → Rust → Studio failures, native commit/open latches,
+      focus/grants and unknown `possible` outcomes without automatic retry.
+- [x] Adapt the OpenCode executable-drift regression to typed revalidation failure;
+      changed bytes/removal must leave zero commit calls and no terminal files.
+- [x] Pass 52 distinct focused tests (combined 50 plus two pure OpenCode profile
+      cases), without repeating the shared selected-preparation file.
+- [ ] Compile/package and accept the combined native source and selected providers.
+      This integration runs Rust formatting only; the owner's Preview is unchanged.
+
+See [combined checks and boundaries](../development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04).
+
 ## OpenCode catalogue correction — 2026-11-04
 
 - [x] Distinguish canonical installation copies from different reviewed native
@@ -325,3 +340,17 @@ the existing presentation fence on creation/presentation failure. Pure Rust sour
 cases cover callback cancellation and late layout refusal; only rustfmt parsing
 and diff validation initially ran for this follow-up. The subsequent integrated
 39-case Rust run executed these regressions successfully.
+
+## Bounded preparation failures and normal picker — 2026-11-04
+
+- [x] Preserve typed stage/code/effects from passive helper through native IPC;
+      validate exact allowlists and keep post-commit/unknown outcomes uncertain.
+- [x] Keep CLI → model → Open primary, remove the duplicate visible title, move
+      technical detail into Advanced, and preserve relevant EN/PT warnings.
+- [x] Cover synthetic review drift with zero commit calls and no terminal files;
+      focused selection/IPC 12/12, passive preparation 23/23 and static EN/PT 1/1.
+- [ ] Compile/package and accept native opening of the actual selected Codex model.
+
+Historical cause and mutable global catalog drift remain distinct: drift is a
+regression scenario, not a historical diagnosis. No Preview/runtime/provider
+operation was performed. See [implementation limits](../development/terminal-preparation-diagnostics.md).

@@ -308,6 +308,11 @@ test('OpenCode review rejects a changed chosen executable instead of substitutin
       assert.equal(result.status, 'catalog');
       const cli = result.catalog.providers.find((entry) => entry.provider === 'opencode')!;
       assert.equal(cli.status, 'available');
+      let commits = 0;
+      f.ports.commit = async () => {
+        commits++;
+        return true;
+      };
       f.ports.confirm = async (_key, detail) => {
         assert.ok(detail.includes(join(f.root, 'bin/opencode')));
         const first = join(f.root, 'bin/opencode');
@@ -331,8 +336,16 @@ test('OpenCode review rejects a changed chosen executable instead of substitutin
           Date.now,
           f.trusted,
         ),
-        /changed during review/,
+        (error: unknown) => {
+          assert.deepEqual(Reflect.get(error as object, 'failure'), {
+            stage: 'revalidation',
+            code: 'catalog_changed',
+            effects: 'not_started',
+          });
+          return true;
+        },
       );
+      assert.equal(commits, 0);
       assert.deepEqual(readdirSync(f.context.parent), []);
     } finally {
       f.close();
@@ -362,19 +375,39 @@ test('unknown model capabilities and changed source/view are refused before prov
     };
     await assert.rejects(
       prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
-      /unavailable/,
+      (error: unknown) => {
+        assert.deepEqual(Reflect.get(error as object, 'failure'), {
+          stage: 'selection',
+          code: 'selection_unavailable',
+          effects: 'not_started',
+        });
+        return true;
+      },
     );
     assert.deepEqual(readdirSync(f.context.parent), []);
     const codex = result.catalog.providers.find((entry) => entry.provider === 'codex')!;
     request.modelId = codex.models[0]!.id;
+    let commits = 0;
+    f.ports.commit = async () => {
+      commits++;
+      return true;
+    };
     f.ports.confirm = async () => {
       writeFileSync(join(f.home, '.codex/config.toml'), 'model="changed"\n', { mode: 0o600 });
       return true;
     };
     await assert.rejects(
       prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
-      /changed during review/,
+      (error: unknown) => {
+        assert.deepEqual(Reflect.get(error as object, 'failure'), {
+          stage: 'revalidation',
+          code: 'catalog_changed',
+          effects: 'not_started',
+        });
+        return true;
+      },
     );
+    assert.equal(commits, 0);
     assert.deepEqual(readdirSync(f.context.parent), []);
   } finally {
     f.close();

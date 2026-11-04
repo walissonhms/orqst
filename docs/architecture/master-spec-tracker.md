@@ -133,6 +133,19 @@ establish that GitHub's server edge is the cause.
 
 ## Verification log
 
+### Combined preparation diagnostics and OpenCode source — 2026-11-04
+
+Diagnostic source `dc92dd9` is integrated with OpenCode source `2db2ed0` (previously
+cherry-picked as `7253c90`) on baseline `f45f740`. Both documentation histories are
+retained. The executable-drift regression now verifies the strict diagnostic
+contract and zero commit calls instead of matching the former exception text.
+The final focused run passes 50/50 plus 2/2 pure OpenCode profile cases, without
+duplicating the shared selected-preparation file.
+See [combined checks and security boundaries](../development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04)
+and the [V6 integration checklist](v6-feature-checklist.md#combined-preparation-source-integration--2026-11-04).
+The historical Codex cause, combined Rust compilation and native/provider acceptance
+remain open; no release criterion or human acceptance is completed by these changes.
+
 V6 Core sources `3a3d250` / `dd2cbfd` and chrome source `ba848ba` are integrated as
 `452d4b0` / `e352d26` / `c2f7bfc`. Feature configuration, scoped aliases/grants and
 layout/team persistence are implemented over existing SQLite/private IPC; native

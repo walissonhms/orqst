@@ -3,7 +3,7 @@ import { createInstance } from 'i18next';
 import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
-import { prepareTauriTerminals } from './tauri-terminal-preparation.js';
+import { prepareTauriTerminals, tauriPreparationFailure } from './tauri-terminal-preparation.js';
 
 process.umask(0o077);
 
@@ -108,7 +108,10 @@ async function main() {
   }
 }
 
-void main().catch(() => {
-  console.error('ORQST native terminal preparation refused.');
+void main().catch((error: unknown) => {
+  // A fixed-size allowlisted envelope survives the native boundary; raw errors never leave here.
+  process.stdout.write(
+    JSON.stringify({ kind: 'failure', failure: tauriPreparationFailure(error) }) + '\n',
+  );
   process.exitCode = 1;
 });
