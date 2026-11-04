@@ -1,4 +1,5 @@
 import './diagnostic-output.js';
+import { terminalSlotLimit, TERMINAL_SLOT_CEILING } from '@orqst/protocol';
 import {
   app,
   BrowserWindow,
@@ -90,8 +91,22 @@ async function start(): Promise<void> {
   const terminalConfigs = process.argv
     .filter((value) => value.startsWith('--terminal-config='))
     .map((value) => value.slice('--terminal-config='.length));
+  const configuredLimit = process.env.ORQST_TERMINAL_LIMIT;
+  if (configuredLimit !== undefined && !/^[1-9]\d*$/.test(configuredLimit))
+    throw new Error(
+      `ORQST_TERMINAL_LIMIT must be an integer from 1 through ${TERMINAL_SLOT_CEILING}`,
+    );
+  const terminalLimit = terminalSlotLimit(
+    configuredLimit === undefined ? undefined : Number(configuredLimit),
+  );
+  const terminalMenuId = (slot: number) =>
+    slot === 0
+      ? 'managed-terminal-open'
+      : slot === 1
+        ? 'managed-terminal-b-open'
+        : `managed-terminal-${slot}-open`;
   let terminals: Awaited<ReturnType<typeof createManagedTerminals>> | undefined;
-  let terminalSelection = new TerminalSelection();
+  let terminalSelection = new TerminalSelection(Date.now, terminalLimit);
   let terminalOpening = false;
   let managedLifetime = 'idle';
   let refreshManagedTray: () => void = () => undefined;
@@ -114,9 +129,23 @@ async function start(): Promise<void> {
         submenu: [
           {
             id: 'managed-terminal-create',
-            label: i18n.t('managedTerminal.createPair'),
+            label: i18n.t(
+              terminalLimit === 1 ? 'managedTerminal.createTeam' : 'managedTerminal.createPair',
+            ),
             click: () => void createTerminalSelection(),
           },
+          ...(terminalLimit > 2
+            ? [
+                {
+                  label: i18n.t('managedTerminal.createTeam'),
+                  submenu: Array.from({ length: terminalLimit }, (_, slot) => ({
+                    id: `managed-terminal-create-${slot + 1}`,
+                    label: i18n.t('managedTerminal.createCount', { count: slot + 1 }),
+                    click: () => void createTerminalSelection(slot + 1),
+                  })),
+                },
+              ]
+            : []),
           {
             id: 'managed-terminal-select',
             label: i18n.t('managedTerminal.selectManifests'),
@@ -128,9 +157,9 @@ async function start(): Promise<void> {
             label: i18n.t('managedAgents.title'),
             click: openManagedAgents,
           },
-          ...[0, 1].map((slot) => ({
-            id: slot === 0 ? 'managed-terminal-open' : 'managed-terminal-b-open',
-            label: `${i18n.t('managedTerminal.open')} ${slot === 0 ? 'A' : 'B'}`,
+          ...Array.from({ length: terminalLimit }, (_, slot) => ({
+            id: terminalMenuId(slot),
+            label: `${i18n.t('managedTerminal.open')} ${String.fromCharCode(65 + slot)}`,
             enabled: !!terminals?.openers[slot],
             click: () => void openTerminalSelection(slot),
           })),
@@ -175,13 +204,17 @@ async function start(): Promise<void> {
     if (create)
       create.enabled =
         !terminals && !terminalSelection.locked && !terminalOpening && !terminalCreationAttempted;
-    for (const [slot, id] of ['managed-terminal-open', 'managed-terminal-b-open'].entries()) {
-      const item = menu?.getMenuItemById(id);
+    for (let slot = 0; slot < terminalLimit; slot++) {
+      const item = menu?.getMenuItemById(terminalMenuId(slot));
       if (item)
         item.enabled =
           !terminalOpening &&
           (!!terminals?.openers[slot] ||
             (!terminalSelection.locked && slot < terminalSelection.count));
+    }
+    for (let count = 1; count <= terminalLimit; count++) {
+      const item = menu?.getMenuItemById(`managed-terminal-create-${count}`);
+      if (item) item.enabled = !!create?.enabled;
     }
     const dashboard = menu?.getMenuItemById('managed-terminal-dashboard');
     if (dashboard) dashboard.enabled = !!terminals;
@@ -201,7 +234,7 @@ async function start(): Promise<void> {
       if (!(await active.retire()) || terminals !== active || quitting) return;
       // Fresh review is possible only after signed Core retirement and complete old-surface cleanup.
       terminals = undefined;
-      terminalSelection = new TerminalSelection();
+      terminalSelection = new TerminalSelection(Date.now, terminalLimit);
       terminalCreationAttempted = false;
       terminalCreationCompleted = false;
     } finally {
@@ -258,7 +291,7 @@ async function start(): Promise<void> {
     });
   }
 
-  async function createTerminalSelection(): Promise<void> {
+  async function createTerminalSelection(count = Math.min(2, terminalLimit)): Promise<void> {
     if (
       terminals ||
       terminalOpening ||
@@ -279,7 +312,7 @@ async function start(): Promise<void> {
     let files: string[] | undefined;
     try {
       const providerResult = await dialog.showMessageBox(context.target!, {
-        title: i18n.t('managedTerminal.createPair'),
+        title: i18n.t(count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam'),
         message: i18n.t('managedTerminal.createProvider'),
         buttons: [
           i18n.t('terminalNative.cancel'),
@@ -315,20 +348,27 @@ async function start(): Promise<void> {
       if (!node) return;
       const project = await choose('createProject', true);
       if (!project) return;
-      const mcpResult = await dialog.showMessageBox(context.target!, {
-        title: i18n.t('managedTerminal.createPair'),
-        message: i18n.t(`managedTerminal.createMcp_${provider}`),
-        buttons: [
-          i18n.t('terminalNative.cancel'),
-          i18n.t('managedTerminal.createWithoutMcp'),
-          i18n.t('managedTerminal.createWithMcp'),
-        ],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
+      const mcpResult =
+        count !== 2
+          ? { response: 1 }
+          : await dialog.showMessageBox(context.target!, {
+              title: i18n.t(
+                count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam',
+              ),
+              message: i18n.t(`managedTerminal.createMcp_${provider}`),
+              buttons: [
+                i18n.t('terminalNative.cancel'),
+                i18n.t('managedTerminal.createWithoutMcp'),
+                i18n.t('managedTerminal.createWithMcp'),
+              ],
+              defaultId: 0,
+              cancelId: 0,
+              noLink: true,
+            });
       if (!current() || ![1, 2].includes(mcpResult.response)) return;
       const creationInput = {
+        count,
+        limit: terminalLimit,
         provider,
         executable,
         node,
@@ -340,48 +380,57 @@ async function start(): Promise<void> {
       };
       let plan = prepareTerminalCreation(creationInput);
       let openCodeStartupAuthorized = false;
+      let startupChoice: number | undefined;
       if (provider === 'opencode') {
-        const consent = await dialog.showMessageBox(context.target!, {
-          type: 'warning',
-          title: i18n.t('managedTerminal.createPair'),
-          message: i18n.t('managedTerminal.openCodeStartupReview'),
-          detail: plan.detail,
-          checkboxLabel: i18n.t('managedTerminal.openCodeStartupAcknowledgment'),
-          checkboxChecked: false,
-          buttons: [
-            i18n.t('terminalNative.cancel'),
-            i18n.t('managedTerminal.openCodeKeepBlocked'),
-            i18n.t('managedTerminal.openCodeAuthorizeStartup'),
-          ],
-          defaultId: 0,
-          cancelId: 0,
-          noLink: true,
-        });
-        if (!current() || ![1, 2].includes(consent.response)) return;
-        if (consent.response === 2 && !consent.checkboxChecked) return;
-        openCodeStartupAuthorized = consent.response === 2;
+        for (const detail of plan.pages) {
+          const consent = await dialog.showMessageBox(context.target!, {
+            type: 'warning',
+            title: i18n.t(
+              count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam',
+            ),
+            message: i18n.t('managedTerminal.openCodeStartupReview'),
+            detail,
+            checkboxLabel: i18n.t('managedTerminal.openCodeStartupAcknowledgment'),
+            checkboxChecked: false,
+            buttons: [
+              i18n.t('terminalNative.cancel'),
+              i18n.t('managedTerminal.openCodeKeepBlocked'),
+              i18n.t('managedTerminal.openCodeAuthorizeStartup'),
+            ],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          if (!current() || ![1, 2].includes(consent.response)) return;
+          if (consent.response === 2 && !consent.checkboxChecked) return;
+          if (startupChoice !== undefined && consent.response !== startupChoice) return;
+          startupChoice = consent.response;
+          openCodeStartupAuthorized = consent.response === 2;
+        }
         if (openCodeStartupAuthorized)
           plan = prepareTerminalCreation({ ...creationInput, openCodeStartupAuthorized: true });
       }
       const reviewExpires = Date.now() + 60000;
       const reviewed = () => current() && Date.now() < reviewExpires;
-      const result = await dialog.showMessageBox(context.target!, {
-        type: 'warning',
-        title: i18n.t('managedTerminal.createPair'),
-        message: i18n.t(
-          openCodeStartupAuthorized
-            ? 'managedTerminal.createOpenCodeAuthorizedReview'
-            : 'managedTerminal.createReview',
-        ),
-        detail: plan.detail,
-        checkboxLabel: i18n.t('managedTerminal.createAcknowledgment'),
-        checkboxChecked: false,
-        buttons: [i18n.t('terminalNative.cancel'), i18n.t('managedTerminal.createFiles')],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
-      if (!reviewed() || result.response !== 1 || !result.checkboxChecked) return;
+      for (const detail of plan.pages) {
+        const result = await dialog.showMessageBox(context.target!, {
+          type: 'warning',
+          title: i18n.t(count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam'),
+          message: i18n.t(
+            openCodeStartupAuthorized
+              ? 'managedTerminal.createOpenCodeAuthorizedReview'
+              : 'managedTerminal.createReview',
+          ),
+          detail,
+          checkboxLabel: i18n.t('managedTerminal.createAcknowledgment'),
+          checkboxChecked: false,
+          buttons: [i18n.t('terminalNative.cancel'), i18n.t('managedTerminal.createFiles')],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (!reviewed() || result.response !== 1 || !result.checkboxChecked) return;
+      }
       terminalCreationAttempted = true;
       files = plan.provision(reviewed);
       terminalCreationCompleted = true;
@@ -469,7 +518,7 @@ async function start(): Promise<void> {
     updateTerminalMenu();
     try {
       const files = terminalSelection.take();
-      terminals = await createManagedTerminals(files, (key) => i18n.t(key), window!);
+      terminals = await createManagedTerminals(files, (key) => i18n.t(key), window!, terminalLimit);
       if (context.current()) terminals.openers[slot]?.();
     } catch (error) {
       if (error instanceof TerminalPreCoreFailure) {
@@ -949,7 +998,12 @@ async function start(): Promise<void> {
   if (terminalConfigs.length) {
     terminalOpening = true;
     try {
-      terminals = await createManagedTerminals(terminalConfigs, (key) => i18n.t(key), window!);
+      terminals = await createManagedTerminals(
+        terminalConfigs,
+        (key) => i18n.t(key),
+        window!,
+        terminalLimit,
+      );
     } finally {
       terminalOpening = false;
       updateTerminalMenu();

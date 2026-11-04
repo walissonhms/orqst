@@ -106,10 +106,9 @@ for (const provider of ['claude', 'opencode'] as const)
               name: 'synthetic-reviewed-hash-only',
               setup(builder: PluginBuild) {
                 builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
-                  contents: readFileSync(args.path, 'utf8').replace(
-                    reviewedProviderMcpBinaries[provider].sha256,
-                    hash,
-                  ),
+                  contents: readFileSync(args.path, 'utf8')
+                    .replace(reviewedProviderMcpBinaries.claude.sha256, hash)
+                    .replace(reviewedProviderMcpBinaries.opencode.sha256, hash),
                   loader: 'ts',
                 }));
               },
@@ -165,6 +164,46 @@ for (const provider of ['claude', 'opencode'] as const)
           }),
         );
         assert.equal(fixture.inspectManagedTerminalFiles([file, otherFile]).length, 2);
+        const sameProvider = readFileSync(otherFile, 'utf8');
+        const common = {
+          trust: config.trust,
+          executable: config.executable,
+          node: config.node,
+          project,
+          state: otherState,
+        };
+        const mixed =
+          provider === 'claude'
+            ? {
+                ...common,
+                version: 3,
+                provider: 'opencode',
+                executableVersion: reviewedProviderMcpBinaries.opencode.version,
+                authentication: {
+                  mode: 'reuse-existing',
+                  nativeIdentity: { HOME: home },
+                  sharedNativeConfiguration: true,
+                },
+                interactive: {
+                  sharedNativeSessions: true,
+                  nativeStartupAuthorized: true,
+                  nativeDatabaseMigrationsAcknowledged: true,
+                  nativeStartupActivityAcknowledged: true,
+                },
+              }
+            : {
+                ...common,
+                version: 2,
+                provider: 'claude',
+                executableVersion: reviewedProviderMcpBinaries.claude.version,
+                sessionId: randomUUID(),
+                authentication: { mode: 'reuse-existing', home, sharedNativeConfiguration: true },
+                interactive: { sharedNativeSessions: true },
+              };
+        writeFileSync(otherFile, JSON.stringify(mixed));
+        assert.throws(() => fixture.inspectManagedTerminalFiles([file, otherFile]), /one provider/);
+        writeFileSync(otherFile, sameProvider);
+
         const backend = fixture.managedTerminalBackend(file, join(root, 'host.cjs'));
         assert.equal(backend.validate(profile), true);
         assert.equal(backend.validate({ ...profile, argv: ['--resume'] }), false);

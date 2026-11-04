@@ -1,5 +1,15 @@
 # Native CLI pair creation and safe early-failure recovery
 
+## Bounded N-member update — 2026-11-03
+
+The fixed pair described below is now the default preset over a configured
+1–8-member same-provider/project selection. New manifests persist UUID metadata;
+full reviews page instead of truncating. Native tabs, isolated per-slot lifecycle
+and all-member signed retirement are generalized together. This supersedes only
+the fixed-count gaps in the historical table below; labels/models/roles, SQLite
+team membership, partial retry/reconfiguration, reconnect and real delegation
+remain incomplete. See [the exact workflow and limits](terminal-teams.md).
+
 ## Implemented first slice — 2026-11-03
 
 In a newly loaded Desktop build, choose **Managed Terminal → Create and review

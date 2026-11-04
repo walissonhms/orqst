@@ -1,7 +1,16 @@
 // Synthetic owned handles and disposable journals. No provider or real authentication.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -16,17 +25,17 @@ import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/deskt
 import { ManagedTerminalPair } from '../packages/core/src/terminal/managed-pair.js';
 import type { TerminalEvents } from '../packages/core/src/terminal/supervisor.js';
 
-function fixture() {
+function fixture(count = 2) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-pair-')));
   const keys = generateKeyPairSync('ed25519');
   const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]));
   const events: TerminalEvents[] = [];
-  const writes: string[][] = [[], []];
+  const writes: string[][] = Array.from({ length: count }, () => []);
   const stores: Store[] = [];
   const directory = join(root, 'admission');
   const pair = new ManagedTerminalPair(
     authority,
-    [0, 1].map((slot) => {
+    Array.from({ length: count }, (_, slot) => {
       const state = join(root, `slot-${slot}`);
       mkdirSync(state, { mode: 0o700 });
       const store = new Store(join(state, 'terminal.sqlite'));
@@ -62,6 +71,7 @@ function fixture() {
       };
     }),
     desktopAgentsAdmission(directory),
+    count,
   );
   const call = (slot: number, operation: string, args: unknown[]) =>
     pair.dispatch(slot, { id: randomUUID(), operation, args });
@@ -167,6 +177,65 @@ test('closed slot journals cannot retire the shared marker even when their old e
     f.pair.closeSlot(0);
     f.events[1]!.exit(0);
     assert.throws(() => f.pair.prepareRetire(), /owner/i);
+    assert.throws(() => desktopAgentsAdmission(f.directory), /reconciliation/);
+  } finally {
+    f.close();
+  }
+});
+
+for (const count of [3, 6, 8])
+  test(`${count} slots share one workspace with independent proof, exit and full retirement archive`, () => {
+    const f = fixture(count);
+    try {
+      const attempts = Array.from({ length: count }, (_, slot) => f.launch(slot));
+      assert.equal(new Set(attempts).size, count);
+      for (const [slot, id] of attempts.entries()) {
+        assert.equal((f.call(slot, 'snapshot', [id]) as { state: string }).state, 'running');
+        assert.throws(() => f.call((slot + 1) % count, 'snapshot', [id]), /Unknown terminal/);
+      }
+      for (let slot = 0; slot < count - 1; slot++) f.events[slot]!.exit(0);
+      assert.throws(() => f.pair.prepareRetire(), /owned exit/);
+      f.events[count - 1]!.exit(0);
+      const review = f.pair.prepareRetire();
+      assert.equal(review.evidence.attempts.length, count);
+      f.pair.retire(f.proof(review.challenge));
+      const archive = readdirSync(f.directory).find((name) => name.startsWith('retired-'))!;
+      const record = JSON.parse(readFileSync(join(f.directory, archive), 'utf8'));
+      assert.equal(record.evidence.attempts.length, count);
+      for (let slot = 0; slot < count; slot++) assert.throws(() => f.prepare(slot), /fenced/);
+      assert.doesNotThrow(() => desktopAgentsAdmission(f.directory));
+    } finally {
+      f.close();
+    }
+  });
+
+test('predictable shared reservation refusal leaves attempt prepared and proof unconsumed', () => {
+  const f = fixture(3);
+  try {
+    const attempt = f.prepare(2);
+    const proof = f.proof(attempt.challenge);
+    writeFileSync(join(f.directory, 'active-pair.json'), 'SYNTHETIC-UNKNOWN', { mode: 0o600 });
+    assert.throws(() => f.call(2, 'launch', [attempt.attemptId, proof]), /reserved/);
+    assert.equal(
+      (f.call(2, 'snapshot', [attempt.attemptId]) as { state: string }).state,
+      'prepared',
+    );
+    assert.equal(f.events.length, 0);
+    // Same refusal, rather than a consumed-proof error; no reconciliation of the unknown marker.
+    assert.throws(() => f.call(2, 'launch', [attempt.attemptId, proof]), /reserved/);
+    assert.equal(readFileSync(join(f.directory, 'active-pair.json'), 'utf8'), 'SYNTHETIC-UNKNOWN');
+  } finally {
+    f.close();
+  }
+});
+
+test('one uncertain slot in a six-member team keeps the entire reservation sticky', () => {
+  const f = fixture(6);
+  try {
+    Array.from({ length: 6 }, (_, slot) => f.launch(slot));
+    f.events[4]!.lost();
+    for (const events of f.events) events.exit(0);
+    assert.throws(() => f.pair.prepareRetire(), /owned exit/);
     assert.throws(() => desktopAgentsAdmission(f.directory), /reconciliation/);
   } finally {
     f.close();

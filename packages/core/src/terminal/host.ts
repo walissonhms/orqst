@@ -1,3 +1,5 @@
+import { terminalSlotLimit } from '@orqst/protocol';
+import { terminalIdentity } from './identity.js';
 // UI-independent owned Terminal component. The observer composition never imports this entry.
 import { createPublicKey, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -15,11 +17,14 @@ import { terminalFile } from './codex-profile.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 
 process.umask(0o077);
-if (!process.send || process.argv.length !== 5 || !/^v24\./.test(process.version))
+if (!process.send || ![5, 6].includes(process.argv.length) || !/^v24\./.test(process.version))
   throw new Error('Private Node Core only');
 async function start() {
   const files: string[] = JSON.parse(process.argv[2]!);
-  const selection = inspectManagedTerminalFiles(files);
+  const limit = terminalSlotLimit(
+    process.argv[5] === undefined ? undefined : Number(process.argv[5]),
+  );
+  const selection = inspectManagedTerminalFiles(files, limit);
   if (selection.some((slot) => slot.blocker)) throw new Error('Terminal profile blocked');
   const publicKey = createPublicKey({
     key: Buffer.from(process.argv[3]!, 'base64url'),
@@ -90,6 +95,7 @@ async function start() {
         };
       }),
       admission,
+      limit,
     );
     const send = (value: object) => {
       if (process.connected)
@@ -154,7 +160,7 @@ async function start() {
       epoch: authority.epoch,
       identities: selection.map(({ config }, slot) => ({
         slot,
-        terminalId: randomUUID(),
+        ...terminalIdentity(config),
         provider: interactiveProvider(config),
       })),
     });

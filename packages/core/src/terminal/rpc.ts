@@ -1,3 +1,4 @@
+import { TERMINAL_SLOT_CEILING } from '@orqst/protocol';
 import { z } from 'zod';
 
 const id = z.string().uuid();
@@ -54,10 +55,22 @@ export const terminalRPCReplySchema = z.union([
 export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('terminal'),
-    slot: z.number().int().min(0).max(1),
+    slot: z
+      .number()
+      .int()
+      .min(0)
+      .max(TERMINAL_SLOT_CEILING - 1),
     request: terminalRPCSchema,
   }),
-  z.strictObject({ kind: z.literal('closeSlot'), id, slot: z.number().int().min(0).max(1) }),
+  z.strictObject({
+    kind: z.literal('closeSlot'),
+    id,
+    slot: z
+      .number()
+      .int()
+      .min(0)
+      .max(TERMINAL_SLOT_CEILING - 1),
+  }),
   z.strictObject({ kind: z.literal('prepareRetire'), id }),
   z.strictObject({ kind: z.literal('retire'), id, proof }),
   z.strictObject({ kind: z.literal('prepareMcp'), id }),
@@ -70,11 +83,16 @@ export const terminalPairReadySchema = z.strictObject({
   identities: z
     .array(
       z.strictObject({
-        slot: z.number().int().min(0).max(1),
+        slot: z
+          .number()
+          .int()
+          .min(0)
+          .max(TERMINAL_SLOT_CEILING - 1),
         terminalId: id,
+        alias: z.string().min(1).max(128).optional(),
         provider: z.enum(['codex', 'claude', 'opencode']),
       }),
     )
     .min(1)
-    .max(2),
+    .max(TERMINAL_SLOT_CEILING),
 });

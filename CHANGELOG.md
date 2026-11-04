@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-03 — Bounded same-workspace terminal teams
+
+- Generalize interactive selection, private RPC, supervisors/journals and native
+  tabs to 1–8 members with default two and a validated Desktop/Core maximum.
+- Persist terminal UUID metadata in new manifests; reject duplicate identities,
+  overlapping state and different projects/providers; page full native reviews.
+- Check predictable ownership/durable admission before consuming start proofs;
+  retain one sticky team reservation until every dispatched slot proves exit and
+  signed retirement archives/fences all members. Unknown ownership blocks release.
+- Keep A/B and exactly-two-member MCP; no real provider, credentials, model controls,
+  mixed-provider parity, per-slot recycling or global machine quota is introduced.
+
 ## 2026-11-03 — Fresh pairs after proved retirement and explicit OpenCode review
 
 - Unlock fresh native creation/selection only after signed retirement, proved owned

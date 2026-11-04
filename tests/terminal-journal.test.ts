@@ -516,3 +516,22 @@ test('v1 upgrade preserves historical metadata and owner fencing while v2 retain
       raw.close();
     }
   }));
+
+test('durable admission preflight rejects before proof consumption or starting effects', () =>
+  fixture((_file, store) => {
+    const f = supervisor(store);
+    const occupied = record();
+    f.journal.prepare(occupied);
+    f.journal.transition(occupied.instanceId, 'starting');
+    const attempt = f.prepare();
+    const proof = f.proof(attempt.challenge);
+    assert.throws(() => f.instance.launch(attempt.attemptId, proof), /durable admission/);
+    assert.equal(f.journal.read(attempt.attemptId)?.state, 'prepared');
+    assert.equal(f.starts(), 0);
+    f.journal.transition(occupied.instanceId, 'exited', { exitCode: 0 });
+    // Same proof remains valid: the refusal had no dispatch or authority consumption.
+    assert.doesNotThrow(() => f.instance.launch(attempt.attemptId, proof));
+    assert.equal(f.starts(), 1);
+    f.events().exit(0);
+    f.instance.shutdown();
+  }));

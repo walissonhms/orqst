@@ -34,14 +34,15 @@ export async function createManagedTerminals(
   files: string[],
   translate: (key: string) => string,
   window: BrowserWindow,
+  limit?: number,
 ) {
   if (process.platform !== 'darwin' || process.arch !== 'arm64' || process.getuid?.() === 0)
     throw new Error('Managed Terminal currently requires non-root macOS arm64');
-  const selection = inspectManagedTerminalFiles(files);
+  const selection = inspectManagedTerminalFiles(files, limit);
   const keys = generateKeyPairSync('ed25519');
   const partitionId = randomUUID();
   const terminalSessions: Electron.Session[] = [];
-  const router = createTerminalRuntimeRouter(ipcMain);
+  const router = createTerminalRuntimeRouter(ipcMain, files.length);
   let core: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
   let blocker: string | undefined = selection.find((slot) => slot.blocker)?.blocker;
   let quitting = false;
@@ -76,6 +77,7 @@ export async function createManagedTerminals(
           join(__dirname, 'managed-terminal-core.cjs'),
           keys.publicKey,
           directory,
+          limit,
         );
     }
     for (const [slot, file] of files.entries()) {
@@ -323,6 +325,9 @@ export async function createManagedTerminals(
                   : 'scope',
           blocker,
           terminalId: core?.identities[slot]?.terminalId,
+          aliases: selection.map(({ config }) =>
+            config.identity ? `P-${config.identity.terminalId}` : undefined,
+          ),
           translate,
         });
         contentType = 'text/html; charset=utf-8';

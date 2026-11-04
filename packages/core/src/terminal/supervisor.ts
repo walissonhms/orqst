@@ -1,14 +1,14 @@
 // Owned Terminal library; the observer runtime never constructs this component.
 import { randomUUID } from 'node:crypto';
-import type { TerminalJournal, TerminalState } from '@orqst/protocol';
+import { terminalAdmissionLimits, type TerminalJournal, type TerminalState } from '@orqst/protocol';
 export type { TerminalState } from '@orqst/protocol';
 import { TerminalAuthority, terminalDigest, type TerminalBinding } from './authority.js';
 import { TerminalOutput } from './output.js';
 
 export const terminalPolicy = Object.freeze({
   version: 1,
-  activeInstances: 2,
-  activeInstancesPerProject: 1,
+  activeInstances: terminalAdmissionLimits.activeInstances,
+  activeInstancesPerProject: terminalAdmissionLimits.perProject,
   startupMs: 10_000,
   inputLeaseMs: 120_000,
   inputWriteBytes: 4096,
@@ -48,6 +48,8 @@ export interface OwnedTerminalHandle {
   dispose(): void;
 }
 export interface TerminalBackend {
+  /** Predictable ownership/admission refusal before consuming a start proof. */
+  preflight?(): void;
   /** Revalidate the frozen profile before grant consumption; never launch or modify a process. */
   validate(profile: Readonly<TerminalProfile>): boolean;
   /** Must report started from backend evidence, never from arbitrary provider prose. */
@@ -174,9 +176,12 @@ export class TerminalSupervisor {
     );
     if (
       active.length >= terminalPolicy.activeInstances ||
-      active.some((value) => value.profile.projectId === attempt.profile.projectId)
+      active.filter((value) => value.profile.projectId === attempt.profile.projectId).length >=
+        terminalPolicy.activeInstancesPerProject
     )
       throw new Error('Terminal admission limit exceeded');
+    this.backend.preflight?.();
+    this.journal?.preflightStart(id);
     const valid = this.validProfile(attempt.profile);
     this.authority.consume(proof, { operation: 'start', target: id, digest: attempt.digest });
     if (!valid) {

@@ -1,3 +1,4 @@
+import { terminalIdentitySchema } from '@orqst/protocol';
 // Explicit native Desktop profiles only. External observation never imports this entry.
 import { join, relative } from 'node:path';
 import { z } from 'zod';
@@ -44,6 +45,7 @@ export const managedClaudeConfigSchema = z.strictObject({
   executableVersion: z.literal(reviewedProviderMcpBinaries.claude.version),
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
+  identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
   sessionId: z.uuid(),

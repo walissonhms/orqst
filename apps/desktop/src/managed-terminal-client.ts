@@ -342,8 +342,6 @@ const pane = (
 const layoutActions = [
   ['dashboard', 'dashboard'],
   ['hide-pane', 'hide'],
-  ['tab-a', 'tab-a'],
-  ['tab-b', 'tab-b'],
   ['split-columns', 'split-columns'],
   ['split-rows', 'split-rows'],
   ['maximize', 'maximize'],
@@ -361,16 +359,16 @@ const changeLayout = (action: TerminalViewAction) => {
 };
 for (const [id, action] of layoutActions)
   document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
+for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]'))
+  tab.addEventListener('click', () => changeLayout({ tab: Number(tab.dataset.tab) }));
 const splitSize = document.getElementById('split-size') as HTMLInputElement;
 splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
 const unsubscribeLayout = pane.onLayout((state) => {
-  for (const [slot, id] of ['tab-a', 'tab-b'].entries())
-    document
-      .getElementById(id)
-      ?.setAttribute(
-        'aria-pressed',
-        String(state.visible.length === 1 && state.visible[0] === slot),
-      );
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]'))
+    tab.setAttribute(
+      'aria-pressed',
+      String(state.visible.length === 1 && state.visible[0] === Number(tab.dataset.tab)),
+    );
   splitSize.value = String(state.percent);
   splitSize.disabled = state.visible.length !== 2;
   document.getElementById('split-value')!.textContent = `${state.percent}%`;
@@ -380,6 +378,6 @@ const unsubscribeLayout = pane.onLayout((state) => {
       .setAttribute('aria-pressed', String(state.visible.length === 2 && state.axis === axis));
   (document.getElementById('maximize') as HTMLButtonElement).disabled = state.visible.length === 1;
   (document.getElementById('restore') as HTMLButtonElement).disabled =
-    state.count !== 2 || state.visible.length === 2;
+    state.count < 2 || state.visible.length === 2;
 });
 window.addEventListener('pagehide', unsubscribeLayout, { once: true });

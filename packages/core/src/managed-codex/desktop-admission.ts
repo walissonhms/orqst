@@ -47,6 +47,17 @@ export function desktopAgentsAdmission(directory: string, manifests: readonly st
   };
   return {
     assertOwner,
+    preflight() {
+      terminalDirectory(directory, true);
+      if (claimed) return assertOwner();
+      if (retired) throw new Error('Desktop admission retired');
+      try {
+        lstatSync(file);
+        throw new Error('Desktop capacity already reserved');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
+    },
     claim() {
       if (retired) throw new Error('Desktop admission retired');
       if (claimed) return assertOwner();

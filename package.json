@@ -43,6 +43,7 @@
     "accept:terminal-gestures": "tsx scripts/accept-terminal-gestures.ts",
     "accept:terminal-creation": "tsx scripts/accept-terminal-creation.ts",
     "accept:terminal-selection": "tsx scripts/accept-terminal-selection.ts",
+    "accept:terminal-team": "tsx scripts/accept-terminal-team.ts",
     "accept:terminal-reuse": "tsx scripts/accept-terminal-reuse.ts"
   },
   "devDependencies": {

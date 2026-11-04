@@ -6,7 +6,11 @@ import type {
   WebContents,
   WebFrameMain,
 } from 'electron';
-import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
+import {
+  terminalNativeReplySchema,
+  terminalNativeRequestSchema,
+  terminalSlotLimit,
+} from '@orqst/protocol';
 import type { TerminalNativeReply } from '../../../packages/core/src/terminal/native-broker.js';
 import { authorizedTerminalSender, type TerminalDocumentBinding } from './terminal-sender.js';
 import { bindTerminalNativeLifecycle } from './terminal-lifecycle.js';
@@ -29,7 +33,11 @@ type CreateBroker = (
 ) => Broker;
 
 /** One IPC handler; routing authority is the native frame, never a renderer-supplied slot. */
-export function createTerminalRuntimeRouter(ipc: Pick<IpcMain, 'handle' | 'removeHandler'>) {
+export function createTerminalRuntimeRouter(
+  ipc: Pick<IpcMain, 'handle' | 'removeHandler'>,
+  limit?: number,
+) {
+  const capacity = terminalSlotLimit(limit);
   const documents = new Map<WebFrameMain, Dispatch>();
   const bindings = new Set<() => void>();
   let closed = false;
@@ -40,7 +48,8 @@ export function createTerminalRuntimeRouter(ipc: Pick<IpcMain, 'handle' | 'remov
   );
   return {
     bind(window: BrowserWindow, session: Session, create: CreateBroker, surface?: TerminalSurface) {
-      if (closed || bindings.size >= 2) throw new Error('Terminal document capacity exceeded');
+      if (closed || bindings.size >= capacity)
+        throw new Error('Terminal document capacity exceeded');
       const dispose = bindRuntime(
         window,
         session,

@@ -1,3 +1,4 @@
+import { terminalIdentitySchema } from '@orqst/protocol';
 import {
   constants,
   closeSync,
@@ -25,6 +26,7 @@ export const managedCodexConfigSchema = z.strictObject({
   executableVersion: z.string().min(1).max(64),
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
+  identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
   interactive: z

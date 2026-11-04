@@ -45,6 +45,11 @@ class Window extends EventEmitter {
   isDestroyed() {
     return this.destroyed;
   }
+  isMinimized() {
+    return false;
+  }
+  show() {}
+  focus() {}
   isVisible() {
     return !this.destroyed;
   }
@@ -148,4 +153,39 @@ test('window closed teardown and later beforeQuit remain idempotent', () => {
   assert.equal(revokes, 1);
   assert.equal(pane.owned.closes, 1);
   assert.equal(f.window.listenerCount('resize'), 0);
+});
+
+test('eight native documents navigate without overlapping more than two or destroying hidden slots', () => {
+  const f = setup();
+  const panes = Array.from({ length: 8 }, () => new Pane());
+  let revoked = 0;
+  for (const pane of panes)
+    f.panels.add(pane as unknown as WebContentsView, () => {
+      revoked++;
+    });
+  try {
+    f.panels.open(0);
+    assert.equal(f.panels.act(0, { tab: 7 }), true);
+    assert.equal(f.panels.visible(7), true);
+    assert.equal(f.panels.visible(0), false);
+    assert.equal(f.panels.act(7, 'split-columns'), true);
+    assert.deepEqual(
+      panes.map((_, slot) => f.panels.visible(slot)),
+      [true, false, false, false, false, false, false, true],
+    );
+    f.panels.open(3);
+    assert.deepEqual(
+      panes.map((_, slot) => f.panels.visible(slot)),
+      [false, false, false, true, false, false, false, false],
+    );
+    assert.equal(f.panels.act(3, { tab: 8 }), false);
+    assert.equal(f.panels.act(3, 'focus-other'), true);
+    assert.equal(f.panels.visible(4), true);
+    assert.equal(f.panels.act(4, 'hide'), true);
+    assert.ok(revoked >= 32);
+    assert.ok(panes.every((pane) => !pane.owned.destroyed));
+  } finally {
+    f.panels.close();
+  }
+  assert.ok(panes.every((pane) => pane.owned.closes === 1));
 });

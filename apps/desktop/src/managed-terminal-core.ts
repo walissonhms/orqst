@@ -1,3 +1,5 @@
+import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
+import { terminalSlotLimit } from '@orqst/protocol';
 import { fork } from 'node:child_process';
 import { randomUUID, type KeyObject } from 'node:crypto';
 import type { TerminalNativeSupervisor } from '../../../packages/core/src/terminal/native-broker.js';
@@ -19,6 +21,7 @@ export async function connectManagedTerminalCore(
   host: string,
   publicKey: KeyObject,
   admissionDirectory: string,
+  limit?: number,
 ) {
   const config = readInteractiveTerminalConfig(files[0]!);
   const child = fork(
@@ -27,6 +30,7 @@ export async function connectManagedTerminalCore(
       JSON.stringify(files),
       publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
       admissionDirectory,
+      String(terminalSlotLimit(limit)),
     ],
     {
       execPath: config.node.path,
@@ -49,6 +53,7 @@ export async function connectManagedTerminalCore(
   let identities: Array<{
     slot: number;
     terminalId: string;
+    alias?: string;
     provider: 'codex' | 'claude' | 'opencode';
   }> = [];
   let ready: () => void;
@@ -88,7 +93,14 @@ export async function connectManagedTerminalCore(
     if (!initialized && started.success) {
       if (
         started.data.identities.length !== files.length ||
-        started.data.identities.some((identity, slot) => identity.slot !== slot)
+        started.data.identities.some((identity, slot) => {
+          const expected = terminalIdentity(readInteractiveTerminalConfig(files[slot]!));
+          return (
+            identity.slot !== slot ||
+            identity.terminalId !== expected.terminalId ||
+            identity.alias !== expected.alias
+          );
+        })
       )
         return close();
       identities = started.data.identities;

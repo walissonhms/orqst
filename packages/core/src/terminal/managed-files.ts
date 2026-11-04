@@ -1,15 +1,23 @@
+import { terminalSlotLimit } from '@orqst/protocol';
+import { terminalIdentity } from './identity.js';
 import { lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { readInteractiveTerminalConfig } from './interactive-profile.js';
+import { readInteractiveTerminalConfig, interactiveProvider } from './interactive-profile.js';
 
 /** Inspect the complete selection before creating a Core, journal or admission marker. */
-export function inspectManagedTerminalFiles(files: readonly string[]) {
-  if (files.length < 1 || files.length > 2) throw new Error('Select one or two terminal manifests');
+export function inspectManagedTerminalFiles(files: readonly string[], limit?: number) {
+  const capacity = terminalSlotLimit(limit);
+  if (files.length < 1 || files.length > capacity)
+    throw new Error('Terminal selection exceeds capacity');
+  const terminalIds = new Set<string>();
   const identities = new Set<string>();
   const states: string[] = [];
   const sessions = new Set<string>();
   const selection = files.map((file) => {
     const config = readInteractiveTerminalConfig(file);
+    const { terminalId } = terminalIdentity(config);
+    if (terminalIds.has(terminalId)) throw new Error('Duplicate terminal identity');
+    terminalIds.add(terminalId);
     if (config.version === 2) {
       if (sessions.has(config.sessionId)) throw new Error('Duplicate Claude session UUID');
       sessions.add(config.sessionId);
@@ -39,6 +47,14 @@ export function inspectManagedTerminalFiles(files: readonly string[]) {
     }
     return { config, blocker };
   });
+  if (
+    selection.some(
+      ({ config }) => interactiveProvider(config) !== interactiveProvider(selection[0]!.config),
+    )
+  )
+    throw new Error('Terminal team requires one provider');
+  if (selection.some(({ config }) => config.project !== selection[0]!.config.project))
+    throw new Error('Terminal team requires one workspace');
   if (
     selection.some(({ config }) => config.interactive?.mcp) &&
     (selection.length !== 2 ||

@@ -1,3 +1,4 @@
+import { terminalSlotLimit } from '@orqst/protocol';
 // Native-menu provisioning only. No process, credential, native config or session reads.
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
@@ -36,6 +37,8 @@ export const reviewedDesktopCodexBinary = Object.freeze({
 });
 
 export interface TerminalCreationInput {
+  count?: number;
+  limit?: number;
   provider: LocalCliProvider;
   executable: string;
   node: string;
@@ -53,6 +56,10 @@ function overlaps(a: string, b: string): boolean {
 
 /** Complete pre-write plan. Version labels are reviewed contracts, never --version evidence. */
 export function prepareTerminalCreation(input: TerminalCreationInput) {
+  const count = input.count ?? 2;
+  if (!Number.isInteger(count) || count < 1 || count > terminalSlotLimit(input.limit))
+    throw new Error('Terminal count exceeds configured capacity');
+  if (input.mcp && count !== 2) throw new Error('MCP requires exactly two terminals');
   if (input.openCodeStartupAuthorized && input.provider !== 'opencode')
     throw new Error('OpenCode startup consent is provider-specific');
   terminalDirectory(input.project);
@@ -79,8 +86,11 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   };
   const toolIdentities = JSON.stringify(toolDirectoryIdentities());
-  const configs: InteractiveTerminalConfig[] = ['A', 'B'].map((slot) => {
+  const configs: InteractiveTerminalConfig[] = Array.from({ length: count }, (_, index) =>
+    String.fromCharCode(65 + index),
+  ).map((slot) => {
     const common = {
+      identity: { terminalId: randomUUID() },
       trust: 'native-same-user',
       executable,
       node,
@@ -194,10 +204,21 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   });
   // Full compact JSON avoids repeating directory inode metadata in the consent dialog.
   const detail = review.replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
-  if (detail.length > 4096) throw new Error('Creation review exceeds native display limit');
+  const pages =
+    detail.length <= 4096
+      ? [detail]
+      : configs.map((config) =>
+          JSON.stringify({ toolPath, terminals: [config] }).replace(
+            /\p{Cf}/gu,
+            (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
+          ),
+        );
+  if (pages.some((page) => page.length > 4096))
+    throw new Error('Creation review exceeds native display limit');
   let attempted = false;
   return {
     detail,
+    pages,
     root,
     provision(current: () => boolean): string[] {
       if (attempted || !current()) throw new Error('Creation unavailable');
@@ -213,8 +234,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       attempted = true; // Partial provisioning is retained; never delete/retry uncertain writes.
       const staging = root + '.pending';
       mkdirSync(staging, { mode: 0o700 });
-      const files = configs.map((config) => {
-        const state = join(staging, config.state.endsWith('/A') ? 'A' : 'B');
+      const files = configs.map((config, slot) => {
+        const state = join(staging, String.fromCharCode(65 + slot));
         mkdirSync(state, { mode: 0o700 });
         for (const name of config.version === 1 ? ['home', 'codex', 'tmp'] : ['tmp'])
           mkdirSync(join(state, name), { mode: 0o700 });

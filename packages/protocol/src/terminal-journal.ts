@@ -50,6 +50,7 @@ export interface TerminalJournal {
   prepare(
     record: Pick<TerminalAttempt, 'instanceId' | 'clientId' | 'projectId' | 'manifestDigest'>,
   ): void;
+  preflightStart(instanceId: string): void;
   transition(instanceId: string, state: TerminalState, exit?: TerminalAttempt['exit']): void;
   read(instanceId: string): TerminalAttempt | undefined;
   release(): void;

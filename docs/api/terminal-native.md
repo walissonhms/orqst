@@ -1,5 +1,28 @@
 # Native terminal client boundary
 
+## Bounded team private transport — 2026-11-03
+
+The interactive Desktop composition now supports 1–8 same-project/provider slots
+(default maximum two). This supersedes fixed-pair wording in the historical notes
+below. The native version-1 process request/reply schema is unchanged. Private
+Electron-to-Node RPC slot indices and ready identity arrays are bounded by the
+shared eight-slot transport ceiling; the configured selection maximum is enforced
+before Core creation and again in Core. Unknown/noninteger/out-of-range slots fail
+closed. Renderer process calls still never choose their slot.
+
+New manifests optionally carry `identity:{terminalId:UUID}`. Ready replies expose
+the persisted terminalId and `alias:P-<UUID>`, checked against the reviewed manifest;
+legacy state paths have a deterministic metadata UUID fallback. Metadata IDs do not
+authorize control or address the separate communication registry. Exact slot attempt
+UUIDs, epochs, frame/session checks, grants and ownership remain independent.
+
+Layout IPC additionally accepts only a strict `{tab:integer}` within the shared
+ceiling, and native main checks it against actual available views. Legacy A/B action
+strings remain valid. Only two views are split at once. Retirement still signs and
+archives every attempted slot, fences all supervisors and refuses any uncertain
+member. MCP remains the two-member contract. See
+[terminal team operation](../development/terminal-teams.md) and ADR-036.
+
 Current opt-in composition: the [embedded managed Codex Terminal](../development/managed-codex-terminal.md)
 uses this unchanged strict wire contract in a separate Desktop document/preload.
 Main keeps signing keys/leases private and calls a Node-owned supervisor through

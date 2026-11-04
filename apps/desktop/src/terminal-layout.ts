@@ -1,3 +1,4 @@
+import { TERMINAL_SLOT_CEILING } from '@orqst/protocol';
 /** Layout-only messages carry no process identity, command or authorization proof. */
 export const terminalViewActions = [
   'dashboard',
@@ -10,7 +11,8 @@ export const terminalViewActions = [
   'restore',
   'focus-other',
 ] as const;
-export type TerminalViewAction = (typeof terminalViewActions)[number] | { percent: number };
+export type TerminalViewAction =
+  (typeof terminalViewActions)[number] | { percent: number } | { tab: number };
 export interface TerminalLayoutState {
   axis: 'columns' | 'rows';
   percent: number;
@@ -21,6 +23,14 @@ export function parseTerminalViewAction(value: unknown): TerminalViewAction | un
   if (typeof value === 'string') return terminalViewActions.find((action) => action === value);
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).length === 1 &&
+    typeof record.tab === 'number' &&
+    Number.isInteger(record.tab) &&
+    record.tab >= 0 &&
+    record.tab < TERMINAL_SLOT_CEILING
+  )
+    return { tab: record.tab };
   if (
     Object.keys(record).length === 1 &&
     typeof record.percent === 'number' &&

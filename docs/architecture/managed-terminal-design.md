@@ -1,5 +1,15 @@
 # Managed terminal: proposed execution boundary
 
+## Bounded team composition update — 2026-11-03
+
+ADR-036 now permits N same-project interactive slots within a configured 1–8
+selection maximum (default two), with isolated state/ownership/journals. Admission
+is per supervisor/journal domain, not a machine-wide quota. The old one-project
+wording below is historical and superseded only for that composition. Native
+brokers, grants and PTY hosts are reused; every slot requires its own signed start
+and owned exit, and one uncertain slot blocks whole-team release. See
+[the complete contract](../development/terminal-teams.md).
+
 Current update: the owner-authorized [embedded native Terminal](../development/managed-codex-terminal.md)
 selects a trusted/same-user contract and composes the library behind a private Node
 Core. It supersedes the blanket immutable-binding/container gate in this historical

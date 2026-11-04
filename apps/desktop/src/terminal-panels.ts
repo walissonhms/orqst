@@ -49,6 +49,10 @@ export class TerminalPanels {
   open(slot: number): void {
     const pane = this.panes[slot];
     if (this.closed || !pane || pane.contents.isDestroyed()) return;
+    if (!this.shown.has(slot) && this.shown.size >= 2) {
+      this.revokeAll();
+      this.shown.clear();
+    }
     this.shown.add(slot);
     if (this.window.isMinimized()) this.window.restore();
     this.window.show();
@@ -61,11 +65,15 @@ export class TerminalPanels {
   act(slot: number, raw: unknown): boolean {
     const action = parseTerminalViewAction(raw);
     if (!action || this.closed || !this.shown.has(slot)) return false;
-    const paired = this.panes.length === 2;
+    const paired = this.panes.length >= 2;
     if (action === 'dashboard') this.showDashboard();
     else if (action === 'hide') this.hide(slot);
-    else if (action === 'tab-a' || action === 'tab-b') {
-      const target = action === 'tab-a' ? 0 : 1;
+    else if (
+      action === 'tab-a' ||
+      action === 'tab-b' ||
+      (typeof action === 'object' && 'tab' in action)
+    ) {
+      const target = typeof action === 'object' ? action.tab : action === 'tab-a' ? 0 : 1;
       if (!this.panes[target]) return false;
       this.revokeAll();
       this.shown.clear();
@@ -78,15 +86,17 @@ export class TerminalPanels {
       if (!paired) return false;
       if (action === 'focus-other') {
         this.revokeAll();
-        this.open(slot === 0 ? 1 : 0);
+        if (this.panes.length > 2) this.shown.clear();
+        this.open((slot + 1) % this.panes.length);
       } else {
         this.revokeAll();
-        if (typeof action === 'object') this.percent = action.percent;
+        if (typeof action === 'object' && 'percent' in action) this.percent = action.percent;
         else {
           if (action === 'split-columns') this.axis = 'columns';
           if (action === 'split-rows') this.axis = 'rows';
-          this.shown.add(0);
-          this.shown.add(1);
+          this.shown.clear();
+          this.shown.add(slot);
+          this.shown.add((slot + 1) % this.panes.length);
         }
         this.layout();
       }
@@ -120,7 +130,7 @@ export class TerminalPanels {
     this.root.setBounds({ x: 0, y: 0, width, height });
     this.dashboard.setBounds({ x: 0, y: 0, width, height });
     this.dashboard.setVisible(this.shown.size === 0);
-    const visible = [...this.shown].sort();
+    const visible = [...this.shown].sort((a, b) => a - b);
     const state: TerminalLayoutState = {
       axis: this.axis,
       percent: this.percent,

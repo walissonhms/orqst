@@ -1,9 +1,10 @@
-import type { TerminalJournal } from '@orqst/protocol';
+import { terminalSlotLimit, type TerminalJournal } from '@orqst/protocol';
 import { TerminalAuthority, terminalDigest } from './authority.js';
 import { terminalRPCSchema } from './rpc.js';
 import { TerminalSupervisor, type TerminalBackend, type TerminalProfile } from './supervisor.js';
 
 export interface TerminalPairAdmission {
+  preflight?(): void;
   claim(): void;
   assertOwner(): void;
   prepareRelease(evidence: unknown): () => void;
@@ -13,7 +14,7 @@ interface PairEvidence {
   attempts: Array<ReturnType<TerminalSupervisor['snapshot']> & { slot: number }>;
 }
 
-/** One Node owner, at most two independent slots. No provider semantics are inferred from PTY text. */
+/** One Node owner, a bounded team of independent slots. No provider semantics are inferred from PTY text. */
 export class ManagedTerminalPair {
   private slots: TerminalSupervisor[];
   private journals: TerminalJournal[];
@@ -33,8 +34,10 @@ export class ManagedTerminalPair {
       journal: TerminalJournal;
     }>,
     private admission: TerminalPairAdmission,
+    limit?: number,
   ) {
-    if (slots.length < 1 || slots.length > 2) throw new Error('One or two slots required');
+    if (slots.length < 1 || slots.length > terminalSlotLimit(limit))
+      throw new Error('Terminal slots exceed configured capacity');
     this.attempts = slots.map(() => new Set());
     this.journals = slots.map((slot) => slot.journal);
     this.slots = slots.map(
@@ -43,6 +46,12 @@ export class ManagedTerminalPair {
           authority,
           {
             validate: (profile) => backend.validate(profile),
+            preflight: () => {
+              this.active();
+              backend.preflight?.();
+              admission.preflight?.();
+              if (this.reserved) admission.assertOwner();
+            },
             start: (profile, events, identity) => {
               this.active();
               // Supervisor consumed the native proof and durably recorded starting before this call.

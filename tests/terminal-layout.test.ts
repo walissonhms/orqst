@@ -67,3 +67,16 @@ test('a single visible tab always fills the parent regardless of split preferenc
         height: 901,
       });
 });
+
+test('N tab actions are bounded data and cannot carry process operations or extra fields', () => {
+  for (const tab of [0, 2, 7]) assert.deepEqual(parseTerminalViewAction({ tab }), { tab });
+  for (const raw of [
+    { tab: 8 },
+    { tab: -1 },
+    { tab: 0.5 },
+    { tab: '2' },
+    { tab: 2, command: 'start' },
+    { tab: 2, percent: 50 },
+  ])
+    assert.equal(parseTerminalViewAction(raw), undefined);
+});

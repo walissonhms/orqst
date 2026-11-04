@@ -262,3 +262,73 @@ test('invalidation after skeleton creation retains inert staging without publish
     f.close();
   }
 });
+
+for (const count of [1, 3, 6, 8])
+  test(`native preparation persists ${count} identities and isolated states with complete review`, async () => {
+    const f = fixture();
+    try {
+      const input = { ...f.input, count, limit: 8, mcp: false };
+      const plan = prepareTerminalCreation(input);
+      assert.ok(plan.pages.every((page) => page.length <= 4096));
+      const reviewed = plan.pages.flatMap((page) => JSON.parse(page).terminals);
+      assert.equal(reviewed.length, count);
+      const files = plan.provision(() => true);
+      const selection = inspectManagedTerminalFiles(files, 8);
+      assert.equal(selection.length, count);
+      const identities = selection.map(({ config }) => config.identity!.terminalId);
+      assert.equal(new Set(identities).size, count);
+      assert.equal(new Set(selection.map(({ config }) => config.state)).size, count);
+      assert.deepEqual(
+        selection.map(({ config }) => config.identity!.terminalId),
+        reviewed.map((config) => config.identity.terminalId),
+      );
+      const native = new TerminalSelection(Date.now, 8);
+      let pages = 0;
+      assert.equal(
+        await native.review({
+          current: () => true,
+          choose: async () => files,
+          confirm: async (page) => {
+            pages++;
+            assert.ok(page.length <= 4096);
+            return true;
+          },
+        }),
+        'reviewed',
+      );
+      assert.ok(pages >= 1);
+      assert.deepEqual(native.take(), files);
+      if (count > 2) assert.throws(() => inspectManagedTerminalFiles(files), /capacity/);
+      assert.deepEqual(
+        selection.map(({ config }) => config.identity!.terminalId),
+        identities,
+      );
+    } finally {
+      f.close();
+    }
+  });
+
+test('count/limit errors, N-member MCP and duplicate identities fail before Core or provisioning', () => {
+  const f = fixture();
+  try {
+    const before = readdirSync(f.input.parent);
+    for (const count of [0, -1, 2.5, 9, NaN])
+      assert.throws(() => prepareTerminalCreation({ ...f.input, count, limit: 8, mcp: false }));
+    assert.throws(
+      () => prepareTerminalCreation({ ...f.input, count: 3, limit: 2, mcp: false }),
+      /capacity/,
+    );
+    assert.throws(() => prepareTerminalCreation({ ...f.input, count: 3, limit: 8 }), /MCP/);
+    assert.deepEqual(readdirSync(f.input.parent), before);
+    const files = prepareTerminalCreation({ ...f.input, count: 3, limit: 8, mcp: false }).provision(
+      () => true,
+    );
+    const first = JSON.parse(readFileSync(files[0]!, 'utf8'));
+    const other = JSON.parse(readFileSync(files[2]!, 'utf8'));
+    other.identity = first.identity;
+    writeFileSync(files[2]!, JSON.stringify(other));
+    assert.throws(() => inspectManagedTerminalFiles(files, 8), /Duplicate terminal identity/);
+  } finally {
+    f.close();
+  }
+});

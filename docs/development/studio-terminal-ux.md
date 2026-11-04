@@ -1,5 +1,14 @@
 # Studio terminal workflow
 
+## N-member navigation update — 2026-11-03
+
+The preceding A/B workflow is preserved as a preset. A configured maximum of 1–8
+now exposes all selected same-project/provider members as tabs in this window,
+with at most two documents in a split. New manifests carry persisted UUID metadata
+and P-UUID aliases; legacy T-number labels remain local. No dynamic live membership,
+model/provider parity or process recovery is implied. See
+[terminal teams](terminal-teams.md) for configuration and acceptance scope.
+
 The opt-in Desktop interactive terminals use the same main window as the observer
 dashboard. Each A/B document retains its isolated preload, native sender checks,
 Core ownership, xterm output and signed process/input confirmations. This UI increment

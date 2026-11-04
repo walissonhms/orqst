@@ -1,5 +1,16 @@
 # ORQST roadmap
 
+## Bounded terminal teams — 2026-11-03
+
+The interactive fixed pair is now a default two-member preset over 1–8 slots in
+the same project/provider, with a validated configurable selection maximum,
+persisted manifest UUID metadata, native tabs and isolated journals/ownership.
+The historical sections below describe preceding increments. This supersedes their
+arbitrary-pane-count blocker only within the bounded interactive contract. MCP
+remains two-member; mixed providers, models/roles/names, live add/remove, per-slot
+retry, team tables and native-provider/delegation acceptance remain incomplete.
+See [terminal teams](docs/development/terminal-teams.md) and ADR-036.
+
 ## CLI team creation and recovery — 2026-11-03
 
 The native creation wizard removes manual manifests for the initial same-provider

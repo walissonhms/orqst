@@ -1,3 +1,4 @@
+import { terminalSlotLimit } from '@orqst/protocol';
 import { lstatSync } from 'node:fs';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.js';
@@ -8,10 +9,10 @@ import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal
 export class TerminalPreCoreFailure extends Error {}
 
 /** Native-selected files only. Inspection never opens a journal, native DB or provider. */
-export function inspectTerminalSelection(files: readonly string[]) {
-  if (files.length < 1 || files.length > 2) throw new Error('Select one or two manifests');
+export function inspectTerminalSelection(files: readonly string[], limit?: number) {
+  terminalSlotLimit(limit);
   const sources = files.map((file) => terminalDigest(terminalFile(file, true)));
-  const selection = inspectManagedTerminalFiles(files);
+  const selection = inspectManagedTerminalFiles(files, limit);
   if (new Set(selection.map(({ config }) => interactiveProvider(config))).size !== 1)
     throw new Error(
       'Live selection requires one provider; cross-provider composition is not enabled',
@@ -25,7 +26,7 @@ export function inspectTerminalSelection(files: readonly string[]) {
     if (sources[slot] !== terminalDigest(terminalFile(file, true)))
       throw new Error('Manifest changed during inspection');
     return {
-      slot: slot === 0 ? 'A' : 'B',
+      slot: String.fromCharCode(65 + slot),
       file,
       sha256: sources[slot],
       manifestIdentity: identities(file),
@@ -41,8 +42,18 @@ export function inspectTerminalSelection(files: readonly string[]) {
     /\p{Cf}/gu,
     (character) => `\\u{${character.codePointAt(0)!.toString(16)}}`,
   );
-  if (detail.length > 4096) throw new Error('Terminal selection too large for native review');
-  return { snapshot, detail };
+  const pages =
+    detail.length <= 4096
+      ? [detail]
+      : slots.map((slot) =>
+          JSON.stringify([slot]).replace(
+            /\p{Cf}/gu,
+            (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
+          ),
+        );
+  if (pages.some((page) => page.length > 4096))
+    throw new Error('Terminal selection too large for native review');
+  return { snapshot, detail, pages };
 }
 
 /** In-memory review is separate from opening the existing, single Desktop pair. */
@@ -51,7 +62,12 @@ export class TerminalSelection {
   private busy = false;
   private attempted = false;
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly limit?: number,
+  ) {
+    terminalSlotLimit(limit);
+  }
 
   get count(): number {
     return this.selection?.files.length ?? 0;
@@ -82,11 +98,15 @@ export class TerminalSelection {
       const files = await ports.choose();
       if (!current()) return 'denied';
       if (!files) return 'cancelled';
-      const inspected = inspectTerminalSelection(files);
+      const inspected = inspectTerminalSelection(files, this.limit);
       if (!current()) return 'denied';
-      if (!(await ports.confirm(inspected.detail))) return 'cancelled';
+      for (const page of inspected.pages) {
+        if (!current()) return 'denied';
+        if (!(await ports.confirm(page))) return 'cancelled';
+      }
       if (!current()) return 'denied';
-      if (inspectTerminalSelection(files).snapshot !== inspected.snapshot) return 'denied';
+      if (inspectTerminalSelection(files, this.limit).snapshot !== inspected.snapshot)
+        return 'denied';
       if (!current()) return 'denied';
       this.selection = { files: [...files], snapshot: inspected.snapshot };
       return 'reviewed';
@@ -101,7 +121,10 @@ export class TerminalSelection {
   take(): string[] {
     if (this.busy || this.attempted || !this.selection)
       throw new Error('No available reviewed terminal selection');
-    if (inspectTerminalSelection(this.selection.files).snapshot !== this.selection.snapshot)
+    if (
+      inspectTerminalSelection(this.selection.files, this.limit).snapshot !==
+      this.selection.snapshot
+    )
       throw new Error('Reviewed selection changed; review again before opening');
     this.attempted = true;
     return [...this.selection.files];

@@ -1,5 +1,17 @@
 # ORQST
 
+## Bounded interactive terminal teams — 2026-11-03
+
+A newly loaded Desktop now supports **1–8 same-provider terminals in one project**,
+with **2 as the default maximum**. `ORQST_TERMINAL_LIMIT=8 pnpm desktop` enables up
+to eight tabs in the same window, with at most two visible in a split. Creation,
+private state, persisted UUID metadata, individual signed starts/stops and all-slot
+retirement use the existing native flow. The setting is per interactive Desktop
+runtime/profile, not a machine-wide quota. MCP remains exactly two participants;
+mixed providers, model selection, real login/delegation and durable reconnect are
+not newly validated. Do not restart a Desktop with drafts or owned work to apply
+this build. See [workflow, identity and exact limits](docs/development/terminal-teams.md).
+
 New Desktop terminal manifests now review one canonical tool PATH shared by CLI
 discovery and the child environment, including trusted native installer locations
 when the GUI has a minimal PATH. Existing manifests retain their prior environment.
@@ -51,8 +63,8 @@ review is explicitly acknowledged. Proved signed retirement plus complete view/h
 cleanup permits fresh creation/selection in the same Desktop process; unknown ownership
 stays reserved. Proven pre-admission/Core view
 failures permit a fresh review, while uncertain effects/reservations remain fixed.
-N-member teams, model selection, durable reconnect and real CLI delegation remain
-pending. Synthetic pair checks cover polling/gesture races and native focus ordering;
+Rich team metadata, model selection, durable reconnect and real CLI delegation remain
+pending; bounded same-project terminal counts are described above. Synthetic pair checks cover polling/gesture races and native focus ordering;
 full real-provider PTY acceptance is not approved.
 See [client creation, recovery and real-acceptance blockers](docs/development/cli-team-recovery.md).
 
@@ -1061,10 +1073,10 @@ structured provider and authenticated agent transport are validated together.
 
 ### Studio terminal workflow
 
-The fixed Desktop A/B panels show the project, provider and owned-process status,
+Desktop terminal tabs show the project, provider and owned-process status,
 with a guided **Start CLI → Connect output → Enable keyboard input** sequence.
 Tabs and collapsible layout controls reuse the same two interactive documents in
-one window. Stop remains visible; detailed permissions, UUIDs and force stop are
-under session details. View switching keeps loaded drafts in memory. T-001/T-002
-remain pair-local slot aliases, not durable message targets. See
+one window, with the A/B preset and bounded N-member selection. Stop remains visible; detailed permissions, UUIDs and force stop are
+under session details. View switching keeps loaded drafts in memory. Legacy T-001/T-002
+remain selection-local slot aliases; new manifests persist P-UUID metadata, not message targets. See
 [Studio terminal workflow and limits](docs/development/studio-terminal-ux.md).

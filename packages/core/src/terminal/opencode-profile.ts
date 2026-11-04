@@ -1,3 +1,4 @@
+import { terminalIdentitySchema } from '@orqst/protocol';
 // Explicit Desktop opt-in only. Never opens the native database or credential/config files.
 import { dirname, join, relative } from 'node:path';
 import { z } from 'zod';
@@ -27,6 +28,7 @@ export const managedOpenCodeConfigSchema = z.strictObject({
   executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
+  identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
   authentication: z.strictObject({

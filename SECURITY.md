@@ -1,5 +1,35 @@
 # Security policy
 
+## Bounded interactive terminal team security — 2026-11-03
+
+The explicit interactive Desktop selection is bounded to 1–8 slots, default two,
+validated before Core/journal allocation and by the Core's private IPC entry. Each
+same-project/provider member keeps separate state, journal, native sender, signed
+start/input/stop proofs and attempt identity. Numeric supervisor/journal admission
+is **per domain**, not a global project/machine quota; Desktop supplies one domain
+per slot. ADR-036 explicitly supersedes ADR-032's earlier project-wide wording.
+
+A predictable journal/owner/reservation conflict is checked before consuming a start
+proof or recording `starting`; a last-boundary race can still become uncertain.
+Same-project agents share the writable project and native provider identity/config;
+private slot state does not isolate repository writes, locks, credentials selected
+by the native CLI or configured hooks/plugins. The user must coordinate concurrent
+project edits. Two visible documents is only a UI split limit; up to N owned
+processes may run. No CPU/RSS/descendant containment or global quota is promised.
+Every dispatched member must prove owned exit before whole-team signed retirement
+archives/fences/releases the unchanged sticky `active-pair.json` domain. Unknown
+markers, lost transport, journal ownership or late exit cannot reclaim capacity.
+No per-slot recycling, PID adoption or global process census is added. New persisted
+UUID/P-UUID metadata cannot authorize control or address the communication queue.
+
+Security review: only private inherited RPC slot/ready bounds and optional manifest
+identity metadata change. The layout IPC adds strict bounded `{tab:number}` data;
+process IPC still receives its slot exclusively from the native binding. Existing
+focus/activation/frame/session checks, O_NOFOLLOW/permissions, CSP, input leases,
+redaction limits and observer HTTP/WebSocket/cookie boundaries remain in force.
+MCP remains exactly two participants; no provider/network/delegation authority is
+expanded. See [precise limits and verification](docs/development/terminal-teams.md).
+
 ORQST observes AI agent sessions that may contain source code, prompts, tool
 output, credentials accidentally pasted by a user, and other sensitive data.
 Security and privacy are therefore part of the product, not an afterthought.

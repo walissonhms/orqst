@@ -6,6 +6,7 @@ export function terminalDocument(options: {
   language: string;
   slot: number;
   providers: string[];
+  aliases?: Array<string | undefined>;
   provider: string;
   project: string;
   version: string;
@@ -17,8 +18,11 @@ export function terminalDocument(options: {
   translate(key: string): string;
 }): string {
   const text = (key: string) => escapeHTML(options.translate(`managedTerminal.${key}`));
-  const pair = options.providers.length === 2;
-  const alias = `${options.slot === 0 ? 'A' : 'B'} · T-00${options.slot + 1}`;
+  const pair = options.providers.length >= 2;
+  const slotName = (slot: number) => String.fromCharCode(65 + slot);
+  const alias = escapeHTML(
+    `${slotName(options.slot)} · ${options.aliases?.[options.slot] ?? `T-${String(options.slot + 1).padStart(3, '0')}`}`,
+  );
   const button = (id: string) =>
     `<button id="${id}"${id === 'login' && options.nativeAuthentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
   return `<!doctype html>
@@ -31,7 +35,7 @@ export function terminalDocument(options: {
 </header>
 <p class="project" title="${escapeHTML(options.project)}"><span>${text('projectLabel')}</span> <bdi>${escapeHTML(options.project)}</bdi></p>
 <nav class="pane-navigation" aria-label="${text('navigation')}">
-  ${options.providers.map((provider, slot) => `<button id="tab-${slot === 0 ? 'a' : 'b'}" aria-pressed="${slot === options.slot}">${slot === 0 ? 'A' : 'B'} · T-00${slot + 1} · ${escapeHTML(provider)}</button>`).join('')}
+  ${options.providers.map((provider, slot) => `<button id="tab-${String.fromCharCode(97 + slot)}" data-tab="${slot}" aria-pressed="${slot === options.slot}">${slotName(slot)} · ${escapeHTML(provider)}</button>`).join('')}
   <button id="dashboard">${text('dashboard')}</button><button id="hide-pane" title="${text('hideHelp')}">${text('hidePane')}</button>
 </nav>
 <details class="layout-options"><summary>${text('layout')}</summary>

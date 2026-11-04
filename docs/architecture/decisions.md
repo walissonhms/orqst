@@ -704,3 +704,40 @@ is added. The observer remains read-only; separately authorized native managed
 operations remain valid. Static upstream declarations, synthetic validation and
 real-provider acceptance remain distinct. Revert the isolated increment to restore
 the previous parser without touching stored data or native sessions.
+
+## ADR-036 — Bounded same-workspace interactive terminal teams
+
+**Status:** Owner-authorized incremental implementation, 2026-11-03. Synthetic
+validation and real-provider acceptance are separate.
+
+**Context.** The team/recovery and reuse-first requirements authorize N members.
+The A/B transport, selector and UI had independent fixed-two assumptions, while
+robust signed per-slot ownership and all-exit retirement already existed.
+
+**Decision.** Generalize those collections to 1–8 interactive slots, default maximum
+two, configured by `ORQST_TERMINAL_LIMIT` and revalidated by Node Core. Require one
+canonical project and provider per selection, with distinct state, journal,
+supervisor, native sender and process ownership for every member. Keep the existing
+A/B preset and exactly-two-member MCP. Keep the old sticky marker name so unknown
+reservations cannot be bypassed. Preflight predictable journal/owner conflicts
+before start-proof consumption; uncertain effects remain unretryable.
+
+**Superseded scope.** This explicitly supersedes ADR-032's **one live instance per
+project** statement for this interactive team composition. Its historical text is
+preserved. The numeric supervisor/journal rule remains one per project **per
+admission domain**, and each Desktop slot has its own domain. N independent slots
+therefore may run in the same project. Neither that rule nor the selection limit
+is a global machine/workspace quota; alternate profiles, independent library
+instances and external CLIs are outside that enforcement. Structured Managed agents
+keeps its existing contract and shares this profile's sticky reservation.
+
+**Consequences.** Persist UUID metadata in newly created manifests and return its
+P-UUID metadata alias from Core. Do not invent communication-registry display IDs
+or grant control through aliases. Review all manifests without truncation; preserve
+one-use grants and require owned exits from all dispatched slots before archiving,
+fencing and releasing the team. One uncertain slot blocks release. Only two native
+documents are split at once; all members are accessible by tabs in one window.
+Mixed providers, models, team SQLite tables, live membership/recycling, reconnect,
+real authentication and provider delegation remain gated and incomplete. No new
+HTTP endpoint, dependency or third-party source reuse is needed. See
+[workflow and verification](../development/terminal-teams.md).

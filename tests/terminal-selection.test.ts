@@ -258,7 +258,7 @@ test('native review rejects duplicate, symlinked, public, oversized or unsupport
   }
 });
 
-test('native review escapes invisible format controls and refuses complete details beyond its limit', () => {
+test('native review escapes invisible controls, pages complete details and rejects oversized pages', () => {
   const f = fixture();
   try {
     const project = join(f.root, 'project-\u202e');
@@ -285,6 +285,16 @@ test('native review escapes invisible format controls and refuses complete detai
     const longProject = join(f.root, ...Array.from({ length: 4 }, () => 'p'.repeat(190)));
     mkdirSync(longProject, { recursive: true, mode: 0o700 });
     updateProject(longProject, true);
+    const paged = inspectTerminalSelection(f.files);
+    assert.equal(paged.pages.length, 2);
+    assert.ok(paged.pages.every((page) => page.length <= 4096));
+    assert.deepEqual(
+      paged.pages.flatMap((page) => JSON.parse(page)).map((slot) => slot.file),
+      f.files,
+    );
+    const oversized = join(f.root, ...Array.from({ length: 3 }, () => '\u202e'.repeat(60)));
+    mkdirSync(oversized, { recursive: true, mode: 0o700 });
+    updateProject(oversized, true);
     assert.throws(() => inspectTerminalSelection(f.files), /too large/);
   } finally {
     f.close();

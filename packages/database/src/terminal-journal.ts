@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import {
   terminalAttemptSchema,
+  terminalAdmissionLimits,
   type TerminalAttempt,
   type TerminalJournal,
   type TerminalState,
@@ -120,7 +121,25 @@ export function openTerminalJournal(
     reconcile();
     db.prepare('INSERT OR REPLACE INTO terminal_owner VALUES (1,?)').run(epoch);
   });
+  const preflightStart = (instanceId: string) => {
+    assertOwner();
+    const record = read(instanceId);
+    if (!record || record.epoch !== epoch || record.state !== 'prepared')
+      throw new Error('Terminal journal start denied');
+    const active = db
+      .prepare(
+        "SELECT project_id FROM terminal_attempts WHERE state IN ('starting','running','ownership_lost')",
+      )
+      .all();
+    if (
+      active.length >= terminalAdmissionLimits.activeInstances ||
+      active.filter((row) => row.project_id === record.projectId).length >=
+        terminalAdmissionLimits.perProject
+    )
+      throw new Error('Terminal durable admission limit exceeded');
+  };
   return {
+    preflightStart,
     epoch,
     assertOwner,
     withOwner: <T>(effect: () => T): T => {
@@ -171,15 +190,7 @@ export function openTerminalJournal(
         const record = read(instanceId);
         if (!record || record.epoch !== epoch || !transitions[record.state].includes(state))
           throw new Error('Terminal journal transition denied');
-        if (state === 'starting') {
-          const active = db
-            .prepare(
-              "SELECT project_id FROM terminal_attempts WHERE state IN ('starting','running','ownership_lost')",
-            )
-            .all();
-          if (active.length >= 2 || active.some((row) => row.project_id === record.projectId))
-            throw new Error('Terminal durable admission limit exceeded');
-        }
+        if (state === 'starting') preflightStart(instanceId);
         save({
           ...record,
           state,
