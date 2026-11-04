@@ -40,8 +40,16 @@ reduce its count. Process launch/output/keyboard permission is a separate native
 signed operation. There is no automatic installation, login, inference, resume,
 process adoption or retry after an uncertain write.
 
-Profiles persist model selection evidence and pass explicit choices as two argv
-entries, `--model` and the validated identifier. Native defaults omit the override.
+Profiles persist model selection evidence. Codex/Claude pass explicit choices as
+`--model` and the validated identifier. OpenCode 2.2.5 full TUI Root does not consume
+that flag: it retains `--standalone` and composes a native V2
+`{model: {providerID, model, variant?}}` into per-process `OPENCODE_CONFIG_CONTENT`,
+preserving the existing generated MCP document. Native defaults omit the model
+override entirely; no global/project config file is written. This is an initial
+native default: managed settings, configured agents and saved variant preferences
+can take precedence, and unavailable models/variants follow native fallback.
+Requested selection remains unverified until reported by the native CLI; exact
+forced selection is not implemented. See the pinned source review below.
 The existing PTY backend re-reads the manifest and profiles immediately before
 dispatch, so model source bytes, binary pins, workspace/Feature binding and expiry
 are checked again. No shell command string is constructed.
@@ -70,7 +78,15 @@ observed session model or history data is used as catalogue evidence.
 
 The executable contracts remain the existing exact binary pins. A provider upgrade
 requires a reviewed pin/adapter update; finding an executable on PATH does not grant
-launch authority. Multiple reviewed candidates require the advanced native workflow.
+launch authority. OpenCode aliases/copies passing the same exact reviewed native
+SHA-256 are one implementation option, retaining existing canonical PATH precedence.
+Raw installation discovery retains distinct canonical copies. The selected path and
+hash are disclosed in native review and bound to the manifest; changing/removing
+that executable requires a fresh review, with no substitution during Start.
+Different bytes, matching names/package versions or shims do not establish equivalence.
+Codex/Claude multiple-candidate selection retains its advanced native workflow;
+that legacy wizard does not support OpenCode. See [pinned source comparison and
+decisions](../research/opencode-executable-equivalence.md).
 
 ## Security review and verification
 

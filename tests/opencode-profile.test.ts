@@ -124,11 +124,41 @@ test('OpenCode MCP factory produces v2 inline environment and rejects compositio
     };
     assert.throws(() => openCodeTerminalProfiles(config), /mismatch/);
     assert.equal(openCodeTerminalProfiles(config, mcp)[0]!.id, 'opencode-terminal-v1');
+    const defaultEnvironment = openCodeTerminalEnvironment(config, mcp);
+    const original = JSON.parse(defaultEnvironment.OPENCODE_CONFIG_CONTENT!);
+    assert.equal(original.model, undefined);
+    const modelSource = join(root, 'synthetic-model.json');
+    writeFileSync(modelSource, '{"model":"openrouter/openai/gpt-5#high"}', { mode: 0o600 });
+    config.model = {
+      value: 'openrouter/openai/gpt-5#high',
+      source: 'native-config',
+      files: [{ path: modelSource, sha256: terminalDigest(readFileSync(modelSource)) }],
+    };
     const environment = openCodeTerminalEnvironment(config, mcp);
-    const server = JSON.parse(environment.OPENCODE_CONFIG_CONTENT!).mcp.servers[mcp.serverName];
+    const inline = JSON.parse(environment.OPENCODE_CONFIG_CONTENT!);
+    assert.deepEqual(inline.model, {
+      providerID: 'openrouter',
+      model: 'openai/gpt-5',
+      variant: 'high',
+    });
+    assert.deepEqual(inline.mcp, original.mcp);
+    assert.deepEqual(openCodeTerminalProfiles(config, mcp)[0]!.argv, ['--standalone']);
+    assert.match(
+      openCodeTerminalProfiles(config, mcp)[0]!.permissions,
+      /saved variant preferences may override/,
+    );
+    assert.deepEqual(JSON.parse(openCodeTerminalEnvironment(config).OPENCODE_CONFIG_CONTENT!), {
+      model: inline.model,
+    });
+    const server = inline.mcp.servers[mcp.serverName];
     assert.deepEqual(server.command, [config.node.path, relay]);
     assert.deepEqual(server.timeout, { startup: 10000, catalog: 10000, execution: 125000 });
     assert.equal(server.protocol, 'legacy');
+    assert.equal(readFileSync(modelSource, 'utf8'), '{"model":"openrouter/openai/gpt-5#high"}');
+    writeFileSync(modelSource, '{}');
+    assert.throws(() => openCodeTerminalEnvironment(config, mcp), /catalogue changed/);
+    assert.throws(() => openCodeTerminalProfiles(config, mcp), /catalogue changed/);
+    delete config.model;
     writeFileSync(relay, '// SYNTHETIC drift\n');
     assert.throws(() => openCodeTerminalProfiles(config, mcp), /changed/);
   } finally {

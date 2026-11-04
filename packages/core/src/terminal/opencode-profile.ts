@@ -1,8 +1,4 @@
-import {
-  terminalModelSelectionSchema,
-  terminalModelArguments,
-  validateTerminalModelSelection,
-} from './model-selection.js';
+import { terminalModelSelectionSchema, openCodeModelConfiguration } from './model-selection.js';
 import {
   terminalPreparationBindingSchema,
   validateTerminalPreparationBinding,
@@ -62,7 +58,7 @@ export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 /** Also used before provisioning; checks directories only, never the DB or its ledger. */
 export function validateOpenCodeSelection(config: ManagedOpenCodeConfig): void {
   managedOpenCodeConfigSchema.parse(config);
-  validateTerminalModelSelection(config.model);
+  openCodeModelConfiguration(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
   const opted = config.interactive;
@@ -108,7 +104,8 @@ export function openCodeTerminalEnvironment(
   config: ManagedOpenCodeConfig,
   mcp?: TerminalMcpLaunch,
 ) {
-  return {
+  const model = openCodeModelConfiguration(config.model);
+  const environment = {
     ...opencodeInteractiveLaunchPlan({
       executable: config.executable.path,
       executableVersion: config.executableVersion,
@@ -121,6 +118,12 @@ export function openCodeTerminalEnvironment(
     PATH: terminalToolPath(config.toolPath),
     TMPDIR: join(config.state, 'tmp'),
   };
+  if (!model) return environment;
+  // Compose only ORQST's generated per-process MCP document, never inherited config.
+  const inline: Record<string, unknown> = environment.OPENCODE_CONFIG_CONTENT
+    ? (JSON.parse(environment.OPENCODE_CONFIG_CONTENT) as Record<string, unknown>)
+    : {};
+  return { ...environment, OPENCODE_CONFIG_CONTENT: JSON.stringify({ ...inline, model }) };
 }
 
 export function openCodeTerminalProfiles(
@@ -129,6 +132,7 @@ export function openCodeTerminalProfiles(
 ): TerminalProfile[] {
   validateTerminalPreparationBinding(config.preparation, config.project);
   managedOpenCodeConfigSchema.parse(config);
+  const model = openCodeModelConfiguration(config.model);
   if (
     !config.interactive.nativeStartupAuthorized ||
     !config.interactive.nativeDatabaseMigrationsAcknowledged ||
@@ -150,13 +154,16 @@ export function openCodeTerminalProfiles(
       executableSha256: config.executable.sha256,
       executableVersion: config.executableVersion,
       cwd: config.project,
-      argv: ['--standalone', ...terminalModelArguments(config.model)],
+      argv: ['--standalone'],
       environmentProfile: 'opencode-native-identity-no-inherited-credentials-v1',
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
         'Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. No automatic ORQST task/login/resume/adoption. --standalone selects a private native server with generated authentication and stdin lease; existing service is not adopted. 30 minute owned TUI deadline; exit proves TUI only, descendant exit and concurrent DB compatibility UNVALIDATED; capacity remains sticky. One dispatch per manifest. ' +
         (mcp
           ? 'Inline ORQST MCP MERGES with native definitions; task grant requires separate native authorization. '
+          : '') +
+        (model
+          ? `Per-process native initial model default: ${JSON.stringify(model)}. Native managed settings, agent model and saved variant preferences may override it; unavailable models/variants follow native fallback. Effective model/provider acceptance is unverified. `
           : '') +
         'Login, new-session routing, native focus, MCP and inference acceptance NOT RUN.',
     },

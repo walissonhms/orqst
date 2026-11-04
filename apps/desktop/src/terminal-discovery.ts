@@ -20,7 +20,7 @@ export function discoverTerminalExecutable(
 ): string[] {
   const pin =
     provider === 'codex' ? reviewedDesktopCodexBinary : reviewedProviderMcpBinaries[provider];
-  return (
+  const candidates = (
     discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)?.candidates ??
     []
   )
@@ -32,6 +32,12 @@ export function discoverTerminalExecutable(
       }
     })
     .map(({ canonical }) => canonical);
+  // OpenCode installers can leave separate native copies of the exact reviewed bytes.
+  // Each candidate passed the same native-file/ownership/hash checks above; canonical
+  // paths alone do not establish distinct implementations. Keep the existing reviewed
+  // PATH precedence, disclose that exact path in native review, then revalidate it at Start.
+  // Raw discoverLocalClis evidence still retains every distinct canonical installation.
+  return provider === 'opencode' ? candidates.slice(0, 1) : candidates;
 }
 
 export function discoverTerminalNode(searchPath: string, home: string): string[] {

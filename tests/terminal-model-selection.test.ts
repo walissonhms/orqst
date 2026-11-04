@@ -17,6 +17,7 @@ import { terminalSelectedRequestSchema } from '../packages/protocol/src/terminal
 import {
   discoverTerminalModels,
   terminalModelArguments,
+  openCodeModelConfiguration,
 } from '../packages/core/src/terminal/model-selection.js';
 import {
   resolveTerminalPreparationContext,
@@ -112,10 +113,10 @@ test('Claude aliases have official provenance and OpenCode exposes only explicit
       opencode.options.map((entry) => entry.selection.value),
       [null, 'synthetic/chosen', 'synthetic/custom', 'synthetic/other'],
     );
-    assert.deepEqual(terminalModelArguments(opencode.options[2]!.selection), [
-      '--model',
-      'synthetic/custom',
-    ]);
+    assert.deepEqual(openCodeModelConfiguration(opencode.options[2]!.selection), {
+      providerID: 'synthetic',
+      model: 'custom',
+    });
     writeFileSync(
       join(f.home, '.config/opencode/opencode.json'),
       JSON.stringify({
@@ -141,6 +142,52 @@ test('Claude aliases have official provenance and OpenCode exposes only explicit
       ),
       [null],
     );
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode model parser preserves provider/model/variant and refuses malformed native references', () => {
+  const selection = {
+    value: null,
+    source: 'cli-default',
+    files: [{ path: '/synthetic/absent-model-source', sha256: null }],
+  } as const;
+  const choose = (value: string | null) => ({ ...selection, files: [...selection.files], value });
+  assert.equal(openCodeModelConfiguration(choose(null)), undefined);
+  assert.deepEqual(openCodeModelConfiguration(choose('openrouter/openai/gpt-5#high')), {
+    providerID: 'openrouter',
+    model: 'openai/gpt-5',
+    variant: 'high',
+  });
+  for (const value of [
+    'gpt-5',
+    '/gpt-5',
+    'openai/',
+    'openai/gpt-5#',
+    'openai/gpt-5#high#extra',
+    'open#ai/gpt-5',
+  ])
+    assert.throws(() => openCodeModelConfiguration(choose(value)));
+  const f = fixture();
+  try {
+    for (const model of [
+      'bare',
+      'openai/gpt#',
+      { providerID: 'openai/other', model: 'gpt' },
+      { providerID: 'openai', model: 'gpt#high' },
+      { providerID: 'openai', model: 'gpt', variant: 'high#extra' },
+    ]) {
+      writeFileSync(join(f.home, '.config/opencode/opencode.json'), JSON.stringify({ model }), {
+        mode: 0o600,
+      });
+      assert.deepEqual(
+        discoverTerminalModels('opencode', f.project, f.home, {}).options.map(
+          (entry) => entry.selection.value,
+        ),
+        [null],
+      );
+    }
   } finally {
     f.close();
   }

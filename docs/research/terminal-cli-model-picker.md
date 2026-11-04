@@ -1,5 +1,17 @@
 # CLI/model picker component review — 2026-11-04
 
+## OpenCode contract correction — 2026-11-04
+
+The earlier matrix below incorrectly attributed a `--model` consumer to OpenCode
+2.2.5 full TUI Root. That flag belongs to other commands. The current full-TUI
+profile keeps `--standalone` and composes a V2 model object with existing MCP in
+per-process `OPENCODE_CONFIG_CONTENT`. It supplies a native initial default,
+subject to managed settings, agent choices, saved variants and native fallback;
+it does not enforce the effective model. See the [revalidated source and exact
+functions](opencode-executable-equivalence.md). Anywh at the pinned revision has
+no OpenCode implementation; Tucano's OpenCode adapter uses a headless run/server
+contract and is not imported into this TUI path.
+
 Base: ORQST `6899cbb`. Node 24 / pnpm 10, strict TypeScript, React/i18next,
 existing Node SQLite/Core/PTY and native signed broker. The approved V6 source
 requires Workspace → Feature → TerminalPane → AgentSession and a CLI/model picker

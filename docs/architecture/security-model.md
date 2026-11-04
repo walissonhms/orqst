@@ -1,5 +1,18 @@
 # Security model
 
+OpenCode catalogue discovery collapses only candidates independently passing the
+same exact reviewed native binary SHA-256, using existing canonical tool-PATH order.
+This does not authorize execution: the exact chosen path/hash is disclosed in native
+review, persisted in the manifest and revalidated before signed Start. Raw discovery
+retains distinct installations; a changed chosen path is not substituted after
+review. No provider probe, credential read or server is added. See [pinned review](../research/opencode-executable-equivalence.md).
+
+OpenCode full TUI model selection uses only per-process `OPENCODE_CONFIG_CONTENT`,
+composed with the existing generated MCP document. No inherited inline config or
+global settings are rewritten. Model evidence is revalidated before dispatch;
+native agent/managed settings, variant preferences and availability can override
+the initial default. Effective selection remains unverified without CLI evidence.
+
 ## Tauri Studio preparation — 2026-11-04
 
 Studio can invoke only the existing native preparation wizard through an exact

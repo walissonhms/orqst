@@ -1,5 +1,22 @@
 # OpenCode Desktop opt-in — 2026-11-03
 
+## Native catalogue and initial model defaults — 2026-11-04
+
+The normal CLI/model picker now treats separately validated copies of the exact
+reviewed native OpenCode bytes as one option, preserving tool-PATH precedence and
+the canonical path/hash disclosed in review. A changed chosen executable requires
+fresh review; Start never substitutes another copy.
+
+The official 2.2.5 full TUI Root does not consume `--model`. Selected identifiers
+now become a per-process V2 `model` object in `OPENCODE_CONFIG_CONTENT`, composed
+with ORQST's existing MCP document. `--standalone`, native identity and the complete
+official TUI are retained. CLI default adds no model override; native files are not
+rewritten. This supplies an initial default, subject to native managed settings,
+agent model selection, saved variant preferences and availability/fallback. Exact
+effective model/variant enforcement remains unavailable; verify/select it in the
+native TUI when required. No native acceptance or retry is implied by this change.
+See [pinned source, functions, licences and limits](../research/opencode-executable-equivalence.md).
+
 ## Codex/OpenCode pair update — 2026-11-03
 
 Native selection and shared Core inspection now allow exactly one Codex and one

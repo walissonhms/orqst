@@ -10,6 +10,19 @@ export const terminalModelValueSchema = z
   .min(1)
   .max(160)
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/#@+-]*$/);
+// OpenCode 2.2.5 ConfigModel.Selection / Model.Ref.parse, reviewed at 9bbb8ce.
+// Retain the shared safe-character budget and require the native reference grammar.
+const openCodeModelValueSchema = terminalModelValueSchema.regex(/^[^/#]+\/[^#]+(?:#[^#]+)?$/u);
+const openCodeModelPartSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .regex(/^[a-zA-Z0-9._:/@+-]+$/);
+const openCodeConfiguredModelSchema = z.object({
+  providerID: terminalModelValueSchema.regex(/^[^/#]+$/u),
+  model: openCodeModelPartSchema,
+  variant: openCodeModelPartSchema.optional(),
+});
 const sourceFile = z.strictObject({
   path: z.string().startsWith('/').max(2048),
   sha256: z
@@ -50,6 +63,20 @@ export function validateTerminalModelSelection(selection: TerminalModelSelection
 export function terminalModelArguments(selection: TerminalModelSelection | undefined): string[] {
   validateTerminalModelSelection(selection);
   return selection?.value ? ['--model', selection.value] : [];
+}
+
+/** Full TUI Root has no --model consumer; use the native V2 inline default instead. */
+export function openCodeModelConfiguration(selection: TerminalModelSelection | undefined) {
+  validateTerminalModelSelection(selection);
+  if (!selection?.value) return undefined;
+  const value = openCodeModelValueSchema.parse(selection.value);
+  const [reference, variant] = value.split('#');
+  const providerEnd = reference!.indexOf('/');
+  return openCodeConfiguredModelSchema.parse({
+    providerID: reference!.slice(0, providerEnd),
+    model: reference!.slice(providerEnd + 1),
+    ...(variant ? { variant } : {}),
+  });
 }
 
 /** Configured identifiers and cached picker entries are choices, never account entitlement. */
@@ -107,6 +134,7 @@ export function discoverTerminalModels(
     const parsed = terminalModelValueSchema.safeParse(value);
     if (
       !parsed.success ||
+      (provider === 'opencode' && !openCodeModelValueSchema.safeParse(parsed.data).success) ||
       options.length >= 128 ||
       options.some((option) => option.selection.value === parsed.data)
     )
@@ -171,16 +199,7 @@ export function discoverTerminalModels(
               // 2.2.5 accepts native V2 fields and migrates legacy provider maps.
               providers: group.optional(),
               provider: group.optional(),
-              model: z
-                .union([
-                  z.string(),
-                  z.object({
-                    providerID: z.string(),
-                    model: z.string(),
-                    variant: z.string().optional(),
-                  }),
-                ])
-                .optional(),
+              model: z.union([z.string(), openCodeConfiguredModelSchema]).optional(),
             })
             .parse(JSON.parse(text));
           if (configured.model && typeof configured.model !== 'string') {
