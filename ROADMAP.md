@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## OpenCode equivalent installations — 2026-11-04
+
+Resolve the normal catalogue's false ambiguity for separate copies of the exact
+reviewed native OpenCode pin using existing PATH precedence and native review.
+Synthetic preparation/profile regressions cover defaults, native inline model defaults
+and drift without provider execution. Dynamic catalogue, real models/entitlements
+and native acceptance remain open. See [pinned reuse review](docs/research/opencode-executable-equivalence.md).
+
 ## Native terminal verification — 2026-11-04
 
 Integrated source `a48bce0` passed 39 Rust tests, packaged-feature tests, all-targets

@@ -1,5 +1,11 @@
 # ORQST
 
+OpenCode copies with the same exact reviewed native SHA-256 now share one CLI/model
+catalog option, preserving existing PATH precedence and exact native path/hash
+review. No CLI probe or reinstall is needed. Synthetic preparation/profile checks
+cover configured model environment, default selection and drift; native/provider
+acceptance remains separate. See [source comparison and limits](docs/research/opencode-executable-equivalence.md).
+
 The [incremental native terminal source](docs/development/terminal-native-enrollment.md)
 now appends a selected CLI/model to the same Core and retained native workspace,
 with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks

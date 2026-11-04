@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-04 — OpenCode equivalent native installations
+
+- Treat independently hash-checked copies of the exact reviewed OpenCode native
+  binary as one catalogue option, preserving existing PATH precedence.
+- Retain raw discovery, exact native path/hash review and pre-Start validation;
+  never substitute an executable after review or accept drift by package version.
+- Cover aliases/copies, defaults/configured model environment and drift synthetically;
+  no provider execution, active Preview update or uncertain-state recovery.
+- Keep official full TUI; replace unsupported Root `--model` with per-process V2
+  inline model defaults composed with MCP, preserving native precedence/fallback.
+- Compare actual Tucano OpenCode V1/V2 and official 2.2.5 source; record the absence
+  of an OpenCode runtime in the exact Anywh pin. Keep existing Core/profile/runtime.
+
 ## 2026-11-04 — Native build and local Preview verification
 
 - Pass 39 Rust tests, Clippy and custom-protocol build; package and locally sign

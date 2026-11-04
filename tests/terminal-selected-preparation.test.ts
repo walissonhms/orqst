@@ -8,12 +8,15 @@ import {
 import { TerminalSupervisor } from '../packages/core/src/terminal/supervisor.js';
 import {
   chmodSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   realpathSync,
   rmSync,
+  statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -25,6 +28,7 @@ import { Store } from '../packages/database/src/index.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-selected-bundle-')));
@@ -37,6 +41,7 @@ await build({
     preparation: 'apps/desktop/src/tauri-terminal-preparation.ts',
     profiles: 'packages/core/src/terminal/interactive-profile.ts',
     backend: 'packages/core/src/terminal/pty-backend.ts',
+    discovery: 'apps/desktop/src/terminal-discovery.ts',
   },
   outdir: bundle,
   outExtension: { '.js': '.cjs' },
@@ -63,15 +68,22 @@ await build({
 const { prepareTauriTerminals } = (await import(
   pathToFileURL(join(bundle, 'preparation.cjs')).href
 )) as typeof import('../apps/desktop/src/tauri-terminal-preparation.js');
-const { readInteractiveTerminalConfig, interactiveTerminalProfiles } = (await import(
+const {
+  readInteractiveTerminalConfig,
+  interactiveTerminalProfiles,
+  interactiveTerminalEnvironment,
+} = (await import(
   pathToFileURL(join(bundle, 'profiles.cjs')).href
 )) as typeof import('../packages/core/src/terminal/interactive-profile.js');
 
 const { managedTerminalBackend } = (await import(
   pathToFileURL(join(bundle, 'backend.cjs')).href
 )) as typeof import('../packages/core/src/terminal/pty-backend.js');
+const { discoverTerminalExecutable } = (await import(
+  pathToFileURL(join(bundle, 'discovery.cjs')).href
+)) as typeof import('../apps/desktop/src/terminal-discovery.js');
 
-function fixture() {
+function fixture(openCodeCopies = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-selected-')));
   chmodSync(root, 0o700);
   const home = join(root, 'native');
@@ -87,6 +99,12 @@ function fixture() {
   mkdirSync(join(home, '.config/opencode'), { mode: 0o700 });
   for (const provider of ['codex', 'claude', 'opencode'])
     writeFileSync(join(bin, provider), readFileSync(binary), { mode: 0o700 });
+  if (openCodeCopies) {
+    const installer = join(home, '.opencode/bin');
+    mkdirSync(installer, { recursive: true, mode: 0o700 });
+    // Identical native bytes at another canonical installation, never a provider process.
+    writeFileSync(join(installer, 'opencode'), readFileSync(binary), { mode: 0o700 });
+  }
   writeFileSync(join(project, 'SYNTHETIC-EXISTING-SOURCE'), 'Preserve selected project', {
     mode: 0o600,
   });
@@ -134,9 +152,14 @@ function fixture() {
   };
 }
 
-for (const provider of ['codex', 'claude', 'opencode'] as const) {
-  test(`selected ${provider} CLI/model reaches the real launch profile without a file picker or alternate project`, async () => {
-    const f = fixture();
+for (const [provider, useDefault] of [
+  ['codex', false],
+  ['claude', false],
+  ['opencode', false],
+  ['opencode', true],
+] as const) {
+  test(`selected ${provider} ${useDefault ? 'default' : 'model'} reaches the launch profile without a file picker or alternate project`, async () => {
+    const f = fixture(provider === 'opencode');
     try {
       const features = featureConfigurationDatabase(f.trusted.preferencesDirectory, f.workspaceId);
       const feature = features.create({ name: 'Synthetic selected Feature' });
@@ -153,9 +176,10 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
       const cli = result.catalog.providers.find((entry) => entry.provider === provider)!;
       assert.equal(cli.status, 'available');
       assert.ok(cli.models.every((entry) => entry.availability === 'unverified'));
-      const selected = cli.models.find(
-        (entry) =>
-          entry.label === (provider === 'opencode' ? 'synthetic/model' : 'synthetic-model'),
+      const selected = cli.models.find((entry) =>
+        useDefault
+          ? entry.isDefault
+          : entry.label === (provider === 'opencode' ? 'synthetic/model' : 'synthetic-model'),
       )!;
       const prepared = await prepareTauriTerminals(
         {
@@ -177,13 +201,22 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
       assert.deepEqual(readdirSync(f.project), ['SYNTHETIC-EXISTING-SOURCE']);
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
       assert.equal(config.project, f.project);
+      assert.equal(
+        config.executable.path,
+        join(f.context.environment.PATH.split(':')[0]!, provider),
+      );
       const profile = interactiveTerminalProfiles(config)[0]!;
       const model = profile.argv.indexOf('--model');
-      assert.ok(model >= 0);
-      assert.equal(
-        profile.argv[model + 1],
-        provider === 'opencode' ? 'synthetic/model' : 'synthetic-model',
-      );
+      if (provider === 'opencode') {
+        assert.deepEqual(profile.argv, ['--standalone']);
+        const inline = interactiveTerminalEnvironment(config).OPENCODE_CONFIG_CONTENT;
+        if (useDefault) assert.equal(inline, undefined);
+        else
+          assert.deepEqual(JSON.parse(inline!).model, { providerID: 'synthetic', model: 'model' });
+      } else {
+        assert.ok(model >= 0);
+        assert.equal(profile.argv[model + 1], 'synthetic-model');
+      }
       assert.equal(profile.cwd, f.project);
       assert.deepEqual(features.read(feature.featureId).terminalIds, [config.identity!.terminalId]);
       const backend = managedTerminalBackend(prepared.files[0]!, 'SYNTHETIC-NEVER-EXECUTED');
@@ -229,6 +262,83 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
     }
   });
 }
+
+test('OpenCode copies, hardlinks and aliases share one reviewed implementation, preserving raw discovery and PATH order', () => {
+  const f = fixture(true);
+  try {
+    const first = join(f.root, 'bin/opencode');
+    const installer = join(f.home, '.opencode/bin/opencode');
+    assert.notEqual(statSync(first).ino, statSync(installer).ino);
+    const alias = join(f.root, 'alias');
+    const hardlink = join(f.root, 'hardlink');
+    const unreviewed = join(f.root, 'unreviewed');
+    for (const directory of [alias, hardlink, unreviewed]) mkdirSync(directory, { mode: 0o700 });
+    symlinkSync(first, join(alias, 'opencode'));
+    linkSync(first, join(hardlink, 'opencode'));
+    const changed = Buffer.concat([readFileSync(binary), Buffer.from('SYNTHETIC-UNREVIEWED')]);
+    writeFileSync(join(unreviewed, 'opencode'), changed, { mode: 0o700 });
+    const path = [unreviewed, alias, hardlink, f.context.environment.PATH].join(':');
+    const raw = discoverLocalClis(path, f.home).find((entry) => entry.provider === 'opencode')!;
+    assert.equal(raw.candidates.length, 4);
+    assert.equal(raw.execution, 'not_authorized');
+    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [first]);
+    // A GUI-minimal PATH falls back to the installed reviewed binary, without a shell/Finder.
+    assert.deepEqual(discoverTerminalExecutable('opencode', '/usr/bin:/bin', f.home), [installer]);
+    // Neither a matching name, unreviewed native bytes, an executable shim nor unsafe
+    // permissions can establish equivalence to the exact reviewed pin.
+    chmodSync(first, 0o777);
+    writeFileSync(installer, '#!/bin/sh\nexit 99\n', { mode: 0o700 });
+    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), []);
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode review rejects a changed chosen executable instead of substituting an equivalent copy', async () => {
+  for (const change of ['bytes', 'removal'] as const) {
+    const f = fixture(true);
+    try {
+      const result = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(result.status, 'catalog');
+      const cli = result.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+      assert.equal(cli.status, 'available');
+      f.ports.confirm = async (_key, detail) => {
+        assert.ok(detail.includes(join(f.root, 'bin/opencode')));
+        const first = join(f.root, 'bin/opencode');
+        if (change === 'removal') rmSync(first);
+        else writeFileSync(first, Buffer.concat([readFileSync(binary), Buffer.from('DRIFT')]));
+        return true;
+      };
+      await assert.rejects(
+        prepareTauriTerminals(
+          {
+            action: 'create-selected',
+            workspaceId: f.workspaceId,
+            featureId: null,
+            catalogId: result.catalog.catalogId,
+            provider: 'opencode',
+            modelId: cli.models[0]!.id,
+            count: 1,
+          },
+          f.context,
+          f.ports,
+          Date.now,
+          f.trusted,
+        ),
+        /changed during review/,
+      );
+      assert.deepEqual(readdirSync(f.context.parent), []);
+    } finally {
+      f.close();
+    }
+  }
+});
 
 test('unknown model capabilities and changed source/view are refused before provisioning', async () => {
   const f = fixture();

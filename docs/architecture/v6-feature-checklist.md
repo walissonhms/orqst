@@ -5,6 +5,23 @@ Authority: the [approved V6 package](../design/v6/README.md). This extends the
 Unchecked acceptance items remain incomplete even when a subset is implemented.
 Update this file in every V6 delivery with implementation and verification.
 
+## OpenCode catalogue correction — 2026-11-04
+
+- [x] Distinguish canonical installation copies from different reviewed native
+      implementations; retain exact binary review and existing PATH precedence.
+- [x] Cover equivalent OpenCode copies, default/configured model environment, unsafe files
+      and review drift through synthetic preparation/profile tests without a provider.
+- [x] Retain full OpenCode TUI with per-process V2 model defaults, MCP composition
+      and provider/model/variant grammar checks; native precedence is preserved.
+- [ ] Enforce exact effective model/variant automatically; native configuration
+      supplies a default and may defer to agents/preferences or fall back.
+- [ ] Validate this correction in native WebKit and a separately authorized provider
+      run; the owner's current Preview and uncertain preparation state are preserved.
+- [ ] Implement an explicitly reviewed dynamic OpenCode catalogue; configured IDs
+      and default selection still provide no entitlement evidence.
+
+See [the pinned source review and reuse decisions](../research/opencode-executable-equivalence.md).
+
 ## Capability inventory before V6 implementation
 
 | Capability                              | Current status and implementation                                                             | Remaining work                                                                                       |

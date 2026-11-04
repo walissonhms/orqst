@@ -1,5 +1,18 @@
 # Security policy
 
+OpenCode's normal catalogue groups only native candidates individually verified
+against the same exact binary pin, retaining existing canonical PATH precedence.
+Native consent still reviews the chosen exact path/hash; manifests and signed Start
+retain their existing path/hash/source/ownership validation. No provider probe,
+server, credential access, state recovery or observer execution route is added.
+See [the equivalence review](docs/research/opencode-executable-equivalence.md).
+
+OpenCode full TUI model selection uses only per-process `OPENCODE_CONFIG_CONTENT`,
+composed with the existing generated MCP document. No inherited inline config or
+global settings are rewritten. Model evidence is revalidated before dispatch;
+native agent/managed settings, variant preferences and availability can override
+the initial default. Effective selection remains unverified without CLI evidence.
+
 ## Private incremental terminal enrollment — 2026-11-04
 
 Inherited trusted Core IPC can admit one prepared slot without granting Start,
