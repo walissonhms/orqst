@@ -2,6 +2,7 @@
 
 mod agents;
 mod desktop;
+mod files;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -23,7 +24,8 @@ fn main() {
         .manage(sidecar::DesktopCore::default())
         .manage(terminal::Terminals::default())
         .manage(agents::Agents::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request])
+        .manage(files::Files::default())
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request, files::file_request])
         .manage(terminal_creation::Preparation::default())
         .on_window_event(terminal_creation::on_window_event)
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
@@ -58,13 +60,23 @@ fn main() {
             desktop::install(app.handle())?;
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle()))?;
             let allowed_origin = origin.clone();
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(origin.parse()?))
+            let file_client = match tauri::async_runtime::block_on(files::start(app.handle(), &origin)) {
+                Ok(client) => client,
+                Err(_) => {
+                    files::stop(app.handle());
+                    eprintln!("ORQST native export startup refused.");
+                    String::new()
+                }
+            };
+            let export_handle = app.handle().clone();
+            let dashboard = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(origin.parse()?))
                 .title("ORQST")
                 .user_agent("ORQSTTauri/0.1 ORQSTDesktop/0.1")
+                .initialization_script(file_client)
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(720.0, 480.0)
                 .on_navigation(move |url| {
-                    // The remote dashboard has no Tauri capabilities or shell API.
+                    // The owned dashboard has only narrow native export commands.
                     url.origin().ascii_serialization() == allowed_origin
                         && url.username().is_empty()
                         && url.password().is_none()
@@ -74,12 +86,21 @@ fn main() {
                 .on_page_load(|window, payload| {
                     if payload.event() == tauri::webview::PageLoadEvent::Started {
                         terminal_creation::invalidate(window.app_handle());
+                        files::invalidate(window.app_handle());
                     }
                 })
                 .build()?;
             let main = app.get_webview_window("main").expect("created dashboard");
             let native = app.handle().clone();
             main.on_window_event(move |event| desktop::main_window_event(&native, event));
+            dashboard.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
+                    files::invalidate(&export_handle);
+                }
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    files::stop(&export_handle);
+                }
+            });
             // Explicit opt-in only. A terminal failure does not replace or stop observation.
             if tauri::async_runtime::block_on(terminal::start(app.handle())).is_err() {
                 terminal::stop(app.handle());
@@ -105,6 +126,7 @@ fn main() {
                 agents::stop_and_wait(app);
                 terminal_creation::stop(app);
                 terminal::stop_and_wait(app);
+                files::stop(app);
                 sidecar::stop(app);
             }
         });

@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { constants } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { chmod, cp, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
@@ -27,7 +28,8 @@ await mkdir(join(native, 'binaries'), { recursive: true });
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const nodeName = `orqst-node-${target}${process.platform === 'win32' ? '.exe' : ''}`;
 const nodeTarget = join(native, 'binaries', nodeName);
-await cp(process.execPath, nodeTarget);
+// Prefer a standalone copy-on-write runtime where available; integrity checks remain mandatory.
+await cp(process.execPath, nodeTarget, { mode: constants.COPYFILE_FICLONE });
 const nodeHash = sha256(await readFile(process.execPath));
 if (sha256(await readFile(nodeTarget)) !== nodeHash) throw new Error('Node copy integrity failure');
 
@@ -53,6 +55,7 @@ const result = await build({
 const terminalResult = await build({
   entryPoints: {
     'tauri-agents-host': 'apps/desktop/src/tauri-agents-host.ts',
+    'tauri-files-host': 'apps/desktop/src/tauri-files-host.ts',
     'managed-agents-host': 'apps/desktop/src/managed-agents-host.ts',
     'codex-structured-host': 'packages/core/src/managed-codex/native-host.ts',
     'tauri-terminal-host': 'apps/desktop/src/tauri-terminal-host.ts',
@@ -78,6 +81,16 @@ const clientResult = await build({
   },
   absWorkingDir: root,
   outdir: join(output, 'terminal'),
+  bundle: true,
+  platform: 'browser',
+  target: 'safari17',
+  format: 'iife',
+  metafile: true,
+});
+const filesClientResult = await build({
+  entryPoints: { client: 'apps/tauri/src/files-client.ts' },
+  absWorkingDir: root,
+  outdir: join(output, 'files'),
   bundle: true,
   platform: 'browser',
   target: 'safari17',
@@ -167,6 +180,7 @@ for (const input of Object.keys({
   ...terminalResult.metafile.inputs,
   ...clientResult.metafile.inputs,
   ...agentsClientResult.metafile.inputs,
+  ...filesClientResult.metafile.inputs,
 })) {
   if (input.includes('node_modules/')) await includePackage(resolve(root, input));
 }

@@ -1154,3 +1154,8 @@ one window, with the A/B preset and bounded N-member selection. Stop remains vis
 under session details. View switching keeps loaded drafts in memory. Legacy T-001/T-002
 remain selection-local slot aliases; new manifests persist P-UUID metadata, not message targets. See
 [Studio terminal workflow and limits](docs/development/studio-terminal-ux.md).
+
+Tauri Preview also connects the existing artifact Markdown and Analytics CSV/Markdown
+controls to native save/replacement dialogs through the existing secure Node writers.
+See [native exports and acceptance limits](docs/api/tauri-files.md); Electron remains
+available until native migration parity is accepted.
