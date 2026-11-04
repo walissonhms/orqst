@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { terminalDirectory, terminalFile } from '../terminal/codex-profile.js';
 import type { TerminalPairAdmission } from '../terminal/managed-pair.js';
 import { inspectDesktopAdmission } from './desktop-admission-inspection.js';
+import { assertNoOfflineRecovery } from './offline-recovery-gate.js';
 
 /** Sticky process admission across client restarts. No TTL, PID probe or automatic takeover. */
 export function desktopAgentsAdmission(
@@ -46,6 +47,7 @@ export function desktopAgentsAdmission(
   let retired = false;
   const enrollmentFiles = new Map<string, string>();
   const assertOwner = () => {
+    assertNoOfflineRecovery(directory);
     if (!claimed || retired || terminalFile(file, true).toString('utf8') !== owner)
       throw new Error('Desktop pair admission owner changed');
     for (const [path, bytes] of enrollmentFiles)
@@ -57,6 +59,7 @@ export function desktopAgentsAdmission(
     assertOwner,
     preflight() {
       terminalDirectory(directory, true);
+      assertNoOfflineRecovery(directory);
       if (claimed) return assertOwner();
       if (retired) throw new Error('Desktop admission retired');
       try {
@@ -67,6 +70,7 @@ export function desktopAgentsAdmission(
       }
     },
     claim() {
+      assertNoOfflineRecovery(directory);
       if (retired) throw new Error('Desktop admission retired');
       if (claimed) return assertOwner();
       writeFileSync(file, owner, { flag: 'wx', mode: 0o600, flush: true });

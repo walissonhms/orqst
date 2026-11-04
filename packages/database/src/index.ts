@@ -32,6 +32,11 @@ export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
 import { openTerminalJournal } from './terminal-journal.js';
 import { openCommunicationJournal } from './pane-communication.js';
 export { TERMINAL_JOURNAL_LIMITS } from './terminal-journal.js';
+export {
+  committedTerminalImage,
+  inspectOfflineTerminalImage,
+  OFFLINE_JOURNAL_BYTES,
+} from './offline-terminal-journal.js';
 export { SESSION_METRICS_LIMITS } from './live-metrics.js';
 import {
   analyticsEvidenceMigration,

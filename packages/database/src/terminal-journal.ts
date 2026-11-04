@@ -8,7 +8,7 @@ import {
   type TerminalState,
 } from '@orqst/protocol';
 
-const terminalJournalMigration = `
+export const terminalJournalMigration = `
 CREATE TABLE terminal_schema (singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL);
 INSERT INTO terminal_schema VALUES (1,2);
 CREATE TABLE terminal_owner (singleton INTEGER PRIMARY KEY CHECK(singleton=1), epoch TEXT NOT NULL);

@@ -2,6 +2,7 @@ import { lstatSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { terminalDirectory, terminalFile } from '../terminal/codex-profile.js';
+import { assertNoOfflineRecovery } from './offline-recovery-gate.js';
 
 const path = z
   .string()
@@ -9,7 +10,7 @@ const path = z
   .max(2048)
   .refine((value) => !value.includes('\0'));
 const manifests = z.array(path).max(8);
-const markerSchema = z.strictObject({
+export const desktopAdmissionMarkerSchema = z.strictObject({
   version: z.literal(1),
   owner: z.uuid(),
   manifests,
@@ -43,6 +44,7 @@ export function inspectDesktopAdmission(directory: string, current?: DesktopAdmi
       return JSON.stringify([ancestor.dev.toString(), ancestor.ino.toString(), 'absent-directory']);
     }
     terminalDirectory(directory, true);
+    assertNoOfflineRecovery(directory);
     const parent = lstatSync(directory, { bigint: true });
     if (!parent.isDirectory() || parent.uid !== BigInt(process.getuid!()) || parent.mode & 0o077n)
       throw new Error();
@@ -64,7 +66,7 @@ export function inspectDesktopAdmission(directory: string, current?: DesktopAdmi
     }
     if (!before.isFile() || before.nlink !== 1n) throw new Error();
     // Reuse the canonical/O_NOFOLLOW/private owner/mode and bounded-read implementation.
-    const marker = markerSchema.parse(
+    const marker = desktopAdmissionMarkerSchema.parse(
       JSON.parse(terminalFile(file, true, 16 * 1024, before).toString('utf8')),
     );
     const after = lstatSync(file, { bigint: true });
