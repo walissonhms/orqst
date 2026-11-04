@@ -22,6 +22,7 @@ import { mentionedHandles } from './mentions.js';
 const grantSchema = z.strictObject({
   actorId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   workspaceId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+  featureId: z.uuid().optional(),
   sourcePaneId: z.uuid(),
   targetPaneIds: z.array(z.uuid()).min(1).max(32),
   expiresAt: z.number().int().nonnegative().safe(),
@@ -50,6 +51,7 @@ export interface CommunicationAdapter {
 }
 export interface CommunicationContentScope {
   workspaceId: string;
+  featureId?: string;
   actorId: string;
   sourcePaneId: string;
   targetPaneId: string;
@@ -168,6 +170,7 @@ export class PaneCommunication {
         if (
           id === paneId ||
           target.workspaceId !== pane.workspaceId ||
+          target.featureId !== pane.featureId ||
           target.ownership !== 'managed' ||
           !target.routing ||
           target.state === 'closed'
@@ -198,13 +201,19 @@ export class PaneCommunication {
     });
   }
 
-  resolveMention(workspaceId: string, text: string): CommunicationPane {
+  resolveMention(workspaceId: string, text: string, featureId?: string): CommunicationPane {
+    if (featureId !== undefined) z.uuid().parse(featureId);
     const handles = mentionedHandles(z.string().min(1).max(2048).parse(text));
     if (handles.length !== 1) throw new Error('Exactly one explicit mention required');
     return this.journal.transaction((tx) => {
       const pane = tx
         .panes()
-        .find((p) => p.workspaceId === workspaceId && p.routing?.handle === handles[0]);
+        .find(
+          (p) =>
+            p.workspaceId === workspaceId &&
+            p.featureId === featureId &&
+            p.routing?.handle === handles[0],
+        );
       if (!pane || pane.ownership !== 'managed' || pane.state === 'closed')
         throw new Error('Mention target unavailable');
       return pane;
@@ -255,6 +264,7 @@ export class PaneCommunication {
         const pane = this.pane(tx, paneId);
         if (
           pane.workspaceId !== parsed.workspaceId ||
+          pane.featureId !== parsed.featureId ||
           pane.ownership !== 'managed' ||
           pane.state === 'closed'
         )
@@ -365,6 +375,8 @@ export class PaneCommunication {
       const grant = this.grants.get(next.grantId);
       const adapter = this.adapters.get(targetPaneId);
       if (
+        source.featureId !== next.featureId ||
+        pane.featureId !== next.featureId ||
         source.state === 'closed' ||
         source.ownership !== 'managed' ||
         !source.capabilities.canSend ||
@@ -521,6 +533,7 @@ export class PaneCommunication {
   ): CommunicationMessage {
     if (
       request.workspaceId !== grant.workspaceId ||
+      request.featureId !== grant.featureId ||
       request.sourcePaneId !== grant.sourcePaneId ||
       !grant.targetPaneIds.includes(request.targetPaneId)
     )
@@ -529,6 +542,8 @@ export class PaneCommunication {
     const target = this.pane(tx, request.targetPaneId);
     if (
       source.workspaceId !== grant.workspaceId ||
+      source.featureId !== grant.featureId ||
+      target.featureId !== grant.featureId ||
       target.workspaceId !== grant.workspaceId ||
       source.state === 'closed' ||
       source.ownership !== 'managed' ||
@@ -591,6 +606,7 @@ export class PaneCommunication {
       if (
         !previous ||
         previous.workspaceId !== grant.workspaceId ||
+        previous.featureId !== grant.featureId ||
         previous.correlationId !== request.correlationId ||
         previous.targetPaneId !== expectedSource ||
         terminalTask(previous)
@@ -649,6 +665,7 @@ export class PaneCommunication {
   private canRead(grant: Grant, m: CommunicationMessage): boolean {
     return (
       m.workspaceId === grant.workspaceId &&
+      m.featureId === grant.featureId &&
       m.sourcePaneId === grant.sourcePaneId &&
       m.actorId === grant.actorId &&
       grant.targetPaneIds.includes(m.targetPaneId)
@@ -672,7 +689,11 @@ export class PaneCommunication {
       } catch (error) {
         this.audit(
           tx,
-          { workspaceId: grant.workspaceId, paneId: grant.sourcePaneId },
+          {
+            workspaceId: grant.workspaceId,
+            paneId: grant.sourcePaneId,
+            featureId: grant.featureId,
+          },
           'denied',
           undefined,
           grant.actorId,
@@ -692,7 +713,7 @@ export class PaneCommunication {
     tx.saveMessage(updated);
     this.audit(
       tx,
-      { workspaceId: m.workspaceId, paneId: m.sourcePaneId },
+      { workspaceId: m.workspaceId, paneId: m.sourcePaneId, featureId: m.featureId },
       'state_changed',
       updated,
     );
@@ -700,7 +721,7 @@ export class PaneCommunication {
   }
   private audit(
     tx: CommunicationTransaction,
-    pane: Pick<CommunicationPane, 'paneId' | 'workspaceId'>,
+    pane: Pick<CommunicationPane, 'paneId' | 'workspaceId' | 'featureId'>,
     action: CommunicationAudit['action'],
     message?: CommunicationMessage,
     actorId?: string,
@@ -709,6 +730,7 @@ export class PaneCommunication {
       timestamp: this.now(),
       actorId: message?.actorId ?? actorId ?? null,
       workspaceId: pane.workspaceId,
+      ...(pane.featureId === undefined ? {} : { featureId: pane.featureId }),
       paneId: pane.paneId,
       messageId: message?.messageId ?? null,
       action,

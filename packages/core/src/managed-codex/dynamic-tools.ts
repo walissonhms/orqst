@@ -63,6 +63,7 @@ export function authorizedDelegation(
   const client = service.authorize({
     actorId: scope.actorId,
     workspaceId: scope.workspaceId,
+    ...(scope.featureId === undefined ? {} : { featureId: scope.featureId }),
     sourcePaneId: scope.sourcePaneId,
     targetPaneIds: [scope.targetPaneId],
     expiresAt: context.deadline,
@@ -156,6 +157,7 @@ export function authorizedDelegation(
           taskId: randomUUID(),
           correlationId: context.correlationId,
           workspaceId: scope.workspaceId,
+          ...(scope.featureId === undefined ? {} : { featureId: scope.featureId }),
           sourcePaneId: scope.sourcePaneId,
           targetPaneId: scope.targetPaneId,
           parentTaskId: null,

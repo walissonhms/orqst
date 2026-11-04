@@ -61,6 +61,7 @@ export function openCommunicationJournal(
             (p) =>
               p.paneId !== pane.paneId &&
               p.workspaceId === pane.workspaceId &&
+              p.featureId === pane.featureId &&
               p.routing?.handle === pane.routing?.handle,
           )
       )
@@ -72,6 +73,8 @@ export function openCommunicationJournal(
         const old = communicationPaneSchema.parse(JSON.parse(String(previous.metadata)));
         if (
           old.workspaceId !== pane.workspaceId ||
+          old.featureId !== pane.featureId ||
+          old.terminalId !== pane.terminalId ||
           old.displayId !== pane.displayId ||
           old.createdAt !== pane.createdAt ||
           JSON.stringify(old.binding) !== JSON.stringify(pane.binding)
@@ -180,6 +183,7 @@ export function openCommunicationJournal(
           timestamp: recovered.updatedAt,
           actorId: message.actorId,
           workspaceId: message.workspaceId,
+          ...(message.featureId === undefined ? {} : { featureId: message.featureId }),
           paneId: message.sourcePaneId,
           messageId: message.messageId,
           action: 'state_changed',

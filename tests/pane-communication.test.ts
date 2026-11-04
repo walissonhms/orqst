@@ -29,7 +29,7 @@ const capabilities = {
   canReportTaskCompletion: true,
   canCancel: true,
 };
-function setup(file = ':memory:') {
+function setup(file = ':memory:', workerTerminalId?: string) {
   const store = new Store(file);
   const journal = store.communicationJournal(randomUUID(), { recover: false });
   let clock = 100000;
@@ -59,6 +59,7 @@ function setup(file = ':memory:') {
     service.registerPane(
       {
         workspaceId,
+        ...(name === 'worker' && workerTerminalId ? { terminalId: workerTerminalId } : {}),
         name,
         provider,
         cliVersion: 'synthetic-v1',
@@ -483,11 +484,9 @@ test(
 test('crash recovery preserves identities and queued work; fences stale writer and quarantines ambiguous attempts', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orqst-synthetic-communication-'));
   const file = join(root, 'communication.db');
-  const f = setup(file);
+  const f = setup(file, randomUUID());
   let recovered: Store | undefined;
   try {
-    f.b.terminalId = randomUUID();
-    f.journal.transaction((tx) => tx.savePane(f.b));
     const client = f.authorize();
     const one = f.request();
     const two = f.request();

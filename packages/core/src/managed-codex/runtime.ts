@@ -43,6 +43,7 @@ export const codexRuntimePolicy = Object.freeze({
 });
 const startSchema = z.strictObject({
   workspaceId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+  featureId: z.uuid().optional(),
   name: z.string().trim().min(1).max(100),
   ownerId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   model: z.string().min(1).max(128).nullable(),
@@ -353,6 +354,7 @@ export class CodexStructuredRuntime {
       attempt.pane = this.communication.registerPane({
         terminalId: terminalIdentity(attempt.config).terminalId,
         workspaceId: attempt.input.workspaceId,
+        ...(attempt.input.featureId === undefined ? {} : { featureId: attempt.input.featureId }),
         name: attempt.input.name,
         routing: attempt.input.mentionHandle
           ? {
@@ -575,6 +577,7 @@ export class CodexStructuredRuntime {
       !target?.pane ||
       source === target ||
       source.pane.workspaceId !== target.pane.workspaceId ||
+      source.pane.featureId !== target.pane.featureId ||
       (source.pane.routing !== null &&
         !this.communication
           .resolvePane(source.pane.workspaceId, source.pane.paneId)
@@ -645,6 +648,9 @@ export class CodexStructuredRuntime {
       {
         actorId: root.source.pane.ownerId,
         workspaceId: root.source.pane.workspaceId,
+        ...(root.source.pane.featureId === undefined
+          ? {}
+          : { featureId: root.source.pane.featureId }),
         sourcePaneId: root.source.pane.paneId,
         targetPaneId: root.target.pane.paneId,
       },
@@ -683,6 +689,9 @@ export class CodexStructuredRuntime {
                 const bytes = this.readContent!(
                   {
                     workspaceId: root.source.pane!.workspaceId,
+                    ...(root.source.pane!.featureId === undefined
+                      ? {}
+                      : { featureId: root.source.pane!.featureId }),
                     actorId: root.source.pane!.ownerId,
                     sourcePaneId: root.source.pane!.paneId,
                     targetPaneId: root.source.pane!.paneId,
