@@ -917,6 +917,8 @@
     "next_blocked": "A preparação não pôde terminar com segurança. Arquivos e reservas existentes foram preservados. Não há nova tentativa automática; consulte o menu nativo Terminal antes de prosseguir."
   },
   "tauriPreparation": {
+    "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",
+    "retired": "Seleção aposentada após saídas confirmadas dos processos próprios e encerramento do Core. Saia e reabra o Tauri com perfis recém-preparados para selecionar novos terminais. Diários, metadados e resultados incertos anteriores são preservados. A reseleção na mesma janela ainda não está disponível.",
     "menu": "Preparar terminais Tauri",
     "openPrepared": "Revisar e abrir terminais preparados…",
     "executable": "Selecione o executável nativo revisado do Codex ou Claude (arquivo canônico; sem shim)",

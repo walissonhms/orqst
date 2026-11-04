@@ -9,6 +9,10 @@ separate opt-in Tauri bridge. Native file exports reuse the Electron savers thro
 narrow bridge; [native tray and source-gated alerts](tauri-native-desktop.md) are
 also implemented. Native human and provider acceptance remain pending.
 
+The native terminal menu also offers [signed retirement and safe reselection after
+restart](tauri-terminal-retirement.md). It preserves uncertain reservations and
+keeps old native selections locked for the application lifetime.
+
 ## Build and run
 
 Use the repository's Node 24 / pnpm 10 toolchain, a Rust toolchain and the

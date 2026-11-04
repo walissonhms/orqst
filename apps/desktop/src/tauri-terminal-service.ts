@@ -1,6 +1,10 @@
 import { randomUUID, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
+import {
+  TauriTerminalRetirement,
+  type TauriTerminalRetirementCore,
+} from './tauri-terminal-retirement.js';
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
 import {
   TerminalNativeBroker,
@@ -16,6 +20,7 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
     request: z.unknown(),
     focused: z.boolean(),
   }),
+  z.strictObject({ kind: z.literal('retire'), id: z.uuid(), slot, focused: z.boolean() }),
   z.strictObject({ kind: z.literal('revoke'), slot }),
   z.strictObject({ kind: z.literal('close'), slot }),
   z.strictObject({ kind: z.literal('confirm'), id: z.uuid(), accepted: z.boolean() }),
@@ -29,13 +34,16 @@ export class TauriTerminalService {
     { slot: number; resolve(value: boolean): void }
   >();
   private closed = false;
+  private readonly retirement?: TauriTerminalRetirement;
 
   constructor(
     supervisors: TerminalNativeSupervisor[],
     keys: { publicKey: KeyObject; privateKey: KeyObject },
     private readonly send: (value: object) => void,
-    translate: (key: string) => string,
+    private readonly translate: (key: string) => string,
+    core?: TauriTerminalRetirementCore,
   ) {
+    if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
     this.panes = supervisors.map((supervisor, slot) => {
       const document = Object.freeze({ slot });
       const state = { focused: false, busy: false, closed: false };
@@ -58,26 +66,7 @@ export class TauriTerminalService {
               (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
             );
             if (detail.length > 4096 || (details.paste?.length ?? 0) > 1024) return false;
-            const id = randomUUID();
-            return new Promise<boolean>((resolve) => {
-              const timer = setTimeout(() => finish(false), 30_000);
-              const finish = (accepted: boolean) => {
-                clearTimeout(timer);
-                this.confirmations.delete(id);
-                resolve(accepted && state.focused && !state.closed && !this.closed);
-              };
-              this.confirmations.set(id, { slot, resolve: finish });
-              this.send({
-                kind: 'confirm',
-                id,
-                slot,
-                title: translate('terminalNative.title'),
-                message: translate(`terminalNative.${details.operation}`),
-                detail,
-                cancel: translate('terminalNative.cancel'),
-                approve: translate('terminalNative.confirm'),
-              });
-            });
+            return this.confirm(slot, translate(`terminalNative.${details.operation}`), detail);
           },
         },
       );
@@ -103,6 +92,43 @@ export class TauriTerminalService {
         pane.state.closed = true;
         pane.broker.close();
       } else pane.broker.revokeInput();
+      return;
+    }
+    if (message.kind === 'retire') {
+      if (!this.retirement || this.panes.some((p) => p.state.busy)) {
+        this.send({
+          kind: 'retirement',
+          id: message.id,
+          status: 'denied',
+          fenced: this.retirement?.fenced ?? false,
+        });
+        return;
+      }
+      // Block every pane before the asynchronous preparation, including polling/read requests.
+      if (this.retirement.busy || this.retirement.fenced) {
+        this.send({
+          kind: 'retirement',
+          id: message.id,
+          status: 'denied',
+          fenced: this.retirement?.fenced ?? false,
+        });
+        return;
+      }
+      for (const p of this.panes) p.broker.revokeInput();
+      pane.state.focused = message.focused;
+      const status = await this.retirement.run({
+        current: () => !this.closed && !pane.state.closed && pane.state.focused,
+        confirm: (detail) =>
+          this.confirm(message.slot, this.translate('managedTerminal.retireConfirm'), detail),
+        closeBrokers: () => {
+          for (const p of this.panes) p.broker.close();
+        },
+      });
+      this.send({ kind: 'retirement', id: message.id, status, fenced: this.retirement.fenced });
+      return;
+    }
+    if (this.retirement?.busy || this.retirement?.fenced) {
+      this.send({ kind: 'reply', id: message.id, value: { status: 'denied' } });
       return;
     }
     const request = terminalNativeRequestSchema.safeParse(message.request);
@@ -132,6 +158,32 @@ export class TauriTerminalService {
     } finally {
       pane.state.busy = false;
     }
+  }
+
+  private confirm(slot: number, message: string, detail: string): Promise<boolean> {
+    const pane = this.panes[slot];
+    if (!pane || this.closed || pane.state.closed || !pane.state.focused)
+      return Promise.resolve(false);
+    const id = randomUUID();
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => finish(false), 30_000);
+      const finish = (accepted: boolean) => {
+        clearTimeout(timer);
+        this.confirmations.delete(id);
+        resolve(accepted && pane.state.focused && !pane.state.closed && !this.closed);
+      };
+      this.confirmations.set(id, { slot, resolve: finish });
+      this.send({
+        kind: 'confirm',
+        id,
+        slot,
+        title: this.translate('terminalNative.title'),
+        message,
+        detail,
+        cancel: this.translate('terminalNative.cancel'),
+        approve: this.translate('terminalNative.confirm'),
+      });
+    });
   }
 
   close(): void {

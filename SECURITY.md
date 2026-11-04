@@ -2,6 +2,13 @@
 
 ## Tauri preview process boundary — 2026-11-04
 
+The terminal retirement menu uses the existing evidence-bound signed Core RPC over
+the private native pipe. Every dispatched process needs its owned exit and every
+journal/reservation must remain owned. A possibly consumed proof or lost reply
+fences the client; native selection remains single-use until application restart.
+No observer/renderer retirement capability, automatic recovery or uncertain-capacity
+release is exposed. See [retirement security review](docs/development/tauri-terminal-retirement.md#security-review).
+
 Native preparation captures the original document URL/generation at menu dispatch,
 rechecks focus before starting its passive helper and invalidates that generation
 when another ORQST window takes focus or the dashboard closes. Returning to the

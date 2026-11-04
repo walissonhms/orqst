@@ -57,7 +57,7 @@ async function start() {
       return shutdown();
     process.stdout.write(line);
   };
-  const service = new TauriTerminalService(core.supervisors, keys, send, translate);
+  const service = new TauriTerminalService(core.supervisors, keys, send, translate, core);
   const store = terminalLayoutStore(
     directory,
     core.identities.map((identity) => identity.terminalId),
@@ -160,6 +160,9 @@ async function start() {
     quitNotice: translate('managedTerminal.quitNotice'),
     cancel: translate('terminalNative.cancel'),
     quit: translate('managedAgents.disconnectQuit'),
+    retire: translate('managedTerminal.retire'),
+    retireDenied: translate('tauriPreparation.retireDenied'),
+    retired: translate('tauriPreparation.retired'),
     panes: selection.map(({ config }, slot) => ({
       title: `${slot + 1} · ${providers[slot]}`,
       html: terminalDocument({

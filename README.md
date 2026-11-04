@@ -9,6 +9,10 @@ Prepared Tauri terminals now support a retained multi-pane workspace. See the
 and [pinned reuse review](docs/research/tauri-terminal-workspace.md). This visual
 parity increment preserves Electron until the full migration is accepted.
 
+Tauri now exposes the existing signed retirement through its native terminal menu.
+See [safe retirement and restart-based reselection](docs/development/tauri-terminal-retirement.md)
+for its evidence requirements and native acceptance limits.
+
 The [native coexistence fixture](docs/development/tauri-native-coexistence.md)
 opens isolated synthetic PTY/communication hosts in one Tauri process for human
 focus and permission checks. Native UI acceptance remains pending; returning from

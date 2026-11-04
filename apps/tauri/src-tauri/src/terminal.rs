@@ -33,6 +33,9 @@ struct Running {
     quit: String,
     confirming_quit: bool,
     exit_authorized: bool,
+    retiring: bool,
+    retire_denied: String,
+    retired_notice: String,
 }
 
 fn url(slot: usize) -> String {
@@ -177,7 +180,8 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         let Some(running) = guard.as_mut() else {
             return denied();
         };
-        if !running.loaded.get(slot).copied().unwrap_or(false)
+        if running.retiring
+            || !running.loaded.get(slot).copied().unwrap_or(false)
             || running.revoked[slot]
             || running.busy[slot]
         {
@@ -249,7 +253,14 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
             .map(|r| r.layout.clone())
             .unwrap_or(Value::Null);
     }
-    if !focused(&window).await {
+    let retiring = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| r.retiring);
+    if retiring || !focused(&window).await {
         return json!(false);
     }
     // Revoke immediately, before the asynchronous Node layout update arrives.
@@ -398,6 +409,105 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         });
 }
 
+/// Native menu only: no renderer request can retire a selection or unlock startup.
+async fn retire_selection(app: &tauri::AppHandle) {
+    let selected = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|r| r.layout["active"].as_u64())
+        .filter(|slot| *slot < 8);
+    let Some(slot) = selected.map(|slot| slot as usize) else {
+        return;
+    };
+    let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
+        return;
+    };
+    if self::slot(&view) != Some(slot) || !focused(&view).await {
+        return;
+    }
+    let (id, receiver, denied, retired) = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else { return };
+        if r.retiring
+            || r.busy.iter().any(|busy| *busy)
+            || !r.pending.is_empty()
+            || !r.loaded[slot]
+            || r.revoked[slot]
+        {
+            return;
+        }
+        r.retiring = true; // Fence every renderer before the first asynchronous Core operation.
+        r.sequence += 1;
+        let id = format!("00000000-0000-4000-8000-{:012x}", r.sequence);
+        let (sender, receiver) = oneshot::channel();
+        r.pending.insert(id.clone(), sender);
+        (
+            id,
+            receiver,
+            r.retire_denied.clone(),
+            r.retired_notice.clone(),
+        )
+    };
+    revoke_all(app);
+    let sent = send(
+        app,
+        json!({"kind":"retire", "id":id, "slot":slot, "focused":true}),
+    );
+    let result = if sent {
+        tokio::time::timeout(Duration::from_secs(60), receiver)
+            .await
+            .ok()
+            .and_then(Result::ok)
+    } else {
+        None
+    };
+    let success = result
+        .as_ref()
+        .is_some_and(|value| value["status"] == "retired" && value["fenced"] == true);
+    {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        if let Some(r) = guard.as_mut() {
+            r.pending.remove(&id);
+            // Only an explicit pre-proof refusal permits another fresh review. Timeout,
+            // transport loss and possibly consumed proof stay fenced until application exit.
+            if result.as_ref().is_some_and(|v| {
+                v["fenced"] == false
+                    && matches!(v["status"].as_str(), Some("denied" | "cancelled" | "busy"))
+            }) {
+                r.retiring = false;
+            }
+        }
+    }
+    if success {
+        revoke_all(app);
+        if let Some(workspace) = app.get_window("terminal-workspace") {
+            let _ = workspace.hide();
+        }
+        // A fresh selection requires a new native application lifetime. Do not reset the
+        // preparation latch or reuse old webviews, callbacks, journals or profile manifests.
+        stop(app);
+    }
+    if result
+        .as_ref()
+        .is_some_and(|value| value["status"] == "cancelled")
+    {
+        return;
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.set_focus();
+        app.dialog()
+            .message(if success { retired } else { denied })
+            .parent(&main)
+            .show(|_| {});
+    }
+}
+
 pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let Ok(files) = std::env::var("ORQST_TAURI_TERMINALS") else {
         return Ok(());
@@ -421,6 +531,9 @@ pub async fn start_selected(
     if paths.is_empty() || paths.len() > 8 || paths.iter().any(|p| p.len() > 2048) {
         return Err("Invalid explicit managed terminal selection".into());
     }
+    // Includes startup-environment selections: uncertain Core setup must never unlock
+    // native preparation or reuse a terminal window in this application lifetime.
+    crate::terminal_creation::fence_selection(app);
     let files = serde_json::to_string(&paths)?;
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");
@@ -493,6 +606,9 @@ pub async fn start_selected(
         quit: ready["quit"].as_str().unwrap_or("").into(),
         confirming_quit: false,
         exit_authorized: false,
+        retiring: false,
+        retire_denied: ready["retireDenied"].as_str().unwrap_or("").into(),
+        retired_notice: ready["retired"].as_str().unwrap_or("").into(),
     });
     let workspace = tauri::window::WindowBuilder::new(app, "terminal-workspace")
         .title(ready["title"].as_str().unwrap_or("ORQST"))
@@ -506,6 +622,13 @@ pub async fn start_selected(
         None => Menu::default(app)?,
     };
     let submenu = Submenu::new(app, ready["title"].as_str().unwrap_or("ORQST"), true)?;
+    submenu.append(&MenuItem::with_id(
+        app,
+        "terminal-retire-selection",
+        ready["retire"].as_str().unwrap_or("ORQST"),
+        true,
+        None::<&str>,
+    )?)?;
     for (slot, pane) in panes.iter().enumerate() {
         let label = format!("terminal-{slot}");
         submenu.append(&MenuItem::with_id(
@@ -576,6 +699,13 @@ pub async fn start_selected(
     menu.append(&submenu)?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
+        if event.id().as_ref() == "terminal-retire-selection" {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                retire_selection(&app).await;
+            });
+            return;
+        }
         if let Some(slot) = event
             .id()
             .as_ref()
@@ -603,6 +733,17 @@ pub async fn start_selected(
                         if let Some(r) = guard.as_mut() {
                             if let Some(sender) = r.pending.remove(id) {
                                 let _ = sender.send(value["value"].clone());
+                            }
+                        }
+                    } else if value["kind"] == "retirement" {
+                        let Some(id) = value["id"].as_str() else {
+                            break;
+                        };
+                        let state = app.state::<Terminals>();
+                        let mut guard = state.0.lock().unwrap();
+                        if let Some(r) = guard.as_mut() {
+                            if let Some(sender) = r.pending.remove(id) {
+                                let _ = sender.send(value.clone());
                             }
                         }
                     } else if value["kind"] == "confirm" {
