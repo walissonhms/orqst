@@ -32,6 +32,15 @@ does not recover or duplicate a process. The retained Tauri workspace now shares
 acceptance remains pending. See [workflow and exact limits](docs/development/terminal-workspace-layout.md)
 and the [pinned reuse decisions](docs/research/terminal-workspace-layout.md).
 
+## Tauri structured agent communication — 2026-11-04
+
+Prepared structured Codex profiles can now opt into the native **Managed agents**
+window through `ORQST_TAURI_AGENTS`. It reuses the existing signed starts, directed
+permissions, roles, mention composer and correlated result transport without Electron.
+This remains a two-member structured composition; native/provider acceptance and
+complete desktop parity are pending. See the [workflow and checklist](docs/development/tauri.md#structured-agent-communication--2026-11-04)
+and [pinned component review](docs/research/tauri-agent-communication.md).
+
 ## Tauri 2 migration preview — 2026-11-04
 
 A separate Tauri 2 application now runs the existing React dashboard with a bundled

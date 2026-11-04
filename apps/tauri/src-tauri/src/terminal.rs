@@ -678,6 +678,13 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
 }
 
 /// Closing the application requires explicit consent to disconnect owned tasks.
+pub fn reset_exit(app: &tauri::AppHandle) {
+    if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+        r.exit_authorized = false;
+        r.confirming_quit = false;
+    }
+}
+
 pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
     let fields = {
         let state = app.state::<Terminals>();
@@ -708,8 +715,9 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
                     r.exit_authorized = true;
                 }
                 app.exit(0);
-            } else if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
-                r.confirming_quit = false;
+            } else {
+                reset_exit(&app);
+                crate::agents::reset_exit(&app);
             }
         });
     true

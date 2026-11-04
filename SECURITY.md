@@ -829,3 +829,21 @@ parent blur and document reload retain input/consent revocation. Layout metadata
 uses the existing private, UUID-keyed, symlink-resistant preference store and
 cannot start, stop, adopt or recover a session. Observer HTTP/WS/cookie and source
 access controls remain unchanged. See the [component review](docs/research/tauri-terminal-workspace.md).
+
+## Tauri structured agent review — 2026-11-04
+
+The dedicated `managed-agents` native window alone receives `allow-agents-request`.
+Exact custom-protocol identity, transient user activation, visible native focus,
+load-generation fencing, strict request schemas and serial mutation checks protect
+the existing Core composition. Paths, host selection and admission stay native-only.
+Bounded exact reviews escape format controls, default to Cancel, expire and invalidate
+on blur/hide/reload/close. Only current affirmative approval signs a one-use Core
+challenge; permissions and exact-task grants remain separate. Unknown transports
+are fenced without retries, adoption or implicit release. Hiding keeps owned tasks.
+Quit requires explicit disconnect consent. Private pipe/output limits are enforced.
+
+No observer API, WebSocket, cookie, ingestion or external-session authority changes.
+The renderer receives no shell, filesystem or dialog plugin permission. Existing
+Core directed/cycle/TTL/ownership checks and secret-free public snapshots are reused.
+Synthetic acceptance simulates invoke/focus/dialog decisions; human native and real
+provider acceptance remain pending. See the [native contract](docs/api/tauri-agents.md).

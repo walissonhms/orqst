@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agents;
 mod sidecar;
 mod terminal;
 
@@ -21,7 +22,8 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .manage(sidecar::DesktopCore::default())
         .manage(terminal::Terminals::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view])
+        .manage(agents::Agents::default())
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request])
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
                 .then(|| terminal::resource(context.app_handle(), request.uri())).flatten();
@@ -34,6 +36,20 @@ fn main() {
                 .header("Cache-Control", "no-store")
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                .body(body).expect("static terminal response")
+        })
+        .register_uri_scheme_protocol("orqst-agents", |context, request| {
+            let resource = (request.method() == tauri::http::Method::GET)
+                .then(|| agents::resource(context.app_handle(), request.uri())).flatten();
+            let (status, body, content_type) = match resource {
+                Some((body, content_type)) => (200, body, content_type),
+                None => (404, Vec::new(), "text/plain"),
+            };
+            tauri::http::Response::builder().status(status)
+                .header("Content-Type", content_type)
+                .header("Cache-Control", "no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 .body(body).expect("static terminal response")
         })
         .setup(|app| {
@@ -57,15 +73,20 @@ fn main() {
                 terminal::stop(app.handle());
                 eprintln!("ORQST managed terminal startup refused.");
             }
+            if tauri::async_runtime::block_on(agents::start(app.handle())).is_err() {
+                agents::stop(app.handle());
+                eprintln!("ORQST managed agents startup refused.");
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
         .expect("ORQST could not initialize the native Desktop")
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { ref api, .. } = event {
-                if terminal::confirm_exit(app) { api.prevent_exit(); }
+                if terminal::confirm_exit(app) || agents::confirm_exit(app) { api.prevent_exit(); }
             }
             if let tauri::RunEvent::Exit = event {
+                agents::stop_and_wait(app);
                 terminal::stop_and_wait(app);
                 sidecar::stop(app);
             }

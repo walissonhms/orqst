@@ -3,8 +3,9 @@
 The owner-approved desktop target is Tauri 2 with the existing React dashboard,
 Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
-validated. The observer is unchanged; prepared managed terminals can opt into separate
-retained native workspace. Native exports, notifications and the full managed workflow remain in Electron.
+validated. The observer is unchanged; prepared managed terminals can opt into
+a retained native workspace. Prepared structured agents have a separate opt-in Tauri
+bridge. Native exports and notifications remain in Electron.
 
 ## Build and run
 
@@ -91,10 +92,11 @@ queries the colocated production Analytics worker and verifies graceful exit.
 This proves packaging and browser operation, not native WebKit/provider equivalence.
 
 The migration is **not complete**. Prepared PTY terminals have the opt-in bridge below;
-structured terminals, native exports, menus/tray parity, OS notifications,
+native exports, menus/tray parity, OS notifications,
 durable reconnect and profile migration require incremental
-parity work. Teams, permissions, editable handles and actual CLI mention/return
-acceptance remain separate requirements of the master specification. This change
+parity work. N-member teams and installed-provider CLI mention/return acceptance remain separate
+requirements of the master specification. Prepared structured permissions and editable
+handles now have the opt-in bridge below. This change
 does not run Codex, Claude or OpenCode, and does not certify any real-provider task.
 
 Windows/Linux builds, macOS Intel, signed/notarized installers and the complete
@@ -160,3 +162,66 @@ durable reconnect, Windows/Linux/Intel and signed installers. Native retirement 
 state/admission remain reserved rather than being deleted or automatically reused.
 No ingestion logic changed; `validate:local`, `validate:live`, full browser suite and
 real-provider acceptances were not run. Electron's implementation remains available.
+
+## Structured agent communication — 2026-11-04
+
+The existing **Managed agents** document now also runs in a dedicated Tauri window,
+using the existing Node structured composition, queue, permissions and result trail.
+This is independent from prepared PTY windows. On non-root macOS Apple Silicon,
+select exactly two **fresh** Codex existing-login manifests prepared with the current
+`terminal:setup` workflow and its explicit native-configuration acknowledgment:
+
+```sh
+export ORQST_TAURI_AGENTS='["/absolute/private/structured-a/terminal.json","/absolute/private/structured-b/terminal.json"]'
+pnpm dev:tauri
+
+# Explicit disposable integration; no installed provider or real credentials.
+pnpm accept:tauri-agents --authorize-synthetic
+```
+
+Open **Managed agents** in the native menu, enter a supported model and start each
+agent through its exact native review. Edit names, unique handles, descriptive roles
+and the directed communication checkbox. Routes begin denied. A saved route requires
+native review; a subsequent task requires separate authorization of its exact bytes.
+Choose either source and use permitted `@handle` suggestions; result and correlation
+state come from actual Core/CLI evidence. Stop each owned instance, wait for confirmed
+exit, then use signed retirement. No task result is inferred from terminal output.
+
+Profiles must not be owned by another app or contain an earlier journal. Tauri's
+admission directory is separate from Electron; this does not permit concurrent use
+of the same profile. Startup validates both before creating the native document;
+a refusal leaves the observer available and prints a fixed diagnostic without paths.
+Omit `ORQST_TAURI_AGENTS` for no structured host. The preview can also enable prepared
+PTY windows independently, with different profiles; both menus are retained.
+
+Closing this window hides it, cancels pending authorization and preserves its draft
+and owned tasks. Reopen through the same menu. Reload permanently fences that
+document. Quit asks for disconnect consent; cancelling either surface's quit review
+clears both approvals when PTY and structured windows are configured. Host cleanup
+does not prove arbitrary
+descendant containment. Retirement does not delete state or silently select a new
+pair; launching fresh profiles requires a new preview run. Durable reconnect and
+native profile selection/creation remain separate work.
+
+Checklist for this increment (synthetic evidence is not native/provider acceptance):
+
+- [x] Reuse the structured document/client/Core/SQLite without importing Electron.
+- [x] Dedicated native capability and exact custom-protocol document identity.
+- [x] Signed reviews for start, roles/routes, exact tasks, stop and retirement.
+- [x] Deny-by-default direction, explicit mentions, loop rejection and correlated return.
+- [x] Cancel/blur/close/expiry/oversize checks and no signature in renderer replies.
+- [x] Packaged synthetic hosts and shipped browser adapter integration.
+- [ ] Human native WebKit focus/dialog/keyboard/hide/quit cycle.
+- [ ] Installed Codex login, inference and source→worker→source acceptance.
+- [ ] N-member structured teams, mixed-provider communication and unified PTY UI.
+- [ ] Durable reconnect, profile creation/selection UI, other platforms and installers.
+
+See [private native API](../api/tauri-agents.md) and
+[pinned research, security differences and rollback](../research/tauri-agent-communication.md).
+
+Checks executed for this structured-client increment: final `pnpm test` passed
+600 tests; lint, typecheck, production build, three Rust tests, Clippy with warnings
+denied, macOS Apple Silicon debug app bundle and all three packaged Tauri acceptances
+passed. The six new boundary/review tests also passed separately. Initial load-related
+suite failures and browser test-instrumentation corrections are recorded in the
+component review. Native/provider acceptance remains unchecked above.

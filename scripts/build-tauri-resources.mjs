@@ -52,6 +52,9 @@ const result = await build({
 // Reuse the exact existing Node hosts and terminal renderer; no Electron runtime is shipped.
 const terminalResult = await build({
   entryPoints: {
+    'tauri-agents-host': 'apps/desktop/src/tauri-agents-host.ts',
+    'managed-agents-host': 'apps/desktop/src/managed-agents-host.ts',
+    'codex-structured-host': 'packages/core/src/managed-codex/native-host.ts',
     'tauri-terminal-host': 'apps/desktop/src/tauri-terminal-host.ts',
     'managed-terminal-core': 'packages/core/src/terminal/host.ts',
     'managed-terminal-host': 'packages/core/src/terminal/pty-host.ts',
@@ -74,6 +77,19 @@ const clientResult = await build({
   },
   absWorkingDir: root,
   outdir: join(output, 'terminal'),
+  bundle: true,
+  platform: 'browser',
+  target: 'safari17',
+  format: 'iife',
+  metafile: true,
+});
+const agentsClientResult = await build({
+  entryPoints: {
+    client: 'apps/tauri/src/agents-client.ts',
+    style: 'apps/desktop/src/managed-agents.css',
+  },
+  absWorkingDir: root,
+  outdir: join(output, 'agents'),
   bundle: true,
   platform: 'browser',
   target: 'safari17',
@@ -149,6 +165,7 @@ for (const input of Object.keys({
   ...result.metafile.inputs,
   ...terminalResult.metafile.inputs,
   ...clientResult.metafile.inputs,
+  ...agentsClientResult.metafile.inputs,
 })) {
   if (input.includes('node_modules/')) await includePackage(resolve(root, input));
 }

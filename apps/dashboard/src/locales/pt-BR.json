@@ -803,6 +803,8 @@
     "layoutMemoryOnly": "Não foi possível salvar o layout. Alterações permanecem em memória."
   },
   "managedAgents": {
+    "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
+    "tauriRetired": "Reserva encerrada após saídas comprovadas. Journals e resultados incertos são preservados. Para selecionar uma dupla nova, saia com segurança e reabra a prévia com novos perfis.",
     "title": "Agentes gerenciados",
     "terminal": "Terminal",
     "model": "ID exato do modelo",

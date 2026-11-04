@@ -14,6 +14,13 @@
     "security": {
       "capabilities": [
         {
+          "identifier": "owned-structured-agents",
+          "description": "Only the dedicated native agent document can review structured communication.",
+          "local": true,
+          "windows": ["managed-agents"],
+          "permissions": ["allow-agents-request"]
+        },
+        {
           "identifier": "owned-terminals",
           "description": "Only dedicated local terminal webviews can access the private native terminal client.",
           "local": true,
@@ -32,7 +39,8 @@
       "../dist/core/": "core/",
       "../dist/dashboard/": "dashboard/",
       "../dist/licenses/": "licenses/",
-      "../dist/terminal/": "terminal/"
+      "../dist/terminal/": "terminal/",
+      "../dist/agents/": "agents/"
     },
     "icon": [
       "../../desktop/resources/icons/orqst-32.png",
