@@ -99,3 +99,12 @@ A reverse preference export requires a separate explicit migration, never deleti
 of the database or execution reservations.
 
 Pinned source review: [research and security differences](../research/terminal-layout-sqlite.md).
+
+The shared layout status now says saving is **not confirmed** while metadata remains
+in memory. The same existing state covers pending Core acknowledgments and failed
+writes; it must not report a write failure before the asynchronous acknowledgment
+arrives. Both shipped locales use this evidence-qualified wording. Save revision
+handling and the durable-success indicator are unchanged. The existing locale,
+terminal-document and Electron/Tauri layout suites passed 20 tests for this wording
+follow-up; lint, typecheck and build passed again. The complete 678-test run belongs
+to the immediately preceding identity increment; it was not repeated for text only.
