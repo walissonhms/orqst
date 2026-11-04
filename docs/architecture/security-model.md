@@ -8,6 +8,11 @@ bounded Codex/Claude manifests; native pickers, paged Cancel-default consent, bi
 and directory revalidation, private state and separate write/open latches remain
 authoritative. The original visible dashboard URL and page-load generation plus
 bounded deadlines fence preparation; modal dialog focus is not provider authority.
+The URL/generation are captured before queueing the blocking helper and focus is
+rechecked before spawn. Another ORQST window gaining focus, or closing/destroying
+the dashboard, invalidates that generation permanently for the pending transaction.
+Returning to the dashboard cannot revive it. Native pickers/sheets do not count as
+another Tauri window, and no native command or capability is added.
 Starting a CLI retains the existing stricter native document/focus/signature checks.
 Cancelled opening can review the same completed files; uncertain effects cannot
 automatically retry or release reservations. New profiles disable ORQST MCP. See

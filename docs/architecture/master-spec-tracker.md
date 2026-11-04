@@ -188,3 +188,26 @@ lint, typecheck, build and resource staging passed; the complete Node suite pass
 target directory. Separate packaged synthetic structured-agent and eight-PTY
 acceptances passed. Native menu interaction, combined native coexistence, real CLI
 execution and the earlier quarantine decision remain unvalidated.
+
+## Native coexistence follow-up — 2026-11-04
+
+From `332aca9`, preparation now captures its document generation before dispatch,
+rechecks initial native focus and fences pending reviews when another ORQST window
+gains focus. An explicit isolated native fixture composes PTY and communication
+hosts without installed providers or credentials. See the
+[workflow, native checklist and retained failures](../development/tauri-native-coexistence.md)
+and [pinned Anywh review](../research/tauri-native-coexistence.md).
+
+Criteria 3, 5, 6, 8, 14 and 16 remain **Partial**. The native shell and both synthetic
+hosts launched, but UI inspection returned `cgWindowNotFound`; native menus,
+consent, focus, keyboard and combined graceful quit are still unaccepted. The
+attempt was explicitly terminated and retained as unsuccessful. No real provider
+started and no quarantined reservation was inspected or modified.
+
+Final checks: lint, typecheck, build, 628 complete Node tests with
+`--test-concurrency=2`, six Rust tests, Clippy with warnings denied, the macOS ARM64
+debug bundle, packaged Core acceptance, eight synthetic PTYs and structured-agent
+acceptance passed. Initial full-suite (627/628), Clippy and one staging failure
+reported `ENOSPC`; only this worktree's generated native intermediates/redundant
+staging copies were removed before successful retries. The complete final app is
+preserved. Synthetic/browser checks do not close the native checklist above.

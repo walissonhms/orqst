@@ -2,6 +2,12 @@
 
 ## Tauri preview process boundary — 2026-11-04
 
+Native preparation captures the original document URL/generation at menu dispatch,
+rechecks focus before starting its passive helper and invalidates that generation
+when another ORQST window takes focus or the dashboard closes. Returning to the
+dashboard cannot revive the pending review. Native picker/sheet transitions remain
+separate from Tauri window changes; signed CLI starts retain their stricter checks.
+
 The opt-in Tauri preview starts its fixed packaged Node Core in a separate
 private profile. The observer renderer has no Tauri capabilities or executable commands,
 restricts navigation to its owned loopback origin and denies new windows. Node

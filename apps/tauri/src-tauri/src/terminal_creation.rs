@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::{Manager, WebviewWindow};
+use tauri::{Manager, WebviewWindow, Window, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -116,7 +116,8 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
             create_action(id)
         };
         let Some(request) = request else { return };
-        {
+        let Ok(source) = window.url() else { return };
+        let generation = {
             let state = app.state::<Preparation>();
             let mut guard = state.0.lock().unwrap();
             if !guard.begin(
@@ -125,12 +126,16 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
             ) {
                 return;
             }
-        }
+            guard.generation
+        };
         let app = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            if run(&app, &window, request).is_err() {
+            if run(&app, &window, request, source.as_str(), generation).is_err() {
                 // Backend errors and selected paths are never printed to logs.
-                if window.is_visible().unwrap_or(false) {
+                if window.is_visible().unwrap_or(false)
+                    && window.is_focused().unwrap_or(false)
+                    && app.state::<Preparation>().0.lock().unwrap().generation == generation
+                {
                     app.dialog()
                         .message(translate("tauriPreparation.denied"))
                         .parent(&window)
@@ -148,9 +153,9 @@ fn run(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
     request: Value,
+    source: &str,
+    generation: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let source = window.url()?;
-    let generation = app.state::<Preparation>().0.lock().unwrap().generation;
     let deadline = Instant::now() + Duration::from_secs(300);
     // Native modal dialogs temporarily receive focus. Bind to the original visible
     // document and expiry, not the dialog's focus transition. CLI starts retain the
@@ -158,11 +163,11 @@ fn run(
     let current = || {
         Instant::now() < deadline
             && window.is_visible().unwrap_or(false)
-            && window.url().is_ok_and(|url| url == source)
+            && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
             && !crate::terminal::is_running(app)
     };
-    if !current() {
+    if !window.is_focused().unwrap_or(false) || !current() {
         return Err("Preparation document unavailable".into());
     }
     let script = app
@@ -330,9 +335,38 @@ pub fn invalidate(app: &tauri::AppHandle) {
     guard.generation = guard.generation.wrapping_add(1);
 }
 
+fn invalidates_preparation(label: &str, event: &WindowEvent) -> bool {
+    match event {
+        WindowEvent::Focused(true) => label != "main",
+        WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => label == "main",
+        _ => false,
+    }
+}
+
+pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    // Native picker/sheet focus is not a Tauri window transition. A different
+    // ORQST surface taking focus must fence the old preparation even after return.
+    if invalidates_preparation(window.label(), event) {
+        invalidate(window.app_handle());
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{create_action, State};
+    use super::{create_action, invalidates_preparation, State};
+    use tauri::WindowEvent;
+
+    #[test]
+    fn another_native_surface_fences_preparation_without_treating_a_modal_as_blur() {
+        assert!(!invalidates_preparation("main", &WindowEvent::Focused(false)));
+        assert!(!invalidates_preparation("main", &WindowEvent::Focused(true)));
+        for label in ["terminal-workspace", "managed-agents"] {
+            assert!(invalidates_preparation(label, &WindowEvent::Focused(true)));
+            assert!(!invalidates_preparation(label, &WindowEvent::Focused(false)));
+            assert!(!invalidates_preparation(label, &WindowEvent::Destroyed));
+        }
+        assert!(invalidates_preparation("main", &WindowEvent::Destroyed));
+    }
 
     #[test]
     fn native_latches_keep_cancelled_opening_reviewable_but_never_retry_uncertain_effects() {

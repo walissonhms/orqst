@@ -26,6 +26,7 @@ fn main() {
         .manage(agents::Agents::default())
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request])
         .manage(terminal_creation::Preparation::default())
+        .on_window_event(terminal_creation::on_window_event)
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
                 .then(|| terminal::resource(context.app_handle(), request.uri())).flatten();
