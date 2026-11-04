@@ -81,6 +81,7 @@ fn main() {
         .setup(|app| {
             desktop::install(app.handle())?;
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle())).ok();
+            desktop::configure(app.handle(), origin.as_deref());
             let allowed_origin = origin.clone();
             let feature_client = origin.as_deref().map(|origin| features::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
             let studio_client = origin.as_deref().map(|origin| terminal_creation::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
