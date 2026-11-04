@@ -19,6 +19,8 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { DatabaseSync } from 'node:sqlite';
+import { terminalLayoutRecordSchema } from '@orqst/protocol';
 import { _electron, expect, type ElectronApplication } from '@playwright/test';
 import { build } from 'esbuild';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
@@ -509,12 +511,22 @@ try {
       ),
     )
     .toBe(Math.min(count, 6));
-  const layoutDirectory = join(profile, 'terminal-layouts');
-  const layoutFile = join(
-    layoutDirectory,
-    (await readdir(layoutDirectory)).find((name) => name.endsWith('.json'))!,
-  );
-  const savedLayout = JSON.parse(await readFile(layoutFile, 'utf8'));
+  const layoutDirectory = join(profile, 'managed-agents', 'terminal-layouts');
+  const layoutFile = join(layoutDirectory, 'preferences.sqlite');
+  const readSavedLayout = () => {
+    const layoutDb = new DatabaseSync(layoutFile, { readOnly: true });
+    try {
+      const rows = layoutDb.prepare('SELECT metadata FROM terminal_layouts').all();
+      assert.equal(rows.length, 1);
+      return terminalLayoutRecordSchema.parse(JSON.parse(String(rows[0]!.metadata)));
+    } finally {
+      layoutDb.close();
+    }
+  };
+  // Native view updates precede the private Core's durable acknowledgment.
+  await expect.poll(() => readSavedLayout().columns).toBe(3);
+  const savedLayout = readSavedLayout();
+  assert.ok(!(await readdir(layoutDirectory)).some((file) => file.endsWith('.json')));
   assert.equal(savedLayout.columns, 3);
   assert.equal(savedLayout.order[0], ids[layoutSlot]);
   assert.ok(

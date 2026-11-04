@@ -28,6 +28,7 @@ export class TerminalPanels {
   private maximized: number | null = null;
   private displayed = new Set<number>();
   private persisted = true;
+  private saveRevision = 0;
   private firstOpen = true;
   private suspended = false;
 
@@ -35,7 +36,7 @@ export class TerminalPanels {
     private readonly window: BrowserWindow,
     private readonly preferences?: {
       initial?: TerminalLayoutPreferences;
-      save(state: TerminalLayoutPreferences): void;
+      save(state: TerminalLayoutPreferences): void | Promise<void>;
     },
   ) {
     const initial = preferences?.initial;
@@ -167,13 +168,31 @@ export class TerminalPanels {
   }
 
   private changed(): void {
+    this.persist();
+    this.layout();
+  }
+
+  private persist(): void {
+    const revision = ++this.saveRevision;
     try {
-      this.preferences?.save(this.snapshot());
-      this.persisted = true;
+      const pending = this.preferences?.save(this.snapshot());
+      this.persisted = !pending;
+      if (pending)
+        void pending.then(
+          () => {
+            if (revision !== this.saveRevision) return;
+            this.persisted = true;
+            this.layout();
+          },
+          () => {
+            if (revision !== this.saveRevision) return;
+            this.persisted = false;
+            this.layout();
+          },
+        );
     } catch {
       this.persisted = false;
     }
-    this.layout();
   }
 
   private revokeAll(): void {

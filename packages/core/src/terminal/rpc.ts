@@ -1,4 +1,4 @@
-import { TERMINAL_SLOT_CEILING } from '@orqst/protocol';
+import { terminalLayoutRecordSchema, TERMINAL_SLOT_CEILING } from '@orqst/protocol';
 import { z } from 'zod';
 
 const id = z.string().uuid();
@@ -71,6 +71,9 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
       .min(0)
       .max(TERMINAL_SLOT_CEILING - 1),
   }),
+  z.strictObject({ kind: z.literal('layoutRead'), id }),
+  z.strictObject({ kind: z.literal('layoutSave'), id, record: terminalLayoutRecordSchema }),
+  z.strictObject({ kind: z.literal('layoutImport'), id, record: terminalLayoutRecordSchema }),
   z.strictObject({ kind: z.literal('prepareRetire'), id }),
   z.strictObject({ kind: z.literal('retire'), id, proof }),
   z.strictObject({ kind: z.literal('prepareMcp'), id }),

@@ -4,6 +4,10 @@ For the current master-specification checklist, evidence, blockers and update ru
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
 roadmap and acceptance records remain available for their original scope and date.
 
+Terminal layout preferences now use private SQLite in both desktop shells, with a
+non-destructive first import of existing JSON. This restores visual metadata only.
+See [migration and limits](docs/development/terminal-layout-sqlite.md).
+
 Prepared Tauri terminals now support a retained multi-pane workspace. See the
 [workflow, delivery checklist and limits](docs/development/tauri-terminal-workspace.md)
 and [pinned reuse review](docs/research/tauri-terminal-workspace.md). This visual

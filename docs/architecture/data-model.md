@@ -464,3 +464,15 @@ changes. The single existing writer checks uniqueness across closed records and
 persists edits with `pane_routing_changed` metadata-only audit in one transaction.
 Recovery retains these fields while marking live identities unavailable; restoring
 metadata does not restore grants, adapters, payload bytes or process ownership.
+
+## Private terminal layout metadata — 2026-11-04
+
+The opt-in native layout adapter uses a separate private preferences Store, outside
+observer and execution-journal databases. `terminal_layout_schema` version 1 and
+`terminal_layouts(selection_id, metadata)` are created transactionally only on
+metadata access. The existing Store `user_version` is unchanged. The key hashes the
+reviewed sorted terminal UUID set; metadata validates against the pure protocol
+`terminalLayoutRecordSchema` on read/write. There are at most 1024 records of 16 KiB.
+No journal owner, PID, grant, prompt, output, session or process status is stored.
+JSON import preserves the original and atomically fills only an absent selection.
+See [layout migration and remaining team scope](../development/terminal-layout-sqlite.md).

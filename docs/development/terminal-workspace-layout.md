@@ -51,7 +51,11 @@ These controls show view selection, not invented task completion or unread statu
 
 ## Persistence and recovery boundary
 
-Main owns private, atomic `userData/terminal-layouts/<selection-hash>.json` files:
+The original JSON preferences described below are now imported non-destructively into
+[private SQLite](terminal-layout-sqlite.md) by both shells. Original JSON files remain
+unchanged; their guarded reader is retained for compatibility.
+
+The original main-owned `userData/terminal-layouts/<selection-hash>.json` contract:
 0700 directory, 0600 files, bounded reads, strict schema, canonical directory and
 O_NOFOLLOW reads/creation. Existing symlink/non-private targets are rejected.
 The selection hash uses sorted reviewed terminal UUIDs, not renderer-supplied paths.

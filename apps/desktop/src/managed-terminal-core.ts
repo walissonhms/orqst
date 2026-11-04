@@ -1,5 +1,9 @@
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
-import { terminalSlotLimit } from '@orqst/protocol';
+import {
+  terminalSlotLimit,
+  terminalLayoutRecordSchema,
+  type TerminalLayoutRecord,
+} from '@orqst/protocol';
 import { fork } from 'node:child_process';
 import { randomUUID, type KeyObject } from 'node:crypto';
 import type { TerminalNativeSupervisor } from '../../../packages/core/src/terminal/native-broker.js';
@@ -157,6 +161,15 @@ export async function connectManagedTerminalCore(
   );
   return {
     identities,
+    layouts: {
+      read: async () => {
+        const value = await call({ kind: 'layoutRead' });
+        return value === null ? null : terminalLayoutRecordSchema.parse(value);
+      },
+      save: (record: TerminalLayoutRecord) => call({ kind: 'layoutSave', record }),
+      import: async (record: TerminalLayoutRecord) =>
+        terminalLayoutRecordSchema.parse(await call({ kind: 'layoutImport', record })),
+    },
     supervisors,
     close,
     async closeAndWait(): Promise<void> {

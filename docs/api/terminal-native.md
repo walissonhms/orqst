@@ -369,3 +369,22 @@ requests and MCP preparation until explicit pre-proof cancellation/refusal, and
 permanently after possible proof consumption. Revoking either document cancels a
 pending selection-wide review. Focus chooses the reviewer only; it never swaps
 MCP source/worker roles. No renderer permission or execution action is added.
+
+## Private layout persistence RPC — 2026-11-04
+
+The existing inherited parent/Core IPC now accepts `layoutRead`, `layoutSave` and
+`layoutImport`, each with a UUID request ID. Save/import carry only a strict
+version-1 `terminalLayoutRecordSchema` record. They accept no path, selection key,
+process ID, command, capability or authorization proof. Core derives both the fixed
+private metadata database path and allowed terminal UUID set from its reviewed
+native configuration; foreign selections are denied. `layoutImport` fills an absent
+selection atomically and returns the existing record if one already exists.
+
+Desktop remains a client of SQLite. Only the existing owned Core opens the database.
+The renderer's existing layout actions still undergo their sender/focus checks;
+there is no new renderer-native command, observer HTTP/WS route or cookie change.
+Layout calls never touch terminal journals, ownership, admission or signed process
+operations. Async acknowledgments report the current save revision and cannot reopen
+hidden documents, change focus or activate a restored route. A rejected metadata
+operation leaves the view usable with the existing memory-only indicator.
+See [migration and limits](../development/terminal-layout-sqlite.md).

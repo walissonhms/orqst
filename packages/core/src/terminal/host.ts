@@ -1,4 +1,5 @@
 import { terminalSlotLimit } from '@orqst/protocol';
+import { terminalLayoutDatabase } from './layout-database.js';
 import { terminalIdentity } from './identity.js';
 // UI-independent owned Terminal component. The observer composition never imports this entry.
 import { createPublicKey, randomUUID } from 'node:crypto';
@@ -97,6 +98,12 @@ async function start() {
       admission,
       limit,
     );
+    // Only this Core chooses the fixed metadata path and reviewed member set.
+    const layouts = () =>
+      terminalLayoutDatabase(
+        process.argv[4]!,
+        selection.map(({ config }) => terminalIdentity(config).terminalId),
+      );
     const send = (value: object) => {
       if (process.connected)
         process.send!(value, (error) => {
@@ -123,6 +130,15 @@ async function start() {
       try {
         let value: unknown;
         switch (request.kind) {
+          case 'layoutRead':
+            value = layouts().read();
+            break;
+          case 'layoutSave':
+            layouts().save(request.record);
+            break;
+          case 'layoutImport':
+            value = layouts().import(request.record);
+            break;
           case 'terminal':
             value = pair.dispatch(request.slot, request.request);
             break;

@@ -16,7 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
+import { legacyTerminalLayoutStore as terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
 import type { TerminalLayoutPreferences } from '../apps/desktop/src/terminal-layout.js';
 
 const state: TerminalLayoutPreferences = {

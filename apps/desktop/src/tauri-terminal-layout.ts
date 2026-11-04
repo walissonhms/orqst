@@ -13,13 +13,14 @@ export class TauriTerminalLayout {
   private height = 860;
   private suspended = true;
   private persisted = true;
+  private saveRevision = 0;
   private firstOpen = true;
 
   constructor(
     private readonly count: number,
     private readonly preferences: {
       initial?: TerminalLayoutPreferences;
-      save(state: TerminalLayoutPreferences): void;
+      save(state: TerminalLayoutPreferences): void | Promise<void>;
     },
     private readonly send: (value: object) => void,
     private readonly revoke: (slot: number) => void,
@@ -94,13 +95,31 @@ export class TauriTerminalLayout {
 
   private changed(focus: number | null = null): void {
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
+    this.persist();
+    this.publish(focus);
+  }
+
+  private persist(): void {
+    const revision = ++this.saveRevision;
     try {
-      this.preferences.save(this.state);
-      this.persisted = true;
+      const pending = this.preferences.save(structuredClone(this.state));
+      this.persisted = !pending;
+      if (pending)
+        void pending.then(
+          () => {
+            if (revision !== this.saveRevision) return;
+            this.persisted = true;
+            this.publish();
+          },
+          () => {
+            if (revision !== this.saveRevision) return;
+            this.persisted = false;
+            this.publish();
+          },
+        );
     } catch {
       this.persisted = false;
     }
-    this.publish(focus);
   }
 
   resize(width: number, height: number): void {
@@ -121,12 +140,7 @@ export class TauriTerminalLayout {
   focus(slot: number): void {
     if (this.state.active === slot || !this.snapshot().visible.includes(slot)) return;
     this.state.active = slot;
-    try {
-      this.preferences.save(this.state);
-      this.persisted = true;
-    } catch {
-      this.persisted = false;
-    }
+    this.persist();
     this.publish();
   }
 

@@ -921,3 +921,8 @@ preparation through review. Either document's revocation cancels pending consent
 possibly consumed retirement proofs fence later MCP and terminal work. The native
 reviewer is selected by exact document and native first-responder focus. No new
 renderer capability, provider-tool approval or observed-session authority is added.
+
+Terminal layout preferences are opt-in visual metadata written by the owned Node
+Core into a separate private SQLite database. Legacy JSON import preserves originals.
+Restored UUIDs/names/layouts grant no process ownership or communication permission.
+See the [private layout RPC boundary](docs/api/terminal-native.md#private-layout-persistence-rpc--2026-11-04).

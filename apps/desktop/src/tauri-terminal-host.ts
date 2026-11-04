@@ -68,10 +68,11 @@ async function start() {
   const store = terminalLayoutStore(
     directory,
     core.identities.map((identity) => identity.terminalId),
+    core.layouts,
   );
   let initial;
   try {
-    initial = store.load();
+    initial = await store.load();
   } catch {
     // Invalid private preferences never affect terminal admission or restore processes.
   }
