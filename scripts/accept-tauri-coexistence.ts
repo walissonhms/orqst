@@ -7,6 +7,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
 import {
+  assertNoResidentCoexistenceApp,
+  nativeBundleIdentifier,
+} from './tauri/coexistence-preflight.js';
+import {
   managedCodexSettings,
   terminalExecutableSha256,
   type ManagedCodexConfig,
@@ -23,13 +27,17 @@ assert.equal(process.arch, 'arm64');
 assert.notEqual(process.getuid?.(), 0);
 process.umask(0o077);
 const app = await realpath(appPath);
-const identifier = execFileSync(
-  '/usr/bin/plutil',
-  ['-extract', 'CFBundleIdentifier', 'raw', join(app, 'Contents/Info.plist')],
-  { encoding: 'utf8' },
-).trim();
+const identifier = nativeBundleIdentifier(app);
 assert.match(identifier, /^dev\.orqst\.coexistence[a-z0-9]+$/);
+assertNoResidentCoexistenceApp(app, identifier);
+const executable = join(app, 'Contents/MacOS/orqst-desktop');
 const node = join(app, 'Contents/MacOS/orqst-node');
+const artifact = {
+  app,
+  identifier,
+  nativeSha256: terminalExecutableSha256(executable),
+  nodeSha256: terminalExecutableSha256(node),
+};
 const fixture = await realpath(await mkdtemp(join(tmpdir(), 'orqst-native-coexistence-')));
 const home = join(fixture, 'home');
 const project = join(fixture, 'project');
@@ -89,11 +97,13 @@ const port = address.port;
 await new Promise<void>((resolve, reject) =>
   server.close((error) => (error ? reject(error) : resolve())),
 );
-await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ identifier, mode, files }), {
+await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ artifact, mode, files, port }), {
   mode: 0o600,
 });
-console.log(JSON.stringify({ fixture, mode, port, nativeAcceptance: 'manual-pending' }));
-const child = spawn(join(app, 'Contents/MacOS/orqst-desktop'), [], {
+console.log(JSON.stringify({ fixture, artifact, mode, port, nativeAcceptance: 'manual-pending' }));
+// Recheck after compilation, immediately before spawn. External launches can still race.
+assertNoResidentCoexistenceApp(app, identifier);
+const child = spawn(executable, [], {
   env: {
     HOME: home,
     PATH: '/usr/bin:/bin',
@@ -106,17 +116,32 @@ const child = spawn(join(app, 'Contents/MacOS/orqst-desktop'), [], {
   },
   stdio: ['ignore', 'ignore', 'inherit'],
 });
+console.log(JSON.stringify({ fixture, pid: child.pid, port }));
 const deadline = setTimeout(() => child.kill('SIGTERM'), 600_000);
 const stop = () => child.kill('SIGTERM');
 process.once('SIGINT', stop);
 process.once('SIGTERM', stop);
-const [code, signal] = await once(child, 'exit').finally(() => {
-  clearTimeout(deadline);
-  process.removeListener('SIGINT', stop);
-  process.removeListener('SIGTERM', stop);
-});
+let spawnFailed = false;
+await once(child, 'exit')
+  .catch(() => {
+    spawnFailed = true;
+  })
+  .finally(() => {
+    clearTimeout(deadline);
+    process.removeListener('SIGINT', stop);
+    process.removeListener('SIGTERM', stop);
+  });
 // Keep private evidence/journals even on uncertain exit. Never release reservations.
-console.log(
-  JSON.stringify({ fixture, code, signal, nativeAcceptance: 'requires-recorded-human-results' }),
-);
-assert.equal(code, 0);
+const result = {
+  fixture,
+  pid: child.pid,
+  port,
+  code: child.exitCode,
+  signal: child.signalCode,
+  spawnFailed,
+  nativeAcceptance: 'requires-recorded-human-results',
+};
+await writeFile(join(fixture, 'exit.json'), JSON.stringify(result), { mode: 0o600 });
+console.log(JSON.stringify(result));
+assert.equal(spawnFailed, false);
+assert.equal(result.code, 0);
