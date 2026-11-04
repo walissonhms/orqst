@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-04 — Combined native package and Electron retirement inventory
+
+- Record the new `9e562fa` local Preview: 40 Rust tests in each of default and
+  custom-protocol configurations (the same 40), all-targets Clippy, dashboard,
+  17-notice resources, native build/bundle and final deep/strict signature pass.
+- Verify 112 configured resources and original Node bytes/Developer ID signature;
+  preserve the corrected verifier/deep-signing history in the local manifest,
+  four earlier apps unchanged and 26.7937 GiB free at build completion.
+- Keep preceding 52 focused Node/lint/type/format/rustfmt evidence separate; the
+  build did not rerun Node checks. No package launch/provider/native Quit acceptance.
+- Add the [retirement guide](docs/development/electron-retirement.md): parity and
+  ownership paths, shared modules/dependencies, real communication P0, shell gates
+  and selective runtime/script/test/CI removal. Documentation only; Electron remains.
+
 ## 2026-11-04 — Bounded preparation failure diagnostics
 
 - Carry strict stage/code/effects across the passive helper, native shell and UI;

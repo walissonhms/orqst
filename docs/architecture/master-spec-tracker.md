@@ -15,6 +15,28 @@ map to them in order so this tracker remains navigable in a checkout without tha
 file. The owner should decide separately whether the original specification should
 be versioned. Do not silently replace or edit the original.
 
+## Current migration state — 2026-11-04
+
+The combined `9e562fa` build and read-only Electron inventory are complete. See
+[package evidence, parity/responsibility matrix and retirement gates](../development/electron-retirement.md).
+The exact new local app has 112 verified resources, preserved Node signature and
+final deep/strict app verification. Default and custom-protocol each passed the
+same 40 Rust tests; preceding 52 focused Node checks were not rerun by the build.
+Four older apps remain intact; 26.7937 GiB was free at build completion.
+
+No full criterion is newly accepted. The package was not launched. P0 remains:
+actual Codex/OpenCode opening with effective provider/model, real task/result
+communication and final native Quit/security. Normal preparation uses `mcp:false`;
+interactive MCP is an explicitly opted-in pair with a separate task grant,
+incremental MCP enrollment is denied, and Feature Delegate remains disabled.
+
+After functional Codex/OpenCode, complete shell parity and remove the Electron
+runtime/dependency/scripts in cohesive slices. `apps/desktop` contains shared
+Tauri hosts/xterm/savers/assets and cannot be deleted wholesale. Preserve Core,
+PTY, SQLite, external read-only observers and all quarantined/uncertain evidence.
+Prior dated entries retain their original evidence; later package verification
+supersedes earlier compile-pending wording without accepting native/provider work.
+
 ## How to maintain this tracker
 
 For each delivery, update the relevant row, its evidence link and the dated log in

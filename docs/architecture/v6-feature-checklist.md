@@ -5,6 +5,28 @@ Authority: the [approved V6 package](../design/v6/README.md). This extends the
 Unchecked acceptance items remain incomplete even when a subset is implemented.
 Update this file in every V6 delivery with implementation and verification.
 
+## Current native package and Electron retirement — 2026-11-04
+
+- [x] Package combined source `9e562fa` after the completed build: 40 Rust tests
+      in each mode (same 40), Clippy, dashboard/resources/native build/bundle,
+      112 configured resources, Node integrity and final deep/strict signature.
+- [x] Complete the read-only retirement inventory and publish the
+      [parity/responsibility matrix, dependency paths and ordered gates](../development/electron-retirement.md).
+      Preserve four older apps; new package was not started. Earlier 52 focused
+      Node/lint/type/format/rustfmt checks were not rerun by the build.
+- [ ] Accept actual Codex/OpenCode opening and effective provider/model/variant;
+      historical Codex cause remains unknown. Older apps do not auto-update.
+- [ ] Deliver real task/result communication: normal preparation is `mcp:false`,
+      interactive MCP requires two opted-in members plus a task grant, enrollment
+      rejects MCP and Feature Delegate is disabled. Two CLIs are not acceptance.
+- [ ] Complete native Quit/security and shell parity, then selectively remove
+      Electron runtime/dependencies/scripts and port tests/CI without deleting
+      shared hosts/xterm/savers/styles/icons under `apps/desktop`.
+
+Full V6 requirements remain open as listed below. This package/inventory does not
+accept provider operation, managed recovery, arbitrary teams or final native UI.
+The earlier capability inventory is a pre-implementation snapshot, not current status.
+
 ## Combined preparation source integration — 2026-11-04
 
 - [x] Integrate Codex diagnostic source `dc92dd9` with OpenCode source `2db2ed0`
@@ -15,8 +37,9 @@ Update this file in every V6 delivery with implementation and verification.
       changed bytes/removal must leave zero commit calls and no terminal files.
 - [x] Pass 52 distinct focused tests (combined 50 plus two pure OpenCode profile
       cases), without repeating the shared selected-preparation file.
-- [ ] Compile/package and accept the combined native source and selected providers.
-      This integration runs Rust formatting only; the owner's Preview is unchanged.
+- [x] Compile/package the combined native source in the subsequent coordinated build;
+      see the current package record above. The source integration itself ran rustfmt only.
+- [ ] Accept selected providers/native workflow in that exact package; older apps remain unchanged.
 
 See [combined checks and boundaries](../development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04).
 

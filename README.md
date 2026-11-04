@@ -1,5 +1,19 @@
 # ORQST
 
+The combined `9e562fa` source now has a [separate local Preview package](docs/development/electron-retirement.md#current-delivery--2026-11-04):
+40 Rust tests passed in each of two configurations, with final resource/Node and
+signature integrity verified. The package has not been started. Actual Codex/OpenCode
+opening, effective models, real communication and final native Quit remain unaccepted.
+Older apps do not auto-update; the human must quit the previous version natively
+before opening the exact new package because of single-instance forwarding.
+
+The [Electron retirement guide](docs/development/electron-retirement.md) records
+parity, shared dependencies, responsibility boundaries and ordered acceptance gates.
+After Codex/OpenCode function correctly, complete migration and remove Electron;
+keep the shared hosts/xterm/savers under `apps/desktop` until their consumers are safe.
+Normal preparation still uses `mcp:false`; the existing opt-in pair and separate
+task grant do not yet provide Feature/N-member communication.
+
 The [bounded native preparation diagnostics](docs/development/terminal-preparation-diagnostics.md)
 now preserve the failing stage and possible effects without exposing raw errors.
 The normal picker keeps CLI → model → Open primary. Synthetic/static checks do
@@ -17,9 +31,9 @@ The [incremental native terminal source](docs/development/terminal-native-enroll
 now appends a selected CLI/model to the same Core and retained native workspace,
 with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks
 pass; native compilation and a locally signed Preview package now also pass.
-Actual terminal opening/provider execution remains under acceptance. The Codex
-opening refusal is unresolved; the existing Preview still has the earlier
-OpenCode discovery behavior until a new package is accepted.
+Actual terminal opening/provider execution remains under acceptance. The historical Codex
+opening refusal is unresolved. The new combined package includes the OpenCode
+correction; older Previews keep their earlier behavior until the human switches apps.
 Earlier one-selection descriptions below record the previous increment. The open
 Preview keeps its existing executable/resources.
 

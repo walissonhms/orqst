@@ -1,10 +1,30 @@
 # ORQST roadmap
 
+## Current migration priority — 2026-11-04
+
+The combined source `9e562fa` is packaged and verified; native/provider acceptance
+is still open. Follow the [parity matrix and ordered retirement checklist](docs/development/electron-retirement.md).
+
+1. Accept Codex/OpenCode opening and effective provider/model on the exact new app.
+2. Prove actual task/result communication through the existing reviewed Core/MCP;
+   normal preparation uses `mcp:false`, MCP append is denied and Delegate is disabled.
+3. Close native Quit/security and shell parity: unavailable Core, Files/Clipboard,
+   notification click routing, tray/lifecycle and supported-target acceptance.
+4. Remove Electron adapters/runtime/dependency/scripts, split mixed tests and close
+   CI/resource/license/package verification while preserving shared desktop modules.
+
+The owner prioritizes complete Electron removal after functional Codex/OpenCode.
+This is incremental reuse of Core/PTY/SQLite, not a new session manager. Preserve
+external read-only observation, user apps and all quarantined/uncertain evidence.
+Entries below retain earlier delivery scope; current compile/package status is
+summarized in the guide and does not upgrade real workflow acceptance.
+
 ## Preparation diagnostics source — 2026-11-04
 
 Bounded stage/code/effects and the simpler normal picker are implemented with
 synthetic/static checks and integrated with the OpenCode catalogue/default correction
-below. Compile and accept the combined native source without replaying uncertain attempts. See
+below. Compilation/packaging now pass; accept the native workflow without replaying
+uncertain attempts. See
 [diagnostic boundaries](docs/development/terminal-preparation-diagnostics.md).
 
 ## OpenCode equivalent installations — 2026-11-04
