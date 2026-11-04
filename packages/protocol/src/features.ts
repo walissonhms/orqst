@@ -62,3 +62,17 @@ export const featureConfigurationEventSchema = featureScopeSchema.extend({
   timestamp: z.number().int().nonnegative().safe(),
   terminalId: z.uuid().nullable(),
 });
+
+/** Persisted visual context only; never a runtime activation or an authorization grant. */
+export const featureViewStateSchema = z.strictObject({
+  contractVersion: z.literal(1),
+  storage: z.literal('core'),
+  workspaceId: featureScopeSchema.shape.workspaceId,
+  featureId: z.uuid().nullable(),
+  revision: z.number().int().nonnegative().safe(),
+});
+export type FeatureViewState = z.infer<typeof featureViewStateSchema>;
+export const featureViewSaveSchema = z.strictObject({
+  expectedRevision: z.number().int().nonnegative().safe(),
+  featureId: z.uuid().nullable(),
+});
