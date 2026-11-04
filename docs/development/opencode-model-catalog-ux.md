@@ -72,3 +72,33 @@ The filtered dashboard and existing resource script are used; root `pnpm build` 
 not run. Original Node Developer ID bytes/license, every previous Preview tree and
 Coexistence698 are compared. Only the outer app is ad-hoc signed, then deep/strict
 verified. The app is not launched. Generated outputs and logs stay uncommitted.
+
+## Frozen package verification
+
+Published source freeze: `b78342fed677ea34f449b042bced6f0bf0fea20d`, annotated tag
+`delivery/2026-11-04-opencode-models-ux-source` (includes integration `c98bfd3`
+and the review corrections). The final package-report commit changes Markdown only.
+
+Local artifacts: [ORQST Preview.app](../../dist/native-preview-opencode-models-ux/ORQST%20Preview.app),
+[build-manifest.json](../../dist/native-preview-opencode-models-ux/build-manifest.json)
+and [short technical report](../../dist/native-preview-opencode-models-ux/technical-report.md).
+All generated artifacts/logs remain outside Git.
+
+| Current check              | Actual result                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node focused source checks | 198 distinct cases, 18 suites, final combined run; no failures/skips; previous worker counts not added                                            |
+| Rust checks                | 62 custom-protocol tests; locked/offline all-target Clippy with `-D warnings`; rustfmt                                                            |
+| Source checks              | Full `pnpm lint` (ESLint/Prettier), `pnpm typecheck`, `git diff --check`                                                                          |
+| Build                      | Filtered dashboard, existing resources script, serial target691 locked/offline custom-protocol native build and app bundle                        |
+| Artifact integrity         | 115 configured resource files match before/after signing; distributed NOTICE exactly matches source including full pinned MIT grant               |
+| Node/signatures            | Original Developer ID Node bytes and distribution license unchanged; outer ad-hoc signing without deep resigning, deep/strict verification passed |
+| Preservation               | All seven previous Preview trees and target691 Coexistence698 match complete content/mode inventories                                             |
+| Cleanup                    | Original candidate branch preserved locally/remotely, worktree clean and no open files before Git worktree removal without force                  |
+
+Packaged native executable SHA-256:
+`c08c43aaf9a52bf5c449cbaa33cb37ea136bc5178437f77678966ddc2c7a782a`.
+Minimum free space through build/sign/verification: **25.0262 GiB** (4 GiB gate
+never approached). Dashboard retains its existing chunk-size warning; Cargo/Clippy
+have no warnings. No check was relaxed. The app was not started, native/provider
+acceptance was not performed, and no effective-model/communication/Quit/Electron
+retirement claim follows from compilation or packaging.

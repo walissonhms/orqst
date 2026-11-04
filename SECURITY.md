@@ -1067,3 +1067,9 @@ any commit; viewing details cannot authorize writes or bypass stale context. Exa
 operational Open and signed grants remain separate. No observer network surface,
 provider server/probe, auth DB or credential access is added. Root NOTICE distributes
 OpenCode's full pinned MIT grant. See [scope and checks](docs/development/opencode-model-catalog-ux.md).
+
+The integrated source was frozen/published at `b78342f`, with 198 distinct focused
+Node checks, 62 custom-protocol Rust tests, full lint/types/rustfmt and all-target
+Clippy. Its separate local package verifies 115 resources, the complete distributed
+MIT notice, original Node/license and deep/strict signatures; native/provider visual
+and runtime acceptance remain pending. See the current delivery evidence linked above.

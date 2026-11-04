@@ -9,6 +9,13 @@ details before any write. The full pinned MIT notice is retained. Native/provide
 acceptance and Electron retirement remain pending. See [integration, checks and
 package boundary](docs/development/opencode-model-catalog-ux.md).
 
+Current delivery passed 198 distinct focused Node cases, 62 Rust custom-protocol
+cases, full lint/types/format/rustfmt and all-target Clippy. The separate local app
+in `dist/native-preview-opencode-models-ux/` was built from published freeze
+`b78342f` (`delivery/2026-11-04-opencode-models-ux-source`): 115 resources, full MIT
+NOTICE, original Node/license and deep/strict signature verified; eight prior trees
+preserved. App not launched; native/provider acceptance remains pending.
+
 ## OpenCode preference catalogue and short native consent — 2026-11-04
 
 OpenCode now offers the models its own preference document recorded

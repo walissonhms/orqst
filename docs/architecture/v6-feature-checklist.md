@@ -479,7 +479,10 @@ operation was performed. See [implementation limits](../development/terminal-pre
 - [x] Pass 198 distinct focused Node cases, 62 Rust custom-protocol cases, Clippy
       all targets with warnings denied, full typecheck/rustfmt; worker counts not added.
 - [x] Pass full lint/format.
-- [ ] Complete separate frozen package verification;
+- [x] Freeze/publish `b78342f` with its source tag, build the separate local app,
+      verify 115 resources/NOTICE/original Node, outer ad-hoc and deep/strict signature,
+      preserve seven earlier Preview trees plus Coexistence698 and remove only the
+      clean, closed candidate worktree after preserving its branch;
       see [current delivery evidence](../development/opencode-model-catalog-ux.md).
 - [ ] Accept packaged native visuals, provider/effective model, communication, Quit
       and Electron retirement. Dynamic catalogue remains unapproved/unimplemented.

@@ -9,6 +9,13 @@ details before any write. The full pinned MIT notice is retained. Native/provide
 acceptance and Electron retirement remain pending. See [integration, checks and
 package boundary](docs/development/opencode-model-catalog-ux.md).
 
+Current delivery passed 198 distinct focused Node cases, 62 Rust custom-protocol
+cases, full lint/types/format/rustfmt and all-target Clippy. The separate local app
+in `dist/native-preview-opencode-models-ux/` was built from published freeze
+`b78342f` (`delivery/2026-11-04-opencode-models-ux-source`): 115 resources, full MIT
+NOTICE, original Node/license and deep/strict signature verified; eight prior trees
+preserved. App not launched; native/provider acceptance remains pending.
+
 ## Selected catalogue false invalidation — 2026-11-04
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
@@ -1294,7 +1301,9 @@ an attributed Apache-2.0 Anywh byte-framing adaptation; see the
 [pinned reuse audit and limits](docs/research/reuse-first-audit.md) and [NOTICE](NOTICE).
 This adds no provider capability or execution authority.
 
-Tucano was used as an architectural reference; no Tucano code or assets were copied.
+The bounded OpenCode preference parser also carries its pinned MIT copyright and full
+license in NOTICE. Existing attributed Tucano mention parsing remains recorded there;
+no Tucano server/probe code was incorporated for this delivery.
 Future independently developed Cloud modules may have separate terms; no Cloud
 service is included in this repository.
 

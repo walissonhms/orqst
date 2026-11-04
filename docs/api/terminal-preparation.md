@@ -175,3 +175,9 @@ run again before commit and provisioning. No new renderer command or execution g
 Original exact operational Open remains independent. Saved model proof adds optional
 `model.files[].openCodeModel`; its digest binds only the selected provider/model/variant.
 The preference read budget is enforced during reads, not solely by initial file size.
+
+The integrated source was frozen/published at `b78342f`, with 198 distinct focused
+Node checks, 62 custom-protocol Rust tests, full lint/types/rustfmt and all-target
+Clippy. Its separate local package verifies 115 resources, the complete distributed
+MIT notice, original Node/license and deep/strict signatures; native/provider visual
+and runtime acceptance remain pending. See the current delivery evidence linked above.
