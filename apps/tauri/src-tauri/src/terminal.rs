@@ -2,6 +2,7 @@
 //! The observer webview has no capability for these commands or this private pipe.
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -142,8 +143,7 @@ fn metadata_reply_matches(
         && crate::features::valid_reply(&value["value"])
 }
 
-fn advance_layout(r: &mut Running) {
-    r.layout_generation = r.layout_generation.saturating_add(1);
+fn publish_layout_generation(r: &mut Running) {
     let _ = r.child.write(
         format!(
             "{}\n",
@@ -151,6 +151,24 @@ fn advance_layout(r: &mut Running) {
         )
         .as_bytes(),
     );
+}
+
+fn advance_layout(r: &mut Running) {
+    r.layout_generation = r.layout_generation.saturating_add(1);
+    publish_layout_generation(r);
+}
+
+fn invalidate_presentation_state(generation: &mut u64, suspended: &mut bool) {
+    *generation = (*generation).saturating_add(1);
+    *suspended = true;
+}
+
+fn invalidate_layout(r: &mut Running) {
+    r.metadata_pending.clear();
+    r.metadata_mutating = None;
+    invalidate_presentation_state(&mut r.layout_generation, &mut r.presentation_suspended);
+    publish_layout_generation(r);
+    let _ = r.child.write(b"{\"kind\":\"layout-suspend\"}\n");
 }
 
 pub(crate) fn metadata_generation(app: &tauri::AppHandle) -> Option<u64> {
@@ -177,11 +195,7 @@ pub(crate) fn metadata_invalidate(app: &tauri::AppHandle) {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
     if let Some(r) = guard.as_mut() {
-        r.metadata_pending.clear();
-        r.metadata_mutating = None;
-        r.presentation_suspended = true;
-        advance_layout(r);
-        let _ = r.child.write(b"{\"kind\":\"layout-suspend\"}\n");
+        invalidate_layout(r);
     }
 }
 
@@ -1301,6 +1315,40 @@ fn valid_enrollment(value: &Value, id: &str, epoch: &str, slot: usize, capacity:
             .is_some_and(|html| !html.is_empty() && html.len() <= 256 * 1024)
 }
 
+fn enrollment_creation_allowed(
+    cancelled: bool,
+    receiver_closed: bool,
+    now: Instant,
+    deadline: Instant,
+    context_current: bool,
+    blocked: bool,
+) -> bool {
+    !cancelled && !receiver_closed && now < deadline && context_current && !blocked
+}
+
+/// Consume only this attempt; a newer Core/view must not be suspended by an old failure.
+fn fence_enrollment_presentation(
+    app: &tauri::AppHandle,
+    epoch: &str,
+    generation: u64,
+    id: &str,
+    slot: usize,
+) {
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    let Some(r) = guard.as_mut().filter(|r| r.epoch == epoch) else {
+        return;
+    };
+    r.pending.remove(id);
+    if let Some(intent) = r.pending_open.get_mut(slot) {
+        *intent = None;
+    }
+    r.enrollment_fenced = true;
+    if r.layout_generation == generation {
+        invalidate_layout(r);
+    }
+}
+
 /// Private native provisioning result only. No renderer command accepts a manifest path.
 pub(crate) async fn enroll_selected(
     app: &tauri::AppHandle,
@@ -1384,16 +1432,48 @@ pub(crate) async fn enroll_selected(
     };
     let (sender, receiver) = oneshot::channel();
     let handle = app.clone();
-    app.run_on_main_thread(move || {
-        let current =
-            !presentation_blocked(&handle) && metadata_generation(&handle) == Some(generation);
-        let created = current && create_terminal_view(&handle, slot).is_ok();
+    let creation_epoch = epoch.clone();
+    let creation_cancelled = Arc::new(AtomicBool::new(false));
+    let callback_cancelled = creation_cancelled.clone();
+    let creation_deadline = Instant::now() + Duration::from_secs(5);
+    let scheduled = app.run_on_main_thread(move || {
+        let context_current = handle
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|r| r.epoch == creation_epoch && r.layout_generation == generation);
+        let current = enrollment_creation_allowed(
+            callback_cancelled.load(Ordering::Acquire),
+            sender.is_closed(),
+            Instant::now(),
+            creation_deadline,
+            context_current,
+            presentation_blocked(&handle),
+        );
+        // Atomically claim before the effect: a timeout/cancellation winning this token is final.
+        let claimed = current
+            && callback_cancelled
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok();
+        let created = claimed
+            && Instant::now() < creation_deadline
+            && !sender.is_closed()
+            && create_terminal_view(&handle, slot).is_ok();
         let _ = sender.send(created);
-    })?;
-    if !tokio::time::timeout(Duration::from_secs(5), receiver)
-        .await
-        .is_ok_and(|r| matches!(r, Ok(true)))
-    {
+    });
+    if scheduled.is_err() {
+        creation_cancelled.store(true, Ordering::Release);
+        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
+        return Err("Native document creation unavailable".into());
+    }
+    let created =
+        tokio::time::timeout_at(tokio::time::Instant::from_std(creation_deadline), receiver).await;
+    // A queued UI callback observes cancellation/closed receiver even after this wait ends.
+    creation_cancelled.store(true, Ordering::Release);
+    if !created.is_ok_and(|r| matches!(r, Ok(true))) {
+        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
         return Err("Native document creation incomplete".into());
     }
     {
@@ -1405,6 +1485,8 @@ pub(crate) async fn enroll_selected(
             || r.confirming_quit
             || r.exit_authorized
         {
+            drop(guard);
+            fence_enrollment_presentation(app, &epoch, generation, &id, slot);
             return Err("Enrollment presentation expired".into());
         }
         r.pending_open[slot] = Some(OpeningIntent {
@@ -1438,7 +1520,8 @@ pub(crate) async fn enroll_selected(
         || r.confirming_quit
         || r.exit_authorized
     {
-        r.pending_open[slot] = None;
+        drop(guard);
+        fence_enrollment_presentation(app, &epoch, generation, &id, slot);
         return Err("Enrollment presentation incomplete".into());
     }
     r.enrollment_fenced = false;
@@ -2070,8 +2153,11 @@ mod opening_tests {
 
 #[cfg(test)]
 mod enrollment_tests {
-    use super::valid_enrollment;
+    use super::{
+        enrollment_creation_allowed, invalidate_presentation_state, valid_enrollment, OpeningIntent,
+    };
     use serde_json::json;
+    use std::time::{Duration, Instant};
     #[test]
     fn only_exact_ready_receipts_can_append_native_documents() {
         let id = "00000000-0000-4000-8000-000000000010";
@@ -2096,5 +2182,60 @@ mod enrollment_tests {
         let mut value = ready;
         value["receipt"]["member"]["admissionRevision"] = json!(2);
         assert!(!valid_enrollment(&value, id, epoch, 2, 8));
+    }
+    #[test]
+    fn expired_or_cancelled_ui_creation_cannot_materialize_a_webview_after_its_wait() {
+        let now = Instant::now();
+        let deadline = now + Duration::from_secs(5);
+        assert!(enrollment_creation_allowed(
+            false, false, now, deadline, true, false
+        ));
+        for at in [deadline, deadline + Duration::from_millis(1)] {
+            assert!(!enrollment_creation_allowed(
+                false, false, at, deadline, true, false
+            ));
+        }
+        assert!(!enrollment_creation_allowed(
+            true, false, now, deadline, true, false
+        ));
+        assert!(!enrollment_creation_allowed(
+            false, true, now, deadline, true, false
+        ));
+        assert!(!enrollment_creation_allowed(
+            false, false, now, deadline, false, false
+        ));
+        assert!(!enrollment_creation_allowed(
+            false, false, now, deadline, true, true
+        ));
+    }
+
+    #[test]
+    fn timed_out_presentation_rejects_late_layout_and_consumed_opening_epoch() {
+        let now = Instant::now();
+        let intent = OpeningIntent {
+            profile: "SYNTHETIC".into(),
+            document: 0,
+            presentation: 2,
+            expires: now + Duration::from_secs(60),
+        };
+        let late = json!({
+            "kind":"layout","generation":2,"revision":3,
+            "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":45,"bottom":34},
+            "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true},
+            "focus":1,"bounds":[{"slot":0,"rect":{"x":155,"y":45,"width":642,"height":821}},{"slot":1,"rect":{"x":797,"y":45,"width":643,"height":821}}]
+        });
+        let mut generation = 2;
+        let mut suspended = false;
+        assert!(crate::features::valid_layout(
+            &late, 2, 1440, 900, 2, generation
+        ));
+        assert!(intent.current(0, generation, now));
+        invalidate_presentation_state(&mut generation, &mut suspended);
+        assert!(suspended);
+        assert_eq!(generation, 3);
+        assert!(!crate::features::valid_layout(
+            &late, 2, 1440, 900, 2, generation
+        ));
+        assert!(!intent.current(0, generation, now));
     }
 }
