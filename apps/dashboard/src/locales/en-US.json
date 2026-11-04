@@ -800,7 +800,18 @@
     "displayName": "Pane display name",
     "rename": "Rename pane",
     "layoutSummary": "{{visible}} of {{shown}} open panes visible · position {{position}} of {{count}}. Use the pane buttons or Focus other pane to navigate.",
-    "layoutMemoryOnly": "Layout saving is not confirmed. Changes remain in memory."
+    "layoutMemoryOnly": "Layout saving is not confirmed. Changes remain in memory.",
+    "minimize": "Minimize pane (keep process)",
+    "paneMenu": "Pane menu: navigation, settings and details",
+    "settingsLayout": "Settings / layout",
+    "floatingUnavailable": "Docked layout. Floating geometry and per-Feature layout are not available in this terminal contract.",
+    "state_prepared": "Prepared",
+    "state_starting": "Starting",
+    "state_running": "Process running",
+    "state_exited": "Exited",
+    "state_start_failed": "Start failed",
+    "state_ownership_lost": "Ownership lost",
+    "unavailable": "Native transport unavailable. Keyboard input is disabled; process state is unconfirmed."
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",

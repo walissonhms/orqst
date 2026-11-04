@@ -119,6 +119,17 @@ const updateButtons = () => {
   }
 };
 const show = (key: string) => {
+  // Focus loss must never replace a relevant refusal or output gap with a benign notice.
+  if (key === 'revoked' && status.dataset.feedback === 'error') return;
+  status.dataset.feedback = [
+    'denied',
+    'cancelled',
+    'gap',
+    'focus_required',
+    'unavailable',
+  ].includes(key)
+    ? 'error'
+    : 'info';
   status.textContent = status.dataset[key] ?? '';
 };
 const revoke = () => {
@@ -157,7 +168,8 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
     if (reply.snapshot) {
       status.dataset.state = reply.snapshot.state;
       const lifecycle = document.getElementById('lifecycle')!;
-      lifecycle.textContent = lifecycle.dataset[reply.snapshot.state] ?? '';
+      lifecycle.textContent = lifecycle.getAttribute(`data-short-${reply.snapshot.state}`) ?? '';
+      lifecycle.title = lifecycle.dataset[reply.snapshot.state] ?? '';
       lifecycle.dataset.state = reply.snapshot.state;
       live = ['starting', 'running'].includes(reply.snapshot.state);
       if (!live) {
@@ -198,6 +210,10 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
         );
     }
     return reply;
+  } catch {
+    revoke();
+    show('unavailable');
+    return undefined;
   } finally {
     busy = false;
     status.dataset.pending = 'false';
@@ -434,7 +450,8 @@ const unsubscribeLayout = pane.onLayout((state) => {
       ? `${state.names[index]} · ${tab.dataset.provider}`
       : tab.dataset.provider!;
   }
-  heading.textContent = `${state.names[slot] || heading.dataset.slotName} · ${heading.dataset.provider}`;
+  heading.textContent = state.names[slot] || heading.dataset.slotName!;
+  heading.title = `${heading.textContent} · ${heading.dataset.provider}`;
   if (document.activeElement !== nameInput) nameInput.value = state.names[slot] ?? '';
   columnChoice.value = String(state.columns);
   splitSize.value = String(state.percent);
@@ -467,3 +484,21 @@ const unsubscribeLayout = pane.onLayout((state) => {
     .replaceAll('{{count}}', String(state.count));
 });
 window.addEventListener('pagehide', unsubscribeLayout, { once: true });
+
+// Native disclosure semantics retain keyboard navigation without intercepting xterm keys.
+const paneMenu = document.getElementById('pane-menu') as HTMLDetailsElement;
+const menuToggle = document.getElementById('pane-menu-toggle')!;
+paneMenu.addEventListener('toggle', () => {
+  menuToggle.setAttribute('aria-expanded', String(paneMenu.open));
+});
+paneMenu.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !paneMenu.open) return;
+  event.preventDefault();
+  event.stopPropagation();
+  paneMenu.open = false;
+  menuToggle.focus();
+});
+document.addEventListener('pointerdown', (event) => {
+  if (paneMenu.open && event.target instanceof Node && !paneMenu.contains(event.target))
+    paneMenu.open = false;
+});

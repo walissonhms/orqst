@@ -42,15 +42,23 @@ test('trusted chrome escapes project, version, provider and identity with no exe
   assert.match(html, /name="viewport"/);
 });
 
-test('process Stop remains outside disclosure, force stop and internal UUIDs inside', () => {
+test('compact chrome keeps stop visible and advanced controls in the pane disclosure', () => {
   const html = document();
+  const menu = html.indexOf('id="pane-menu"');
   const details = html.indexOf('<details class="session-details">');
-  assert.ok(html.indexOf('id="stop"') < details);
-  assert.ok(html.indexOf('id="kill"') > details);
-  assert.ok(html.indexOf('id="instance"') > details);
-  assert.ok(html.indexOf('id="terminal-identity"') > details);
+  const process = html.indexOf('<section class="process-controls"');
+  assert.ok(menu < details && details < process);
+  assert.ok(html.indexOf('id="stop"') > process);
+  for (const id of ['kill', 'instance', 'terminal-identity', 'login']) {
+    assert.ok(html.indexOf(`id="${id}"`) > details);
+    assert.ok(html.indexOf(`id="${id}"`) < process);
+  }
   assert.ok(html.includes(en.managedTerminal.aliasScope));
-  assert.match(html, /id="lifecycle"[^>]*>Prepared; no process started/);
+  assert.match(html, /id="lifecycle"[^>]*>Prepared/);
+  assert.match(html, /id="hide-pane"[^>]*aria-label="Minimize pane/);
+  assert.match(html, /id="pane-menu-toggle"[^>]*aria-expanded="false"/);
+  assert.ok(html.includes('T-001')); // Existing selection-local alias, qualified in details.
+  assert.ok(!html.includes('<select id="model'));
 });
 
 test('blocked and single-pane selections retain navigation without suggesting launch support', () => {
