@@ -10,11 +10,15 @@ import {
   assertNoResidentCoexistenceApp,
   nativeBundleIdentifier,
 } from './tauri/coexistence-preflight.js';
+import { captureNativeWindow, compileNativeWindowProbe } from './tauri/native-window.js';
 import {
   managedCodexSettings,
   terminalExecutableSha256,
   type ManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
+
+const WINDOW_WAIT_MS = 90_000;
+const STDERR_LIMIT = 32 * 1024;
 
 const [authorization, appPath, mode] = process.argv.slice(2);
 assert.equal(authorization, '--authorize-synthetic');
@@ -100,7 +104,10 @@ await new Promise<void>((resolve, reject) =>
 await writeFile(join(fixture, 'fixture.json'), JSON.stringify({ artifact, mode, files, port }), {
   mode: 0o600,
 });
+// Read-only WindowServer metadata probe: compiled privately, never captures pixels.
+const probe = compileNativeWindowProbe(join(fixture, 'window-probe'));
 console.log(JSON.stringify({ fixture, artifact, mode, port, nativeAcceptance: 'manual-pending' }));
+console.log(JSON.stringify({ windowProbe: probe === undefined ? 'unavailable' : 'armed' }));
 // Recheck after compilation, immediately before spawn. External launches can still race.
 assertNoResidentCoexistenceApp(app, identifier);
 const child = spawn(executable, [], {
@@ -114,9 +121,36 @@ const child = spawn(executable, [], {
     ORQST_TAURI_AGENTS: JSON.stringify(files[1]),
     ...(mode === 'combined' ? { ORQST_TAURI_TERMINALS: JSON.stringify(files[0]) } : {}),
   },
-  stdio: ['ignore', 'ignore', 'inherit'],
+  stdio: ['ignore', 'ignore', 'pipe'],
 });
-console.log(JSON.stringify({ fixture, pid: child.pid, port }));
+const pid = child.pid;
+assert.ok(pid !== undefined && pid > 1, 'native fixture did not start');
+console.log(JSON.stringify({ fixture, pid, port }));
+// The app's own stderr is private evidence: bounded, never a substitute for a window.
+let stderrBytes = 0;
+let stderrTail = Buffer.alloc(0);
+child.stderr?.on('data', (chunk: Buffer) => {
+  stderrBytes += chunk.length;
+  if (stderrTail.length < STDERR_LIMIT) {
+    stderrTail = Buffer.concat([stderrTail, chunk]).subarray(0, STDERR_LIMIT);
+  }
+});
+let window: Awaited<ReturnType<typeof captureNativeWindow>>;
+let failure: string | undefined;
+if (probe === undefined) {
+  window = { status: 'probe-unavailable', waitedMs: 0, samples: 0, windows: [] };
+  await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
+  console.log(JSON.stringify({ windowProbe: 'unavailable', cause: 'swiftc was not found' }));
+} else {
+  window = await captureNativeWindow(probe, pid, { timeoutMs: WINDOW_WAIT_MS });
+  await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
+  console.log(JSON.stringify({ window }));
+  // A process exit is not native acceptance, and an unfound window cannot be accepted.
+  if (window.status !== 'window-observed' && window.status !== 'window-exists-offscreen') {
+    failure = `No capturable native window was observed for the owned process (${window.status})`;
+    child.kill('SIGTERM');
+  }
+}
 const deadline = setTimeout(() => child.kill('SIGTERM'), 600_000);
 const stop = () => child.kill('SIGTERM');
 process.once('SIGINT', stop);
@@ -132,16 +166,21 @@ await once(child, 'exit')
     process.removeListener('SIGTERM', stop);
   });
 // Keep private evidence/journals even on uncertain exit. Never release reservations.
+await writeFile(join(fixture, 'native-stderr.log'), stderrTail, { mode: 0o600 });
 const result = {
   fixture,
-  pid: child.pid,
+  pid,
   port,
   code: child.exitCode,
   signal: child.signalCode,
   spawnFailed,
+  stderrBytes,
+  window: window.status,
   nativeAcceptance: 'requires-recorded-human-results',
+  ...(failure === undefined ? {} : { failure }),
 };
 await writeFile(join(fixture, 'exit.json'), JSON.stringify(result), { mode: 0o600 });
 console.log(JSON.stringify(result));
 assert.equal(spawnFailed, false);
+assert.equal(failure, undefined);
 assert.equal(result.code, 0);
