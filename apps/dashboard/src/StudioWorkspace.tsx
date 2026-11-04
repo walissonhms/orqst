@@ -1,14 +1,18 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, X } from 'lucide-react';
 import { FeatureWorkspace } from './FeatureWorkspace.js';
-import { Studio } from './Studio.js';
+import { TauriStudioPreparation } from './TauriStudioPreparation.js';
 
 /** One viewport shell; preparation never replaces or remounts the workspace. */
 export function StudioWorkspace({ onOverview }: { onOverview: () => void }) {
   const { t } = useTranslation();
   const preparation = useRef<HTMLDialogElement>(null);
+  const [visited, setVisited] = useState(false);
+  const native =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
   function openPreparation() {
+    setVisited(true);
     preparation.current?.showModal();
   }
   return (
@@ -41,7 +45,13 @@ export function StudioWorkspace({ onOverview }: { onOverview: () => void }) {
             <X size={18} aria-hidden="true" />
           </button>
         </div>
-        <Studio preparationOnly />
+        {visited && (
+          <section className="panel studio-setup" aria-labelledby="studio-setup-title">
+            {!native && <p className="notice">{t('studio.tauri.unavailable')}</p>}
+            <TauriStudioPreparation native={native} />
+            <p className="studio-boundary">{t('studio.grantsHelp')}</p>
+          </section>
+        )}
       </dialog>
     </div>
   );

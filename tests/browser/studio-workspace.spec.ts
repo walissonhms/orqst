@@ -16,7 +16,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
         },
       },
     });
-    Object.defineProperty(window, 'orqstStudio', {
+    Object.defineProperty(window, 'orqstTauriStudio', {
       value: {
         contractVersion: 1,
         async request({ action }: { action: string }) {
@@ -25,11 +25,11 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
             status: 'ok',
             snapshot: {
               count: 0,
-              limit: 2,
-              opened: false,
-              prepared: false,
+              generation: 1,
+              limit: 8,
+              selectionLocked: false,
               canCreate: true,
-              canSelect: true,
+              canReview: false,
               busy: false,
             },
           };
@@ -64,9 +64,22 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   const drawer = page.getByRole('dialog', { name: 'Terminal preparation', exact: true });
   await expect(drawer).toBeVisible();
   await expect(
-    drawer.getByRole('button', { name: 'Prepare Codex + OpenCode…', exact: true }),
+    drawer.getByRole('button', { name: 'Prepare and review terminals…', exact: true }),
   ).toBeEnabled();
+  await expect(drawer.getByText('Prepare Codex + OpenCode…', { exact: true })).toHaveCount(0);
+  await expect(drawer.getByLabel('CLI provider').locator('option')).toHaveCount(2);
+  await expect(drawer.getByLabel('Terminal count').locator('option')).toHaveCount(8);
+  await expect(drawer.getByText('This Desktop is running an older', { exact: false })).toHaveCount(
+    0,
+  );
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath('studio-preparation-en.png') });
+  await page.setViewportSize({ width: 390, height: 600 });
+  await expect(drawer).toHaveCSS('width', '390px');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  await expect(drawer.getByLabel('CLI provider')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('studio-preparation-compact-en.png') });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeFocused();
@@ -81,6 +94,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await expect(
     page.getByRole('dialog', { name: 'Preparação de terminais', exact: true }),
   ).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('studio-preparation-pt.png') });
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-pt.png') });
   expect(await page.evaluate(() => Reflect.get(window, 'studioCalls'))).toEqual([
