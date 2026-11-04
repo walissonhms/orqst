@@ -1,5 +1,9 @@
 # ORQST
 
+## Integrated opening diagnostics — 2026-11-04
+
+The opening fixes and reviewed bounded logger are integrated; 187 Node and 21 standalone Rust cases plus lint/types passed. Packaging evidence is recorded separately after publishing frozen source. No native/provider acceptance or reservation recovery is implied. See [integration, log location and remaining limits](docs/development/tauri-opening-diagnostics-integration.md).
+
 ## Tauri opening source integration — 2026-11-04
 
 The combined source releases application state before document getters and

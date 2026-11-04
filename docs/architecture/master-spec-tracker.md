@@ -1,5 +1,9 @@
 # Master specification delivery tracker
 
+## Opening diagnostics integration — 2026-11-04
+
+Logger writer/hooks/documentation are integrated above the UI-lock and admission fixes. 187 Node and 21 standalone Rust cases, full lint/types/rustfmt pass. Serial native checks and package results are separate generated evidence after source publication. No acceptance criterion becomes Accepted; old capacity remains untouched. See [integration](../development/tauri-opening-diagnostics-integration.md).
+
 ## Tauri opening source integration — 2026-11-04
 
 UI-getter lock release and passive admission/startup diagnostics are integrated

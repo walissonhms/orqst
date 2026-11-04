@@ -6,10 +6,14 @@
       preserving post-wait ownership checks and keyed late append/EOF protection.
 - [x] Verify the original stop cleanup body and intentional public Stop; pass
       187 synthetic Node and 8 pure Rust cases, lint/types/rustfmt/diff.
-- [ ] Integrate reviewed logger hooks and freeze combined source before one package build.
+- [x] Integrate reviewed logger hooks and documentation; verify 187 Node and 21
+      standalone Rust cases, full lint/types/rustfmt.
+- [ ] Publish final combined source freeze before serial native checks/package build;
+      actual later results are recorded in the generated package manifest.
 - [ ] Complete full native compilation and actual native/provider opening acceptance.
 
-See [integration and actual test scope](../development/tauri-opening-source-integration.md).
+See [current logger integration](../development/tauri-opening-diagnostics-integration.md)
+and [opening source integration and actual test scope](../development/tauri-opening-source-integration.md).
 
 ## Passive admission and startup diagnosis — 2026-11-04
 

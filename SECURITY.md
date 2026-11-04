@@ -1,5 +1,9 @@
 # Security policy
 
+## Integrated diagnostic security review — 2026-11-04
+
+The integration preserves native document/request/owner fences and keyed append/EOF cleanup; public Stop is byte-identical to the combined opening source. FIFO and append-error regressions passed in the standalone runner. Logger failure cannot authorize retry or release reservations. No HTTP/WebSocket/cookie/static-serving change. See [integration and remaining limits](docs/development/tauri-opening-diagnostics-integration.md).
+
 Tauri now explicitly denies new webview permission requests reaching supported
 backend callbacks and rejects browser downloads in every owned webview builder.
 Dashboard document navigation additionally requires an existing SPA/session path.

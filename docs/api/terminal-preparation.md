@@ -1,5 +1,9 @@
 # Native terminal catalogue and selected preparation
 
+## Optional local diagnostic projection — 2026-11-04
+
+The native shell projects validated preparation stage/code/effects into closed diagnostic enums and correlates helper, host and first open with an independent UUID. Native startup-N and all helper/host/public IPC shapes remain unchanged; the UUID grants no authority and is not added to requests or replies. No paths, auth, prompts, terminal content, owner/epoch/files or proofs are persisted. Log failure never changes an operational result. See [local contract and consultation](../development/local-diagnostics.md) and [integrated checks/limits](../development/tauri-opening-diagnostics-integration.md).
+
 This private native IPC contract adds no observer HTTP/WebSocket execution route.
 The renderer sends identifiers only. The owned Tauri helper receives its observer
 database and private preferences directory separately through native argv 4.

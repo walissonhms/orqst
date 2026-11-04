@@ -1,5 +1,9 @@
 # Changelog
 
+## Opening diagnostics integration — 2026-11-04
+
+Preserve original logger commits above the combined opening fixes, add FIFO/append-error regressions, and document source freeze, packaging boundaries and local log consultation. Existing reservations, public Stop and native authority are unchanged. See [integration](docs/development/tauri-opening-diagnostics-integration.md).
+
 ## Tauri opening source integration — 2026-11-04
 
 The combined source releases application state before document getters and

@@ -1,5 +1,9 @@
 # Security model
 
+## Integrated opening diagnostics review — 2026-11-04
+
+The reviewed integration adds only optional local diagnostic projection: no observer HTTP/WebSocket execution authority, no content-bearing generic log, and no reservation recovery. The standalone runner verifies FIFO rejection and append failure in disposable fixtures. Native document/request/owner fences and public Stop remain intact. See [integration and machine-evidence boundary](../development/tauri-opening-diagnostics-integration.md).
+
 ## Tauri webview policy — 2026-11-04
 
 Supported new browser permission requests are denied by the global native callback;

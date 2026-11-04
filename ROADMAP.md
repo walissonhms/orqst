@@ -1,5 +1,9 @@
 # ORQST roadmap
 
+## Opening diagnostics delivery — 2026-11-04
+
+Reviewed logger source is integrated and focused checks pass. Serial packaging is gated on the published source freeze; actual results belong to its generated manifest. Native/provider opening and evidence-backed reservation review remain open. See [delivery boundary](docs/development/tauri-opening-diagnostics-integration.md).
+
 ## Tauri opening source integration — 2026-11-04
 
 The combined source releases application state before document getters and
