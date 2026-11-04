@@ -333,7 +333,7 @@ pub(crate) fn document_current(app: &tauri::AppHandle, source: &str, document: u
     })
 }
 /// Same AppKit first-responder check as the terminal client; renderer focus is never proof.
-async fn focused(view: &Webview) -> bool {
+pub(crate) async fn focused(view: &Webview) -> bool {
     if !view.window().is_visible().unwrap_or(false) || !view.window().is_focused().unwrap_or(false)
     {
         return false;
