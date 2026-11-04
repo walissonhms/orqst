@@ -252,19 +252,39 @@ test('unknown model capabilities and changed source/view are refused before prov
     };
     await assert.rejects(
       prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
-      /unavailable/,
+      (error: unknown) => {
+        assert.deepEqual(Reflect.get(error as object, 'failure'), {
+          stage: 'selection',
+          code: 'selection_unavailable',
+          effects: 'not_started',
+        });
+        return true;
+      },
     );
     assert.deepEqual(readdirSync(f.context.parent), []);
     const codex = result.catalog.providers.find((entry) => entry.provider === 'codex')!;
     request.modelId = codex.models[0]!.id;
+    let commits = 0;
+    f.ports.commit = async () => {
+      commits++;
+      return true;
+    };
     f.ports.confirm = async () => {
       writeFileSync(join(f.home, '.codex/config.toml'), 'model="changed"\n', { mode: 0o600 });
       return true;
     };
     await assert.rejects(
       prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
-      /changed during review/,
+      (error: unknown) => {
+        assert.deepEqual(Reflect.get(error as object, 'failure'), {
+          stage: 'revalidation',
+          code: 'catalog_changed',
+          effects: 'not_started',
+        });
+        return true;
+      },
     );
+    assert.equal(commits, 0);
     assert.deepEqual(readdirSync(f.context.parent), []);
   } finally {
     f.close();

@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Preparation diagnostics source — 2026-11-04
+
+Bounded stage/code/effects and the simpler normal picker are implemented with
+synthetic/static checks. Coordinate catalog identity fixes separately, then compile
+and accept actual native model opening without replaying uncertain attempts. See
+[diagnostic boundaries](docs/development/terminal-preparation-diagnostics.md).
+
 ## Native terminal verification — 2026-11-04
 
 Integrated source `a48bce0` passed 39 Rust tests, packaged-feature tests, all-targets

@@ -6,6 +6,7 @@ import type {
   TauriStudioRequest,
   TauriStudioSnapshot,
   TerminalPreparationCatalog,
+  TerminalPreparationFailure,
 } from '@orqst/protocol';
 
 type Scope = { workspaceId: string; featureId: string | null };
@@ -27,6 +28,7 @@ export function TauriStudioPreparation({
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [failure, setFailure] = useState<TerminalPreparationFailure>();
   const sequence = useRef(0);
   const active = useRef(false);
   const inFlight = useRef(false);
@@ -41,6 +43,7 @@ export function TauriStudioPreparation({
       inFlight.current = true;
       setBusy(true);
       setNotice('');
+      if (!['snapshot', 'catalog'].includes(input.action)) setFailure(undefined);
       try {
         const reply = await native.request(input);
         if (!active.current || sequence.current !== token) return;
@@ -53,6 +56,7 @@ export function TauriStudioPreparation({
           setCatalog(reply.catalog);
           setModelId(''); // A refreshed catalog always needs a current explicit choice.
         } else {
+          if (reply.failure) setFailure(reply.failure);
           // Opening may move focus/generation. Inspect once; never repeat a mutation.
           const current =
             input.action !== 'snapshot' && !reply.snapshot
@@ -77,6 +81,7 @@ export function TauriStudioPreparation({
   }, [request, workspaceId, featureId]);
   useEffect(() => {
     active.current = true;
+    setFailure(undefined);
     setCatalog(undefined);
     setModelId('');
     void refresh();
@@ -101,19 +106,23 @@ export function TauriStudioPreparation({
   const scopeMatches = catalog?.workspaceId === workspaceId && catalog?.featureId === featureId;
   return (
     <>
-      <div className="studio-section-title">
-        <Terminal size={20} />
-        <h2 id="studio-setup-title">{t('studio.tauri.openTitle')}</h2>
-        <span className="studio-state">{t(`studio.tauri.state_${stage}`)}</span>
-      </div>
-      <p>{t('studio.tauri.openHelp')}</p>
-      <p className="studio-boundary">{t('studio.tauri.enrollmentLimit')}</p>
+      <span id="studio-setup-title" className="sr-only">
+        {t('studio.tauri.openTitle')}
+      </span>
+      {stage !== 'empty' && <p className="studio-state">{t(`studio.tauri.state_${stage}`)}</p>}
+      {failure && (
+        <p className="notice" role="alert">
+          {t(`tauriPreparation.failure_${failure.effects}`)} {t('tauriPreparation.failureStage')}:{' '}
+          {t(`tauriPreparation.stage_${failure.stage}`)}. {t('tauriPreparation.failureReason')}:{' '}
+          {t(`tauriPreparation.code_${failure.code}`)}.
+        </p>
+      )}
       {!workspaceId && (
         <p className="notice" role="status">
           {t('studio.tauri.chooseWorkspace')}
         </p>
       )}
-      {notice && (
+      {notice && !failure && (
         <p className="notice" role="status">
           {t(notice === 'denied' ? 'studio.tauri.denied' : `studio.${notice}`)}
         </p>
@@ -158,16 +167,12 @@ export function TauriStudioPreparation({
           </select>
         </label>
       </div>
-      {chosen && (
+      {chosen && chosen.reason !== 'ready' && (
         <p className="studio-next" role="status">
           {t(`studio.tauri.catalog_${chosen.reason}`)}
         </p>
       )}
-      {model && (
-        <p className="studio-next">
-          {t(`studio.tauri.source_${model.source}`)} · {t('studio.tauri.modelUnverified')}
-        </p>
-      )}
+      {model && <p className="studio-next">{t('studio.tauri.modelUnverified')}</p>}
       <div className="studio-actions">
         <button
           className="button primary"
@@ -203,6 +208,9 @@ export function TauriStudioPreparation({
       </div>
       <details className="studio-advanced">
         <summary>{t('studio.tauri.advanced')}</summary>
+        <p>{t('studio.tauri.openHelp')}</p>
+        <p>{t('studio.tauri.enrollmentLimit')}</p>
+        {model && <p>{t(`studio.tauri.source_${model.source}`)}</p>}
         <p>
           {t(
             snapshot?.liveEnrollment
@@ -251,11 +259,13 @@ export function TauriStudioPreparation({
           </button>
         </div>
       </details>
-      <p className="studio-next" role="status" aria-busy={busy || snapshot?.busy}>
-        {busy
-          ? t('studio.reviewing')
-          : t(`studio.tauri.next_${stage}`, { count: snapshot?.count ?? 0 })}
-      </p>
+      {(busy || stage !== 'empty') && (
+        <p className="studio-next" role="status" aria-busy={busy || snapshot?.busy}>
+          {busy
+            ? t('studio.reviewing')
+            : t(`studio.tauri.next_${stage}`, { count: snapshot?.count ?? 0 })}
+        </p>
+      )}
     </>
   );
 }

@@ -56,14 +56,51 @@ export const tauriStudioSnapshotSchema = z.strictObject({
   liveEnrollment: z.boolean().optional(),
 });
 export type TauriStudioSnapshot = z.infer<typeof tauriStudioSnapshotSchema>;
+// Bounded native diagnostics only; never include exception text, stderr or local identities.
+export const terminalPreparationFailureSchema = z
+  .strictObject({
+    stage: z.enum([
+      'bootstrap',
+      'request',
+      'catalog',
+      'selection',
+      'plan',
+      'review',
+      'revalidation',
+      'commit',
+      'provision',
+      'inspection',
+      'feature_assignment',
+      'opening',
+    ]),
+    code: z.enum([
+      'failed',
+      'catalog_changed',
+      'selection_unavailable',
+      'capacity_exceeded',
+      'review_too_large',
+      'selection_blocked',
+    ]),
+    effects: z.enum(['not_started', 'possible']),
+  })
+  .refine(
+    (failure) =>
+      failure.effects === 'possible' ||
+      !['bootstrap', 'provision', 'inspection', 'feature_assignment', 'opening'].includes(
+        failure.stage,
+      ),
+  );
+export type TerminalPreparationFailure = z.infer<typeof terminalPreparationFailureSchema>;
 export const tauriStudioReplySchema = z.union([
   z.strictObject({ status: z.literal('catalog'), catalog: terminalPreparationCatalogSchema }),
   z
     .strictObject({
       status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),
       snapshot: tauriStudioSnapshotSchema.optional(),
+      failure: terminalPreparationFailureSchema.optional(),
     })
-    .refine((reply) => reply.status !== 'ok' || reply.snapshot !== undefined),
+    .refine((reply) => reply.status !== 'ok' || reply.snapshot !== undefined)
+    .refine((reply) => !reply.failure || ['denied', 'unavailable'].includes(reply.status)),
 ]);
 export interface TauriStudio {
   readonly contractVersion: 1;

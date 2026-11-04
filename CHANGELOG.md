@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-04 — Bounded preparation failure diagnostics
+
+- Carry strict stage/code/effects across the passive helper, native shell and UI;
+  preserve uncertainty after possible effects and on unknown transport failures.
+- Keep CLI → model → Open primary, with technical details in Advanced and EN/PT
+  diagnostics; remove the empty-project prescription from normal refusal text.
+- Cover synthetic drift before commit and static EN/PT rendering. Historical
+  Codex cause and actual native opening remain unaccepted.
+
 ## 2026-11-04 — Native build and local Preview verification
 
 - Pass 39 Rust tests, Clippy and custom-protocol build; package and locally sign

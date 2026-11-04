@@ -1,5 +1,10 @@
 # ORQST
 
+The [bounded native preparation diagnostics](docs/development/terminal-preparation-diagnostics.md)
+now preserve the failing stage and possible effects without exposing raw errors.
+The normal picker keeps CLI → model → Open primary. Synthetic/static checks do
+not establish the cause of the historical Codex refusal or native opening acceptance.
+
 The [incremental native terminal source](docs/development/terminal-native-enrollment.md)
 now appends a selected CLI/model to the same Core and retained native workspace,
 with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks

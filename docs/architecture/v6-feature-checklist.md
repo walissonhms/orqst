@@ -307,3 +307,17 @@ the existing presentation fence on creation/presentation failure. Pure Rust sour
 cases cover callback cancellation and late layout refusal; only rustfmt parsing
 and diff validation initially ran for this follow-up. The subsequent integrated
 39-case Rust run executed these regressions successfully.
+
+## Bounded preparation failures and normal picker — 2026-11-04
+
+- [x] Preserve typed stage/code/effects from passive helper through native IPC;
+      validate exact allowlists and keep post-commit/unknown outcomes uncertain.
+- [x] Keep CLI → model → Open primary, remove the duplicate visible title, move
+      technical detail into Advanced, and preserve relevant EN/PT warnings.
+- [x] Cover synthetic review drift with zero commit calls and no terminal files;
+      focused selection/IPC 12/12, passive preparation 23/23 and static EN/PT 1/1.
+- [ ] Compile/package and accept native opening of the actual selected Codex model.
+
+Historical cause and mutable global catalog drift remain distinct: drift is a
+regression scenario, not a historical diagnosis. No Preview/runtime/provider
+operation was performed. See [implementation limits](../development/terminal-preparation-diagnostics.md).

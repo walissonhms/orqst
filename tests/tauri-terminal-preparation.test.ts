@@ -22,6 +22,8 @@ import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creatio
 import {
   prepareTauriTerminals as productionPreparation,
   tauriPreparationSchema,
+  tauriPreparationFailure,
+  TauriPreparationError,
   type TauriPreparationPorts,
 } from '../apps/desktop/src/tauri-terminal-preparation.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
@@ -260,7 +262,14 @@ test('expiry and directory drift after native review prevent publication', async
     };
     await assert.rejects(
       prepareTauriTerminals({ action: 'create', provider: 'codex', count: 1 }, f.context, f.ports),
-      /empty/,
+      (error: unknown) => {
+        assert.deepEqual(Reflect.get(error as object, 'failure'), {
+          stage: 'provision',
+          code: 'failed',
+          effects: 'possible',
+        });
+        return true;
+      },
     );
     assert.deepEqual(readdirSync(f.context.parent), ['unknown-reservation']);
   } finally {
@@ -294,7 +303,15 @@ test('production pins and strict native request bounds remain enforced', async (
   try {
     await assert.rejects(
       productionPreparation({ action: 'create', provider: 'codex', count: 1 }, f.context, f.ports),
-      /reviewed Codex/,
+      (error: unknown) => {
+        assert.deepEqual(tauriPreparationFailure(error), {
+          stage: 'plan',
+          code: 'failed',
+          effects: 'not_started',
+        });
+        assert.ok(!String(error).includes(f.context.node));
+        return true;
+      },
     );
     for (const request of [
       { action: 'create', provider: 'opencode', count: 1 },
@@ -410,3 +427,29 @@ for (const fault of ['eof', 'wrong-id', 'oversized'] as const) {
     },
   );
 }
+
+test('unknown preparation errors never become no-effect claims or leak raw data', () => {
+  const secret = 'SYNTHETIC /private/config token proof stderr';
+  assert.deepEqual(tauriPreparationFailure(new Error(secret)), {
+    stage: 'bootstrap',
+    code: 'failed',
+    effects: 'possible',
+  });
+  assert.deepEqual(
+    tauriPreparationFailure(
+      new TauriPreparationError({
+        stage: 'opening',
+        code: 'failed',
+        effects: 'not_started',
+      }),
+    ),
+    { stage: 'bootstrap', code: 'failed', effects: 'possible' },
+  );
+  const error = new TauriPreparationError({
+    stage: 'revalidation',
+    code: 'catalog_changed',
+    effects: 'not_started',
+  });
+  assert.deepEqual(tauriPreparationFailure(error), error.failure);
+  assert.ok(!JSON.stringify(tauriPreparationFailure(new Error(secret))).includes(secret));
+});
