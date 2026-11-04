@@ -1,4 +1,21 @@
 import type { Preferences, Snapshot, StoredEvent } from '@orqst/protocol';
+import {
+  desktopNotificationFrameSchema,
+  desktopNotificationSessionIdSchema,
+} from '@orqst/protocol';
+
+/** Project source-gated alerts onto the private, bounded native pipe, never OS text. */
+export function desktopNotificationFrame(result: { pending: number; alerts: NativeAlert[] }) {
+  return desktopNotificationFrameSchema.parse({
+    connected: true,
+    pending: result.pending,
+    alerts: result.alerts.map(({ category, silent, sessionId }) => ({
+      category,
+      silent,
+      ...(desktopNotificationSessionIdSchema.safeParse(sessionId).success ? { sessionId } : {}),
+    })),
+  });
+}
 
 /** Only the fields used by the source-gated native monitor. */
 export interface DesktopMonitorSnapshot {

@@ -1450,3 +1450,14 @@ MCP opt-in; normal Open remains disabled for MCP. Operational Open and one-task
 grants retain separate ownership, focus/document, revalidation and uncertainty
 fences. No new observer execution API or transport is introduced. See the
 [combined review and acceptance limits](../development/tauri-mcp-unavailable-integration.md).
+
+## Tauri notification view routing review — 2026-11-04
+
+Only Core source-gated allowlisted identities enter the bounded private monitor
+pipe. The OS receives fixed category text and an opaque numeric ID, with the
+session mapping confined to native RAM. Exact origin/generation/freshness and
+one-use tap correlation precede a fresh authenticated snapshot membership check.
+The dashboard keeps its existing draft guard and denies revoked/context-stale
+results. This view event grants no execution or managed-session authority; no
+HTTP/WebSocket/cookie/CSP/capability change is introduced. Actual OS delivery is
+not inferred from show(). See [source, contract and limits](../development/tauri-notification-route.md).

@@ -5,6 +5,14 @@ and browser downloads, and limits dashboard documents to existing SPA routes.
 See [source defaults, checks and remaining native/platform acceptance](docs/development/tauri-webview-policy.md).
 Native file exports retain their existing guarded flow; Electron retirement remains pending.
 
+## Tauri notification routing source — 2026-11-04
+
+Source-backed private identities now route native notification taps through a
+fresh authenticated snapshot and the existing dashboard draft guard. Numeric OS
+IDs map only in RAM; stale/revoked/invalid targets fail closed. See the
+[implementation, source review and native limits](docs/development/tauri-notification-route.md).
+Pure checks do not accept native click delivery, packaging or Electron retirement.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

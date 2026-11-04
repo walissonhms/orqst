@@ -52,6 +52,7 @@ import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 import { isSessionLocation, sessionFromLocation } from './session-link';
 import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
+import { NativeSessionNavigation } from './native-session-navigation';
 import { Agents } from './Agents';
 import { Studio } from './Studio';
 import { StudioWorkspace } from './StudioWorkspace';
@@ -643,6 +644,42 @@ export function App() {
     [nativeDesktop, sound, t],
   );
   const { snapshot, connection, error, refresh } = useObservatory(onLive);
+  const nativeNavigation = useRef<NativeSessionNavigation | null>(null);
+  const nativeNavigationContext = useRef({ key: '', token: {} });
+  const nativeNavigationKey = JSON.stringify([connection, workspaceId, view, selected]);
+  if (nativeNavigationContext.current.key !== nativeNavigationKey)
+    nativeNavigationContext.current = { key: nativeNavigationKey, token: {} };
+  const nativeNavigationActions = useRef({
+    context: () => nativeNavigationContext.current.token,
+    refresh,
+    open: (id: string, fresh: Snapshot, current: () => boolean) =>
+      openSession(id, undefined, { snapshot: fresh, current }),
+  });
+  nativeNavigationActions.current = {
+    context: () => nativeNavigationContext.current.token,
+    refresh,
+    open: (id, fresh, current) => openSession(id, undefined, { snapshot: fresh, current }),
+  };
+  useEffect(() => {
+    if (!navigator.userAgent.includes(' ORQSTTauri/0.1')) return;
+    const navigation = new NativeSessionNavigation({
+      context: () => nativeNavigationActions.current.context(),
+      refresh: () => nativeNavigationActions.current.refresh(),
+      open: (id, fresh, current) => nativeNavigationActions.current.open(id, fresh, current),
+    });
+    nativeNavigation.current = navigation;
+    const select = (event: Event) => {
+      const detail: unknown = event instanceof CustomEvent ? event.detail : null;
+      void navigation.request(detail);
+    };
+    window.addEventListener('orqst-native-session', select);
+    return () => {
+      navigation.cancel();
+      nativeNavigation.current = null;
+      window.removeEventListener('orqst-native-session', select);
+    };
+  }, []);
+  useEffect(() => nativeNavigation.current?.observe(snapshot), [snapshot]);
   function linkedDestination() {
     if (isSessionLocation(location) && !snapshot) {
       pendingSessionLink.current = true;
@@ -759,10 +796,15 @@ export function App() {
       applyView(page, '');
     });
   }
-  function openSession(id: string, artifact?: ArtifactExtractionRequest) {
-    const session = snapshot?.sessions.find((item) => item.id === id);
+  function openSession(
+    id: string,
+    artifact?: ArtifactExtractionRequest,
+    native?: { snapshot: Snapshot; current: () => boolean },
+  ) {
+    const session = (native?.snapshot ?? snapshot)?.sessions.find((item) => item.id === id);
     if (!session) return;
     const transition = () => {
+      if (native && !native.current()) return;
       setWorkspaceId(session.workspaceId);
       setQuery('');
       setStatus('');

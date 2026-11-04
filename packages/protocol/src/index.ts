@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export * from './dashboard-routes.js';
+export * from './desktop-notifications.js';
 export * from './analytics.js';
 export * from './analytics-export.js';
 export * from './lifecycle.js';

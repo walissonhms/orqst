@@ -430,7 +430,11 @@ test('native metadata pipe reuses live evidence, consumes replay and omits priva
     await until(() => frames().some((value) => value.alerts.length > 0));
     const notified = frames().filter((value) => value.alerts.length > 0);
     assert.deepEqual(notified, [
-      { connected: true, pending: 1, alerts: [{ category: 'completed', silent: true }] },
+      {
+        connected: true,
+        pending: 1,
+        alerts: [{ category: 'completed', silent: true, sessionId: 'synthetic-desktop-session' }],
+      },
     ]);
     const length = frames().length;
     await until(() => frames().length > length);
@@ -440,10 +444,7 @@ test('native metadata pipe reuses live evidence, consumes replay and omits priva
       await bootstrap(`http://127.0.0.1:${port}`),
     );
     assert.equal(current.notifications.length, 1);
-    assert.doesNotMatch(
-      run.stdout(),
-      /synthetic-desktop-session|private|PRIVATE|source|sessionId|token|cookie/i,
-    );
+    assert.doesNotMatch(run.stdout(), /private|PRIVATE|source|token|cookie/i);
     for (const line of run.stdout().split('\n')) assert.ok(Buffer.byteLength(line) <= 1024);
     run.child.stdin!.end();
     assert.equal((await run.exited).code, 0);
