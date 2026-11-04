@@ -1573,3 +1573,10 @@ key, HTTP/WS recovery authority, dependency or new public surface is added.
 Existing format-1 anchors and incomplete captures are preserved. Synchronous
 helper syscalls are not instantly interruptible by pipe/focus notifications.
 See [clock, threat and preserved-state limits](../development/offline-recovery-consent-clock.md).
+
+Offline administrative capture may consume an explicit native-only historical
+binding candidate. It changes no launch/claim authority and never reads current
+model-source contents. The exact preimage, receipt/context, durable private evidence
+and separately reviewed current critical metadata are required; source size/times
+are excluded only for those unread model sources. All recovery records preserve
+full freshness checks. [Detailed boundary](../development/offline-historical-binding.md).

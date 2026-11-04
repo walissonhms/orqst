@@ -21,6 +21,10 @@ fn allowed_dashboard_navigation(url: &tauri::Url, origin: Option<&str>) -> bool 
 }
 
 fn main() {
+    if offline_recovery::startup_arguments().is_err() {
+        eprintln!("Invalid administrative recovery arguments");
+        return;
+    }
     tauri::Builder::default()
         .on_permission_request(|_, _| PermissionResponse::Deny)
         // Adapted from Anywh lib.rs at the same pinned commit as sidecar.rs.
@@ -92,7 +96,7 @@ fn main() {
                 local_diagnostics::install(parent);
             }
             // Fixed native entry is selected before observer/Core, file hosts or managed providers.
-            if offline_recovery::requested() {
+            if offline_recovery::startup_arguments()?.is_some() {
                 return offline_recovery::install(app.handle());
             }
             let diagnostic = local_diagnostics::Attempt::begin();

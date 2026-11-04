@@ -23,14 +23,25 @@ function inode(path: string, missing = false): string | null {
   }
 }
 
+/** Exact historical enrollment serializer. No authority or filesystem effects. */
+export function terminalEnrollmentPreimage(
+  config: InteractiveTerminalConfig,
+  identities: readonly (string | null)[],
+  source: Buffer,
+  modelSources: readonly (readonly [string, string | null])[],
+): string {
+  return JSON.stringify([config, identities, source.toString('base64'), modelSources]);
+}
+
 /** Frozen originals are compared as metadata, never re-inspected as fresh/empty profiles. */
 export function terminalEnrollmentFile(file: string, config: InteractiveTerminalConfig) {
   const paths = [file, config.state, config.project, config.executable.path, config.node.path];
   const identities = paths.map((path) => inode(path));
   const source = terminalFile(file, true);
-  const modelSources = config.model?.files.map(({ path }) => [path, inode(path, true)]) ?? [];
+  const modelSources =
+    config.model?.files.map(({ path }): [string, string | null] => [path, inode(path, true)]) ?? [];
   const bindingDigest = terminalDigest(
-    JSON.stringify([config, identities, source.toString('base64'), modelSources]),
+    terminalEnrollmentPreimage(config, identities, source, modelSources),
   );
   return { file, config, identities, bindingDigest };
 }

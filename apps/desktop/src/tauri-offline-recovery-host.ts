@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { offlineRecoveryHelperArguments } from './offline-recovery-arguments.js';
 import {
   AdministrativeReviewPipe,
   ADMIN_FRAME_BYTES,
@@ -13,14 +13,14 @@ async function main() {
     process.arch !== 'arm64' ||
     process.getuid?.() === 0 ||
     !/^v24\./.test(process.version) ||
-    process.argv.length !== 3
+    ![3, 5].includes(process.argv.length)
   )
     throw new Error('Unsupported native administrative helper');
-  const parent = z.string().startsWith('/').max(2048).parse(process.argv[2]);
+  const { parent, historicalEvidenceFile } = offlineRecoveryHelperArguments(process.argv.slice(2));
   let sent = 0,
     received = 0;
   const pipe = new AdministrativeReviewPipe((value) => send(value));
-  const recovery = new TauriOfflineRecovery(parent, pipe);
+  const recovery = new TauriOfflineRecovery(parent, pipe, {}, historicalEvidenceFile);
   const deadline = setTimeout(close, 300_000);
   function close() {
     clearTimeout(deadline);

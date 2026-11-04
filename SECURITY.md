@@ -1134,3 +1134,10 @@ key, HTTP/WS recovery authority, dependency or new public surface is added.
 Existing format-1 anchors and incomplete captures are preserved. Synchronous
 helper syscalls are not instantly interruptible by pipe/focus notifications.
 See [clock, threat and preserved-state limits](docs/development/offline-recovery-consent-clock.md).
+
+The optional offline historical binding candidate is untrusted native argv data,
+not a renderer grant or a runtime identity. It must reproduce the complete frozen
+enrollment preimage and receipt/context, be durably captured privately and receive
+fresh phase approval. Current model-source content is deliberately not inspected;
+normal launch/model validation is unchanged. See
+[the exact boundary](docs/development/offline-historical-binding.md).

@@ -134,3 +134,12 @@ pre-review challenge issuance: v2 proofs bind the displayed complete intention
 fingerprint, native `Instant` plus continuous clock start in the AppKit delegate,
 and Core enforces the minimum effective deadline through the final commit.
 Existing format-1 anchors are loaded without migration or regeneration.
+
+## Optional exact historical binding candidate
+
+Native-only `--offline-recovery --offline-recovery-binding-evidence ABS` passes a
+candidate file to the existing capture helper through argv, never an action or
+renderer field. Evidence is data until the complete historical enrollment
+preimage matches frozen intent/receipt and native phase approval signs the full
+review. The new bundle retains exact private evidence bytes/metadata; all later
+phases use only that copy. [Contract, operator vector and current-content limits](../development/offline-historical-binding.md).

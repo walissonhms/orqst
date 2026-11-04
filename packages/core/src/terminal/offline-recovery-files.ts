@@ -34,6 +34,14 @@ import {
 import { managedClaudeConfigSchema } from './interactive-profile.js';
 import { managedOpenCodeConfigSchema } from './opencode-profile.js';
 import { terminalEnrollmentFile } from './enrollment-files.js';
+import {
+  historicalBindingSnapshotSchema,
+  historicalBindingLogical,
+  offlineModelSourceMetadata,
+  verifyHistoricalBinding,
+  type HistoricalBindingEvidence,
+  type HistoricalBindingSnapshot,
+} from './offline-historical-binding.js';
 
 export const RECOVERY_LIMIT = 64 * 1024 * 1024;
 
@@ -93,6 +101,7 @@ export const offlineSnapshotSchema = z.strictObject({
     .min(1)
     .max(8),
   membership: z.array(z.string()).max(256),
+  historicalBinding: historicalBindingSnapshotSchema.optional(),
   logicalDigest: digest,
   rawDigest: digest,
 });
@@ -106,10 +115,20 @@ export function assertHeldRecoverySnapshot(directory: string, value: unknown) {
         files: snapshot.files,
         journals: snapshot.journals,
         membership: snapshot.membership,
+        ...(snapshot.historicalBinding ? { historicalBinding: snapshot.historicalBinding } : {}),
       }),
     ) !== snapshot.rawDigest
   )
     throw new Error('Recovery archived snapshot digest changed');
+  if (
+    snapshot.historicalBinding &&
+    JSON.stringify(
+      offlineModelSourceMetadata(
+        snapshot.historicalBinding.currentSources.map((source) => source.path),
+      ),
+    ) !== JSON.stringify(snapshot.historicalBinding.currentSources)
+  )
+    throw new Error('Recovery held model source metadata changed');
   for (const file of snapshot.files) {
     if (file.path === join(directory, 'active-pair.json')) continue;
     if (JSON.stringify(readRecoveryFile(file.path, OFFLINE_JOURNAL_BYTES)) !== JSON.stringify(file))
@@ -231,7 +250,15 @@ const receiptSchema = z.strictObject({
 });
 
 /** No Store, live SQLite connection, provider file, executable or auth configuration is opened. */
-export function snapshotOfflineReservation(directory: string, scratch: string) {
+export function snapshotOfflineReservation(
+  directory: string,
+  scratch: string,
+  historical?: {
+    evidence: HistoricalBindingEvidence;
+    sha256: string;
+    record: ReturnType<typeof readRecoveryFile>;
+  },
+) {
   terminalDirectory(directory, true);
   terminalDirectory(scratch, true);
   if (directory === scratch) throw new Error('Recovery scratch overlaps source');
@@ -251,6 +278,7 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
   const membership = names();
   const files = [take(join(directory, 'active-pair.json'))];
   const marker = desktopAdmissionMarkerSchema.parse(json(files[0]!));
+  if (historical) files.push(historical.record);
   if (!marker.manifests.length || new Set(marker.manifests).size !== marker.manifests.length)
     throw new Error('Recovery initial manifests incomplete');
   if (directoryNames(directory).some((name) => name.startsWith(`retired-${marker.owner}-`)))
@@ -303,6 +331,7 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
   const seenStates = new Set<string>();
   const seenTerminals = new Set<string>();
   let selectedProject: string | undefined;
+  let historicalBinding: HistoricalBindingSnapshot | undefined;
   const journals = paths.map((path, slot) => {
     const manifest = take(path);
     files.push(manifest);
@@ -340,7 +369,41 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
       throw new Error('Recovery lifecycle/rollback uncertainty');
     const binding = terminalEnrollmentFile(path, config);
     const intent = intents.find((entry) => entry.member.slot === slot);
-    if (intent && intent.member.bindingDigest !== binding.bindingDigest)
+    let bindingDigest = binding.bindingDigest;
+    if (historical && historical.evidence.member.slot === slot) {
+      const evidence = historical.evidence;
+      const intentSource = files.find(
+        (source) =>
+          source.path ===
+          join(directory, `enrollment-${marker.owner}-${evidence.enrollment.opId}.json`),
+      );
+      const receiptSource = files.find(
+        (source) =>
+          source.path ===
+          join(directory, `enrollment-${marker.owner}-${evidence.enrollment.opId}.receipt.json`),
+      );
+      if (
+        !intent ||
+        evidence.marker.owner !== marker.owner ||
+        evidence.marker.sha256 !== files[0]!.sha256 ||
+        evidence.enrollment.opId !== intent.input.opId ||
+        evidence.enrollment.epoch !== intent.input.epoch ||
+        evidence.enrollment.intentSha256 !== intentSource?.sha256 ||
+        evidence.enrollment.receiptSha256 !== receiptSource?.sha256 ||
+        evidence.member.terminalId !== config.identity.terminalId ||
+        evidence.member.manifestSha256 !== manifest.sha256 ||
+        evidence.member.manifestIdentity !== `${manifest.identity[0]}:${manifest.identity[1]}` ||
+        evidence.member.frozenBindingDigest !== intent.member.bindingDigest
+      )
+        throw new OfflineEnrollmentBindingChanged();
+      const currentSources = offlineModelSourceMetadata(
+        config.model?.files.map((file) => file.path) ?? [],
+      );
+      verifyHistoricalBinding(evidence, binding, currentSources);
+      historicalBinding = { evidenceSha256: historical.sha256, evidence, currentSources };
+      bindingDigest = evidence.member.frozenBindingDigest;
+    }
+    if (intent && intent.member.bindingDigest !== bindingDigest)
       throw new OfflineEnrollmentBindingChanged();
     if (
       intent &&
@@ -383,7 +446,7 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
       path: base.path,
       slot,
       terminalId: config.identity.terminalId,
-      bindingDigest: binding.bindingDigest,
+      bindingDigest,
       databaseIdentity: [
         base.identity[0]!,
         base.identity[1]!,
@@ -395,6 +458,7 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
       logical,
     };
   });
+  if (historical && !historicalBinding) throw new OfflineEnrollmentBindingChanged();
   if (new Set(journals.map((journal) => journal.logical.epoch)).size !== 1)
     throw new Error('Recovery mixed journal owners');
   for (const file of files) {
@@ -415,8 +479,18 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
     )
       throw new Error('Recovery SHM metadata changed');
   }
+  if (
+    historicalBinding &&
+    JSON.stringify(
+      offlineModelSourceMetadata(historicalBinding.currentSources.map((source) => source.path)),
+    ) !== JSON.stringify(historicalBinding.currentSources)
+  )
+    throw new Error('Recovery model source metadata changed');
   // Raw journal/WAL bytes and file metadata are captured separately from checkpoint-stable facts.
   const logical = {
+    ...(historicalBinding
+      ? { historicalBinding: historicalBindingLogical(historicalBinding) }
+      : {}),
     marker,
     membership,
     immutable: files.filter(
@@ -439,8 +513,16 @@ export function snapshotOfflineReservation(directory: string, scratch: string) {
     files,
     journals,
     membership,
+    ...(historicalBinding ? { historicalBinding } : {}),
     logicalDigest: terminalDigest(JSON.stringify(logical)),
-    rawDigest: terminalDigest(JSON.stringify({ files, journals, membership })),
+    rawDigest: terminalDigest(
+      JSON.stringify({
+        files,
+        journals,
+        membership,
+        ...(historicalBinding ? { historicalBinding } : {}),
+      }),
+    ),
   };
 }
 export type OfflineReservationSnapshot = ReturnType<typeof snapshotOfflineReservation>;

@@ -63,6 +63,7 @@ export class TauriOfflineRecovery {
     private readonly dependencies: NonNullable<
       ConstructorParameters<typeof OfflineReservationRecovery>[1]
     > = {},
+    private readonly historicalEvidenceFile?: string,
   ) {}
   async receive(input: unknown): Promise<AdministrativeOutcome> {
     const request = administrativeRequestSchema.parse(input);
@@ -172,7 +173,7 @@ export class TauriOfflineRecovery {
       let outcome: AdministrativeOutcome;
       if (request.action === 'capture') {
         if (request.bundle !== null) throw new Error('Capture cannot supply a bundle');
-        await this.recovery.capture(paths.admission, paths.bundles);
+        await this.recovery.capture(paths.admission, paths.bundles, this.historicalEvidenceFile);
         outcome = 'captured';
       } else {
         const bundle = z.string().parse(request.bundle);

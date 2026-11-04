@@ -1,5 +1,15 @@
 # Changelog
 
+## Exact offline historical enrollment binding — 2026-11-04
+
+- Accept an explicit private native candidate only when one model-source inode
+  reconstructs the complete frozen enrollment preimage and receipt/context.
+- Persist evidence in the new signed capture bundle; separate historical logical
+  facts from freshly reviewed critical source metadata without reading provider
+  configuration content or changing launch/model guards.
+- Preserve old captures/anchors, partial material, native consent clocks and
+  phase-specific approval. See [scope and operator syntax](docs/development/offline-historical-binding.md).
+
 ## Offline approval clock correction — 2026-11-04
 
 - Review immutable complete intention before a fresh version-2 recovery proof.

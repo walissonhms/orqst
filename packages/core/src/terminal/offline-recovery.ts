@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { terminalDigest } from './authority.js';
 import { terminalDirectory } from './codex-profile.js';
+import { historicalBindingEvidenceSchema } from './offline-historical-binding.js';
 import {
   readRecoveryFile,
   RECOVERY_GATE,
@@ -249,9 +250,26 @@ export class OfflineReservationRecovery {
   private sync(directory: string) {
     syncRecoveryDirectory(directory, this.dependencies.sync);
   }
+  private historicalEvidence(bundle: string) {
+    const file = join(bundle, 'historical-binding-evidence.json');
+    if (!this.present(file)) return undefined;
+    return this.readHistoricalEvidence(file);
+  }
+  private readHistoricalEvidence(file: string) {
+    const record = readRecoveryFile(file, 4096);
+    if ((BigInt(record.identity[3]!) & 0o7777n) !== 0o600n)
+      throw new Error('Historical binding evidence must be private');
+    const evidence = historicalBindingEvidenceSchema.parse(
+      JSON.parse(
+        new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(record.bytes, 'base64')),
+      ),
+    );
+    return { evidence, sha256: record.sha256, bytes: record.bytes, record };
+  }
   private snapshot(directory: string, bundle: string) {
+    const historical = this.historicalEvidence(bundle);
     const scratch = mkdtempSync(join(bundle, 'inspection-'));
-    return snapshotOfflineReservation(directory, scratch);
+    return snapshotOfflineReservation(directory, scratch, historical);
   }
   private async approve<P extends AdministrativeRecoveryIntent['phase']>(
     proposal: AdministrativeRecoveryIntent & { phase: P },
@@ -289,6 +307,22 @@ export class OfflineReservationRecovery {
             path: file.path,
             record: JSON.parse(Buffer.from(file.bytes, 'base64').toString('utf8')) as unknown,
           })),
+        ...(snapshot.historicalBinding
+          ? {
+              historicalBinding: snapshot.historicalBinding,
+              modelSourceIdentityDrift: {
+                path: snapshot.historicalBinding.evidence.historicalModelSource.path,
+                historicalIdentity:
+                  snapshot.historicalBinding.evidence.historicalModelSource.identity,
+                currentIdentity: snapshot.historicalBinding.currentSources[
+                  snapshot.historicalBinding.evidence.historicalModelSource.index
+                ]!.identity!.slice(0, 2).join(':'),
+                scope: 'historical identity differs from current physical identity',
+              },
+              historicalBindingScope:
+                'Historical enrollment preimage verified; current model source CONTENT was NOT inspected or validated; current critical metadata (canonical path/dev/ino/regular/mode/uid/nlink) is fresh for this review only; critical metadata changes during this phase deny stale approval; current model source size/mtime/ctime and content are not evidence; no automatic retry, a new explicit operation/review is required; NO launch, claim, config reuse or provider authority',
+            }
+          : {}),
         membership: snapshot.membership,
         journals: snapshot.journals,
       },
@@ -345,13 +379,23 @@ export class OfflineReservationRecovery {
   }
 
   /** Trusted native paths only. Creates its own exclusive bundle and sticky gate. */
-  async capture(directory: string, recoveryRoot: string) {
+  async capture(directory: string, recoveryRoot: string, historicalEvidenceFile?: string) {
     terminalDirectory(directory, true);
     terminalDirectory(recoveryRoot, true);
     const operationId = randomUUID();
     const bundle = join(recoveryRoot, `offline-${operationId}`);
     mkdirSync(bundle, { mode: 0o700 });
     this.sync(recoveryRoot);
+    if (historicalEvidenceFile !== undefined) {
+      const candidate = this.readHistoricalEvidence(historicalEvidenceFile);
+      this.write(
+        join(bundle, 'historical-binding-evidence.json'),
+        Buffer.from(candidate.bytes, 'base64').toString('utf8'),
+      );
+      const saved = this.historicalEvidence(bundle);
+      if (saved?.sha256 !== candidate.sha256 || saved.bytes !== candidate.bytes)
+        throw new OfflineRecoveryBlocked('historical_evidence_copy_changed', bundle);
+    }
     const beforeBoot = this.boot();
     const snapshot = this.snapshot(directory, bundle);
     const bytes = JSON.stringify(snapshot);
@@ -451,10 +495,23 @@ export class OfflineReservationRecovery {
     const saved = readRecoveryFile(join(bundle, 'snapshot.json'), RECOVERY_LIMIT);
     if (saved.sha256 !== capture.snapshotHash || capture.snapshotHash !== before.snapshotDigest)
       throw new Error('Recovery capture corrupted');
-    const snapshot = JSON.parse(Buffer.from(saved.bytes, 'base64').toString('utf8')) as {
-      rawDigest?: unknown;
-      logicalDigest?: unknown;
-    };
+    const snapshot = offlineSnapshotSchema.parse(
+      JSON.parse(Buffer.from(saved.bytes, 'base64').toString('utf8')),
+    );
+    const historical = this.historicalEvidence(bundle);
+    if (
+      (historical &&
+        JSON.stringify(
+          snapshot.files.find(
+            (file) => file.path === join(bundle, 'historical-binding-evidence.json'),
+          ),
+        ) !== JSON.stringify(historical.record)) ||
+      snapshot.historicalBinding?.evidenceSha256 !== historical?.sha256 ||
+      (snapshot.historicalBinding &&
+        JSON.stringify(snapshot.historicalBinding.evidence) !==
+          JSON.stringify(historical?.evidence))
+    )
+      throw new Error('Recovery historical evidence changed');
     if (typeof snapshot.rawDigest !== 'string' || snapshot.logicalDigest !== before.currentDigest)
       throw new Error('Recovery capture binding changed');
     return { capture, before };
@@ -771,13 +828,16 @@ export class OfflineReservationRecovery {
         this.dependencies.boundary?.('archive');
         archive = this.archiveRecord(bundle, capture);
       }
+      const phaseCurrent = continuingArchive ? this.snapshot(directory, bundle) : archive.current;
+      if (phaseCurrent.logicalDigest !== before.currentDigest)
+        throw new Error('Recovery logical snapshot changed');
       const assertCurrent = () => {
         exact(join(directory, RECOVERY_GATE), this.gate(capture));
         exact(lock, lockValue);
         if (
           this.boot() !== currentBoot ||
           this.present(held) ||
-          this.snapshot(directory, bundle).rawDigest !== archive.current.rawDigest
+          this.snapshot(directory, bundle).rawDigest !== phaseCurrent.rawDigest
         )
           throw new Error('Recovery changed before final namespace commit');
       };
@@ -802,10 +862,10 @@ export class OfflineReservationRecovery {
           phase: 'release',
           currentBoot,
           currentDigest: terminalDigest(
-            JSON.stringify({ rawDigest: archive.current.rawDigest, transaction }),
+            JSON.stringify({ rawDigest: phaseCurrent.rawDigest, transaction }),
           ),
         };
-        const approval = await this.approve(proposal, archive.current, transaction);
+        const approval = await this.approve(proposal, phaseCurrent, transaction);
         const { challenge, signature } = approval;
         await this.revalidate(approval);
         assertCurrent();
@@ -909,6 +969,9 @@ export class OfflineReservationRecovery {
           files: record.current.files,
           journals: record.current.journals,
           membership: record.current.membership,
+          ...(record.current.historicalBinding
+            ? { historicalBinding: record.current.historicalBinding }
+            : {}),
         }),
       ) !== record.current.rawDigest
     )
@@ -983,6 +1046,10 @@ export class OfflineReservationRecovery {
       plan: planSchema,
       challenge: captureSchema.shape.challenge.extend({ phase: z.literal('finalize') }),
       signature: captureSchema.shape.signature,
+      currentRawDigest: z
+        .string()
+        .regex(/^[a-f0-9]{64}$/)
+        .optional(),
     });
     const lease = this.lease(bundle, currentBoot, true, capture.operationId);
     let cleanLease = false;
@@ -1022,7 +1089,10 @@ export class OfflineReservationRecovery {
           challenge.beforeBoot !== before.beforeBoot ||
           challenge.currentBoot === before.beforeBoot ||
           challenge.snapshotDigest !== before.snapshotDigest ||
-          challenge.currentDigest !== terminalDigest(JSON.stringify(plan)) ||
+          challenge.currentDigest !==
+            (intent.currentRawDigest
+              ? terminalDigest(JSON.stringify({ plan, rawDigest: intent.currentRawDigest }))
+              : terminalDigest(JSON.stringify(plan))) ||
           !verify(
             null,
             administrativeRecoveryBytes(challenge),
@@ -1070,11 +1140,14 @@ export class OfflineReservationRecovery {
           throw new OfflineRecoveryBlocked('completion_record_uncertain_commit_preserved', bundle);
         throw new OfflineRecoveryBlocked('already_finalized_original_commit_preserved', bundle);
       }
+      const fresh = heldBefore ? archive.current : this.snapshot(directory, bundle);
+      if (fresh.logicalDigest !== archive.current.logicalDigest)
+        throw new OfflineRecoveryBlocked('pre_commit_logical_source_changed', bundle);
       const assertPrepared = () => {
         if (
           this.boot() !== currentBoot ||
           this.present(heldPath) ||
-          this.snapshot(directory, bundle).rawDigest !== archive.current.rawDigest
+          this.snapshot(directory, bundle).rawDigest !== fresh.rawDigest
         )
           throw new OfflineRecoveryBlocked('pre_commit_source_changed', bundle);
         exact(gateFile, this.gate(capture));
@@ -1109,9 +1182,11 @@ export class OfflineReservationRecovery {
         ...administrativeRecoveryIntent(before),
         phase: 'finalize',
         currentBoot,
-        currentDigest: terminalDigest(JSON.stringify(plan)),
+        currentDigest: fresh.historicalBinding
+          ? terminalDigest(JSON.stringify({ plan, rawDigest: fresh.rawDigest }))
+          : terminalDigest(JSON.stringify(plan)),
       };
-      const approval = await this.approve(proposal, archive.current, {
+      const approval = await this.approve(proposal, fresh, {
         phase: heldBefore
           ? 'namespace_commit_observed_cleanup_only'
           : 'final_commit_original_marker_retained',
@@ -1125,7 +1200,12 @@ export class OfflineReservationRecovery {
       if (this.boot() !== currentBoot) throw new Error('Recovery kernel boot changed');
       if (!heldBefore) assertPrepared();
       this.assertApproval(approval);
-      const signedPlan = { plan, challenge, signature };
+      const signedPlan = {
+        plan,
+        challenge,
+        signature,
+        ...(fresh.historicalBinding ? { currentRawDigest: fresh.rawDigest } : {}),
+      };
       this.write(
         join(bundle, `finalization-approval-${challenge.nonce}.json`),
         JSON.stringify(signedPlan),

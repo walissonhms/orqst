@@ -1418,3 +1418,8 @@ startup, with a separately installed durable administrative anchor, complete
 scrollable native review and private phase-keyed transport over final service
 freeze `739870c`. Operator sequence, checks and pending native/integration gates
 are in [the dedicated recovery flow](docs/development/offline-native-recovery.md).
+
+The offline capture source also supports an optional native-only exact historical
+enrollment preimage candidate, with a durable private copy and fresh critical
+metadata review per phase. It does not inspect current provider configuration
+content or grant launch authority. See [operator syntax and limits](docs/development/offline-historical-binding.md).

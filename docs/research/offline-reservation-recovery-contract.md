@@ -180,3 +180,13 @@ adapt only typed failure reporting. No upstream code, dependency, lock/runtime
 mechanism or Overclock visual asset is incorporated. SQLite's
 [WAL format](https://sqlite.org/fileformat2.html#wal_file_format) remains unchanged;
 this correction does not loosen salts, checksums, commit or stale-tail rejection.
+
+## Exact preimage candidate increment
+
+The typed refusal above remains the default without evidence. The subsequent
+[historical candidate contract](../development/offline-historical-binding.md)
+reuses that exact frozen serializer and readers; it does not rebind enrollment.
+Only one same-device model-source inode may differ, with a full preimage match,
+intent/receipt/context checks, private durable evidence and fresh native review.
+Model-source content is not read, and its current size/times are not proof.
+No upstream material or runtime authority is incorporated.

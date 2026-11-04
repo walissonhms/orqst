@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
   chmodSync,
+  unlinkSync,
   existsSync,
   fsyncSync,
   fstatSync,
   lstatSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -48,7 +50,7 @@ import {
 } from '../packages/core/src/terminal/offline-recovery-files.js';
 import { administrativeBlockedOutcome } from '../apps/desktop/src/tauri-offline-recovery.js';
 
-function fixture(wal = false, journalNow?: () => number) {
+function fixture(wal = false, journalNow?: () => number, twoSources = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
   const directory = join(root, 'preferences');
   const recoveryRoot = join(root, 'captures');
@@ -56,6 +58,8 @@ function fixture(wal = false, journalNow?: () => number) {
   const model = join(root, 'model.json');
   for (const path of [directory, recoveryRoot, project]) mkdirSync(path, { mode: 0o700 });
   writeFileSync(model, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
+  const otherModel = join(root, 'other-model.json');
+  writeFileSync(otherModel, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
   const owner = randomUUID();
   const epoch = randomUUID();
   const firstBoot = randomUUID();
@@ -75,7 +79,12 @@ function fixture(wal = false, journalNow?: () => number) {
       model: {
         value: slot ? 'synthetic-selected' : 'synthetic/model',
         source: 'native-config',
-        files: [{ path: model, sha256: terminalDigest('SYNTHETIC-NO-CREDENTIAL') }],
+        files: [
+          { path: slot ? model : otherModel, sha256: terminalDigest('SYNTHETIC-NO-CREDENTIAL') },
+          ...(slot && twoSources
+            ? [{ path: otherModel, sha256: terminalDigest('SYNTHETIC-NO-CREDENTIAL') }]
+            : []),
+        ],
       },
       preparation: {
         observerDatabase: join(root, 'NEVER-OPEN.sqlite'),
@@ -1940,6 +1949,350 @@ test('a shorter native grant survives repeated checks and cumulative sign plus f
       existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)),
       false,
     );
+  } finally {
+    f.close();
+  }
+});
+
+// SYNTHETIC historical preimage evidence. Source CONTENT is never inspected by recovery.
+function historicalFixture(twoSources = false, replaceSource = true) {
+  const f = fixture(false, undefined, twoSources);
+  const file = f.configs[1]!.model!.files[0]!.path;
+  const historical = `${lstatSync(file).dev}:${lstatSync(file).ino}`;
+  const digest = (path: string) => terminalDigest(readFileSync(path));
+  const evidence = {
+    kind: 'orqst.offline-recovery.historical-binding-evidence',
+    version: 1,
+    marker: { owner: f.owner, sha256: digest(f.marker) },
+    enrollment: {
+      opId: f.intent.input.opId,
+      epoch: f.epoch,
+      intentSha256: digest(f.intentFile),
+      receiptSha256: digest(f.receiptFile),
+    },
+    member: {
+      slot: 1,
+      terminalId: f.intent.member.terminalId,
+      manifestSha256: digest(f.manifests[1]!),
+      manifestIdentity: `${lstatSync(f.manifests[1]!).dev}:${lstatSync(f.manifests[1]!).ino}`,
+      frozenBindingDigest: f.intent.member.bindingDigest,
+    },
+    historicalModelSource: { index: 0, path: file, identity: historical },
+    modelSources: f.configs[1]!.model!.files.map(({ path }) => ({
+      path,
+      identity: `${lstatSync(path).dev}:${lstatSync(path).ino}`,
+    })),
+  };
+  const evidenceFile = join(f.root, 'SYNTHETIC-historical-evidence.json');
+  const save = () => writeFileSync(evidenceFile, JSON.stringify(evidence), { mode: 0o600 });
+  const replace = () => {
+    const next = `${file}.replacement`;
+    writeFileSync(next, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
+    renameSync(next, file);
+  };
+  save();
+  if (replaceSource) replace();
+  return {
+    ...f,
+    file,
+    evidence,
+    evidenceFile,
+    save,
+    replace,
+    captureHistorical: () => f.recovery.capture(f.directory, f.recoveryRoot, evidenceFile),
+  };
+}
+
+test('historical single inode full preimage captures, persists and revalidates across boots/phases', async () => {
+  const f = historicalFixture();
+  try {
+    await assert.rejects(f.capture(), /enrollment binding/);
+    const captured = await f.captureHistorical();
+    const snapshot = JSON.parse(readFileSync(join(captured.bundle, 'snapshot.json'), 'utf8'));
+    assert.equal(
+      snapshot.historicalBinding.evidenceSha256,
+      terminalDigest(readFileSync(f.evidenceFile)),
+    );
+    assert.equal(snapshot.journals[1].bindingDigest, f.intent.member.bindingDigest);
+    assert.match(f.fullReviews[0]!, /CONTENT was NOT inspected/);
+    assert.match(f.fullReviews[0]!, /NO launch/);
+    assert.equal(
+      lstatSync(join(captured.bundle, 'historical-binding-evidence.json')).mode & 0o777,
+      0o600,
+    );
+    unlinkSync(f.evidenceFile);
+    f.changeBoot();
+    f.replace();
+    const reload = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await reload.release(captured.bundle);
+    const releaseRaw = f.reviews.at(-1)!.currentDigest;
+    assert.notEqual(releaseRaw, snapshot.rawDigest);
+    f.replace();
+    await reload.finalize(captured.bundle);
+    assert.equal(existsSync(f.marker), false);
+    assert.notEqual(f.reviews.at(-1)!.currentDigest, releaseRaw);
+  } finally {
+    f.close();
+  }
+});
+
+for (const mutation of [
+  'inode',
+  'device',
+  'path',
+  'index',
+  'marker',
+  'intent',
+  'receipt',
+  'manifest',
+  'binding',
+  'extra',
+  'baseline',
+] as const) {
+  test(`historical evidence denies synthetic ${mutation} mismatch`, async () => {
+    const f = historicalFixture();
+    try {
+      if (mutation === 'inode')
+        f.evidence.historicalModelSource.identity = `${lstatSync(f.file).dev}:1`;
+      if (mutation === 'device')
+        f.evidence.historicalModelSource.identity = `1:${lstatSync(f.file).ino}`;
+      if (mutation === 'path') f.evidence.historicalModelSource.path += '-wrong';
+      if (mutation === 'index') f.evidence.historicalModelSource.index = 1;
+      if (mutation === 'marker') f.evidence.marker.sha256 = 'a'.repeat(64);
+      if (mutation === 'intent') f.evidence.enrollment.intentSha256 = 'a'.repeat(64);
+      if (mutation === 'receipt') f.evidence.enrollment.receiptSha256 = 'a'.repeat(64);
+      if (mutation === 'manifest') f.evidence.member.manifestSha256 = 'a'.repeat(64);
+      if (mutation === 'binding') f.evidence.member.frozenBindingDigest = 'a'.repeat(64);
+      if (mutation === 'baseline')
+        f.evidence.modelSources[0]!.identity = `${lstatSync(f.file).dev}:1`;
+      f.save();
+      if (mutation === 'extra')
+        writeFileSync(f.evidenceFile, JSON.stringify({ ...f.evidence, extra: true }));
+      await assert.rejects(f.captureHistorical());
+      assert.equal(f.reviews.length, 0);
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    } finally {
+      f.close();
+    }
+  });
+}
+for (const stage of ['review', 'sign', 'revalidate'] as const) {
+  test(`historical capture denies current metadata replacement during ${stage}`, async () => {
+    const f = historicalFixture();
+    try {
+      if (stage === 'review') f.reading(f.replace);
+      if (stage === 'sign') f.review(f.replace);
+      if (stage === 'revalidate')
+        f.revalidation(() => {
+          f.replace();
+          return 30_001;
+        });
+      await assert.rejects(f.captureHistorical(), /capture_source_changed/);
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    } finally {
+      f.close();
+    }
+  });
+}
+for (const kind of [
+  'mode',
+  'symlink',
+  'oversize',
+  'utf8',
+  'missing',
+  'source-mode',
+  'source-symlink',
+  'source-missing',
+] as const) {
+  test(`historical evidence/current source rejects ${kind}`, async () => {
+    const f = historicalFixture();
+    try {
+      if (kind === 'mode') chmodSync(f.evidenceFile, 0o644);
+      if (kind === 'symlink') {
+        renameSync(f.evidenceFile, `${f.evidenceFile}.real`);
+        symlinkSync(`${f.evidenceFile}.real`, f.evidenceFile);
+      }
+      if (kind === 'oversize') writeFileSync(f.evidenceFile, ' '.repeat(4097));
+      if (kind === 'utf8') writeFileSync(f.evidenceFile, Buffer.from([0xff]));
+      if (kind === 'missing') unlinkSync(f.evidenceFile);
+      if (kind === 'source-mode') chmodSync(f.file, 0o666);
+      if (kind === 'source-symlink') {
+        renameSync(f.file, `${f.file}.real`);
+        symlinkSync(`${f.file}.real`, f.file);
+      }
+      if (kind === 'source-missing') unlinkSync(f.file);
+      await assert.rejects(f.captureHistorical());
+      assert.equal(f.reviews.length, 0);
+    } finally {
+      f.close();
+    }
+  });
+}
+test('historical signed capture cannot adopt altered persisted evidence or partial capture', async () => {
+  const f = historicalFixture();
+  try {
+    const captured = await f.captureHistorical();
+    f.changeBoot();
+    const saved = join(captured.bundle, 'historical-binding-evidence.json');
+    writeFileSync(saved, `${readFileSync(saved, 'utf8')}\n`);
+    const reload = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await assert.rejects(reload.release(captured.bundle), /historical evidence changed/);
+    unlinkSync(join(captured.bundle, 'capture.json'));
+    await assert.rejects(reload.continueCapture(captured.bundle), /missing_or_partial_capture/);
+    assert.ok(existsSync(f.marker));
+  } finally {
+    f.close();
+  }
+});
+
+test('historical evidence rejects two model source inode deltas', async () => {
+  const f = historicalFixture(true);
+  try {
+    const other = f.configs[1]!.model!.files[1]!.path;
+    const next = `${other}.replacement`;
+    writeFileSync(next, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
+    renameSync(next, other);
+    await assert.rejects(f.captureHistorical(), /additional source drift/);
+    assert.equal(f.reviews.length, 0);
+  } finally {
+    f.close();
+  }
+});
+for (const source of ['manifest', 'state', 'project'] as const) {
+  test(`historical evidence cannot cover another ${source} identity delta`, async () => {
+    const f = historicalFixture();
+    try {
+      const path = source === 'manifest' ? f.manifests[1]! : f.configs[1]![source];
+      renameSync(path, `${path}.preserved`);
+      if (source === 'manifest')
+        writeFileSync(path, readFileSync(`${path}.preserved`), { mode: 0o600 });
+      else mkdirSync(path, { mode: 0o700 });
+      await assert.rejects(f.captureHistorical());
+      assert.equal(f.reviews.length, 0);
+    } finally {
+      f.close();
+    }
+  });
+}
+for (const field of ['node', 'executable', 'model', 'preparation'] as const) {
+  test(`historical full preimage rejects modified parsed ${field}`, async () => {
+    const f = historicalFixture();
+    try {
+      const config = JSON.parse(readFileSync(f.manifests[1]!, 'utf8'));
+      if (field === 'model') config.model.files[0].sha256 = 'a'.repeat(64);
+      else if (field === 'preparation') config.preparation.fence = 'SYNTHETIC-CHANGED';
+      else config[field].sha256 = 'b'.repeat(64);
+      writeFileSync(f.manifests[1]!, JSON.stringify(config));
+      f.evidence.member.manifestSha256 = terminalDigest(readFileSync(f.manifests[1]!));
+      f.save();
+      await assert.rejects(f.captureHistorical(), /preimage/);
+    } finally {
+      f.close();
+    }
+  });
+}
+test('historical metadata evidence does not assert current model source content', async () => {
+  const f = historicalFixture();
+  try {
+    writeFileSync(f.file, 'SYNTHETIC-CONTENT-DIFFERENT-AND-UNINSPECTED');
+    const captured = await f.captureHistorical();
+    assert.ok(existsSync(join(captured.bundle, 'capture.json')));
+    assert.match(f.fullReviews[0]!, /CONTENT was NOT inspected or validated/);
+  } finally {
+    f.close();
+  }
+});
+test('historical evidence copy fsync failure preserves partial material without capture/gate', async () => {
+  const f = historicalFixture();
+  try {
+    f.failSyncAt(2);
+    await assert.rejects(f.captureHistorical(), /fsync/);
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    assert.ok(existsSync(join(bundle, 'historical-binding-evidence.json')));
+    assert.equal(existsSync(join(bundle, 'capture.json')), false);
+    assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    await assert.rejects(f.recovery.continueCapture(bundle), /missing_or_partial_capture/);
+  } finally {
+    f.close();
+  }
+});
+for (const phase of ['release', 'finalize'] as const) {
+  test(`historical ${phase} denies metadata replacement during fresh review`, async () => {
+    const f = historicalFixture();
+    try {
+      const captured = await f.captureHistorical();
+      f.changeBoot();
+      if (phase === 'finalize') await f.recovery.release(captured.bundle);
+      f.reading(f.replace);
+      await assert.rejects(f.recovery[phase](captured.bundle), /changed/);
+      assert.ok(existsSync(f.marker));
+    } finally {
+      f.close();
+    }
+  });
+}
+test('unread model source size/time changes within review are not administrative evidence', async () => {
+  const f = historicalFixture();
+  try {
+    const original = lstatSync(f.file);
+    f.reading(() => writeFileSync(f.file, 'SYNTHETIC-UNINSPECTED-CONTENT-OF-A-DIFFERENT-SIZE'));
+    const captured = await f.captureHistorical();
+    assert.equal(lstatSync(f.file).ino, original.ino);
+    assert.notEqual(lstatSync(f.file).size, original.size);
+    f.changeBoot();
+    await f.recovery.release(captured.bundle);
+    await f.recovery.finalize(captured.bundle);
+  } finally {
+    f.close();
+  }
+});
+test('historical evidence refuses a redundant already-current binding', async () => {
+  const f = historicalFixture(false, false);
+  try {
+    await assert.rejects(f.captureHistorical(), /redundant/);
+  } finally {
+    f.close();
+  }
+});
+test('historical inode candidate still requires the complete frozen SHA', async () => {
+  const f = historicalFixture();
+  try {
+    const wrong = `${lstatSync(f.file).dev}:1`;
+    f.evidence.historicalModelSource.identity = wrong;
+    f.evidence.modelSources[0]!.identity = wrong;
+    f.save();
+    await assert.rejects(f.captureHistorical(), /preimage does not match/);
+  } finally {
+    f.close();
+  }
+});
+for (const critical of ['mode', 'nlink', 'symlink'] as const) {
+  test(`historical capture denies ${critical} change during review`, async () => {
+    const f = historicalFixture();
+    try {
+      f.reading(() => {
+        if (critical === 'mode') chmodSync(f.file, 0o400);
+        if (critical === 'nlink') linkSync(f.file, `${f.file}.link`);
+        if (critical === 'symlink') {
+          renameSync(f.file, `${f.file}.real`);
+          symlinkSync(`${f.file}.real`, f.file);
+        }
+      });
+      await assert.rejects(f.captureHistorical());
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    } finally {
+      f.close();
+    }
+  });
+}
+test('persisted historical evidence metadata remains strict even for unchanged bytes', async () => {
+  const f = historicalFixture();
+  try {
+    const captured = await f.captureHistorical();
+    f.changeBoot();
+    chmodSync(join(captured.bundle, 'historical-binding-evidence.json'), 0o400);
+    await assert.rejects(f.recovery.release(captured.bundle), /evidence must be private/);
+    assert.ok(existsSync(f.marker));
   } finally {
     f.close();
   }

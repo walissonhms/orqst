@@ -89,3 +89,12 @@ reboot fences all old processes; it does not manufacture owned process exits.
 
 Observer/API/cookie/static-serving behavior and OpenCode dispatch guard remain
 unchanged. No UI is added, so no locale keys are introduced.
+
+The optional third `capture(directory, recoveryRoot, historicalEvidenceFile)`
+argument is native composition data only. Snapshot version 1 accepts an optional
+`historicalBinding` projection: evidence SHA/semantics in logical history,
+current critical model-source metadata in RAW freshness. Legacy captures without
+it remain supported. Finalization of a historical capture binds the new phase's
+RAW digest alongside its plan; persisted intent may include `currentRawDigest`.
+The complete version 2 review fingerprint still binds every displayed field.
+See [historical binding scope](../development/offline-historical-binding.md).

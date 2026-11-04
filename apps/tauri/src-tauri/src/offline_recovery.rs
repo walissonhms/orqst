@@ -40,10 +40,35 @@ struct State {
     child: Option<CommandChild>,
 }
 
-pub fn requested() -> bool {
-    std::env::args_os()
+/// Native startup only: malformed hints cannot fall through into normal Core startup.
+pub fn arguments(args: &[String]) -> Result<Option<Option<String>>, &'static str> {
+    let relevant = args.iter().any(|arg| arg.starts_with("--offline-recovery"));
+    if !relevant {
+        return Ok(None);
+    }
+    match args {
+        [mode] if mode == "--offline-recovery" => Ok(Some(None)),
+        [mode, flag, path]
+            if mode == "--offline-recovery"
+                && flag == "--offline-recovery-binding-evidence"
+                && path.starts_with('/')
+                && path.len() <= 2048
+                && !path.contains('\0') =>
+        {
+            Ok(Some(Some(path.clone())))
+        }
+        _ => Err("Invalid administrative recovery arguments"),
+    }
+}
+pub fn startup_arguments() -> Result<Option<Option<String>>, &'static str> {
+    let args = std::env::args_os()
         .skip(1)
-        .any(|arg| arg == "--offline-recovery")
+        .map(|arg| {
+            arg.into_string()
+                .map_err(|_| "Invalid administrative recovery arguments")
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    arguments(&args)
 }
 fn text(key: &str) -> String {
     let source = if std::env::var("LANG")
@@ -405,7 +430,7 @@ fn completion_outcome(value: &Value, action: &str) -> bool {
 }
 
 pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    if std::env::args_os().skip(1).count() != 1 {
+    if startup_arguments()?.is_none() {
         return Err("Invalid native recovery entry".into());
     }
     #[cfg(target_os = "macos")]
@@ -494,10 +519,18 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
         .resource_dir()?
         .join("core/tauri-offline-recovery-host.cjs");
     let parent = app.path().app_data_dir()?;
+    let mut helper_args = vec![
+        script.as_os_str().to_os_string(),
+        parent.as_os_str().to_os_string(),
+    ];
+    if let Some(Some(path)) = startup_arguments()? {
+        helper_args.push("--offline-recovery-binding-evidence".into());
+        helper_args.push(path.into());
+    }
     let (mut rx, child) = app
         .shell()
         .sidecar("orqst-node")?
-        .args([script.as_os_str(), parent.as_os_str()])
+        .args(helper_args)
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| key == "LANG"))
         .spawn()?;
@@ -689,6 +722,53 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn native_arguments_are_exact_and_hints_never_select_normal_startup() {
+        let parse =
+            |args: &[&str]| arguments(&args.iter().map(|arg| arg.to_string()).collect::<Vec<_>>());
+        assert_eq!(parse(&[]).unwrap(), None);
+        assert_eq!(parse(&["--offline-recovery"]).unwrap(), Some(None));
+        assert_eq!(
+            parse(&[
+                "--offline-recovery",
+                "--offline-recovery-binding-evidence",
+                "/private/SYNTHETIC.json"
+            ])
+            .unwrap(),
+            Some(Some("/private/SYNTHETIC.json".into()))
+        );
+        for args in [
+            vec!["--offline-recovery-binding-evidence", "/private/x"],
+            vec!["--offline-recovery", "--offline-recovery"],
+            vec!["--offline-recovery", "--offline-recovery-binding-evidence"],
+            vec![
+                "--offline-recovery",
+                "--offline-recovery-binding-evidence",
+                "relative",
+            ],
+            vec![
+                "--offline-recovery",
+                "--offline-recovery-binding-evidence",
+                "/x\0y",
+            ],
+            vec![
+                "--offline-recovery",
+                "--offline-recovery-binding-evidence",
+                "/x",
+                "extra",
+            ],
+            vec![
+                "--offline-recovery",
+                "--offline-recovery-binding-evidence",
+                "/x",
+                "--offline-recovery-binding-evidence",
+                "/y",
+            ],
+        ] {
+            assert!(parse(&args).is_err());
+        }
+    }
+
     #[test]
     fn static_recovery_document_requires_exact_components_and_get() {
         let request = |method: &str, url: &str| {
