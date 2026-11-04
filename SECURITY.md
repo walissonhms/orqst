@@ -2,14 +2,21 @@
 
 ## Tauri preview process boundary — 2026-11-04
 
-The opt-in Tauri preview starts only its fixed packaged Node Core in a separate
-private profile. It grants no renderer Tauri capabilities or executable commands,
+The opt-in Tauri preview starts its fixed packaged Node Core in a separate
+private profile. The observer renderer has no Tauri capabilities or executable commands,
 restricts navigation to its owned loopback origin and denies new windows. Node
 receives an environment allowlist, validates its packaged dashboard before READY,
 and retains the existing Bridge Host/Origin, cookie, WebSocket and CSP protections.
-Native shutdown addresses only the retained child; no provider execution, observed
-session control, stored-PID adoption or automatic respawn is added. Electron's
-managed execution and its signing authority are not exposed through this preview.
+Native shutdown addresses only retained children. Explicit `ORQST_TAURI_TERMINALS`
+selection adds a separate private pipe to the existing managed Node host and broker.
+Only dedicated local terminal documents get the two terminal commands; no remote
+origin, shell, filesystem or dialog plugin permission is granted to renderers.
+Native identity/focus, bounded exact-action confirmation, signed grants, input
+revocation and existing manifest/journal admission checks remain authoritative.
+Malformed public requests are denied without fencing unrelated slots. Reload closes
+that document permanently; hiding revokes input without stopping its process.
+No observer execution endpoint, observed-session control, PID adoption or automatic
+respawn is introduced. Full native consent/keyboard/provider parity remains unaccepted.
 See [implementation and remaining parity](docs/development/tauri.md) and the
 [private process contract](docs/api/desktop-sidecar.md). Complete native dependency
 redistribution notices and signed installers remain release prerequisites.

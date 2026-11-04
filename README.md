@@ -19,8 +19,10 @@ Node 24 Core, SQLite and the production Analytics worker, without Electron. Its
 native child lifecycle and single-instance handling adapt pinned, attributed Anywh
 code. The local macOS Apple Silicon debug bundle has startup/navigation/shutdown
 evidence; this is the first migration increment, not complete desktop parity.
-Managed terminals and native exports/notifications still use the existing Electron
-application. See [build, run and exact limits](docs/development/tauri.md) and the
+Prepared managed-terminal profiles can now opt into dedicated Tauri windows through
+`ORQST_TAURI_TERMINALS`; their existing Node broker, PTY and xterm are reused.
+Native terminal consent/provider parity remains unaccepted; exports/notifications
+and the complete managed workflow remain available in Electron. See [build, run and exact limits](docs/development/tauri.md) and the
 [component/license review](docs/research/tauri-core-reuse.md).
 
 ## Bounded interactive terminal teams — 2026-11-03

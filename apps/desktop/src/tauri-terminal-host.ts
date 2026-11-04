@@ -1,0 +1,124 @@
+import { generateKeyPairSync } from 'node:crypto';
+import { join } from 'node:path';
+import { createInstance } from 'i18next';
+import { z } from 'zod';
+import en from '../../dashboard/src/locales/en-US.json';
+import pt from '../../dashboard/src/locales/pt-BR.json';
+import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
+import { interactiveProvider } from '../../../packages/core/src/terminal/interactive-profile.js';
+import { connectManagedTerminalCore } from './managed-terminal-core.js';
+import { terminalDocument } from './terminal-document.js';
+import { TauriTerminalService } from './tauri-terminal-service.js';
+
+process.umask(0o077);
+let activeCore: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
+async function start() {
+  if (
+    process.platform !== 'darwin' ||
+    process.arch !== 'arm64' ||
+    process.getuid?.() === 0 ||
+    !/^v24\./.test(process.version)
+  )
+    throw new Error('Unsupported managed terminal host');
+  const files = z
+    .array(z.string().min(1).max(2048))
+    .min(1)
+    .max(8)
+    .parse(JSON.parse(process.argv[2]!));
+  const directory = process.argv[3];
+  if (!directory) throw new Error('Private native admission directory required');
+  const selection = inspectManagedTerminalFiles(files, files.length);
+  if (selection.some((p) => p.blocker || p.config.interactive?.mcp))
+    throw new Error('Blocked profile or unimplemented native MCP consent');
+  const keys = generateKeyPairSync('ed25519');
+  const core = await connectManagedTerminalCore(
+    files,
+    join(__dirname, 'managed-terminal-core.cjs'),
+    keys.publicKey,
+    directory,
+    files.length,
+  );
+  const i18n = createInstance();
+  activeCore = core;
+  const language = process.env.LANG?.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US';
+  await i18n.init({
+    lng: language,
+    fallbackLng: 'en-US',
+    resources: { 'en-US': { translation: en }, 'pt-BR': { translation: pt } },
+  });
+  const translate = (key: string) => String(i18n.t(key));
+  let closed = false;
+  const send = (value: object) => {
+    const line = JSON.stringify(value) + '\n';
+    // A slow native consumer must not create an unbounded output queue.
+    if (Buffer.byteLength(line) > 512 * 1024 || process.stdout.writableLength > 1024 * 1024)
+      return shutdown();
+    process.stdout.write(line);
+  };
+  const service = new TauriTerminalService(core.supervisors, keys, send, translate);
+  function shutdown() {
+    if (closed) return;
+    closed = true;
+    service.close();
+    process.stdin.destroy();
+    void core.closeAndWait().catch(() => {
+      process.exitCode = 1;
+    });
+  }
+  let pending = Buffer.alloc(0);
+  process.stdin.on('data', (chunk: Buffer) => {
+    pending = Buffer.concat([pending, chunk]);
+    if (pending.length > 128 * 1024) return shutdown();
+    let end: number;
+    while ((end = pending.indexOf(10)) !== -1) {
+      const line = pending.subarray(0, end).toString('utf8');
+      pending = pending.subarray(end + 1);
+      if (line === 'shutdown') return shutdown();
+      try {
+        void service.receive(JSON.parse(line)).catch(shutdown);
+      } catch {
+        shutdown();
+      }
+    }
+  });
+  process.stdin.on('end', shutdown);
+  process.stdin.on('error', shutdown);
+  process.stdout.on('error', shutdown);
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+  process.stdin.resume();
+  const providers = selection.map(({ config }) =>
+    translate(`shell.adapters.${interactiveProvider(config)}`),
+  );
+  send({
+    kind: 'ready',
+    title: translate('managedTerminal.title'),
+    quitNotice: translate('managedTerminal.quitNotice'),
+    cancel: translate('terminalNative.cancel'),
+    quit: translate('managedAgents.disconnectQuit'),
+    panes: selection.map(({ config }, slot) => ({
+      title: `${slot + 1} · ${providers[slot]}`,
+      html: terminalDocument({
+        language,
+        slot,
+        providers,
+        provider: providers[slot]!,
+        project: config.project,
+        version: config.executableVersion,
+        startProfile: `${interactiveProvider(config)}-terminal-v1`,
+        nativeAuthentication: !!config.authentication,
+        scope: config.authentication ? 'reuseScope' : 'scope',
+        terminalId: core.identities[slot]!.terminalId,
+        translate,
+      })
+        .replaceAll('orqst-terminal://local/client.js', 'client.js')
+        .replaceAll('orqst-terminal://local/style.css', 'style.css')
+        .replace('<body>', '<body class="tauri-terminal">'),
+    })),
+  });
+}
+void start().catch(() => {
+  activeCore?.close();
+  console.error('ORQST managed terminal startup refused.');
+  process.exitCode = 1;
+});

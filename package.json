@@ -33,6 +33,7 @@
     "build:tauri-resources": "pnpm --filter @orqst/dashboard build && node scripts/build-tauri-resources.mjs",
     "test:tauri": "cargo test --manifest-path apps/tauri/src-tauri/Cargo.toml",
     "accept:tauri-core": "tsx scripts/accept-tauri-core.ts",
+    "accept:tauri-terminals": "tsx scripts/accept-tauri-terminals.ts",
     "test:desktop": "tsx scripts/smoke-desktop.ts",
     "accept:terminal-pty": "tsx scripts/accept-terminal-pty.ts",
     "accept:terminal-native": "tsx scripts/accept-terminal-native.ts",

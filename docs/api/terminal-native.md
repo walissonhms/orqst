@@ -1,5 +1,23 @@
 # Native terminal client boundary
 
+## Tauri native client — 2026-11-04
+
+An opt-in Tauri client reuses this request/reply contract, `TerminalNativeBroker`,
+`connectManagedTerminalCore` and the existing Core/PTY hosts. `terminal_request` accepts
+only the public request; Rust derives the slot from the native window label and exact
+`orqst-terminal://local/<slot>/index.html` document. Only these local windows receive
+the command capability. The remote observer receives none; no HTTP or WebSocket
+execution route is added. `terminal_view` handles local hide, dashboard, maximize,
+restore and existing-tab selection, with no execution data or proof.
+
+The private parent pipe carries bounded correlated requests/replies, native revoke/close
+events and native dialog results. Signed proofs, keys, leases and attachments remain
+inside Node and its existing private Core IPC. Public shape errors return `denied`
+without closing unrelated terminals. Native transport timeout/reload fences the affected
+document rather than retrying an uncertain mutation. Hiding retains the document/process;
+quit closes the owned hosts. Native retirement and MCP consent are not ported.
+See [workflow and acceptance limits](../development/tauri.md#prepared-managed-terminals--2026-11-04).
+
 ## Codex/OpenCode pair exception — 2026-11-03
 
 The shared manifest inspection permits exactly one Codex and one OpenCode in either

@@ -12,7 +12,15 @@
     "windows": [],
     "withGlobalTauri": false,
     "security": {
-      "capabilities": [],
+      "capabilities": [
+        {
+          "identifier": "owned-terminals",
+          "description": "Only dedicated local terminal windows can access the private native terminal client.",
+          "local": true,
+          "windows": ["terminal-*"],
+          "permissions": ["allow-terminal-request", "allow-terminal-view"]
+        }
+      ],
       "csp": "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
     }
   },
@@ -23,7 +31,8 @@
     "resources": {
       "../dist/core/": "core/",
       "../dist/dashboard/": "dashboard/",
-      "../dist/licenses/": "licenses/"
+      "../dist/licenses/": "licenses/",
+      "../dist/terminal/": "terminal/"
     },
     "icon": [
       "../../desktop/resources/icons/orqst-32.png",
