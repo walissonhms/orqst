@@ -1,8 +1,8 @@
 # Master specification delivery tracker
 
-**Snapshot:** 2026-11-04, local `main` at `ee08ecb` before this documentation
-change. This is the entry point for tracking the owner's Tauri, Node Core and
-multi-agent terminal specification. It is not a release approval.
+**Tracking date:** 2026-11-04. Initial baseline: `ee08ecb`; subsequent deliveries and
+their evidence are recorded below. This is the entry point for tracking the owner's
+Tauri, Node Core and multi-agent terminal specification. It is not a release approval.
 
 The owner-supplied `ORQST_MASTER_SPEC_TAURI_REUSE_UI.md` is currently local and
 excluded from Git. Its section 10 has 16 acceptance criteria; the numbered rows below
@@ -293,3 +293,9 @@ See [delivery checklist and checks](../development/terminal-layout-sqlite.md).
 The complete criterion 13 remains partial: team configuration, unified communication,
 process recovery, native/provider acceptance and distribution remain open. No existing
 quarantine, process, reservation, source session or shared main checkout was changed.
+
+Integrated as `9d4aee6` (source `d717d8a`): lint, typecheck, build, resource staging,
+677 Node tests (`--test-concurrency=2`) and the eight-PTY Tauri synthetic acceptance
+passed on the main checkout. Rust/native UI and real-provider tests were not run
+for this TypeScript/SQLite integration. The contributor's worktree remains active
+for the following identity increment and must not be removed yet.
