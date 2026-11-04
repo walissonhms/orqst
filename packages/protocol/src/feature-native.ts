@@ -48,6 +48,7 @@ export const featureNativeSnapshotSchema = z
     }),
     features: z.array(workspaceFeatureSchema).max(1024),
     view: featureViewStateSchema,
+    activeFeatureId: z.uuid().nullable(),
     slots: z
       .array(
         z.strictObject({
@@ -69,6 +70,8 @@ export const featureNativeSnapshotSchema = z
       new Set(assignments).size === assignments.length &&
       value.slots.every((slot, index) => slot.slot === index) &&
       new Set(value.slots.map((slot) => slot.terminalId)).size === value.slots.length &&
+      (value.activeFeatureId === null ||
+        value.features.some((feature) => feature.featureId === value.activeFeatureId)) &&
       (value.view.featureId === null ||
         value.features.some((feature) => feature.featureId === value.view.featureId))
     );

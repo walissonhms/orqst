@@ -18,7 +18,7 @@ export class TauriFeatureService {
   private generation = 0;
   private catalog: WorkspaceFeature[] = [];
   private view!: FeatureViewState;
-  private membership = '';
+  private activeFeatureId: string | null = null;
   private initialized = false;
 
   constructor(
@@ -34,52 +34,62 @@ export class TauriFeatureService {
   ) {}
 
   async initialize(): Promise<void> {
-    await this.refresh(false);
+    await this.refresh();
+    await this.present(this.view.featureId, false, this.layout.presentationRevision());
     this.initialized = true;
   }
 
-  private async refresh(open?: boolean): Promise<void> {
-    const resume = open ?? !this.layout.snapshot().suspended;
+  private async refresh(): Promise<void> {
     const catalog = await this.core.features.list();
     const view = await this.core.features.readView();
-    const assigned = catalog.flatMap((feature) => feature.terminalIds);
-    const feature = catalog.find((entry) => entry.featureId === view.featureId);
-    if (view.featureId !== null && !feature) throw new Error('Feature view unavailable');
-    const members =
-      feature?.terminalIds ??
-      this.core.identities.map((i) => i.terminalId).filter((id) => !assigned.includes(id));
-    const membership = JSON.stringify([view.featureId, members]);
-    if (membership !== this.membership || open) {
-      await this.layout.flush();
-      await this.revoke();
-      const ids = this.core.identities.map((identity) => identity.terminalId);
-      if (feature) {
-        const mapping = featureLayout(
-          ids,
-          members,
-          await this.core.features.readLayout(feature.featureId),
-        );
-        this.layout.context(
-          mapping.initial,
-          async (state) => {
-            await this.core.features.saveLayout(feature.featureId, mapping.record(state));
-          },
-          resume,
-        );
-      } else {
-        // Legacy preferences are never imported into a Feature. Partial unassigned views stay ephemeral.
-        const initial = assigned.length ? undefined : await this.legacy.load();
-        const mapping = featureLayout(ids, members, null);
-        this.layout.context(
-          initial ?? mapping.initial,
-          assigned.length ? () => {} : this.legacy.save,
-          resume,
-        );
-      }
-      this.membership = membership;
-    }
+    if (view.featureId !== null && !catalog.some((feature) => feature.featureId === view.featureId))
+      throw new Error('Feature preference unavailable');
     this.catalog = catalog;
     this.view = view;
+  }
+
+  private async present(
+    featureId: string | null,
+    open: boolean,
+    presentation: number,
+  ): Promise<void> {
+    const feature = this.catalog.find((entry) => entry.featureId === featureId);
+    if (featureId !== null && !feature) throw new Error('Feature view unavailable');
+    const assigned = this.catalog.flatMap((entry) => entry.terminalIds);
+    const ids = this.core.identities.map((identity) => identity.terminalId);
+    const members = feature?.terminalIds ?? ids.filter((id) => !assigned.includes(id));
+    await this.layout.flush();
+    await this.revoke();
+    if (feature) {
+      const mapping = featureLayout(
+        ids,
+        members,
+        await this.core.features.readLayout(feature.featureId),
+      );
+      // Native navigation/quit can invalidate a command while SQLite/readLayout is in flight.
+      // Its committed preference stays honest; the obsolete command cannot alter this view.
+      if (presentation !== this.layout.presentationRevision())
+        throw new Error('Stale presentation');
+      this.layout.context(
+        mapping.initial,
+        async (state) => {
+          await this.core.features.saveLayout(feature.featureId, mapping.record(state));
+        },
+        open,
+      );
+    } else {
+      // Legacy preferences are never imported into a Feature. Partial unassigned views stay ephemeral.
+      const initial = assigned.length ? undefined : await this.legacy.load();
+      const mapping = featureLayout(ids, members, null);
+      if (presentation !== this.layout.presentationRevision())
+        throw new Error('Stale presentation');
+      this.layout.context(
+        initial ?? mapping.initial,
+        assigned.length ? () => {} : this.legacy.save,
+        open,
+      );
+    }
+    this.activeFeatureId = featureId;
   }
 
   private snapshot(): FeatureNativeSnapshot {
@@ -90,6 +100,7 @@ export class TauriFeatureService {
       workspace: { id: this.view.workspaceId, name: basename(this.project) || this.project },
       features: this.catalog,
       view: this.view,
+      activeFeatureId: this.activeFeatureId,
       slots: this.core.identities.map(({ slot, terminalId, provider }) => ({
         slot,
         terminalId,
@@ -97,7 +108,7 @@ export class TauriFeatureService {
       })),
       layoutSaved:
         this.layout.snapshot().persisted &&
-        (this.view.featureId !== null ||
+        (this.activeFeatureId !== null ||
           !this.catalog.some((feature) => feature.terminalIds.length > 0)),
     });
     if (Buffer.byteLength(JSON.stringify(value)) > 96 * 1024)
@@ -112,7 +123,9 @@ export class TauriFeatureService {
     if (this.busy) return { status: 'busy' };
     this.busy = true;
     const request = parsed.data;
+    const presentation = this.layout.presentationRevision();
     try {
+      if (request.action === 'select' || request.action === 'organize') await this.revoke();
       await this.refresh();
       if (request.action !== 'snapshot' && request.generation !== this.generation)
         return { status: 'stale', snapshot: this.snapshot() };
@@ -135,6 +148,7 @@ export class TauriFeatureService {
           break;
         }
         case 'assign': {
+          const open = !this.layout.snapshot().suspended;
           if (!this.core.identities.some((identity) => identity.slot === request.slot))
             return { status: 'denied' };
           const feature = this.catalog.find((entry) => entry.featureId === request.featureId);
@@ -147,10 +161,12 @@ export class TauriFeatureService {
             request.expectedRevision,
           );
           this.generation++;
+          await this.refresh();
+          if (this.activeFeatureId === request.featureId || this.activeFeatureId === null)
+            await this.present(this.activeFeatureId, open, presentation);
           break;
         }
         case 'select': {
-          const presentation = this.layout.presentationRevision();
           if (request.expectedRevision !== this.view.revision)
             return { status: 'stale', snapshot: this.snapshot() };
           if (
@@ -158,18 +174,19 @@ export class TauriFeatureService {
             !this.catalog.some((feature) => feature.featureId === request.featureId)
           )
             return { status: 'denied' };
-          await this.revoke();
           await this.layout.flush();
           await this.core.features.saveView({
             featureId: request.featureId,
             expectedRevision: request.expectedRevision,
           });
-          await this.refresh(presentation === this.layout.presentationRevision());
           this.generation++;
+          await this.refresh();
+          await this.present(request.featureId, true, presentation);
           break;
         }
         case 'organize': {
-          await this.revoke();
+          if (presentation !== this.layout.presentationRevision())
+            throw new Error('Stale presentation');
           const state = this.layout.snapshot();
           if (state.active < 0) return { status: 'denied' };
           if (!state.visible.includes(state.active)) this.layout.open(state.active);

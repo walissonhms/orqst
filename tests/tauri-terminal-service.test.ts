@@ -243,3 +243,26 @@ test('metadata mutations and native execution reviews exclude each other in both
     s.service.close();
   }
 });
+
+test('metadata edits keep passive state reads available while new input reviews stay blocked', async () => {
+  const s = setup();
+  try {
+    const start = await s.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    assert.equal(start.status, 'ok');
+    if (start.status !== 'ok') throw new Error('Missing synthetic instance');
+    assert.equal(s.service.beginMetadata(), true);
+    assert.equal(
+      (await s.request(0, { version: 1, action: 'snapshot', instanceId: start.instanceId })).status,
+      'ok',
+    );
+    assert.equal(
+      (await s.request(0, { version: 1, action: 'input', instanceId: start.instanceId })).status,
+      'busy',
+    );
+    assert.deepEqual(s.starts, [1, 0]);
+    assert.deepEqual(s.signals, []);
+    s.service.endMetadata();
+  } finally {
+    s.service.close();
+  }
+});
