@@ -146,6 +146,42 @@ separately configured Bridge, set `ORQST_DESKTOP_PORT=4320`; only integer ports
 The dashboard must already be built/served by that Bridge. No development-only Origin
 exception is added for Electron.
 
+## Diagnostic output lifetime
+
+The main-process bootstrap handles only `EPIPE` with syscall `write` emitted by
+its own `process.stdout` or `process.stderr`. A launcher can close the reading end
+of these diagnostic pipes while the application is still alive. Losing that
+output does not authorize quitting the client, releasing terminal ownership or
+changing stored data. Diagnostics sent to the lost channel cannot be recovered;
+healthy output and Node warnings keep their normal behavior. All other stream
+errors are rethrown. There is no application-wide exception/rejection handler,
+console replacement, warning suppression, retry or IPC/PTY error exemption.
+
+For a background/detached launch, connect diagnostics to a deliberately owned
+file or `ignore` them; `detached: true` alone does not disconnect inherited pipes.
+The normal `pnpm desktop` command remains a foreground launch. Playwright 1.64.1
+on macOS uses detached process groups with piped stdout/stderr; its parent must
+keep draining them until the disposable application has exited.
+
+`pnpm exec tsx scripts/accept-desktop-stdio.ts --authorize-synthetic-stdio` is an
+explicit isolated Electron 45.2.1 test. It creates temporary profiles, closes one
+diagnostic reader after readiness, exercises output/warnings again during teardown,
+and removes only its own temporary state. A strict fixture-only Console exposes
+the reported `writeOut → console.error → kWriteToConsole → write EPIPE` stack;
+the default Node Console can already ignore write errors. Without the bootstrap
+guard each strict fixture fails; with it each exits normally. The fixture records
+fatal exceptions and exits immediately solely to avoid native error dialogs;
+that recorder is never part of the application. Automatic Node tests also verify
+real closed pipes and fatal unexpected errors/unrelated sockets.
+
+This proves the closed diagnostic channel failure mechanism and the narrow fix.
+It does not identify the original reported process: no original Electron PID or
+descriptor evidence was retained. The concurrent eight-slot synthetic run's log
+reported a page-count timeout, without EPIPE. Do not attribute that crash to the
+resident Desktop or to that synthetic run without further evidence. No running
+client acquires this bootstrap fix from a build; a safe, separate relaunch is
+required, preserving any loaded drafts and owned terminals.
+
 ## Verification and distribution limits
 
 `pnpm test` includes pure URL/port security policy tests. `pnpm test:desktop` is an

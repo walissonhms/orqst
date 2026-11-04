@@ -1,3 +1,4 @@
+import './diagnostic-output.js';
 import {
   app,
   BrowserWindow,
