@@ -15,8 +15,29 @@ events and native dialog results. Signed proofs, keys, leases and attachments re
 inside Node and its existing private Core IPC. Public shape errors return `denied`
 without closing unrelated terminals. Native transport timeout/reload fences the affected
 document rather than retrying an uncertain mutation. Hiding retains the document/process;
-quit closes the owned hosts. Native retirement and MCP consent are not ported.
+quit closes the owned hosts. Native retirement is not ported. MCP consent now has a
+native-menu-only path, described below; native/provider acceptance remains pending.
 See [workflow and acceptance limits](../development/tauri.md#prepared-managed-terminals--2026-11-04).
+
+### Interactive MCP native menu
+
+For two opted-in profiles, Rust sends only private
+`{kind:'authorizeMcp',id,slot,focused}` after deriving the current native reviewing
+document. This is not a `terminal_request` action and introduces no renderer/API
+capability. Node responds with a correlated `confirm` containing `requestId`, slot,
+translated labels and complete bounded grant metadata. Only the native modal can
+send `{kind:'confirm',id,accepted}`; default/Escape cancel. Native request/document/
+generation/focus and Node revocation/deadlines are rechecked before signing.
+
+The native-only reply contains status, never a proof, task payload or grant. Core
+remains the authority for both owned running UUIDs, source/worker roles, workspace,
+epoch, replay, 120-second maximum and 4/8-KiB task/result limits. Neither reviewing
+terminal selection nor a menu click swaps roles or sends a task. Reload/destruction
+calls Core `closeSlot` to invalidate the channel; hide only revokes pending consent
+and keyboard authority. Transport ambiguity fences the document without retrying.
+No observer HTTP/WS/cookie changes. See the
+[security and source review](../research/tauri-interactive-mcp.md) and
+[reproduction/remaining gates](../development/tauri-interactive-mcp.md).
 
 ## Codex/OpenCode pair exception — 2026-11-03
 

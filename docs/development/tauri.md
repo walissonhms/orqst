@@ -123,8 +123,9 @@ Omitting the variable keeps observer-only startup. Selection supports the existi
 1–8 same-provider contract and reviewed Codex/OpenCode pair. It retains executable
 hash/version checks, native-session acknowledgments, duplicate/overlap rejection,
 private file permissions and sticky admission. Existing journals are refused; never
-select profiles currently owned by Electron. MCP-enabled profiles are refused because
-their separate native delegation consent is not ported. Selection failure leaves the
+select profiles currently owned by Electron. Explicitly prepared MCP-enabled pairs
+now use the [native task-grant review](tauri-interactive-mcp.md), separately from each
+signed process start. Native/provider acceptance remains pending. Selection failure leaves the
 observer available and prints a fixed refusal without paths or backend diagnostics.
 
 Use the native **Managed Terminal** menu to show prepared panes in the retained workspace. Start, connect
@@ -161,7 +162,7 @@ the attempt and input was revoked. An earlier UI-tool timeout is not positive ev
 
 Remaining limits: full native focus/dialog/keyboard/hide/quit lifecycle acceptance,
 real Codex/Claude/OpenCode login/tasks, native retirement/reselection, creation through
-the dashboard, SQLite layout persistence, PTY teams/mentions and MCP consent,
+the dashboard, SQLite layout persistence, PTY teams/mentions and native MCP acceptance,
 durable reconnect, Windows/Linux/Intel and signed installers. Native retirement is absent;
 state/admission remain reserved rather than being deleted or automatically reused.
 No ingestion logic changed; `validate:local`, `validate:live`, full browser suite and

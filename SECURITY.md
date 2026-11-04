@@ -1,5 +1,16 @@
 # Security policy
 
+## Tauri interactive MCP consent — 2026-11-04
+
+Only the native menu can request a one-use grant for an explicitly opted-in pair.
+Native document/focus/generation checks and Cancel-default review precede Node's
+signature; existing Core independently checks owned running instances and replay.
+No renderer MCP command, observer API, provider approval or task injection is added.
+Reload/destruction invalidates the channel; hide cancels pending review. Sticky
+reservations and the previous quarantine remain untouched. Native UI/provider
+acceptance and Rust compilation for this increment remain pending. See the
+[security review and pinned sources](docs/research/tauri-interactive-mcp.md).
+
 ## Tauri preview process boundary — 2026-11-04
 
 Native preparation captures the original document URL/generation at menu dispatch,

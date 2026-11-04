@@ -9,6 +9,12 @@ Prepared Tauri terminals now support a retained multi-pane workspace. See the
 and [pinned reuse review](docs/research/tauri-terminal-workspace.md). This visual
 parity increment preserves Electron until the full migration is accepted.
 
+Explicitly prepared MCP terminal pairs can now review a one-use task grant from
+the Tauri native menu, reusing the existing Core and Unix/stdio relays. Synthetic
+PTY/relay checks cover the correlated return; native UI/provider acceptance remains
+pending. The quarantined reservation is unchanged. See the
+[interactive MCP workflow and validation limits](docs/development/tauri-interactive-mcp.md).
+
 The [native coexistence fixture](docs/development/tauri-native-coexistence.md)
 opens isolated synthetic PTY/communication hosts in one Tauri process for human
 focus and permission checks. Native UI acceptance remains pending; returning from
@@ -59,7 +65,7 @@ The native **Prepare Tauri terminals** menu also prepares and reviews 1–8 Code
 Claude manifests using the bundled Node 24, native pickers and existing provisioning.
 Opening and signed CLI startup remain separate approvals; real-provider/native
 creation acceptance remains pending.
-Native terminal consent/provider parity remains unaccepted. The Tauri preview now includes
+Native interactive MCP consent is implemented; native/provider parity remains unaccepted. The Tauri preview now includes
 a native tray, source-gated per-run alerts and an explicit background-close option;
 OS delivery and full lifecycle acceptance remain pending. Exports and the complete
 managed workflow remain available in Electron. See the [native desktop workflow and checklist](docs/development/tauri-native-desktop.md),
