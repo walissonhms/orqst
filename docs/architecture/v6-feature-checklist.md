@@ -549,3 +549,8 @@ old-binary exclusion remain integration prerequisites; no native acceptance adde
 Offline final-point ordering is implemented/tested in source: original marker
 retained until the final approved commit, with legacy wx exclusion beforehand and
 future owner preservation afterward. No native/provider/kernel acceptance added.
+
+- [x] Dedicated offline native recovery entry, independent durable anchor and
+      complete native detail transport implemented over final 744 service freeze.
+- [ ] Serial joint review, commit-point TTL correction, package and actual native
+      external-fence/focus/scrolling/operator acceptance; no real acceptance implied.

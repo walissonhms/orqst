@@ -57,6 +57,7 @@ extern "C-unwind" fn deactivated(_: &AnyObject, _: Sel, _: *mut AnyObject) {
     if let Some(app) = APP.get() {
         crate::desktop::quit_deactivated(app);
         crate::terminal_creation::invalidate(app);
+        crate::offline_recovery::invalidate(app);
         super::native_focus_lost(app, "application-deactivated");
     }
 }
@@ -65,6 +66,7 @@ extern "C-unwind" fn key_changed(_: &AnyObject, _: Sel, _: *mut AnyObject) {
     let Some(app) = APP.get() else { return };
     crate::desktop::quit_key_changed(app);
     crate::terminal_creation::native_key_changed(app);
+    crate::offline_recovery::native_key_changed(app);
     let Some(window) = app.get_window("terminal-workspace") else {
         return;
     };
