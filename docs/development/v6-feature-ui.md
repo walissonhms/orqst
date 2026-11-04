@@ -176,6 +176,43 @@ The broad suite, EN/PT, runner deadline/cleanup execution and native/provider UI
 acceptance were not run during this integration pause. Earlier broad-suite counts
 belong only to their documented source revisions.
 
+### Authorized EN follow-up and accessible editor labels
+
+The owner authorized one fresh isolated EN run on published `dbdf60e`, with PT
+conditional on EN passing and confirmed cleanup. EN again reached 15 switches
+3/2/1 with the same six starts/documents/history, then failed on the exact `Status`
+field lookup. PT was not started and EN was not retried.
+
+This attempt's cleanup was confirmed: all six lifecycle journals end with an exit
+receipt, signed retirement completed, the active reservation is absent and the
+original host exited. The earlier fixture's six missing receipts remain uncertain
+and its data was neither adopted, reconciled nor deleted. One fixture's cleanup
+does not retrospectively accept another's.
+
+A separate renderer-only reproduction found an open editor with no exact `Status`
+label: its wrapping label included every option's text. The description label
+similarly included existing textarea content, and the edit button's ellipsis was
+its accessible name. Explicit localized ARIA labels fix those names without changing
+the command/lifecycle contracts or weakening the acceptance locator.
+
+The explicit no-session regression is:
+
+```sh
+pnpm exec tsx scripts/accept-feature-editor.ts --authorize-synthetic-feature-ui
+```
+
+It bundles the actual React component, serves only intercepted browser resources
+and uses schema-validated synthetic metadata in memory. Both EN and PT passed exact
+description/status lookup and three save/rename/reopen cycles, with no page errors.
+The first regression attempt also exposed the missing edit-button name; after the
+explicit label fix it passed. No Core, host, PTY, SQLite or provider is started.
+This is renderer evidence only: the six-PTY EN correction still needs a new
+authorized run, and full PT/native/provider acceptance remains incomplete.
+
+For this label-only correction, the renderer regression, lint, typecheck, regular
+build and resource staging with 17 notices passed. The broad Node suite and native
+checks were not rerun; no Rust/lifecycle contract changed.
+
 ## Fragments for central integration
 
 - **Checklist:** Feature metadata CRUD/selection, reviewed-slot assignment and

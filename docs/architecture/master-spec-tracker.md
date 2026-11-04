@@ -440,3 +440,17 @@ Integrated verification passed 53 session-free Node tests, 28 Rust tests,
 lint/typecheck, regular/native executable builds, Clippy and 17-notice resource
 staging. The broad suite and EN/PT remain paused. These checks do not accept the
 unexecuted cleanup/deadline correction or native/provider workflow.
+
+## Authorized EN follow-up — 2026-11-04
+
+One fresh authorized EN attempt on `dbdf60e` again passed 15 synthetic 3/2/1
+switches before failing on exact Status lookup. PT was not started. This attempt
+confirmed all six owned exit receipts, signed retirement and original host exit;
+its reservation is absent. Its successful cleanup does not resolve the earlier
+fixture's six missing receipts, which remain preserved and uncertain.
+
+Renderer-only reproduction found that option/textarea text was included in the
+editor's accessible labels, while the edit button was named by its ellipsis.
+Explicit localized labels now pass a separate EN/PT regression with three
+save/rename/reopen cycles and no Core/host/PTY. A new six-PTY run of this correction
+has not been authorized or executed. Full native/provider acceptance is unchanged.

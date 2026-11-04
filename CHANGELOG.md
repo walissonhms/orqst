@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Feature editor accessible names
+
+- Give the editor button, description and status fields explicit localized
+  accessible names. Status options and existing textarea content no longer become
+  part of their field labels.
+- Add an explicit renderer-only EN/PT regression for exact labels and three
+  save/rename/reopen cycles per locale, with synthetic metadata and no Core/PTY.
+- Record the fresh six-PTY EN failure on Status lookup, with six owned exit receipts,
+  signed retirement and host exit confirmed. Full PT and the new six-PTY rerun remain
+  pending; the earlier uncertain fixture is preserved.
+
 ## 2026-11-04 — Native Feature UI and retained view integration
 
 - Connect compact Workspace/Feature chrome and Studio metadata editing to private

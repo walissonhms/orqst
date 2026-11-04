@@ -12,11 +12,13 @@ guards. The [shared terminal chrome](docs/development/v6-terminal-chrome.md) use
 compact header and pane menu while retaining actual xterm and signed controls.
 The [native Feature UI](docs/development/v6-feature-ui.md) now connects metadata
 CRUD, reviewed-slot assignment and selection to the retained terminal view and
-per-Feature SQLite layout. Automated acceptance is partial: 15 synthetic six-PTY
-switches preserved identities/history, then EN failed on editor reopening; its
-correction has no rerun and PT is paused. Cleanup lacks six exit receipts and remains
-uncertain. Native/provider acceptance, runtime enrollment and Floating remain open;
-saved configuration restores no execution authority.
+per-Feature SQLite layout. Automated acceptance is partial: a fresh authorized EN
+run preserved identities/history across 15 synthetic six-PTY switches, then failed
+on the editor's exact Status label lookup. Explicit accessible names now pass a
+renderer-only EN/PT regression; the six-PTY correction has no rerun. That new run
+confirmed six exit receipts, signed retirement and host exit; the earlier fixture
+still lacks its receipts and remains uncertain. Full PT, native/provider acceptance,
+runtime enrollment and Floating remain open. Saved metadata restores no authority.
 
 For the current master-specification checklist, evidence, blockers and update rules,
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical

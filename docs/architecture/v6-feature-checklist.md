@@ -141,3 +141,24 @@ Integrated checks passed: 53 session-free Node tests, 28 Rust tests, lint,
 typecheck, regular/native executable builds, Clippy and resource staging with 17
 notices. The broad suite and EN/PT were not rerun. A first Rust check lacked staged
 Feature resources; it passed after staging, without changing the check.
+
+## Authorized EN follow-up and editor labels — 2026-11-04
+
+- [x] Run the authorized fresh EN attempt on `dbdf60e`; record its failure on exact
+      Status lookup after 15 successful 3/2/1 switches, without retrying or starting PT.
+- [x] Confirm that new attempt's six exit receipts, signed retirement, absent active
+      reservation and original host exit. Preserve its failure evidence separately.
+- [x] Reproduce the label defect without sessions and give the editor button,
+      description and Status explicit localized accessible names.
+- [x] Pass the actual component's renderer-only EN/PT regression: exact labels and
+      three save/rename/reopen cycles per locale. This uses metadata in memory only.
+- [ ] Rerun the corrected six-PTY EN under fresh authorization; full PT remains
+      conditional on EN success and confirmed cleanup.
+- [ ] Resolve the earlier uncertain fixture's missing receipts through its separate
+      owner review. Its data/reservation remains preserved; no state is fabricated.
+
+Native WebKit/provider acceptance and the broader V6 gaps remain unchanged.
+
+Label correction checks passed: renderer-only EN/PT, lint, typecheck, regular build
+and 17-notice resource staging. The broad suite/native checks were not rerun for
+this UI-only change.

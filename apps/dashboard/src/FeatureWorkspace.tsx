@@ -228,6 +228,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
             <label>
               {t('features.description')}
               <textarea
+                aria-label={t('features.description')}
                 maxLength={2048}
                 rows={3}
                 value={description}
@@ -238,6 +239,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
             <label>
               {t('features.status')}
               <select
+                aria-label={t('features.status')}
                 value={status}
                 onChange={(event) => setStatus(event.target.value as WorkspaceFeature['status'])}
                 disabled={busy}
@@ -336,6 +338,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
         <div>
           <button
             ref={editTrigger}
+            aria-label={t('features.edit')}
             disabled={busy || !selected}
             onClick={() => selected && openEditor(selected)}
             title={t('features.edit')}
