@@ -1,3 +1,4 @@
+import { FeatureWorkspace } from './FeatureWorkspace.js';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Columns2, FileCheck2, FolderOpen, ShieldCheck, Terminal } from 'lucide-react';
@@ -56,6 +57,7 @@ export function Studio() {
             : 'blocked';
   return (
     <section className="studio-page" aria-labelledby="studio-title">
+      {window.orqstFeatures && <FeatureWorkspace />}
       <header className="studio-heading">
         <div>
           <p className="studio-eyebrow">{t('studio.eyebrow')}</p>
