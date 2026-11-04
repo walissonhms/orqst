@@ -25,6 +25,12 @@ native WebKit or real providers. The earlier fixture with missing exit receipts 
 still preserved and uncertain. Runtime enrollment and Floating remain open; saved
 metadata restores no authority. See [local native preview and remaining UI gaps](docs/development/v6-feature-ui.md#local-native-preview).
 
+Studio source now exposes Tauri's existing native preparation wizard for 1–8
+same-provider Codex/Claude terminals, with truthful shell-specific controls and
+EN/PT text. Preparation, opening and signed CLI Start remain separate; Electron's
+mixed preset stays separate. See [workflow, command and validation limits](docs/development/tauri-studio-preparation.md).
+The currently open Preview app is not updated by this source increment.
+
 For the current master-specification checklist, evidence, blockers and update rules,
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
 roadmap and acceptance records remain available for their original scope and date.

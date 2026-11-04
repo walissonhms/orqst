@@ -10,6 +10,18 @@
   in Chromium. This does not accept native terminal/provider execution or replace
   the owner's running Preview app.
 
+## 2026-11-04 — Tauri Studio preparation bridge
+
+- Add a narrow main-Webview Studio facade over the existing native Codex/Claude
+  1–8 preparation, full review and separate opening flow; retain Electron's contract.
+- Provide an independent localized preparation component for Studio's drawer,
+  showing supported homogeneous choices without an Electron mixed preset.
+- Reuse AppKit focus/own-sheet observation, generation and shared native latches;
+  fence preparation on deactivation, another key window and any Quit attempt.
+- Add pure contract/bootstrap refusals and renderer-only EN/PT regression. Native
+  WebKit, providers, final Quit and the owner's open Preview remain unmodified
+  and unaccepted by this source increment.
+
 ## 2026-11-04 — Packaged Feature acceptance EN/PT
 
 - Pass the complete packaged Chromium-facade workflow in both locales: six

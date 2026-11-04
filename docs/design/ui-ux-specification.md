@@ -459,3 +459,15 @@ the native facade, Feature sidebar/CRUD/context switching and Floating layout ar
 not yet connected. Earlier screen rows retain their original dated scope. Current
 acceptance is in the [V6 checklist](../architecture/v6-feature-checklist.md); renderer
 fixtures do not establish WebKit/provider acceptance.
+
+## Tauri Studio preparation composition — 2026-11-04
+
+The shared preparation fragment uses existing Studio classes and i18next EN/PT.
+Tauri shows only same-provider Codex/Claude 1–8 creation and continuation of native
+prepared-file opening review. It mounts in the Studio preparation drawer without
+a second Feature workspace/sidebar. Electron keeps its own mixed preset/contract;
+Tauri never inherits its older-Desktop/relaunch notice or OpenCode startup guide.
+Unsupported native access has an honest unavailable state. The actual native wizard
+continues to own paths, review and separate opening; this introduces no Start,
+login, prompt, model choice or provider operation. See the
+[contract and remaining acceptance](../api/tauri-studio.md).

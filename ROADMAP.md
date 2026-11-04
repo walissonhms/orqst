@@ -21,7 +21,10 @@ The shared terminal renderer now has compact chrome and an accessible pane menu.
 The native metadata facade and actual Feature sidebar/CRUD/selection are now
 connected to retained per-Feature docked layouts. Packaged Chromium-facade EN/PT
 acceptance now passes with confirmed cleanup and 15 switches per locale. Native
-WebKit/provider acceptance and the Tauri Studio preparation bridge remain open. Floating, larger
+WebKit/provider acceptance remains open. The
+[Tauri Studio preparation bridge](docs/development/tauri-studio-preparation.md) is
+implemented in source using the existing wizard; native acceptance remains pending.
+Floating, larger
 structured teams, model capability controls and authorized cross-Feature routes
 remain separate dependencies. See [Core](docs/development/v6-feature-core.md) and
 [chrome](docs/development/v6-terminal-chrome.md) for exact evidence and limits.

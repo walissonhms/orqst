@@ -1,5 +1,17 @@
 # Security policy
 
+## Tauri Studio preparation — 2026-11-04
+
+The owned main dashboard now has one narrow `studio_request` capability for passive
+Codex/Claude 1–8 preparation and review of native-held files. Actual Webview/parent,
+origin/document, generation and AppKit focus are authoritative; no paths, PID,
+proof, task, Start or arbitrary Core operation comes from the renderer. Menu and
+Studio reuse the same exclusion/write/admission latches and native confirmations.
+The existing AppKit observer also revokes preparation on deactivation/another key
+window while retaining main's exact own-sheet. Observer HTTP/WS and signed
+MCP/retirement/Quit authority are unchanged. See the [contract and security review](docs/api/tauri-studio.md).
+Native/provider/final-Quit acceptance is still pending.
+
 ## Tauri interactive MCP consent — 2026-11-04
 
 Only the native menu can request a one-use grant for an explicitly opted-in pair.

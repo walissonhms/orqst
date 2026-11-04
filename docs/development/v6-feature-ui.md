@@ -317,3 +317,14 @@ See the [pinned reference decision](../research/studio-full-window.md).
 - **ROADMAP / design:** retain the approved V6 frame and real terminal surface.
   Broader workspace creation/control, runtime enrollment/communication, model
   choice and native/provider acceptance still need their own functional increments.
+
+## Tauri Studio preparation source follow-up — 2026-11-04
+
+The source gap described under Local native preview now has a narrow Tauri bridge
+and independent localized preparation component. It reuses the existing native
+1–8 Codex/Claude menu wizard, with separate opening and signed Start. Electron's
+mixed preset is not offered in Tauri. The component is suitable for the separately
+coordinated full-window Studio preparation drawer; it adds no workspace/layout.
+See [workflow, checks and source/native limits](tauri-studio-preparation.md).
+The owner's already open native app, data and processes are unchanged; its earlier
+observation does not accept this new source or native/provider/final-Quit behavior.

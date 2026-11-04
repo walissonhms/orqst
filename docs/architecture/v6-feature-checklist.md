@@ -174,8 +174,10 @@ this UI-only change.
 - [x] Complete signed stops/retirement and original-host exit before deleting each
       successful fixture. The earlier uncertain fixture is preserved separately.
 - [x] Generate and open a locally signed native Preview app for owner inspection.
-- [ ] Port the Studio preparation buttons to Tauri; use the existing native menu
-      meanwhile. Correct its misleading older-Desktop/relaunch notice.
+- [x] Implement the Tauri Studio preparation facade/component over the existing
+      native 1–8 Codex/Claude wizard; distinguish capabilities and remove the
+      older-Electron/relaunch composition in source. Native execution acceptance
+      remains unchecked; the owner's open Preview app is unchanged.
 - [ ] Accept the complete native WebKit flow, final Quit and real-provider behavior.
 
 These results supersede the earlier EN/PT pause for this workflow. They do not
@@ -197,3 +199,16 @@ strict local ad hoc signature verification; this does not accept native executio
 - [ ] Package and accept this correction in native WebKit. The owner's running
       Preview is preserved and still contains its earlier resources.
 - [ ] Complete the separate native Studio preparation bridge and provider acceptance.
+
+## Tauri Studio preparation source — 2026-11-04
+
+- [x] Reuse native menu provisioning/review/opening with strict main-Webview,
+      source/document/generation/focus and exact provider/count contracts.
+- [x] Keep Electron independent; provide EN/PT component for the Studio drawer,
+      with no mixed Tauri preset or automatic Start/login/task/MCP effects.
+- [x] Add pure contract/negative/bootstrap and renderer EN/PT checks, preserving
+      selection, uncertain writes/admission, own-sheet and existing Quit gates.
+- [ ] Accept actual native WebKit preparation/dialogs/providers and final Quit.
+
+See [delivery checks and limits](../development/tauri-studio-preparation.md).
+The earlier uncertain fixture remains preserved, without adoption or cleanup.
