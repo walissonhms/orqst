@@ -7,7 +7,8 @@ import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { chromium, expect } from '@playwright/test';
+import type { TerminalLayoutState } from '../apps/desktop/src/terminal-layout.js';
+import { chromium, expect, type Page } from '@playwright/test';
 import { terminalNativeReplySchema, type TerminalNativeRequest } from '@orqst/protocol';
 import {
   managedCodexSettings,
@@ -15,7 +16,12 @@ import {
   type ManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
 
-assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic']);
+const args = process.argv.slice(2);
+const count = args[1] === '--panes=8' ? 8 : 2;
+assert.deepEqual(
+  args,
+  count === 8 ? ['--authorize-synthetic', '--panes=8'] : ['--authorize-synthetic'],
+);
 const fixture = await realpath(await mkdtemp(join(tmpdir(), 'orqst-tauri-terminal-acceptance-')));
 await cp('apps/tauri/dist/core', join(fixture, 'core'), { recursive: true });
 const runtime = JSON.parse(await readFile('apps/tauri/dist/core/runtime.json', 'utf8')) as {
@@ -24,11 +30,17 @@ const runtime = JSON.parse(await readFile('apps/tauri/dist/core/runtime.json', '
 const node = join(fixture, 'node');
 await cp(`apps/tauri/src-tauri/binaries/orqst-node-${runtime.target}`, node);
 const executable = join(fixture, 'synthetic-pty');
-execFileSync('cc', ['-O2', resolve('tests/helpers/managed-terminal-fixture.c'), '-o', executable]);
+execFileSync('cc', [
+  '-O2',
+  '-DORQST_SYNTHETIC_TIMEOUT_SECONDS=90',
+  resolve('tests/helpers/managed-terminal-fixture.c'),
+  '-o',
+  executable,
+]);
 const project = join(fixture, 'project');
 await mkdir(project, { mode: 0o700 });
 const manifests: string[] = [];
-for (const slot of [0, 1]) {
+for (let slot = 0; slot < count; slot++) {
   const state = join(fixture, `state-${slot}`);
   for (const directory of [state, ...['home', 'codex', 'tmp'].map((p) => join(state, p))])
     await mkdir(directory, { mode: 0o700 });
@@ -68,10 +80,16 @@ child.stderr.on('data', (chunk: Buffer) => {
 const lines = createInterface({ input: child.stdout });
 const pending = new Map<string, (value: unknown) => void>();
 const send = (value: object) => child.stdin.write(JSON.stringify(value) + '\n');
-let acceptReady!: (value: { panes: Array<{ html: string }> }) => void;
-const ready = new Promise<{ panes: Array<{ html: string }> }>((resolve) => {
-  acceptReady = resolve;
-});
+let acceptReady!: (value: { panes: Array<{ html: string }>; layout: TerminalLayoutState }) => void;
+let layout: TerminalLayoutState;
+const pages: Page[] = [];
+let layoutWork = Promise.resolve();
+let layoutError: unknown;
+const ready = new Promise<{ panes: Array<{ html: string }>; layout: TerminalLayoutState }>(
+  (resolve) => {
+    acceptReady = resolve;
+  },
+);
 const confirmations: string[] = [];
 lines.on('line', (line) => {
   const value = JSON.parse(line) as {
@@ -80,9 +98,29 @@ lines.on('line', (line) => {
     detail: string;
     value: unknown;
     panes: Array<{ html: string }>;
+    layout: TerminalLayoutState;
+    state: TerminalLayoutState;
+    bounds: Array<{ slot: number; rect: { width: number; height: number } | null }>;
   };
-  if (value.kind === 'ready') acceptReady(value);
-  else if (value.kind === 'confirm') {
+  if (value.kind === 'ready') {
+    layout = value.layout;
+    acceptReady(value);
+  } else if (value.kind === 'layout') {
+    layout = value.state;
+    layoutWork = layoutWork
+      .then(async () => {
+        for (const [slot, page] of pages.entries()) {
+          const rect = value.bounds.find((b) => b.slot === slot)?.rect;
+          if (rect) await page.setViewportSize({ width: rect.width, height: rect.height });
+          await page.evaluate((state) => {
+            window.dispatchEvent(new CustomEvent('orqst-terminal-layout', { detail: state }));
+          }, value.state);
+        }
+      })
+      .catch((error: unknown) => {
+        layoutError = error;
+      });
+  } else if (value.kind === 'confirm') {
     confirmations.push(value.detail);
     send({ kind: 'confirm', id: value.id, accepted: true }); // Synthetic native consent only.
   } else pending.get(value.id)?.(value.value);
@@ -103,7 +141,7 @@ async function request(request: TerminalNativeRequest, slot = 0) {
   });
 }
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
-const deadline = setTimeout(() => child.kill('SIGKILL'), 30_000);
+const deadline = setTimeout(() => child.kill('SIGKILL'), 90_000);
 try {
   const value = await Promise.race([
     ready,
@@ -112,126 +150,147 @@ try {
     }),
   ]);
   browser = await chromium.launch();
-  const page = await browser.newPage();
-  await page.exposeFunction(
-    'syntheticNativeInvoke',
-    (command: string, args: { request: TerminalNativeRequest }) => {
-      if (command === 'terminal_view') return true; // Native window behavior is simulated.
-      assert.equal(command, 'terminal_request');
-      return request(args.request);
-    },
-  );
-  await page.addInitScript(() => {
-    const native = Reflect.get(window, 'syntheticNativeInvoke') as (
-      command: string,
-      args: unknown,
-    ) => Promise<unknown>;
-    Reflect.set(window, '__TAURI_INTERNALS__', { invoke: native });
-  });
+  send({ kind: 'layout-resize', width: 1440, height: 1200 });
+  send({ kind: 'layout-open', slot: 0 });
+  await expect.poll(() => layout.visible.length).toBeGreaterThan(0);
   const client = await readFile('apps/tauri/dist/terminal/client.js', 'utf8');
   const style = await readFile('apps/tauri/dist/terminal/style.css', 'utf8');
   const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.route('**/*', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    assert.ok(['/0/index.html', '/0/client.js', '/0/style.css'].includes(path));
-    return route.fulfill({
-      contentType: path.endsWith('.js')
-        ? 'text/javascript'
-        : path.endsWith('.css')
-          ? 'text/css'
-          : 'text/html',
-      body: path.endsWith('.js') ? client : path.endsWith('.css') ? style : value.panes[0]!.html,
+  const ids: string[] = [];
+  for (let slot = 0; slot < count; slot++) {
+    const page: Page = await browser.newPage({ viewport: { width: 720, height: 600 } });
+    await page.exposeFunction(
+      'syntheticNativeInvoke',
+      (command: string, args: { request: TerminalNativeRequest; action: unknown }) => {
+        if (command === 'terminal_view') {
+          if (args.action === 'layout') return layout;
+          if (!layout.visible.includes(slot)) return false;
+          send({ kind: 'layout-action', slot, action: args.action });
+          return true;
+        }
+        assert.equal(command, 'terminal_request');
+        if (
+          !layout.visible.includes(slot) &&
+          !['read', 'snapshot', 'resize', 'detach'].includes(args.request.action)
+        )
+          return { status: 'focus_required' };
+        return request(args.request, slot);
+      },
+    );
+    await page.addInitScript(() => {
+      Reflect.set(window, '__TAURI_INTERNALS__', {
+        invoke: Reflect.get(window, 'syntheticNativeInvoke'),
+      });
     });
-  });
-  await page.goto('https://synthetic.orqst.invalid/0/index.html');
-  await expect(page.locator('#terminal .xterm')).toBeVisible();
-  await expect(page.locator('[data-tab="0"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('[data-tab="1"]')).toHaveAttribute('aria-pressed', 'false');
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.route('**/*', (route) => {
+      const path = new URL(route.request().url()).pathname;
+      assert.ok([`/${slot}/index.html`, `/${slot}/client.js`, `/${slot}/style.css`].includes(path));
+      return route.fulfill({
+        contentType: path.endsWith('.js')
+          ? 'text/javascript'
+          : path.endsWith('.css')
+            ? 'text/css'
+            : 'text/html',
+        body: path.endsWith('.js')
+          ? client
+          : path.endsWith('.css')
+            ? style
+            : value.panes[slot]!.html,
+      });
+    });
+    // Native menu selection makes compact-page panes visible; it never starts a process.
+    send({ kind: 'layout-open', slot });
+    await expect.poll(() => layout.visible.includes(slot)).toBe(true);
+    await page.goto(`https://synthetic.orqst.invalid/${slot}/index.html`);
+    pages.push(page);
+    await expect(page.locator('#terminal .xterm')).toBeVisible();
+    await page.locator('#start').click();
+    await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
+    await page.locator('#attach').click();
+    await expect(page.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
+    assert.equal(await page.evaluate(() => Reflect.get(window, 'syntheticInjection')), undefined);
+    const id = await page.locator('#status').getAttribute('data-instance-id');
+    assert.ok(id && !ids.includes(id));
+    ids.push(id);
+  }
+  const page = pages[0]!;
+  send({ kind: 'layout-open', slot: 0 });
+  await expect.poll(() => layout.visible.includes(0)).toBe(true);
+  await layoutWork;
   await page.locator('#maximize').click();
   await expect(page.locator('#restore')).toBeVisible();
+  await expect.poll(() => layout.visible).toEqual([0]);
   await page.locator('#restore').click();
   await expect(page.locator('#maximize')).toBeVisible();
-  await page.locator('#start').click();
-  await expect(page.locator('#status'))
-    .toHaveAttribute('data-state', 'running')
-    .catch((error: unknown) => {
-      throw new Error(
-        `Synthetic start failed (${confirmations.length} confirmations; host diagnostics: ${diagnostics})`,
-        { cause: error },
-      );
-    });
-  await page.locator('#attach').click();
+  await page.locator('.layout-options summary').click();
+  await page.locator('#pane-name').fill('<script>plain name</script>');
+  await page.locator('#rename-pane button').click();
+  await expect(page.locator('#pane-title')).toContainText('<script>plain name</script>');
+  await page.locator('#move-later').click();
+  await expect.poll(() => layout.order[1]).toBe(0);
+  await expect(page.locator('.pane-tabs button').nth(1)).toHaveAttribute('data-tab', '0');
+  await page.locator('#column-choice').selectOption('3');
+  await expect.poll(() => layout.columns).toBe(3);
+  await page.locator('.layout-options summary').click();
+  await page.locator('#hide-pane').click();
+  await expect.poll(() => layout.shown.includes(0)).toBe(false);
+  send({ kind: 'layout-open', slot: 0 });
+  await expect.poll(() => layout.visible.includes(0)).toBe(true);
+  await layoutWork;
+  assert.equal(await page.locator('#status').getAttribute('data-instance-id'), ids[0]);
   await expect(page.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
-  assert.equal(await page.evaluate(() => Reflect.get(window, 'syntheticInjection')), undefined);
+  send({ kind: 'layout-resize', width: 600, height: 700 });
+  await expect.poll(() => layout.visible).toEqual([0]);
+  await layoutWork;
   await page.locator('#input').click();
   await expect(page.locator('main')).toHaveAttribute('data-next', 'typing');
   await page.keyboard.type('ping');
   await page.keyboard.press('Enter');
   await expect(page.locator('#terminal')).toContainText('SYNTHETIC:PONG');
-  const id = await page.locator('#status').getAttribute('data-instance-id');
-  assert.ok(id);
-  const second = await browser.newPage();
-  second.on('pageerror', (error) => errors.push(error.message));
-  await second.exposeFunction(
-    'syntheticNativeInvoke',
-    (command: string, args: { request: TerminalNativeRequest }) => {
-      if (command === 'terminal_view') return true;
-      assert.equal(command, 'terminal_request');
-      return request(args.request, 1);
-    },
-  );
-  await second.addInitScript(() => {
-    const native = Reflect.get(window, 'syntheticNativeInvoke') as (
-      command: string,
-      args: unknown,
-    ) => Promise<unknown>;
-    Reflect.set(window, '__TAURI_INTERNALS__', { invoke: native });
-  });
-  await second.route('**/*', (route) => {
-    const path = new URL(route.request().url()).pathname;
-    assert.ok(['/1/index.html', '/1/client.js', '/1/style.css'].includes(path));
-    return route.fulfill({
-      contentType: path.endsWith('.js')
-        ? 'text/javascript'
-        : path.endsWith('.css')
-          ? 'text/css'
-          : 'text/html',
-      body: path.endsWith('.js') ? client : path.endsWith('.css') ? style : value.panes[1]!.html,
-    });
-  });
-  await second.goto('https://synthetic.orqst.invalid/1/index.html');
-  await expect(second.locator('#terminal .xterm')).toBeVisible();
-  await expect(second.locator('[data-tab="1"]')).toHaveAttribute('aria-pressed', 'true');
-  await expect(second.locator('[data-tab="0"]')).toHaveAttribute('aria-pressed', 'false');
-  await second.locator('#start').click();
-  await expect(second.locator('#status')).toHaveAttribute('data-state', 'running');
-  await second.locator('#attach').click();
-  await expect(second.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
-  const secondId = await second.locator('#status').getAttribute('data-instance-id');
-  assert.ok(secondId && secondId !== id);
-  await second.locator('#stop').click();
-  await expect(second.locator('#status')).toHaveAttribute('data-state', 'exited');
-  await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
+  await page.keyboard.type('size');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#terminal')).toContainText('SYNTHETIC:SIZE:');
+  const size = (await page.locator('#terminal').innerText()).match(/SYNTHETIC:SIZE:(\d+)x(\d+)/);
+  assert.ok(size && Number(size[1]) > 0 && Number(size[2]) > 0);
   const resized = terminalNativeReplySchema.parse(
-    await request({ version: 1, action: 'resize', instanceId: id, columns: 91, rows: 31 }),
+    await request({ version: 1, action: 'resize', instanceId: ids[0]!, columns: 91, rows: 31 }),
   );
   assert.equal(resized.status, 'ok');
   send({ kind: 'revoke', slot: 0 });
   const revoked = terminalNativeReplySchema.parse(
-    await request({ version: 1, action: 'write', instanceId: id, sequence: 100, text: 'revoked' }),
+    await request({
+      version: 1,
+      action: 'write',
+      instanceId: ids[0]!,
+      sequence: 100,
+      text: 'revoked',
+    }),
   );
   assert.equal(revoked.status, 'denied');
-  await page.locator('#stop').click();
-  await expect(page.locator('#status')).toHaveAttribute('data-state', 'exited');
+  const second = pages[1]!;
+  send({ kind: 'layout-open', slot: 1 });
+  await expect.poll(() => layout.visible.includes(1)).toBe(true);
+  await second.locator('#stop').click();
+  await expect(second.locator('#status')).toHaveAttribute('data-state', 'exited');
+  await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
+  for (const [slot, current] of pages.entries()) {
+    if (slot === 1) continue;
+    send({ kind: 'layout-open', slot });
+    await expect.poll(() => layout.visible.includes(slot)).toBe(true);
+    await current.locator('#stop').click();
+    await expect(current.locator('#status')).toHaveAttribute('data-state', 'exited');
+  }
+  await layoutWork;
+  assert.equal(layoutError, undefined);
   assert.deepEqual(errors, []);
-  assert.ok(confirmations.length >= 4);
+  assert.ok(confirmations.length >= count * 2);
   child.stdin.end('shutdown\n');
   const [code, signal] = await exited;
   assert.equal(code, 0);
   assert.equal(signal, null);
   console.log(
-    'PASS: packaged Node hosts + two independent synthetic PTYs + Tauri xterm bundle, signed start/attach/input/stop, output, resize and revocation outside checkout. Native IPC/focus/dialogs simulated; no real provider.',
+    `PASS: packaged Node hosts + ${count} independent synthetic PTYs + retained Tauri xterm documents, layout/rename/reorder/hide/compact/maximize, signed start/attach/input/stop, output, resize and revocation outside checkout. Native IPC/focus/dialogs simulated; no real provider.`,
   );
 } finally {
   clearTimeout(deadline);

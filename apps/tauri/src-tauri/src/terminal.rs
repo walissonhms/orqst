@@ -7,7 +7,8 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
-use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::webview::WebviewBuilder;
+use tauri::{Manager, Webview, WebviewUrl, Window, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -19,6 +20,7 @@ pub struct Terminals(Mutex<Option<Running>>);
 struct Running {
     child: CommandChild,
     documents: Vec<String>,
+    layout: Value,
     generations: Vec<u64>,
     loaded: Vec<bool>,
     revoked: Vec<bool>,
@@ -37,7 +39,7 @@ fn url(slot: usize) -> String {
     format!("orqst-terminal://local/{slot}/index.html")
 }
 
-fn slot(window: &WebviewWindow) -> Option<usize> {
+fn slot(window: &Webview) -> Option<usize> {
     document_slot(window.label(), window.url().ok()?.as_str())
 }
 
@@ -46,8 +48,66 @@ fn document_slot(label: &str, source: &str) -> Option<usize> {
     (slot < 8 && label == format!("terminal-{slot}") && source == url(slot)).then_some(slot)
 }
 
-fn focused(window: &WebviewWindow) -> bool {
-    window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false)
+// Tauri exposes native window focus, but no per-child-webview focus getter.
+// Inspect the owned WKWebView's native first responder on the UI thread. Never
+// accept a renderer-supplied active slot or document.hasFocus as execution proof.
+async fn focused(view: &Webview) -> bool {
+    let Some(slot) = slot(view) else { return false };
+    let visible = view
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| {
+            r.layout["visible"]
+                .as_array()
+                .is_some_and(|slots| slots.iter().any(|s| s.as_u64() == Some(slot as u64)))
+        });
+    if !visible
+        || !view.window().is_visible().unwrap_or(false)
+        || !view.window().is_focused().unwrap_or(false)
+    {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = oneshot::channel();
+        if view
+            .with_webview(move |native| {
+                // SAFETY: Tauri supplies the live WKWebView on the main thread;
+                // pointers are borrowed only for these synchronous AppKit messages.
+                let valid = unsafe {
+                    use objc2::runtime::AnyObject;
+                    use objc2::{msg_send, sel};
+                    let webview = native.inner().cast::<AnyObject>();
+                    let window: *mut AnyObject = msg_send![webview, window];
+                    if window.is_null() {
+                        false
+                    } else {
+                        let responder: *mut AnyObject = msg_send![window, firstResponder];
+                        if responder.is_null() {
+                            false
+                        } else {
+                            let is_view: bool =
+                                msg_send![responder, respondsToSelector: sel!(isDescendantOf:)];
+                            is_view && msg_send![responder, isDescendantOf: webview]
+                        }
+                    }
+                };
+                let _ = tx.send(valid);
+            })
+            .is_err()
+        {
+            return false;
+        }
+        matches!(
+            tokio::time::timeout(Duration::from_secs(1), rx).await,
+            Ok(Ok(true))
+        )
+    }
+    #[cfg(not(target_os = "macos"))]
+    false // Other platforms remain fail-closed until native child-focus is implemented.
 }
 
 fn send(app: &tauri::AppHandle, message: Value) -> bool {
@@ -101,12 +161,16 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
 }
 
 #[tauri::command]
-pub async fn terminal_request(window: WebviewWindow, request: Value) -> Value {
+pub async fn terminal_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status": "denied"});
     let Some(slot) = slot(&window) else {
         return denied();
     };
     let app = window.app_handle().clone();
+    let focus = focused(&window).await;
+    if focus {
+        send(&app, json!({"kind":"layout-focus", "slot":slot}));
+    }
     let (id, generation, receiver) = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
@@ -119,7 +183,6 @@ pub async fn terminal_request(window: WebviewWindow, request: Value) -> Value {
         {
             return denied();
         }
-        let focus = focused(&window);
         if !matches!(
             request["action"].as_str(),
             Some("read" | "snapshot" | "resize" | "detach")
@@ -171,52 +234,136 @@ pub async fn terminal_request(window: WebviewWindow, request: Value) -> Value {
 }
 
 #[tauri::command]
-pub fn terminal_view(window: WebviewWindow, action: Value) -> bool {
+pub async fn terminal_view(window: Webview, action: Value) -> Value {
     let Some(slot) = slot(&window) else {
-        return false;
+        return json!(false);
     };
-    if !focused(&window) {
-        return false;
-    }
     let app = window.app_handle();
-    revoke(app, slot, false);
-    match action.as_str() {
-        Some("hide" | "dashboard") => {
-            if action == "dashboard" {
-                if let Some(main) = app.get_webview_window("main") {
-                    let _ = main.show();
-                    let _ = main.set_focus();
-                }
-            }
-            window.hide().is_ok()
+    if action == "layout" {
+        return app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|r| r.layout.clone())
+            .unwrap_or(Value::Null);
+    }
+    if !focused(&window).await {
+        return json!(false);
+    }
+    // Revoke immediately, before the asynchronous Node layout update arrives.
+    revoke_all(app);
+    if action == "dashboard" {
+        if let Some(main) = app.get_webview_window("main") {
+            let _ = main.show();
+            let _ = main.set_focus();
         }
-        Some("maximize") => window.maximize().is_ok(),
-        Some("restore") => window.unmaximize().is_ok(),
-        _ => {
-            let Some(target) = action.get("tab").and_then(Value::as_u64) else {
-                return false;
-            };
-            if let Some(target) = app.get_webview_window(&format!("terminal-{target}")) {
-                let _ = target.show();
-                target.set_focus().is_ok()
-            } else {
-                false
+    }
+    json!(send(
+        app,
+        json!({"kind": "layout-action", "slot": slot, "action": action})
+    ))
+}
+
+fn revoke_all(app: &tauri::AppHandle) {
+    let count = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.documents.len())
+        .unwrap_or(0);
+    for slot in 0..count {
+        revoke(app, slot, false);
+    }
+}
+
+fn resize(app: &tauri::AppHandle, window: &Window) {
+    if let Ok(size) = window.inner_size() {
+        let logical = size.to_logical::<u32>(window.scale_factor().unwrap_or(1.0));
+        send(
+            app,
+            json!({"kind":"layout-resize", "width":logical.width.clamp(1, 32768), "height":logical.height.clamp(1, 32768)}),
+        );
+    }
+}
+
+fn apply_layout(app: &tauri::AppHandle, value: &Value) {
+    let Some(window) = app.get_window("terminal-workspace") else {
+        return;
+    };
+    let state = &value["state"];
+    {
+        let terminal = app.state::<Terminals>();
+        if let Some(r) = terminal.0.lock().unwrap().as_mut() {
+            r.layout = state.clone();
+        };
+    }
+    let Some(bounds) = value["bounds"].as_array() else {
+        return;
+    };
+    let visible = state["visible"].as_array().is_some_and(|s| !s.is_empty());
+    if !visible {
+        revoke_all(app);
+        let _ = window.hide();
+    }
+    for bound in bounds {
+        let Some(slot) = bound["slot"].as_u64() else {
+            continue;
+        };
+        let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
+            continue;
+        };
+        if bound["rect"].is_null() {
+            revoke(app, slot as usize, false);
+            let _ = view.hide();
+        } else {
+            let rect = &bound["rect"];
+            let coordinates: Option<Vec<f64>> = ["x", "y", "width", "height"]
+                .iter()
+                .map(|k| {
+                    rect[*k]
+                        .as_f64()
+                        .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 32768.0)
+                })
+                .collect();
+            let Some(c) = coordinates else { continue };
+            let _ = view.set_bounds(tauri::Rect {
+                position: tauri::LogicalPosition::new(c[0], c[1]).into(),
+                size: tauri::LogicalSize::new(c[2], c[3]).into(),
+            });
+            let _ = view.show();
+        }
+        // Only trusted, JSON-serialized layout metadata is evaluated, never CLI output.
+        let _ = view.eval(format!(
+            "window.dispatchEvent(new CustomEvent('orqst-terminal-layout',{{detail:{state}}}));"
+        ));
+    }
+    if visible {
+        let _ = window.show();
+        if let Some(slot) = value["focus"].as_u64() {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+                let _ = view.set_focus();
             }
         }
     }
 }
 
-fn confirm(app: &tauri::AppHandle, value: &Value) {
+async fn confirm(app: &tauri::AppHandle, value: &Value) {
     let Some(slot) = value["slot"].as_u64().map(|v| v as usize) else {
         return;
     };
     let Some(id) = value["id"].as_str().map(str::to_owned) else {
         return;
     };
-    let Some(window) = app.get_webview_window(&format!("terminal-{slot}")) else {
+    let Some(window) = app.get_webview(&format!("terminal-{slot}")) else {
         return;
     };
-    let valid = self::slot(&window) == Some(slot) && focused(&window);
+    let valid = self::slot(&window) == Some(slot) && focused(&window).await;
     let fields: Option<Vec<&str>> = ["title", "message", "detail", "cancel", "approve"]
         .iter()
         .map(|key| value[*key].as_str())
@@ -238,13 +385,16 @@ fn confirm(app: &tauri::AppHandle, value: &Value) {
     let app = app.clone();
     // macOS: first/default and third/Escape both cancel; only the middle button approves.
     app.dialog().message(format!("{}\n\n{}", fields[1], fields[2]))
-        .title(fields[0]).parent(&window)
+        .title(fields[0]).parent(&window.window())
         .buttons(MessageDialogButtons::YesNoCancelCustom(fields[3].into(), approve, fields[3].into()))
         .show_with_result(move |result| {
-            let current = app.state::<Terminals>().0.lock().unwrap().as_ref().map(|r| r.generations[slot]);
-            let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
-                && generation == current && self::slot(&window) == Some(slot) && focused(&window);
-            send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
+            tauri::async_runtime::spawn(async move {
+                let focused = focused(&window).await;
+                let current = app.state::<Terminals>().0.lock().unwrap().as_ref().map(|r| r.generations[slot]);
+                let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
+                    && generation == current && self::slot(&window) == Some(slot) && focused;
+                send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
+            });
         });
 }
 
@@ -314,6 +464,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
     *app.state::<Terminals>().0.lock().unwrap() = Some(Running {
         child,
         documents,
+        layout: ready["layout"].clone(),
         generations: vec![0; count],
         loaded: vec![false; count],
         revoked: vec![false; count],
@@ -327,7 +478,17 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         confirming_quit: false,
         exit_authorized: false,
     });
-    let menu = Menu::default(app)?;
+    let workspace = tauri::window::WindowBuilder::new(app, "terminal-workspace")
+        .title(ready["title"].as_str().unwrap_or("ORQST"))
+        .inner_size(1280.0, 860.0)
+        .min_inner_size(480.0, 400.0)
+        .visible(false)
+        .build()?;
+    // Append to the current menu so independently implemented creation actions survive.
+    let menu = match app.menu() {
+        Some(menu) => menu,
+        None => Menu::default(app)?,
+    };
     let submenu = Submenu::new(app, ready["title"].as_str().unwrap_or("ORQST"), true)?;
     for (slot, pane) in panes.iter().enumerate() {
         let label = format!("terminal-{slot}");
@@ -340,49 +501,73 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         )?)?;
         let handle = app.clone();
         let expected = url(slot);
-        let window =
-            WebviewWindowBuilder::new(app, &label, WebviewUrl::External(expected.parse()?))
-                .title(pane["title"].as_str().unwrap_or("ORQST"))
-                .inner_size(1000.0, 760.0)
-                .visible(false)
-                .on_navigation(move |url| url.as_str() == expected)
-                .on_new_window(|_, _| NewWindowResponse::Deny)
-                .on_page_load(move |window, payload| {
-                    if payload.event() == tauri::webview::PageLoadEvent::Started {
-                        let state = window.state::<Terminals>();
-                        let mut guard = state.0.lock().unwrap();
-                        let reload = guard.as_ref().is_some_and(|r| r.loaded[slot]);
-                        if let Some(r) = guard.as_mut() {
-                            r.loaded[slot] = true;
-                            r.revoked[slot] |= reload;
-                        }
-                        drop(guard);
-                        if reload {
-                            revoke(&handle, slot, true);
-                        }
+        let builder = WebviewBuilder::new(&label, WebviewUrl::External(expected.parse()?))
+            .focused(false)
+            .disable_drag_drop_handler()
+            .on_navigation(move |url| url.as_str() == expected)
+            .on_new_window(|_, _| NewWindowResponse::Deny)
+            .on_page_load(move |window, payload| {
+                if payload.event() == tauri::webview::PageLoadEvent::Started {
+                    let state = window.state::<Terminals>();
+                    let mut guard = state.0.lock().unwrap();
+                    let reload = guard.as_ref().is_some_and(|r| r.loaded[slot]);
+                    if let Some(r) = guard.as_mut() {
+                        r.loaded[slot] = true;
+                        r.revoked[slot] |= reload;
                     }
-                })
-                .build()?;
-        let handle = app.clone();
-        let target = window.clone();
-        window.on_window_event(move |event| match event {
-            WindowEvent::Focused(false) => revoke(&handle, slot, false),
-            WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                revoke(&handle, slot, false);
-                let _ = target.hide();
-            }
-            WindowEvent::Destroyed => revoke(&handle, slot, true),
-            _ => {}
-        });
+                    drop(guard);
+                    if reload {
+                        revoke(&handle, slot, true);
+                    }
+                }
+            });
+        let view = workspace.add_child(
+            builder,
+            tauri::LogicalPosition::new(0.0, 0.0),
+            tauri::LogicalSize::new(1280.0, 860.0),
+        )?;
+        view.hide()?;
     }
+    let handle = app.clone();
+    let target = workspace.clone();
+    workspace.on_window_event(move |event| match event {
+        WindowEvent::Focused(false) => revoke_all(&handle),
+        WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+            resize(&handle, &target)
+        }
+        WindowEvent::CloseRequested { api, .. } => {
+            api.prevent_close();
+            revoke_all(&handle);
+            send(&handle, json!({"kind":"layout-suspend"}));
+            let _ = target.hide();
+        }
+        WindowEvent::Destroyed => {
+            let count = handle
+                .state::<Terminals>()
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .map(|r| r.documents.len())
+                .unwrap_or(0);
+            for slot in 0..count {
+                revoke(&handle, slot, true);
+            }
+        }
+        _ => {}
+    });
+    resize(app, &workspace);
     menu.append(&submenu)?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
-        if let Some(window) = app.get_webview_window(event.id().as_ref()) {
-            let _ = window.unminimize();
-            let _ = window.show();
-            let _ = window.set_focus();
+        if let Some(slot) = event
+            .id()
+            .as_ref()
+            .strip_prefix("terminal-")
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            revoke_all(app);
+            send(app, json!({"kind":"layout-open", "slot":slot}));
         }
     });
     let app = app.clone();
@@ -405,7 +590,9 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
                             }
                         }
                     } else if value["kind"] == "confirm" {
-                        confirm(&app, &value);
+                        confirm(&app, &value).await;
+                    } else if value["kind"] == "layout" {
+                        apply_layout(&app, &value);
                     } else {
                         break;
                     }

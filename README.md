@@ -4,6 +4,11 @@ For the current master-specification checklist, evidence, blockers and update ru
 see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
 roadmap and acceptance records remain available for their original scope and date.
 
+Prepared Tauri terminals now support a retained multi-pane workspace. See the
+[workflow, delivery checklist and limits](docs/development/tauri-terminal-workspace.md)
+and [pinned reuse review](docs/research/tauri-terminal-workspace.md). This visual
+parity increment preserves Electron until the full migration is accepted.
+
 ## Explicit mention routing — 2026-11-04
 
 The existing Electron **Managed agents** client now edits pane names, unique handles,
@@ -23,8 +28,8 @@ one/two/three/adaptive columns, plain-text display names, heading drag reorder
 with keyboard alternatives, maximize/restore, hide/show and compact-window paging.
 Layout preferences persist privately by stable terminal UUID; changing layout
 preserves the live documents and scrollback and starts no CLI. Reopening preferences
-does not recover or duplicate a process. Tauri managed-terminal parity remains
-pending. See [workflow and exact limits](docs/development/terminal-workspace-layout.md)
+does not recover or duplicate a process. The retained Tauri workspace now shares these layout controls; native/provider
+acceptance remains pending. See [workflow and exact limits](docs/development/terminal-workspace-layout.md)
 and the [pinned reuse decisions](docs/research/terminal-workspace-layout.md).
 
 ## Tauri 2 migration preview — 2026-11-04

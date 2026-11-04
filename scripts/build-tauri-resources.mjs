@@ -80,11 +80,6 @@ const clientResult = await build({
   format: 'iife',
   metafile: true,
 });
-await writeFile(
-  join(output, 'terminal/style.css'),
-  '\n.tauri-terminal .layout-toolbar { display: none; }\n',
-  { flag: 'a' },
-);
 if (process.platform === 'darwin' && process.arch === 'arm64') {
   const require = createRequire(import.meta.url);
   const source = dirname(require.resolve('node-pty/package.json'));

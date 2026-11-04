@@ -311,3 +311,17 @@ selected slot (`active`), maximized slot or null, display names, prepared-docume
 count and whether preferences were saved. These are view facts, never agent task
 states. A false save result is shown as memory-only operation. No REST/WS shape,
 terminal-native execution request or Core ownership contract changes.
+
+## Tauri retained workspace — 2026-11-04
+
+The dedicated native client now uses sibling webviews in one `terminal-workspace`
+window. Existing `terminal_request` requests and broker grants are unchanged.
+`terminal_view` accepts the existing bounded layout-only action contract and an
+identity-scoped `layout` snapshot query. Neither command accepts a renderer slot.
+Native identity remains the exact terminal label and custom-protocol document;
+macOS mutation focus checks the owned WKWebView's native first responder.
+
+The private Node pipe adds validated layout-action/open/focus/suspend/resize records
+and returns layout state plus native bounds. These are not observer HTTP/WS routes.
+Preferences reuse the existing private UUID-keyed JSON store; no process recovery
+or authority is persisted by layout. See the [review](../research/tauri-terminal-workspace.md).

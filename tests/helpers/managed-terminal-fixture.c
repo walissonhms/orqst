@@ -9,7 +9,10 @@
 #include <unistd.h>
 
 int main(int argc, char **argv) {
-  alarm(25);
+#ifndef ORQST_SYNTHETIC_TIMEOUT_SECONDS
+#define ORQST_SYNTHETIC_TIMEOUT_SECONDS 25
+#endif
+  alarm(ORQST_SYNTHETIC_TIMEOUT_SECONDS);
   setbuf(stdout, NULL);
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "login") == 0) {

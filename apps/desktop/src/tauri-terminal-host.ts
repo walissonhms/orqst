@@ -8,6 +8,8 @@ import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal
 import { interactiveProvider } from '../../../packages/core/src/terminal/interactive-profile.js';
 import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { terminalDocument } from './terminal-document.js';
+import { terminalLayoutStore } from './terminal-layout-store.js';
+import { TauriTerminalLayout } from './tauri-terminal-layout.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 
 process.umask(0o077);
@@ -56,6 +58,24 @@ async function start() {
     process.stdout.write(line);
   };
   const service = new TauriTerminalService(core.supervisors, keys, send, translate);
+  const store = terminalLayoutStore(
+    directory,
+    core.identities.map((identity) => identity.terminalId),
+  );
+  let initial;
+  try {
+    initial = store.load();
+  } catch {
+    // Invalid private preferences never affect terminal admission or restore processes.
+  }
+  const layout = new TauriTerminalLayout(
+    files.length,
+    { initial, save: store.save },
+    send,
+    (slot) => {
+      void service.receive({ kind: 'revoke', slot }).catch(shutdown);
+    },
+  );
   function shutdown() {
     if (closed) return;
     closed = true;
@@ -65,6 +85,40 @@ async function start() {
       process.exitCode = 1;
     });
   }
+  const visualMessageSchema = z.discriminatedUnion('kind', [
+    z.strictObject({
+      kind: z.literal('layout-action'),
+      slot: z
+        .number()
+        .int()
+        .min(0)
+        .max(files.length - 1),
+      action: z.unknown(),
+    }),
+    z.strictObject({ kind: z.literal('layout-suspend') }),
+    z.strictObject({
+      kind: z.literal('layout-focus'),
+      slot: z
+        .number()
+        .int()
+        .min(0)
+        .max(files.length - 1),
+    }),
+    z.strictObject({
+      kind: z.literal('layout-open'),
+      slot: z
+        .number()
+        .int()
+        .min(0)
+        .max(files.length - 1),
+    }),
+    z.strictObject({
+      kind: z.literal('layout-resize'),
+      width: z.number().int().min(1).max(32768),
+      height: z.number().int().min(1).max(32768),
+    }),
+  ]);
+
   let pending = Buffer.alloc(0);
   process.stdin.on('data', (chunk: Buffer) => {
     pending = Buffer.concat([pending, chunk]);
@@ -75,7 +129,16 @@ async function start() {
       pending = pending.subarray(end + 1);
       if (line === 'shutdown') return shutdown();
       try {
-        void service.receive(JSON.parse(line)).catch(shutdown);
+        const raw: unknown = JSON.parse(line);
+        const visual = visualMessageSchema.safeParse(raw);
+        if (visual.success) {
+          const message = visual.data;
+          if (message.kind === 'layout-action') layout.act(message.slot, message.action);
+          else if (message.kind === 'layout-open') layout.open(message.slot);
+          else if (message.kind === 'layout-focus') layout.focus(message.slot);
+          else if (message.kind === 'layout-suspend') layout.suspend();
+          else layout.resize(message.width, message.height);
+        } else void service.receive(raw).catch(shutdown);
       } catch {
         shutdown();
       }
@@ -92,6 +155,7 @@ async function start() {
   );
   send({
     kind: 'ready',
+    layout: layout.snapshot(),
     title: translate('managedTerminal.title'),
     quitNotice: translate('managedTerminal.quitNotice'),
     cancel: translate('terminalNative.cancel'),

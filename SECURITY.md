@@ -817,3 +817,15 @@ An invalid store falls back to defaults; failed saves report memory-only operati
 Same-user malicious ancestor replacement remains outside the existing filesystem
 contract. HTTP, WebSocket, cookies, CSP, provider grants and observer ingestion
 are unchanged. See the [layout guide](docs/development/terminal-workspace-layout.md).
+
+## Tauri workspace focus boundary — 2026-11-04
+
+The retained Tauri grid binds commands to each exact local terminal webview, not
+only its parent window. On macOS, mutation/approval focus requires the native
+NSWindow first responder to belong to the owned WKWebView. The check runs on
+Tauri's UI thread and fails closed on other platforms. No renderer active-slot
+or JavaScript focus value grants execution authority. Layout changes, hiding,
+parent blur and document reload retain input/consent revocation. Layout metadata
+uses the existing private, UUID-keyed, symlink-resistant preference store and
+cannot start, stop, adopt or recover a session. Observer HTTP/WS/cookie and source
+access controls remain unchanged. See the [component review](docs/research/tauri-terminal-workspace.md).
