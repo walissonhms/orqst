@@ -1547,3 +1547,9 @@ or a different authenticated kernel boot, permits continuing a retained lease.
 New reviews are mandatory; Cancel/expiry is not persisted approval. Known phase
 completion re-establishes archive/receipt durability before namespace mutation.
 A partial legacy control or unproven same-boot helper is never automatically cleared.
+
+The offline namespace commit occurs only inside finalization after durable signed
+intent and preparatory evidence. The present original marker excludes existing
+legacy wx claimants until this point; kernel boot fences its old owner. Future
+claims after commit are normal operations. Cleanup validates old held/control
+identities only and must not revalidate or mutate future runtime state.

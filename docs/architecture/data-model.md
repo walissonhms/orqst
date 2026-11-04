@@ -573,3 +573,8 @@ phase-specific continuation proofs, signed abort and signed finalization intent.
 These administrative records do not alter terminal schemas, attempts, owner rows
 or runtime authority. Existing archives/receipts are verified and re-fsynced, never
 overwritten; incomplete records remain preserved and denied.
+
+Offline preparation receipt v2 says release_prepared and binds the full original
+marker. finalized.json now contains a signed version-2 commit_prepared plan, not an
+outcome. Unique commit-observed records and completion.json describe the later
+namespace observation and exact old-control cleanup. No terminal schema changes.

@@ -1,5 +1,9 @@
 # ORQST
 
+Offline release now prepares only; the original admission marker remains until
+the separately approved final commit. Legacy wx claims are excluded before that
+point; later owner markers are never touched by recovery cleanup.
+
 Independent source review added explicit phase continuation/abort and fresh signed
 finalization; Cancel/expiry no longer consumes a control-only release. Partial or
 unauthenticated state remains denied. Native anchor/menu and real use remain gates.

@@ -793,3 +793,7 @@ See [location, retention, query, checks and limits](docs/development/local-diagn
 Offline recovery source now has verified explicit phase continuations; trusted
 administrative native persistence/review and compatibility-controlled real use
 remain required before terminal-opening acceptance.
+
+The offline final-point source now keeps the original marker until final approved
+commit; legacy wx claim exclusion no longer assumes gate-compatible installations.
+Native anchor/entry integration and actual platform acceptance remain separate.

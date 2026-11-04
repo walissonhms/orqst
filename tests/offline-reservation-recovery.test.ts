@@ -185,6 +185,7 @@ function fixture(wal = false, journalNow?: () => number) {
   let reviewHook: ((challenge: Readonly<AdministrativeRecoveryChallenge>) => void) | undefined;
   let cancel = false;
   let fault: string | undefined;
+  let boundaryHook: ((stage: string) => void) | undefined;
   let syncCount = 0;
   let failSync = -1;
   let failSyncFile: string | undefined;
@@ -203,6 +204,7 @@ function fixture(wal = false, journalNow?: () => number) {
       fsyncSync(fd);
     },
     boundary: (stage: string) => {
+      boundaryHook?.(stage);
       if (stage === fault) throw new Error(`SYNTHETIC ${stage} fsync/write failure`);
     },
   };
@@ -268,6 +270,9 @@ function fixture(wal = false, journalNow?: () => number) {
       fault = undefined;
       failSync = -1;
     },
+    boundary: (hook: typeof boundaryHook) => {
+      boundaryHook = hook;
+    },
     fault: (stage: string) => {
       fault = stage;
     },
@@ -294,11 +299,8 @@ test('different kernel boot + full prepared OpenCode/zero-attempt Codex archives
     assert.equal(result.fence, 'external_kernel_boot_fence');
     assert.equal(result.admissionBlocked, true);
     assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
-    assert.ok(!existsSync(f.marker));
-    assert.equal(
-      readFileSync(join(f.directory, `recovered-${capture.operationId}.marker.json`), 'utf8'),
-      f.markerBytes,
-    );
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.ok(!existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
     const archive = JSON.parse(readFileSync(join(capture.bundle, 'archive.json'), 'utf8'));
     assert.equal(archive.current.journals[0].logical.attempts[0].state, 'prepared');
     assert.equal(archive.current.journals[0].logical.attempts[0].exit, undefined);
@@ -309,12 +311,17 @@ test('different kernel boot + full prepared OpenCode/zero-attempt Codex archives
       assert.deepEqual(readFileSync(`${file}-wal`), before[slot]![1]);
     }
     assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+    assert.equal(
+      readFileSync(join(f.directory, `recovered-${capture.operationId}.marker.json`), 'utf8'),
+      f.markerBytes,
+    );
+    assert.ok(!existsSync(f.marker));
     assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
     assert.equal(f.reviews.length, 3);
     assert.match(f.fullReviews[1]!, /prepared/);
     assert.ok(f.fullReviews[1]!.includes(f.receiptFile));
     assert.match(f.fullReviews[2]!, /heldMarker/);
-    assert.match(f.fullReviews[2]!, /released_admission_blocked/);
+    assert.match(f.fullReviews[2]!, /final_commit_original_marker_retained/);
     await assert.rejects(next.release(capture.bundle));
     await assert.rejects(next.finalize(capture.bundle));
   } finally {
@@ -343,7 +350,7 @@ test('WAL checkpoint byte changes preserve exactly the same committed logical sn
     for (const { db } of f.databases) db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     assert.notDeepEqual(readFileSync(f.databases[0]!.file), before);
     f.changeBoot();
-    assert.equal((await f.recovery.release(capture.bundle)).status, 'released');
+    assert.equal((await f.recovery.release(capture.bundle)).status, 'release_prepared');
   } finally {
     f.close();
   }
@@ -428,14 +435,7 @@ for (const fault of [
     }
   });
 
-for (const stage of [
-  'gate',
-  'capture',
-  'archive',
-  'before_marker',
-  'after_marker',
-  'receipt',
-] as const)
+for (const stage of ['gate', 'capture', 'archive', 'receipt'] as const)
   test(`${stage} write/fsync failure retains effective administrative reservation and evidence`, async () => {
     const f = fixture();
     try {
@@ -448,9 +448,7 @@ for (const stage of [
         f.changeBoot();
         f.fault(stage);
         await assert.rejects(f.recovery.release(capture.bundle), /SYNTHETIC/);
-        if (stage === 'after_marker' || stage === 'receipt') {
-          assert.ok(existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
-        } else assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+        assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
         await assert.rejects(f.recovery.release(capture.bundle)); // no retry after uncertain effects
       }
       assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), stage !== 'capture');
@@ -624,7 +622,7 @@ for (const syncNumber of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
       assert.throws(() => desktopAgentsAdmission(f.directory));
       if (syncNumber >= 3 && syncNumber <= 6) {
         const reviews = f.reviews.length;
-        assert.equal((await f.recovery.release(capture.bundle)).status, 'released');
+        assert.equal((await f.recovery.release(capture.bundle)).status, 'release_prepared');
         assert.ok(f.reviews.length > reviews); // Known control-only failure is not approval.
       } else await assert.rejects(f.recovery.release(capture.bundle));
     } finally {
@@ -824,6 +822,9 @@ test('identical-byte held marker inode replacement cannot finalize recovery', as
     const capture = await f.capture();
     f.changeBoot();
     await f.recovery.release(capture.bundle);
+    f.fault('after_marker');
+    await assert.rejects(f.recovery.finalize(capture.bundle));
+    f.clearFault();
     const held = join(f.directory, `recovered-${capture.operationId}.marker.json`);
     const replacement = `${held}.SYNTHETIC`;
     writeFileSync(replacement, readFileSync(held), { mode: 0o600 });
@@ -851,7 +852,7 @@ for (const mode of ['cancel', 'expired'] as const)
       f.allow();
       const next = new OfflineReservationRecovery(f.authority, f.dependencies);
       const result = await next.release(capture.bundle);
-      assert.equal(result.status, 'released');
+      assert.equal(result.status, 'release_prepared');
       assert.notEqual(f.reviews.at(-1)!.nonce, denied.nonce);
       assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
     } finally {
@@ -873,7 +874,7 @@ for (const stage of ['capture', 'gate'] as const)
       const next = new OfflineReservationRecovery(f.authority, f.dependencies);
       assert.equal((await next.continueCapture(bundle)).admissionBlocked, true);
       f.changeBoot();
-      assert.equal((await next.release(bundle)).status, 'released');
+      assert.equal((await next.release(bundle)).status, 'release_prepared');
     } finally {
       f.close();
     }
@@ -917,7 +918,7 @@ test('legacy gate with partial capture remains ambiguous and is never adopted or
   }
 });
 
-for (const stage of ['archive', 'before_marker', 'after_marker', 'receipt'] as const)
+for (const stage of ['archive', 'receipt'] as const)
   for (const caller of ['same_returned_helper', 'new_boot_helper'] as const)
     test(`explicit continuation of durable ${stage} from ${caller} neither overwrites nor invents exit`, async () => {
       const f = fixture();
@@ -940,7 +941,7 @@ for (const stage of ['archive', 'before_marker', 'after_marker', 'receipt'] as c
         }
         const reviewCount = f.reviews.length;
         const result = await next.continueRelease(capture.bundle);
-        assert.equal(result.status, 'released');
+        assert.equal(result.status, 'release_prepared');
         assert.equal(f.reviews.length, reviewCount + 1);
         assert.deepEqual(readFileSync(join(capture.bundle, 'archive.json')), archived);
         assert.equal(f.databases[0]!.journal.read(f.attemptId)!.state, 'prepared');
@@ -979,8 +980,20 @@ test('finalization continues after durable authority and interrupted lock unlink
     const capture = await f.capture();
     f.changeBoot();
     await f.recovery.release(capture.bundle);
-    f.failSyncAt(15);
-    await assert.rejects(f.recovery.finalize(capture.bundle), /fsync failure/);
+    const interrupted = new OfflineReservationRecovery(f.authority, {
+      ...f.dependencies,
+      sync: (fd) => {
+        if (
+          fstatSync(fd).isDirectory() &&
+          existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)) &&
+          !existsSync(join(f.directory, 'offline-recovery-operation.lock')) &&
+          existsSync(join(f.directory, RECOVERY_GATE))
+        )
+          throw new Error('SYNTHETIC fsync failure');
+        fsyncSync(fd);
+      },
+    });
+    await assert.rejects(interrupted.finalize(capture.bundle), /namespace_commit_observed/);
     assert.ok(existsSync(join(capture.bundle, 'finalized.json')));
     assert.ok(!existsSync(join(f.directory, 'offline-recovery-operation.lock')));
     assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
@@ -1084,7 +1097,7 @@ for (const file of ['archive.json', 'receipt-prepared.json'] as const)
       assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
       assert.deepEqual(readFileSync(path), bytes);
       f.clearFault();
-      assert.equal((await f.recovery.continueRelease(capture.bundle)).status, 'released');
+      assert.equal((await f.recovery.continueRelease(capture.bundle)).status, 'release_prepared');
     } finally {
       f.close();
     }
@@ -1287,6 +1300,268 @@ test('valid SQLite WAL reuse with stale physical tail is conservatively unsuppor
     await assert.rejects(f.capture(), /frame binding/);
     assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
     assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
+  } finally {
+    f.close();
+  }
+});
+
+// The legacy claim's actual primitive is an exclusive wx write, not an advisory gate.
+function legacyClaim(f: ReturnType<typeof fixture>, bytes = 'SYNTHETIC-FUTURE-OWNER') {
+  writeFileSync(f.marker, bytes, { flag: 'wx', mode: 0o600, flush: true });
+}
+
+test('original marker continuously blocks legacy claim(wx) until final authorized commit', async () => {
+  const f = fixture();
+  try {
+    const blocked: string[] = [];
+    f.review((challenge) => {
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.throws(() => legacyClaim(f), /EEXIST/);
+      blocked.push(challenge.phase);
+    });
+    f.boundary((stage) => {
+      if (['archive', 'receipt', 'commit_prepared', 'before_marker'].includes(stage)) {
+        assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+        assert.throws(() => legacyClaim(f), /EEXIST/);
+        blocked.push(stage);
+      }
+      if (stage === 'after_marker') {
+        assert.ok(existsSync(join(f.directory, RECOVERY_GATE))); // Unpatched claimant ignores it.
+        legacyClaim(f);
+      }
+    });
+    const capture = await f.capture();
+    f.changeBoot();
+    assert.equal((await f.recovery.release(capture.bundle)).status, 'release_prepared');
+    assert.equal(
+      JSON.parse(readFileSync(join(capture.bundle, 'receipt.json'), 'utf8')).status,
+      'release_prepared',
+    );
+    assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
+    assert.deepEqual(blocked, [
+      'capture',
+      'release',
+      'archive',
+      'receipt',
+      'finalize',
+      'commit_prepared',
+      'before_marker',
+    ]);
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+    assert.equal(
+      readFileSync(join(f.directory, `recovered-${capture.operationId}.marker.json`), 'utf8'),
+      f.markerBytes,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+for (const stage of [
+  'commit_prepared',
+  'before_marker',
+  'after_marker',
+  'commit_receipt',
+  'after_lock',
+  'after_gate',
+] as const)
+  for (const caller of ['returned_helper', 'later_boot_helper'] as const)
+    test(`final commit continuation at ${stage} from ${caller} preserves phase and marker identity`, async () => {
+      const f = fixture();
+      try {
+        const capture = await f.capture();
+        f.changeBoot();
+        await f.recovery.release(capture.bundle);
+        const prepared = readFileSync(join(capture.bundle, 'receipt.json'));
+        f.fault(stage);
+        await assert.rejects(f.recovery.finalize(capture.bundle));
+        const committed = !['commit_prepared', 'before_marker'].includes(stage);
+        if (committed) {
+          assert.ok(!existsSync(f.marker));
+          assert.equal(
+            readFileSync(join(f.directory, `recovered-${capture.operationId}.marker.json`), 'utf8'),
+            f.markerBytes,
+          );
+          const stranger = new OfflineReservationRecovery(f.authority, f.dependencies);
+          await assert.rejects(
+            stranger.finalize(capture.bundle),
+            /same_boot_helper_fence_required/,
+          );
+        } else {
+          assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+          assert.throws(() => legacyClaim(f), /EEXIST/);
+        }
+        assert.deepEqual(readFileSync(join(capture.bundle, 'receipt.json')), prepared);
+        assert.equal(JSON.parse(prepared.toString()).status, 'release_prepared');
+        f.clearFault();
+        let next = f.recovery;
+        if (caller === 'later_boot_helper') {
+          f.changeBoot();
+          next = new OfflineReservationRecovery(f.authority, f.dependencies);
+        }
+        assert.equal((await next.finalize(capture.bundle)).releaseCommitted, true);
+        assert.equal(f.databases[0]!.journal.read(f.attemptId)!.state, 'prepared');
+        await assert.rejects(next.finalize(capture.bundle), /already_finalized/);
+      } finally {
+        f.close();
+      }
+    });
+
+for (const stage of ['after_marker', 'commit_receipt', 'after_lock', 'after_gate'] as const)
+  test(`future legacy owner after commit survives interrupted ${stage} and explicit completion`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      f.changeBoot();
+      await f.recovery.release(capture.bundle);
+      f.boundary((point) => {
+        if (point === 'after_marker') {
+          legacyClaim(f);
+          writeFileSync(join(f.directory, 'enrollment-SYNTHETIC-FUTURE.json'), 'SYNTHETIC-FUTURE', {
+            mode: 0o600,
+          });
+          // No historical revalidation may mistake future records for pre-commit facts.
+          f.databases[0]!.journal.transition(f.attemptId, 'starting');
+        }
+      });
+      f.fault(stage);
+      await assert.rejects(f.recovery.finalize(capture.bundle), /namespace_commit_observed/);
+      const future = lstatSync(f.marker, { bigint: true });
+      f.clearFault();
+      f.boundary(undefined);
+      const result = await f.recovery.finalize(capture.bundle);
+      assert.equal(result.releaseCommitted, true);
+      assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+      assert.equal(lstatSync(f.marker, { bigint: true }).ino, future.ino);
+      assert.equal(
+        readFileSync(join(f.directory, 'enrollment-SYNTHETIC-FUTURE.json'), 'utf8'),
+        'SYNTHETIC-FUTURE',
+      );
+      await assert.rejects(f.recovery.finalize(capture.bundle), /already_finalized/);
+      assert.equal(lstatSync(f.marker, { bigint: true }).ino, future.ino);
+    } finally {
+      f.close();
+    }
+  });
+
+test('new future controls created after old gate unlink are never deleted by completion or replay', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.boundary((stage) => {
+      if (stage === 'after_marker') legacyClaim(f);
+      if (stage === 'after_gate') {
+        writeFileSync(join(f.directory, RECOVERY_GATE), 'SYNTHETIC-NEW-GATE', {
+          flag: 'wx',
+          mode: 0o600,
+        });
+        writeFileSync(join(f.directory, 'offline-recovery-operation.lock'), 'SYNTHETIC-NEW-LOCK', {
+          flag: 'wx',
+          mode: 0o600,
+        });
+      }
+    });
+    assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
+    const future = readFileSync(f.marker);
+    f.boundary(undefined);
+    await assert.rejects(f.recovery.finalize(capture.bundle), /already_finalized/);
+    assert.deepEqual(readFileSync(f.marker), future);
+    assert.equal(readFileSync(join(f.directory, RECOVERY_GATE), 'utf8'), 'SYNTHETIC-NEW-GATE');
+    assert.equal(
+      readFileSync(join(f.directory, 'offline-recovery-operation.lock'), 'utf8'),
+      'SYNTHETIC-NEW-LOCK',
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('changed source owner during final native review cannot reach the final commit', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    const replacement = JSON.stringify({
+      version: 1,
+      owner: randomUUID(),
+      manifests: [f.manifests[0]],
+    });
+    f.review((challenge) => {
+      if (challenge.phase === 'finalize') writeFileSync(f.marker, replacement);
+    });
+    await assert.rejects(f.recovery.finalize(capture.bundle), /pre_commit_source_changed/);
+    assert.equal(readFileSync(f.marker, 'utf8'), replacement);
+    assert.ok(!existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+  } finally {
+    f.close();
+  }
+});
+
+test('changed control after commit is preserved by exact identity and does not authorize touching a future marker', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.boundary((stage) => {
+      if (stage === 'after_marker') {
+        legacyClaim(f);
+        const path = join(f.directory, RECOVERY_GATE);
+        renameSync(path, path + '.SYNTHETIC-old');
+        writeFileSync(path, 'SYNTHETIC-FOREIGN-CONTROL', { mode: 0o600, flag: 'wx' });
+      }
+    });
+    const result = await f.recovery.finalize(capture.bundle);
+    assert.equal(result.releaseCommitted, true);
+    assert.equal(result.cleanup, 'changed_controls_preserved');
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+    assert.equal(
+      readFileSync(join(f.directory, RECOVERY_GATE), 'utf8'),
+      'SYNTHETIC-FOREIGN-CONTROL',
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('partial final intent cannot commit or erase the continuously present original reservation', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    writeFileSync(join(capture.bundle, 'finalized.json'), '{', { mode: 0o600 });
+    await assert.rejects(f.recovery.finalize(capture.bundle), /incomplete_or_legacy_commit_intent/);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.throws(() => legacyClaim(f), /EEXIST/);
+    assert.equal(readFileSync(join(capture.bundle, 'finalized.json'), 'utf8'), '{');
+  } finally {
+    f.close();
+  }
+});
+
+test('partial post-commit observation is retained while a fresh explicit observation completes without touching future owner', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.boundary((stage) => {
+      if (stage === 'after_marker') legacyClaim(f);
+    });
+    f.fault('after_marker');
+    await assert.rejects(f.recovery.finalize(capture.bundle), /namespace_commit_observed/);
+    f.clearFault();
+    f.boundary(undefined);
+    const partial = join(capture.bundle, `commit-observed-${randomUUID()}.json`);
+    writeFileSync(partial, '{', { mode: 0o600 });
+    assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
+    assert.equal(readFileSync(partial, 'utf8'), '{');
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
   } finally {
     f.close();
   }

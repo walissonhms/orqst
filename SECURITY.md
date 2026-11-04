@@ -1111,3 +1111,8 @@ Boot-scoped exclusive helper leases never infer process exit from PID absence;
 partial/unknown controls stay reserved. Complete records are re-fsynced before
 namespace release. Abort preserves the original reservation; finalization requires
 a fresh independent administrative signature. No public/renderer API changed.
+
+Offline marker exclusion now relies on the continuously present original marker
+and existing legacy claim(wx) until the final signed/durable commit. Cleanup after
+that point never reads, renames or unlinks a future active marker; only exact old
+control objects can be removed. No atomicity across separate files is asserted.

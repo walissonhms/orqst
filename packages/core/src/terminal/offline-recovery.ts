@@ -13,7 +13,6 @@ import {
   syncRecoveryDirectory,
   syncRecoveryFile,
   writeRecoveryFile,
-  assertHeldRecoverySnapshot,
   offlineSnapshotSchema,
   type OfflineReservationSnapshot,
 } from './offline-recovery-files.js';
@@ -87,7 +86,17 @@ interface RecoveryDependencies {
   sync(fd: number): void;
   /** Test fault injection at durability boundaries. Production composition omits it. */
   boundary?(
-    stage: 'gate' | 'capture' | 'archive' | 'before_marker' | 'after_marker' | 'receipt',
+    stage:
+      | 'gate'
+      | 'capture'
+      | 'archive'
+      | 'before_marker'
+      | 'after_marker'
+      | 'receipt'
+      | 'commit_prepared'
+      | 'commit_receipt'
+      | 'after_lock'
+      | 'after_gate',
   ): void;
 }
 const captureSchema = z.strictObject({
@@ -181,7 +190,7 @@ export class OfflineReservationRecovery {
               ? 'Explicitly finalize verified administrative recovery; no launch or old process exit claim'
               : challenge.phase === 'capture'
                 ? 'Capture privately before a kernel reboot; retain admission'
-                : 'Archive non-dispatch evidence and release after external kernel fence; no process exit claim',
+                : 'Prepare durable administrative evidence after external kernel fence; retain the original reservation until separate final commit approval; no process exit claim',
         challenge,
         transaction: transaction ?? null,
         files: snapshot.files.map((file) => ({
@@ -634,23 +643,19 @@ export class OfflineReservationRecovery {
       const assertCurrent = () => {
         exact(join(directory, RECOVERY_GATE), this.gate(capture));
         exact(lock, lockValue);
-        if (this.boot() !== currentBoot) throw new Error('Recovery kernel boot changed');
-        if (this.present(join(directory, 'active-pair.json'))) {
-          if (
-            this.present(held) ||
-            this.snapshot(directory, bundle).rawDigest !== archive.current.rawDigest
-          )
-            throw new Error('Recovery changed after fence/review');
-        } else this.heldMarker(directory, capture, archive.current);
+        if (
+          this.boot() !== currentBoot ||
+          this.present(held) ||
+          this.snapshot(directory, bundle).rawDigest !== archive.current.rawDigest
+        )
+          throw new Error('Recovery changed before final namespace commit');
       };
       assertCurrent();
       if (continuation && continuingArchive) {
-        const markerPath = this.present(join(directory, 'active-pair.json'))
-          ? join(directory, 'active-pair.json')
-          : held;
+        const markerPath = join(directory, 'active-pair.json');
         const marker = readRecoveryFile(markerPath);
         const transaction = {
-          phase: markerPath === held ? 'marker_preserved' : 'archive_before_marker',
+          phase: 'archive_preparation_original_marker_retained',
           archiveHash: readRecoveryFile(archivePath, RECOVERY_LIMIT).sha256,
           historicalRelease: archive.challenge,
           marker: { path: markerPath, identity: marker.identity, sha256: marker.sha256 },
@@ -696,27 +701,21 @@ export class OfflineReservationRecovery {
       if (!this.present(preparedFile)) this.write(preparedFile, JSON.stringify(prepared));
       exact(preparedFile, prepared);
       this.syncFile(preparedFile);
-      this.dependencies.boundary?.('before_marker');
       assertCurrent();
-      if (this.present(join(directory, 'active-pair.json'))) {
-        if (this.present(held)) throw new Error('Recovery held marker already exists');
-        renameSync(join(directory, 'active-pair.json'), held);
-        this.dependencies.boundary?.('after_marker');
-      }
-      // Re-fsync even when continuing a rename whose directory sync was interrupted.
-      this.sync(directory);
-      this.heldMarker(directory, capture, archive.current);
+      const marker = this.sourceMarker(archive.current, directory);
       const receipt = {
         ...prepared,
-        status: 'released',
-        heldMarkerHash: readRecoveryFile(held).sha256,
-        heldMarkerIdentity: readRecoveryFile(held).identity,
+        version: 2,
+        status: 'release_prepared',
+        sourceMarkerHash: marker.sha256,
+        sourceMarkerIdentity: marker.identity,
       };
       const receiptFile = join(bundle, 'receipt.json');
       if (!this.present(receiptFile)) this.write(receiptFile, JSON.stringify(receipt));
       exact(receiptFile, receipt);
       this.syncFile(receiptFile);
       this.dependencies.boundary?.('receipt');
+      assertCurrent();
       cleanLease = true;
       return { ...receipt, bundle, admissionBlocked: true as const };
     } catch (error) {
@@ -778,72 +777,104 @@ export class OfflineReservationRecovery {
     return record;
   }
 
-  private heldMarker(
-    directory: string,
-    capture: z.infer<typeof captureSchema>,
-    snapshot: OfflineReservationSnapshot,
-  ) {
-    if (this.present(join(directory, 'active-pair.json')))
-      throw new Error('Recovery owner reappeared');
-    const held = readRecoveryFile(join(directory, `recovered-${capture.operationId}.marker.json`));
-    const original = snapshot.files.find(
-      (file) => file.path === join(directory, 'active-pair.json'),
-    );
-    if (
-      held.sha256 !== original?.sha256 ||
-      JSON.stringify(held.identity.slice(0, 6)) !== JSON.stringify(original.identity.slice(0, 6))
-    )
-      throw new Error('Recovery original marker identity changed');
-    assertHeldRecoverySnapshot(directory, snapshot);
-    return held;
+  private sourceMarker(snapshot: OfflineReservationSnapshot, directory: string) {
+    const marker = snapshot.files.find((file) => file.path === join(directory, 'active-pair.json'));
+    if (!marker) throw new Error('Recovery signed original marker missing');
+    return marker;
   }
 
-  /** Fresh explicit completion review, including after a later authenticated kernel boot. */
+  private observedHeldMarker(
+    marker: ReturnType<OfflineReservationRecovery['sourceMarker']>,
+    held: string,
+  ) {
+    const value = readRecoveryFile(held);
+    // rename changes ctime. Device/inode/size/mode/uid/mtime and complete bytes remain exact.
+    if (
+      value.sha256 !== marker.sha256 ||
+      JSON.stringify(value.identity.slice(0, 6)) !== JSON.stringify(marker.identity.slice(0, 6))
+    )
+      throw new Error('Recovery original held marker identity changed');
+    return value;
+  }
+
+  /** Final namespace commit only after durable prepared records and a fresh phase signature.
+   * Post-commit cleanup never reads, renames or unlinks active-pair.json again.
+   */
   async finalize(bundle: string) {
     const { capture, before } = this.captureRecord(bundle);
     const archive = this.archiveRecord(bundle, capture);
-    const receipt = sourceJSON(join(bundle, 'receipt.json')) as Record<string, unknown>;
     const directory = before.directory;
     const currentBoot = this.boot();
     if (currentBoot === before.beforeBoot) throw new Error('Different kernel boot required');
+    const marker = this.sourceMarker(archive.current, directory);
+    const heldPath = join(directory, `recovered-${capture.operationId}.marker.json`);
+    const archiveHash = readRecoveryFile(join(bundle, 'archive.json'), RECOVERY_LIMIT).sha256;
+    const receipt = {
+      version: 2,
+      operationId: capture.operationId,
+      status: 'release_prepared',
+      archiveHash,
+      reason: 'non_dispatch',
+      fence: 'external_kernel_boot_fence',
+      owner: before.owner,
+      epoch: before.epoch,
+      beforeBoot: before.beforeBoot,
+      currentBoot: archive.challenge.currentBoot,
+      sourceMarkerHash: marker.sha256,
+      sourceMarkerIdentity: marker.identity,
+    };
+    exact(join(bundle, 'receipt.json'), receipt);
+    const receiptHash = readRecoveryFile(join(bundle, 'receipt.json')).sha256;
+    const gateFile = join(directory, RECOVERY_GATE);
+    const lockFile = join(directory, 'offline-recovery-operation.lock');
+    const intentFile = join(bundle, 'finalized.json');
+    const completionFile = join(bundle, 'completion.json');
+    const fileSchema = offlineSnapshotSchema.shape.files.element;
+    const planSchema = z.strictObject({
+      version: z.literal(2),
+      status: z.literal('commit_prepared'),
+      operationId: z.uuid(),
+      archiveHash: z.string(),
+      receiptHash: z.string(),
+      marker: fileSchema,
+      heldPath: z.string(),
+      controls: z.strictObject({ gate: fileSchema, lock: fileSchema }),
+    });
+    const intentSchema = z.strictObject({
+      plan: planSchema,
+      challenge: captureSchema.shape.challenge.extend({ phase: z.literal('finalize') }),
+      signature: captureSchema.shape.signature,
+    });
     const lease = this.lease(bundle, currentBoot, true, capture.operationId);
     let cleanLease = false;
-    let cleanupStarted = false;
+    let namespaceAttempted = false;
+    let namespaceObserved = false;
     try {
-      const held = this.heldMarker(directory, capture, archive.current);
-      const expected = {
-        version: 1,
-        operationId: capture.operationId,
-        status: 'released',
-        archiveHash: readRecoveryFile(join(bundle, 'archive.json'), RECOVERY_LIMIT).sha256,
-        reason: 'non_dispatch',
-        fence: 'external_kernel_boot_fence',
-        owner: before.owner,
-        epoch: before.epoch,
-        beforeBoot: before.beforeBoot,
-        currentBoot: archive.challenge.currentBoot,
-        heldMarkerHash: held.sha256,
-        heldMarkerIdentity: held.identity,
-      };
-      if (JSON.stringify(receipt) !== JSON.stringify(expected))
-        throw new Error('Recovery completion unavailable');
-      const finalizedFile = join(bundle, 'finalized.json');
-      const receiptHash = readRecoveryFile(join(bundle, 'receipt.json')).sha256;
-      const finalDigest = terminalDigest(JSON.stringify(expected));
-      let priorFinalization = false;
-      if (this.present(finalizedFile)) {
-        const record = z
-          .strictObject({
-            operationId: z.uuid(),
-            receiptHash: z.string(),
-            challenge: captureSchema.shape.challenge.extend({ phase: z.literal('finalize') }),
-            signature: captureSchema.shape.signature,
-          })
-          .parse(sourceJSON(finalizedFile));
-        const challenge = record.challenge;
+      let intent: z.infer<typeof intentSchema> | undefined;
+      if (this.present(intentFile)) {
+        try {
+          intent = intentSchema.parse(sourceJSON(intentFile, RECOVERY_LIMIT));
+        } catch {
+          throw new OfflineRecoveryBlocked(
+            'incomplete_or_legacy_commit_intent_preserve_marker',
+            bundle,
+          );
+        }
+        const { plan, challenge } = intent;
         if (
-          record.operationId !== capture.operationId ||
-          record.receiptHash !== receiptHash ||
+          plan.operationId !== capture.operationId ||
+          plan.archiveHash !== archiveHash ||
+          plan.receiptHash !== receiptHash ||
+          plan.heldPath !== heldPath ||
+          JSON.stringify(plan.marker) !== JSON.stringify(marker) ||
+          plan.controls.gate.path !== gateFile ||
+          plan.controls.lock.path !== lockFile ||
+          JSON.stringify(
+            JSON.parse(Buffer.from(plan.controls.gate.bytes, 'base64').toString('utf8')),
+          ) !== JSON.stringify(this.gate(capture)) ||
+          JSON.stringify(
+            JSON.parse(Buffer.from(plan.controls.lock.bytes, 'base64').toString('utf8')),
+          ) !== JSON.stringify({ operationId: capture.operationId }) ||
           challenge.operationId !== capture.operationId ||
           challenge.owner !== before.owner ||
           challenge.epoch !== before.epoch ||
@@ -852,73 +883,209 @@ export class OfflineReservationRecovery {
           challenge.beforeBoot !== before.beforeBoot ||
           challenge.currentBoot === before.beforeBoot ||
           challenge.snapshotDigest !== before.snapshotDigest ||
-          challenge.currentDigest !== finalDigest ||
+          challenge.currentDigest !== terminalDigest(JSON.stringify(plan)) ||
           !verify(
             null,
             administrativeRecoveryBytes(challenge),
             this.authority.publicKey,
-            Buffer.from(record.signature, 'base64url'),
+            Buffer.from(intent.signature, 'base64url'),
           )
         )
-          throw new OfflineRecoveryBlocked('untrusted_finalization_record', bundle);
-        priorFinalization = true;
+          throw new OfflineRecoveryBlocked('untrusted_commit_intent', bundle);
       }
-      const gateFile = join(directory, RECOVERY_GATE);
-      const lockFile = join(directory, 'offline-recovery-operation.lock');
-      const assertCurrent = () => {
-        if (this.boot() !== currentBoot) throw new Error('Recovery kernel boot changed');
-        if (this.present(gateFile)) exact(gateFile, this.gate(capture));
-        else if (!priorFinalization || this.present(lockFile))
-          throw new OfflineRecoveryBlocked('gate_missing_without_completed_authority', bundle);
-        if (this.present(lockFile)) exact(lockFile, { operationId: capture.operationId });
-        else if (!priorFinalization)
-          throw new OfflineRecoveryBlocked('lock_missing_before_finalization', bundle);
-        this.heldMarker(directory, capture, archive.current);
-        exact(join(bundle, 'receipt.json'), expected);
+      const heldBefore = this.present(heldPath);
+      if (heldBefore && !intent)
+        throw new OfflineRecoveryBlocked('held_marker_without_signed_final_commit', bundle);
+      if (heldBefore) {
+        this.observedHeldMarker(marker, heldPath);
+        namespaceObserved = true;
+      }
+      // A replay cannot repeat the namespace mutation or clean a future owner's files.
+      if (this.present(completionFile)) {
+        const completeSchema = z.strictObject({
+          version: z.literal(1),
+          operationId: z.uuid(),
+          status: z.literal('finalized'),
+          intentHash: z.string(),
+          observation: z.string(),
+          observationHash: z.string(),
+          cleanup: z.enum(['old_controls_removed', 'changed_controls_preserved']),
+        });
+        let complete: z.infer<typeof completeSchema>;
+        try {
+          complete = completeSchema.parse(sourceJSON(completionFile));
+        } catch {
+          throw new OfflineRecoveryBlocked('completion_record_uncertain_commit_preserved', bundle);
+        }
+        if (
+          !intent ||
+          !heldBefore ||
+          complete.operationId !== capture.operationId ||
+          complete.intentHash !== readRecoveryFile(intentFile, RECOVERY_LIMIT).sha256 ||
+          !complete.observation.startsWith(join(bundle, 'commit-observed-')) ||
+          !/^commit-observed-[a-f0-9-]+\.json$/.test(
+            complete.observation.slice(bundle.length + 1),
+          ) ||
+          readRecoveryFile(complete.observation).sha256 !== complete.observationHash
+        )
+          throw new OfflineRecoveryBlocked('completion_record_uncertain_commit_preserved', bundle);
+        throw new OfflineRecoveryBlocked('already_finalized_original_commit_preserved', bundle);
+      }
+      const assertPrepared = () => {
+        if (
+          this.boot() !== currentBoot ||
+          this.present(heldPath) ||
+          this.snapshot(directory, bundle).rawDigest !== archive.current.rawDigest
+        )
+          throw new OfflineRecoveryBlocked('pre_commit_source_changed', bundle);
+        exact(gateFile, this.gate(capture));
+        exact(lockFile, { operationId: capture.operationId });
+        exact(join(bundle, 'receipt.json'), receipt);
+        if (
+          intent &&
+          (JSON.stringify(readRecoveryFile(gateFile)) !==
+            JSON.stringify(intent.plan.controls.gate) ||
+            JSON.stringify(readRecoveryFile(lockFile)) !==
+              JSON.stringify(intent.plan.controls.lock))
+        )
+          throw new OfflineRecoveryBlocked('pre_commit_control_identity_changed', bundle);
       };
-      assertCurrent();
-      if (!this.present(gateFile))
-        throw new OfflineRecoveryBlocked('already_finalized_or_final_sync_uncertain', bundle);
-      const challenge: AdministrativeRecoveryChallenge = {
+      let plan: z.infer<typeof planSchema>;
+      if (intent) plan = intent.plan;
+      else {
+        assertPrepared();
+        plan = {
+          version: 2,
+          status: 'commit_prepared',
+          operationId: capture.operationId,
+          archiveHash,
+          receiptHash,
+          marker,
+          heldPath,
+          controls: { gate: readRecoveryFile(gateFile), lock: readRecoveryFile(lockFile) },
+        };
+      }
+      if (!heldBefore) assertPrepared();
+      const challenge: AdministrativeRecoveryChallenge & { phase: 'finalize' } = {
         ...before,
         phase: 'finalize',
         nonce: randomUUID(),
         expiresAt: this.dependencies.now() + 30_000,
         currentBoot,
-        currentDigest: finalDigest,
+        currentDigest: terminalDigest(JSON.stringify(plan)),
       };
       const signature = await this.approve(challenge, archive.current, {
-        phase: priorFinalization ? 'finalization_cleanup' : 'released_admission_blocked',
-        receipt: expected,
-        archiveHash: expected.archiveHash,
-        heldMarker: { path: held.path, identity: held.identity, sha256: held.sha256 },
+        phase: heldBefore
+          ? 'namespace_commit_observed_cleanup_only'
+          : 'final_commit_original_marker_retained',
+        snapshotScope: 'historical_pre_commit',
+        plan,
+        heldMarker: heldBefore ? this.observedHeldMarker(marker, heldPath) : null,
+        actionAfterCommit: 'Never touch active-pair.json or revalidate future owner activity',
       });
-      assertCurrent();
+      if (this.boot() !== currentBoot) throw new Error('Recovery kernel boot changed');
+      if (!heldBefore) assertPrepared();
+      const approval = { plan, challenge, signature };
       this.write(
         join(bundle, `finalization-approval-${challenge.nonce}.json`),
-        JSON.stringify({ challenge, signature }),
+        JSON.stringify(approval),
       );
-      if (!priorFinalization) {
-        this.write(
-          finalizedFile,
-          JSON.stringify({ operationId: capture.operationId, receiptHash, challenge, signature }),
-        );
-        priorFinalization = true;
+      if (!intent) {
+        this.write(intentFile, JSON.stringify(approval));
+        intent = approval;
       }
+      if (!intent) throw new Error('Durable commit intent unavailable');
+      // Every preparatory record is explicitly durable before the only marker-absent point.
       this.syncFile(join(bundle, 'archive.json'));
       this.syncFile(join(bundle, 'receipt-prepared.json'));
       this.syncFile(join(bundle, 'receipt.json'));
-      this.syncFile(finalizedFile);
-      assertCurrent();
-      cleanupStarted = true;
-      if (this.present(lockFile)) unlinkSync(lockFile);
+      this.syncFile(intentFile);
+      if (!heldBefore) {
+        this.dependencies.boundary?.('commit_prepared');
+        assertPrepared();
+        this.dependencies.boundary?.('before_marker');
+        assertPrepared();
+        namespaceAttempted = true;
+        // Protocol exclusion is marker-presence + legacy claim(wx), not an invented multi-file CAS.
+        // Old pre-boot owners are dead; post-boot claimants cannot replace this present marker.
+        renameSync(marker.path, heldPath);
+        namespaceObserved = true;
+        this.dependencies.boundary?.('after_marker');
+      }
+      namespaceAttempted = true;
+      const held = this.observedHeldMarker(marker, heldPath);
       this.sync(directory);
-      unlinkSync(gateFile);
+      // Commit has already happened. New active markers and enrollments are future operations.
+      const observation = join(bundle, `commit-observed-${randomUUID()}.json`);
+      this.write(
+        observation,
+        JSON.stringify({
+          version: 1,
+          operationId: capture.operationId,
+          status: 'release_committed',
+          authority: 'administrative_recovery',
+          reason: 'non_dispatch',
+          fence: 'external_kernel_boot_fence',
+          intentHash: readRecoveryFile(intentFile, RECOVERY_LIMIT).sha256,
+          observedBoot: currentBoot,
+          heldMarkerHash: held.sha256,
+          heldMarkerIdentity: held.identity,
+        }),
+      );
+      this.dependencies.boundary?.('commit_receipt');
+      let changedControls = false;
+      for (const [kind, control] of [
+        ['lock', intent.plan.controls.lock],
+        ['gate', intent.plan.controls.gate],
+      ] as const) {
+        if (!this.present(control.path)) continue;
+        let current: ReturnType<typeof readRecoveryFile>;
+        try {
+          current = readRecoveryFile(control.path);
+        } catch {
+          changedControls = true;
+          continue;
+        }
+        if (JSON.stringify(current) !== JSON.stringify(control)) {
+          changedControls = true;
+          continue;
+        }
+        unlinkSync(control.path);
+        this.dependencies.boundary?.(kind === 'lock' ? 'after_lock' : 'after_gate');
+        this.sync(directory);
+      }
       this.sync(directory);
+      const cleanup = changedControls
+        ? ('changed_controls_preserved' as const)
+        : ('old_controls_removed' as const);
+      this.write(
+        completionFile,
+        JSON.stringify({
+          version: 1,
+          operationId: capture.operationId,
+          status: 'finalized',
+          intentHash: readRecoveryFile(intentFile, RECOVERY_LIMIT).sha256,
+          observation,
+          observationHash: readRecoveryFile(observation).sha256,
+          cleanup,
+        }),
+      );
       cleanLease = true;
-      return { operationId: capture.operationId, status: 'finalized' as const };
+      return {
+        operationId: capture.operationId,
+        status: 'finalized' as const,
+        releaseCommitted: true as const,
+        cleanup,
+      };
     } catch (error) {
-      if (!cleanupStarted) cleanLease = true; // Cancel/expiry is never finalization consent.
+      if (!namespaceAttempted) cleanLease = true;
+      if (namespaceAttempted && !(error instanceof OfflineRecoveryBlocked))
+        throw new OfflineRecoveryBlocked(
+          namespaceObserved
+            ? 'namespace_commit_observed_durability_or_cleanup_uncertain'
+            : 'namespace_commit_result_uncertain',
+          bundle,
+        );
       throw error;
     } finally {
       this.endLease(lease, cleanLease);

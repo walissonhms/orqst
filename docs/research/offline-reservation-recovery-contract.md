@@ -47,22 +47,25 @@ the changed kernel boot, never by a newly introduced advisory file.
    re-read every original source. Exact immutable marker/manifests/enrollments,
    owner epochs and complete logical journal facts must agree. Checkpointed WAL
    bytes may differ only when the validated logical projection is identical.
-4. Review a fresh release challenge bound to both complete snapshots and boots.
-   Re-read after review, before archive and before marker finalization. Any new
-   enrollment/owner/attempt/uncertainty retains admission. Write an exclusive
-   durable archive and a new receipt explicitly saying `non_dispatch`,
-   `external_kernel_boot_fence`, `administrative_recovery`; never claim old exit.
-5. Preserve the original marker by atomic rename to an operation-specific held
-   marker, then fsync. A failure after a namespace mutation is uncertain; the
-   sticky administrative gate continues denying admission. No rollback guesses.
-   Release completion is a separate durable receipt, not an old runtime signature.
-   Gate removal requires a separate fresh signed finalization review against the
-   exact gate, completed receipt and held marker. Explicit continuations re-fsync
-   complete records whose previous durability was uncertain. No automatic reopen/start/retry is part of recovery.
+4. Review a fresh release-preparation challenge bound to complete snapshots and
+   boots. Revalidate, fsync the archive and preparatory receipts. `receipt.json`
+   says `release_prepared`; the original marker remains continuously present.
+5. Review a separate final-commit challenge. Its signed, durable version-2 plan
+   binds the original marker bytes/full identity, held path, archive/receipt hashes
+   and full gate/lock records. Re-fsync all records and revalidate before the only
+   namespace commit: rename the original marker to held. No review or preparatory
+   authority remains to be obtained after that marker-absent point.
+6. Observe/fsync the held phase and write new committed observation/completion
+   evidence. Future claims are ordinary new operations. Never read/mutate their
+   active marker, journals or enrollments during old-operation cleanup. Remove
+   only exact old control objects; changed objects are preserved. Any uncertainty
+   requires explicit phase verification, not an automatic retry or a guessed exit.
 
 Ordinary legacy binaries cannot claim while the original marker exists, and
-cannot inherit its UUID through the current constructor. Compliant patched
-admissions additionally honor the sticky gate throughout. No path deletes a
+cannot inherit its UUID through the current constructor. Before the final commit, the continuously present original marker also excludes
+post-boot legacy `claim(wx)` regardless of the new gate. Patched admissions
+additionally honor the gate. After commit, new claims do not invalidate historical
+proof and cleanup never touches their marker. No path deletes a
 journal owner, changes an attempt or runs `recover:true`.
 
 ## Reuse decisions
@@ -128,3 +131,22 @@ The original pinned Anywh/Tucano lock/restore/stop/router sources were re-inspec
 they supply no compatible legacy fencing or administrative trust anchor. Keep the
 existing ORQST readers, canonical validators, admission ordering and native helper
 transport; no upstream code, dependencies or runtime authority is incorporated.
+
+## Final-point ordering correction — 2026-11-04
+
+The intermediate continuation freeze `3c33960` still renamed during `release` and
+reviewed finalization later. Root rejected assuming compatible installations or
+human autoreopen settings. The corrected order closes that specific gap using the
+existing legacy exclusive claim primitive: a post-boot claimant cannot replace a
+present original marker, and no old pre-boot owner can legitimately retire it.
+Administrative helpers are serialized by the exact boot lease. Revalidation then
+rename is conditional under those protocol participants; no OS CAS across files is
+claimed. A controller that arbitrarily deletes another owner's marker is outside
+this existing sticky-admission contract, not silently treated as compatible.
+
+Crash recovery classifies exact original/prepared versus exact held/committed
+namespace evidence. It never treats an error as proof of completion or reconstructs
+runtime authority. A kernel/filesystem recovery that yields neither exact phase
+stays ambiguous and reserved. All receipts before rename say preparation only;
+committed observation is separate. Snapshot non-dispatch remains scoped to the
+preserved attempts before this point, not future activity or pruned history.

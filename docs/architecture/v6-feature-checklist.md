@@ -545,3 +545,7 @@ Offline recovery continuation is source/fixture work only: explicit capture/rele
 continuation, pre-effect abort preserving the reservation, and fresh signed async
 finalization. Durable native administrative identity, full native review and
 old-binary exclusion remain integration prerequisites; no native acceptance added.
+
+Offline final-point ordering is implemented/tested in source: original marker
+retained until the final approved commit, with legacy wx exclusion beforehand and
+future owner preservation afterward. No native/provider/kernel acceptance added.

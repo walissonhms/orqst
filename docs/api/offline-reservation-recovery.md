@@ -14,14 +14,14 @@ Keys from runtime epochs, renderer fields, capture files or generic consent are
 not acceptable trust anchors. Trusted native persistence of this independent key
 across boots is an integration prerequisite; this increment does not provision it.
 
-| Method                                        | Result / effects                                                                                                                                                                                                                                           |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `capture(preferencesDirectory, recoveryRoot)` | Reviews and durably saves signed capture material **before** publishing the sticky gate. Partial pre-gate material leaves the original reservation intact.                                                                                                 |
-| `continueCapture(bundle)`                     | Explicit fresh capture review of a complete authenticated bundle, exact source/control checks and renewed file fsync before publishing/completing the same gate. Never reconstructs missing signatures.                                                    |
-| `release(bundle)`                             | Requires a different kernel boot and a new release signature. Control-only cancellation/expiry permits a later explicit call with a fresh nonce. Archive/rename effects require `continueRelease`.                                                         |
-| `continueRelease(bundle)`                     | Explicit fresh review of the exact signed archive and observed original/held marker phase. Re-fsyncs complete records, never overwrites an existing archive/receipt, never repeats a completed rename.                                                     |
-| `abort(bundle)`                               | Explicit separate administrative approval, only before any archive effect. Verifies operation/control/source identity, preserves the original reservation and journals, and removes only this operation's gate/lock. Aborted bundles cannot later release. |
-| `finalize(bundle)`                            | **Async**, with its own fresh native signature. Validates and re-fsyncs archive, receipts, held marker and signed finalization intent before gate removal. A later authenticated boot is accepted only with new finalization approval. No launch.          |
+| Method                                        | Result / effects                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capture(preferencesDirectory, recoveryRoot)` | Explicit review; durably saves the signed bundle before publishing its gate. The original reservation remains present.                                                                                                                                                                                                                                                                                                                                                |
+| `continueCapture(bundle)`                     | Fresh review and complete source/control checks of an authenticated capture, renewed fsync and gate completion; no marker release.                                                                                                                                                                                                                                                                                                                                    |
+| `release(bundle)`                             | Different native boot, complete equivalent source and a new release signature. Saves only archive/preparatory receipts; returns `version:2`, `status:'release_prepared'`, `sourceMarkerHash`, `sourceMarkerIdentity`, `admissionBlocked:true`. **Never renames the original marker.**                                                                                                                                                                                 |
+| `continueRelease(bundle)`                     | Explicit fresh review and renewed durability for exact archive/preparation records; still leaves the original marker present. Held-marker phases require `finalize`, not a release retry.                                                                                                                                                                                                                                                                             |
+| `abort(bundle)`                               | Separate native approval only before archive effects. Removes verified administrative controls, preserving the original global reservation and journals. Aborted bundles cannot release.                                                                                                                                                                                                                                                                              |
+| `finalize(bundle)`                            | Async explicit **final commit** approval. Persists and fsyncs the signed commit plan and all preparatory records, revalidates exact source/controls, then performs the only original-marker rename. After commit, verifies held evidence and cleans only the old exact gate/lock. Returns `status:'finalized'`, `releaseCommitted:true`, `cleanup:'old_controls_removed'` or `'changed_controls_preserved'`; never promises global capacity if a future owner exists. |
 
 Production defaults read boot UUID from the fixed macOS native sysctl executable
 with bounded output/timeout. Boot/clock/sync/boundary dependency overrides exist
@@ -48,12 +48,36 @@ Legacy release-attempt v1/unsigned finalization controls are not silently migrat
 A legacy gate published before its authenticated capture was saved cannot be
 attributed from its pathname; this patch deliberately provides no blind cleanup.
 
-A complete signed finalization intent permits explicit continuation after the
-admission lock was removed but the gate remained. After the final gate unlink,
-a failing directory fsync still cannot prove crash durability of that cleanup.
-The archive, receipts, signed finalization intent and held original marker remain;
-a repeated call reports `already_finalized_or_final_sync_uncertain` instead of
-manufacturing another release. No automatic reopen/start/retry is provided.
+`finalized.json` is a **version-2 `commit_prepared` plan**, not a release outcome.
+Its administrative signature binds the full original marker record, exact held path,
+archive/preparation hashes and complete private gate/lock records (bytes/hash and
+all seven identity fields). Native review shows the actual phase and full plan.
+The only commit point is `rename(active-pair.json, held)` **inside finalize**, after
+all approvals and preparatory records are durable. There is no rename→review gap.
+
+Before that point the original marker continuously excludes legacy `claim(wx)`,
+even if a post-boot old binary ignores the advisory gate. The old pre-boot owner is
+fenced by the native kernel transition. This is protocol exclusion based on the
+existing non-overwriting claim and dead original owner, not an atomic multi-file
+transaction or an invented compare-and-rename syscall.
+
+After commit, a late legacy claim is an ordinary future operation. Cleanup never
+reads, renames or unlinks `active-pair.json`, or revalidates future journals and
+enrollments. It compares only the old gate/lock's complete signed records before
+unlink; different objects are preserved. Signed intent plus the exact original
+held inode/hash proves the observed commit for explicit continuation after a crash.
+Unique `commit-observed-<uuid>.json` records say `release_committed` only after the
+namespace transition is observed and the directory is fsynced. `completion.json`
+binds an observation and cleanup result; replay cannot repeat the marker transition
+or delete a future owner's files.
+
+A post-rename fsync/write failure reports namespace/durability/cleanup uncertainty,
+never an invented successful exit or automatic retry. Explicit finalize can confirm
+the held phase and complete old controls even when a new active owner already exists.
+Neither exact original source nor exact held evidence means denial, not rollback.
+A full valid intent is necessary: partial/legacy intent or partial completion stays
+preserved with a phase reason. Partial observational receipts do not supply approval;
+a fresh explicit continuation can create a separate verified observation.
 
 `non_dispatch` describes all preserved attempts in the validated snapshots, each
 historically `prepared`, or zero attempts. It is not a claim that this AppData has

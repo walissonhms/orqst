@@ -1,5 +1,12 @@
 # Changelog
 
+## Offline final commit ordering — 2026-11-04
+
+- Keep the original reservation continuously present through archive/preparatory
+  receipts and final native review; rename only at the final authorized commit.
+- Bind the commit plan to exact original/control identities. Reconstruct committed
+  phase by held evidence and never touch a future owner during cleanup/replay.
+
 ## Offline recovery continuation correction — 2026-11-04
 
 - Persist signed capture before its gate; allow fresh explicit release review after

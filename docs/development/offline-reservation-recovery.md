@@ -10,8 +10,9 @@ Run only the disposable fixture flow with Node 24/pnpm 10:
 pnpm exec tsx --test tests/offline-reservation-recovery.test.ts
 ```
 
-The first fixture performs capture → simulated different kernel boot → fresh
-administrative transaction → archive → marker preservation → explicit finalize.
+The first fixture performs capture → simulated different kernel boot → reviewed
+archive/preparation with original marker retained → explicitly reviewed final
+namespace commit → marker preservation and exact old-control cleanup.
 It uses actual SQLite journals and WAL generated in a private temporary directory,
 an OpenCode v3 manifest with one prepared attempt, and an enrolled Codex v1 member
 with zero attempts. Synthetic administrative keys and boot UUIDs are explicit.
@@ -43,14 +44,14 @@ Before any native integration or real application, root must review the
 the [private API](../api/offline-reservation-recovery.md), trusted administrative
 key persistence and complete native review implementation. Pin the corresponding
 runtime/source semantics; schema versions alone do not attest an old executable.
-Ensure every installed controller participating in the procedure uses the new
-gate hooks. An unpatched binary is not constrained by a new advisory file.
-The legacy pre-boot controller is fenced by the actual kernel transition only.
+The legacy pre-boot controller is fenced by the actual kernel transition. Before
+final commit, the original marker continuously excludes the existing legacy
+non-overwriting claim, even when that claimant ignores the advisory gate. No human
+checkbox or assumed installation compatibility supplies this exclusion.
 
 Only after that code review/integration should root present a concrete separate
 human procedure: review/capture the exact real reservation before any reboot;
-preserve unrelated work and explicitly authorize a full kernel reboot; keep
-reopening disabled; inspect a different native boot and the entire post-boot
+preserve unrelated work and explicitly authorize any full kernel reboot; inspect a different native boot and the entire post-boot
 snapshot; review release and finalization. No step is requested or executed here.
 OpenCode dispatched-descendant acceptance, actual Codex Open→started→owned exit,
 native UI acceptance, packaging and Electron removal are later gates.
@@ -67,17 +68,17 @@ started and no application/runtime data or existing evidence was removed.
 
 ## Explicit continuation phases — source correction after independent review
 
-| Durable observation                                                                          | Explicit permitted action                                                                        | Denial / preserved evidence                                                                                 |
-| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| Partial bundle, no gate                                                                      | A new capture; preserve the partial bundle                                                       | No release; original marker still blocks Open                                                               |
-| Complete trusted capture, absent/exact gate                                                  | `continueCapture` with fresh review and renewed fsync                                            | Partial/conflicting gate is never adopted                                                                   |
-| Release control/lock only, no archive                                                        | New `release` review after known Cancel/expiry; or pre-effect `abort`                            | Persisted control is not consent                                                                            |
-| Complete signed archive, original marker                                                     | `continueRelease`, fresh review, re-fsync archive/prepared receipt, then rename once             | Corruption, source change or ambiguous helper retains gate                                                  |
-| Complete signed archive, held original marker                                                | `continueRelease`, verify original inode/hash and all raw sources, re-fsync and complete receipt | Both/neither markers, partial receipt or different owner deny                                               |
-| Released receipt, gate/lock retained                                                         | Async `finalize` with fresh phase signature                                                      | Cancel/expiry permits another explicit review                                                               |
-| Signed finalization intent, lock removed, gate retained                                      | Explicit `finalize`; verify intent/receipt/held marker and re-fsync                              | An unsigned old intent is insufficient                                                                      |
-| Gate already unlinked after durable authority                                                | Report completed/final-sync uncertainty; no second release                                       | Cleanup crash durability is not inferred                                                                    |
-| Partial/absent signed capture behind an old gate; partial controls; unknown same-boot helper | Preserve and report the exact phase; no blind cleanup                                            | Needs independently authenticated missing material or a proven helper fence; a filename/PID is insufficient |
+| Durable observation                                                                                                           | Explicit permitted action                                                                     | Preserved authority / boundary                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Partial capture, no gate                                                                                                      | New capture; keep partial evidence                                                            | Original marker remains; no release authority                                                  |
+| Trusted complete capture, absent/exact gate                                                                                   | `continueCapture`, fresh review and renewed fsync                                             | Partial/conflicting gate is never adopted                                                      |
+| Release control only, no archive                                                                                              | New release review after known Cancel/expiry, or pre-effect `abort`                           | Control is not consent; original marker remains                                                |
+| Signed archive / preparatory receipts                                                                                         | `continueRelease`, then `finalize`                                                            | `release_prepared`, never released; original marker remains                                    |
+| Signed commit plan, original source exact                                                                                     | Fresh explicit `finalize` review, re-fsync and source/control checks, then one rename         | Original marker excludes legacy wx claim until this FINAL point                                |
+| Exact original held inode plus signed plan                                                                                    | Fresh explicit finalize continuation; confirm/fsync namespace and write committed observation | Do not inspect or mutate future active owner/journals/enrollments                              |
+| Old control still matches full signed record                                                                                  | Remove only that exact gate/lock                                                              | New or changed control objects are preserved                                                   |
+| Completion receipt valid                                                                                                      | Replay denied                                                                                 | Never touch future active marker or repeat rename                                              |
+| Partial/absent signature, partial controls/intent/completion, neither exact original nor exact held, unknown same-boot helper | Preserve and report phase; no blind cleanup                                                   | Needs authenticated missing evidence or a proved helper fence; filenames/PIDs are insufficient |
 
 A native wrapper must retain the same helper/object after a returned post-effect
 error if it wants same-boot explicit continuation. The current one-shot preparation
@@ -104,32 +105,32 @@ it does **not** solve terminal opening by deleting the original marker.
    existing preparation admission predicate: it intentionally refuses the very
    reservation this action must inspect. Keep Open/retire/MCP/metadata/Quit reviews
    mutually exclusive. Never add a generic renderer/RPC/path/boot/key command.
-2. Implement a fixed app-bound macOS Keychain item for the separate administrative
-   Ed25519 private key and pinned public fingerprint, before capture. Bind its
-   fixed service/account to the signing identity and canonical AppData; no key
-   material in argv/environment/logs or renderer messages. Pin/load its public key
-   independently of the bundle; bind it to the canonical installation/AppData and
-   preserve it across boots. Refuse missing/replaced keys; no automatic rotation
-   or trusting a bundle-supplied key. Runtime keys remain ephemeral and unrelated.
-   This repository currently has no durable key-store implementation; choose and
-   review that native boundary explicitly rather than claiming a file is trusted.
+2. Provision a separate durable administrative Ed25519 identity from a fixed,
+   native-owned AppData keystore, independent of every bundle/runtime key. Under
+   the declared native-same-user boundary, use canonical private owner/mode checks,
+   reject symlinks/replacements and pin the public fingerprint before capture.
+   Persist/revalidate the anchor across boots and again after native ACK, before
+   signing. Missing or changed keys must deny, never silently regenerate or rotate.
+   No private key material in argv/environment/logs or renderer messages. This is
+   a native composition requirement, not a claim that bundle-local keys are trusted.
 3. Display the complete bounded review as native plain text, including action,
    exact owner/epoch, all members/model choices, logical/raw hashes, original and
    current kernel boots, archive/marker phase and remaining limits. Existing native
    `detail` is capped at 16 KiB whereas this API allows 64 KiB: direct reuse would
-   reject/truncate valid reviews. Supply reviewed bounded paging with every page
-   required, no hidden approve/omitted fields; preserve focus/generation/revocation
-   and Cancel default. Core challenge lifetime is 30 seconds; design the review
-   lifetime explicitly, and renew via a fresh revalidated challenge rather than
-   accepting an expired signature or stretching a renderer timeout.
+   reject/truncate valid reviews. Root approved a minimal native NSScrollView for
+   the complete <=64 KiB plain-text details, followed by a distinct keyed ACK.
+   Preserve focus/generation/revocation and Cancel default, then revalidate anchor
+   and pipe before signing the exact challenge bytes. Keep the Core's 30-second
+   lifetime: expiration returns null, and only another explicit human gesture
+   obtains a new review/challenge. No automatic renewal or recycled consent.
 4. Before an owner-authorized later kernel transition: capture the exact reservation
-   and verify its durable bundle/gate, with old installations/autoreopen excluded
-   from the procedure. Operator saves unrelated work and separately authorizes any
+   and verify its durable bundle/gate, with the original marker continuously present until final commit. Operator saves unrelated work and separately authorizes any
    full kernel restart. This document requests no restart now. Afterwards the native
    action reads a different kernel UUID, reloads the independently trusted key,
    reviews/revalidates the full state, releases, then separately reviews finalization.
-   Old binaries ignore the new gate, including the window after marker rename;
-   key persistence alone cannot enforce the compatibility precondition.
+   Old binaries ignore the advisory gate, but their existing wx claim is excluded
+   by the continuously present original marker until the FINAL authorized rename.
+   A claim after that point is future normal work, never a cleanup target.
 5. Completion returns only to the ordinary CLI → model → Open flow. That flow creates
    new owned state; recovery never adopts journals, restores keys, claims provider
    exit or launches automatically. Real Codex started → owned exit and OpenCode
@@ -141,7 +142,7 @@ Current nonces/phase signatures and exclusive control/lease files deny ordinary
 replay; full AppData/volume rollback is explicitly outside this source contract.
 If AppData-restore detection is required, the next native boundary must also retain
 an operation ID, capture hash and consumed phase checkpoint independently of the
-bundle, refuse older phases and define crash-consistent updates. A Keychain key
+bundle, refuse older phases and define crash-consistent updates. A durable key
 alone is not a monotonic ledger or protection against rollback of that store too.
 Do not advertise stronger anti-rollback guarantees or add a generic runtime ledger.
 
@@ -164,3 +165,33 @@ committed prefix, but the current offline parser rejects the stale tail with
 or database corruption. The parser was not broadened in the continuation fix;
 native preflight must report the refusal and preserve state, never truncate or
 checkpoint the original source to make recovery eligible.
+
+## Final-point freeze after root ordering decision
+
+`release`/`continueRelease` now return only `release_prepared` (receipt version 2).
+`finalize` approves the final namespace commit. Native details must show its complete
+version-2 `commit_prepared` plan, then the exact `administrativeRecoveryBytes` are
+signed with the unchanged 30-second challenge lifetime. No proof may be inferred
+from a transport ACK, timeout, process exit code or a preparatory receipt.
+
+The atomic operation is only the original-marker rename. It follows durable
+preparatory records and native final approval; no cross-file atomicity is claimed.
+Afterward `commit-observed-*` records plus `completion.json` describe outcome and
+cleanup; partial observation files remain private and may be superseded by a fresh
+explicit observation. The original marker, archive and signatures remain evidence.
+No post-commit path reads or removes a future active marker. A future claim or
+source write after the point cannot retroactively invalidate pre-commit proof.
+
+Fixtures cover every before/after commit stage, positive legacy wx exclusion,
+actual late claims while the advisory gate still exists, future enrollment/journal
+changes, changed/future controls, replay, owner change during final review,
+partial intent/observations, and fsync failures. Unknown namespace/metadata after a
+real crash still requires exact phase classification; these fixtures do not claim
+actual kernel/APFS crash acceptance or stronger power-loss guarantees.
+
+Final-point correction verification: 170 focused synthetic cases passed (117
+offline transaction cases and 53 existing regressions), together with whole-tree
+ESLint, root TypeScript no-emit, formatting and whitespace checks. This supersedes
+the intermediate 154-case continuation freeze only for the final marker ordering;
+no native/real kernel/provider acceptance is inferred. Node 24.22.2, no dependency
+changes, builds, Cargo, real managed Core/PTY, reboot or user state operations.
