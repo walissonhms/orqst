@@ -189,6 +189,50 @@ test('cancelled opening retains complete files and a new native review can open 
   }
 });
 
+for (const stage of ['pick', 'create', 'acknowledge', 'open'] as const) {
+  test(`switching native surfaces during ${stage} cannot revive the old preparation on return`, async () => {
+    const f = fixture();
+    let generation = 0;
+    const originalGeneration = generation;
+    f.ports.current = () => generation === originalGeneration;
+    const choose = f.ports.choose;
+    f.ports.choose = async (directory) => {
+      const selected = await choose(directory);
+      if (stage === 'pick') generation++;
+      return selected;
+    };
+    f.ports.confirm = async (key) => {
+      if (key === stage) generation++;
+      // Returning to the original dashboard never restores its old generation.
+      return true;
+    };
+    try {
+      const result = await prepareTauriTerminals(
+        { action: 'create', provider: 'codex', count: 4 },
+        f.context,
+        f.ports,
+      );
+      assert.equal(result.status, stage === 'open' ? 'prepared' : 'cancelled');
+      if (stage === 'open') {
+        const members = inspectManagedTerminalFiles(result.files, 8);
+        assert.equal(members.length, 4);
+        assert.ok(
+          members.every(({ config }) => !readdirSync(config.state).includes('terminal.sqlite')),
+        );
+      } else {
+        assert.deepEqual(result.files, []);
+        assert.deepEqual(readdirSync(f.context.parent), ['unknown-reservation']);
+      }
+      assert.equal(
+        readFileSync(join(f.context.parent, 'unknown-reservation'), 'utf8'),
+        'SYNTHETIC-PRESERVE',
+      );
+    } finally {
+      f.close();
+    }
+  });
+}
+
 test('expiry and directory drift after native review prevent publication', async () => {
   const f = fixture();
   try {

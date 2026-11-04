@@ -9,6 +9,11 @@ Prepared Tauri terminals now support a retained multi-pane workspace. See the
 and [pinned reuse review](docs/research/tauri-terminal-workspace.md). This visual
 parity increment preserves Electron until the full migration is accepted.
 
+The [native coexistence fixture](docs/development/tauri-native-coexistence.md)
+opens isolated synthetic PTY/communication hosts in one Tauri process for human
+focus and permission checks. Native UI acceptance remains pending; returning from
+another ORQST window now cancels any pending dashboard preparation review.
+
 ## Explicit mention routing — 2026-11-04
 
 The existing Electron **Managed agents** client now edits pane names, unique handles,

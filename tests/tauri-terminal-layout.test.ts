@@ -15,6 +15,7 @@ import type {
 function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
   const messages: Array<{
     state: TerminalLayoutState;
+    focus: number | null;
     bounds: Array<{
       slot: number;
       rect: { x: number; y: number; width: number; height: number } | null;
@@ -60,6 +61,26 @@ test('one to eight retained Tauri documents use shared grid geometry and compact
     }
     assert.deepEqual(layout.snapshot().order, original);
   }
+});
+
+test('passive layout updates never request native focus from the communication window', () => {
+  const { layout, messages } = fixture(4);
+  layout.open(0);
+  assert.equal(messages.at(-1)!.focus, 0);
+  messages.length = 0;
+  layout.resize(1440, 1200);
+  layout.focus(1);
+  layout.act(1, { name: 'SYNTHETIC' });
+  layout.act(1, 'maximize');
+  layout.act(1, 'restore');
+  assert.ok(messages.length > 0);
+  assert.ok(messages.every((message) => message.focus === null));
+  layout.suspend();
+  layout.resize(1200, 900);
+  assert.equal(messages.at(-1)!.focus, null);
+  assert.deepEqual(messages.at(-1)!.state.visible, []);
+  layout.open(1);
+  assert.equal(messages.at(-1)!.focus, 1);
 });
 
 test('hide, suspend, restore, reorder and plain-text rename retain stable slots', () => {
