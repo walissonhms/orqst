@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
+import { writeFileSync } from 'node:fs';
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -120,6 +121,7 @@ const child = spawn(executable, [], {
     PATH: '/usr/bin:/bin',
     TMPDIR: fixture,
     LANG: 'en_US.UTF-8',
+    ORQST_TAURI_FOCUS_DIAGNOSTICS: '1',
     ORQST_TAURI_PORT: String(port),
     ORQST_CODEX_SESSIONS: sources,
     ORQST_TAURI_AGENTS: JSON.stringify(files[1]),
@@ -131,7 +133,9 @@ const child = spawn(executable, [], {
 const exited = observeNativeFixtureExit(child);
 const pid = child.pid;
 assert.ok(pid !== undefined && pid > 1, 'native fixture did not start');
-console.log(JSON.stringify({ fixture, pid, port }));
+const launch = { fixture, pid, port, spawnedAt: new Date().toISOString(), artifact };
+await writeFile(join(fixture, 'launch.json'), JSON.stringify(launch), { mode: 0o600 });
+console.log(JSON.stringify(launch));
 // The app's own stderr is private evidence: bounded, never a substitute for a window.
 let stderrBytes = 0;
 let stderrTail = Buffer.alloc(0);
@@ -139,13 +143,16 @@ child.stderr?.on('data', (chunk: Buffer) => {
   stderrBytes += chunk.length;
   if (stderrTail.length < STDERR_LIMIT) {
     stderrTail = Buffer.concat([stderrTail, chunk]).subarray(0, STDERR_LIMIT);
+    writeFileSync(join(fixture, 'native-stderr.log'), stderrTail, { mode: 0o600 });
   }
 });
 let window: Awaited<ReturnType<typeof captureNativeWindow>>;
 let failure: string | undefined;
 if (probe === undefined) {
   window = { status: 'probe-unavailable', waitedMs: 0, samples: 0, windows: [] };
-  await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
+  await writeFile(join(fixture, 'window.json'), JSON.stringify({ pid, ...window }), {
+    mode: 0o600,
+  });
   console.log(JSON.stringify({ windowProbe: 'unavailable', cause: 'swiftc was not found' }));
   failure = 'Native window probe is unavailable';
   child.kill('SIGTERM');
@@ -154,7 +161,9 @@ if (probe === undefined) {
     timeoutMs: WINDOW_WAIT_MS,
     alive: () => child.exitCode === null && child.signalCode === null,
   });
-  await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
+  await writeFile(join(fixture, 'window.json'), JSON.stringify({ pid, ...window }), {
+    mode: 0o600,
+  });
   console.log(JSON.stringify({ window }));
   // A process exit is not native acceptance, and an unfound window cannot be accepted.
   if (window.status !== 'window-observed') {
