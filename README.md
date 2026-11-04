@@ -1,5 +1,9 @@
 # ORQST
 
+For the current master-specification checklist, evidence, blockers and update rules,
+see the [delivery tracker](docs/architecture/master-spec-tracker.md). Historical
+roadmap and acceptance records remain available for their original scope and date.
+
 ## Explicit mention routing — 2026-11-04
 
 The existing Electron **Managed agents** client now edits pane names, unique handles,

@@ -1,5 +1,9 @@
 # ORQST roadmap
 
+For current master-specification acceptance and outstanding work, start with the
+[delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain
+their original dates and may have been superseded by later increments.
+
 ## Codex/OpenCode pair — 2026-11-03
 
 Native manifest selection and Core preflight now permit exactly two mixed members:
