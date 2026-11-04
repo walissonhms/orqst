@@ -63,6 +63,7 @@ async function start() {
     send,
     translate,
     mcpEnabled ? core : undefined,
+    core,
   );
   const store = terminalLayoutStore(
     directory,
@@ -166,6 +167,9 @@ async function start() {
     quitNotice: translate('managedTerminal.quitNotice'),
     cancel: translate('terminalNative.cancel'),
     quit: translate('managedAgents.disconnectQuit'),
+    retire: translate('managedTerminal.retire'),
+    retireDenied: translate('tauriPreparation.retireDenied'),
+    retired: translate('tauriPreparation.retired'),
     mcpEnabled,
     mcpAuthorize: translate('managedTerminal.mcpAuthorize'),
     mcpDenied: translate('managedTerminal.mcpDenied'),

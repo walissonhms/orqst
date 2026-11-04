@@ -917,6 +917,8 @@
     "next_blocked": "Preparation could not finish safely. Existing files and reservations were preserved. Automatic retry is unavailable; inspect the native Terminal menu before proceeding."
   },
   "tauriPreparation": {
+    "retireDenied": "Retirement was refused or could not be confirmed. Preserve the reservation, archives and journals. After a possibly dispatched authorization, this client stays locked; an archive may already exist. Quit and inspect the evidence before selecting fresh profiles. No automatic recovery or replay is performed.",
+    "retired": "Selection retired after confirmed owned exits and Core shutdown. Quit and reopen Tauri with freshly prepared profiles to select new terminals. Old journals, metadata and uncertain outcomes are preserved. In-window reselection is not available yet.",
     "menu": "Prepare Tauri terminals",
     "openPrepared": "Review and open prepared terminals…",
     "executable": "Select the reviewed Codex or Claude native executable (canonical file; no shim)",

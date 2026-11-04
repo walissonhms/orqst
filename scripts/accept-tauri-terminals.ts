@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { cp, mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -123,7 +123,7 @@ lines.on('line', (line) => {
   } else if (value.kind === 'confirm') {
     confirmations.push(value.detail);
     send({ kind: 'confirm', id: value.id, accepted: true }); // Synthetic native consent only.
-  } else pending.get(value.id)?.(value.value);
+  } else pending.get(value.id)?.(value.kind === 'retirement' ? value : value.value);
 });
 async function request(request: TerminalNativeRequest, slot = 0) {
   const id = randomUUID();
@@ -285,12 +285,36 @@ try {
   assert.equal(layoutError, undefined);
   assert.deepEqual(errors, []);
   assert.ok(confirmations.length >= count * 2);
+  // Stop renderer polling before the exclusive, native-only retirement transaction.
+  await browser.close();
+  browser = undefined;
+  const retirementId = randomUUID();
+  const retirement = new Promise<unknown>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Synthetic retirement timed out')), 15000);
+    pending.set(retirementId, (value) => {
+      clearTimeout(timer);
+      pending.delete(retirementId);
+      resolve(value);
+    });
+  });
+  send({ kind: 'retire', id: retirementId, slot: 0, focused: true });
+  assert.deepEqual(await retirement, {
+    kind: 'retirement',
+    id: retirementId,
+    status: 'retired',
+    fenced: true,
+  });
+  const admission = await readdir(join(fixture, 'admission'));
+  assert.equal(admission.includes('active-pair.json'), false);
+  assert.equal(admission.filter((file) => file.startsWith('retired-')).length, 1);
+  for (const slot of manifests.keys())
+    assert.ok((await readFile(join(fixture, `state-${slot}`, 'terminal.sqlite'))).length > 0);
   child.stdin.end('shutdown\n');
   const [code, signal] = await exited;
   assert.equal(code, 0);
   assert.equal(signal, null);
   console.log(
-    `PASS: packaged Node hosts + ${count} independent synthetic PTYs + retained Tauri xterm documents, layout/rename/reorder/hide/compact/maximize, signed start/attach/input/stop, output, resize and revocation outside checkout. Native IPC/focus/dialogs simulated; no real provider.`,
+    `PASS: packaged Node hosts + ${count} independent synthetic PTYs + retained Tauri xterm documents, layout/rename/reorder/hide/compact/maximize, signed start/attach/input/stop, output, resize, revocation and signed retirement after owned exits/Core shutdown outside checkout. Native IPC/focus/dialogs simulated; no real provider.`,
   );
 } finally {
   clearTimeout(deadline);

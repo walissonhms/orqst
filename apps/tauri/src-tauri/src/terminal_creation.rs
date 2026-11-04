@@ -322,6 +322,14 @@ fn field<'a>(value: &'a Value, key: &str, limit: usize) -> Result<&'a str, &'sta
         .ok_or("Invalid native preparation field")
 }
 
+/// Any selection entering Core, including startup configuration, is single-use.
+/// Signed retirement does not prove that old native webview callbacks were removed.
+pub fn fence_selection(app: &tauri::AppHandle) {
+    let state = app.state::<Preparation>();
+    let mut guard = state.0.lock().unwrap();
+    guard.opened = true;
+}
+
 pub fn stop(app: &tauri::AppHandle) {
     if let Some(child) = app.state::<Preparation>().0.lock().unwrap().child.take() {
         // This helper never owns a provider, PTY, journal or reservation.

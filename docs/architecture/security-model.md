@@ -17,6 +17,18 @@ or released. HTTP/WS/cookies/CSP, captured sources, credentials and filesystem
 permissions are unchanged. See the [component/security review](../research/tauri-interactive-mcp.md)
 and [validation limits](../development/tauri-interactive-mcp.md).
 
+## Tauri terminal retirement
+
+The native menu alone can request selection retirement. The private host serializes
+all panes, presents complete bounded Core evidence and signs its exact one-use
+retirement challenge after native confirmation. Core alone rechecks journal and
+reservation ownership plus owned process exits before archival/release. Success
+also requires confirmed Core shutdown. A possibly consumed proof, missing reply or
+unconfirmed cleanup never reopens old execution or the native preparation latch.
+Startup-environment selections share the same single-use latch. This adds no
+renderer execution operation or observer HTTP/WS endpoint and never reconciles an
+uncertain reservation. See the [workflow/security review](../development/tauri-terminal-retirement.md).
+
 ## Tauri preview process boundary — 2026-11-04
 
 The native terminal preparation menu adds only a fixed passive Node helper, not a
@@ -1266,3 +1278,15 @@ existing retained-content and Analytics validation and secure file writers; nati
 pickers supply host-only paths through private pipes. No HTTP route, cookie, CSP or
 source-access policy changes. See the [security review](../api/tauri-files.md) for
 revocation, capacity, partial-write and native acceptance limitations.
+
+## Combined Tauri retirement and MCP consent — 2026-11-04
+
+Native menu and private service guards serialize retirement, MCP preparation and
+consent across all panes. Either document's revocation invalidates a pending
+selection-wide review, including preparation arriving late. A retirement proof
+that may have been consumed fences subsequent MCP preparation and terminal work;
+only an explicit pre-proof refusal/cancellation permits another fresh review.
+Native first-responder identity selects the reviewer for both actions; display
+layout and MCP source/worker roles grant no authority. No new capabilities or
+observer API changes are introduced. See the
+[combined checks and remaining gates](../development/tauri-retirement-mcp-integration.md).

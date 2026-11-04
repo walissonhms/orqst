@@ -15,6 +15,12 @@ PTY/relay checks cover the correlated return; native UI/provider acceptance rema
 pending. The quarantined reservation is unchanged. See the
 [interactive MCP workflow and validation limits](docs/development/tauri-interactive-mcp.md).
 
+Tauri now exposes the existing signed retirement through its native terminal menu.
+See [safe retirement and restart-based reselection](docs/development/tauri-terminal-retirement.md)
+for its evidence requirements and native acceptance limits. Retirement and MCP
+consent share selection-wide exclusion and document revocation; see the
+[combined integration checks](docs/development/tauri-retirement-mcp-integration.md).
+
 The [native coexistence fixture](docs/development/tauri-native-coexistence.md)
 opens isolated synthetic PTY/communication hosts in one Tauri process for human
 focus and permission checks. Native UI acceptance remains pending; returning from

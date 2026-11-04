@@ -55,9 +55,10 @@ pnpm accept:tauri-terminal-mcp --authorize-synthetic
 The opt-in acceptance copies staged resources and Node outside the checkout,
 compiles the small existing C PTY fixture, starts two synthetic owned PTYs and two
 actual Node stdio relays, denies calls before grant, confirms native-consent doubles,
-checks the exact UUID-bound exchange and replay denial, and preserves its synthetic
-admission marker. The `0.162.1` manifest version is a required contract label on
-this C fixture, not a measured provider version or compatibility claim. No installed
+checks the exact UUID-bound exchange and replay denial, and retains its synthetic
+admission marker until signed retirement after actual owned exits. It then verifies
+archival, release, journal preservation and denial of new MCP authorization. The
+`0.162.1` manifest version is a required contract label on this C fixture, not a measured provider version or compatibility claim. No installed
 provider, login, inference, native credentials or observed session is used.
 
 ## Verification and limits
@@ -69,9 +70,10 @@ bundle generation are deliberately not run in this increment because only about
 or a runnable native application. Existing Tauri binaries are not hot-upgraded.
 
 Real Codex/Claude/OpenCode authentication, MCP protocol negotiation, provider tools,
-idle-worker delivery and A-to-B-to-A inference remain pending. Also pending: native
-retirement/reselection, durable reconnect, more than two MCP participants, broader
-mixed teams, Windows/Linux/Intel acceptance and signed distribution. No ingestion
+idle-worker delivery and A-to-B-to-A inference remain pending. Signed native
+retirement and restart-based reselection are now integrated; see the [combined record](tauri-retirement-mcp-integration.md). Native retirement UI acceptance
+and live in-window reselection remain pending, along with durable reconnect, more
+than two MCP participants, broader mixed teams, Windows/Linux/Intel acceptance and signed distribution. No ingestion
 changed; `validate:local`/`validate:live` and the full browser suite are not run.
 
 Current change results on Node 24.22.2 / pnpm 10.34.9 / macOS ARM64:

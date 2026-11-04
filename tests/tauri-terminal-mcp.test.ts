@@ -1,13 +1,21 @@
 // Synthetic owned handles, disposable SQLite journals and Unix sockets. No installed CLI/login.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { Store } from '@orqst/database';
-import { terminalNativeRequestSchema } from '@orqst/protocol';
+import { terminalNativeRequestSchema, type TerminalJournal } from '@orqst/protocol';
 import {
   TauriTerminalService,
   tauriTerminalMessageSchema,
@@ -22,13 +30,21 @@ import { terminalRPCSchema } from '../packages/core/src/terminal/rpc.js';
 import type { TerminalNativeSupervisor } from '../packages/core/src/terminal/native-broker.js';
 import type { TerminalEvents } from '../packages/core/src/terminal/supervisor.js';
 
-async function fixture(optedIn = true) {
+async function fixture(
+  optedIn = true,
+  options: {
+    beforeRetirePrepare?: () => Promise<void>;
+    retireError?: boolean;
+    closeError?: boolean;
+  } = {},
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-tauri-mcp-')));
   const keys = generateKeyPairSync('ed25519');
   const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now);
   const admissionDirectory = join(root, 'admission');
   const admission = desktopAgentsAdmission(admissionDirectory);
   const stores: Store[] = [];
+  const journals: TerminalJournal[] = [];
   const events: TerminalEvents[] = [];
   const writes: string[] = [];
   const signals: string[] = [];
@@ -57,6 +73,8 @@ async function fixture(optedIn = true) {
       mkdirSync(directory, { mode: 0o700 });
       const store = new Store(join(directory, 'terminal.sqlite'));
       stores.push(store);
+      const journal = store.terminalJournal(authority.epoch, { recover: false });
+      journals.push(journal);
       return {
         profiles: [
           {
@@ -71,7 +89,7 @@ async function fixture(optedIn = true) {
             permissions: 'Synthetic only',
           },
         ],
-        journal: store.terminalJournal(authority.epoch, { recover: false }),
+        journal,
         backend: session.wrap(slot, {
           validate: () => true,
           start: (_profile, handlers) => {
@@ -110,8 +128,12 @@ async function fixture(optedIn = true) {
         }),
       ) as TerminalNativeSupervisor,
   );
+  const calls = { prepareMcp: 0, prepareRetire: 0, retire: 0, close: 0 };
   const port: TauriTerminalMcp = {
-    prepareMcp: async () => session.prepare(),
+    prepareMcp: async () => {
+      calls.prepareMcp++;
+      return session.prepare();
+    },
     authorizeMcp: async (proof) => session.authorize(proof),
     closeSlot: async (slot) => {
       session.invalidate();
@@ -124,6 +146,24 @@ async function fixture(optedIn = true) {
     (message) => messages.push(message as Record<string, unknown>),
     (key) => key,
     optedIn ? port : undefined,
+    {
+      prepareRetire: async () => {
+        calls.prepareRetire++;
+        await options.beforeRetirePrepare?.();
+        return pair.prepareRetire();
+      },
+      retire: async (proof) => {
+        calls.retire++;
+        if (options.retireError) throw new Error('Synthetic uncertain retirement');
+        pair.retire(proof);
+        await session.close();
+      },
+      closeAndWait: async () => {
+        calls.close++;
+        if (options.closeError) throw new Error('Synthetic unconfirmed Core exit');
+        pair.close();
+      },
+    },
   );
   const clients = await Promise.all(
     endpoints.map((endpoint) => connectMcpInstance(endpoint.socketPath, endpoint.capabilityFile)),
@@ -171,6 +211,18 @@ async function fixture(optedIn = true) {
     writes,
     signals,
     port,
+    calls,
+    journals,
+    retire(slot = 0) {
+      const id = randomUUID();
+      return {
+        id,
+        pending: service.receive({ kind: 'retire', id, slot, focused: true }),
+        result: () => messages.findLast((m) => m.id === id),
+      };
+    },
+    archive: () => readdirSync(admissionDirectory).filter((name) => name.startsWith('retired-')),
+    reserved: () => existsSync(join(admissionDirectory, 'active-pair.json')),
     start,
     authorize,
     status,
@@ -242,6 +294,33 @@ test('Tauri native signed consent completes Core/socket A -> B -> A without PTY 
     assert.deepEqual(f.signals, []);
     assert.deepEqual(f.marker(), marker);
     f.assertReserved();
+    // MCP completion is not process exit and grants no retirement authority.
+    const running = f.retire(1);
+    await running.pending;
+    assert.equal(running.result()?.status, 'denied');
+    assert.equal(f.calls.retire, 0);
+    f.events.forEach((event) => event.exit(0));
+    const facts = f.journals.map((journal, slot) => journal.read([source, target][slot]!));
+    const retirement = f.retire(1);
+    const review = await f.confirm();
+    assert.equal(review.slot, 1);
+    assert.equal(review.message, 'managedTerminal.retireConfirm');
+    await retirement.pending;
+    assert.equal(retirement.result()?.status, 'retired');
+    assert.equal(retirement.result()?.fenced, true);
+    assert.equal(f.reserved(), false);
+    assert.equal(f.archive().length, 1);
+    assert.deepEqual(
+      f.journals.map((journal, slot) => journal.read([source, target][slot]!)),
+      facts,
+    );
+    const prepares = f.calls.prepareMcp;
+    const after = f.authorize();
+    await after.pending;
+    assert.equal(f.status(after.id), 'denied');
+    assert.equal(f.calls.prepareMcp, prepares);
+    assert.deepEqual(f.writes, []);
+    assert.deepEqual(f.signals, []);
   } finally {
     await f.close();
   }
@@ -436,3 +515,171 @@ test('native terminal host shutdown cancels consent before signing', async () =>
     await f.close();
   }
 });
+
+test('MCP preparation and pending consent exclude retirement across both panes', async () => {
+  const f = await fixture();
+  try {
+    await f.start(0);
+    await f.start(1);
+    const marker = f.marker();
+    const original = f.port.prepareMcp;
+    let release!: (value: unknown) => void;
+    f.port.prepareMcp = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const request = f.authorize(1);
+    const early = f.retire();
+    await early.pending;
+    assert.equal(early.result()?.status, 'denied');
+    assert.equal(f.calls.prepareRetire, 0);
+    release(await original());
+    await setImmediate();
+    const confirmation = f.messages.findLast((m) => m.kind === 'confirm')!;
+    const pending = f.retire();
+    await pending.pending;
+    assert.equal(pending.result()?.status, 'denied');
+    assert.equal(f.calls.prepareRetire, 0);
+    await f.service.receive({ kind: 'revoke', slot: 0 });
+    await f.service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+    await request.pending;
+    assert.equal(f.status(request.id), 'cancelled');
+    assert.equal(f.session.snapshot().state, 'ungranted');
+    assert.deepEqual(f.marker(), marker);
+    f.events.forEach((event) => event.exit(0));
+    const retry = f.retire(1);
+    await f.confirm();
+    await retry.pending;
+    assert.equal(retry.result()?.status, 'retired');
+  } finally {
+    await f.close();
+  }
+});
+
+test('retirement preparation and pending consent exclude MCP and terminal mutations across both panes', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const f = await fixture(true, { beforeRetirePrepare: () => gate });
+  try {
+    await f.start(0);
+    await f.start(1);
+    f.events.forEach((event) => event.exit(0));
+    const marker = f.marker();
+    const retirement = f.retire(1);
+    for (const stage of ['preparing', 'reviewing']) {
+      if (stage === 'reviewing') {
+        release();
+        await setImmediate();
+      }
+      const request = f.authorize();
+      await request.pending;
+      assert.equal(f.status(request.id), 'denied');
+      assert.equal(f.calls.prepareMcp, 0);
+      const id = randomUUID();
+      await f.service.receive({
+        kind: 'request',
+        id,
+        slot: 0,
+        focused: true,
+        request: { version: 1, action: 'start', profileId: 'codex-terminal-v1' },
+      });
+      assert.equal(f.status(id), 'denied');
+    }
+    await f.confirm(false);
+    await retirement.pending;
+    assert.equal(retirement.result()?.status, 'cancelled');
+    assert.equal(retirement.result()?.fenced, false);
+    assert.equal(f.calls.retire, 0);
+    assert.deepEqual(f.marker(), marker);
+    // Cancellation releases the client lock; Core still refuses MCP for exited handles.
+    const fresh = f.authorize();
+    await fresh.pending;
+    assert.equal(f.status(fresh.id), 'denied');
+    assert.equal(f.calls.prepareMcp, 1);
+  } finally {
+    release();
+    await f.close();
+  }
+});
+
+for (const kind of ['revoke', 'close'] as const) {
+  test(`either document ${kind} invalidates a pending retirement after MCP consent`, async () => {
+    const f = await fixture();
+    try {
+      await f.start(0);
+      await f.start(1);
+      const grant = f.authorize(1);
+      await f.confirm();
+      await grant.pending;
+      f.events.forEach((event) => event.exit(0));
+      const marker = f.marker();
+      const retirement = f.retire(1);
+      await setImmediate();
+      const confirmation = f.messages.findLast((m) => m.kind === 'confirm')!;
+      await f.service.receive({ kind, slot: 0 });
+      await f.service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+      await retirement.pending;
+      assert.equal(retirement.result()?.status, 'cancelled');
+      assert.equal(retirement.result()?.fenced, false);
+      assert.equal(f.calls.retire, 0);
+      assert.deepEqual(f.marker(), marker);
+      assert.deepEqual(f.signals, []);
+    } finally {
+      await f.close();
+    }
+  });
+}
+
+test('retirement preparation arriving after another pane revocation cannot open a stale review', async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const f = await fixture(true, { beforeRetirePrepare: () => gate });
+  try {
+    await f.start(0);
+    await f.start(1);
+    f.events.forEach((event) => event.exit(0));
+    const count = f.messages.filter((m) => m.kind === 'confirm').length;
+    const retirement = f.retire(1);
+    await f.service.receive({ kind: 'revoke', slot: 0 });
+    release();
+    await retirement.pending;
+    assert.equal(retirement.result()?.status, 'denied');
+    assert.equal(f.calls.retire, 0);
+    assert.equal(f.messages.filter((m) => m.kind === 'confirm').length, count);
+    assert.equal(f.reserved(), true);
+  } finally {
+    release();
+    await f.close();
+  }
+});
+
+for (const error of ['retireError', 'closeError'] as const) {
+  test(`uncertain ${error} fences MCP as well as retirement with no proof retry`, async () => {
+    const f = await fixture(true, { [error]: true });
+    try {
+      await f.start(0);
+      await f.start(1);
+      f.events.forEach((event) => event.exit(0));
+      const retirement = f.retire();
+      await f.confirm();
+      await retirement.pending;
+      assert.equal(retirement.result()?.status, 'denied');
+      assert.equal(retirement.result()?.fenced, true);
+      const mcp = f.authorize(1);
+      await mcp.pending;
+      assert.equal(f.status(mcp.id), 'denied');
+      assert.equal(f.calls.prepareMcp, 0);
+      const retry = f.retire(1);
+      await retry.pending;
+      assert.equal(retry.result()?.status, 'denied');
+      assert.equal(f.calls.retire, 1);
+      assert.equal(f.reserved(), error === 'retireError');
+    } finally {
+      await f.close();
+    }
+  });
+}

@@ -346,3 +346,26 @@ The private Node pipe adds validated layout-action/open/focus/suspend/resize rec
 and returns layout state plus native bounds. These are not observer HTTP/WS routes.
 Preferences reuse the existing private UUID-keyed JSON store; no process recovery
 or authority is persisted by layout. See the [review](../research/tauri-terminal-workspace.md).
+
+## Native Tauri retirement — 2026-11-04
+
+The private inherited native/Node pipe accepts exactly
+`{kind:'retire', id:UUID, slot:0..7, focused:boolean}`. Only the native menu sends
+this message after exact-document/native-focus validation. Renderer
+`terminal_request` does not accept retirement and no Tauri command, REST/WS route
+or permission is added. Existing native confirmation messages carry the bounded
+Core evidence; proofs never cross the pipe.
+
+The correlated result is `{kind:'retirement', id, status, fenced}` with status
+`retired`, `denied`, `cancelled` or `busy`. `retired` requires signed Core retirement
+and confirmed Core exit. `fenced:true` also accompanies post-proof uncertainty;
+denial alone never proves whether archival completed. A bounded timeout/lost result
+keeps native execution fenced. The existing Core RPC/admission schemas and journal
+states are unchanged. See [workflow/security review](../development/tauri-terminal-retirement.md).
+
+MCP consent and retirement are mutually exclusive across every selected pane,
+including asynchronous preparation and native review. Retirement blocks public
+requests and MCP preparation until explicit pre-proof cancellation/refusal, and
+permanently after possible proof consumption. Revoking either document cancels a
+pending selection-wide review. Focus chooses the reviewer only; it never swaps
+MCP source/worker roles. No renderer permission or execution action is added.

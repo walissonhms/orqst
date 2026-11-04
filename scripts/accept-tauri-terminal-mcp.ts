@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn, execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -112,7 +112,8 @@ try {
       if (value.requestId) grants.push(value);
       else starts.push(JSON.parse(String(value.detail)) as Record<string, unknown>);
       native.send({ kind: 'confirm', id: value.id, accepted: true });
-    } else if (value.kind === 'reply')
+    } else if (value.kind === 'retirement') native.pending.get(String(value.id))?.(value);
+    else if (value.kind === 'reply')
       native.pending.get(String(value.id))?.(value.value as Record<string, unknown>);
   });
   const deadline = globalThis.setTimeout(() => host.kill('SIGKILL'), 50_000);
@@ -228,6 +229,11 @@ try {
       (await native.request({ kind: 'authorizeMcp', slot: 0, focused: true })).status,
       'denied',
     );
+    assert.equal(
+      (await native.request({ kind: 'retire', slot: 1, focused: true })).status,
+      'denied',
+      'A completed MCP exchange cannot substitute for owned process exits',
+    );
     assert.deepEqual(await readFile(join(root, 'admission/active-pair.json')), marker);
     for (const slot of [0, 1]) {
       assert.equal(
@@ -242,6 +248,36 @@ try {
         'ok',
       );
     }
+    for (const slot of [0, 1]) {
+      let ownedExit = false;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const result = await native.request({
+          kind: 'request',
+          slot,
+          focused: true,
+          request: { version: 1, action: 'snapshot', instanceId: ids[slot] },
+        });
+        const snapshot = result.snapshot as { state: string; exit?: unknown };
+        if (snapshot.state === 'exited' && snapshot.exit) {
+          ownedExit = true;
+          break;
+        }
+        await setTimeout(20);
+      }
+      assert.equal(ownedExit, true, 'Retirement must wait for actual synthetic PTY exit');
+    }
+    const retirement = await native.request({ kind: 'retire', slot: 1, focused: true });
+    assert.equal(retirement.status, 'retired');
+    assert.equal(retirement.fenced, true);
+    const archive = await readdir(join(root, 'admission'));
+    assert.equal(archive.includes('active-pair.json'), false);
+    assert.equal(archive.filter((file) => file.startsWith('retired-')).length, 1);
+    for (const slot of [0, 1])
+      assert.ok((await readFile(join(root, `state-${slot}`, 'terminal.sqlite'))).length > 0);
+    assert.equal(
+      (await native.request({ kind: 'authorizeMcp', slot: 1, focused: true })).status,
+      'denied',
+    );
     host.stdin.write('shutdown\n');
     assert.deepEqual(
       await exits[0],
@@ -249,7 +285,7 @@ try {
       'Host must exit cleanly, not via the fixture deadline',
     );
     console.log(
-      'PASS: packaged Tauri host, two synthetic owned PTYs, native-consent double, two stdio relays and correlated MCP return; reservation retained. No provider/native UI acceptance.',
+      'PASS: packaged Tauri host, two synthetic owned PTYs, native-consent double, two stdio relays and correlated MCP return followed by signed retirement, archive release and preserved journals. No provider/native UI acceptance.',
     );
   } finally {
     clearTimeout(deadline);

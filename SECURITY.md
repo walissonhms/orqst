@@ -13,6 +13,13 @@ acceptance and Rust compilation for this increment remain pending. See the
 
 ## Tauri preview process boundary — 2026-11-04
 
+The terminal retirement menu uses the existing evidence-bound signed Core RPC over
+the private native pipe. Every dispatched process needs its owned exit and every
+journal/reservation must remain owned. A possibly consumed proof or lost reply
+fences the client; native selection remains single-use until application restart.
+No observer/renderer retirement capability, automatic recovery or uncertain-capacity
+release is exposed. See [retirement security review](docs/development/tauri-terminal-retirement.md#security-review).
+
 Native preparation captures the original document URL/generation at menu dispatch,
 rechecks focus before starting its passive helper and invalidates that generation
 when another ORQST window takes focus or the dashboard closes. Returning to the
@@ -908,3 +915,9 @@ secure destination checks and serializers are reused. Reload, parent loss and
 bounded timeouts revoke operations; uncertain writes are not retried. Standalone
 Bridge HTTP/cookie/CSP behavior is unchanged. See the
 [contract, security review and remaining limits](docs/api/tauri-files.md).
+
+MCP consent and terminal retirement are serialized across every Tauri pane, from
+preparation through review. Either document's revocation cancels pending consent;
+possibly consumed retirement proofs fence later MCP and terminal work. The native
+reviewer is selected by exact document and native first-responder focus. No new
+renderer capability, provider-tool approval or observed-session authority is added.
