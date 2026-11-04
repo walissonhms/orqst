@@ -195,3 +195,18 @@ ESLint, root TypeScript no-emit, formatting and whitespace checks. This supersed
 the intermediate 154-case continuation freeze only for the final marker ordering;
 no native/real kernel/provider acceptance is inferred. Node 24.22.2, no dependency
 changes, builds, Cargo, real managed Core/PTY, reboot or user state operations.
+
+## Final commit deadline and lease correction — 2026-11-04
+
+Vertical review reproduced expired consent reaching rename when durable preparation
+outlasted the 30-second proof deadline. It also reproduced an altered helper lease
+being detected only after rename. The narrow correction checks that exact retained
+lease and the existing monotonic deadline immediately before the namespace commit,
+after the last source checks. No deadline is extended. A denied pre-commit phase
+keeps the original marker; a later explicit finalize obtains a new nonce and review.
+Expiry after commit preserves the committed outcome and truthful completion receipt.
+
+Five synthetic regressions cover exact deadline at both commit boundaries, actual
+fsync followed by elapsed fixture time, changed helper lease and post-commit expiry
+with a future owner. Before correction, the three expiry cases and lease preservation
+failed; the post-commit outcome case passed. No real state or kernel boot was used.

@@ -186,6 +186,7 @@ function fixture(wal = false, journalNow?: () => number) {
   let cancel = false;
   let fault: string | undefined;
   let boundaryHook: ((stage: string) => void) | undefined;
+  let syncHook: (() => void) | undefined;
   let syncCount = 0;
   let failSync = -1;
   let failSyncFile: string | undefined;
@@ -202,6 +203,7 @@ function fixture(wal = false, journalNow?: () => number) {
       )
         throw new Error('SYNTHETIC fsync failure');
       fsyncSync(fd);
+      syncHook?.();
     },
     boundary: (stage: string) => {
       boundaryHook?.(stage);
@@ -272,6 +274,9 @@ function fixture(wal = false, journalNow?: () => number) {
     },
     boundary: (hook: typeof boundaryHook) => {
       boundaryHook = hook;
+    },
+    synced: (hook: typeof syncHook) => {
+      syncHook = hook;
     },
     fault: (stage: string) => {
       fault = stage;
@@ -1562,6 +1567,92 @@ test('partial post-commit observation is retained while a fresh explicit observa
     assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
     assert.equal(readFileSync(partial, 'utf8'), '{');
     assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+  } finally {
+    f.close();
+  }
+});
+
+for (const stage of ['commit_prepared', 'before_marker', 'slow_fsync'] as const)
+  test(`final commit rejects proof expiring at exact deadline during ${stage}`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      f.changeBoot();
+      await f.recovery.release(capture.bundle);
+      let approved = false;
+      f.review((challenge) => {
+        approved = challenge.phase === 'finalize';
+      });
+      if (stage === 'slow_fsync') {
+        f.synced(() => {
+          if (approved) {
+            approved = false;
+            f.advance(30_000);
+          }
+        });
+      } else
+        f.boundary((point) => {
+          if (point === stage) f.advance(30_000);
+        });
+      await assert.rejects(f.recovery.finalize(capture.bundle), /expired/);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.ok(!existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
+      assert.ok(!existsSync(join(capture.bundle, 'completion.json')));
+      const reviews = f.reviews.length;
+      f.boundary(undefined);
+      f.synced(undefined);
+      assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
+      assert.equal(f.reviews.length, reviews + 1);
+      assert.notEqual(f.reviews.at(-1)!.nonce, f.reviews.at(-2)!.nonce);
+    } finally {
+      f.close();
+    }
+  });
+
+test('proof deadline passing after namespace commit preserves truthful completion without retry', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.boundary((stage) => {
+      if (stage === 'after_marker') {
+        f.advance(30_000);
+        legacyClaim(f);
+      }
+    });
+    const result = await f.recovery.finalize(capture.bundle);
+    assert.equal(result.releaseCommitted, true);
+    assert.equal(result.status, 'finalized');
+    assert.equal(
+      JSON.parse(readFileSync(join(capture.bundle, 'completion.json'), 'utf8')).status,
+      'finalized',
+    );
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+    const reviews = f.reviews.length;
+    await assert.rejects(f.recovery.finalize(capture.bundle), /already_finalized/);
+    assert.equal(f.reviews.length, reviews);
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-FUTURE-OWNER');
+  } finally {
+    f.close();
+  }
+});
+
+test('changed exact helper lease immediately before namespace commit preserves original marker', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.boundary((stage) => {
+      if (stage === 'before_marker') {
+        const lease = readdirSync(capture.bundle).find((name) => name.startsWith('operation-'))!;
+        writeFileSync(join(capture.bundle, lease), 'SYNTHETIC-UNKNOWN-HELPER', { mode: 0o600 });
+      }
+    });
+    await assert.rejects(f.recovery.finalize(capture.bundle), /operation_lease_changed/);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.ok(!existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
   } finally {
     f.close();
   }

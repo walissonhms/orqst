@@ -53,7 +53,7 @@ Its administrative signature binds the full original marker record, exact held p
 archive/preparation hashes and complete private gate/lock records (bytes/hash and
 all seven identity fields). Native review shows the actual phase and full plan.
 The only commit point is `rename(active-pair.json, held)` **inside finalize**, after
-all approvals and preparatory records are durable. There is no rename→review gap.
+all approvals and preparatory records are durable. There is no rename→review gap. Immediately before rename, after all durability and source checks, the exact retained boot lease bytes/identity and the fresh proof deadline are checked again. Equality with the deadline is expired; the original marker stays present and only another explicit review may proceed. Expiry after a completed rename does not undo that commit or suppress its truthful receipts.
 
 Before that point the original marker continuously excludes legacy `claim(wx)`,
 even if a post-boot old binary ignores the advisory gate. The old pre-boot owner is

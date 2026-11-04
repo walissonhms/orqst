@@ -1005,6 +1005,15 @@ export class OfflineReservationRecovery {
         assertPrepared();
         this.dependencies.boundary?.('before_marker');
         assertPrepared();
+        const currentLease = readRecoveryFile(lease.file);
+        if (
+          currentLease.bytes !== Buffer.from(lease.value.bytes).toString('base64') ||
+          JSON.stringify(currentLease.identity) !== JSON.stringify(lease.value.identity)
+        )
+          throw new OfflineRecoveryBlocked('operation_lease_changed', bundle);
+        // Durability/source checks may outlast consent. Never extend or reuse its deadline.
+        if (challenge.expiresAt <= this.dependencies.now())
+          throw new OfflineRecoveryBlocked('final_commit_approval_expired', bundle);
         namespaceAttempted = true;
         // Protocol exclusion is marker-presence + legacy claim(wx), not an invented multi-file CAS.
         // Old pre-boot owners are dead; post-boot claimants cannot replace this present marker.
