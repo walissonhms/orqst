@@ -338,3 +338,15 @@ Default-concurrency tests, full Chromium, native Desktop/PTY acceptance and
 provider, inference, login/model probe, installed service restart or user-data
 migration was performed. PTY stability, real A-to-B processing/return and native
 provider acceptance remain open.
+
+### Native CLI environment follow-up — 2026-11-03
+
+The [pinned runtime comparison](native-cli-runtime-comparison.md) re-inspects
+executable resolution, child environments/authentication, PTY versus pipe transport,
+UI, lifecycle and per-CLI compatibility. It explicitly inspects Tucano's OpenCode V2
+path, whose data-directory credential reuse differs from the V1 auth-file linking
+described above; neither source path was executed/imported. A single local passive
+PATH policy is now wired into discovery and newly reviewed Desktop manifest child
+environments. No additional upstream source is incorporated; the attributed Anywh
+framer remains the actual reused component. Provider gates and the unvalidated
+real A-to-B-to-A milestone are preserved.

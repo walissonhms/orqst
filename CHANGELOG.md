@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-03 — Reviewed native CLI tool PATH
+
+- Use one passive canonical directory policy for CLI discovery and new Desktop
+  manifest child environments; preserve PATH priority, installer fallbacks, origin
+  evidence, bounded inspection and explicit unsafe-directory exclusions.
+- Persist/review tool PATH without inheriting credentials or loader variables;
+  retain absolute/hash-pinned provider/Node launches and legacy manifest behavior.
+- Compare pinned Anywh/Tucano discovery, authentication, transports, UI, lifecycle
+  and per-provider paths; preserve existing audited source attribution and native
+  startup/MCP gates. No real provider execution or overall team acceptance claimed.
+
 ## 2026-11-03 — Native pair creation and proved early-failure recovery
 
 - Create reviewed Codex/Claude/OpenCode A/B manifests from native Desktop dialogs,

@@ -11,6 +11,7 @@ import {
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, parse, relative } from 'node:path';
 import { z } from 'zod';
+import { terminalToolPath, terminalToolPathSchema } from './local-cli-path.js';
 import { terminalDigest } from './authority.js';
 import type { TerminalProfile } from './supervisor.js';
 import { terminalMcpLaunchSchema, type TerminalMcpLaunch } from './mcp-launch.js';
@@ -23,6 +24,7 @@ export const managedCodexConfigSchema = z.strictObject({
   executable: binary,
   executableVersion: z.string().min(1).max(64),
   node: binary,
+  toolPath: terminalToolPathSchema.optional(),
   project: path,
   state: path,
   interactive: z
@@ -150,6 +152,7 @@ export function managedCodexSettings(config: ManagedCodexConfig): string {
 
 export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   managedCodexConfigSchema.parse(config);
+  terminalToolPath(config.toolPath);
   terminalDirectory(config.project);
   terminalDirectory(config.state, true);
   assertSeparateTerminalState(config.project, config.state);
@@ -202,6 +205,7 @@ export function managedCodexProfiles(
       ? 'native-auth-config-sessions-no-inherited-credentials-v1'
       : 'managed-home-no-inherited-credentials-v1',
     permissions:
+      `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
       'Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.',
   };
   if (config.authentication)
@@ -265,7 +269,7 @@ export function managedCodexEnvironment(config: ManagedCodexConfig): Record<stri
     TMPDIR: join(config.state, 'tmp'),
     XDG_CONFIG_HOME: join(config.state, 'home/.config'),
     XDG_CACHE_HOME: join(config.state, 'home/.cache'),
-    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    PATH: terminalToolPath(config.toolPath),
     LANG: 'en_US.UTF-8',
     LC_ALL: 'en_US.UTF-8',
     TERM: 'xterm-256color',

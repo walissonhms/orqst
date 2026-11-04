@@ -1,44 +1,44 @@
 // Passive executable discovery only. Never execute a CLI or inspect provider state.
 import { accessSync, constants, lstatSync, realpathSync } from 'node:fs';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { join } from 'node:path';
+import { localCliPathDirectories, localCliPathPolicy } from './local-cli-path.js';
 import { interactiveCliStatus } from './interactive-adapters.js';
 
 export const localCliProviders = ['codex', 'claude', 'opencode'] as const;
 export type LocalCliProvider = (typeof localCliProviders)[number];
 export const localCliDiscoveryPolicy = Object.freeze({
-  maximumPathBytes: 32768,
-  maximumDirectories: 128,
+  ...localCliPathPolicy,
   maximumCandidates: 16,
 });
 
 export interface LocalCliDiscovery {
   provider: LocalCliProvider;
   lookup: 'candidate_found' | 'not_found' | 'incomplete';
-  candidates: { launcher: string; canonical: string }[];
+  candidates: { launcher: string; canonical: string; origin: 'env' | 'fallback' }[];
   inspection: 'complete' | 'limited';
+  rejectedDirectories: ReturnType<typeof localCliPathDirectories>['rejected'];
   version: null;
   authentication: 'unknown';
   execution: 'not_authorized';
 }
 
 /** PATH order is evidence, not launch authority. Symlinked CLI launchers are common. */
-export function discoverLocalClis(searchPath: string): LocalCliDiscovery[] {
-  if (Buffer.byteLength(searchPath) > localCliDiscoveryPolicy.maximumPathBytes)
-    throw new Error('CLI discovery PATH exceeds the inspection budget');
-  const entries = [...new Set(searchPath.split(delimiter))];
-  // Empty/relative entries depend on cwd and must never select a project executable.
-  const directories = entries.filter((entry) => isAbsolute(entry) && !entry.includes('\0'));
-  const limited = directories.length > localCliDiscoveryPolicy.maximumDirectories;
+export function discoverLocalClis(
+  searchPath: string,
+  home?: string,
+  selectedDirectories: readonly string[] = [],
+): LocalCliDiscovery[] {
+  const search = localCliPathDirectories(searchPath, home, selectedDirectories);
   return localCliProviders.map((provider) => {
     const candidates: LocalCliDiscovery['candidates'] = [];
     const seen = new Set<string>();
-    let incomplete = limited;
-    for (const directory of directories.slice(0, localCliDiscoveryPolicy.maximumDirectories)) {
+    let incomplete = search.inspection === 'limited' || search.rejected.length > 0;
+    for (const directory of search.directories) {
       if (candidates.length === localCliDiscoveryPolicy.maximumCandidates) {
         incomplete = true;
         break;
       }
-      const launcher = join(directory, provider);
+      const launcher = join(directory.path, provider);
       try {
         const entry = lstatSync(launcher);
         if (!entry.isFile() && !entry.isSymbolicLink()) continue;
@@ -47,7 +47,7 @@ export function discoverLocalClis(searchPath: string): LocalCliDiscovery[] {
         if (!info.isFile() || !(info.mode & 0o111) || seen.has(canonical)) continue;
         accessSync(canonical, constants.X_OK);
         seen.add(canonical);
-        candidates.push({ launcher, canonical });
+        candidates.push({ launcher, canonical, origin: directory.origin });
       } catch (error) {
         // Absence is ordinary. Other failures leave availability uncertain.
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') incomplete = true;
@@ -58,6 +58,7 @@ export function discoverLocalClis(searchPath: string): LocalCliDiscovery[] {
       lookup: candidates.length ? 'candidate_found' : incomplete ? 'incomplete' : 'not_found',
       candidates,
       inspection: incomplete ? 'limited' : 'complete',
+      rejectedDirectories: search.rejected,
       version: null,
       authentication: 'unknown',
       execution: 'not_authorized',
@@ -75,7 +76,7 @@ const reuseBlockers = {
     'opencode_native_database_credentials_and_sessions_coupled',
     'native_database_startup_migrations_not_authorized',
     'native_standalone_descendant_lifecycle_unvalidated',
-    'managed_adapter_unimplemented',
+    'native_provider_acceptance_pending',
   ],
 } as const;
 

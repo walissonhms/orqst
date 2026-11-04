@@ -1,6 +1,7 @@
 // Explicit native Desktop profiles only. External observation never imports this entry.
 import { join, relative } from 'node:path';
 import { z } from 'zod';
+import { terminalToolPath, terminalToolPathSchema } from './local-cli-path.js';
 import {
   assertSeparateTerminalState,
   managedCodexConfigSchema,
@@ -42,6 +43,7 @@ export const managedClaudeConfigSchema = z.strictObject({
   executable: binary,
   executableVersion: z.literal(reviewedProviderMcpBinaries.claude.version),
   node: binary,
+  toolPath: terminalToolPathSchema.optional(),
   project: path,
   state: path,
   sessionId: z.uuid(),
@@ -69,6 +71,7 @@ export function interactiveProvider(
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
   managedClaudeConfigSchema.parse(config);
+  terminalToolPath(config.toolPath);
   if (config.executable.sha256 !== reviewedProviderMcpBinaries.claude.sha256)
     throw new Error('No reviewed launch contract for this exact Claude binary');
   if (!!config.interactive.mcp !== !!config.interactive.strictMcpAcknowledged)
@@ -142,6 +145,7 @@ export function interactiveTerminalProfiles(
       argv: candidate?.argv ?? ['--session-id', config.sessionId],
       environmentProfile: 'claude-native-identity-no-inherited-credentials-v1',
       permissions:
+        `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
         'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ' +
         (mcp
           ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude 2.1.178. ORQST task grant requires separate native authorization. '
@@ -163,7 +167,7 @@ export function interactiveTerminalEnvironment(
       ? { CLAUDE_CONFIG_DIR: config.authentication.claudeConfigDirectory }
       : {}),
     TMPDIR: join(config.state, 'tmp'),
-    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    PATH: terminalToolPath(config.toolPath),
     LANG: 'en_US.UTF-8',
     LC_ALL: 'en_US.UTF-8',
     TERM: 'xterm-256color',

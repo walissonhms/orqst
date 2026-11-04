@@ -89,10 +89,14 @@ test('creation plans without writes, publishes complete private A/B and reuses n
     const plan = prepareTerminalCreation(f.input);
     assert.deepEqual(readdirSync(f.root, { recursive: true }), before);
     assert.ok(plan.detail.length <= 4096);
-    const configs = JSON.parse(plan.detail);
+    const review = JSON.parse(plan.detail);
+    const configs = review.terminals;
     assert.equal(configs.length, 2);
     assert.notEqual(configs[0].state, configs[1].state);
     assert.equal(configs[0].authentication.home, f.input.home);
+    assert.ok(review.toolPath.includes('/usr/bin'));
+    assert.ok(review.toolPath.split(':').every((path: string) => path.startsWith('/')));
+    assert.equal('toolPath' in configs[0], false);
     assert.equal(configs[0].authentication.codexHome, f.input.environment.CODEX_HOME);
     assert.doesNotMatch(plan.detail, /SYNTHETIC_EXCLUDED|not-forwarded/);
     const files = plan.provision(() => true);
@@ -103,6 +107,7 @@ test('creation plans without writes, publishes complete private A/B and reuses n
     assert.deepEqual(readdirSync(f.input.project), []);
     for (const file of files) assert.equal(lstatSync(file).mode & 0o777, 0o600);
     for (const { config } of inspected) {
+      assert.equal(config.toolPath, review.toolPath);
       assert.equal(lstatSync(config.state).mode & 0o777, 0o700);
       assert.deepEqual(readdirSync(config.state).sort(), ['codex', 'home', 'terminal.json', 'tmp']);
     }
@@ -132,6 +137,23 @@ test('host binary drift after review refuses before provisioning without executi
     writeFileSync(node, Buffer.concat([bytes, Buffer.from('CHANGED')]));
     assert.throws(() => plan.provision(() => true), /executable changed/);
     assert.deepEqual(readdirSync(f.input.parent), ['active-pair.json']);
+  } finally {
+    f.close();
+  }
+});
+
+test('reviewed tool directory replacement refuses before provisioning and without changing native identity', () => {
+  const f = fixture();
+  try {
+    const tools = join(f.root, 'synthetic-tools');
+    mkdirSync(tools, { mode: 0o700 });
+    f.input.environment.PATH = tools;
+    const plan = prepareTerminalCreation(f.input);
+    renameSync(tools, tools + '.old');
+    mkdirSync(tools, { mode: 0o700 });
+    assert.throws(() => plan.provision(() => true), /Tool PATH directory identity changed/);
+    assert.deepEqual(readdirSync(f.input.parent), ['active-pair.json']);
+    assert.deepEqual(readdirSync(f.input.home), ['.codex']);
   } finally {
     f.close();
   }

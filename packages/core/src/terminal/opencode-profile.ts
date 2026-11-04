@@ -1,6 +1,7 @@
 // Explicit Desktop opt-in only. Never opens the native database or credential/config files.
 import { dirname, join, relative } from 'node:path';
 import { z } from 'zod';
+import { terminalToolPath, terminalToolPathSchema } from './local-cli-path.js';
 import {
   assertSeparateTerminalState,
   terminalDirectory,
@@ -25,6 +26,7 @@ export const managedOpenCodeConfigSchema = z.strictObject({
   executable: binary.extend({ sha256: z.literal(reviewedProviderMcpBinaries.opencode.sha256) }),
   executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
   node: binary,
+  toolPath: terminalToolPathSchema.optional(),
   project: path,
   state: path,
   authentication: z.strictObject({
@@ -47,6 +49,7 @@ export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 /** Also used before provisioning; checks directories only, never the DB or its ledger. */
 export function validateOpenCodeSelection(config: ManagedOpenCodeConfig): void {
   managedOpenCodeConfigSchema.parse(config);
+  terminalToolPath(config.toolPath);
   const opted = config.interactive;
   if (
     opted.nativeStartupAuthorized !== !!opted.nativeDatabaseMigrationsAcknowledged ||
@@ -100,6 +103,7 @@ export function openCodeTerminalEnvironment(
       nodePath: config.node.path,
       ...(mcp ? { mcp } : {}),
     }).environment,
+    PATH: terminalToolPath(config.toolPath),
     TMPDIR: join(config.state, 'tmp'),
   };
 }
@@ -133,7 +137,7 @@ export function openCodeTerminalProfiles(
       argv: ['--standalone'],
       environmentProfile: 'opencode-native-identity-no-inherited-credentials-v1',
       permissions:
-        `Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
+        `Tool PATH: ${terminalToolPath(config.toolPath)}. Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
         'Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. No automatic ORQST task/login/resume/adoption. --standalone selects a private native server with generated authentication and stdin lease; existing service is not adopted. 30 minute owned TUI deadline; exit proves TUI only, descendant exit and concurrent DB compatibility UNVALIDATED; capacity remains sticky. One dispatch per manifest. ' +
         (mcp
           ? 'Inline ORQST MCP MERGES with native definitions; task grant requires separate native authorization. '

@@ -1,5 +1,12 @@
 # ORQST
 
+New Desktop terminal manifests now review one canonical tool PATH shared by CLI
+discovery and the child environment, including trusted native installer locations
+when the GUI has a minimal PATH. Existing manifests retain their prior environment.
+This fixes local tool resolution only; native login, provider pins, OpenCode startup
+consent and real delegation acceptance remain separate. See the
+[pinned runtime comparison and per-CLI status](docs/research/native-cli-runtime-comparison.md).
+
 **One place. Every agent.**
 
 The shared dashboard uses the approved ORQST logo in navigation and a static mascot

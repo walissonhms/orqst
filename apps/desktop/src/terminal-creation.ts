@@ -22,6 +22,11 @@ import {
   validateManagedOpenCodeConfig,
 } from '../../../packages/core/src/terminal/opencode-profile.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
+import {
+  localCliPathDirectories,
+  legacyTerminalPath,
+  terminalToolPath,
+} from '../../../packages/core/src/terminal/local-cli-path.js';
 import type { LocalCliProvider } from '../../../packages/core/src/terminal/local-cli.js';
 
 // Passive hash of the selected local native candidate; no version/login/provider command run.
@@ -57,11 +62,26 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   const node = { path: input.node, sha256: terminalExecutableSha256(input.node) };
   const directories = new Set([input.parent, input.project, input.home]);
   const nativeRoots: string[] = [];
+  const tools = localCliPathDirectories(input.environment.PATH ?? legacyTerminalPath, input.home, [
+    dirname(input.node),
+    dirname(input.executable),
+  ]);
+  if (tools.inspection !== 'complete') throw new Error('CLI tool PATH review is incomplete');
+  const toolPath = terminalToolPath(tools.path);
+  const toolDirectoryIdentities = () => {
+    terminalToolPath(toolPath);
+    return tools.directories.map(({ path }) => {
+      const info = lstatSync(path);
+      return { path, device: info.dev, inode: info.ino };
+    });
+  };
+  const toolIdentities = JSON.stringify(toolDirectoryIdentities());
   const configs: InteractiveTerminalConfig[] = ['A', 'B'].map((slot) => {
     const common = {
       trust: 'native-same-user',
       executable,
       node,
+      toolPath,
       project: input.project,
       state: join(root, slot),
     };
@@ -154,8 +174,17 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   const identities = JSON.stringify(directoryIdentities());
   const snapshot = JSON.stringify(configs);
+  // The common PATH is disclosed once; both persisted manifests contain the exact reviewed value.
+  const review = JSON.stringify({
+    toolPath,
+    terminals: configs.map((config) => {
+      const terminal = { ...config };
+      delete terminal.toolPath;
+      return terminal;
+    }),
+  });
   // Full compact JSON avoids repeating directory inode metadata in the consent dialog.
-  const detail = snapshot.replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+  const detail = review.replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
   if (detail.length > 4096) throw new Error('Creation review exceeds native display limit');
   let attempted = false;
   return {
@@ -168,6 +197,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       for (const binary of [executable, node])
         if (terminalExecutableSha256(binary.path) !== binary.sha256)
           throw new Error('Creation executable changed');
+      if (JSON.stringify(toolDirectoryIdentities()) !== toolIdentities)
+        throw new Error('Tool PATH directory identity changed');
       if (JSON.stringify(configs) !== snapshot || !current()) throw new Error('Creation changed');
       if (readdirSync(input.project).length) throw new Error('Project is no longer empty');
       attempted = true; // Partial provisioning is retained; never delete/retry uncertain writes.

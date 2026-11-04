@@ -640,3 +640,25 @@ Any possible write/transport effect keeps the latch.
 Capacity feedback contains no paths/marker content and provides no takeover, reset
 or signal action. No observer HTTP/WS/cookie/static/schema, dependency or credentials
 interface changed. See [workflow and limits](docs/development/cli-team-recovery.md).
+
+## Reviewed native CLI tool PATH — 2026-11-03
+
+New Desktop terminal manifests may contain an explicit `toolPath`, derived by the
+same passive canonical directory policy used for CLI discovery. The native creation
+review discloses the common PATH once; both private manifests persist its exact
+value. Root/current-user directory ownership, no group/world write bits, trusted
+ancestors, device/inode deduplication, 128-directory/32-KiB bounds and repeat
+validation precede dispatch. Empty/relative/NUL entries and unsafe directories are
+excluded, not converted into cwd lookup; unsupported metadata/budget truncation
+blocks creation. A canonical PATH target containing its delimiter is excluded.
+Unsafe exclusions and env/fallback origins are visible in developer preflight.
+
+This expands the local tools a native CLI or its MCPs/hooks can resolve. Those
+subordinate tools are not individually hash-pinned or contained: the native
+same-user trust contract still applies. The provider and private Node host keep
+canonical absolute paths and SHA-256 pins; no API keys, loaders, shell profiles or
+arbitrary environment variables are inherited. No shell/login/version/provider
+probe, credential/configuration read, public API/WS/cookie change or new task grant
+is introduced. Old manifests keep the fixed system PATH. Native identity/session
+acknowledgments, Claude's exact reviewed pin and OpenCode's startup/database/activity
+consent remain separate. See [runtime comparison and limits](docs/research/native-cli-runtime-comparison.md).

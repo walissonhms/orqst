@@ -1,4 +1,5 @@
 // Developer preflight, outside application startup. No provider process or state access.
+import { homedir } from 'node:os';
 import { parseArgs } from 'node:util';
 import {
   discoverLocalClis,
@@ -6,7 +7,7 @@ import {
 } from '../packages/core/src/terminal/local-cli.js';
 
 parseArgs({ options: {}, allowPositionals: false });
-const discovery = discoverLocalClis(process.env.PATH ?? '');
+const discovery = discoverLocalClis(process.env.PATH ?? '', homedir());
 console.log(
   JSON.stringify(
     {

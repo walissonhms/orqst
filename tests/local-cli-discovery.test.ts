@@ -43,7 +43,9 @@ test('passive discovery resolves CLI aliases, deduplicates and retains PATH prio
     symlinkSync(canonical, join(next, 'codex'));
     writeFileSync(join(f.bin, 'claude'), 'SYNTHETIC-NEVER-EXECUTE', { mode: 0o700 });
     const discovery = discoverLocalClis([f.bin, next, f.bin].join(delimiter));
-    assert.deepEqual(discovery[0]!.candidates, [{ launcher: join(f.bin, 'codex'), canonical }]);
+    assert.deepEqual(discovery[0]!.candidates, [
+      { launcher: join(f.bin, 'codex'), canonical, origin: 'env' },
+    ]);
     assert.equal(discovery[0]!.inspection, 'complete');
     assert.equal(discovery[1]!.lookup, 'candidate_found');
     assert.equal(discovery[2]!.lookup, 'not_found');
@@ -56,6 +58,7 @@ test('passive discovery resolves CLI aliases, deduplicates and retains PATH prio
       assert.equal(plan.automaticInstall, false);
       assert.equal(plan.automaticLogin, false);
       assert.equal(plan.execution, 'blocked');
+      assert.equal(plan.blockers.includes('managed_adapter_unimplemented'), false);
     }
     assert.equal(claudeDescriptor.implemented, false);
     assert.equal(opencodeDescriptor.implemented, false);

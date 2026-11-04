@@ -22,19 +22,24 @@ With the repository's Node 24/pnpm 10 toolchain, run:
 pnpm terminal:discover
 ```
 
-This developer command inspects only executable filesystem metadata in the current
-process's PATH. It resolves symlink launchers to canonical files, preserves PATH
+This developer command inspects only filesystem metadata in the current process's
+PATH and documented native installer directories. It resolves symlink launchers to canonical files, preserves PATH
 priority and deduplicates targets. It ignores empty/relative PATH entries and never
 searches project files, session roots, credentials, shell profiles or the Keychain.
 It does not execute even `--version`, authentication-status or help commands, install
 anything, create homes, start a server, or connect to an existing process.
 
-The JSON report contains up to 16 candidate launchers/targets per provider, null
-version, unknown authentication and no execution authority. Scanning is capped at
+The JSON report contains up to 16 candidate launchers/targets per provider, each
+with an environment/fallback origin, plus excluded unsafe directories, null version,
+unknown authentication and no execution authority. Scanning is capped at
 128 unique absolute directories and 32 KiB of PATH. Truncation/errors produce limited
 inspection; oversized input fails before inspection. `not_found` means not found in
-this bounded PATH inspection, not absent from the machine. Finder-launched Desktop
-may have a different PATH; this command does not source a login shell to repair it.
+this bounded inspection, not absent from the machine. Finder-launched Desktop can
+use the same passive installer fallbacks in a newly reviewed manifest's optional
+`toolPath`. Native creation review and each child environment use the same canonical
+directory policy. Legacy manifests without the field keep their fixed system PATH;
+legacy setup scripts do not silently opt in. Neither path sources a login shell. See
+[policy, trust checks, exclusions and per-CLI acceptance](../research/native-cli-runtime-comparison.md).
 Windows launcher discovery is not implemented.
 
 A candidate can be a shim, incompatible binary or untrusted file. Metadata is not
