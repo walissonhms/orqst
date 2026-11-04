@@ -97,6 +97,19 @@ const filesClientResult = await build({
   format: 'iife',
   metafile: true,
 });
+const featuresClientResult = await build({
+  entryPoints: {
+    client: 'apps/tauri/src/features-client.ts',
+    workspace: 'apps/tauri/src/feature-workspace-client.ts',
+  },
+  absWorkingDir: root,
+  outdir: join(output, 'features'),
+  bundle: true,
+  platform: 'browser',
+  target: 'safari17',
+  format: 'iife',
+  metafile: true,
+});
 const agentsClientResult = await build({
   entryPoints: {
     client: 'apps/tauri/src/agents-client.ts',
@@ -181,6 +194,7 @@ for (const input of Object.keys({
   ...clientResult.metafile.inputs,
   ...agentsClientResult.metafile.inputs,
   ...filesClientResult.metafile.inputs,
+  ...featuresClientResult.metafile.inputs,
 })) {
   if (input.includes('node_modules/')) await includePackage(resolve(root, input));
 }
