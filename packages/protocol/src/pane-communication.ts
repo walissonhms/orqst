@@ -24,12 +24,24 @@ export const paneCapabilitiesSchema = z.strictObject({
   canCancel: z.boolean(),
 });
 export type PaneCapabilities = z.infer<typeof paneCapabilitiesSchema>;
+export const paneHandleSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{1,31}$/);
+export const paneRoutingSchema = z.strictObject({
+  handle: paneHandleSchema,
+  role: z.enum(['worker', 'reviewer', 'orchestrator']),
+  allowedTargetPaneIds: z.array(z.uuid()).max(32),
+});
+export const paneRoutingUpdateSchema = paneRoutingSchema.extend({
+  name: z.string().trim().min(1).max(100),
+});
+export type PaneRoutingUpdate = z.infer<typeof paneRoutingUpdateSchema>;
 export const communicationPaneSchema = z.strictObject({
   schemaVersion: z.literal(1),
   paneId: z.uuid(),
   workspaceId: id,
   displayId: z.string().regex(/^T-[0-9]{3,}$/),
   name: z.string().trim().min(1).max(100),
+  // Legacy native compositions retain their exact per-task grants. Routed panes also require this matrix.
+  routing: paneRoutingSchema.nullable().default(null),
   provider: id,
   cliVersion: z.string().min(1).max(100).nullable(),
   model: z.string().min(1).max(128).nullable(),
@@ -125,6 +137,7 @@ export const communicationAuditSchema = z.strictObject({
   action: z.enum([
     'pane_registered',
     'pane_renamed',
+    'pane_routing_changed',
     'pane_state',
     'admitted',
     'state_changed',

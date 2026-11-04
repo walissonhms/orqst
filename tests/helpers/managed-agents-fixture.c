@@ -54,6 +54,7 @@ int main(void) {
       printf("{\"id\":\"%s\",\"result\":{\"thread\":{\"id\":\"%s\",\"ephemeral\":true},"
         "\"model\":\"SYNTHETIC-model\",\"sandbox\":{\"type\":\"readOnly\"},\"approvalPolicy\":\"on-request\"}}\n", id, thread);
     } else if (!strcmp(name, "turn/start")) {
+      root = strstr(line, "targetPaneId") != NULL;
       printf("{\"id\":\"%s\",\"result\":{\"turn\":{\"id\":\"SYNTHETIC-turn\",\"status\":\"inProgress\"}}}\n", id);
       char params[1024];
       snprintf(params, sizeof(params), "{\"threadId\":\"%s\",\"turn\":{\"id\":\"SYNTHETIC-turn\",\"status\":\"inProgress\"}}", thread);
@@ -67,7 +68,7 @@ int main(void) {
         char pane[129]; memcpy(pane, target, length); pane[length] = 0;
         printf("{\"id\":\"SYNTHETIC-call\",\"method\":\"item/tool/call\",\"params\":{"
           "\"threadId\":\"%s\",\"turnId\":\"SYNTHETIC-turn\",\"callId\":\"SYNTHETIC-call\","
-          "\"namespace\":null,\"tool\":\"orqst_delegate_task\",\"arguments\":{\"targetPaneId\":\"%s\",\"task\":\"SYNTHETIC worker task\"}}}\n", thread, pane);
+          "\"namespace\":null,\"tool\":\"orqst_delegate_task\",\"arguments\":{\"targetPaneId\":\"%s\",\"task\":\"@terminal-b SYNTHETIC worker task\"}}}\n", thread, pane);
       } else complete("SYNTHETIC worker result");
     } else return 38;
   }

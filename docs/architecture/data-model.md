@@ -452,3 +452,15 @@ schema 2 additionally permits null exit code with explicit signal, preserving le
 numeric exits. Receipt inspection never mutates the journal or frees lost capacity;
 there is no automatic receipt pruning or retrospective reconciliation. See the
 [format and recovery limitations](../development/codex-lifecycle-receipts.md).
+
+## Managed communication routing metadata — 2026-11-04
+
+The separate opt-in communication journal stores an additive nullable `routing`
+object in each existing `communication_panes.metadata` JSON record: workspace-unique
+handle, descriptive role and explicitly allowed target UUIDs. Missing metadata parses
+as null for the existing exact-grant compositions. New Desktop managed panes start
+with an empty route matrix. No event/source/Analytics table or observer migration
+changes. The single existing writer checks uniqueness across closed records and
+persists edits with `pane_routing_changed` metadata-only audit in one transaction.
+Recovery retains these fields while marking live identities unavailable; restoring
+metadata does not restore grants, adapters, payload bytes or process ownership.

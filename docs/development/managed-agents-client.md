@@ -321,3 +321,46 @@ synthetic integration boundaries. A focus-only refusal now preserves the last
 observed lifecycle label; mutation buttons stay disabled until a fresh snapshot
 restores them. A synthetic Chromium regression covers this client state transition,
 without claiming native focus or modal acceptance.
+
+## Explicit mentions and directed permissions — 2026-11-04
+
+This increment extends this existing client, not the Studio PTY surface or the Tauri
+observer preview. Start two fresh reviewed Codex manifests as before. Each initial
+pane has a stable UUID, handle `@terminal-a` or `@terminal-b`, role Worker and no
+allowed destination. Starting both processes grants no communication route.
+
+1. Edit each name/handle/role. On the chosen source, enable **Allow this terminal to
+   delegate to the other terminal** and select **Review identity and permissions**.
+   Review the exact change in the existing Cancel-default native dialog. Role changes
+   alone do not permit delegation. Disable an old opposite edge before reversing a
+   route; two-way permission cycles are refused.
+2. Select the source terminal. Type `@` at the end of the worker-task field and select
+   a permitted suggestion showing handle/name/provider/state/role, or type the exact
+   handle. Include exactly one distinct destination outside code. Unknown/multiple
+   destinations fail closed. No mention in captured output triggers work.
+3. Enter source instructions and select **Review and authorize delegation**. The
+   existing separate native review still covers exact source/target UUIDs, task,
+   deadline and one delegation. Admission is queued; accepted, running and completed
+   require independent correlated Core/CLI evidence. A's reply requires the worker
+   result to return through the native dynamic-tool call. Either pane may be source. Both signed starts now request the same dynamic tool;
+   a handler/grant exists only for the separately authorized root source. Advertising
+   a tool never authorizes the worker to delegate recursively.
+4. Read the correlated message trail and results in the actual source/target pane.
+   Hide/restore, signed Stop and signed retirement retain their existing meanings.
+   Identity/route edits are blocked during active or uncertain root work. An edit
+   invalidates older task reviews so a renamed handle cannot silently change a target.
+
+The explicit `pnpm accept:managed-agents --authorize-synthetic-agents` command now also
+loads the shipped document/client in Chromium, edits a route, checks autocomplete
+prefix preservation, and dispatches through actual Node hosts to compiled synthetic
+CLI processes. Its trusted test signer replaces native modal consent; the shipped
+preload, focus checks and signer are unchanged. It does not validate an installed
+Codex model/login, human native dialogs or Electron/Tauri active interaction.
+
+Remaining scope: exactly two Codex structured instances; no Claude/OpenCode bridge,
+N-member team composer, autonomous delegation chain, provider approvals, persisted
+payload body, restart/reconnect/adoption or hard cost containment. Pane metadata and
+routes persist in the private journal, but this Desktop still requires fresh slots
+and does not restore a live pair after restart. Unknown outcomes remain fenced and
+cannot be reset to make another acceptance attempt pass. See
+[research, provenance and current checks](../research/mention-communication.md).

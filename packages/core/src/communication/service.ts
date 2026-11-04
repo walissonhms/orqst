@@ -6,6 +6,7 @@ import {
   communicationPaneSchema,
   paneProviderEvidenceSchema,
   paneSendSchema,
+  paneRoutingUpdateSchema,
   type CommunicationAudit,
   type CommunicationContent,
   type CommunicationJournal,
@@ -14,7 +15,9 @@ import {
   type CommunicationTransaction,
   type PaneProviderEvidence,
   type PaneSend,
+  type PaneRoutingUpdate,
 } from '@orqst/protocol';
+import { mentionedHandles } from './mentions.js';
 
 const grantSchema = z.strictObject({
   actorId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -63,7 +66,7 @@ const active = (message: CommunicationMessage) =>
   ['dispatching', 'accepted', 'delivered', 'delivery_unknown'].includes(message.deliveryState) &&
   !['completed', 'failed', 'cancelled'].includes(message.taskState);
 
-/** Experimental opt-in Core service. Never constructed by ObserverCore, Bridge or Desktop. */
+/** Trusted opt-in Core service. Never constructed by observer startup. */
 export class PaneCommunication {
   private grants = new Map<string, Grant>();
   private clients = new WeakMap<CommunicationClient, Grant>();
@@ -78,7 +81,12 @@ export class PaneCommunication {
 
   /** Trusted composition only: enrollment must prove ownership; captured provider text cannot call this. */
   registerPane(
-    input: Omit<CommunicationPane, 'schemaVersion' | 'paneId' | 'displayId' | 'createdAt'>,
+    input: Omit<
+      CommunicationPane,
+      'schemaVersion' | 'paneId' | 'displayId' | 'createdAt' | 'routing'
+    > & {
+      routing?: CommunicationPane['routing'];
+    },
     adapter?: CommunicationAdapter,
   ): CommunicationPane {
     const pane = this.journal.transaction((tx) => {
@@ -99,6 +107,11 @@ export class PaneCommunication {
         throw new Error('Managed ownership binding required');
       if (value.binding && panes.some((p) => p.binding?.instanceId === value.binding?.instanceId))
         throw new Error('Instance already registered');
+      if (
+        value.routing &&
+        (value.ownership !== 'managed' || value.routing.allowedTargetPaneIds.length)
+      )
+        throw new Error('Routing enrollment requires managed ownership and an empty matrix');
       tx.savePane(value);
       this.audit(tx, value, 'pane_registered');
       return value;
@@ -132,6 +145,62 @@ export class PaneCommunication {
       tx.savePane(updated);
       this.audit(tx, pane, 'pane_renamed');
       return updated;
+    });
+  }
+
+  /** Trusted host only. Roles are descriptive; permission edits do not issue task grants. */
+  configureRouting(paneId: string, input: PaneRoutingUpdate): CommunicationPane {
+    const { name, ...routing } = paneRoutingUpdateSchema.parse(input);
+    return this.journal.transaction((tx) => {
+      const pane = this.pane(tx, paneId);
+      if (!pane.routing || pane.ownership !== 'managed' || pane.state === 'closed')
+        throw new Error('Routed managed pane required');
+      const panes = tx.panes();
+      for (const id of routing.allowedTargetPaneIds) {
+        const target = this.pane(tx, id);
+        if (
+          id === paneId ||
+          target.workspaceId !== pane.workspaceId ||
+          target.ownership !== 'managed' ||
+          !target.routing ||
+          target.state === 'closed'
+        )
+          throw new Error('Routing target denied');
+      }
+      if (new Set(routing.allowedTargetPaneIds).size !== routing.allowedTargetPaneIds.length)
+        throw new Error('Duplicate routing target');
+      const visiting = new Set<string>();
+      const visited = new Set<string>();
+      const visit = (id: string) => {
+        if (visiting.has(id)) throw new Error('Routing cycle denied');
+        if (visited.has(id)) return;
+        visiting.add(id);
+        const targets =
+          id === paneId
+            ? routing.allowedTargetPaneIds
+            : (panes.find((p) => p.paneId === id)?.routing?.allowedTargetPaneIds ?? []);
+        targets.forEach(visit);
+        visiting.delete(id);
+        visited.add(id);
+      };
+      visit(paneId);
+      const updated = communicationPaneSchema.parse({ ...pane, name, routing });
+      tx.savePane(updated);
+      this.audit(tx, pane, 'pane_routing_changed');
+      return updated;
+    });
+  }
+
+  resolveMention(workspaceId: string, text: string): CommunicationPane {
+    const handles = mentionedHandles(z.string().min(1).max(2048).parse(text));
+    if (handles.length !== 1) throw new Error('Exactly one explicit mention required');
+    return this.journal.transaction((tx) => {
+      const pane = tx
+        .panes()
+        .find((p) => p.workspaceId === workspaceId && p.routing?.handle === handles[0]);
+      if (!pane || pane.ownership !== 'managed' || pane.state === 'closed')
+        throw new Error('Mention target unavailable');
+      return pane;
     });
   }
 
@@ -184,6 +253,12 @@ export class PaneCommunication {
         )
           throw new Error('Grant scope denied');
       }
+      const source = this.pane(tx, parsed.sourcePaneId);
+      if (
+        source.routing &&
+        parsed.targetPaneIds.some((id) => !source.routing!.allowedTargetPaneIds.includes(id))
+      )
+        throw new Error('Routing permission denied');
     });
     const grant: Grant = { ...parsed, id: randomUUID(), revoked: false };
     this.grants.set(grant.id, grant);
@@ -286,6 +361,7 @@ export class PaneCommunication {
         source.state === 'closed' ||
         source.ownership !== 'managed' ||
         !source.capabilities.canSend ||
+        (source.routing !== null && !source.routing.allowedTargetPaneIds.includes(targetPaneId)) ||
         !grant ||
         !this.valid(grant) ||
         !this.canRead(grant, next) ||
@@ -450,6 +526,7 @@ export class PaneCommunication {
       source.state === 'closed' ||
       source.ownership !== 'managed' ||
       !source.capabilities.canSend ||
+      (source.routing !== null && !source.routing.allowedTargetPaneIds.includes(target.paneId)) ||
       target.ownership !== 'managed' ||
       target.state === 'closed' ||
       !target.capabilities.canSend ||

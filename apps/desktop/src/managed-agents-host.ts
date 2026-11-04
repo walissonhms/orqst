@@ -48,7 +48,13 @@ process.on('message', async (raw: unknown) => {
         value = await service.launch(r.slot, r.proof);
         break;
       case 'prepareTask':
-        value = service.prepareTask(r.text, r.task);
+        value = service.prepareTask(r.text, r.task, r.sourceSlot);
+        break;
+      case 'prepareRouting':
+        value = service.prepareRouting(r.slot, r.update);
+        break;
+      case 'applyRouting':
+        service.applyRouting(r.changeId, r.proof);
         break;
       case 'runTask':
         service.runTask(r.taskId, r.correlationId, r.proof);

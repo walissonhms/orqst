@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { paneRoutingUpdateSchema } from '@orqst/protocol';
 const slot = z.number().int().min(0).max(1);
 const proof = z.strictObject({
   challengeId: z.uuid(),
@@ -10,6 +11,13 @@ export const agentsHostRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({ id: z.uuid(), operation: z.literal('retire'), proof }),
   z.strictObject({
     id: z.uuid(),
+    operation: z.literal('prepareRouting'),
+    slot,
+    update: paneRoutingUpdateSchema,
+  }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('applyRouting'), changeId: z.uuid(), proof }),
+  z.strictObject({
+    id: z.uuid(),
     operation: z.literal('prepareStart'),
     slot,
     model: z.string().trim().min(1).max(128),
@@ -18,6 +26,7 @@ export const agentsHostRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({
     id: z.uuid(),
     operation: z.literal('prepareTask'),
+    sourceSlot: slot.default(0),
     text: z.string().min(1).max(2048),
     task: z.string().min(1).max(1024),
   }),
