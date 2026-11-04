@@ -1,3 +1,12 @@
+import {
+  terminalModelSelectionSchema,
+  terminalModelArguments,
+  validateTerminalModelSelection,
+} from './model-selection.js';
+import {
+  terminalPreparationBindingSchema,
+  validateTerminalPreparationBinding,
+} from './preparation-context.js';
 import { terminalIdentitySchema } from '@orqst/protocol';
 import {
   constants,
@@ -29,6 +38,8 @@ export const managedCodexConfigSchema = z.strictObject({
   identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
+  model: z.lazy(() => terminalModelSelectionSchema).optional(),
+  preparation: z.lazy(() => terminalPreparationBindingSchema).optional(),
   interactive: z
     .strictObject({ sharedNativeSessions: z.literal(true), mcp: z.literal(true).optional() })
     .optional(),
@@ -154,6 +165,8 @@ export function managedCodexSettings(config: ManagedCodexConfig): string {
 
 export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
   managedCodexConfigSchema.parse(config);
+  validateTerminalModelSelection(config.model);
+  validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
   terminalDirectory(config.project);
   terminalDirectory(config.state, true);
@@ -190,6 +203,7 @@ export function managedCodexProfiles(
   config: ManagedCodexConfig,
   mcp?: TerminalMcpLaunch,
 ): TerminalProfile[] {
+  validateTerminalPreparationBinding(config.preparation, config.project);
   if (config.authentication && !config.interactive)
     throw new Error(
       'Existing authentication is supported only by the structured runtime unless interactive native session writes are acknowledged',
@@ -216,6 +230,7 @@ export function managedCodexProfiles(
         ...common,
         id: 'codex-terminal-v1',
         argv: [
+          ...terminalModelArguments(config.model),
           '--no-daemon',
           '--sandbox',
           'read-only',
@@ -238,6 +253,7 @@ export function managedCodexProfiles(
       ...common,
       id: 'codex-terminal-v1',
       argv: [
+        ...terminalModelArguments(config.model),
         '--no-daemon',
         '--sandbox',
         'read-only',

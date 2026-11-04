@@ -626,3 +626,4 @@ export class Store {
     this.db.close();
   }
 }
+export { readTerminalWorkspace } from './terminal-workspace.js';
