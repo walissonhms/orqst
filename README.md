@@ -773,6 +773,16 @@ Uninstall stops the service and removes its plist; it preserves the database, ba
 synthetic PTY mechanics experiment on macOS/arm64. It is separate from automatic
 tests and launches no agent. See [scope and limits](docs/development/terminal-pty-acceptance.md).
 
+`pnpm accept:tauri-coexistence --authorize-synthetic <app> combined|preparation`
+launches the isolated native fixture and now also records read-only WindowServer
+metadata (`window.json`) for the process it owns; a missing window fails the run
+instead of leaving the failure unexplained. `pnpm inspect:terminal-capacity --journal
+<absolute terminal.sqlite>` reports quarantined reservations and admission capacity
+without releasing or rewriting them. Both are developer-only and are never part of
+automatic tests, CI or normal startup. See
+[native coexistence](docs/development/tauri-native-coexistence.md) and
+[quarantine capacity](docs/development/codex-quarantine-capacity.md).
+
 Additional commands: `pnpm validate:live` runs an explicitly requested native Codex acceptance task; `pnpm runtime:install` and `pnpm service:{plan,install,status,restart,uninstall}` manage the private macOS runtime/service. The live test uses the current Codex login/model and consumes real provider usage. It never runs as part of the application, automatic tests or CI.
 
 ## Configuration
