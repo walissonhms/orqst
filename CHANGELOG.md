@@ -1,5 +1,12 @@
 # Changelog
 
+## Selected catalogue false invalidation — 2026-11-04
+
+Source now binds the actual selected CLI/model/configuration/context, so unrelated
+cache/provider updates do not reject normal Open. Original cache expiry and native
+review/revalidation/launch fences remain enforced. See [reproduction and source-only
+checks](docs/development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+
 ## Shared document URL boundary — 2026-11-04
 
 - Move the reserved terminal URL into existing pure policy; retain the Electron

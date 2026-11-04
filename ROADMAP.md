@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Selected catalogue false invalidation — 2026-11-04
+
+Source now binds the actual selected CLI/model/configuration/context, so unrelated
+cache/provider updates do not reject normal Open. Original cache expiry and native
+review/revalidation/launch fences remain enforced. See [reproduction and source-only
+checks](docs/development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+
 The [shared document URL boundary](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
 is split with pure checks and legacy Electron compatibility. Runtime/dependency
 removal still requires the existing parity and acceptance gates.

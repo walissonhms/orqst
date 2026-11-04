@@ -25,6 +25,7 @@ const openCodeConfiguredModelSchema = z.object({
 });
 const sourceFile = z.strictObject({
   path: z.string().startsWith('/').max(2048),
+  codexModel: terminalModelValueSchema.optional(),
   sha256: z
     .string()
     .regex(/^[a-f0-9]{64}$/)
@@ -48,6 +49,50 @@ function read(path: string): Buffer | null {
   }
 }
 
+const codexCacheSchema = z.object({
+  client_version: z.literal('0.162.1'),
+  fetched_at: z.iso.datetime({ offset: true }),
+  models: z
+    .array(
+      z.object({
+        slug: z.string(),
+        display_name: z.string().optional(),
+        visibility: z.enum(['list', 'hide', 'none']),
+      }),
+    )
+    .max(128),
+});
+
+function codexCache(bytes: Buffer) {
+  let cache: z.infer<typeof codexCacheSchema>;
+  try {
+    cache = codexCacheSchema.parse(JSON.parse(bytes.toString('utf8')));
+  } catch {
+    throw new Error('CLI model catalogue changed; reload the terminal picker');
+  }
+  const fetchedAt = Date.parse(cache.fetched_at);
+  const expiresAt = fetchedAt + 300_000;
+  if (fetchedAt > Date.now() || expiresAt <= Date.now())
+    throw new Error('CLI model catalogue expired; reload the terminal picker');
+  return { ...cache, expiresAt };
+}
+
+function cachedModelDigest(cache: ReturnType<typeof codexCache>, value: string) {
+  const matches = cache.models.filter((model) => model.slug === value);
+  if (matches.length !== 1 || matches[0]!.visibility !== 'list')
+    throw new Error('CLI model catalogue changed; reload the terminal picker');
+  const model = matches[0]!;
+  // Only the selected visible entry is source evidence. Freshness is checked separately.
+  return terminalDigest(
+    JSON.stringify([
+      cache.client_version,
+      model.slug,
+      model.display_name ?? model.slug,
+      model.visibility,
+    ]),
+  );
+}
+
 /** Evidence is checked again immediately before the existing PTY profile is dispatched. */
 export function validateTerminalModelSelection(selection: TerminalModelSelection | undefined) {
   if (!selection) return;
@@ -56,7 +101,22 @@ export function validateTerminalModelSelection(selection: TerminalModelSelection
     throw new Error('CLI model catalogue expired; reload the terminal picker');
   for (const file of selection.files) {
     const bytes = read(file.path);
-    if ((bytes === null ? null : terminalDigest(bytes)) !== file.sha256)
+    const cache = file.codexModel && bytes ? codexCache(bytes) : undefined;
+    if (
+      file.codexModel &&
+      (!cache ||
+        selection.value !== file.codexModel ||
+        selection.source !== 'cli-cache' ||
+        selection.expiresAt === undefined ||
+        cache.expiresAt < selection.expiresAt)
+    )
+      throw new Error('CLI model catalogue changed; reload the terminal picker');
+    const digest = cache
+      ? cachedModelDigest(cache, file.codexModel!)
+      : bytes === null
+        ? null
+        : terminalDigest(bytes);
+    if (digest !== file.sha256)
       throw new Error('CLI model catalogue changed; reload the terminal picker');
   }
 }
@@ -114,7 +174,10 @@ export function discoverTerminalModels(
     const bytes = read(path);
     return { path, bytes, sha256: bytes === null ? null : terminalDigest(bytes) };
   });
-  const files = sources.map(({ path, sha256 }) => ({ path, sha256 }));
+  // Native defaults/configured models do not consume the picker cache.
+  const files = sources
+    .filter(({ path }) => !path.endsWith('models_cache.json'))
+    .map(({ path, sha256 }) => ({ path, sha256 }));
   const options: { label: string; selection: TerminalModelSelection }[] = [
     {
       label: 'CLI default',
@@ -130,6 +193,7 @@ export function discoverTerminalModels(
     source: TerminalModelSelection['source'],
     label?: unknown,
     expiresAt?: number,
+    cacheFile?: z.infer<typeof sourceFile>,
   ) => {
     const parsed = terminalModelValueSchema.safeParse(value);
     if (
@@ -142,7 +206,12 @@ export function discoverTerminalModels(
     options.push({
       label:
         typeof label === 'string' && /^[^\p{Cc}\p{Cf}]{1,160}$/u.test(label) ? label : parsed.data,
-      selection: { value: parsed.data, source, files, ...(expiresAt ? { expiresAt } : {}) },
+      selection: {
+        value: parsed.data,
+        source,
+        files: cacheFile ? [...files, cacheFile] : files,
+        ...(expiresAt ? { expiresAt } : {}),
+      },
     });
   };
   if (provider === 'claude') {
@@ -154,28 +223,14 @@ export function discoverTerminalModels(
     const text = bytes.toString('utf8');
     try {
       if (path.endsWith('models_cache.json')) {
-        const data: unknown = JSON.parse(text);
-        const cache = z
-          .object({
-            client_version: z.literal('0.162.1'),
-            fetched_at: z.iso.datetime({ offset: true }),
-            models: z
-              .array(
-                z.object({
-                  slug: z.string(),
-                  display_name: z.string().optional(),
-                  visibility: z.enum(['list', 'hide', 'none']),
-                }),
-              )
-              .max(128),
-          })
-          .parse(data);
-        const fetchedAt = Date.parse(cache.fetched_at);
-        const expiresAt = fetchedAt + 300_000;
-        if (fetchedAt > Date.now() || expiresAt <= Date.now()) continue;
+        const cache = codexCache(bytes);
         for (const model of cache.models)
           if (model.visibility === 'list')
-            add(model.slug, 'cli-cache', model.display_name, expiresAt);
+            add(model.slug, 'cli-cache', model.display_name, cache.expiresAt, {
+              path,
+              codexModel: model.slug,
+              sha256: cachedModelDigest(cache, model.slug),
+            });
         if (options.some((option) => option.selection.source === 'cli-cache')) limited = false;
       } else if (path.endsWith('.toml')) {
         // Deliberately narrow: JSON-compatible TOML basic strings only. No TOML evaluation.

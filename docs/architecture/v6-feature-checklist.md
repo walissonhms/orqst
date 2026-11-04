@@ -1,5 +1,17 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Selected catalogue false invalidation — 2026-11-04
+
+Source now binds the actual selected CLI/model/configuration/context, so unrelated
+cache/provider updates do not reject normal Open. Original cache expiry and native
+review/revalidation/launch fences remain enforced. See [reproduction and source-only
+checks](../development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+
+- [x] Reproduce three isolated false invalidations against the published baseline.
+- [x] Bind selected evidence and retain cache expiry, review, commit and launch fences;
+      97 focused checks, full typecheck and focal lint/format passed.
+- [ ] Integrate/package frozen source and validate actual native/provider opening.
+
 ## Shared document URL boundary — 2026-11-04
 
 - [x] Reuse pure terminal policy for the reserved document URL, retaining the

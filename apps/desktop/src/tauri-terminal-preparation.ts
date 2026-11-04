@@ -12,7 +12,7 @@ import {
   terminalPreparationBindingSchema,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
-import { terminalPreparationCatalog } from './terminal-catalog.js';
+import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import { z } from 'zod';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import { TerminalSelection } from './terminal-selection.js';
@@ -107,11 +107,9 @@ export async function prepareTauriTerminals(
       const count = pair ? 2 : request.count;
       const sourceProvider = pair ? request.sourceProvider : request.provider;
       const select = (name: typeof sourceProvider, modelId: string) => {
-        const provider = discovered.providers.find((entry) => entry.provider === name);
-        const model = provider?.models?.options.find((entry) => entry.id === modelId);
-        if (!provider || provider.executables.length !== 1 || !model)
-          return fail('selection_unavailable');
-        return { provider: name, executable: provider.executables[0]!, model: model.selection };
+        const selected = resolveCatalogSelection(discovered, name, modelId);
+        if (!selected) return fail('selection_unavailable');
+        return selected;
       };
       const source = select(
         sourceProvider,
@@ -161,14 +159,37 @@ export async function prepareTauriTerminals(
           return { status: 'cancelled', files: [] };
       }
       stage = 'revalidation';
-      const rechecked = terminalPreparationCatalog(
-        { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },
-        trusted,
-        context,
-      );
-      if (rechecked.catalog.catalogId !== request.catalogId) fail('catalog_changed');
+      const revalidate = () => {
+        const rechecked = terminalPreparationCatalog(
+          { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },
+          trusted,
+          context,
+        );
+        if (
+          rechecked.catalog.catalogId !== request.catalogId ||
+          !resolveCatalogSelection(
+            rechecked,
+            sourceProvider,
+            pair
+              ? sourceProvider === 'codex'
+                ? request.codexModelId
+                : request.openCodeModelId
+              : request.modelId,
+          ) ||
+          (pair &&
+            !resolveCatalogSelection(
+              rechecked,
+              sourceProvider === 'codex' ? 'opencode' : 'codex',
+              sourceProvider === 'codex' ? request.openCodeModelId : request.codexModelId,
+            ))
+        )
+          fail('catalog_changed');
+      };
+      revalidate();
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
+      stage = 'revalidation';
+      revalidate();
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
       files = plan.provision(reviewed);

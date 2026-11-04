@@ -51,7 +51,7 @@ can take precedence, and unavailable models/variants follow native fallback.
 Requested selection remains unverified until reported by the native CLI; exact
 forced selection is not implemented. See the pinned source review below.
 The existing PTY backend re-reads the manifest and profiles immediately before
-dispatch, so model source bytes, binary pins, workspace/Feature binding and expiry
+dispatch, so model source evidence, binary pins, workspace/Feature binding and expiry
 are checked again. No shell command string is constructed.
 
 ## Catalogue sources and limits
@@ -71,8 +71,8 @@ are checked again. No shell command string is constructed.
 Each source file is limited to 2 MiB, each provider to 128 options, and model
 identifiers to 160 safe characters. Unsupported TOML forms, JSONC and configuration
 interpolation are delegated to the real CLI default, rather than evaluated or
-invented. Unsafe/unreadable source files make the provider unavailable. Catalogue
-and model source digests are checked after review and before publication/launch.
+invented. Unsafe/unreadable source files make the provider unavailable. Context and selected-choice
+evidence are checked after review, after the commit latch and before publication/launch.
 Missing or stale catalogues keep honest default/configured choices. No Analytics,
 observed session model or history data is used as catalogue evidence.
 
@@ -139,3 +139,14 @@ Bootstrap/provision/inspection/Feature assignment/opening cannot claim
 stable identifiers, not exception text or retry permission. Extra fields are
 rejected. The helper sends the same object as `{kind:'failure',failure}` over its
 private pipe. See [boundaries and checks](../development/terminal-preparation-diagnostics.md).
+
+## Selected catalogue evidence — 2026-11-04
+
+`catalogId` binds Workspace/Feature context and revision; each opaque `modelId`
+binds the selected executable, native context, model and configuration. Unselected
+provider changes no longer invalidate a choice. Codex native-config/default options
+exclude the picker cache; cache choices validate only their selected visible entry,
+client version and freshness, retaining the original deadline through refresh and
+at launch. Private manifests add optional `model.files[].codexModel` semantic proof;
+legacy source hashes retain their meaning. Public IPC shape is unchanged. See
+[format, invariants, source research and limits](../research/terminal-catalog-selection-binding.md).

@@ -1037,3 +1037,13 @@ The dashboard keeps its existing draft guard and denies revoked/context-stale
 results. This view event grants no execution or managed-session authority; no
 HTTP/WebSocket/cookie/CSP/capability change is introduced. Actual OS delivery is
 not inferred from show(). See [source, contract and limits](docs/development/tauri-notification-route.md).
+
+## Selected terminal catalogue evidence — 2026-11-04
+
+Normal terminal preparation binds the selected executable/native context/model and
+configuration independently from unrelated provider discoveries. Semantic Codex
+cache proofs retain the original selected expiry and validate the selected visible
+entry, cache version and current freshness at provisioning and dispatch. Full native
+review, binary pins, Workspace/Feature checks, signed launch and native commit latches
+remain authoritative. No new observer API or retry is introduced. See [selection
+binding review](docs/research/terminal-catalog-selection-binding.md).

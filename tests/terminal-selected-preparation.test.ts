@@ -14,6 +14,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -586,18 +587,8 @@ for (const fault of [
       } else {
         await assert.rejects(attempt, (error: unknown) => {
           const failure = Reflect.get(error as object, 'failure');
-          assert.equal(
-            failure.stage,
-            fault.endsWith('-model')
-              ? 'selection'
-              : fault === 'companion-commit-drift'
-                ? 'provision'
-                : 'revalidation',
-          );
-          assert.equal(
-            failure.effects,
-            fault === 'companion-commit-drift' ? 'possible' : 'not_started',
-          );
+          assert.equal(failure.stage, fault.endsWith('-model') ? 'selection' : 'revalidation');
+          assert.equal(failure.effects, 'not_started');
           return true;
         });
       }
@@ -650,3 +641,311 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
     }
   });
 }
+
+// Human-reported path: picker catalog -> explicit CLI/model -> create-selected.
+// All sources, workspaces and native bytes below are disposable synthetic fixtures.
+async function catalogChoice(
+  f: ReturnType<typeof fixture>,
+  label: string,
+  featureId: string | null = null,
+) {
+  const scope = { workspaceId: f.workspaceId, featureId };
+  const reply = await prepareTauriTerminals(
+    { action: 'catalog', ...scope },
+    f.context,
+    f.ports,
+    Date.now,
+    f.trusted,
+  );
+  assert.equal(reply.status, 'catalog');
+  const model = reply.catalog.providers
+    .find((entry) => entry.provider === 'codex')!
+    .models.find((entry) => entry.label === label)!;
+  assert.ok(model);
+  return {
+    action: 'create-selected',
+    ...scope,
+    catalogId: reply.catalog.catalogId,
+    provider: 'codex',
+    modelId: model.id,
+    count: 1,
+  };
+}
+function syntheticCache(f: ReturnType<typeof fixture>, fetchedAt = Date.now()) {
+  const cache = {
+    client_version: '0.162.1',
+    fetched_at: new Date(fetchedAt).toISOString(),
+    models: [
+      { slug: 'gpt-6.1-sol', display_name: 'gpt-6.1-sol', visibility: 'list' },
+      { slug: 'synthetic-other', display_name: 'Synthetic other', visibility: 'list' },
+    ],
+  };
+  const save = () =>
+    writeFileSync(join(f.home, '.codex/models_cache.json'), JSON.stringify(cache), { mode: 0o600 });
+  save();
+  return { cache, save };
+}
+
+for (const selected of ['native-config', 'cli-default', 'cli-cache'] as const) {
+  for (const phase of ['before-click', 'review', 'commit'] as const) {
+    test(`catalog regression: ${selected} survives unrelated cache/provider updates at ${phase}`, async (t) => {
+      const f = fixture();
+      let clock = Date.now();
+      t.mock.method(Date, 'now', () => clock);
+      try {
+        const cache = syntheticCache(f, clock - 10_000);
+        const label =
+          selected === 'native-config'
+            ? 'synthetic-model'
+            : selected === 'cli-default'
+              ? 'CLI default'
+              : 'gpt-6.1-sol';
+        const request = await catalogChoice(f, label);
+        const originalExpiry = clock - 10_000 + 300_000;
+        const mutate = () => {
+          clock += 1000;
+          cache.cache.fetched_at = new Date(clock).toISOString();
+          cache.cache.models[1]!.display_name = 'Changed unrelated model';
+          cache.cache.models.reverse();
+          cache.save();
+          writeFileSync(
+            join(f.home, '.claude/settings.json'),
+            '{"model":"synthetic-other-provider"}',
+            { mode: 0o600 },
+          );
+          rmSync(join(f.root, 'bin/claude'));
+        };
+        if (phase === 'before-click') mutate();
+        if (phase === 'review')
+          f.ports.confirm = async () => {
+            mutate();
+            return true;
+          };
+        if (phase === 'commit')
+          f.ports.commit = async () => {
+            mutate();
+            return true;
+          };
+        const result = await prepareTauriTerminals(
+          request,
+          f.context,
+          f.ports,
+          Date.now,
+          f.trusted,
+        );
+        assert.equal(result.status, 'open');
+        const config = readInteractiveTerminalConfig(result.files[0]!);
+        assert.equal(config.model!.source, selected);
+        assert.equal(config.model!.value, selected === 'cli-default' ? null : label);
+        assert.equal(
+          config.model!.expiresAt,
+          selected === 'cli-cache' ? originalExpiry : undefined,
+        );
+        assert.equal(config.interactive?.mcp, undefined);
+        // A successful preparation is files only; it never initializes a runtime journal.
+        assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
+        if (selected === 'cli-cache') {
+          clock = originalExpiry;
+          assert.throws(() => readInteractiveTerminalConfig(result.files[0]!), /expired/);
+        }
+      } finally {
+        f.close();
+      }
+    });
+  }
+}
+
+for (const fault of [
+  'model',
+  'label',
+  'hidden',
+  'removed',
+  'duplicate',
+  'version',
+  'expired',
+  'config',
+  'source',
+  'executable',
+  'home',
+  'path',
+  'feature',
+  'workspace',
+] as const) {
+  for (const phase of ['before-click', 'review', 'commit'] as const) {
+    test(`catalog regression: selected ${fault} drift at ${phase} refuses before effects`, async (t) => {
+      const f = fixture();
+      let clock = Date.now();
+      t.mock.method(Date, 'now', () => clock);
+      try {
+        const cache = syntheticCache(f, clock - 299_000);
+        const features = featureConfigurationDatabase(
+          f.trusted.preferencesDirectory,
+          f.workspaceId,
+        );
+        const feature = features.create({ name: 'Synthetic catalog scope' });
+        features.saveView({ expectedRevision: 0, featureId: feature.featureId });
+        const request = await catalogChoice(f, 'gpt-6.1-sol', feature.featureId);
+        let commits = 0;
+        const mutate = () => {
+          if (fault === 'model') cache.cache.models[0]!.slug = 'synthetic-replacement';
+          if (fault === 'label') cache.cache.models[0]!.display_name = 'Replacement label';
+          if (fault === 'hidden') cache.cache.models[0]!.visibility = 'hide';
+          if (fault === 'removed') cache.cache.models.shift();
+          if (fault === 'duplicate') cache.cache.models.push({ ...cache.cache.models[0]! });
+          if (fault === 'version') cache.cache.client_version = 'synthetic-unreviewed';
+          if (fault === 'expired') clock += 1000;
+          cache.save();
+          if (fault === 'config')
+            writeFileSync(join(f.home, '.codex/config.toml'), 'model="synthetic-changed"', {
+              mode: 0o600,
+            });
+          if (fault === 'source')
+            writeFileSync(join(f.home, '.codex/config.toml'), 'model="gpt-6.1-sol"', {
+              mode: 0o600,
+            });
+          if (fault === 'executable') writeFileSync(join(f.root, 'bin/codex'), 'SYNTHETIC-CHANGED');
+          if (fault === 'home')
+            f.context.environment = { ...f.context.environment, HOME: '/synthetic-changed' };
+          if (fault === 'path') f.context.environment.PATH = '/usr/bin:/bin';
+          if (fault === 'feature')
+            features.update(feature.featureId, {
+              expectedRevision: feature.revision,
+              name: 'Changed synthetic Feature',
+            });
+          if (fault === 'workspace') {
+            renameSync(f.project, f.project + '-replaced');
+            mkdirSync(f.project, { mode: 0o700 });
+          }
+        };
+        // HOME is supplied independently by the trusted host, like the real preparation boundary.
+        const drift = () => {
+          mutate();
+          if (fault === 'home') f.context.home = f.project;
+        };
+        if (phase === 'before-click') drift();
+        f.ports.confirm = async () => {
+          if (phase === 'review') drift();
+          return true;
+        };
+        f.ports.commit = async () => {
+          commits++;
+          if (phase === 'commit') drift();
+          return true;
+        };
+        await assert.rejects(
+          prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
+          (error: unknown) => {
+            const failure = Reflect.get(error as object, 'failure');
+            assert.equal(failure.effects, 'not_started');
+            assert.equal(
+              failure.stage,
+              phase === 'before-click'
+                ? ['workspace', 'feature'].includes(fault)
+                  ? 'catalog'
+                  : 'selection'
+                : 'revalidation',
+            );
+            assert.ok(
+              ['failed', 'catalog_changed', 'selection_unavailable'].includes(failure.code),
+            );
+            assert.ok(!JSON.stringify(failure).includes(f.root));
+            return true;
+          },
+        );
+        assert.equal(commits, phase === 'commit' ? 1 : 0);
+        assert.deepEqual(readdirSync(f.context.parent), []);
+      } finally {
+        f.close();
+      }
+    });
+  }
+}
+
+for (const field of ['fetched_at', 'other-model', 'other-cli'] as const) {
+  test(`catalog regression isolated field: ${field} changes without invalidating configured gpt-6.1-sol`, async () => {
+    const f = fixture();
+    try {
+      writeFileSync(join(f.home, '.codex/config.toml'), 'model="gpt-6.1-sol"\n', { mode: 0o600 });
+      const cache = syntheticCache(f, Date.now() - 10_000);
+      const request = await catalogChoice(f, 'gpt-6.1-sol');
+      if (field === 'fetched_at')
+        cache.cache.fetched_at = new Date(Date.now() - 1000).toISOString();
+      if (field === 'other-model') cache.cache.models[1]!.slug = 'synthetic-replacement';
+      if (field === 'other-cli') rmSync(join(f.root, 'bin/claude'));
+      cache.save();
+      const prepared = await prepareTauriTerminals(
+        request,
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(prepared.status, 'open');
+      const config = readInteractiveTerminalConfig(prepared.files[0]!);
+      assert.equal(config.model!.value, 'gpt-6.1-sol');
+      assert.equal(config.model!.source, 'native-config');
+      assert.deepEqual(f.confirmations, ['selected']);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('catalog regression: cache selection launch fence keeps source and original expiry after refresh', async (t) => {
+  const f = fixture();
+  let clock = Date.now();
+  t.mock.method(Date, 'now', () => clock);
+  try {
+    const cache = syntheticCache(f, clock - 10_000);
+    const request = await catalogChoice(f, 'gpt-6.1-sol');
+    const expiry = clock - 10_000 + 300_000;
+    const prepared = await prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted);
+    assert.equal(prepared.status, 'open');
+    clock += 1000;
+    cache.cache.fetched_at = new Date(clock).toISOString();
+    cache.cache.models[1]!.slug = 'synthetic-other-updated';
+    cache.save();
+    assert.equal(readInteractiveTerminalConfig(prepared.files[0]!).model!.expiresAt, expiry);
+    cache.cache.models[0]!.visibility = 'hide';
+    cache.save();
+    assert.throws(() => readInteractiveTerminalConfig(prepared.files[0]!), /catalogue changed/);
+    cache.cache.models[0]!.visibility = 'list';
+    cache.save();
+    clock = expiry;
+    assert.throws(() => readInteractiveTerminalConfig(prepared.files[0]!), /expired/);
+    const stored = JSON.parse(readFileSync(prepared.files[0]!, 'utf8')) as { state: string };
+    assert.ok(!readdirSync(stored.state).includes('terminal.sqlite'));
+  } finally {
+    f.close();
+  }
+});
+
+test('catalog regression: opaque cache deadline cannot be extended or erased by the requester', async () => {
+  const f = fixture();
+  try {
+    syntheticCache(f);
+    const request = await catalogChoice(f, 'gpt-6.1-sol');
+    const original = request.modelId;
+    for (const prefix of [
+      '000000000000',
+      (Number.parseInt(original.slice(0, 12), 16) + 1).toString(16).padStart(12, '0'),
+    ]) {
+      request.modelId = prefix + original.slice(12);
+      await assert.rejects(
+        prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
+        (error: unknown) => {
+          assert.deepEqual(Reflect.get(error as object, 'failure'), {
+            stage: 'selection',
+            code: 'selection_unavailable',
+            effects: 'not_started',
+          });
+          return true;
+        },
+      );
+    }
+    assert.deepEqual(f.confirmations, []);
+    assert.deepEqual(readdirSync(f.context.parent), []);
+  } finally {
+    f.close();
+  }
+});
