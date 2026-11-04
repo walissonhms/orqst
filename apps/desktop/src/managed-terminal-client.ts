@@ -6,6 +6,7 @@ import type {
   TerminalNativeRequest,
   TerminalNativeWireReply,
 } from '@orqst/protocol';
+import { terminalNativeReplySchema } from '@orqst/protocol';
 
 const client = (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal;
 const status = document.querySelector<HTMLElement>('#status')!;
@@ -47,6 +48,7 @@ let interactionGeneration = 0;
 let gap = false;
 let pending = '';
 let live = false;
+let openingIncomplete = false;
 let gesture = false;
 let gestureEnd: ReturnType<typeof setTimeout> | undefined;
 const actions = ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const;
@@ -81,19 +83,21 @@ const updateGuidance = () => {
   const key =
     status.dataset.blocked === 'true'
       ? 'blocked'
-      : state === 'ownership_lost'
-        ? 'uncertain'
-        : gap
-          ? 'gap'
-          : state === 'exited' || state === 'start_failed'
-            ? 'exited'
-            : !live
-              ? 'start'
-              : !attached
-                ? 'attach'
-                : input
-                  ? 'typing'
-                  : 'input';
+      : openingIncomplete && !state
+        ? 'openingIncomplete'
+        : state === 'ownership_lost'
+          ? 'uncertain'
+          : gap
+            ? 'gap'
+            : state === 'exited' || state === 'start_failed'
+              ? 'exited'
+              : !live
+                ? 'start'
+                : !attached
+                  ? 'attach'
+                  : input
+                    ? 'typing'
+                    : 'input';
   const main = document.querySelector('main');
   if (main) main.dataset.next = key;
   const message = guidance.dataset[key] ?? '';
@@ -108,7 +112,8 @@ const updateButtons = () => {
       status.dataset.blocked === 'true' ||
       document.getElementById(action)!.dataset.unavailable === 'true';
     if (action === 'login' || action === 'start')
-      disabled ||= live || status.dataset.state === 'ownership_lost';
+      disabled ||=
+        live || status.dataset.state === 'ownership_lost' || (openingIncomplete && !!instanceId);
     else if (action === 'attach')
       disabled ||=
         !instanceId || attached || !['running', 'exited'].includes(status.dataset.state ?? '');
@@ -140,13 +145,16 @@ const revoke = () => {
   updateGuidance();
 };
 
-async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireReply | undefined> {
+async function send(
+  request: TerminalNativeRequest,
+  suppliedReply?: TerminalNativeWireReply,
+): Promise<TerminalNativeWireReply | undefined> {
   if (busy) return;
   busy = true;
   status.dataset.pending = 'true';
   updateButtons();
   try {
-    const reply = await client.request(request);
+    const reply = suppliedReply ?? (await client.request(request));
     if (reply.status !== 'ok') {
       if (request.action === 'write' || request.action === 'paste') revoke();
       show(reply.status);
@@ -163,6 +171,7 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
       lastColumns = 80;
       lastRows = 24;
       attached = input = gap = false;
+      delete status.dataset.state;
       pending = '';
     }
     if (reply.snapshot) {
@@ -175,6 +184,16 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
       if (!live) {
         input = false;
         pending = '';
+      }
+    }
+    if (request.action === 'open') {
+      openingIncomplete = reply.opening !== 'ready';
+      attached = input = reply.opening === 'ready';
+      if (openingIncomplete) show('openingIncomplete');
+      else {
+        fit.fit();
+        container.scrollIntoView({ block: 'nearest' });
+        terminal.focus();
       }
     }
     if (request.action === 'attach') {
@@ -190,6 +209,7 @@ async function send(request: TerminalNativeRequest): Promise<TerminalNativeWireR
       revoke();
     }
     if (request.action === 'input') {
+      openingIncomplete = false;
       input = true;
       sequence = 0;
       terminal.focus();
@@ -283,7 +303,11 @@ for (const action of actions) {
         if (!live)
           await send({
             version: 1,
-            action: 'start',
+            action:
+              action === 'start' &&
+              document.querySelector<HTMLElement>('main')!.dataset.operationalOpen === 'true'
+                ? 'open'
+                : 'start',
             profileId:
               action === 'login'
                 ? 'codex-login-v1'
@@ -308,6 +332,21 @@ for (const action of actions) {
   });
 }
 window.addEventListener('blur', revoke);
+// Only Tauri's selected-flow bootstrap produces this result. It contains no
+// proof/lease and all later operations still pass the native broker's authority.
+window.addEventListener('orqst-terminal-open', (event) => {
+  if (document.querySelector<HTMLElement>('main')?.dataset.operationalOpen !== 'true') return;
+  const reply = terminalNativeReplySchema.safeParse((event as CustomEvent<unknown>).detail);
+  if (reply.success)
+    void send(
+      {
+        version: 1,
+        action: 'open',
+        profileId: document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
+      },
+      reply.data,
+    );
+});
 let resize: ReturnType<typeof setTimeout> | undefined;
 // Adapted from Anywh TerminalView.tsx at 546f189c04415c3c5af5f40e3931a0a90b9aba31
 // (Apache-2.0). Observe the container, debounce fitting, and retain ORQST's bounded

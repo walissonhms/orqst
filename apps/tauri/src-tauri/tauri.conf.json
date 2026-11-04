@@ -25,7 +25,11 @@
           "description": "Only dedicated local terminal webviews can access the private native terminal client.",
           "local": true,
           "webviews": ["terminal-*"],
-          "permissions": ["allow-terminal-request", "allow-terminal-view"]
+          "permissions": [
+            "allow-terminal-request",
+            "allow-terminal-view",
+            "allow-terminal-open-prepared"
+          ]
         }
       ],
       "csp": "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"

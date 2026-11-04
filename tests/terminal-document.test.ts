@@ -85,3 +85,14 @@ test('every emitted native chrome key exists in both shipped locales', () => {
       document({ translate, scope });
   }
 });
+
+test('only explicitly selected terminal documents opt into operational Open; legacy Start is unchanged', () => {
+  const legacy = document();
+  const selected = document({ operationalOpen: true });
+  assert.ok(!legacy.includes('data-operational-open="true"'));
+  assert.ok(legacy.includes(`id="start">${en.managedTerminal.start}</button>`));
+  assert.ok(selected.includes('data-operational-open="true"'));
+  assert.ok(selected.includes(`id="start">${en.managedTerminal.open}</button>`));
+  assert.ok(selected.includes(en.managedTerminal.openingIncomplete));
+  assert.ok(selected.includes(en.managedTerminal.guide_openingIncomplete));
+});

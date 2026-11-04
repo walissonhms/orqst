@@ -960,3 +960,21 @@ The native Feature metadata facade is scoped to the exact owned dashboard/chrome
 and reviewed terminal selection. It grants no process/input authority and exposes
 no generic Core/HTTP execution transport. Its document, CAS, review-exclusion and
 presentation fences are documented in [the security model](docs/architecture/security-model.md#native-feature-metadata-facade).
+
+## CLI/model operational Open — 2026-11-04
+
+The normal Studio request carries scoped IDs and opaque catalog/model digests.
+Only the owned observer database resolves a project; native argv supplies private
+preferences. No renderer path, arbitrary executable, login, task or proof is accepted.
+`terminal_open_prepared` is restricted to exact dedicated terminal Webviews and
+consumes a native intent bound to document/presentation generation and 60-second
+expiry. Real deactivation, blur, reload, dashboard navigation and Quit revoke it.
+The deliberate initial Studio transition cannot revive obsolete layout messages.
+Operational Open has one explicit native consent and three independent expiring
+signed challenges; each effect and the final async snapshot revalidate the original
+consent deadline. Partial failure retains identity/receipts and never retries,
+signals or adopts a process. Observer HTTP/WS/cookies/CSP and original sessions
+remain unchanged. Legacy Start grants startup only. Current selection remains
+one-shot per app launch; live enrollment needs its own ownership/admission review.
+Pure/renderer checks do not prove native/provider acceptance; Cargo remains pending
+while coordinated disk margin is unavailable.

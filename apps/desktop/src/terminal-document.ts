@@ -11,6 +11,7 @@ export function terminalDocument(options: {
   project: string;
   version: string;
   startProfile: string;
+  operationalOpen?: boolean;
   nativeAuthentication: boolean;
   scope: string;
   blocker?: string;
@@ -18,6 +19,7 @@ export function terminalDocument(options: {
   translate(key: string): string;
 }): string {
   const text = (key: string) => escapeHTML(options.translate(`managedTerminal.${key}`));
+  const attribute = (key: string) => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
   const pair = options.providers.length >= 2;
   const slotName = (slot: number) => String.fromCharCode(65 + slot);
   const identity = escapeHTML(
@@ -25,13 +27,13 @@ export function terminalDocument(options: {
   );
   const alias = `${slotName(options.slot)} · ${identity}`;
   const button = (id: string) =>
-    `<button id="${id}"${id === 'login' && options.nativeAuthentication ? ' data-unavailable="true" disabled' : ''}>${text(id)}</button>`;
+    `<button id="${id}"${id === 'login' && options.nativeAuthentication ? ' data-unavailable="true" disabled' : ''}>${text(id === 'start' && options.operationalOpen ? 'open' : id)}</button>`;
   const iconButton = (id: string, label: string, icon: string) =>
     `<button id="${id}" class="pane-icon" aria-label="${text(label)}" title="${text(label)}"${id === 'restore' ? ' hidden' : ''}><span aria-hidden="true">${icon}</span></button>`;
   return `<!doctype html>
 <html lang="${escapeHTML(options.language)}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${text('title')} ${alias} · ${escapeHTML(options.provider)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head>
-<body><main data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}">
+<body><main data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}"${options.operationalOpen ? ' data-operational-open="true"' : ''}>
 <header class="pane-header">
   <span class="pane-provider">${escapeHTML(options.provider)}</span>
   <span class="pane-identity" title="${identity}">${identity}</span>
@@ -68,9 +70,9 @@ export function terminalDocument(options: {
 </header>
 <section class="process-controls" aria-label="${text('processControls')}">
   <div class="action-row">${['start', 'attach', 'input', 'detach', 'stop'].map(button).join('')}</div>
-  <p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap'].map((key) => `data-${key}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>
+  <p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>
 </section>
-<p id="status" data-blocked="${options.blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required', 'unavailable'].map((key) => `data-${key}="${text(key)}"`).join(' ')}>${text(options.blocker ?? (options.nativeAuthentication ? 'reuseIdle' : 'idle'))}</p>
+<p id="status" data-blocked="${options.blocker ? 'true' : 'false'}" role="status" aria-live="polite" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required', 'unavailable', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(key)}"`).join(' ')}>${text(options.blocker ?? (options.nativeAuthentication ? 'reuseIdle' : 'idle'))}</p>
 <div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div>
 </main><script src="${terminalScriptURL}" defer></script></body></html>`;
 }

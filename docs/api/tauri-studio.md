@@ -8,13 +8,19 @@ The strict public request union is:
 
 ```ts
 { action: 'snapshot' }
+{ action: 'catalog', workspaceId: string, featureId: string | null }
+{ action: 'create-selected', generation: number, workspaceId: string, featureId: string | null, catalogId: string, provider: 'codex' | 'claude' | 'opencode', modelId: string, count: number }
 { action: 'create', generation: number, provider: 'codex' | 'claude', count: number }
 { action: 'review', generation: number }
 ```
 
 Generation is a nonnegative safe integer from the latest native snapshot. Count is
-an integer 1–8; there is no mixed preset, OpenCode, model selection, custom limit,
-Start, task, prompt or login action. Additional properties are rejected. In
+an integer 1–8. The normal drawer creates one selected member. Catalog/model IDs
+are scoped hex64 digests; `catalog` is passive and returns `{status:'catalog',catalog}`
+using the [shared catalog contract](terminal-preparation.md). Native argv4 supplies
+only the owned observer database and private preferences directory. No project or
+executable path comes from JavaScript. There is no mixed preset, custom limit,
+task, prompt or login action. Additional properties are rejected. In
 particular no paths, files, PID, proof, source or arbitrary Core method is accepted.
 `review` uses only the native state's already prepared files. `create` uses native
 pickers and the bundled Node 24, then runs the exact existing menu wizard.
@@ -37,7 +43,7 @@ this application lifetime, including after retirement.
   exact supported document path, absent credentials/query/fragment, and native
   generation. Mutations reuse the AppKit first-responder check; the full context is
   checked again after that await and at atomic admission. JS activation is only
-  defense in depth; read-only snapshots require no click.
+  defense in depth; read-only snapshot/catalog calls require no click.
 - The menu and command share a single preparation latch. The fixed helper retains
   its existing bounded pipe, native pickers, Cancel-default configuration review,
   shared-effects acknowledgment, complete opening review and five-minute expiry.
@@ -63,3 +69,18 @@ its older-Desktop/relaunch warning.
 
 Native WebKit/own-sheet execution, provider behavior, final Quit and platform
 packaging acceptance remain separate from pure/renderer checks.
+
+## Selected operational opening
+
+`create-selected` uses no picker. Its one native provisioning/selection review
+precedes a distinct exact operational Open review in the dedicated terminal
+document. The additional `terminal_open_prepared` command is granted only to
+`terminal-*`, never the dashboard. It accepts no arguments. Native-held profile,
+document generation, presentation epoch and 60-second deadline are captured before
+focus awaits and checked again before the one-use dispatch. Revocation consumes
+the intent, with no automatic rearming. The [broker contract](terminal-operational-open.md)
+retains three independently signed grants and incomplete attempt identity.
+
+Current source still fences fresh selection while a host exists. A second
+independently chosen terminal requires live enrollment into the same Core; it is
+not implemented or accepted by this increment. See [workflow and checks](../development/terminal-product-open.md).

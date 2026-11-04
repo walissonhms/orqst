@@ -382,3 +382,49 @@ test('a suspended sheet never renews an expired signed approval', async (t) => {
     s.service.close();
   }
 });
+
+test('selected operational Open uses one native confirmation and distinct broker grants; legacy Start stays separate', async () => {
+  const s = setup();
+  try {
+    const opened = await s.request(0, { version: 1, action: 'open', profileId: 'synthetic' });
+    assert.equal(opened.status, 'ok');
+    if (opened.status !== 'ok') throw new Error('Missing synthetic open');
+    assert.equal(opened.opening, 'ready');
+    assert.equal(s.starts[0], 1);
+    assert.equal(s.messages.filter((m) => m.kind === 'confirm').length, 1);
+    const review = s.messages.find((m) => m.kind === 'confirm')!;
+    assert.equal(review.message, 'terminalNative.open');
+    assert.equal(review.approve, 'studio.tauri.open');
+    assert.equal(JSON.parse(String(review.detail)).operation, 'open');
+    assert.equal(
+      (
+        await s.request(0, {
+          version: 1,
+          action: 'write',
+          instanceId: opened.instanceId,
+          sequence: 0,
+          text: 'SYNTHETIC',
+        })
+      ).status,
+      'ok',
+    );
+    const started = await s.request(1, { version: 1, action: 'start', profileId: 'synthetic' });
+    if (started.status !== 'ok') throw new Error('Missing legacy synthetic start');
+    assert.equal(started.opening, undefined);
+    assert.equal(
+      (
+        await s.request(1, {
+          version: 1,
+          action: 'write',
+          instanceId: started.instanceId,
+          sequence: 0,
+          text: 'must remain denied',
+        })
+      ).status,
+      'denied',
+    );
+    assert.deepEqual(s.writes, [['SYNTHETIC'], []]);
+  } finally {
+    s.service.close();
+  }
+});

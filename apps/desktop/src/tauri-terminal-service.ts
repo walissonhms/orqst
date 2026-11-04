@@ -82,7 +82,12 @@ export class TauriTerminalService {
               (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
             );
             if (detail.length > 4096 || (details.paste?.length ?? 0) > 1024) return false;
-            return this.confirm(slot, translate(`terminalNative.${details.operation}`), detail);
+            return this.confirm(
+              slot,
+              translate(`terminalNative.${details.operation}`),
+              detail,
+              details.operation === 'open' ? 'studio.tauri.open' : 'terminalNative.confirm',
+            );
           },
         },
       );
@@ -296,7 +301,12 @@ export class TauriTerminalService {
     }
   }
 
-  private confirm(slot: number, message: string, detail: string): Promise<boolean> {
+  private confirm(
+    slot: number,
+    message: string,
+    detail: string,
+    approve = 'terminalNative.confirm',
+  ): Promise<boolean> {
     const pane = this.panes[slot];
     if (!pane || this.closed || pane.state.closed || !pane.state.focused)
       return Promise.resolve(false);
@@ -317,7 +327,7 @@ export class TauriTerminalService {
         message,
         detail,
         cancel: this.translate('terminalNative.cancel'),
-        approve: this.translate('terminalNative.confirm'),
+        approve: this.translate(approve),
       });
     });
   }
