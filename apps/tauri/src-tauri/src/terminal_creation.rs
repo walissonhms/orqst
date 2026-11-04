@@ -1,10 +1,10 @@
-//! Native-menu-only preparation. Reuses the passive Node provisioning/selection flow.
-//! No renderer command, arbitrary program, CLI invocation or observer API is exposed.
+//! Native menu and Studio preparation reuse the same passive Node provisioning/selection flow.
+//! No arbitrary program, CLI invocation or observer API is exposed.
 use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::{Manager, WebviewWindow, Window, WindowEvent};
+use tauri::{Manager, Webview, WebviewWindow, Window, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -15,6 +15,7 @@ pub struct Preparation(Mutex<State>);
 #[derive(Default)]
 struct State {
     generation: u64,
+    origin: String,
     busy: bool,
     committed: bool,
     opened: bool,
@@ -117,36 +118,204 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         };
         let Some(request) = request else { return };
         let Ok(source) = window.url() else { return };
-        let generation = {
-            let state = app.state::<Preparation>();
-            let mut guard = state.0.lock().unwrap();
-            if !guard.begin(
-                request["action"] == "create",
-                crate::terminal::is_running(app),
-            ) {
-                return;
-            }
-            guard.generation
-        };
-        let app = app.clone();
-        tauri::async_runtime::spawn_blocking(move || {
-            if run(&app, &window, request, source.as_str(), generation).is_err() {
-                // Backend errors and selected paths are never printed to logs.
-                if window.is_visible().unwrap_or(false)
-                    && window.is_focused().unwrap_or(false)
-                    && app.state::<Preparation>().0.lock().unwrap().generation == generation
-                {
-                    app.dialog()
-                        .message(translate("tauriPreparation.denied"))
-                        .parent(&window)
-                        .blocking_show();
-                }
-            }
-            stop(&app);
-            app.state::<Preparation>().0.lock().unwrap().busy = false;
-        });
+        if let Some(generation) = begin(app, &request, None) {
+            let app = app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                execute(&app, &window, request, source.as_str(), generation);
+            });
+        }
     });
     Ok(())
+}
+
+fn exact(value: &Value, keys: &[&str]) -> bool {
+    value
+        .as_object()
+        .is_some_and(|v| v.len() == keys.len() && keys.iter().all(|k| v.contains_key(*k)))
+}
+fn valid_request(value: &Value) -> bool {
+    let generation = value["generation"]
+        .as_u64()
+        .is_some_and(|n| n <= 9_007_199_254_740_991);
+    match value["action"].as_str() {
+        Some("snapshot") => exact(value, &["action"]),
+        Some("review") => exact(value, &["action", "generation"]) && generation,
+        Some("create") => {
+            exact(value, &["action", "generation", "provider", "count"])
+                && generation
+                && matches!(value["provider"].as_str(), Some("codex" | "claude"))
+                && value["count"]
+                    .as_u64()
+                    .is_some_and(|n| (1..=8).contains(&n))
+        }
+        _ => false,
+    }
+}
+fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
+    let Ok(url) = tauri::Url::parse(source) else {
+        return false;
+    };
+    label == "main"
+        && parent == "main"
+        && url.origin().ascii_serialization() == origin
+        && matches!(url.path(), "/" | "/studio")
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+}
+fn identity(view: &Webview) -> Option<(String, u64)> {
+    let state = view.state::<Preparation>();
+    let guard = state.0.lock().unwrap();
+    let source = view.url().ok()?.to_string();
+    document_matches(view.label(), view.window().label(), &source, &guard.origin)
+        .then_some((source, guard.generation))
+}
+fn snapshot(app: &tauri::AppHandle) -> Value {
+    let running = crate::terminal::is_running(app);
+    let blocked = crate::terminal::presentation_blocked(app);
+    let state = app.state::<Preparation>();
+    let guard = state.0.lock().unwrap();
+    let available = !blocked && !guard.busy && !guard.opened && !running;
+    json!({"generation":guard.generation, "limit":8, "count":guard.prepared.len(),
+        "busy":guard.busy || blocked, "canCreate":available && !guard.committed,
+        "canReview":available && !guard.prepared.is_empty(), "selectionLocked":guard.opened || running})
+}
+/// The same atomic latches protect native menu and Studio, including uncertain writes/admission.
+fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Option<u64> {
+    if crate::terminal::presentation_blocked(app) {
+        return None;
+    }
+    let running = crate::terminal::is_running(app);
+    let state = app.state::<Preparation>();
+    let mut guard = state.0.lock().unwrap();
+    if expected.is_some_and(|generation| generation != guard.generation)
+        || !guard.begin(request["action"] == "create", running)
+    {
+        return None;
+    }
+    Some(guard.generation)
+}
+fn execute(
+    app: &tauri::AppHandle,
+    window: &WebviewWindow,
+    request: Value,
+    source: &str,
+    generation: u64,
+) -> bool {
+    let succeeded = run(app, window, request, source, generation).is_ok();
+    if !succeeded
+        && window.is_visible().unwrap_or(false)
+        && window.is_focused().unwrap_or(false)
+        && app.state::<Preparation>().0.lock().unwrap().generation == generation
+    {
+        app.dialog()
+            .message(translate("tauriPreparation.denied"))
+            .parent(window)
+            .blocking_show();
+    }
+    stop(app);
+    app.state::<Preparation>().0.lock().unwrap().busy = false;
+    succeeded
+}
+#[tauri::command]
+pub async fn studio_request(window: Webview, request: Value) -> Value {
+    let denied = || json!({"status":"denied"});
+    if !valid_request(&request) {
+        return denied();
+    }
+    let Some((source, generation)) = identity(&window) else {
+        return denied();
+    };
+    let app = window.app_handle().clone();
+    if request["action"] == "snapshot" {
+        return json!({"status":"ok", "snapshot":snapshot(&app)});
+    }
+    // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
+    if !crate::features::focused(&window).await {
+        return json!({"status":"focus_required"});
+    }
+    if identity(&window) != Some((source.clone(), generation))
+        || request["generation"].as_u64() != Some(generation)
+    {
+        return denied();
+    }
+    let Some(parent) = app.get_webview_window("main") else {
+        return denied();
+    };
+    let native_request = if request["action"] == "review" {
+        let files = app
+            .state::<Preparation>()
+            .0
+            .lock()
+            .unwrap()
+            .prepared
+            .clone();
+        if files.is_empty() {
+            return denied();
+        }
+        json!({"action":"review", "files":files})
+    } else {
+        json!({"action":"create", "provider":request["provider"], "count":request["count"]})
+    };
+    if begin(&app, &native_request, Some(generation)).is_none() {
+        let current = snapshot(&app);
+        return json!({"status":if current["busy"] == true { "busy" } else { "denied" }, "snapshot":current});
+    }
+    // Once admitted, the native task owns completion even if the JS invocation disappears.
+    let native_app = app.clone();
+    let native_source = source.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        execute(
+            &native_app,
+            &parent,
+            native_request,
+            &native_source,
+            generation,
+        )
+    })
+    .await;
+    if identity(&window) != Some((source, generation)) {
+        return denied();
+    }
+    json!({"status":if matches!(result, Ok(true)) { "ok" } else { "unavailable" }, "snapshot":snapshot(&app)})
+}
+pub fn configure(
+    app: &tauri::AppHandle,
+    origin: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    if !crate::terminal::install_quit_observer(app) {
+        return Err("Preparation focus observer unavailable".into());
+    }
+    app.state::<Preparation>().0.lock().unwrap().origin = origin.into();
+    app.add_capability(
+        tauri::ipc::CapabilityBuilder::new("studio-native-preparation")
+            .local(false)
+            .remote(format!("{origin}/"))
+            .remote(format!("{origin}/studio"))
+            .webview("main")
+            .permission("allow-studio-request"),
+    )?;
+    let client = std::fs::read_to_string(app.path().resource_dir()?.join("features/studio.js"))?;
+    Ok(format!(
+        "if(location.origin === {}) {{\n{client}\n}}",
+        json!(origin)
+    ))
+}
+/// Called on the AppKit thread by the existing process-lifetime observer.
+#[cfg(target_os = "macos")]
+pub(crate) fn native_key_changed(app: &tauri::AppHandle) {
+    if !app.state::<Preparation>().0.lock().unwrap().busy {
+        return;
+    }
+    let owned = app
+        .get_window("main")
+        .and_then(|window| crate::terminal::quit_window_focus(&window))
+        .is_some_and(|focus| focus.0);
+    if !owned {
+        invalidate(app);
+    }
 }
 
 fn run(
@@ -166,6 +335,7 @@ fn run(
             && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
             && !crate::terminal::is_running(app)
+            && !crate::terminal::presentation_blocked(app)
     };
     if !window.is_focused().unwrap_or(false) || !current() {
         return Err("Preparation document unavailable".into());
@@ -361,16 +531,93 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
 
 #[cfg(test)]
 mod tests {
-    use super::{create_action, invalidates_preparation, State};
+    use super::{create_action, document_matches, invalidates_preparation, valid_request, State};
+    use serde_json::json;
     use tauri::WindowEvent;
 
     #[test]
+    fn studio_requests_are_strict_bounded_and_cannot_supply_native_authority() {
+        assert!(valid_request(&json!({"action":"snapshot"})));
+        assert!(valid_request(&json!({"action":"review","generation":3})));
+        for provider in ["codex", "claude"] {
+            for count in 1..=8 {
+                assert!(valid_request(
+                    &json!({"action":"create","generation":3,"provider":provider,"count":count})
+                ));
+            }
+        }
+        for request in [
+            json!({"action":"createMixed"}),
+            json!({"action":"start"}),
+            json!({"action":"review","generation":3,"files":["/SYNTHETIC"]}),
+            json!({"action":"create","generation":3,"provider":"opencode","count":2}),
+            json!({"action":"create","generation":3,"provider":"codex","count":9}),
+            json!({"action":"create","generation":3,"provider":"codex","count":0}),
+            json!({"action":"create","generation":-1,"provider":"codex","count":1}),
+            json!({"action":"review","generation":9_007_199_254_740_992u64}),
+        ] {
+            assert!(!valid_request(&request));
+        }
+        for field in ["path", "pid", "proof", "source", "method", "mcp"] {
+            let mut request =
+                json!({"action":"create","generation":3,"provider":"codex","count":1});
+            request[field] = json!("SYNTHETIC");
+            assert!(!valid_request(&request));
+        }
+    }
+    #[test]
+    fn studio_authenticates_actual_webview_parent_and_exact_dashboard_document() {
+        let origin = "http://127.0.0.1:4319";
+        for path in ["/", "/studio"] {
+            assert!(document_matches(
+                "main",
+                "main",
+                &format!("{origin}{path}"),
+                origin
+            ));
+        }
+        for url in [
+            "http://127.0.0.1:4320/studio",
+            "http://localhost:4319/studio",
+            "https://127.0.0.1:4319/studio",
+            "http://127.0.0.1:4319/studio?path=x",
+            "http://127.0.0.1:4319/studio#x",
+            "http://user@127.0.0.1:4319/studio",
+            "http://127.0.0.1:4319/settings",
+            "orqst-terminal://local/index.html",
+        ] {
+            assert!(!document_matches("main", "main", url, origin));
+        }
+        for (label, parent) in [
+            ("iframe", "main"),
+            ("main", "terminal-workspace"),
+            ("terminal-0", "main"),
+        ] {
+            assert!(!document_matches(
+                label,
+                parent,
+                &format!("{origin}/studio"),
+                origin
+            ));
+        }
+    }
+
+    #[test]
     fn another_native_surface_fences_preparation_without_treating_a_modal_as_blur() {
-        assert!(!invalidates_preparation("main", &WindowEvent::Focused(false)));
-        assert!(!invalidates_preparation("main", &WindowEvent::Focused(true)));
+        assert!(!invalidates_preparation(
+            "main",
+            &WindowEvent::Focused(false)
+        ));
+        assert!(!invalidates_preparation(
+            "main",
+            &WindowEvent::Focused(true)
+        ));
         for label in ["terminal-workspace", "managed-agents"] {
             assert!(invalidates_preparation(label, &WindowEvent::Focused(true)));
-            assert!(!invalidates_preparation(label, &WindowEvent::Focused(false)));
+            assert!(!invalidates_preparation(
+                label,
+                &WindowEvent::Focused(false)
+            ));
             assert!(!invalidates_preparation(label, &WindowEvent::Destroyed));
         }
         assert!(invalidates_preparation("main", &WindowEvent::Destroyed));

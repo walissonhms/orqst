@@ -27,7 +27,7 @@ fn main() {
         .manage(agents::Agents::default())
         .manage(files::Files::default())
         .manage(features::Features::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request])
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request, terminal_creation::studio_request])
         .manage(terminal_creation::Preparation::default())
         .on_window_event(|window,event| { terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
@@ -72,6 +72,7 @@ fn main() {
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle()))?;
             let allowed_origin = origin.clone();
             let feature_client = features::configure(app.handle(), &origin)?;
+            let studio_client = terminal_creation::configure(app.handle(), &origin)?;
             let file_client = match tauri::async_runtime::block_on(files::start(app.handle(), &origin)) {
                 Ok(client) => client,
                 Err(_) => {
@@ -86,6 +87,7 @@ fn main() {
                 .user_agent("ORQSTTauri/0.1 ORQSTDesktop/0.1")
                 .initialization_script(file_client)
                 .initialization_script(feature_client)
+                .initialization_script(studio_client)
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(720.0, 480.0)
                 .on_navigation(move |url| {
@@ -135,6 +137,7 @@ fn main() {
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event { desktop::focus(app); }
             if let tauri::RunEvent::ExitRequested { ref api, .. } = event {
+                terminal_creation::invalidate(app);
                 if terminal::confirm_exit(app) || agents::confirm_exit(app) { api.prevent_exit(); }
             }
             if let tauri::RunEvent::Exit = event {

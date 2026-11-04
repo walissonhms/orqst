@@ -6,6 +6,7 @@ fn main() {
             "agents_request",
             "file_request",
             "feature_request",
+            "studio_request",
         ]),
     ))
     .expect("native permission manifest");
