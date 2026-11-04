@@ -87,3 +87,11 @@ real model application/readiness, packaging and the second-terminal workflow are
 not validated by renderer or pure tests. The first xterm regression exposed a
 serialized test helper and a camel-case HTML data-attribute lookup; both were
 corrected without weakening the runtime assertions.
+
+## Incremental native source follow-up — 2026-11-04
+
+The one-selection source restriction described above is superseded by the
+[retained native enrollment increment](terminal-native-enrollment.md). It appends
+one selected CLI/model to the same Core/service/Webview workspace and preserves
+Feature layouts. Runtime/native/provider acceptance remains pending; the running
+Preview has not been rebuilt or replaced.

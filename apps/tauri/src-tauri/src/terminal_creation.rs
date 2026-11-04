@@ -271,10 +271,16 @@ fn snapshot(app: &tauri::AppHandle) -> Value {
     let blocked = crate::terminal::presentation_blocked(app);
     let state = app.state::<Preparation>();
     let guard = state.0.lock().unwrap();
-    let available = !blocked && !guard.busy && !guard.opened && !running;
-    json!({"generation":guard.generation, "limit":8, "count":guard.prepared.len(),
+    let available = !blocked
+        && !guard.busy
+        && if running {
+            crate::terminal::enrollment_available(app)
+        } else {
+            !guard.opened
+        };
+    json!({"generation":guard.generation, "limit":8, "count":guard.prepared.len(), "liveEnrollment":running,
         "busy":guard.busy || blocked, "canCreate":available && !guard.committed,
-        "canReview":available && !guard.prepared.is_empty(), "selectionLocked":guard.opened || running})
+        "canReview":available && !running && !guard.prepared.is_empty(), "selectionLocked":if running { !available } else { guard.opened }})
 }
 /// The same atomic latches protect native menu and Studio, including uncertain writes/admission.
 fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Option<u64> {
@@ -282,16 +288,37 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
         return None;
     }
     let running = crate::terminal::is_running(app);
+    let incremental = running
+        && matches!(
+            request["action"].as_str(),
+            Some("catalog" | "create-selected")
+        );
+    if running
+        && (!incremental
+            || !crate::terminal::enrollment_available(app)
+            || (request["action"] == "create-selected" && request["count"] != 1))
+    {
+        return None;
+    }
     let state = app.state::<Preparation>();
     let mut guard = state.0.lock().unwrap();
     if expected.is_some_and(|generation| generation != guard.generation)
-        || !guard.begin(
-            matches!(
-                request["action"].as_str(),
-                Some("create" | "create-selected")
-            ),
-            running,
-        )
+        || if incremental {
+            if guard.busy || guard.committed {
+                true
+            } else {
+                guard.busy = true;
+                false
+            }
+        } else {
+            !guard.begin(
+                matches!(
+                    request["action"].as_str(),
+                    Some("create" | "create-selected")
+                ),
+                running,
+            )
+        }
     {
         return None;
     }
@@ -447,7 +474,11 @@ fn run(
             && window.is_visible().unwrap_or(false)
             && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
-            && !crate::terminal::is_running(app)
+            && (!crate::terminal::is_running(app)
+                || (matches!(
+                    request["action"].as_str(),
+                    Some("catalog" | "create-selected")
+                ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
     };
     if !window.is_focused().unwrap_or(false) || !current() {
@@ -634,16 +665,40 @@ fn run(
     if result["status"] == "open" && current() {
         // Latch before entering Core. Never retry uncertain admission, even on failure.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
-        if let Err(error) =
+        let live_enrollment = crate::terminal::is_running(app);
+        let opened = if live_enrollment {
+            if request["action"] != "create-selected" || files.len() != 1 {
+                return Err("Native enrollment requires one selected member".into());
+            }
+            tauri::async_runtime::block_on(crate::terminal::enroll_selected(
+                app,
+                &files[0],
+                result["previousLayout"].clone(),
+            ))
+        } else {
             tauri::async_runtime::block_on(crate::terminal::start_selected_with_open(
                 app,
                 files,
                 request["action"] == "create-selected",
             ))
-        {
-            crate::terminal::stop(app);
+        };
+        if let Err(error) = opened {
+            // Only a confirmed pre-effect refusal may release the creation latch.
+            // Files/Feature metadata remain as evidence; no original operation is retried.
+            if live_enrollment && crate::terminal::enrollment_available(app) {
+                let state = app.state::<Preparation>();
+                let mut guard = state.0.lock().unwrap();
+                guard.committed = false;
+                guard.opened = false;
+            }
+            // The existing Core, PTYs and documents survive rejected/uncertain additions.
             return Err(error);
         }
+        let state = app.state::<Preparation>();
+        let mut guard = state.0.lock().unwrap();
+        guard.prepared.clear();
+        guard.committed = false;
+        guard.opened = false;
     } else if result["status"] != "prepared" {
         return Err("Invalid preparation status".into());
     }

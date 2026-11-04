@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Native incremental terminal source — 2026-11-04
+
+Service, retained Webview, xterm navigation and Feature/layout append are now wired
+to the frozen enrollment Core. Complete Cargo/native/provider/model/cleanup and
+packaging acceptance when coordinated disk/process gates permit it. Pure/facade
+evidence does not close those gates. See [source and checks](docs/development/terminal-native-enrollment.md).
+
 ## Normal terminal opening — 2026-11-04
 
 The CLI/model preparation Core now resolves existing workspaces and forwards actual

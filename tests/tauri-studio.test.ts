@@ -232,3 +232,21 @@ test('catalog replies validate source, unverified availability and bounded provi
   ])
     assert.equal(tauriStudioReplySchema.safeParse({ status: 'catalog', catalog }).success, false);
 });
+
+test('native live-enrollment capability is optional metadata and carries no path or capacity authority', () => {
+  assert.equal(tauriStudioReplySchema.safeParse({ status: 'ok', snapshot: empty }).success, true);
+  assert.equal(
+    tauriStudioReplySchema.safeParse({ status: 'ok', snapshot: { ...empty, liveEnrollment: true } })
+      .success,
+    true,
+  );
+  for (const extra of [
+    { liveEnrollment: 'true' },
+    { capacity: 64 },
+    { manifestFile: '/SYNTHETIC' },
+  ])
+    assert.equal(
+      tauriStudioReplySchema.safeParse({ status: 'ok', snapshot: { ...empty, ...extra } }).success,
+      false,
+    );
+});

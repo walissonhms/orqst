@@ -22,6 +22,10 @@ mod native_focus;
 pub struct Terminals(Mutex<Option<Running>>);
 struct Running {
     child: CommandChild,
+    epoch: String,
+    capacity: usize,
+    enrollment_pending: bool,
+    enrollment_fenced: bool,
     documents: Vec<String>,
     layout: Value,
     generations: Vec<u64>,
@@ -213,7 +217,7 @@ pub(crate) async fn metadata_request(
                     r.retiring,
                     r.mcp_request.is_some(),
                     &r.reviewing,
-                    r.metadata_mutating.is_some(),
+                    r.metadata_mutating.is_some() || r.enrollment_pending,
                 ) || r.native_dialog.is_some()))
         {
             return json!({"status":"busy"});
@@ -714,6 +718,7 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
             || r.revoked[slot]
             || !r.loaded[slot]
             || r.metadata_mutating.is_some()
+            || r.enrollment_pending
             || r.confirming_quit
             || r.exit_authorized
             || r.retiring
@@ -758,7 +763,7 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         .lock()
         .unwrap()
         .as_ref()
-        .is_some_and(|r| r.retiring || r.metadata_mutating.is_some());
+        .is_some_and(|r| r.retiring || r.metadata_mutating.is_some() || r.enrollment_pending);
     if retiring || presentation_blocked(app) || !focused(&window).await {
         return json!(false);
     }
@@ -964,7 +969,7 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else { return };
-        if r.native_dialog.is_some() || r.metadata_mutating.is_some() {
+        if r.native_dialog.is_some() || r.metadata_mutating.is_some() || r.enrollment_pending {
             drop(guard);
             send(app, json!({"kind":"confirm", "id":id, "accepted":false}));
             return;
@@ -1041,7 +1046,7 @@ async fn authorize_mcp(app: &tauri::AppHandle) {
             r.retiring,
             r.mcp_request.is_some(),
             &r.busy,
-            r.metadata_mutating.is_some(),
+            r.metadata_mutating.is_some() || r.enrollment_pending,
         ) || count != 2
             || !r.loaded[slot]
             || r.revoked.iter().any(|revoked| *revoked)
@@ -1127,7 +1132,7 @@ async fn retire_selection(app: &tauri::AppHandle) {
             r.retiring,
             r.mcp_request.is_some(),
             &r.busy,
-            r.metadata_mutating.is_some(),
+            r.metadata_mutating.is_some() || r.enrollment_pending,
         ) || !r.pending.is_empty()
             || !r.loaded[slot]
             || r.revoked[slot]
@@ -1210,6 +1215,236 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
     start_selected(app, paths).await
 }
 
+/// Capacity is fixed by the original native host ready; renderer cannot increase it.
+pub fn enrollment_available(app: &tauri::AppHandle) -> bool {
+    !presentation_blocked(app)
+        && app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .is_some_and(|r| {
+                !r.enrollment_fenced
+                    && !r.enrollment_pending
+                    && r.documents.len() < r.capacity
+                    && !r.retiring
+                    && r.metadata_mutating.is_none()
+                    && r.native_dialog.is_none()
+                    && r.mcp_request.is_none()
+                    && !r.reviewing.iter().any(|busy| *busy)
+            })
+}
+
+fn create_terminal_view(
+    app: &tauri::AppHandle,
+    slot: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let workspace = app
+        .get_window("terminal-workspace")
+        .ok_or("Missing retained workspace")?;
+    let label = format!("terminal-{slot}");
+    let handle = app.clone();
+    let expected = url(slot);
+    let builder = WebviewBuilder::new(&label, WebviewUrl::External(expected.parse()?))
+        .focused(false)
+        .disable_drag_drop_handler()
+        .on_navigation(move |url| url.as_str() == expected)
+        .on_new_window(|_, _| NewWindowResponse::Deny)
+        .on_page_load(move |window, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                let state = window.state::<Terminals>();
+                let mut guard = state.0.lock().unwrap();
+                let reload = guard.as_ref().is_some_and(|r| r.loaded[slot]);
+                if let Some(r) = guard.as_mut() {
+                    r.loaded[slot] = true;
+                    r.revoked[slot] |= reload;
+                }
+                drop(guard);
+                if reload {
+                    metadata_invalidate(&handle);
+                    revoke(&handle, slot, true);
+                }
+            }
+        });
+    let view = workspace.add_child(
+        builder,
+        tauri::LogicalPosition::new(0.0, 0.0),
+        tauri::LogicalSize::new(1280.0, 860.0),
+    )?;
+    view.hide()?;
+    Ok(())
+}
+
+fn valid_enrollment(value: &Value, id: &str, epoch: &str, slot: usize, capacity: usize) -> bool {
+    let receipt = &value["receipt"];
+    let member = &receipt["member"];
+    value["status"] == "ready"
+        && receipt["version"] == 1
+        && receipt["status"] == "ready"
+        && receipt["reason"] == "admitted"
+        && receipt["epoch"] == epoch
+        && receipt["opId"] == id
+        && slot < capacity
+        && member["slot"].as_u64() == Some(slot as u64)
+        && member["status"] == "ready"
+        && crate::features::uuid(&member["terminalId"])
+        && member["admissionRevision"]
+            .as_u64()
+            .is_some_and(|n| n > 0 && receipt["revision"].as_u64() == Some(n))
+        && matches!(
+            value["pane"]["profileId"].as_str(),
+            Some("codex-terminal-v1" | "claude-terminal-v1" | "opencode-terminal-v1")
+        )
+        && value["pane"]["html"]
+            .as_str()
+            .is_some_and(|html| !html.is_empty() && html.len() <= 256 * 1024)
+}
+
+/// Private native provisioning result only. No renderer command accepts a manifest path.
+pub(crate) async fn enroll_selected(
+    app: &tauri::AppHandle,
+    manifest: &str,
+    previous_layout: Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !enrollment_available(app) {
+        return Err("Native enrollment unavailable".into());
+    }
+    let (id, epoch, generation, slot, receiver) = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        if r.enrollment_fenced
+            || r.enrollment_pending
+            || r.documents.len() >= r.capacity
+            || r.retiring
+            || r.metadata_mutating.is_some()
+            || r.confirming_quit
+            || r.exit_authorized
+        {
+            return Err("Native enrollment busy".into());
+        }
+        r.sequence += 1;
+        let id = format!("00000000-0000-4000-8000-{:012x}", r.sequence);
+        let (sender, receiver) = oneshot::channel();
+        r.pending.insert(id.clone(), sender);
+        r.enrollment_pending = true;
+        // Once a mutation may have reached Core, uncertainty never unlocks enrollment.
+        r.enrollment_fenced = true;
+        let message = json!({"kind":"enroll", "id":id, "epoch":r.epoch,
+            "generation":r.layout_generation, "manifestFile":manifest, "previousLayout":previous_layout});
+        if r.child.write(format!("{message}\n").as_bytes()).is_err() {
+            r.pending.remove(&id);
+            r.enrollment_pending = false;
+            return Err("Enrollment transport uncertain".into());
+        }
+        (
+            id,
+            r.epoch.clone(),
+            r.layout_generation,
+            r.documents.len(),
+            receiver,
+        )
+    };
+    // The Core's isolated deadline is 12s. This transport never closes old terminals on timeout.
+    let result = tokio::time::timeout(Duration::from_secs(14), receiver).await;
+    let value = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        r.pending.remove(&id); // Late ACK has no consumer and cannot materialize a document.
+        r.enrollment_pending = false;
+        let value = result
+            .ok()
+            .and_then(Result::ok)
+            .ok_or("Enrollment result uncertain")?;
+        if value["status"] == "rejected" {
+            r.enrollment_fenced = false;
+            return Err("Enrollment rejected; prepared metadata preserved".into());
+        }
+        if r.epoch != epoch
+            || r.layout_generation != generation
+            || r.confirming_quit
+            || r.exit_authorized
+            || !valid_enrollment(&value, &id, &epoch, slot, r.capacity)
+            || r.documents.len() != slot
+        {
+            return Err("Enrollment result incomplete or uncertain".into());
+        }
+        // Append only. Existing documents, generations, busy state and opening intents are retained.
+        r.documents
+            .push(value["pane"]["html"].as_str().unwrap().into());
+        r.generations.push(0);
+        r.loaded.push(false);
+        r.revoked.push(false);
+        r.pending_open.push(None);
+        r.busy.push(false);
+        r.reviewing.push(false);
+        value
+    };
+    let (sender, receiver) = oneshot::channel();
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let current =
+            !presentation_blocked(&handle) && metadata_generation(&handle) == Some(generation);
+        let created = current && create_terminal_view(&handle, slot).is_ok();
+        let _ = sender.send(created);
+    })?;
+    if !tokio::time::timeout(Duration::from_secs(5), receiver)
+        .await
+        .is_ok_and(|r| matches!(r, Ok(true)))
+    {
+        return Err("Native document creation incomplete".into());
+    }
+    {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        if r.epoch != epoch
+            || r.layout_generation != generation
+            || r.confirming_quit
+            || r.exit_authorized
+        {
+            return Err("Enrollment presentation expired".into());
+        }
+        r.pending_open[slot] = Some(OpeningIntent {
+            profile: value["pane"]["profileId"].as_str().unwrap().into(),
+            document: r.generations[slot],
+            presentation: generation,
+            expires: Instant::now() + Duration::from_secs(60),
+        });
+        r.presentation_suspended = false;
+    }
+    let receiver = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let r = guard.as_mut().ok_or("Original Core unavailable")?;
+        let (sender, receiver) = oneshot::channel();
+        r.pending.insert(id.clone(), sender);
+        receiver
+    };
+    send(
+        app,
+        json!({"kind":"enrollment-present", "id":id, "generation":generation}),
+    );
+    let presented = tokio::time::timeout(Duration::from_secs(10), receiver).await;
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    let r = guard.as_mut().ok_or("Original Core unavailable")?;
+    r.pending.remove(&id);
+    if !matches!(presented, Ok(Ok(ref value)) if value["kind"] == "enrollment-presented" && value["ready"] == true)
+        || r.epoch != epoch
+        || r.layout_generation != generation
+        || r.confirming_quit
+        || r.exit_authorized
+    {
+        r.pending_open[slot] = None;
+        return Err("Enrollment presentation incomplete".into());
+    }
+    r.enrollment_fenced = false;
+    Ok(())
+}
+
 pub fn is_running(app: &tauri::AppHandle) -> bool {
     app.state::<Terminals>().0.lock().unwrap().is_some()
 }
@@ -1228,7 +1463,7 @@ pub async fn start_selected_with_open(
     operational_open: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if is_running(app) {
-        return Err("Managed terminals already open".into());
+        return Err("Existing Core requires explicit native enrollment".into());
     }
     if paths.is_empty() || paths.len() > 8 || paths.iter().any(|p| p.len() > 2048) {
         return Err("Invalid explicit managed terminal selection".into());
@@ -1313,6 +1548,17 @@ pub async fn start_selected_with_open(
     let exited = Arc::new(Notify::new());
     *app.state::<Terminals>().0.lock().unwrap() = Some(Running {
         child,
+        epoch: ready["epoch"]
+            .as_str()
+            .filter(|_| crate::features::uuid(&ready["epoch"]))
+            .ok_or("Missing Core epoch")?
+            .into(),
+        capacity: ready["capacity"]
+            .as_u64()
+            .filter(|n| *n >= count as u64 && *n <= 8)
+            .ok_or("Missing native Core capacity")? as usize,
+        enrollment_pending: false,
+        enrollment_fenced: false,
         documents,
         layout: ready["layout"].clone(),
         generations: vec![0; count],
@@ -1369,35 +1615,7 @@ pub async fn start_selected_with_open(
             true,
             None::<&str>,
         )?)?;
-        let handle = app.clone();
-        let expected = url(slot);
-        let builder = WebviewBuilder::new(&label, WebviewUrl::External(expected.parse()?))
-            .focused(false)
-            .disable_drag_drop_handler()
-            .on_navigation(move |url| url.as_str() == expected)
-            .on_new_window(|_, _| NewWindowResponse::Deny)
-            .on_page_load(move |window, payload| {
-                if payload.event() == tauri::webview::PageLoadEvent::Started {
-                    let state = window.state::<Terminals>();
-                    let mut guard = state.0.lock().unwrap();
-                    let reload = guard.as_ref().is_some_and(|r| r.loaded[slot]);
-                    if let Some(r) = guard.as_mut() {
-                        r.loaded[slot] = true;
-                        r.revoked[slot] |= reload;
-                    }
-                    drop(guard);
-                    if reload {
-                        metadata_invalidate(&handle);
-                        revoke(&handle, slot, true);
-                    }
-                }
-            });
-        let view = workspace.add_child(
-            builder,
-            tauri::LogicalPosition::new(0.0, 0.0),
-            tauri::LogicalSize::new(1280.0, 860.0),
-        )?;
-        view.hide()?;
+        create_terminal_view(app, slot)?;
     }
     let handle = app.clone();
     let target = workspace.clone();
@@ -1494,7 +1712,9 @@ pub async fn start_selected_with_open(
                 .lock()
                 .unwrap()
                 .as_ref()
-                .is_some_and(|r| r.retiring || r.metadata_mutating.is_some())
+                .is_some_and(|r| {
+                    r.retiring || r.metadata_mutating.is_some() || r.enrollment_pending
+                })
             {
                 return;
             }
@@ -1533,6 +1753,16 @@ pub async fn start_selected_with_open(
                             if valid {
                                 if let Some(pending) = r.metadata_pending.remove(id) {
                                     let _ = pending.sender.send(value["value"].clone());
+                                }
+                            }
+                        }
+                    } else if value["kind"] == "enrollment-reply"
+                        || value["kind"] == "enrollment-presented"
+                    {
+                        if let Some(id) = value["id"].as_str() {
+                            if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+                                if let Some(sender) = r.pending.remove(id) {
+                                    let _ = sender.send(value.clone());
                                 }
                             }
                         }
@@ -1703,7 +1933,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         let Some(r) = guard.as_mut() else {
             return false;
         };
-        if r.metadata_mutating.is_some() {
+        if r.metadata_mutating.is_some() || r.enrollment_pending {
             // Admission and the Quit latch share the same lock; no review can race a mutation.
             advance_layout(r);
             drop(guard);
@@ -1835,5 +2065,36 @@ mod opening_tests {
             incomplete_open(&json!({"status":"ok","instanceId":"forged"})),
             json!({"status":"denied"})
         );
+    }
+}
+
+#[cfg(test)]
+mod enrollment_tests {
+    use super::valid_enrollment;
+    use serde_json::json;
+    #[test]
+    fn only_exact_ready_receipts_can_append_native_documents() {
+        let id = "00000000-0000-4000-8000-000000000010";
+        let epoch = "00000000-0000-4000-8000-000000000011";
+        let ready = json!({"status":"ready","receipt":{"version":1,"status":"ready",
+            "reason":"admitted","epoch":epoch,"opId":id,"revision":1,"member":{
+            "slot":2,"status":"ready","terminalId":"00000000-0000-4000-8000-000000000012",
+            "admissionRevision":1}},"pane":{"profileId":"claude-terminal-v1","html":"SYNTHETIC"}});
+        assert!(valid_enrollment(&ready, id, epoch, 2, 8));
+        for status in ["rejected", "uncertain"] {
+            let mut value = ready.clone();
+            value["status"] = json!(status);
+            assert!(!valid_enrollment(&value, id, epoch, 2, 8));
+            value["status"] = json!("ready");
+            value["receipt"]["status"] = json!(status);
+            assert!(!valid_enrollment(&value, id, epoch, 2, 8));
+        }
+        assert!(!valid_enrollment(&ready, epoch, epoch, 2, 8));
+        assert!(!valid_enrollment(&ready, id, id, 2, 8));
+        assert!(!valid_enrollment(&ready, id, epoch, 3, 8));
+        assert!(!valid_enrollment(&ready, id, epoch, 2, 2));
+        let mut value = ready;
+        value["receipt"]["member"]["admissionRevision"] = json!(2);
+        assert!(!valid_enrollment(&value, id, epoch, 2, 8));
     }
 }

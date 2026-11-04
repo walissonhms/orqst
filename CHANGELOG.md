@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-04 — Native incremental terminal source
+
+- Append a selected CLI/model to the existing Core, broker service and retained
+  native workspace; preserve older terminal documents and xterm scrollback.
+- Preserve UUID layout metadata across Feature membership CAS; fence late ACK,
+  native creation/presentation failure and uncertain effects without restarting Core.
+- Pass session-free and EN/PT xterm-facade checks; native compilation/provider
+  execution and packaging remain pending. See [checks and limits](docs/development/terminal-native-enrollment.md).
+
 ## 2026-11-04 — CLI/model preparation Core
 
 - Resolve the selected workspace from the native-owned observer database in

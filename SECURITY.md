@@ -988,3 +988,10 @@ remain unchanged. Legacy Start grants startup only. Current selection remains
 one-shot per app launch; live enrollment needs its own ownership/admission review.
 Pure/renderer checks do not prove native/provider acceptance; Cargo remains pending
 while coordinated disk margin is unavailable.
+
+Native incremental terminal enrollment is restricted to the inherited owned
+parent/Core pipe. Epoch/CAS/capacity and exact document/presentation fences remain
+separate from signed Start/output/input grants. Uncertain additions are retained,
+not retried or adopted; no renderer-controlled manifest or public endpoint is
+introduced. Native/provider acceptance is still pending. See
+[the source increment](docs/development/terminal-native-enrollment.md).

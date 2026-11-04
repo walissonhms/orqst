@@ -2,6 +2,7 @@ import {
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
   type TerminalPreparationCatalog,
+  type TerminalLayoutRecord,
 } from '@orqst/protocol';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import {
@@ -43,7 +44,11 @@ export async function prepareTauriTerminals(
   now: () => number = Date.now,
   trusted?: TerminalPreparationContext,
 ): Promise<
-  | { status: 'cancelled' | 'prepared' | 'open'; files: string[] }
+  | {
+      status: 'cancelled' | 'prepared' | 'open';
+      files: string[];
+      previousLayout?: TerminalLayoutRecord;
+    }
   | { status: 'catalog'; catalog: TerminalPreparationCatalog }
 > {
   const request = tauriPreparationSchema.parse(raw);
@@ -108,8 +113,10 @@ export async function prepareTauriTerminals(
     files = plan.provision(reviewed);
     const selection = inspectManagedTerminalFiles(files, 8);
     if (selection.some((entry) => entry.blocker)) throw new Error('Prepared selection blocked');
+    let previousLayout: TerminalLayoutRecord | null = null;
     if (request.featureId !== null) {
       let feature = discovered.workspace.features.read(request.featureId);
+      previousLayout = discovered.workspace.features.readLayout(request.featureId);
       for (const member of selection) {
         if (!reviewed()) throw new Error('Feature enrollment expired');
         feature = discovered.workspace.features.assignTerminal(
@@ -119,7 +126,7 @@ export async function prepareTauriTerminals(
         );
       }
     }
-    return { status: 'open', files };
+    return { status: 'open', files, ...(previousLayout ? { previousLayout } : {}) };
   }
   if (request.action === 'create') {
     const executable = await ports.choose(false);

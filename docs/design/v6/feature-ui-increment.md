@@ -20,3 +20,13 @@ The final Chromium screenshot comparison remains pending after the failed EN
 acceptance and owner pause; it will not establish native WebKit acceptance.
 Floating, safe lifecycle archive/removal, full minimized dock,
 verified models and cross-Feature communication remain separate increments.
+
+## Incremental native source — 2026-11-04
+
+The existing + Terminal drawer/CLI/model choice now reaches append-only native
+enrollment in the same Core. Old terminal Webviews/xterm remain mounted; their
+navigation grows in place. Feature CAS and UUID layout-key extension preserve
+prior visual metadata; an uncertain addition remains explicitly unavailable. No
+redesign or simulated terminal content is introduced. Pure/EN/PT facade checks
+passed; actual native/provider acceptance is pending. See
+[workflow and limitations](../../development/terminal-native-enrollment.md).

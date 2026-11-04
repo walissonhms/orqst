@@ -1405,3 +1405,15 @@ revision. Admission grants no Start/attach/input. Exclusive durable records reta
 partial effects and capacity, with no automatic release/retry/adoption; timeout
 and stale acknowledgments do not disconnect or renew previous panes. Native
 presentation/layout and real-provider acceptance remain separate.
+
+## Incremental native retained views — 2026-11-04
+
+Only the native provisioning result supplies enrollment manifest paths over the
+existing inherited pipe. Original Core epoch/capacity, native UUID and CAS bind
+admission; renderer inputs cannot raise capacity or authorize execution. Confirmed
+ready appends one broker/document, with distinct existing signed Open grants.
+Timeout removes the native correlation; late ACK or inspect cannot create/adopt a
+Webview. Rejection/uncertainty and creation/presentation failure preserve the old
+Core/documents/evidence. No observer endpoint, listener, cookie/CSP or WebSocket
+change is introduced. Native/provider acceptance remains pending; see the
+[workflow/security review](../development/terminal-native-enrollment.md).

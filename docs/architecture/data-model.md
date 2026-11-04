@@ -523,3 +523,13 @@ records together with every owned attempt; uncertain partial records reserve
 capacity and cannot retire. No observer Store/migration, native history or event
 payload is modified. Per-slot journals and their quotas remain unchanged; enrolled
 Start manifest digests additionally bind the copied admission revision/hash.
+
+## Incremental native layout membership — 2026-11-04
+
+The native preparation path captures the old Feature layout before membership CAS.
+After a confirmed Core enrollment, it writes an expanded UUID layout through the
+existing Feature layout store, retaining the previous membership-key record. Names,
+order, sizing and hidden state remain visual metadata, never execution authority.
+Rejected/uncertain enrollment may retain assigned metadata with no usable native
+slot; no rollback or automatic process adoption is performed. No schema migration
+is introduced. See [workflow](../development/terminal-native-enrollment.md).

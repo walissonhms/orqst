@@ -1,5 +1,12 @@
 # ORQST
 
+The [incremental native terminal source](docs/development/terminal-native-enrollment.md)
+now appends a selected CLI/model to the same Core and retained native workspace,
+with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks
+pass; native compilation, WebKit/provider execution and packaging remain pending.
+Earlier one-selection descriptions below record the previous increment. The open
+Preview keeps its existing executable/resources.
+
 The [private incremental Core enrollment API](docs/api/terminal-enrollment.md) can
 append prepared independent slots to the same owned Pair without rebuilding old
 supervisors. `ready` means admitted, with separate signed launch/output/input.

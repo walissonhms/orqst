@@ -71,6 +71,7 @@ try {
       canCreate: true,
       canReview: false,
       selectionLocked: false,
+      liveEnrollment: true,
     });
     let catalog = terminalPreparationCatalogSchema.parse({
       contractVersion: 1,
@@ -134,6 +135,12 @@ try {
     const model = drawer.getByLabel(locale.studio.tauri.model, { exact: true });
     const open = drawer.getByRole('button', { name: locale.studio.tauri.open, exact: true });
     await expect(provider.locator('option')).toHaveCount(3);
+    await drawer.locator('.studio-advanced > summary').click();
+    await expect(drawer.getByLabel(locale.studio.tauri.count, { exact: true })).toBeDisabled();
+    await expect(
+      drawer.getByText(locale.studio.tauri.advancedInitialOnly, { exact: true }),
+    ).toBeVisible();
+    await drawer.locator('.studio-advanced > summary').click();
     await expect(open).toBeDisabled();
     for (const [value, id] of [
       ['codex', '1'],
