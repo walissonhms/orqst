@@ -6,6 +6,7 @@
 
 #[path = "sidecar_availability.rs"]
 mod availability;
+use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
 use availability::Availability;
 use std::sync::Arc;
 use std::time::Duration;
@@ -40,7 +41,15 @@ fn ready_origin(line: &[u8]) -> Option<String> {
     (port >= 1024).then(|| format!("http://127.0.0.1:{port}"))
 }
 
-pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error::Error>> {
+pub async fn start(
+    app: &tauri::AppHandle,
+    diagnostic: Attempt,
+) -> Result<String, Box<dyn std::error::Error>> {
+    diagnostic.record(
+        Stage::ObserverStartup,
+        Outcome::Requested,
+        Effects::Unconfirmed,
+    );
     let state = app.state::<DesktopCore>();
     // Hold the lock across start/readiness: two attachments cannot spawn duplicates.
     let mut state = state.0.lock().await;
@@ -83,6 +92,11 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
         .env("ORQST_DEV", "0")
         .env("ORQST_NATIVE_MONITOR", "1");
     let (mut rx, child) = command.spawn()?;
+    diagnostic.record(
+        Stage::ObserverStartup,
+        Outcome::Started,
+        Effects::Unconfirmed,
+    );
     let pid = child.pid();
     let exited = Arc::new(Notify::new());
     // Retain ownership even if readiness times out or the pipe is uncertain.
@@ -98,13 +112,34 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
                 CommandEvent::Stdout(line) => {
                     bytes = bytes.saturating_add(line.len());
                     if bytes > 1024 {
+                        diagnostic.record(
+                            Stage::ObserverStartup,
+                            Outcome::ProtocolRejected,
+                            Effects::Unconfirmed,
+                        );
                         return None;
                     }
-                    return ready_origin(&line);
+                    let origin = ready_origin(&line);
+                    if origin.is_none() {
+                        diagnostic.record(
+                            Stage::ObserverStartup,
+                            Outcome::ProtocolRejected,
+                            Effects::Unconfirmed,
+                        );
+                    }
+                    return origin;
                 }
-                CommandEvent::Error(_) => return None,
+                CommandEvent::Error(_) => {
+                    diagnostic.record(
+                        Stage::ObserverStartup,
+                        Outcome::TransportFailed,
+                        Effects::Unconfirmed,
+                    );
+                    return None;
+                }
                 CommandEvent::Terminated(_) => {
                     terminated = true;
+                    diagnostic.record(Stage::ObserverStartup, Outcome::Eof, Effects::Unconfirmed);
                     return None;
                 }
                 // Do not print potentially sensitive Node diagnostics or paths.
@@ -115,6 +150,13 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
         None
     })
     .await;
+    if readiness.is_err() {
+        diagnostic.record(
+            Stage::ObserverStartup,
+            Outcome::Timeout,
+            Effects::Unconfirmed,
+        );
+    }
     let origin = readiness.ok().flatten();
     if terminated {
         // Only a confirmed exit releases this handle; uncertainty never does.
@@ -132,6 +174,11 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
             match event {
                 CommandEvent::Stdout(line) => {
                     if observer_disconnected(&line) {
+                        diagnostic.record(
+                            Stage::ObserverStream,
+                            Outcome::Refused,
+                            Effects::Unconfirmed,
+                        );
                         disconnected(&app, pid).await;
                     } else if app
                         .state::<DesktopCore>()
@@ -144,8 +191,16 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
                         crate::desktop::receive(&app, &line);
                     }
                 }
-                CommandEvent::Error(_) => disconnected(&app, pid).await,
+                CommandEvent::Error(_) => {
+                    diagnostic.record(
+                        Stage::ObserverStream,
+                        Outcome::TransportFailed,
+                        Effects::Unconfirmed,
+                    );
+                    disconnected(&app, pid).await;
+                }
                 CommandEvent::Terminated(_) => {
+                    diagnostic.record(Stage::ObserverStream, Outcome::Eof, Effects::Unconfirmed);
                     disconnected(&app, pid).await;
                     exited.notify_one();
                     let state = app.state::<DesktopCore>();
@@ -164,6 +219,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
             }
         }
         // EOF is lost observation, not proof that the owned process exited.
+        diagnostic.record(Stage::ObserverStream, Outcome::Eof, Effects::Unconfirmed);
         disconnected(&app, pid).await;
     });
     origin.ok_or_else(|| "ORQST Desktop Core did not become ready".into())

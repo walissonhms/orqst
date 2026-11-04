@@ -4,6 +4,7 @@ mod agents;
 mod desktop;
 mod features;
 mod files;
+mod local_diagnostics;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -79,8 +80,14 @@ fn main() {
             unavailable::response(&request)
         })
         .setup(|app| {
+            if let Ok(parent) = app.path().app_data_dir() {
+                local_diagnostics::install(parent);
+            }
+            let diagnostic = local_diagnostics::Attempt::begin();
+            diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Started, local_diagnostics::Effects::Unconfirmed);
             desktop::install(app.handle())?;
-            let origin = tauri::async_runtime::block_on(sidecar::start(app.handle())).ok();
+            let origin = tauri::async_runtime::block_on(sidecar::start(app.handle(), diagnostic.clone())).ok();
+            diagnostic.record(local_diagnostics::Stage::ObserverStartup, if origin.is_some() { local_diagnostics::Outcome::Ready } else { local_diagnostics::Outcome::Failed }, local_diagnostics::Effects::Unconfirmed);
             desktop::configure(app.handle(), origin.as_deref());
             let allowed_origin = origin.clone();
             let feature_client = origin.as_deref().map(|origin| features::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
@@ -132,6 +139,7 @@ fn main() {
             // An observer startup failure exposes no preparation or additional hosts.
             // Existing owned-host state is never stopped by this unavailable view.
             if origin.is_none() {
+                diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Ready, local_diagnostics::Effects::Unconfirmed);
                 return Ok(());
             }
             // Explicit opt-in only. A terminal failure does not replace or stop observation.
@@ -145,6 +153,7 @@ fn main() {
                 eprintln!("ORQST managed agents startup refused.");
             }
             terminal_creation::install(app.handle())?;
+            diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Ready, local_diagnostics::Effects::Unconfirmed);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -157,6 +166,7 @@ fn main() {
                 if terminal::confirm_exit(app) || agents::confirm_exit(app) { api.prevent_exit(); }
             }
             if let tauri::RunEvent::Exit = event {
+                local_diagnostics::Attempt::begin().record(local_diagnostics::Stage::NativeExit, local_diagnostics::Outcome::Requested, local_diagnostics::Effects::Unconfirmed);
                 desktop::stop(app);
                 agents::stop_and_wait(app);
                 terminal_creation::stop(app);
