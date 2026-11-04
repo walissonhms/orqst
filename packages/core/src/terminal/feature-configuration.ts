@@ -23,6 +23,10 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       }),
     );
   return {
+    readView: () =>
+      withTerminalPreferences(directory, (store) => store.features().readView(workspaceId)),
+    saveView: (input: unknown) =>
+      withTerminalPreferences(directory, (store) => store.features().saveView(workspaceId, input)),
     read: (featureId: string) =>
       withTerminalPreferences(directory, (store) => store.features().read(scope(featureId))),
     list: () => withTerminalPreferences(directory, (store) => store.features().list(workspaceId)),

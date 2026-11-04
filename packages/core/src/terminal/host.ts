@@ -144,6 +144,12 @@ async function start() {
       try {
         let value: unknown;
         switch (request.kind) {
+          case 'featureViewRead':
+            value = features().readView();
+            break;
+          case 'featureViewSave':
+            value = features().saveView(request.input);
+            break;
           case 'featureList':
             value = features().list();
             break;

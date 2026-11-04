@@ -200,3 +200,19 @@ quarantine, `ownership_lost`, native provider state and global configuration wer
 changed. Keep the worktree until the owner integrates/publishes and authorizes its
 removal. Rollback must preserve SQLite, originals and journals; older strict v1
 readers may reject new Feature fields, so downgrading journals needs explicit review.
+
+## Persisted presentation context — UI increment
+
+`featureViewRead` has no extra fields and returns
+`{ contractVersion: 1, storage: 'core', workspaceId, featureId: UUID | null, revision }`.
+`featureViewSave` accepts `input: { expectedRevision, featureId: UUID | null }`.
+Both retain the private IPC UUID envelope. Workspace still comes exclusively from
+the reviewed project. Null denotes unassigned reviewed terminals, never implicit
+membership in a Feature. Store's separate `feature_view_schema` version 1 and
+`feature_views` table use the same private SQLite writer. An absent context has
+revision 0; each successful compare-and-save increments it. Foreign Feature IDs,
+stale revisions, newer schema versions and exhausted capacity fail closed.
+
+This record is a preferred view, not a global runtime activation. Reopening it
+restores no terminal ownership, process, grant, input lease or task. The native UI
+facade and presentation guards are documented in [Feature UI](v6-feature-ui.md).

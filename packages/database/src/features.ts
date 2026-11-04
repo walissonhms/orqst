@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import {
   featureScopeSchema,
+  featureViewStateSchema,
+  featureViewSaveSchema,
   featureCreateSchema,
   featureUpdateSchema,
   workspaceFeatureSchema,
@@ -37,6 +39,29 @@ export function openFeatures(
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, metadata TEXT NOT NULL CHECK(json_valid(metadata))
     );`);
   });
+  transaction(() => {
+    db.exec(`CREATE TABLE IF NOT EXISTS feature_view_schema (
+      singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL
+    ); INSERT OR IGNORE INTO feature_view_schema VALUES (1,1);`);
+    if (
+      db.prepare('SELECT version FROM feature_view_schema WHERE singleton=1').get()?.version !== 1
+    )
+      throw new Error('Unsupported feature view schema');
+    db.exec(`CREATE TABLE IF NOT EXISTS feature_views (
+      workspace_id TEXT PRIMARY KEY, feature_id TEXT REFERENCES features(id), revision INTEGER NOT NULL
+    );`);
+  });
+  const readView = (workspaceId: string) => {
+    featureScopeSchema.shape.workspaceId.parse(workspaceId);
+    const row = db.prepare('SELECT * FROM feature_views WHERE workspace_id=?').get(workspaceId);
+    return featureViewStateSchema.parse({
+      contractVersion: 1,
+      storage: 'core',
+      workspaceId,
+      featureId: row?.feature_id ?? null,
+      revision: row?.revision ?? 0,
+    });
+  };
   const read = (raw: FeatureScope): WorkspaceFeature => {
     const scope = featureScopeSchema.parse(raw);
     const row = db
@@ -94,6 +119,27 @@ export function openFeatures(
   };
   return {
     read,
+    readView,
+    saveView: (workspaceId: string, input: unknown) =>
+      transaction(() => {
+        const value = featureViewSaveSchema.parse(input);
+        const before = readView(workspaceId);
+        if (before.revision !== value.expectedRevision)
+          throw new Error('Stale feature view revision');
+        if (before.revision >= Number.MAX_SAFE_INTEGER)
+          throw new Error('Feature view revision exhausted');
+        if (value.featureId !== null) read({ workspaceId, featureId: value.featureId });
+        if (
+          before.revision === 0 &&
+          Number(db.prepare('SELECT COUNT(*) AS n FROM feature_views').get()?.n) >= 1024
+        )
+          throw new Error('Feature view capacity exceeded');
+        db.prepare(
+          `INSERT INTO feature_views VALUES (?,?,?) ON CONFLICT(workspace_id)
+        DO UPDATE SET feature_id=excluded.feature_id, revision=excluded.revision`,
+        ).run(workspaceId, value.featureId, before.revision + 1);
+        return readView(workspaceId);
+      }),
     list: (workspaceId: string) => {
       featureScopeSchema.shape.workspaceId.parse(workspaceId);
       return db

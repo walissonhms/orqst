@@ -132,6 +132,37 @@ test('owned Core private Feature RPC persists metadata for six terminals without
     assert.equal(created.ok, true);
     let feature = workspaceFeatureSchema.parse(created.value);
     assert.equal(feature.workspaceId, stableId('workspace', project));
+    const view = (await call({ kind: 'featureViewRead' })).value as {
+      revision: number;
+      featureId: string | null;
+    };
+    assert.equal(view.revision, 0);
+    assert.equal(
+      (
+        await call({
+          kind: 'featureViewSave',
+          input: { featureId: feature.featureId, expectedRevision: 0 },
+        })
+      ).ok,
+      true,
+    );
+    assert.equal(
+      (await call({ kind: 'featureViewSave', input: { featureId: null, expectedRevision: 0 } })).ok,
+      false,
+    );
+    assert.equal(
+      (
+        await call({
+          kind: 'featureViewSave',
+          input: { featureId: randomUUID(), expectedRevision: 1 },
+        })
+      ).ok,
+      false,
+    );
+    assert.equal(
+      ((await call({ kind: 'featureViewRead' })).value as { featureId: string }).featureId,
+      feature.featureId,
+    );
     for (let slot = 0; slot < ids.length; slot++) {
       const assigned = await call({
         kind: 'featureAssign',

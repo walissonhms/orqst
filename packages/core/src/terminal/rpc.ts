@@ -1,6 +1,7 @@
 import {
   terminalLayoutRecordSchema,
   featureCreateSchema,
+  featureViewSaveSchema,
   featureUpdateSchema,
   terminalTeamSaveSchema,
   TERMINAL_SLOT_CEILING,
@@ -77,6 +78,8 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
       .min(0)
       .max(TERMINAL_SLOT_CEILING - 1),
   }),
+  z.strictObject({ kind: z.literal('featureViewRead'), id }),
+  z.strictObject({ kind: z.literal('featureViewSave'), id, input: featureViewSaveSchema }),
   z.strictObject({ kind: z.literal('featureList'), id }),
   z.strictObject({ kind: z.literal('featureRead'), id, featureId: id }),
   z.strictObject({
