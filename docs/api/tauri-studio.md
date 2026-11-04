@@ -1,0 +1,65 @@
+# Tauri Studio preparation contract
+
+The owned dashboard receives `window.orqstTauriStudio` (`contractVersion: 1`).
+It is separate from the unchanged Electron `window.orqstStudio`. The only native
+command is `studio_request`; it is not a Bridge HTTP/WebSocket or Core RPC endpoint.
+
+The strict public request union is:
+
+```ts
+{ action: 'snapshot' }
+{ action: 'create', generation: number, provider: 'codex' | 'claude', count: number }
+{ action: 'review', generation: number }
+```
+
+Generation is a nonnegative safe integer from the latest native snapshot. Count is
+an integer 1–8; there is no mixed preset, OpenCode, model selection, custom limit,
+Start, task, prompt or login action. Additional properties are rejected. In
+particular no paths, files, PID, proof, source or arbitrary Core method is accepted.
+`review` uses only the native state's already prepared files. `create` uses native
+pickers and the bundled Node 24, then runs the exact existing menu wizard.
+
+Reply: `{status, snapshot?}`. Status is `ok`, `denied`, `focus_required`, `busy` or
+`unavailable`. The snapshot contains only `generation`, `limit: 8`, `count` (0–8),
+`busy`, `canCreate`, `canReview` and `selectionLocked`. It reveals no paths or
+execution authority. `selectionLocked` means opening was attempted or a selected
+host exists, including uncertainty; it does not prove a CLI started or succeeded.
+Cancelling opening retains prepared files and permits another explicit review.
+An uncertain write blocks creation; an opening attempt blocks fresh selection for
+this application lifetime, including after retirement.
+
+## Security review
+
+- Capability is remote-only for exact owned loopback origin at `/` and `/studio`,
+  with only `allow-studio-request` on actual `main` Webview. No shell/filesystem/
+  dialog plugin capability, wildcard window permission or renderer-supplied identity.
+- Native command checks the invoking Webview and its parent, actual URL/origin,
+  exact supported document path, absent credentials/query/fragment, and native
+  generation. Mutations reuse the AppKit first-responder check; the full context is
+  checked again after that await and at atomic admission. JS activation is only
+  defense in depth; read-only snapshots require no click.
+- The menu and command share a single preparation latch. The fixed helper retains
+  its existing bounded pipe, native pickers, Cancel-default configuration review,
+  shared-effects acknowledgment, complete opening review and five-minute expiry.
+  Native document reload/destruction/close, any Quit attempt and another owned window revoke the
+  generation. The existing AppKit observer now also revokes preparation on actual
+  deactivation/another key window while preserving the exact active main own-sheet.
+- `presentation_blocked` and `is_running` fence pending Quit/selected-host states;
+  the existing selection latch is set before Core admission. Core remains the sole
+  owner of journals, signed start/input/MCP/retirement and process evidence.
+- Accepted native work retains completion ownership even if its invocation future
+  disappears. No automatic retry, adoption, reconciliation, deletion or uncertain
+  capacity release is introduced. The renderer ignores late/unmounted replies and
+  does not let own-sheet focus refresh replace an in-flight mutation result.
+- Bridge HTTP/WS/cookies/Host/Origin/CSP, source ingestion, credentials and public
+  observer APIs are unchanged. Existing uncertain fixtures and evidence remain intact.
+
+The renderer component is `TauriStudioPreparation({native?: TauriStudio})`; it can
+mount in the Studio preparation drawer. It has no Feature workspace/sidebar,
+terminal renderer, CSS layout or process ownership. Without the facade its controls
+stay unavailable. User-agent detection may select truthful explanatory text, never
+a capability. Tauri must not display Electron's mixed Codex/OpenCode controls or
+its older-Desktop/relaunch warning.
+
+Native WebKit/own-sheet execution, provider behavior, final Quit and platform
+packaging acceptance remain separate from pure/renderer checks.

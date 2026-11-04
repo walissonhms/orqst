@@ -1,5 +1,16 @@
 # Security model
 
+## Tauri Studio preparation — 2026-11-04
+
+Studio can invoke only the existing native preparation wizard through an exact
+main-Webview capability and strict provider/count/review union. It cannot select
+paths, supply process/proof/source fields, send tasks or call arbitrary Core methods.
+Native AppKit focus, source/document generation, shared menu exclusion, commit and
+opening latches, own-sheet handling and Quit fences remain authoritative. Bridge
+HTTP/WS/cookie/CSP and source ingestion are unchanged. See the
+[command-specific security review](../api/tauri-studio.md) and
+[pinned reuse decisions](../research/tauri-studio-preparation.md).
+
 ## Tauri interactive MCP consent — 2026-11-04
 
 The native menu authorizes one bounded grant through the existing Core, never through
