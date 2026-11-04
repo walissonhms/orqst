@@ -35,3 +35,26 @@ No app, CLI, Core process or PTY session was started. Build/resources/Cargo/inst
 full repository tests and local ingestion validation are outside this source-only
 check. Native/provider acceptance remains open. The requested isolated worktree
 is retained for integration, with no main commit, push or tag.
+
+## Main integration and package freeze
+
+Main fast-forwarded from `df0da2cf02c0a7ae046281b978740a423bb9535b` to the original
+candidate `4eeeea2c9dfce4aade719c24d3e7cb4e2f866823`. This retains the shared-document
+Electron type closure and every earlier feature; no older base was substituted.
+The same four focused files were run together exactly once after integration:
+**97 passed, zero failed/skipped/cancelled**. Full `pnpm lint` (ESLint and Prettier),
+`pnpm typecheck` and `git diff --check` passed with Node 24.22.2 / pnpm 10.34.9.
+
+The existing policy/notification package remains prior evidence: 20 distinct pure
+Node tests, the same 59 Rust tests in default and custom-protocol configurations,
+and Clippy. These were not rerun or added to the 97-case total. This fix changes no
+Rust source, dependency or lockfile. Full Node tests, ingestion validation, browser,
+Core/PTY/provider execution and native acceptance were not run.
+
+The next package is restricted to `dist/native-preview-codex-catalog-fix/ORQST Preview.app`.
+Its generated manifest must record a published source freeze before the filtered
+dashboard/resources/custom-protocol native build and bundle, exact resource and
+Node integrity, outer ad-hoc signing without deep re-signing, and deep/strict
+verification. All earlier Preview trees and target691 Coexistence698 are preserved.
+Each heavy step requires at least 4 GiB free. No application is launched by this
+delivery; actual opening and effective model remain a separate human acceptance.
