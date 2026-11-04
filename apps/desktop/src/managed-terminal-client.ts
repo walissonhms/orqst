@@ -498,7 +498,8 @@ paneMenu.addEventListener('keydown', (event) => {
   paneMenu.open = false;
   menuToggle.focus();
 });
-document.addEventListener('pointerdown', (event) => {
+// A header drag starts outside the disclosure; keep its drop targets until a click occurs.
+document.addEventListener('click', (event) => {
   if (paneMenu.open && event.target instanceof Node && !paneMenu.contains(event.target))
     paneMenu.open = false;
 });

@@ -1,3 +1,4 @@
+import { openTerminalPaneMenu, openTerminalPaneSettings } from './terminal/ui-controls.js';
 // Explicit disposable Electron/Core/PTY exercise. Native focus/dialogs are synthetic doubles.
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -419,9 +420,10 @@ try {
     attempts[0]!,
   );
   assert.equal(cross.status, 'denied');
+  await openTerminalPaneMenu(panes[last]!);
   await panes[last]!.locator(`#tab-${String.fromCharCode(97 + layoutSlot)}`).click();
   await expect(panes[layoutSlot]!.locator('#start')).toBeVisible();
-  await panes[layoutSlot]!.locator('.layout-options > summary').click();
+  await openTerminalPaneSettings(panes[layoutSlot]!);
   await panes[layoutSlot]!.locator('#split-columns').click();
   assert.equal(
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
@@ -455,6 +457,7 @@ try {
   await layoutPage.locator('#restore').press('Enter');
   await expect(layoutPage.locator('#maximize')).toBeFocused();
   // Pointer reorder has a complete keyboard equivalent above, and moves no document.
+  await openTerminalPaneMenu(layoutPage);
   await layoutPage
     .locator('#pane-title')
     .dragTo(layoutPage.locator(layoutSlot === 0 ? '#tab-b' : '#tab-a'));
@@ -494,6 +497,7 @@ try {
   await desktop.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 1000),
   );
+  await openTerminalPaneSettings(layoutPage);
   await layoutPage.locator('#show-all').click();
   await layoutPage.locator('#column-choice').selectOption('3');
   await expect

@@ -64,7 +64,7 @@ try {
   });
   const page = await desktop.firstWindow();
   await expect(page).toHaveURL('orqst-terminal://local/index.html');
-  await expect(page.locator('h1')).toContainText(/Synthetic|sintético/);
+  await expect(page.locator('.pane-provider')).toContainText(/Synthetic|sintético/);
   assert.equal(await page.evaluate(() => typeof Reflect.get(window, 'require')), 'undefined');
   assert.equal(
     await page.evaluate(() => typeof Reflect.get(window, 'orqstArtifacts')),

@@ -87,10 +87,12 @@ Screenshots and generated reports stay outside Git. Chromium/facade results do
 not establish native WebKit focus/modal/clipboard/IME, live PTY/provider acceptance,
 process survival during actual Feature switching or cross-platform packaging.
 
-Existing developer native pair/team runners that select the former always-visible
-layout/navigation now need to open `#pane-menu-toggle` first. Their native/provider
-acceptance is separate from this renderer runner; their selectors must be adapted
-with the native front before claiming those runs on this chrome.
+Integration updated the developer pair/team and Tauri runners to open the pane
+menu/settings before their controls; the native single-pane smoke checks provider
+text in its separate badge. The packaged eight-PTY Tauri fixture passed on this
+chrome. Electron pair/team headful runs were deferred during the concurrent native
+focus investigation; no pass is claimed for those adapted runners. Native/provider
+acceptance remains separate from Chromium and simulated transports.
 
 ## Integration fragments for central documentation
 
@@ -110,3 +112,14 @@ These fragments avoid concurrent changes to the delivery tracker and central doc
   whole V6 UI acceptance complete from the renderer comparison alone.
 
 See the [pinned reuse review](../research/v6-terminal-chrome.md).
+
+## Integrated drag/menu regression — 2026-11-04
+
+Outside dismissal uses click rather than pointerdown. A drag begins on the header
+outside the disclosure; closing at pointerdown hid its existing tab drop targets
+before the drag could reach them. The Chromium runner now performs an actual
+header-to-tab drag in both locales and verifies the existing `moveTo` request,
+while menu dismissal, input revocation and retained xterm checks continue to pass.
+The integrated Node suite passed 710 tests before this browser-only dismissal
+adjustment; lint/typecheck, desktop build and the updated renderer were rerun after
+it. No native provider or WebKit claim is made.

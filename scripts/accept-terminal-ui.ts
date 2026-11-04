@@ -182,6 +182,17 @@ try {
     await expect(page.locator('#guidance')).toHaveText(locale.managedTerminal.guide_input);
     await page.locator('#tab-a').click();
     await expect(page.locator('#tab-a')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('#pane-title').dragTo(page.locator('#tab-b'));
+    await expect(page.locator('#pane-menu')).toHaveAttribute('open', '');
+    assert.equal(
+      await page.evaluate(() =>
+        Reflect.get(window, 'syntheticViews').some(
+          (value: unknown) =>
+            value !== null && typeof value === 'object' && 'moveTo' in value && value.moveTo === 1,
+        ),
+      ),
+      true,
+    );
     await page.evaluate(() => Reflect.set(window, 'syntheticLayoutRefused', true));
     await page.locator('#split-columns').click();
     await expect(page.locator('#status')).toHaveText(locale.managedTerminal.focus_required);

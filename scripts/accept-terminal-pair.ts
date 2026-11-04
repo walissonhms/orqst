@@ -1,3 +1,4 @@
+import { openTerminalPaneMenu, openTerminalPaneSettings } from './terminal/ui-controls.js';
 // Explicit same-window Desktop acceptance. Only a compiled synthetic CLI and disposable state.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
@@ -243,7 +244,7 @@ try {
     .filter((page) => page.url() === 'orqst-terminal://local/index.html');
   // Select by native trusted header, never by provider output.
   const indexed = await Promise.all(
-    pages.map(async (page) => ({ page, header: await page.locator('h1').innerText() })),
+    pages.map(async (page) => ({ page, header: await page.locator('#pane-identity').innerText() })),
   );
   const terminals = ['T-001', 'T-002'].map(
     (id) => indexed.find((entry) => entry.header.includes(id))!.page,
@@ -349,7 +350,7 @@ try {
       };
     });
   await focus(0);
-  await terminals[0]!.locator('.layout-options summary').click();
+  await openTerminalPaneSettings(terminals[0]!);
   await terminals[0]!.locator('#split-rows').click();
   await expect
     .poll(async () => {
@@ -366,6 +367,7 @@ try {
   const confirmationsBeforeLayout = await desktop.evaluate(() =>
     Reflect.get(globalThis, 'syntheticConfirmCount'),
   );
+  await openTerminalPaneSettings(terminals[0]!);
   await terminals[0]!.locator('#split-size').focus();
   await terminals[0]!.locator('#split-size').press('ArrowRight');
   await expect(terminals[0]!.locator('#split-value')).toHaveText('51%');
@@ -392,6 +394,7 @@ try {
   await expect
     .poll(async () => (await geometry()).panes.map((p) => p.visible))
     .toEqual([true, false]);
+  await openTerminalPaneMenu(terminals[0]!);
   await terminals[0]!.locator('#tab-b').click();
   await expect
     .poll(async () => (await geometry()).panes.map((p) => p.visible))
@@ -402,11 +405,12 @@ try {
     ).orqstTerminalPane.show('restore'),
   );
   assert.equal(hidden, false);
-  await terminals[1]!.locator('.layout-options summary').click();
+  await openTerminalPaneSettings(terminals[1]!);
   await terminals[1]!.locator('#restore').click();
   await expect
     .poll(async () => (await geometry()).panes.map((p) => p.visible))
     .toEqual([true, true]);
+  await openTerminalPaneSettings(terminals[1]!);
   await terminals[1]!.locator('#split-columns').click();
   await expect
     .poll(async () => {
@@ -443,6 +447,7 @@ try {
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
     1,
   );
+  await openTerminalPaneMenu(terminals[0]!);
   await terminals[0]!.locator('#dashboard').click();
   await expect(draft).toHaveValue(draftText);
   assert.equal(

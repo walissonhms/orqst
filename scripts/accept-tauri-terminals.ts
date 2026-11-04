@@ -1,3 +1,4 @@
+import { openTerminalPaneSettings } from './terminal/ui-controls.js';
 // Explicit disposable packaging acceptance. Native focus/dialogs are simulated; no provider runs.
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -225,7 +226,7 @@ try {
   await expect.poll(() => layout.visible).toEqual([0]);
   await page.locator('#restore').click();
   await expect(page.locator('#maximize')).toBeVisible();
-  await page.locator('.layout-options summary').click();
+  await openTerminalPaneSettings(page);
   await page.locator('#pane-name').fill('<script>plain name</script>');
   await page.locator('#rename-pane button').click();
   await expect(page.locator('#pane-title')).toContainText('<script>plain name</script>');
@@ -234,7 +235,7 @@ try {
   await expect(page.locator('.pane-tabs button').nth(1)).toHaveAttribute('data-tab', '0');
   await page.locator('#column-choice').selectOption('3');
   await expect.poll(() => layout.columns).toBe(3);
-  await page.locator('.layout-options summary').click();
+  await page.locator('#pane-menu-toggle').click();
   await page.locator('#hide-pane').click();
   await expect.poll(() => layout.shown.includes(0)).toBe(false);
   send({ kind: 'layout-open', slot: 0 });
