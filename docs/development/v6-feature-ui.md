@@ -1,0 +1,158 @@
+# V6 Feature UI and retained native view
+
+The native `DesktopFeatures` v1 facade connects the real shared React
+`FeatureWorkspace` to the selected, reviewed terminal Core. Only that project's
+Workspace is listed. Feature UUIDs, metadata, exclusive slot assignments and
+preferred view remain in Core SQLite. No HTTP execution, generic RPC, renderer
+path/PID/proof, provider selection, new queue or session manager is introduced.
+
+## Workflow
+
+After a native terminal selection is reviewed/opened (including the existing
+explicit startup selection), Studio and native terminal chrome can list Features,
+create one with name/description/status, edit/rename it, and select it. Assigning
+an available reviewed slot adds metadata only. The terminal may already be running;
+no Start is sent. A member absent from this reviewed selection is counted and
+reported unavailable, without adoption/restart. An empty Feature remains selected
+with a visible sidebar and truthful empty state. Unassigned legacy terminals stay
+separate. No other observed project is made controllable.
+
+Selection filters only the retained native view. The existing six/eight-terminal
+Core pool, PTYs, instance IDs, xterm documents and scrollback continue independently.
+Each Feature maps saved UUID layout metadata to the currently available reviewed
+slots. Unavailable members' order/names are retained on a save. A partial unassigned
+view has no Feature layout namespace and remains a temporary view; no legacy JSON
+or global layout is silently imported into a Feature.
+
+The compact approved frame reserves 155px sidebar (46px at 720px and below), 45px
+topbar and 34px footer. Existing 31px terminal headers and actual PTY surfaces fill
+the remaining geometry. Terminal menus still own rename/reorder/minimize/maximize,
+columns, ratio and signed lifecycle actions. Feature CRUD uses an inline sidebar
+editor to avoid putting a dialog behind native child webviews. Keyboard focus
+moves into its name field, Escape cancels/returns focus, and strings use both
+locales. There is no focus-triggered refresh that disables an in-progress click;
+explicit Refresh and validated native snapshots update the view.
+At compact width, the editor occupies the existing 45px topbar and scrolls
+horizontally, preserving the 46px native sidebar inset. A completed save only
+closes the editor version that initiated it; it cannot close a newer editor.
+
+## Native contract and authority
+
+See [API](../api/features.md). `features.rs` accepts only the actual main Webview
+at its fixed native origin and canonical `/` or `/studio` document, or the exact
+`feature-workspace` document under `terminal-workspace`. It derives source,
+document generation and fresh wire UUID; renderer fields are optimistic
+concurrency only. Main navigation/close invalidates pending metadata. The child
+is installed once, local resources are allowlisted, navigation/new windows denied,
+and no terminal document is recreated during selection. Mutating native focus checks
+are currently macOS-only, matching the existing terminal preview; other platforms
+remain fail-closed until their native integration is validated.
+
+Mutating metadata and existing MCP/retirement/quit reviews exclude each other in
+both directions. Select/organize revoke input before asynchronous work. A selected
+Feature never enables keyboard input or supplies a native signature. The native
+layout generation, document generation, Feature view revision and Core metadata
+revision are distinct. Native layout generation fences dashboard/close/navigation/
+quit; stale geometry is discarded before updating layout/show/focus. Bounds are
+validated against the real logical viewport, exact insets and selected slots.
+The internal `terminal::metadata_request(app, envelope, presentation)` receives
+the native epoch captured before the asynchronous focus check; it is never a
+renderer field. Its independent pending map is bounded to eight UUIDs/128 KiB and
+15 seconds. Only `feature-reply` with the same UUID/document/current epoch can
+resolve it. Quit admission and metadata admission share the native state lock;
+a Quit attempt during a mutation revokes input/fences presentation but starts no
+review or automatic retry. The existing preparation/selection latch remains.
+A save ACK publishes current state only; it cannot reopen a suspended workspace.
+The snapshot distinguishes the saved preferred `view` from `activeFeatureId`, the
+context actually presented. If navigation invalidates a selection after SQLite
+commits, its obsolete command changes no live view; a later snapshot reads metadata
+without applying it. The user can select again with the current CAS revision.
+
+SQLite saves use the existing private 0700 directory/0600 database and bounded
+Store. Feature edits, slot assignment and view selection retain CAS. A stale view
+shows an explicit error and requires refresh/review; uncertain transport does not
+retry a mutation. Archive with members reports a useful lifecycle-review refusal
+and preserves sessions. Clone/remove, Floating, unverified models and cross-Feature
+communication remain unavailable. This increment is not complete V6 acceptance.
+
+The existing Core RPC remains unchanged. After an explicit negative Core reply,
+the typed metadata client may read the current revision to diagnose a CAS conflict;
+it does not retry the write. A timeout/disconnect never uses that diagnosis and
+remains an unavailable/uncertain transport result.
+
+## Verification and remaining limits
+
+The explicit runner is:
+
+```sh
+pnpm build:tauri-resources
+pnpm exec tsx scripts/accept-v6-features.ts --authorize-synthetic-features
+```
+
+It uses isolated synthetic C PTYs, packaged Node/Core, actual xterm documents and
+a Chromium facade for native IPC/focus/consent. Native geometry is emulated with
+retained iframes only in that runner. Its assertions cover UI CRUD/assignment,
+Feature 3/2/1 switching, per-Feature layout, instance/document/scrollback identity,
+input revocation, one process attempt per terminal and screenshot geometry. This
+runner cannot establish Tauri WebKit first-responder/sheet behavior, real provider
+acceptance, machine-restart continuity or platform packaging. Exact executed
+results/failures and native base dependencies accompany the delivery; do not infer
+that this command passed merely because its executable exists.
+
+### Executed evidence and pause — 2026-11-04
+
+The EN Chromium/packaged-Core run reached 15 repeated Feature switches with six
+synthetic PTYs assigned 3/2/1. Instance IDs, document IDs, xterm/scrollback and exactly
+six Starts remained unchanged. The run then failed while reopening the editor
+after rename (`Status` locator timeout); this is a failed acceptance, not a pass.
+The editor-version correction is implemented but has **not** been rerun. PT and
+the final screenshot comparison at 1440×900 have not completed.
+
+After the runner lost its host, a later process snapshot found no matching Core,
+PTY host or synthetic PTY processes. All six lifecycle receipts nevertheless end
+at `started`, without an exit receipt, and the fixture's `active-pair.json` remains.
+Cleanup is therefore **uncertain**. The original fixture, receipts, SQLite and
+log are preserved for owner review; no adoption, signal, reconciliation, deletion
+or restart was attempted after transport loss. EN/PT, new fixtures/Starts and the
+broad suite are paused by owner instruction, pending specific review/authorization.
+
+The runner cleanup correction is separate code: while the original host is still
+valid it attempts signed stops for known instance IDs, observes exits, requests
+signed retirement, and checks host exit. After loss it preserves evidence and
+never reconnects/adopts/signals. Failure artifacts remain even after a confirmed
+cleanup. Node/Core fixture copies use copy-on-write and verify their hashes before
+startup. This correction has not been executed during the pause.
+
+Checks that start no sessions passed on the integrated branch: 53 focused
+SQLite/mock/layout/broker tests; lint, TypeScript and the regular dashboard/bridge/
+desktop build; Tauri resources with 17 dependency notices; 24 Rust unit tests,
+Clippy with warnings denied, and `cargo build --features custom-protocol`.
+Rust used the existing target691 serially with debug/incremental disabled. No
+application/bundle was launched, and no full native bundle or provider acceptance
+is claimed. An initial Rust type error and runner lint errors were corrected;
+the subsequent listed checks passed without weakening rules.
+
+The earlier broad Node run was interrupted (exit 130): 703 passed, four failed,
+two cancelled. ENOSPC is established only for the logs that report it; the 55s
+startup-counter timeout has no established cause. That interrupted run is not a
+successful suite. Native WebKit, provider, NSApp deactivation and final Quit
+acceptance remain untested in this increment.
+
+## Fragments for central integration
+
+- **Checklist:** Feature metadata CRUD/selection, reviewed-slot assignment and
+  per-Feature retained docked layout are connected through a narrow native facade.
+  Keep acceptance **unchecked**: 15 synthetic six-PTY switches 3/2/1 preserved IDs,
+  documents, scrollback and Start count, but EN failed on the rename/editor race.
+  The correction has no rerun; PT/final screenshots are pending. Six exit receipts
+  are absent and cleanup is uncertain; preserve the fixture/journals/reservation.
+  New runs require specific owner review/authorization. Feature duplication,
+  removal/move, safe archive with members, Floating, mixed-provider/N-member
+  communication and platform/restart acceptance remain unchecked.
+- **README / CHANGELOG:** the selected native Workspace now exposes persisted
+  Features in Studio/native compact chrome; selecting a Feature filters retained
+  terminals and restores its SQLite layout without issuing Start or restoring
+  input. Members outside the reviewed selection are unavailable, not adopted.
+- **ROADMAP / design:** retain the approved V6 frame and real terminal surface.
+  Broader workspace creation/control, runtime enrollment/communication, model
+  choice and native/provider acceptance still need their own functional increments.
