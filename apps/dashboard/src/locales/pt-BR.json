@@ -1073,5 +1073,11 @@
     "creationUnavailable": "Use a preparação nativa para criar/revisar terminais. Atribua apenas os slots revisados disponíveis.",
     "loading": "Carregando…",
     "switching": "Alternando visão…"
+  },
+  "tauriCoreUnavailable": {
+    "title": "Observador indisponível",
+    "observer": "O Core observador não iniciou ou sua conexão foi perdida. A observação está indisponível.",
+    "managed": "Os hosts de terminais gerenciados podem continuar em execução. Esta tela não determina seu estado nem reinicia processos.",
+    "recovery": "A recuperação automática está desativada. Revise as janelas de terminal existentes antes de usar a ação Sair do menu nativo. Reiniciar o app não é uma repetição segura de uma sessão gerenciada própria."
   }
 }

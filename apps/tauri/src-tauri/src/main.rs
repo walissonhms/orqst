@@ -2,11 +2,12 @@
 
 mod agents;
 mod desktop;
-mod files;
 mod features;
+mod files;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
+mod unavailable;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -67,22 +68,27 @@ fn main() {
                 .header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 .body(body).expect("static terminal response")
         })
+        .register_uri_scheme_protocol("orqst-unavailable", |_, request| {
+            unavailable::response(&request)
+        })
         .setup(|app| {
             desktop::install(app.handle())?;
-            let origin = tauri::async_runtime::block_on(sidecar::start(app.handle()))?;
+            let origin = tauri::async_runtime::block_on(sidecar::start(app.handle())).ok();
             let allowed_origin = origin.clone();
-            let feature_client = features::configure(app.handle(), &origin)?;
-            let studio_client = terminal_creation::configure(app.handle(), &origin)?;
-            let file_client = match tauri::async_runtime::block_on(files::start(app.handle(), &origin)) {
-                Ok(client) => client,
-                Err(_) => {
+            let feature_client = origin.as_deref().map(|origin| features::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
+            let studio_client = origin.as_deref().map(|origin| terminal_creation::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
+            let file_client = match origin.as_deref().map(|origin| tauri::async_runtime::block_on(files::start(app.handle(), origin))) {
+                None => String::new(),
+                Some(Ok(client)) => client,
+                Some(Err(_)) => {
                     files::stop(app.handle());
                     eprintln!("ORQST native export startup refused.");
                     String::new()
                 }
             };
             let export_handle = app.handle().clone();
-            let dashboard = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(origin.parse()?))
+            let dashboard_url = origin.as_deref().unwrap_or(unavailable::URL).parse()?;
+            let dashboard = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(dashboard_url))
                 .title("ORQST")
                 .user_agent("ORQSTTauri/0.1 ORQSTDesktop/0.1")
                 .initialization_script(file_client)
@@ -92,10 +98,7 @@ fn main() {
                 .min_inner_size(720.0, 480.0)
                 .on_navigation(move |url| {
                     // The owned dashboard has only narrow native export commands.
-                    url.origin().ascii_serialization() == allowed_origin
-                        && url.username().is_empty()
-                        && url.password().is_none()
-                        && url.query().is_none()
+                    unavailable::allowed_navigation(url, allowed_origin.as_deref())
                 })
                 .on_new_window(|_, _| NewWindowResponse::Deny)
                 .on_page_load(|window, payload| {
@@ -106,9 +109,8 @@ fn main() {
                     }
                 })
                 .build()?;
-            let main = app.get_webview_window("main").expect("created dashboard");
             let native = app.handle().clone();
-            main.on_window_event(move |event| desktop::main_window_event(&native, event));
+            dashboard.on_window_event(move |event| desktop::main_window_event(&native, event));
             dashboard.on_window_event(move |event| {
                 if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
                     files::invalidate(&export_handle);
@@ -118,6 +120,11 @@ fn main() {
                     files::stop(&export_handle);
                 }
             });
+            // An observer startup failure exposes no preparation or additional hosts.
+            // Existing owned-host state is never stopped by this unavailable view.
+            if origin.is_none() {
+                return Ok(());
+            }
             // Explicit opt-in only. A terminal failure does not replace or stop observation.
             if tauri::async_runtime::block_on(terminal::start(app.handle())).is_err() {
                 terminal::stop(app.handle());
