@@ -9,6 +9,10 @@ for validation scope; an accepted ADR is not evidence of an implemented feature.
 - [Existing local CLI integration](development/local-cli-integration.md) — passive
   executable discovery, native authentication direction and unresolved isolation.
 - [Changelog](../CHANGELOG.md)
+- [Versioning and releases](development/releasing.md) — focused commits/pushes,
+  annotated version tags and the experimental preview publication gate.
+- [First preview notes](releases/v0.1.0-alpha.1.md) — proposed scope and known limits;
+  not a publication or acceptance announcement.
 - [macOS Desktop checkout client](development/desktop.md) — setup, verified Electron
   runtime, trust/lifetime, offline behavior and distribution limits.
 

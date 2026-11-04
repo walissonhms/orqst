@@ -1,5 +1,10 @@
 # Changelog
 
+The first proposed release is [v0.1.0-alpha.1](docs/releases/v0.1.0-alpha.1.md), an
+experimental source preview. These notes do not announce publication, stable/MVP
+acceptance, installers or real-provider acceptance. See the
+[versioning and release policy](docs/development/releasing.md).
+
 ## 2026-11-03 — Fresh pairs after proved retirement and explicit OpenCode review
 
 - Unlock fresh native creation/selection only after signed retirement, proved owned
@@ -150,8 +155,9 @@
   source changes after final validation are not atomic; native visual acceptance,
   real spreadsheet import and complete Desktop MVP acceptance remain pending.
 
-Changes are grouped by release using semantic versioning. `Unreleased` does not
-announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
+The dated entries record development increments, not previously published releases.
+`Unreleased` does not announce a release; package versions remain the `0.1.0`
+development baseline. Published versions are identified by annotated Git tags.
 
 ## Unreleased
 
