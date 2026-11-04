@@ -722,6 +722,7 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
 
 #[cfg(test)]
 mod tests {
+    use super::arguments;
     #[test]
     fn native_arguments_are_exact_and_hints_never_select_normal_startup() {
         let parse =
