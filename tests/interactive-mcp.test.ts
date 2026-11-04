@@ -209,10 +209,12 @@ test('owned process loss ends a pending MCP wait as unknown and does not recover
   }
 });
 
-test('mixed Codex/Claude profile slots preserve signed source/worker roles without PTY delivery', async () => {
+test('mixed profile slots preserve signed source/worker roles without PTY delivery', async () => {
   for (const profiles of [
     ['codex-terminal-v1', 'claude-terminal-v1'],
     ['claude-terminal-v1', 'codex-terminal-v1'],
+    ['codex-terminal-v1', 'opencode-terminal-v1'],
+    ['opencode-terminal-v1', 'codex-terminal-v1'],
   ]) {
     const f = await fixture(profiles);
     try {

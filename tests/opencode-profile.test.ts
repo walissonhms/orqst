@@ -31,6 +31,10 @@ import {
   openCodeTerminalEnvironment,
 } from '../packages/core/src/terminal/opencode-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import {
+  interactiveTerminalEnvironment,
+  interactiveTerminalProfiles,
+} from '../packages/core/src/terminal/interactive-profile.js';
 import type { TerminalSelection } from '../apps/desktop/src/terminal-selection.js';
 
 function configFixture() {
@@ -127,6 +131,74 @@ test('OpenCode MCP factory produces v2 inline environment and rejects compositio
     assert.equal(server.protocol, 'legacy');
     writeFileSync(relay, '// SYNTHETIC drift\n');
     assert.throws(() => openCodeTerminalProfiles(config, mcp), /changed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('mixed MCP launch documents keep identities and capability paths per adapter without secret values', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mixed-mcp-documents-')));
+  try {
+    const relay = join(root, 'relay.cjs');
+    writeFileSync(relay, '// SYNTHETIC, never executed\n', { mode: 0o600 });
+    const openCode = configFixture();
+    openCode.interactive = {
+      sharedNativeSessions: true,
+      nativeStartupAuthorized: true,
+      nativeDatabaseMigrationsAcknowledged: true,
+      nativeStartupActivityAcknowledged: true,
+      mcp: true,
+      mergedMcpAcknowledged: true,
+    };
+    const codex: ManagedCodexConfig = {
+      version: 1,
+      trust: 'native-same-user',
+      executable: openCode.executable,
+      executableVersion: '0.162.1',
+      node: openCode.node,
+      project: openCode.project,
+      state: '/synthetic/codex-state',
+      authentication: {
+        mode: 'reuse-existing',
+        home: '/synthetic/codex-home',
+        codexHome: '/synthetic/codex-native',
+        sharedNativeConfiguration: true,
+      },
+      interactive: { sharedNativeSessions: true, mcp: true },
+    };
+    for (const [slot, config] of [codex, openCode].entries()) {
+      const secret = `SYNTHETIC-SECRET-${slot}-NEVER-IN-LAUNCH-DOCUMENT`;
+      const launch = {
+        serverName: 'orqst_' + String(slot).repeat(32),
+        socketPath: join(root, `${slot}.sock`),
+        capabilityFile: join(root, `${slot}.cap`),
+        relay: { path: relay, sha256: terminalDigest(readFileSync(relay)) },
+      };
+      writeFileSync(launch.capabilityFile, secret, { mode: 0o600 });
+      const profile = interactiveTerminalProfiles(config!, launch)[0]!;
+      const environment = interactiveTerminalEnvironment(config!, launch);
+      const document = JSON.stringify({ argv: profile.argv, environment });
+      assert.ok(document.includes(launch.capabilityFile));
+      assert.ok(document.includes(launch.socketPath));
+      assert.ok(!document.includes(secret));
+      assert.equal(environment.HOME, slot === 0 ? '/synthetic/codex-home' : '/synthetic/home');
+      if (slot === 0) {
+        assert.equal(profile.id, 'codex-terminal-v1');
+        assert.equal(environment.CODEX_HOME, '/synthetic/codex-native');
+        assert.equal(environment.OPENCODE_CONFIG_CONTENT, undefined);
+        assert.equal(environment.OPENCODE_DB, undefined);
+      } else {
+        assert.deepEqual(profile.argv, ['--standalone']);
+        assert.equal(environment.CODEX_HOME, undefined);
+        const server = JSON.parse(environment.OPENCODE_CONFIG_CONTENT!).mcp.servers[
+          launch.serverName
+        ];
+        assert.deepEqual(server.environment, {
+          ORQST_SOCKET_PATH: launch.socketPath,
+          ORQST_CAP_FILE: launch.capabilityFile,
+        });
+      }
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -258,7 +330,7 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
       ).length,
       2,
     );
-    // A valid Codex reuse manifest remains a different provider, even with the same binary pin.
+    // A mixed pair retains each reviewed adapter, identity, blocker and consent.
     const codexState = join(root, 'codex-review');
     mkdirSync(codexState, { mode: 0o700 });
     for (const name of ['tmp', 'home', 'codex']) mkdirSync(join(codexState, name), { mode: 0o700 });
@@ -282,10 +354,79 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
       mode: 0o600,
     });
     writeFileSync(codexFile, JSON.stringify(codexConfig), { mode: 0o600 });
-    assert.throws(
-      () => selectionModule.inspectTerminalSelection([join(state, 'terminal.json'), codexFile]),
-      /one provider/,
+    const openCodeFile = join(state, 'terminal.json');
+    const authorizedFile = join(authorized, 'terminal.json');
+    const beforeMixed = readdirSync(root, { recursive: true });
+    for (const files of [
+      [codexFile, openCodeFile],
+      [openCodeFile, codexFile],
+    ]) {
+      const reviewed = JSON.parse(selectionModule.inspectTerminalSelection(files).detail);
+      assert.deepEqual(
+        reviewed.map((slot: { file: string }) => slot.file),
+        files,
+      );
+      assert.equal(
+        reviewed.find((slot: { file: string }) => slot.file === openCodeFile).blocker,
+        'opencode_startup_required',
+      );
+      assert.equal(
+        reviewed.find((slot: { file: string }) => slot.file === codexFile).blocker,
+        'reuse_unavailable',
+      );
+      const mixed = new selectionModule.TerminalSelection();
+      assert.equal(
+        await mixed.review({
+          current: () => true,
+          choose: async () => files,
+          confirm: async () => true,
+        }),
+        'reviewed',
+      );
+      assert.deepEqual(mixed.take(), files);
+    }
+    assert.deepEqual(readdirSync(root, { recursive: true }), beforeMixed);
+    // Raising the limit never extends mixed composition to three or more members.
+    for (const files of [
+      [codexFile, openCodeFile, authorizedFile],
+      [openCodeFile, authorizedFile, codexFile],
+    ])
+      assert.throws(() => inspect.inspectManagedTerminalFiles(files, 8), /one provider/);
+    // Neither workspace nor MCP opt-ins can be inherited from the sibling.
+    const original = readFileSync(codexFile, 'utf8');
+    writeFileSync(
+      codexFile,
+      JSON.stringify({
+        ...codexConfig,
+        executableVersion: '0.162.1',
+        interactive: { sharedNativeSessions: true, mcp: true },
+      }),
     );
+    assert.throws(() => inspect.inspectManagedTerminalFiles([codexFile, authorizedFile]), /MCP/);
+    const otherProject = { ...codexConfig, project: home };
+    writeFileSync(join(codexState, 'codex/config.toml'), managedCodexSettings(otherProject));
+    writeFileSync(codexFile, JSON.stringify(otherProject));
+    assert.throws(
+      () => inspect.inspectManagedTerminalFiles([codexFile, authorizedFile]),
+      /workspace/,
+    );
+    writeFileSync(codexFile, original);
+    writeFileSync(join(codexState, 'codex/config.toml'), managedCodexSettings(codexConfig));
+    const mcpCodex = {
+      ...codexConfig,
+      executableVersion: '0.162.1',
+      interactive: { sharedNativeSessions: true, mcp: true },
+    };
+    const mcpOpenCode = JSON.parse(readFileSync(authorizedFile, 'utf8'));
+    mcpOpenCode.interactive.mcp = true;
+    mcpOpenCode.interactive.mergedMcpAcknowledged = true;
+    writeFileSync(codexFile, JSON.stringify(mcpCodex));
+    writeFileSync(authorizedFile, JSON.stringify(mcpOpenCode));
+    for (const files of [
+      [codexFile, authorizedFile],
+      [authorizedFile, codexFile],
+    ])
+      assert.equal(inspect.inspectManagedTerminalFiles(files).length, 2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

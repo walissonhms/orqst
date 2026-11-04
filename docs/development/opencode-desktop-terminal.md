@@ -1,5 +1,13 @@
 # OpenCode Desktop opt-in — 2026-11-03
 
+## Codex/OpenCode pair update — 2026-11-03
+
+Native selection and shared Core inspection now allow exactly one Codex and one
+OpenCode, in either order, in the same canonical project. This supersedes the
+single-provider selection restriction below for that pair only. OpenCode startup,
+MCP and retirement gates are unchanged; no real provider acceptance follows from
+selection support. See [client steps](codex-opencode-pair.md).
+
 This supersedes the no-factory gate in `fd5c26d`. The exact reviewed OpenCode 2.2.5
 binary now has a Desktop factory, fixed `--standalone` profile, private Node PTY
 host and version-3 manifest. The observer adapter is still a contract. No native

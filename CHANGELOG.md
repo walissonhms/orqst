@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-03 — Reviewed Codex/OpenCode pair
+
+- Allow exactly one Codex and one OpenCode manifest in native review and the shared
+  Core preflight. Larger selections and other mixed pairs remain refused.
+- Reuse per-slot profiles/environments, individual native grants and existing
+  OpenCode startup acknowledgments; keep OpenCode descendant retirement blocked.
+- Add explicit mixed-pair synthetic Desktop coverage. Real provider/login/delegation
+  acceptance still requires human native gestures and has not been established.
+
 ## 2026-11-03 — Bounded same-workspace terminal teams
 
 - Generalize interactive selection, private RPC, supervisors/journals and native

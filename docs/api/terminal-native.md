@@ -1,5 +1,14 @@
 # Native terminal client boundary
 
+## Codex/OpenCode pair exception — 2026-11-03
+
+The shared manifest inspection permits exactly one Codex and one OpenCode in either
+order, in the same canonical project. All other mixed selections are refused,
+including 3–8-member teams. Native review uses this same Core validation. No wire
+schema, process profile, environment or signing capability changes; startup and MCP
+task grants remain separate. A pair containing OpenCode cannot retire capacity,
+even after owned TUI exits, while descendant exit is unvalidated.
+
 ## Bounded team private transport — 2026-11-03
 
 The interactive Desktop composition now supports 1–8 same-project/provider slots

@@ -18,7 +18,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import test from 'node:test';
 import { build, type PluginBuild } from 'esbuild';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import {
+  managedCodexSettings,
+  terminalExecutableSha256,
+  type ManagedCodexConfig,
+} from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import type { ManagedOpenCodeConfig } from '../packages/core/src/terminal/opencode-profile.js';
 import type { ManagedClaudeConfig } from '../packages/core/src/terminal/interactive-profile.js';
@@ -202,6 +206,22 @@ for (const provider of ['claude', 'opencode'] as const)
               };
         writeFileSync(otherFile, JSON.stringify(mixed));
         assert.throws(() => fixture.inspectManagedTerminalFiles([file, otherFile]), /one provider/);
+        if (provider === 'claude') {
+          for (const name of ['home', 'codex']) mkdirSync(join(otherState, name), { mode: 0o700 });
+          const codex: ManagedCodexConfig = {
+            ...common,
+            version: 1,
+            executableVersion: 'SYNTHETIC-NOT-A-PROVIDER',
+          };
+          writeFileSync(join(otherState, 'codex/config.toml'), managedCodexSettings(codex), {
+            mode: 0o600,
+          });
+          writeFileSync(otherFile, JSON.stringify(codex));
+          assert.throws(
+            () => fixture.inspectManagedTerminalFiles([file, otherFile]),
+            /one provider/,
+          );
+        }
         writeFileSync(otherFile, sameProvider);
 
         const backend = fixture.managedTerminalBackend(file, join(root, 'host.cjs'));

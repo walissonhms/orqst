@@ -2,7 +2,6 @@ import { terminalSlotLimit } from '@orqst/protocol';
 import { lstatSync } from 'node:fs';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.js';
-import { interactiveProvider } from '../../../packages/core/src/terminal/interactive-profile.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 
 /** Main-process evidence only: no admission/Core path entered and partial views cleaned up. */
@@ -13,10 +12,6 @@ export function inspectTerminalSelection(files: readonly string[], limit?: numbe
   terminalSlotLimit(limit);
   const sources = files.map((file) => terminalDigest(terminalFile(file, true)));
   const selection = inspectManagedTerminalFiles(files, limit);
-  if (new Set(selection.map(({ config }) => interactiveProvider(config))).size !== 1)
-    throw new Error(
-      'Live selection requires one provider; cross-provider composition is not enabled',
-    );
   const identities = (path: string) => {
     const info = lstatSync(path);
     return { device: info.dev, inode: info.ino };

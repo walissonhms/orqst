@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
+  access,
   chmod,
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -17,19 +19,25 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { _electron, expect, type ElectronApplication } from '@playwright/test';
+import { build } from 'esbuild';
+import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import type { DesktopTerminal } from '@orqst/protocol';
 import { createBridge } from '../apps/bridge/src/app.js';
 
 assert.ok(
   JSON.stringify(process.argv.slice(2)) === JSON.stringify(['--authorize-synthetic-pty']) ||
     JSON.stringify(process.argv.slice(2)) ===
-      JSON.stringify(['--authorize-synthetic-pty', '--slots=2']),
+      JSON.stringify(['--authorize-synthetic-pty', '--slots=2']) ||
+    JSON.stringify(process.argv.slice(2)) ===
+      JSON.stringify(['--authorize-synthetic-pty', '--mixed-codex-opencode']),
 );
 assert.match(process.version, /^v24\./);
 assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
 process.umask(0o077);
-const count = process.argv.includes('--slots=2') ? 2 : 8;
+const mixed = process.argv.includes('--mixed-codex-opencode');
+const count = mixed || process.argv.includes('--slots=2') ? 2 : 8;
 const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-synthetic-team-')));
 const run = promisify(execFile);
 const project = join(root, 'project');
@@ -52,32 +60,95 @@ try {
   // Longer fixture-only deadline accommodates eight independent native confirmations.
   await writeFile(
     source,
-    (await readFile(resolve('tests/helpers/managed-terminal-fixture.c'), 'utf8')).replace(
-      'alarm(25)',
-      'alarm(90)',
-    ),
+    (await readFile(resolve('tests/helpers/managed-terminal-fixture.c'), 'utf8'))
+      .replace('alarm(25)', 'alarm(90)')
+      .replace(
+        '  struct termios raw;',
+        mixed
+          ? `  const char *codex = getenv("CODEX_HOME");
+  const char *home = getenv("HOME");
+  if (!home || getenv("OPENCODE_CONFIG_CONTENT")) return 8;
+  if (argc == 2 && strcmp(argv[1], "--standalone") == 0) {
+    if (codex || !strstr(home, "native-opencode") || !getenv("OPENCODE_DB")) return 9;
+  } else {
+    if (!codex || !strstr(home, "native-codex") || getenv("OPENCODE_DB")) return 10;
+  }
+  struct termios raw;`
+          : '  struct termios raw;',
+      ),
   );
   await run('/usr/bin/cc', [source, '-o', fake]);
   await chmod(fake, 0o700);
   const states = Array.from({ length: count }, (_, slot) => join(root, `slot-${slot}`));
   const ids: string[] = [];
-  for (const state of states) {
-    await run(process.execPath, [
-      '--import',
-      'tsx',
-      resolve('scripts/setup-managed-terminal.ts'),
-      '--authentication',
-      'separate-login',
-      '--executable',
-      fake,
-      '--executable-version',
-      'SYNTHETIC-NOT-A-PROVIDER',
-      '--project',
-      project,
-      '--state',
-      state,
-    ]);
-    await writeFile(join(state, 'codex/auth.json'), '{"synthetic":true}', { mode: 0o600 });
+  for (const [slot, state] of states.entries()) {
+    if (mixed && slot === 1) {
+      const home = join(root, 'native-opencode');
+      for (const dir of [home, state, join(state, 'tmp')]) await mkdir(dir, { mode: 0o700 });
+      const node = {
+        path: await realpath(process.execPath),
+        sha256: terminalExecutableSha256(process.execPath),
+      };
+      await writeFile(
+        join(state, 'terminal.json'),
+        JSON.stringify({
+          version: 3,
+          provider: 'opencode',
+          trust: 'native-same-user',
+          executable: { path: fake, sha256: terminalExecutableSha256(fake) },
+          executableVersion: '2.2.5',
+          node,
+          project,
+          state,
+          authentication: {
+            mode: 'reuse-existing',
+            sharedNativeConfiguration: true,
+            nativeIdentity: { HOME: home, OPENCODE_DB: join(home, 'SYNTHETIC-UNOPENED.db') },
+          },
+          interactive: {
+            sharedNativeSessions: true,
+            nativeStartupAuthorized: true,
+            nativeDatabaseMigrationsAcknowledged: true,
+            nativeStartupActivityAcknowledged: true,
+          },
+        }),
+        { mode: 0o600 },
+      );
+    } else {
+      const home = join(root, 'native-codex');
+      if (mixed) {
+        await mkdir(home, { mode: 0o700 });
+        await mkdir(join(home, '.codex'), { mode: 0o700 });
+      }
+      await run(process.execPath, [
+        '--import',
+        'tsx',
+        resolve('scripts/setup-managed-terminal.ts'),
+        '--authentication',
+        mixed ? 'reuse-existing' : 'separate-login',
+        ...(mixed
+          ? [
+              '--interactive',
+              '--acknowledge-shared-native-config',
+              '--acknowledge-shared-native-sessions',
+              '--user-home',
+              home,
+              '--codex-home',
+              join(home, '.codex'),
+            ]
+          : []),
+        '--executable',
+        fake,
+        '--executable-version',
+        'SYNTHETIC-NOT-A-PROVIDER',
+        '--project',
+        project,
+        '--state',
+        state,
+      ]);
+      if (!mixed)
+        await writeFile(join(state, 'codex/auth.json'), '{"synthetic":true}', { mode: 0o600 });
+    }
     const file = join(state, 'terminal.json');
     const config = JSON.parse(await readFile(file, 'utf8'));
     const terminalId = randomUUID();
@@ -85,11 +156,49 @@ try {
     config.identity = { terminalId };
     await writeFile(file, JSON.stringify(config), { mode: 0o600 });
   }
+  let output = resolve('apps/desktop/dist');
+  if (mixed) {
+    output = join(root, 'desktop');
+    await cp(resolve('apps/desktop/dist'), output, { recursive: true });
+    // Synthetic pin substitution is confined to disposable copies of all three process boundaries.
+    for (const [entry, name] of [
+      ['apps/desktop/src/main.ts', 'main.cjs'],
+      ['packages/core/src/terminal/host.ts', 'managed-terminal-core.cjs'],
+      ['packages/core/src/terminal/pty-host.ts', 'managed-terminal-host.cjs'],
+    ])
+      await build({
+        entryPoints: [entry!],
+        outfile: join(output, name!),
+        bundle: true,
+        platform: 'node',
+        target: 'node24',
+        format: 'cjs',
+        external: ['electron', 'node-pty'],
+        logLevel: 'silent',
+        plugins: [
+          {
+            name: 'synthetic-opencode-pin-only',
+            setup(builder) {
+              builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, async (args) => ({
+                contents: (await readFile(args.path, 'utf8')).replace(
+                  reviewedProviderMcpBinaries.opencode.sha256,
+                  terminalExecutableSha256(fake),
+                ),
+                loader: 'ts',
+              }));
+            },
+          },
+        ],
+      });
+  }
+  const manifestBytes = await Promise.all(
+    states.map((state) => readFile(join(state, 'terminal.json'), 'utf8')),
+  );
   const profile = join(root, 'profile');
   const bootstrap = join(root, 'bootstrap.cjs');
   await writeFile(
     bootstrap,
-    `require('electron').app.setPath('userData', ${JSON.stringify(profile)}); require(${JSON.stringify(resolve('apps/desktop/dist/main.cjs'))});`,
+    `require('electron').app.setPath('userData', ${JSON.stringify(profile)}); require(${JSON.stringify(join(output, 'main.cjs'))});`,
   );
   const port = await bridge.start();
   const require = createRequire(resolve('apps/desktop/package.json'));
@@ -97,7 +206,7 @@ try {
     executablePath: require('electron') as string,
     args: [
       bootstrap,
-      ...states.map((state) => `--terminal-config=${join(state, 'terminal.json')}`),
+      ...(mixed ? [] : states.map((state) => `--terminal-config=${join(state, 'terminal.json')}`)),
     ],
     env: {
       HOME: root,
@@ -116,6 +225,33 @@ try {
     diagnostics = (diagnostics + bytes.toString('utf8')).slice(-16000);
   });
   await desktop.firstWindow({ timeout: 30000 });
+  if (mixed) {
+    const files = states.map((state) => join(state, 'terminal.json'));
+    await desktop.evaluate(({ BrowserWindow, dialog, Menu }, files) => {
+      const window = BrowserWindow.getAllWindows()[0]!;
+      window.isFocused = () => true;
+      window.webContents.isFocused = () => true;
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: files });
+      dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: true });
+      Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-select')!.click();
+    }, files);
+    await expect
+      .poll(() =>
+        desktop!.evaluate(
+          ({ Menu }) =>
+            Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.enabled,
+        ),
+      )
+      .toBe(true);
+    // Native review alone starts no Core/journal/CLI and writes no admission marker.
+    for (const state of states) assert.ok(!(await readdir(state)).includes('terminal.sqlite'));
+    await assert.rejects(access(join(profile, 'managed-agents/active-pair.json')), {
+      code: 'ENOENT',
+    });
+    await desktop.evaluate(({ Menu }) =>
+      Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
+    );
+  }
   try {
     await expect.poll(() => desktop!.context().pages().length).toBe(count + 1);
   } catch (error) {
@@ -147,7 +283,16 @@ try {
     for (const view of window.contentView.children)
       if ('webContents' in view)
         (view as Electron.WebContentsView).webContents.isFocused = () => true;
-    dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: true });
+    Reflect.set(globalThis, 'syntheticRetirementDenials', 0);
+    dialog.showMessageBox = async (_target: unknown, options?: Electron.MessageBoxOptions) => {
+      if (options?.buttons?.length === 1)
+        Reflect.set(
+          globalThis,
+          'syntheticRetirementDenials',
+          Number(Reflect.get(globalThis, 'syntheticRetirementDenials')) + 1,
+        );
+      return { response: 1, checkboxChecked: true };
+    };
     dialog.showMessageBoxSync = () => 1;
   });
   const indexed = await Promise.all(
@@ -255,41 +400,78 @@ try {
     await panes[slot]!.locator('#stop').click();
     await expect(panes[slot]!.locator('#status')).toHaveAttribute('data-state', 'exited');
   }
+  const marker = join(profile, 'managed-agents/active-pair.json');
+  const beforeRetire = await readFile(marker, 'utf8');
+  const denialsBefore = await desktop.evaluate(() =>
+    Number(Reflect.get(globalThis, 'syntheticRetirementDenials')),
+  );
   await desktop.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-retire')!.click(),
   );
-  await expect
-    .poll(async () => (await readdir(join(profile, 'managed-agents'))).includes('active-pair.json'))
-    .toBe(false);
-  await expect.poll(() => desktop!.context().pages().length).toBe(1);
-  const archive = (await readdir(join(profile, 'managed-agents'))).find((name) =>
-    name.startsWith('retired-'),
-  )!;
-  const record = JSON.parse(await readFile(join(profile, 'managed-agents', archive), 'utf8'));
-  assert.equal(record.evidence.attempts.length, count);
-  assert.ok(
-    record.evidence.attempts.every((attempt: { state: string }) => attempt.state === 'exited'),
-  );
-  await expect
-    .poll(() =>
-      desktop!.evaluate(
-        ({ Menu }) =>
-          Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-create')!.enabled,
-      ),
-    )
-    .toBe(true);
-  console.log(
-    JSON.stringify({
-      synthetic: true,
-      slots: count,
-      windows: 1,
-      crossSlotDenied: true,
-      partialRetirementDenied: true,
-      allRetired: true,
-      provider: 'not executed',
-      nativeFocus: 'test double',
-    }),
-  );
+  if (mixed) {
+    // Wait for the denial dialog: an unchanged marker before RPC settles proves nothing.
+    await expect
+      .poll(() =>
+        desktop!.evaluate(() => Number(Reflect.get(globalThis, 'syntheticRetirementDenials'))),
+      )
+      .toBe(denialsBefore + 1);
+    // Owned TUI exit is insufficient to establish OpenCode descendant exit.
+    assert.deepEqual(
+      await Promise.all(states.map((state) => readFile(join(state, 'terminal.json'), 'utf8'))),
+      manifestBytes,
+    );
+    assert.equal(await readFile(marker, 'utf8'), beforeRetire);
+    await expect.poll(() => desktop!.context().pages().length).toBe(3);
+    console.log(
+      JSON.stringify({
+        synthetic: true,
+        slots: count,
+        windows: 1,
+        providers: ['codex', 'opencode'],
+        providerEnvironmentIsolated: true,
+        crossSlotDenied: true,
+        allOwnedTuisExited: true,
+        retirement: 'blocked-descendant-exit-unvalidated',
+        providerAcceptance: 'NOT RUN',
+        nativeFocus: 'test double',
+      }),
+    );
+  } else {
+    await expect
+      .poll(async () =>
+        (await readdir(join(profile, 'managed-agents'))).includes('active-pair.json'),
+      )
+      .toBe(false);
+    await expect.poll(() => desktop!.context().pages().length).toBe(1);
+    const archive = (await readdir(join(profile, 'managed-agents'))).find((name) =>
+      name.startsWith('retired-'),
+    )!;
+    const record = JSON.parse(await readFile(join(profile, 'managed-agents', archive), 'utf8'));
+    assert.equal(record.evidence.attempts.length, count);
+    assert.ok(
+      record.evidence.attempts.every((attempt: { state: string }) => attempt.state === 'exited'),
+    );
+    await expect
+      .poll(() =>
+        desktop!.evaluate(
+          ({ Menu }) =>
+            Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-create')!.enabled,
+        ),
+      )
+      .toBe(true);
+    console.log(
+      JSON.stringify({
+        synthetic: true,
+        slots: count,
+        windows: 1,
+        crossSlotDenied: true,
+        partialRetirementDenied: true,
+        allRetired: true,
+        provider: 'not executed',
+        nativeFocus: 'test double',
+      }),
+    );
+  }
 } finally {
   await desktop?.close().catch(() => {});
   await bridge.stop();

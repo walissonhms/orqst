@@ -1,5 +1,13 @@
 # Native CLI pair creation and safe early-failure recovery
 
+## Codex/OpenCode pair update — 2026-11-03
+
+The homogeneous creation preset is unchanged. Advanced selection/Core inspection
+also permit exactly two manifests, one Codex and one OpenCode in the same project.
+Each keeps its own environment, state, native grants and lifecycle. OpenCode still
+blocks capacity retirement; no old reservation can be discarded for this pair.
+See [client steps and remaining real-acceptance gates](codex-opencode-pair.md).
+
 ## Bounded N-member update — 2026-11-03
 
 The fixed pair described below is now the default preset over a configured

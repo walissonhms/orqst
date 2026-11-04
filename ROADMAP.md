@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## Codex/OpenCode pair — 2026-11-03
+
+Native manifest selection and Core preflight now permit exactly two mixed members:
+one Codex and one OpenCode, in either order and the same project. Creation remains
+a homogeneous preset; select independently prepared manifests for the mixed pair.
+Larger mixed teams, native-provider/login/delegation acceptance and descendant
+retirement remain incomplete. See [client steps](docs/development/codex-opencode-pair.md).
+
 ## Bounded terminal teams — 2026-11-03
 
 The interactive fixed pair is now a default two-member preset over 1–8 slots in

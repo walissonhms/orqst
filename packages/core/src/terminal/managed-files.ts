@@ -47,12 +47,12 @@ export function inspectManagedTerminalFiles(files: readonly string[], limit?: nu
     }
     return { config, blocker };
   });
-  if (
-    selection.some(
-      ({ config }) => interactiveProvider(config) !== interactiveProvider(selection[0]!.config),
-    )
-  )
-    throw new Error('Terminal team requires one provider');
+  const providers = new Set(selection.map(({ config }) => interactiveProvider(config)));
+  // The only reviewed heterogeneous contract is a two-member Codex/OpenCode pair.
+  const codexOpenCodePair =
+    selection.length === 2 && providers.has('codex') && providers.has('opencode');
+  if (providers.size !== 1 && !codexOpenCodePair)
+    throw new Error('Terminal team requires one provider except for a Codex/OpenCode pair');
   if (selection.some(({ config }) => config.project !== selection[0]!.config.project))
     throw new Error('Terminal team requires one workspace');
   if (

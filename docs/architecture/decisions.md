@@ -741,3 +741,21 @@ Mixed providers, models, team SQLite tables, live membership/recycling, reconnec
 real authentication and provider delegation remain gated and incomplete. No new
 HTTP endpoint, dependency or third-party source reuse is needed. See
 [workflow and verification](../development/terminal-teams.md).
+
+## ADR-037: Exactly two Codex/OpenCode terminals
+
+**Status:** Implemented selection contract, 2026-11-03; real acceptance pending.
+
+Extend ADR-036 only for an ordered selection of exactly two independently prepared
+manifests: one Codex, one OpenCode, in the same canonical project. Keep the single
+shared Core inspection authoritative instead of duplicating the provider policy in
+native review. Other mixed pairs and 3–8-member mixed teams remain refused.
+
+No merged provider environment, new runner, credential store or approval mechanism
+is introduced. Individual profiles, signed broker grants, sticky admission and
+OpenCode's separately acknowledged startup/database/activity effects remain intact.
+MCP stays exactly two opted-in members with a separate task grant. Owned TUI exits
+do not validate OpenCode descendants, and therefore cannot release its reservation.
+The creation wizard remains homogeneous; native selection composes existing files.
+Synthetic process/transport evidence does not prove real login, human consent,
+model availability or A-to-B processing. See [client workflow](../development/codex-opencode-pair.md).

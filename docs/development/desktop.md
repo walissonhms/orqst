@@ -71,7 +71,7 @@ initializes the fixed pair and its existing admission/journal path. Blocked Open
 manifests create only blocked views. Native CLI start remains separately signed.
 No renderer path method or second-instance import exists. Selection becomes fixed
 once initialization is attempted, including failures; no live pair is replaced.
-See [the flow, same-provider limit and focus gates](opencode-desktop-terminal.md#select-an-existing-manifest-in-a-running-desktop).
+See [the flow, reviewed provider limits and focus gates](opencode-desktop-terminal.md#select-an-existing-manifest-in-a-running-desktop).
 
 The owner-supplied application icons are stored in `apps/desktop/resources/icons/`
 and copied beside the built main process. The running macOS Dock uses the supplied

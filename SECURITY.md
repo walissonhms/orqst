@@ -1,5 +1,19 @@
 # Security policy
 
+## Codex/OpenCode pair security review — 2026-11-03
+
+The only heterogeneous selection allowed is exactly one Codex and one OpenCode in
+the same canonical project. The shared pre-Core inspection is authoritative for
+native review and startup-argv/Core entry; 3–8 members remain homogeneous. No
+profile/environment is merged: each adapter retains its selected native identity,
+strict pins, independent state/journal, focused broker and signed per-slot grants.
+OpenCode startup/database/activity acknowledgments and separate two-member MCP
+task authorization remain mandatory. OpenCode descendant exit is unvalidated, so
+the sticky reservation still cannot retire, even after both owned TUIs exit. No
+observer API, WebSocket, cookie, static-serving, credential or schema change occurs.
+Synthetic focus/dialog doubles establish wiring only; human/native/provider
+acceptance remains separate.
+
 ## Bounded interactive terminal team security — 2026-11-03
 
 The explicit interactive Desktop selection is bounded to 1–8 slots, default two,

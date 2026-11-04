@@ -1,5 +1,17 @@
 # Bounded same-workspace terminal teams
 
+## Codex/OpenCode exception — 2026-11-03
+
+Exactly two selected manifests may now be one Codex and one OpenCode, in either
+order. The same project and independent states/identities remain mandatory.
+Three through eight members still require one provider; other mixed pairs are
+refused. The creation wizard remains homogeneous. Each slot uses its own adapter
+profile/environment, native confirmation and one-use signed proof. MCP still needs
+both per-manifest opt-ins plus its separate grant; OpenCode startup acknowledgments
+are unchanged and its descendant-retirement gate still reserves capacity.
+See [mixed-pair client steps and validation limits](codex-opencode-pair.md).
+This supersedes the mixed-provider blocker below only for this exact pair.
+
 A newly loaded Desktop can create and review **1–8 interactive terminals** in one
 window. The default maximum remains **2**. Set a smaller or larger explicit maximum
 when launching a new Desktop, for example:

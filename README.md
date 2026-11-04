@@ -3,13 +3,15 @@
 ## Bounded interactive terminal teams — 2026-11-03
 
 A newly loaded Desktop now supports **1–8 same-provider terminals in one project**,
+plus an explicitly reviewed **two-member Codex/OpenCode pair**,
 with **2 as the default maximum**. `ORQST_TERMINAL_LIMIT=8 pnpm desktop` enables up
 to eight tabs in the same window, with at most two visible in a split. Creation,
 private state, persisted UUID metadata, individual signed starts/stops and all-slot
 retirement use the existing native flow. The setting is per interactive Desktop
 runtime/profile, not a machine-wide quota. MCP remains exactly two participants;
-mixed providers, model selection, real login/delegation and durable reconnect are
-not newly validated. Do not restart a Desktop with drafts or owned work to apply
+broader mixed teams, model selection, real login/delegation and durable reconnect are
+not newly validated. OpenCode still blocks retirement pending descendant-exit proof.
+Do not restart a Desktop with drafts or owned work to apply
 this build. See [workflow, identity and exact limits](docs/development/terminal-teams.md).
 
 New Desktop terminal manifests now review one canonical tool PATH shared by CLI
@@ -71,7 +73,7 @@ See [client creation, recovery and real-acceptance blockers](docs/development/cl
 The updated Desktop native menu can select/review existing manifests in memory,
 then open its fixed Terminal pair without restarting. Layout preferences survive
 view switching in memory; they do not restore processes or layouts after restart. It accepts one provider per
-live selection and preserves existing reservations; review starts no provider or
+live selection or exactly one Codex and one OpenCode, and preserves existing reservations; review starts no provider or
 Core. An older loaded shell is not hot-upgraded by rebuilding. Strict inference-free
 OpenCode startup remains blocked by the [documented enforcement gap](docs/development/opencode-startup-safety.md).
 `pnpm terminal:plan:opencode` now reviews the exact installed 2.2.5 standalone
