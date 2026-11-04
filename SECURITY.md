@@ -1,5 +1,11 @@
 # Security policy
 
+The optional native diagnostic sink accepts only fixed event variants and opaque
+per-attempt correlation, never raw errors/stderr, terminal/session content, paths,
+configuration or credentials. A bounded queue and rotating private files isolate
+logging from operation success/failure. There is no remote sink or new API.
+See [filesystem controls, retention and failure limits](docs/development/local-diagnostics.md).
+
 Tauri now explicitly denies new webview permission requests reaching supported
 backend callbacks and rejects browser downloads in every owned webview builder.
 Dashboard document navigation additionally requires an existing SPA/session path.

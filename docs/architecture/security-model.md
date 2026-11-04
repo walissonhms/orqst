@@ -1,5 +1,16 @@
 # Security model
 
+## Optional local native diagnostics — 2026-11-04
+
+The native bootstrap alone selects the app-data diagnostic directory. A closed
+event enum accepts no arbitrary data; opaque attempt UUIDs are correlation only.
+The bounded asynchronous writer uses private rotating files, final no-follow and
+hardlink rejection plus a nonblocking OS writer lock on macOS/Linux. Log failure
+cannot grant retry, change effects or alter the operation outcome. This is not the
+observer event store and exposes no new local/remote API. See
+[filesystem assumptions, platform limits and retention](../development/local-diagnostics.md)
+and [source/reuse decisions](../research/local-diagnostics.md).
+
 ## Tauri webview policy — 2026-11-04
 
 Supported new browser permission requests are denied by the global native callback;

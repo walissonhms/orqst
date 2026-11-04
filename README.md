@@ -1,5 +1,13 @@
 # ORQST
 
+## Local native diagnostics — 2026-11-04
+
+Native source now includes an optional private rotating JSONL writer independent
+of stdout/stderr, with setup/Core/exit boundary events and opaque correlation.
+Terminal helper/startup/enrollment hooks are a separate integration increment.
+See [location, retention, consultation and source-only limits](docs/development/local-diagnostics.md).
+Existing installed/open apps are unchanged; native/provider acceptance remains pending.
+
 ## OpenCode saved models and native review — 2026-11-04
 
 Passive discovery now offers model references already saved by OpenCode 2.2.5,
