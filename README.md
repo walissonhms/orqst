@@ -1,5 +1,23 @@
 # ORQST
 
+## Core availability and explicit MCP pair integration — 2026-11-04
+
+Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit
+Codex/OpenCode pair), preserving additive EN/PT namespaces and existing tests.
+The static unavailable document has no script, IPC, network or retry controls;
+observer loss latches without releasing uncertain owned handles or stopping
+managed hosts. Normal Open keeps MCP disabled. The unchecked pair option reviews
+both catalog models, exact source/worker identities and every native page in the
+same workspace; operational Open and the one-use task grant remain separate.
+No new runtime, process adoption, permission expansion or Feature Delegate.
+
+See [Core availability](docs/development/tauri-core-unavailable.md),
+[pair workflow/security](docs/development/tauri-mcp-product-pair.md) and
+[combined validation and package boundary](docs/development/tauri-mcp-unavailable-integration.md).
+Real providers, effective models, native WebKit/MCP/Quit and Electron retirement
+remain pending. The new local package is built only from published frozen source;
+its generated manifest records actual Rust/build/signature/resource checks.
+
 The combined `9e562fa` source now has a [separate local Preview package](docs/development/electron-retirement.md#current-delivery--2026-11-04):
 40 Rust tests passed in each of two configurations, with final resource/Node and
 signature integrity verified. The package has not been started. Actual Codex/OpenCode

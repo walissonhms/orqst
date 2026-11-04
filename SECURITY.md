@@ -1008,3 +1008,14 @@ separate from signed Start/output/input grants. Uncertain additions are retained
 not retried or adopted; no renderer-controlled manifest or public endpoint is
 introduced. Native/provider acceptance is still pending. See
 [the source increment](docs/development/terminal-native-enrollment.md).
+
+## Tauri unavailable and explicit pair boundaries — 2026-11-04
+
+The fixed observer-unavailable custom protocol serves only its exact local GET
+document with escaped EN/PT text and no script, IPC, network or retry controls.
+Existing native remote capabilities remain bound to the owned dashboard origin.
+Explicit fresh Codex/OpenCode pair preparation reviews both models and bilateral
+MCP opt-in; normal Open remains disabled for MCP. Operational Open and one-task
+grants retain separate ownership, focus/document, revalidation and uncertainty
+fences. No new observer execution API or transport is introduced. See the
+[combined review and acceptance limits](docs/development/tauri-mcp-unavailable-integration.md).
