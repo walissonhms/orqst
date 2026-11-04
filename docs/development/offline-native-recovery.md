@@ -233,3 +233,40 @@ Permanent acceptance checklist for the corrected source:
 See [the new private contract and clock boundary](offline-recovery-consent-clock.md).
 No renewed native acceptance, Cargo, application build or packaging occurred in
 this correction. The prior real anchor and partial capture are outside its worktree.
+
+## Reviewed consent integration and package freeze — 2026-11-04
+
+The independently reviewed correction `97d0cf88c53f67cd439daa2023b4fcc3a916c5f1`
+was integrated by fast-forward from `5ceb745199068080433401e1492762932def04a3`.
+Its implementation is unchanged. The source delivery tag is
+`delivery/2026-11-04-offline-review-consent-source`; the tag and main are published
+atomically with the original `fix/offline-review-consent` branch before the final
+application build. No dependency, lockfile, license or upstream reuse changes apply.
+
+On the frozen implementation, locked/offline Cargo check passed; all-target tests
+passed in default and custom-protocol modes, each with 95 passed and the same one
+pre-existing explicit FIFO-fixture ignore. Clippy passed in both modes with
+`-D warnings`. These are executable native-source checks, not AppKit UI acceptance.
+The prior reviewers' 235 focused Node cases, full lint and TypeScript results are
+inherited for the exact unchanged implementation; no broad Node rerun is claimed.
+
+Final resources and the dashboard are regenerated after publication. The separate
+output is `dist/native-preview-review-consent/ORQST Preview.app`; its generated
+`build-manifest.json` records the actual source/native/helper hashes, commands,
+signatures, resource comparison and preservation of prior Preview packages.
+`OPERATOR.md` beside it provides the exact `--offline-recovery` executable command.
+Root build is excluded because it cleans shared output. The outer ad-hoc signature
+must preserve the original bundled Node signature; this is not notarization.
+
+The operator resumes the already authorized capture objective with the **existing
+format-1 anchor**, without installation, rotation or regeneration. Preserve the old
+incomplete inspection without `capture.json`: it cannot be selected as authenticated
+capture, adopted, deleted or automatically retried. A newly reviewed explicit capture
+creates a separate bundle. Review remains bounded by the original 300-second session;
+the 30-second effect grant starts only at explicit native Approve, includes sleep
+and transport delay, and is never refreshed by Details or Back.
+
+The coordinator owns UI/instance preflight and the renewed native reading, callback,
+focus, Cancel/Back, EOF and expiry acceptance. This integration does not launch or
+close an app, inspect real AppData, capture, release, reboot, start Core/PTY/provider
+or claim native recovery acceptance. No reboot is requested by package delivery.
