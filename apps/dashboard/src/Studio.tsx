@@ -1,3 +1,4 @@
+import { TauriStudioPreparation } from './TauriStudioPreparation.js';
 import { FeatureWorkspace } from './FeatureWorkspace.js';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +9,9 @@ import type { StudioRequest, StudioSnapshot } from '@orqst/protocol';
 export function Studio() {
   const { t } = useTranslation();
   const native = window.orqstStudio?.contractVersion === 1 ? window.orqstStudio : undefined;
+  const tauri =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const tauriShell = !!tauri || navigator.userAgent.includes('ORQSTTauri/');
   const desktop = !!window.orqstManagedAgents || navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const [snapshot, setSnapshot] = useState<StudioSnapshot>();
   const [busy, setBusy] = useState(false);
@@ -69,9 +73,15 @@ export function Studio() {
           {t('studio.local')}
         </span>
       </header>
-      {!native && (
+      {!native && !tauri && (
         <p className="notice" role="status">
-          {t(desktop ? 'studio.oldDesktop' : 'studio.desktopOnly')}
+          {t(
+            tauriShell
+              ? 'studio.tauri.unavailable'
+              : desktop
+                ? 'studio.oldDesktop'
+                : 'studio.desktopOnly',
+          )}
         </p>
       )}
       {notice && (
@@ -85,92 +95,102 @@ export function Studio() {
           aria-labelledby="studio-setup-title"
           aria-busy={busy}
         >
-          <div className="studio-section-title">
-            <Terminal size={20} />
-            <h2 id="studio-setup-title">{t('studio.setupTitle')}</h2>
-            <span className="studio-state">{t(`studio.state_${stage}`)}</span>
-          </div>
-          <p>{t('studio.setupHelp')}</p>
-          <div className="studio-members" aria-label={t('studio.preset')}>
-            <div>
-              <span className="studio-slot">A</span>
-              <div>
-                <strong>Codex</strong>
-                <small>{t('studio.providerCandidate')}</small>
+          {tauriShell ? (
+            <TauriStudioPreparation native={tauri} />
+          ) : (
+            <>
+              <div className="studio-section-title">
+                <Terminal size={20} />
+                <h2 id="studio-setup-title">{t('studio.setupTitle')}</h2>
+                <span className="studio-state">{t(`studio.state_${stage}`)}</span>
               </div>
-            </div>
-            <ArrowRight size={18} aria-hidden="true" />
-            <div>
-              <span className="studio-slot">B</span>
-              <div>
-                <strong>OpenCode</strong>
-                <small>{t('studio.providerCandidate')}</small>
+              <p>{t('studio.setupHelp')}</p>
+              <div className="studio-members" aria-label={t('studio.preset')}>
+                <div>
+                  <span className="studio-slot">A</span>
+                  <div>
+                    <strong>Codex</strong>
+                    <small>{t('studio.providerCandidate')}</small>
+                  </div>
+                </div>
+                <ArrowRight size={18} aria-hidden="true" />
+                <div>
+                  <span className="studio-slot">B</span>
+                  <div>
+                    <strong>OpenCode</strong>
+                    <small>{t('studio.providerCandidate')}</small>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="studio-actions">
-            {snapshot?.prepared && !snapshot.count && (
-              <button
-                className="button primary"
-                disabled={disabled || !snapshot.canSelect}
-                onClick={() => void request('resumeReview')}
-              >
-                <FileCheck2 size={16} />
-                {t('studio.continueReview')}
-              </button>
-            )}
+              <div className="studio-actions">
+                {snapshot?.prepared && !snapshot.count && (
+                  <button
+                    className="button primary"
+                    disabled={disabled || !snapshot.canSelect}
+                    onClick={() => void request('resumeReview')}
+                  >
+                    <FileCheck2 size={16} />
+                    {t('studio.continueReview')}
+                  </button>
+                )}
 
-            <button
-              className={`button ${snapshot?.count || snapshot?.prepared ? '' : 'primary'}`}
-              disabled={disabled || !snapshot?.canCreate || snapshot.limit < 2}
-              onClick={() => void request('createMixed')}
-            >
-              <FileCheck2 size={16} />
-              {t('studio.prepareMixed')}
-            </button>
-            <button
-              className="button"
-              disabled={disabled || !snapshot?.count || (!snapshot.opened && !snapshot.canSelect)}
-              onClick={() => void request('open')}
-            >
-              <Columns2 size={16} />
-              {t(snapshot?.opened ? 'studio.return' : 'studio.open')}
-            </button>
-          </div>
-          <p className="studio-next" role="status">
-            {busy
-              ? t('studio.reviewing')
-              : t(`studio.next_${stage}`, { count: snapshot?.count ?? 0 })}
-          </p>
-          {snapshot && snapshot.limit < 2 && <p className="notice">{t('studio.capacityOne')}</p>}
-          <details className="studio-advanced">
-            <summary>{t('studio.otherOptions')}</summary>
-            <div className="studio-actions">
-              <button
-                className="button"
-                disabled={disabled || !snapshot?.canCreate}
-                onClick={() => void request('create')}
-              >
-                {t('studio.createOther')}
-              </button>
-              <button
-                className="button"
-                disabled={disabled || !snapshot?.canSelect}
-                onClick={() => void request('select')}
-              >
-                <FolderOpen size={16} />
-                {t('studio.select')}
-              </button>
-              <button
-                className="button"
-                disabled={!native || busy}
-                onClick={() => void request('snapshot')}
-              >
-                {t('studio.refresh')}
-              </button>
-            </div>
-            <p>{t('studio.advancedHelp')}</p>
-          </details>
+                <button
+                  className={`button ${snapshot?.count || snapshot?.prepared ? '' : 'primary'}`}
+                  disabled={disabled || !snapshot?.canCreate || snapshot.limit < 2}
+                  onClick={() => void request('createMixed')}
+                >
+                  <FileCheck2 size={16} />
+                  {t('studio.prepareMixed')}
+                </button>
+                <button
+                  className="button"
+                  disabled={
+                    disabled || !snapshot?.count || (!snapshot.opened && !snapshot.canSelect)
+                  }
+                  onClick={() => void request('open')}
+                >
+                  <Columns2 size={16} />
+                  {t(snapshot?.opened ? 'studio.return' : 'studio.open')}
+                </button>
+              </div>
+              <p className="studio-next" role="status">
+                {busy
+                  ? t('studio.reviewing')
+                  : t(`studio.next_${stage}`, { count: snapshot?.count ?? 0 })}
+              </p>
+              {snapshot && snapshot.limit < 2 && (
+                <p className="notice">{t('studio.capacityOne')}</p>
+              )}
+              <details className="studio-advanced">
+                <summary>{t('studio.otherOptions')}</summary>
+                <div className="studio-actions">
+                  <button
+                    className="button"
+                    disabled={disabled || !snapshot?.canCreate}
+                    onClick={() => void request('create')}
+                  >
+                    {t('studio.createOther')}
+                  </button>
+                  <button
+                    className="button"
+                    disabled={disabled || !snapshot?.canSelect}
+                    onClick={() => void request('select')}
+                  >
+                    <FolderOpen size={16} />
+                    {t('studio.select')}
+                  </button>
+                  <button
+                    className="button"
+                    disabled={!native || busy}
+                    onClick={() => void request('snapshot')}
+                  >
+                    {t('studio.refresh')}
+                  </button>
+                </div>
+                <p>{t('studio.advancedHelp')}</p>
+              </details>
+            </>
+          )}
         </section>
         <aside className="panel studio-guide" aria-labelledby="studio-guide-title">
           <h2 id="studio-guide-title">{t('studio.guideTitle')}</h2>
@@ -179,13 +199,15 @@ export function Studio() {
               <li key={step}>
                 <span>{index + 1}</span>
                 <div>
-                  <strong>{t(`studio.step_${step}`)}</strong>
-                  <p>{t(`studio.step_${step}_help`)}</p>
+                  <strong>{t(`studio.${tauriShell ? 'tauri.' : ''}step_${step}`)}</strong>
+                  <p>{t(`studio.${tauriShell ? 'tauri.' : ''}step_${step}_help`)}</p>
                 </div>
               </li>
             ))}
           </ol>
-          <p className="studio-boundary">{t('studio.boundary')}</p>
+          <p className="studio-boundary">
+            {t(tauriShell ? 'studio.tauri.boundary' : 'studio.boundary')}
+          </p>
         </aside>
       </div>
       <section className="studio-capabilities" aria-label={t('studio.capabilities')}>
