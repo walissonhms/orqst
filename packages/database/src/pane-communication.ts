@@ -53,6 +53,18 @@ export function openCommunicationJournal(
         .map((row) => communicationMessageSchema.parse(JSON.parse(String(row.metadata)))),
     savePane: (input) => {
       const pane = communicationPaneSchema.parse(input);
+      if (
+        pane.routing &&
+        tx
+          .panes()
+          .some(
+            (p) =>
+              p.paneId !== pane.paneId &&
+              p.workspaceId === pane.workspaceId &&
+              p.routing?.handle === pane.routing?.handle,
+          )
+      )
+        throw new Error('Mention handle already registered');
       const previous = db
         .prepare('SELECT metadata FROM communication_panes WHERE id=?')
         .get(pane.paneId);

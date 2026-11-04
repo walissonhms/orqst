@@ -1,10 +1,20 @@
 import { z } from 'zod';
-import { communicationMessageSchema, communicationPaneSchema } from './pane-communication.js';
+import {
+  communicationMessageSchema,
+  communicationPaneSchema,
+  paneRoutingUpdateSchema,
+} from './pane-communication.js';
 
 const slot = z.number().int().min(0).max(1);
 export const managedAgentsRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot'), version: z.literal(1) }),
   z.strictObject({ action: z.literal('retire'), version: z.literal(1) }),
+  z.strictObject({
+    action: z.literal('routing'),
+    version: z.literal(1),
+    slot,
+    update: paneRoutingUpdateSchema,
+  }),
   z.strictObject({
     action: z.literal('start'),
     version: z.literal(1),
@@ -13,6 +23,7 @@ export const managedAgentsRequestSchema = z.discriminatedUnion('action', [
   }),
   z.strictObject({
     action: z.literal('delegate'),
+    sourceSlot: slot.default(0),
     version: z.literal(1),
     text: z.string().min(1).max(2048),
     task: z.string().min(1).max(1024),

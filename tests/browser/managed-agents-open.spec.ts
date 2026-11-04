@@ -1,5 +1,7 @@
 import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
+import { managedAgentsDocument } from '../../apps/desktop/src/managed-agents-document.js';
+import en from '../../apps/dashboard/src/locales/en-US.json' with { type: 'json' };
 
 // Synthetic opener replies only; real sender/preload/focus refusal is checked in Electron smoke.
 test('managed opener explains focus refusal, recovers and supports an older running preload', async ({
@@ -53,20 +55,15 @@ test('managed opener explains focus refusal, recovers and supports an older runn
 test('focus refusal preserves known lifecycle until a fresh snapshot restores controls', async ({
   page,
 }) => {
-  await page.setContent(`
-    <p id="status" data-working="working" data-focus_required="focus required"></p>
-    <p id="lifetime" data-active="active" data-idle="idle" data-uncertain="uncertain"></p>
-    <p id="project"></p><button id="retire"></button><button id="delegate"></button>
-    <textarea id="instructions"></textarea><textarea id="task"></textarea>
-    <pre id="communication"></pre>
-    ${[0, 1]
-      .map(
-        (slot) => `<input id="model-${slot}" value="SYNTHETIC">
-      <button id="start-${slot}"></button><button id="stop-${slot}"></button>
-      <pre id="identity-${slot}"></pre><pre id="output-${slot}"></pre>`,
-      )
-      .join('')}
-  `);
+  await page.setContent(
+    managedAgentsDocument(
+      'en-US',
+      (key) =>
+        en.managedAgents[key.slice('managedAgents.'.length) as keyof typeof en.managedAgents],
+    )
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/g, '')
+      .replace(/<link[^>]*>/g, ''),
+  );
   await page.evaluate(() => {
     let held = false;
     Reflect.set(window, 'syntheticSnapshotsHeld', false);
@@ -100,13 +97,13 @@ test('focus refusal preserves known lifecycle until a fresh snapshot restores co
     });
   });
   await page.addScriptTag({ path: resolve('apps/desktop/dist/managed-agents-client.js') });
-  await expect(page.locator('#lifetime')).toHaveText('active');
+  await expect(page.locator('#lifetime')).toHaveText(en.managedAgents.lifetime_active);
   await expect(page.locator('#stop-0')).toBeEnabled();
   await page.locator('#stop-0').click();
-  await expect(page.locator('#status')).toHaveText('focus required');
-  await expect(page.locator('#lifetime')).toHaveText('active');
+  await expect(page.locator('#status')).toHaveText(en.managedAgents.focus_required);
+  await expect(page.locator('#lifetime')).toHaveText(en.managedAgents.lifetime_active);
   await expect(page.locator('#stop-0')).toBeDisabled();
   await page.evaluate(() => Reflect.set(window, 'syntheticSnapshotsHeld', false));
   await expect(page.locator('#stop-0')).toBeEnabled();
-  await expect(page.locator('#lifetime')).toHaveText('active');
+  await expect(page.locator('#lifetime')).toHaveText(en.managedAgents.lifetime_active);
 });

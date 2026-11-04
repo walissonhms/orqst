@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Explicit managed-agent mentions and permissions
+
+- Adapt Tucano's pure mention parser with pinned Apache-2.0 attribution; retain
+  ORQST's owned Codex driver, SQLite queue, grants and correlated native tool return.
+- Add workspace-unique handles, descriptive roles and deny-by-default directed
+  routes to managed pane metadata; refuse self-send and transitive permission cycles.
+- Extend the existing native client with identity/permission review, selectable
+  source and permitted mention suggestions. Each task still needs its exact grant.
+- Keep the two-Codex scope, Tauri/PTY boundaries, unknown outcomes and native-provider
+  acceptance limits explicit; no text-written-to-PTY completion or autonomous chaining.
+
 ## 2026-11-04 — Tauri preview with the existing Node Core
 
 - Add an opt-in Tauri 2 shell that packages Node 24, the existing Bridge/Core,

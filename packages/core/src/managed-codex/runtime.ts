@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { Store } from '@orqst/database';
 import {
   communicationContentSchema,
+  paneHandleSchema,
   type CommunicationPane,
   type TerminalJournal,
   type TerminalState,
@@ -45,6 +46,7 @@ const startSchema = z.strictObject({
   ownerId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
   model: z.string().min(1).max(128).nullable(),
   dynamicTools: z.boolean().default(false),
+  mentionHandle: paneHandleSchema.optional(),
 });
 const rootSchema = z.strictObject({
   targetPaneId: z.uuid(),
@@ -350,6 +352,13 @@ export class CodexStructuredRuntime {
       attempt.pane = this.communication.registerPane({
         workspaceId: attempt.input.workspaceId,
         name: attempt.input.name,
+        routing: attempt.input.mentionHandle
+          ? {
+              handle: attempt.input.mentionHandle,
+              role: 'worker',
+              allowedTargetPaneIds: [],
+            }
+          : null,
         provider: 'codex',
         cliVersion: attempt.config.executableVersion,
         model: null,
@@ -564,6 +573,10 @@ export class CodexStructuredRuntime {
       !target?.pane ||
       source === target ||
       source.pane.workspaceId !== target.pane.workspaceId ||
+      (source.pane.routing !== null &&
+        !this.communication
+          .resolvePane(source.pane.workspaceId, source.pane.paneId)
+          .routing?.allowedTargetPaneIds.includes(target.pane.paneId)) ||
       !source.adapter?.ready(source.pane) ||
       !target.adapter?.ready(target.pane) ||
       input.deadline <= Date.now() ||
@@ -572,6 +585,8 @@ export class CodexStructuredRuntime {
       Buffer.byteLength(input.delegatedTask) > 2048
     )
       throw new Error('Root delegation plan unavailable or outside policy');
+    source.pane = this.communication.resolvePane(source.pane.workspaceId, source.pane.paneId);
+    target.pane = this.communication.resolvePane(target.pane.workspaceId, target.pane.paneId);
     const id = randomUUID();
     const correlationId = randomUUID();
     const plan = {
@@ -611,6 +626,15 @@ export class CodexStructuredRuntime {
       Date.now() >= root.input.deadline
     )
       throw new Error('Root delegation grant unavailable');
+    const currentSource = this.communication.resolvePane(
+      root.source.pane.workspaceId,
+      root.source.pane.paneId,
+    );
+    if (
+      currentSource.routing &&
+      !currentSource.routing.allowedTargetPaneIds.includes(root.target.pane.paneId)
+    )
+      throw new Error('Routing permission denied');
     this.authority.consume(proof, { operation: 'input', target: taskId, digest: root.digest });
     root.used = true;
     const context = { taskId, correlationId: root.correlationId, deadline: root.input.deadline };

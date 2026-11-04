@@ -22,3 +22,13 @@ See docs/research/tauri-core-reuse.md for component scope and acceptance.
 Source: client/src-tauri/src/lib.rs (run_with single-instance window callback)
 Destination: apps/tauri/src-tauri/src/main.rs
 Modified by ORQST to focus its own main window without deep-link forwarding.
+
+This product includes code adapted from Tucano (Apache License 2.0):
+https://github.com/eduwxyz/tucano
+Commit: 0501956d127699300209902e889f3e69a0948766
+Source: src/core/context.ts (mentioned), src/shared/types.ts (CODE_SPANS)
+Destination: packages/core/src/communication/mentions.ts
+Modified by ORQST to return normalized handles, retain unknown/oversized handles
+for explicit rejection, and remove Tucano application-specific Agent dependencies.
+The upstream tree at this commit contains LICENSE and no NOTICE file.
+See LICENSE and docs/research/mention-communication.md for provenance and changes.

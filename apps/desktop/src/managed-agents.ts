@@ -1,3 +1,4 @@
+import { managedAgentsDocument } from './managed-agents-document.js';
 import { generateKeyPairSync, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,7 +25,6 @@ import {
   terminalScriptURL,
   terminalStyleURL,
 } from './terminal-policy.js';
-import { escapeHTML } from './policy.js';
 
 /** A native client surface over the existing structured runtime, separate from observed sessions. */
 export async function createManagedAgents(
@@ -40,15 +40,15 @@ export async function createManagedAgents(
   browserSession.webRequest.onBeforeRequest((d, done) =>
     done({ cancel: !allowedTerminalRequest(d.url, d.resourceType) }),
   );
-  const t = (key: string) => escapeHTML(translate(`managedAgents.${key}`));
   browserSession.protocol.handle('orqst-terminal', (request) => {
     if (request.method !== 'GET') return new Response(null, { status: 405 });
     let body: string;
     let type: string;
     if (request.url === terminalDocumentURL) {
-      const card = (slot: number) =>
-        `<section class="pane"><h2>${t('terminal')} ${slot === 0 ? 'A' : 'B'}</h2><label>${t('model')} <input id="model-${slot}" maxlength="128" autocomplete="off"></label><nav><button id="start-${slot}">${t('start')}</button><button id="stop-${slot}" disabled>${t('stop')}</button></nav><pre id="identity-${slot}">${t('notStarted')}</pre><pre class="output" id="output-${slot}" aria-label="${t('output')}"></pre></section>`;
-      body = `<!doctype html><html lang="${app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US'}"><head><meta charset="utf-8"><title>${t('title')}</title><link rel="stylesheet" href="${terminalStyleURL}"></head><body><main><h1>${t('title')}</h1><p>${t('scope')}</p><p>${t('setup')}</p><p>${t('risk')}</p><aside class="lifetime"><p>${t('lifetime')}</p><p id="lifetime" role="status" ${['idle', 'active', 'uncertain', 'reserved', 'retired'].map((k) => `data-${k}="${t(`lifetime_${k}`)}"`).join(' ')}>${t('lifetime_idle')}</p><p>${t('recoveryLimit')}</p><button id="retire" disabled>${t('retire')}</button></aside><p id="status" role="status" aria-live="polite" ${['ok', 'cancelled', 'busy', 'denied', 'focus_required', 'unavailable', 'working'].map((k) => `data-${k}="${t(k)}"`).join(' ')}>${t('notStarted')}</p><p id="project"></p><div class="panes">${card(0)}${card(1)}</div><section><h2>${t('delegation')}</h2><label>${t('instructions')}<textarea id="instructions" maxlength="2048"></textarea></label><label>${t('task')}<textarea id="task" maxlength="1024"></textarea></label><button id="delegate" disabled>${t('send')}</button><p>${t('limits')}</p><pre id="communication" aria-label="${t('communication')}"></pre></section></main><script src="${terminalScriptURL}" defer></script></body></html>`;
+      body = managedAgentsDocument(
+        app.getLocale().toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US',
+        translate,
+      );
       type = 'text/html; charset=utf-8';
     } else if (request.url === terminalScriptURL) {
       body = readFileSync(join(__dirname, 'managed-agents-client.js'), 'utf8');
@@ -187,6 +187,7 @@ export async function createManagedAgents(
       let challenge: TerminalChallenge;
       let details: unknown;
       let task: ReturnType<DesktopManagedAgents['prepareTask']> | undefined;
+      let routing: ReturnType<DesktopManagedAgents['prepareRouting']> | undefined;
       if (r.action === 'start') {
         const prepared = (await core.call({
           operation: 'prepareStart',
@@ -200,9 +201,18 @@ export async function createManagedAgents(
           operation: 'prepareTask',
           text: r.text,
           task: r.task,
+          sourceSlot: r.sourceSlot,
         })) as ReturnType<DesktopManagedAgents['prepareTask']>;
         challenge = task.challenge;
         details = task.plan;
+      } else if (r.action === 'routing') {
+        routing = (await core.call({
+          operation: 'prepareRouting',
+          slot: r.slot,
+          update: r.update,
+        })) as ReturnType<DesktopManagedAgents['prepareRouting']>;
+        challenge = routing.challenge;
+        details = routing.plan;
       } else if (r.action === 'retire') {
         const prepared = (await core.call({ operation: 'prepareRetire' })) as ReturnType<
           DesktopManagedAgents['prepareRetire']
@@ -248,6 +258,8 @@ export async function createManagedAgents(
         await core.call({ operation: 'launch', slot: r.slot, proof });
       } else if (r.action === 'retire') await core.call({ operation: 'retire', proof });
       else if (r.action === 'stop') await core.call({ operation: 'stop', slot: r.slot, proof });
+      else if (r.action === 'routing')
+        await core.call({ operation: 'applyRouting', changeId: routing!.changeId, proof });
       else
         await core.call({
           operation: 'runTask',

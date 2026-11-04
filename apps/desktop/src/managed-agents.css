@@ -41,6 +41,7 @@ textarea {
   margin-top: 8px;
 }
 input,
+select,
 textarea,
 button {
   font: inherit;

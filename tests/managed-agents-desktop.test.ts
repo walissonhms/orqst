@@ -176,6 +176,22 @@ function fixture(
     admissionDirectory,
     exits,
     proof,
+    allowRoute(
+      sourceSlot = 0,
+      targetSlot = 1,
+      extra: Partial<import('@orqst/protocol').PaneRoutingUpdate> = {},
+    ) {
+      const source = service.snapshot().slots[sourceSlot]!.pane!;
+      const target = service.snapshot().slots[targetSlot]!.pane!;
+      const prepared = service.prepareRouting(sourceSlot, {
+        name: source.name,
+        ...source.routing!,
+        allowedTargetPaneIds: [target.paneId],
+        ...extra,
+      });
+      service.applyRouting(prepared.changeId, proof(prepared.challenge));
+      return service.snapshot().slots[sourceSlot]!.pane!;
+    },
     close() {
       service.close();
       rmSync(root, { recursive: true, force: true });
@@ -198,7 +214,8 @@ test('Desktop composition needs signed starts and task; exposes correlated A/B r
     assert.equal(new Set(f.service.snapshot().slots.map((s) => s!.pane!.displayId)).size, 2);
     assert.equal(new Set(f.service.snapshot().slots.map((s) => s!.nativeThreadId)).size, 2);
     assert.throws(() => f.service.prepareStart(0, 'synthetic-model'), /No retry/);
-    const task = f.service.prepareTask('SYNTHETIC A instructions', 'SYNTHETIC B task');
+    f.allowRoute();
+    const task = f.service.prepareTask('SYNTHETIC A instructions', '@terminal-b SYNTHETIC B task');
     assert.equal(f.transports[0]!.turns, 0);
     assert.throws(
       () => f.service.runTask(task.plan.taskId, randomUUID(), f.proof(task.challenge)),
@@ -210,7 +227,7 @@ test('Desktop composition needs signed starts and task; exposes correlated A/B r
       /identity/,
     );
     await tick();
-    const call = f.transports[0]!.delegate(task.plan.target.paneId, 'SYNTHETIC B task');
+    const call = f.transports[0]!.delegate(task.plan.target.paneId, '@terminal-b SYNTHETIC B task');
     await tick();
     assert.equal(f.service.snapshot().messages[0]!.taskState, 'running');
     assert.equal(f.service.snapshot().root!.resultText, null);
@@ -242,6 +259,113 @@ test('Desktop composition needs signed starts and task; exposes correlated A/B r
   }
 });
 
+test('native routing review is signed, one-use, collision-safe and invalidates prepared task identities', async () => {
+  const f = fixture();
+  try {
+    for (const slot of [0, 1]) {
+      const start = f.service.prepareStart(slot, 'synthetic-model');
+      await f.service.launch(slot, f.proof(start.challenge));
+    }
+    const [a, b] = f.service.snapshot().slots.map((s) => s!.pane!);
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'), /permission/);
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@unknown SYNTHETIC'), /unavailable/);
+    assert.throws(
+      () => f.service.prepareTask('SYNTHETIC', '@terminal-a @terminal-b'),
+      /one explicit/,
+    );
+    const update = {
+      name: 'SYNTHETIC coordinator',
+      ...a!.routing!,
+      role: 'orchestrator' as const,
+      allowedTargetPaneIds: [b!.paneId],
+    };
+    const prepared = f.service.prepareRouting(0, update);
+    assert.deepEqual(f.service.snapshot().slots[0]!.pane!.routing?.allowedTargetPaneIds, []);
+    assert.throws(() => f.service.applyRouting(prepared.changeId, {}), /proof/);
+    f.service.applyRouting(prepared.changeId, f.proof(prepared.challenge));
+    assert.throws(
+      () => f.service.applyRouting(prepared.changeId, f.proof(prepared.challenge)),
+      /stale/,
+    );
+    assert.equal(f.service.snapshot().slots[0]!.pane!.paneId, a!.paneId);
+    assert.equal(f.service.snapshot().slots[0]!.pane!.routing?.role, 'orchestrator');
+    const stale = f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC');
+    const rename = f.service.prepareRouting(1, {
+      name: 'SYNTHETIC reviewer',
+      ...b!.routing!,
+      handle: 'reviewer',
+    });
+    const concurrent = f.service.prepareRouting(0, update);
+    f.service.applyRouting(rename.changeId, f.proof(rename.challenge));
+    assert.throws(
+      () => f.service.applyRouting(concurrent.changeId, f.proof(concurrent.challenge)),
+      /stale/,
+    );
+    assert.throws(
+      () =>
+        f.service.runTask(stale.plan.taskId, stale.plan.correlationId, f.proof(stale.challenge)),
+      /identity/,
+    );
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'), /unavailable/);
+    assert.doesNotThrow(() => f.service.prepareTask('SYNTHETIC', '@reviewer SYNTHETIC'));
+    const collision = f.service.prepareRouting(1, {
+      name: 'SYNTHETIC',
+      ...b!.routing!,
+      handle: 'terminal-a',
+    });
+    assert.throws(
+      () => f.service.applyRouting(collision.changeId, f.proof(collision.challenge)),
+      /already registered/,
+    );
+    assert.deepEqual(
+      f.transports.map((t) => t.turns),
+      [0, 0],
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('either native terminal may be source; matrix cycles are denied and result follows source identity', async () => {
+  const f = fixture();
+  try {
+    for (const slot of [0, 1]) {
+      const start = f.service.prepareStart(slot, 'synthetic-model');
+      await f.service.launch(slot, f.proof(start.challenge));
+    }
+    f.allowRoute(1, 0, { role: 'orchestrator' });
+    assert.throws(() => f.allowRoute(), /cycle/);
+    const task = f.service.prepareTask('SYNTHETIC reverse source', '@terminal-a SYNTHETIC task', 1);
+    assert.equal(task.plan.source.paneId, f.service.snapshot().slots[1]!.pane!.paneId);
+    f.service.runTask(task.plan.taskId, task.plan.correlationId, f.proof(task.challenge));
+    await tick();
+    assert.throws(() => f.allowRoute(1, 0), /active/);
+    const call = f.transports[1]!.delegate(task.plan.target.paneId, '@terminal-a SYNTHETIC task');
+    await tick();
+    f.transports[0]!.complete('SYNTHETIC reverse worker');
+    await tick();
+    f.transports[1]!.item({
+      id: call,
+      type: 'dynamicToolCall',
+      tool: 'orqst_delegate_task',
+      status: 'completed',
+      success: true,
+    });
+    f.transports[1]!.complete('SYNTHETIC reverse root received');
+    await tick();
+    const snapshot = f.service.snapshot();
+    assert.equal(snapshot.root?.state, 'completed');
+    assert.equal(snapshot.root?.resultText, 'SYNTHETIC reverse root received');
+    assert.equal(snapshot.messages[0]?.sourcePaneId, task.plan.source.paneId);
+    assert.equal(snapshot.messages[0]?.targetPaneId, task.plan.target.paneId);
+    assert.equal(snapshot.messages[0]?.correlationId, task.plan.correlationId);
+    assert.equal(snapshot.messages[0]?.resultText, 'SYNTHETIC reverse worker');
+    assert.equal(snapshot.messages[0]?.deliveryState, 'accepted');
+  } finally {
+    f.close();
+  }
+});
+
 test('Desktop source loss blocks uncertain task retries; reopening cannot migrate or adopt journals', async () => {
   const f = fixture();
   try {
@@ -249,13 +373,14 @@ test('Desktop source loss blocks uncertain task retries; reopening cannot migrat
       const p = f.service.prepareStart(slot, 'synthetic-model');
       await f.service.launch(slot, f.proof(p.challenge));
     }
-    const task = f.service.prepareTask('SYNTHETIC', 'SYNTHETIC');
+    f.allowRoute();
+    const task = f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC');
     f.service.runTask(task.plan.taskId, task.plan.correlationId, f.proof(task.challenge));
     await tick();
     f.transports[0]!.lost();
     await tick();
     assert.equal(f.service.snapshot().root!.state, 'outcome_unknown');
-    assert.throws(() => f.service.prepareTask('SYNTHETIC', 'SYNTHETIC'), /uncertain/);
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'), /uncertain/);
     const file = join(f.service.project, '..', 'a', 'desktop-communication.sqlite');
     const before = readFileSync(file);
     assert.throws(
@@ -334,7 +459,8 @@ test('uncertain task retirement preserves outcomes and evidence, requires every 
       const start = f.service.prepareStart(slot, 'synthetic-model');
       await f.service.launch(slot, f.proof(start.challenge));
     }
-    const task = f.service.prepareTask('SYNTHETIC', 'SYNTHETIC');
+    f.allowRoute();
+    const task = f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC');
     f.service.runTask(task.plan.taskId, task.plan.correlationId, f.proof(task.challenge));
     await tick();
     f.transports[0]!.complete('SYNTHETIC without verified delegation');
@@ -357,7 +483,7 @@ test('uncertain task retirement preserves outcomes and evidence, requires every 
     assert.equal(after.admission, 'retired');
     assert.equal(after.canRetire, false);
     assert.throws(() => f.service.prepareStart(0, 'synthetic-model'), /retired/);
-    assert.throws(() => f.service.prepareTask('SYNTHETIC', 'SYNTHETIC'), /uncertain/);
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'), /uncertain/);
     assert.throws(() => f.service.retire(f.proof(prepared.challenge)), /retirable/);
     assert.deepEqual(
       f.transports.flatMap((t) => t.signals),

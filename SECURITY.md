@@ -767,3 +767,26 @@ provider prompts or process commands. Non-read requests require preload activati
 authorized native sender and focus, then the existing parented path/hash/consent
 reviews. It cannot start a CLI or accept provider permissions. No HTTP/WS execution
 route was added; the Studio path uses the existing static dashboard security controls.
+
+## Managed mention routing review — 2026-11-04
+
+The existing isolated Electron managed-client IPC gains bounded identity/route edits
+and an explicit source slot. Strict protocol schemas reject injected paths, proofs,
+actor/workspace claims and additional properties. Sender/session/main-frame/generation,
+user activation, native focus, Cancel-default review, expiry and Ed25519 one-use
+challenge consumption are preserved. The private Core binds exact before/after
+metadata to the signed routing review; revision changes invalidate stale reviews
+and prepared tasks. Active/uncertain root work blocks policy edits in this client.
+
+New routed identities deny all destinations initially. The Core checks workspace,
+managed ownership, unique handles, directed matrix permission and cycles; permission
+is enforced again on grants, message admission and dispatch. Roles grant no authority.
+Each task still needs the separate exact native task grant. Mention parsing applies
+only to submitted composer text, never captured output; unknown/multiple targets fail
+closed. Text remains untrusted, rendered using textContent; no HTML evaluation, PTY
+injection, automatic reply chaining, fallback provider or observer control is added.
+
+No HTTP/WS/cookie/static-file-serving contract, network listener or credential access
+changes. The refactored native document keeps the same isolated protocol/CSP and
+escapes localized labels. Synthetic Chromium consent is not native-modal acceptance;
+real-provider and Tauri managed-terminal parity remain unvalidated.

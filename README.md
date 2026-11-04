@@ -1,5 +1,17 @@
 # ORQST
 
+## Explicit mention routing — 2026-11-04
+
+The existing Electron **Managed agents** client now edits pane names, unique handles,
+coordination roles and directed communication permissions. Its task composer suggests
+permitted `@handles` and resolves one explicit destination to the existing UUID-based
+Codex structured queue/result transport. Either member can be the source; all routes
+start denied and require native review, followed by separate exact-task authorization.
+This is still a two-Codex composition, separate from the interactive 1–8 PTY team and
+the Tauri observer preview. Native provider acceptance remains pending. See the
+[workflow and limits](docs/development/managed-agents-client.md#explicit-mentions-and-directed-permissions--2026-11-04)
+and [pinned component review](docs/research/mention-communication.md).
+
 ## Tauri 2 migration preview — 2026-11-04
 
 A separate Tauri 2 application now runs the existing React dashboard with a bundled

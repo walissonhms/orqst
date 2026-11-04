@@ -193,3 +193,43 @@ delivery. Both signed starts and a separate task grant remain mandatory. Real
 A-to-B-to-A processing/result acceptance, pane-addressed UI delivery and N-member
 composition remain incomplete. Preserve current source/target/idempotency/status
 semantics; an uncertain result must not be replayed as if acceptance never occurred.
+
+## Explicit mentions and directed permissions — 2026-11-04
+
+New routed panes have `routing: {handle, role, allowedTargetPaneIds}`. Handles use
+2–32 lowercase ASCII letters/digits/underscore/hyphen, start with a letter/digit
+and are unique within the workspace, including closed records. `paneId`, display
+ID and owned runtime binding are unchanged by edits. Roles (`worker`, `reviewer`,
+`orchestrator`) are descriptive and never create execution authority.
+
+`configureRouting` is trusted Core composition only. It atomically validates targets,
+workspace/managed ownership, handle uniqueness, duplicate/self edges and direct or
+transitive cycles, then saves metadata plus `pane_routing_changed` audit. Explicit
+matrix permission is checked at grant creation, admission and dispatch. Removing an
+edge blocks undispatched work without changing known delivery/task outcomes or scoped
+read access. The original message can still be cancelled before dispatch; there is
+no automatic redirect, expiry extension or replay.
+
+`resolveMention` accepts explicitly submitted composer text only. It adapts the pinned
+Tucano parser, ignores fenced/inline code and ordinary email addresses, normalizes
+case and requires exactly one distinct known managed handle in that workspace.
+Unknown/oversized handles fail rather than falling back to a name, ID or model router.
+The original task bytes, including the mention, remain the exact authorized payload.
+Captured CLI output never invokes this resolver or grants a subsequent delegation.
+
+The native request union adds `{action:"routing",version:1,slot,update}` and a
+`sourceSlot` (0 or 1, default 0) on `delegate`. Routing requests expose no proof,
+path, actor, workspace or grant. The main process prepares a signed one-use review
+binding exact before/after identity and routes; Core refuses stale revisions and
+invalidates previously prepared root tasks after an edit. Active or uncertain root
+work blocks edits. A separate existing native confirmation binds each exact source,
+target, task and deadline before inference. Roles do not select an implicit source.
+
+Existing journal records parse missing `routing` as null. Those legacy/native
+compositions continue requiring their original exact per-task native grants; null
+is not anonymous execution permission. New Desktop routed panes always enroll with
+an empty matrix. This additive metadata contract creates no table migration, REST,
+WebSocket, generic MCP or observer capability. This path is enabled only through the
+explicit Electron managed client. The earlier capability table describes the original
+library milestone; the current implementation and remaining acceptance boundary are
+recorded in [the component review](../research/mention-communication.md).
