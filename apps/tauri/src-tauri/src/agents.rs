@@ -270,6 +270,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         .visible(false)
         .on_navigation(|url| url.as_str() == URL)
         .on_new_window(|_, _| NewWindowResponse::Deny)
+        .on_download(|_, _| false)
         .on_page_load(move |window, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
                 let state = window.state::<Agents>();

@@ -1,5 +1,14 @@
 # Changelog
 
+## Webview policy hardening — 2026-11-04
+
+- Deny supported new permission requests with the existing Tauri global callback
+  and cancel browser downloads in dashboard/terminal/Feature/agent webviews.
+- Restrict dashboard document paths to existing SPA/session routes while retaining
+  exact origin/unavailable guards, custom CSP and native file/export flows.
+- Record [pinned default differences and acceptance limits](docs/research/tauri-webview-policy.md).
+  Pure path tests pass; native compilation and platform acceptance remain pending.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

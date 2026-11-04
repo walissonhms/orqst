@@ -1,5 +1,21 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Webview policy hardening — 2026-11-04
+
+- [x] Compare locked Tauri/Wry permission/download defaults with Electron source;
+      implement supported callback denial and matching dashboard document routes.
+- [x] Preserve exact custom documents/CSP, focus/capabilities and native file flows;
+      pass four standalone pure Rust path/encoding tests.
+- [ ] Run coordinated native compilation/URL tests and accept effective permission,
+      download, clipboard, SPA/unavailable and file/export behavior per platform.
+      Saved browser decisions and unsupported callbacks remain explicit limits.
+- [ ] Resolve/accept the default Tauri data store versus Electron non-persistent
+      sessions, persisted grants bypassing callbacks, and missing macOS geo/
+      browser-notification/clipboard-read callbacks before claiming full parity.
+
+See [source evidence](../research/tauri-webview-policy.md) and
+[validation scope](../development/tauri-webview-policy.md). Electron retirement remains open.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

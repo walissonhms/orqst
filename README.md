@@ -1,5 +1,10 @@
 # ORQST
 
+Tauri webview hardening now explicitly denies supported new permission requests
+and browser downloads, and limits dashboard documents to existing SPA routes.
+See [source defaults, checks and remaining native/platform acceptance](docs/development/tauri-webview-policy.md).
+Native file exports retain their existing guarded flow; Electron retirement remains pending.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit
