@@ -3,9 +3,9 @@
 Baseline: main `03e5bcb3348e1faac7be03ee8065208253eb6d61`, service `2e0a32b`
 and contract `1b3dd9a`, corrected service freeze 744/1
 `3c33960bf7f2f546c74a10978079d6e10d7703fb` and final marker-ordering freeze
-`739870cb7782d9b1274ee2ad658500b1652b719e`. Work is isolated; main, packages,
-real AppData, reservations, journals and auth configurations were not changed by
-verification. No application, Core, PTY or provider was started. No reboot,
+`739870cb7782d9b1274ee2ad658500b1652b719e`. The original worker increment was isolated. Integration now combines it with
+service correction `0382301`; real AppData, reservations, journals and auth
+configurations remain untouched by verification. No application, Core, PTY or provider was started. No reboot,
 signal, adoption, reconcile or package build was performed.
 
 ## Native flow
@@ -132,3 +132,61 @@ Core correction. This worker did not edit Core/types or claim that this separate
 review issue was fixed. Production acceptance requires the integrated correction.
 
 Joint source review and native validation remain required before production use.
+
+## Integrated source and package boundary — 2026-11-04
+
+The source integration preserves original service commits `2e0a32b`, `1b3dd9a`,
+`3c33960`, `739870c` and native commit `614cae6` (cherry-picked as `753788a`), plus
+separate blocker correction `0382301`. The final commit checks the retained helper
+lease bytes/full identity and proof deadline after durable preparation and the last
+source checks. No new consent is inferred from an old signed plan or control file.
+
+Vertical source review checked the independent durable anchor, separate signature
+domains, fixed native kernel UUID source, full DB/WAL and current-owner enrollment
+validation, non-dispatch restriction, per-phase approval, Cancel/EOF denial, unknown
+same-boot helper refusal, marker exclusion until commit and future-owner cleanup.
+The fixed native document has no IPC capability; HTTP/WS and observer authority
+remain unchanged. Its static custom scheme restricts method/URL, refuses navigation,
+new windows and downloads, and sets a no-script/no-connect CSP. This is the security
+review note for that new local static surface. Existing upstream/license decisions
+above were revalidated; no dependencies or upstream source are added.
+
+On integrated source, 122 service tests and 29 native-boundary tests passed (151
+distinct synthetic cases); full lint/Prettier, TypeScript, Rust formatting and Git
+whitespace checks passed. The existing 53 admission/enrollment/retirement regressions
+were already reported green on unchanged service dependencies by the prior reviewer;
+that result is not a newly executed integration check. Full `pnpm test`, root build,
+browser tests and real local ingestion validation are excluded here: ingestion is
+unchanged and root build would clean shared output. Native Cargo tests/Clippy and
+packaging happen only after the published source freeze, serially in the coordinated
+`/tmp/orqst-691-target`; their actual outcomes and hashes belong to the generated
+`dist/native-preview-offline-recovery/build-manifest.json`. A failing source gate
+requires correction and a new published freeze before packaging continues.
+
+The output is a separate `dist/native-preview-offline-recovery/ORQST Preview.app`.
+Open its **executable** with the explicit argument, only during separately authorized
+human acceptance, without first double-clicking its normal application icon:
+
+```sh
+"dist/native-preview-offline-recovery/ORQST Preview.app/Contents/MacOS/orqst-desktop" --offline-recovery
+```
+
+An existing Preview instance with the same bundle identity keeps its existing mode.
+If the administrative title/menu is absent, stop: another launch did not select
+administrative mode. Any orderly closing of current work needs its own human
+context and authorization; this delivery does not quit, kill or adopt anything.
+
+Real acceptance must first verify native detail wrapping/scrolling/selection,
+Cancel/default, Back without approval, focus loss and timeout. Only then separately
+authorize installation and exact real capture **before** any full kernel reboot.
+Preserve the complete bundle/independent anchor and unrelated work. A subsequent
+human-authorized kernel reboot is external; app restart or userspace restart is
+insufficient. After a different native boot, select the exact captured bundle and
+review release preparation; confirm it reports `release_prepared`, then separately
+review/approve final commit. If the result is unconfirmed or controls are preserved,
+preserve evidence and do not infer free capacity or retry automatically. Explicit
+continuations obey the phase/lease rules; unknown same-boot helper evidence stays
+denied. Normal Codex Open remains a later, independent human action requiring its
+existing native grants and real started/owned-exit evidence. Recovery has not run
+against the real reservation, and no actual release, native/provider or Codex
+acceptance is claimed by source checks or packaging.

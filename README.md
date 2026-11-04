@@ -1,5 +1,12 @@
 # ORQST
 
+## Offline recovery source integration — 2026-11-04
+
+The dedicated administrative entry and marker-preserving transaction are integrated,
+including final proof-deadline/lease checks. 151 focused synthetic cases and source
+checks passed. Packaging follows a published freeze; real recovery and Codex Open
+remain pending explicit human acceptance. See the [integrated flow and package boundary](docs/development/offline-native-recovery.md#integrated-source-and-package-boundary--2026-11-04).
+
 Offline release now prepares only; the original admission marker remains until
 the separately approved final commit. Legacy wx claims are excluded before that
 point; later owner markers are never touched by recovery cleanup.
