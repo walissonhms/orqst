@@ -7,7 +7,11 @@ import {
   paneRoutingUpdateSchema,
   type ManagedAgentsSnapshot,
   type PaneRoutingUpdate,
+  type TerminalTeamSave,
 } from '@orqst/protocol';
+import { terminalIdentity } from '../terminal/identity.js';
+import { terminalTeamDatabase } from '../terminal/team-database.js';
+import { teamRoutingProposal } from '../communication/team-configuration.js';
 import { PaneCommunication, type CommunicationContentScope } from '../communication/service.js';
 import { TerminalAuthority, terminalDigest } from '../terminal/authority.js';
 import { readManagedCodexConfig } from '../terminal/codex-profile.js';
@@ -41,6 +45,7 @@ export class DesktopManagedAgents {
   >();
   private content = new Map<string, { scope: string; bytes: Uint8Array }>();
   readonly project: string;
+  private terminalIds: string[];
 
   constructor(
     private files: [string, string],
@@ -51,6 +56,7 @@ export class DesktopManagedAgents {
       assertOwner(): void;
       prepareRelease(evidence: unknown): () => void;
     },
+    private configurationDirectory?: string,
   ) {
     const configs = files.map(readManagedCodexConfig);
     const [a, b] = configs;
@@ -70,6 +76,7 @@ export class DesktopManagedAgents {
       for (const file of ['terminal.sqlite', 'desktop-communication.sqlite'])
         if (existsSync(join(config.state, file))) throw new Error('Fresh private slots required');
     this.project = a.project;
+    this.terminalIds = configs.map((config) => terminalIdentity(config).terminalId);
     const authority = (this.authority = new TerminalAuthority(
       new Map([['desktop-agents', publicKey]]),
       Date.now,
@@ -102,6 +109,34 @@ export class DesktopManagedAgents {
       backend,
       read,
     );
+  }
+
+  private teamDatabase() {
+    if (!this.configurationDirectory) throw new Error('Team configuration unavailable');
+    return terminalTeamDatabase(
+      this.configurationDirectory,
+      this.terminalIds,
+      terminalDigest(this.project),
+    );
+  }
+  readTeam() {
+    return { team: this.teamDatabase().read(), terminalIds: [...this.terminalIds] };
+  }
+  saveTeam(input: TerminalTeamSave) {
+    // Saved intent does not mutate routing revisions, pending tasks, ownership or grants.
+    return { team: this.teamDatabase().save(input), terminalIds: [...this.terminalIds] };
+  }
+  prepareTeamRouting(slot: number, expectedRevision: number) {
+    const state = this.teamDatabase().read();
+    if (state.revision !== expectedRevision || !state.configuration)
+      throw new Error('Stale team configuration');
+    const update = teamRoutingProposal(
+      state.configuration,
+      this.terminalIds[slot] ?? '',
+      terminalDigest(this.project),
+      this.snapshot().slots.flatMap((s) => (s?.pane ? [s.pane] : [])),
+    );
+    return this.prepareRouting(slot, update);
   }
 
   prepareStart(slot: number, model: string) {

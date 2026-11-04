@@ -163,6 +163,7 @@ function fixture(
       },
     },
     wrapAdmission(desktopAgentsAdmission(admissionDirectory)),
+    admissionDirectory,
   );
   const proof = (challenge: TerminalChallenge) => ({
     challengeId: challenge.challengeId,
@@ -639,6 +640,54 @@ test('failed marker finalization can be reviewed again after fencing without ret
       readdirSync(f.admissionDirectory).filter((name) => name.startsWith('retired-')).length,
       1,
     );
+  } finally {
+    f.close();
+  }
+});
+
+test('saved team intent stays inert until fresh live identities and a signed route review', async () => {
+  const f = fixture();
+  try {
+    const { team, terminalIds } = f.service.readTeam();
+    assert.equal(team.revision, 0);
+    const configuration = {
+      version: 1 as const,
+      name: 'SYNTHETIC saved team',
+      members: terminalIds.map((terminalId, slot) => ({
+        terminalId,
+        name: `SYNTHETIC restored ${slot}`,
+        handle: `restored-${slot}`,
+        role: 'reviewer' as const,
+        allowedTargetTerminalIds: slot === 0 ? [terminalIds[1]!] : [],
+      })),
+    };
+    f.service.saveTeam({ expectedRevision: 0, configuration });
+    assert.deepEqual(f.service.snapshot().slots, [null, null]);
+    assert.equal(f.transports.length, 0);
+    assert.throws(() => f.service.prepareTeamRouting(0, 1), /Live/);
+    for (const slot of [0, 1]) {
+      const start = f.service.prepareStart(slot, 'synthetic-model');
+      await f.service.launch(slot, f.proof(start.challenge));
+    }
+    assert.deepEqual(f.service.snapshot().slots[0]!.pane!.routing!.allowedTargetPaneIds, []);
+    assert.equal(f.service.snapshot().slots[0]!.pane!.routing!.role, 'worker');
+    assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b task'), /denied/);
+    assert.throws(() => f.service.prepareTeamRouting(0, 0), /Stale/);
+    const proposal = f.service.prepareTeamRouting(0, 1);
+    assert.deepEqual(f.service.snapshot().slots[0]!.pane!.routing!.allowedTargetPaneIds, []);
+    assert.throws(() => f.service.applyRouting(proposal.changeId, {}));
+    f.service.applyRouting(proposal.changeId, f.proof(proposal.challenge));
+    const pane = f.service.snapshot().slots[0]!.pane!;
+    assert.equal(pane.routing!.handle, 'restored-0');
+    assert.equal(pane.routing!.role, 'reviewer');
+    assert.deepEqual(pane.routing!.allowedTargetPaneIds, [
+      f.service.snapshot().slots[1]!.pane!.paneId,
+    ]);
+    assert.equal(
+      f.transports.reduce((sum, transport) => sum + transport.turns, 0),
+      0,
+    );
+    assert.equal(f.service.readTeam().team.revision, 1);
   } finally {
     f.close();
   }

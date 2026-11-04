@@ -1,4 +1,7 @@
+import { stableId } from '@orqst/shared';
 import { terminalSlotLimit } from '@orqst/protocol';
+import { featureConfigurationDatabase } from './feature-configuration.js';
+import { terminalTeamDatabase } from './team-database.js';
 import { terminalLayoutDatabase } from './layout-database.js';
 import { terminalIdentity } from './identity.js';
 // UI-independent owned Terminal component. The observer composition never imports this entry.
@@ -104,6 +107,17 @@ async function start() {
         process.argv[4]!,
         selection.map(({ config }) => terminalIdentity(config).terminalId),
       );
+    const features = () =>
+      featureConfigurationDatabase(
+        process.argv[4]!,
+        stableId('workspace', selection[0]!.config.project),
+      );
+    const teams = () =>
+      terminalTeamDatabase(
+        process.argv[4]!,
+        selection.map(({ config }) => terminalIdentity(config).terminalId),
+        terminalDigest(selection[0]!.config.project),
+      );
     const send = (value: object) => {
       if (process.connected)
         process.send!(value, (error) => {
@@ -130,6 +144,46 @@ async function start() {
       try {
         let value: unknown;
         switch (request.kind) {
+          case 'featureList':
+            value = features().list();
+            break;
+          case 'featureRead':
+            value = features().read(request.featureId);
+            break;
+          case 'featureCreate':
+            value = features().create(request.input);
+            break;
+          case 'featureUpdate':
+            value = features().update(request.featureId, request.input);
+            break;
+          case 'featureAssign': {
+            const selected = selection[request.slot];
+            if (!selected) throw new Error('Unknown reviewed terminal');
+            value = features().assignTerminal(
+              request.featureId,
+              terminalIdentity(selected.config).terminalId,
+              request.expectedRevision,
+            );
+            break;
+          }
+          case 'featureTeamRead':
+            value = features().readTeam(request.featureId);
+            break;
+          case 'featureTeamSave':
+            value = features().saveTeam(request.featureId, request.input);
+            break;
+          case 'featureLayoutRead':
+            value = features().readLayout(request.featureId);
+            break;
+          case 'featureLayoutSave':
+            value = features().saveLayout(request.featureId, request.record);
+            break;
+          case 'teamRead':
+            value = teams().read();
+            break;
+          case 'teamSave':
+            value = teams().save(request.input);
+            break;
           case 'layoutRead':
             value = layouts().read();
             break;

@@ -40,6 +40,8 @@ export const communicationPaneSchema = z.strictObject({
   /** Stable terminal metadata link only; live message targets still use paneId/binding. */
   terminalId: z.uuid().optional(),
   workspaceId: id,
+  /** Optional only for legacy v1 records; never inferred from titles or restored grants. */
+  featureId: z.uuid().optional(),
   displayId: z.string().regex(/^T-[0-9]{3,}$/),
   name: z.string().trim().min(1).max(100),
   // Legacy native compositions retain their exact per-task grants. Routed panes also require this matrix.
@@ -76,6 +78,8 @@ export const paneSendSchema = z.strictObject({
   taskId: z.uuid(),
   correlationId: z.uuid(),
   workspaceId: id,
+  /** Optional only for legacy v1 records; never inferred from titles or restored grants. */
+  featureId: z.uuid().optional(),
   sourcePaneId: z.uuid(),
   targetPaneId: z.uuid(),
   parentTaskId: z.uuid().nullable(),
@@ -134,6 +138,8 @@ export const communicationAuditSchema = z.strictObject({
   timestamp: time,
   actorId: id.nullable(),
   workspaceId: id,
+  /** Optional only for legacy v1 records; never inferred from titles or restored grants. */
+  featureId: z.uuid().optional(),
   paneId: z.uuid(),
   messageId: z.uuid().nullable(),
   action: z.enum([

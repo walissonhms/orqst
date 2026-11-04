@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import type { DatabaseSync } from 'node:sqlite';
 import { terminalLayoutRecordSchema, type TerminalLayoutRecord } from '@orqst/protocol';
 import { stableId } from '@orqst/shared';
@@ -5,7 +6,12 @@ import { stableId } from '@orqst/shared';
 export const TERMINAL_LAYOUT_LIMITS = Object.freeze({ records: 1024, bytes: 16 * 1024 });
 
 /** Existing Store transaction/connection; no terminal journal, owner claim or recovery. */
-export function openTerminalLayouts(db: DatabaseSync, transaction: <T>(action: () => T) => T) {
+export function openTerminalLayouts(
+  db: DatabaseSync,
+  transaction: <T>(action: () => T) => T,
+  featureId?: string,
+) {
+  if (featureId !== undefined) z.uuid().parse(featureId);
   transaction(() => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS terminal_layout_schema (
@@ -36,7 +42,9 @@ export function openTerminalLayouts(db: DatabaseSync, transaction: <T>(action: (
       percent: 50,
       names: [],
     });
-    return stableId('terminal-layout', JSON.stringify([...ids].sort()));
+    return featureId === undefined
+      ? stableId('terminal-layout', JSON.stringify([...ids].sort()))
+      : stableId('terminal-layout-feature', featureId, JSON.stringify([...ids].sort()));
   };
   const read = (ids: string[]): TerminalLayoutRecord | undefined => {
     const row = db

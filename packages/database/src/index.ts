@@ -25,6 +25,8 @@ import {
 import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
+import { openFeatures } from './features.js';
+import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
 import { openTerminalJournal } from './terminal-journal.js';
@@ -208,8 +210,16 @@ export class Store {
     );
   }
   /** Opt-in metadata only; never called by observer startup or exposed over HTTP. */
-  terminalLayouts() {
-    return openTerminalLayouts(this.db, (action) => this.transaction(action));
+  features() {
+    return openFeatures(this.db, (action) => this.transaction(action));
+  }
+
+  terminalTeams(featureId?: string) {
+    return openTerminalTeams(this.db, (action) => this.transaction(action), featureId);
+  }
+
+  terminalLayouts(featureId?: string) {
+    return openTerminalLayouts(this.db, (action) => this.transaction(action), featureId);
   }
   checkpoint(source: string): Checkpoint | undefined {
     return this.get(

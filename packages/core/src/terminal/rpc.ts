@@ -1,4 +1,10 @@
-import { terminalLayoutRecordSchema, TERMINAL_SLOT_CEILING } from '@orqst/protocol';
+import {
+  terminalLayoutRecordSchema,
+  featureCreateSchema,
+  featureUpdateSchema,
+  terminalTeamSaveSchema,
+  TERMINAL_SLOT_CEILING,
+} from '@orqst/protocol';
 import { z } from 'zod';
 
 const id = z.string().uuid();
@@ -71,6 +77,46 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
       .min(0)
       .max(TERMINAL_SLOT_CEILING - 1),
   }),
+  z.strictObject({ kind: z.literal('featureList'), id }),
+  z.strictObject({ kind: z.literal('featureRead'), id, featureId: id }),
+  z.strictObject({
+    kind: z.literal('featureCreate'),
+    id,
+    input: featureCreateSchema.omit({ workspaceId: true }),
+  }),
+  z.strictObject({
+    kind: z.literal('featureUpdate'),
+    id,
+    featureId: id,
+    input: featureUpdateSchema,
+  }),
+  z.strictObject({
+    kind: z.literal('featureAssign'),
+    id,
+    featureId: id,
+    slot: z
+      .number()
+      .int()
+      .min(0)
+      .max(TERMINAL_SLOT_CEILING - 1),
+    expectedRevision: z.number().int().positive().safe(),
+  }),
+  z.strictObject({ kind: z.literal('featureTeamRead'), id, featureId: id }),
+  z.strictObject({
+    kind: z.literal('featureTeamSave'),
+    id,
+    featureId: id,
+    input: terminalTeamSaveSchema,
+  }),
+  z.strictObject({ kind: z.literal('featureLayoutRead'), id, featureId: id }),
+  z.strictObject({
+    kind: z.literal('featureLayoutSave'),
+    id,
+    featureId: id,
+    record: terminalLayoutRecordSchema,
+  }),
+  z.strictObject({ kind: z.literal('teamRead'), id }),
+  z.strictObject({ kind: z.literal('teamSave'), id, input: terminalTeamSaveSchema }),
   z.strictObject({ kind: z.literal('layoutRead'), id }),
   z.strictObject({ kind: z.literal('layoutSave'), id, record: terminalLayoutRecordSchema }),
   z.strictObject({ kind: z.literal('layoutImport'), id, record: terminalLayoutRecordSchema }),

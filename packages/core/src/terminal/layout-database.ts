@@ -13,7 +13,7 @@ import type { TerminalLayoutRecord } from '@orqst/protocol';
 import { terminalDirectory } from './codex-profile.js';
 
 /** Core-only visual metadata writer; never opens an execution journal or claims ownership. */
-export function terminalLayoutDatabase(userData: string, identities: string[]) {
+export function withTerminalPreferences<T>(userData: string, action: (store: Store) => T): T {
   const directory = join(realpathSync(userData), 'terminal-layouts');
   try {
     mkdirSync(directory, { mode: 0o700 });
@@ -45,26 +45,30 @@ export function terminalLayoutDatabase(userData: string, identities: string[]) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   };
-  const withStore = <T>(action: (layouts: ReturnType<Store['terminalLayouts']>) => T): T => {
-    terminalDirectory(directory, true);
-    for (const suffix of ['', '-wal', '-shm', '-journal']) checkFile(file + suffix);
-    try {
-      const fd = openSync(
-        file,
-        constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW,
-        0o600,
-      );
-      closeSync(fd);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-    }
-    const store = new Store(file);
-    try {
-      return action(store.terminalLayouts());
-    } finally {
-      store.close();
-    }
-  };
+
+  terminalDirectory(directory, true);
+  for (const suffix of ['', '-wal', '-shm', '-journal']) checkFile(file + suffix);
+  try {
+    const fd = openSync(
+      file,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY | constants.O_NOFOLLOW,
+      0o600,
+    );
+    closeSync(fd);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  const store = new Store(file);
+  try {
+    return action(store);
+  } finally {
+    store.close();
+  }
+}
+
+export function terminalLayoutDatabase(userData: string, identities: string[]) {
+  const withStore = <T>(action: (layouts: ReturnType<Store['terminalLayouts']>) => T) =>
+    withTerminalPreferences(userData, (store) => action(store.terminalLayouts()));
   return {
     read: () => withStore((layouts) => layouts.read(identities) ?? null),
     save: (record: TerminalLayoutRecord) =>
