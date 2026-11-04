@@ -30,7 +30,8 @@ It does not execute even `--version`, authentication-status or help commands, in
 anything, create homes, start a server, or connect to an existing process.
 
 The JSON report contains up to 16 candidate launchers/targets per provider, each
-with an environment/fallback origin, plus excluded unsafe directories, null version,
+with an environment/fallback origin, path-precedence policy, excluded unsafe
+directories, null version,
 unknown authentication and no execution authority. Scanning is capped at
 128 unique absolute directories and 32 KiB of PATH. Truncation/errors produce limited
 inspection; oversized input fails before inspection. `not_found` means not found in

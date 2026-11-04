@@ -39,14 +39,26 @@ bounded PTY/IPC/journal with them would discard already-tested local contracts.
 
 ## Concrete correction and security review
 
-`local-cli-path.ts` preserves absolute environment PATH order, appends
-`~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`, `/usr/local/bin` and
-`~/.opencode/bin`, then any explicitly selected native host/provider executable
-directories. These additional fallbacks permit sibling tools and the selected Node
-host to be found even under a minimal GUI PATH, without overriding existing PATH
-priority. The policy canonicalizes existing directories and deduplicates by device/inode.
+`local-cli-path.ts` recognizes an empty PATH or a PATH containing only the fixed
+system directories (`/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`) as GUI-minimal. Its
+reviewed precedence is **selected native host/provider directories → installer
+fallbacks → supplied system directories**. This prevents system developer-tool
+stubs from shadowing an explicitly selected runtime or a trusted installed tool.
+The installer locations are `~/.local/bin`, `~/.claude/local`, `/opt/homebrew/bin`,
+`/usr/local/bin` and `~/.opencode/bin`. A PATH with any other absolute entry is
+explicit: preserve its full order, then append installer fallbacks and selected
+directories. Selection does not override a deliberate custom PATH. Preflight reports
+`pathPrecedence` and candidate origins; native review shows the complete resulting
+PATH before provisioning. Four synthetic homonym tests exercise both rules using
+controlled Node fixture tools, including `git` names that take precedence over
+system git stubs, without executing a provider or a shell.
+
+The policy canonicalizes existing directories and deduplicates by device/inode.
 Empty, relative and NUL-containing entries are ignored. Canonical targets containing
-the PATH delimiter cannot be represented and are excluded. Directories must belong
+the PATH delimiter cannot be represented. Unsafe environment/installer entries are
+excluded; an explicitly selected native executable directory that is missing,
+noncanonical, unsafe, unrepresentable or outside the inspection budget **blocks
+creation** with a path-free reason. It is never silently dropped. Directories must belong
 to root/current uid, have no group/world write bits, and have trusted ancestors
 (the existing sticky-parent exception applies). Missing directories are ordinary;
 metadata errors or more than 128 unique input directories produce limited coverage.
@@ -60,6 +72,19 @@ creation. New Desktop manifests carry the exact reviewed `toolPath`; the native
 creation review shows this common value once, and both private manifests persist it.
 Directory identities are rechecked before provisioning. Reading a new manifest and
 constructing the child environment revalidate its canonical path and permissions.
+Safe diagnostic reasons distinguish invalid/budgeted lists, missing/inaccessible
+directories, canonicality drift, owner/permission drift and duplicate identities;
+they include no path or credential. Five JSON round-trip tests cover unchanged,
+missing, permission-drifted, symlink-replaced and trusted same-path replacement
+cases. Creation also tests that an unrepresentable selected directory writes no state.
+
+Only the PATH **string** is persisted. Directory device/inode snapshots protect the
+creation review-to-provision interval; they are not persisted launch identities.
+After provisioning, replacing a directory with another trusted directory at the
+same canonical path is **not detected**. The round-trip test deliberately records
+this accepted limitation. Runtime validation checks the current path/owner/mode,
+while native executable hashes separately protect the selected provider and Node
+content. It does not pin subordinate tools or prove directory continuity.
 Old manifests without the optional field retain `/usr/bin:/bin:/usr/sbin:/sbin`;
 they are not silently upgraded. Create/review a fresh pair to use the new policy.
 Legacy developer setup scripts retain their prior environment policy.
@@ -143,3 +168,20 @@ acceptance and ingestion `validate:local`/`validate:live` were not run for this 
 The observer reader is unchanged. Existing live Desktop documents are not hot-upgraded
 by a build; safe integration/restart must preserve any active owned processes.
 Private specifications and agent instruction files are not part of this change.
+
+### Follow-up review before publication
+
+The baseline `aa44e5f` was reviewed by QA528 and Opus and passed 515 sequential
+unit cases plus lint/typecheck/build and three-provider synthetic creation after
+rebasing onto `f186264`. The follow-up corrects GUI-minimal tool precedence and
+fail-closed selected-directory handling, adds safe drift diagnostics and explicitly
+documents the path-only persisted identity. The environment whitelist, three child
+environment consumers, existing native gates and gesture/client files are unchanged.
+The following final verification supersedes baseline counts where stated.
+
+Final follow-up focal validation: 41/41 passed, including four tool-homonym
+precedence cases, selected-directory creation refusal without writes and five PATH
+JSON round trips. `pnpm lint`, `pnpm typecheck` and `pnpm build` passed again on the
+follow-up source. The previous integrated three-provider Electron creation
+acceptance passed; this delta changes no UI, manifest review shape, client, gestures,
+provider grants or MCP composition. No new discovery/model/recovery feature is added.

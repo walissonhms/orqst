@@ -159,6 +159,24 @@ test('reviewed tool directory replacement refuses before provisioning and withou
   }
 });
 
+test('an unrepresentable explicitly selected host directory blocks creation without writing state', () => {
+  const f = fixture();
+  try {
+    const directory = join(f.root, 'selected:tools');
+    mkdirSync(directory, { mode: 0o700 });
+    const node = join(directory, 'synthetic-node');
+    writeFileSync(node, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
+    assert.throws(
+      () => prepareTerminalCreation({ ...f.input, node }),
+      /Selected CLI tool directory is unavailable or unsafe/,
+    );
+    assert.deepEqual(readdirSync(f.input.parent), ['active-pair.json']);
+    assert.deepEqual(readdirSync(f.input.home), ['.codex']);
+  } finally {
+    f.close();
+  }
+});
+
 test('absent focus/expiry and changed project or directory identity refuse before writes', () => {
   const f = fixture();
   try {

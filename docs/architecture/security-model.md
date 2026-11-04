@@ -977,8 +977,9 @@ same passive canonical directory policy used for CLI discovery. The native creat
 review discloses the common PATH once; both private manifests persist its exact
 value. Root/current-user directory ownership, no group/world write bits, trusted
 ancestors, device/inode deduplication, 128-directory/32-KiB bounds and repeat
-validation precede dispatch. Empty/relative/NUL entries and unsafe directories are
-excluded, not converted into cwd lookup; unsupported metadata/budget truncation
+validation precede dispatch. Empty/relative/NUL environment entries and unsafe environment/installer directories
+are excluded, not converted into cwd lookup; explicitly selected directories block
+creation when unsafe or unavailable; unsupported metadata/budget truncation
 blocks creation. A canonical PATH target containing its delimiter is excluded.
 Unsafe exclusions and env/fallback origins are visible in developer preflight.
 
@@ -991,3 +992,20 @@ probe, credential/configuration read, public API/WS/cookie change or new task gr
 is introduced. Old manifests keep the fixed system PATH. Native identity/session
 acknowledgments, Claude's exact reviewed pin and OpenCode's startup/database/activity
 consent remain separate. See [runtime comparison and limits](../research/native-cli-runtime-comparison.md).
+
+### GUI PATH precedence and path-only launch identity
+
+For a GUI-minimal system-only PATH, reviewed selected native executable directories
+precede installer fallbacks and system stubs. A custom absolute PATH preserves its
+explicit order. The complete result is disclosed before provisioning. Unsafe
+environment/installer entries can be excluded with diagnostics; an unsafe, missing,
+noncanonical or unrepresentable explicitly selected directory blocks creation with
+a safe reason. Bounds remain mandatory.
+
+Current canonicality, ownership and permissions are checked again on manifest read
+and child environment construction. Device/inode snapshots protect only creation
+review-to-provision, not later launches: only the PATH string is persisted, so a
+trusted replacement at the same canonical path is not detected. Native provider and
+Node hashes are separate content pins; subordinate tools have no continuity or hash
+guarantee. Drift diagnostics are specific but path-free. Existing same-user trust,
+provider consent, environment whitelist and no-auto-retry boundaries remain.

@@ -46,7 +46,7 @@ function trustedDirectory(path: string): { device: number; inode: number } | und
   return { device: info.dev, inode: info.ino };
 }
 
-/** Preserve PATH priority, append installer fallbacks, and deduplicate canonical directory identities. */
+/** Review GUI tool precedence explicitly; preserve a custom environment PATH and canonical identities. */
 export function localCliPathDirectories(
   searchPath: string,
   home?: string,
@@ -54,13 +54,41 @@ export function localCliPathDirectories(
 ) {
   if (Buffer.byteLength(searchPath) > localCliPathPolicy.maximumPathBytes)
     throw new Error('CLI discovery PATH exceeds the inspection budget');
-  const inputs = [
-    ...searchPath.split(delimiter).map((path) => ({ path, origin: 'env' as const })),
-    ...(home
-      ? localCliFallbackDirectories(home).map((path) => ({ path, origin: 'fallback' as const }))
-      : []),
-    ...selectedDirectories.map((path) => ({ path, origin: 'fallback' as const })),
-  ].filter(({ path }) => isAbsolute(path) && !path.includes('\0'));
+  if (
+    selectedDirectories.length > localCliPathPolicy.maximumDirectories ||
+    Buffer.byteLength(selectedDirectories.join(delimiter)) > localCliPathPolicy.maximumPathBytes
+  )
+    throw new Error('Selected CLI tool directories exceed the inspection budget');
+  // Explicit selection must never silently disappear during safe filtering.
+  for (const path of selectedDirectories) {
+    try {
+      if (
+        !isAbsolute(path) ||
+        path.includes('\0') ||
+        path.includes(delimiter) ||
+        realpathSync(path) !== path ||
+        !trustedDirectory(path)
+      )
+        throw new Error('Invalid selection');
+    } catch {
+      throw new Error('Selected CLI tool directory is unavailable or unsafe');
+    }
+  }
+  const environment = searchPath
+    .split(delimiter)
+    .filter((path) => isAbsolute(path) && !path.includes('\0'))
+    .map((path) => ({ path, origin: 'env' as const }));
+  const installers = home
+    ? localCliFallbackDirectories(home).map((path) => ({ path, origin: 'fallback' as const }))
+    : [];
+  const selected = selectedDirectories.map((path) => ({ path, origin: 'fallback' as const }));
+  const system = new Set(legacyTerminalPath.split(delimiter));
+  const guiMinimal = environment.every(({ path }) => system.has(path.replace(/\/+$/, '')));
+  // Finder/launchd system stubs must not shadow explicitly selected native tools.
+  // A custom PATH is a deliberate order and is retained; the complete result is reviewed.
+  const inputs = guiMinimal
+    ? [...selected, ...installers, ...environment]
+    : [...environment, ...installers, ...selected];
   const unique: typeof inputs = [];
   const seenPaths = new Set<string>();
   for (const input of inputs) {
@@ -93,6 +121,8 @@ export function localCliPathDirectories(
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') limited = true;
     }
   }
+  if (selectedDirectories.some((path) => !directories.some((directory) => directory.path === path)))
+    throw new Error('Selected CLI tool directory is unavailable or unsafe');
   const path = directories.map((value) => value.path).join(delimiter);
   if (Buffer.byteLength(path) > localCliPathPolicy.maximumPathBytes)
     throw new Error('Canonical CLI PATH exceeds the inspection budget');
@@ -100,6 +130,9 @@ export function localCliPathDirectories(
     path,
     directories,
     rejected,
+    precedence: guiMinimal
+      ? ('selected-installers-system' as const)
+      : ('explicit-env-first' as const),
     inspection: limited ? ('limited' as const) : ('complete' as const),
   };
 }
@@ -107,9 +140,35 @@ export function localCliPathDirectories(
 /** New manifests carry reviewed canonical directories; legacy manifests retain their fixed PATH. */
 export function terminalToolPath(reviewed?: string): string {
   if (reviewed === undefined) return legacyTerminalPath;
-  terminalToolPathSchema.parse(reviewed);
+  if (!terminalToolPathSchema.safeParse(reviewed).success)
+    throw new Error('Reviewed terminal PATH is invalid or exceeds the byte budget');
+  const entries = reviewed.split(delimiter);
+  if (entries.length > localCliPathPolicy.maximumDirectories)
+    throw new Error('Reviewed terminal PATH exceeds the directory budget');
+  const identities = new Set<string>();
+  for (const path of entries) {
+    if (!isAbsolute(path) || path.includes('\0'))
+      throw new Error('Reviewed terminal PATH contains an empty or nonabsolute directory');
+    let canonical: string;
+    let info: ReturnType<typeof trustedDirectory>;
+    try {
+      canonical = realpathSync(path);
+      info = trustedDirectory(canonical);
+    } catch {
+      throw new Error('Reviewed terminal PATH directory is missing or inaccessible');
+    }
+    if (canonical !== path)
+      throw new Error('Reviewed terminal PATH directory is no longer canonical');
+    if (!info) throw new Error('Reviewed terminal PATH directory ownership or permissions changed');
+    const identity = `${info.device}:${info.inode}`;
+    if (identities.has(identity))
+      throw new Error('Reviewed terminal PATH contains duplicate directory identities');
+    identities.add(identity);
+  }
   const current = localCliPathDirectories(reviewed);
-  if (current.inspection !== 'complete' || current.path !== reviewed)
-    throw new Error('Reviewed terminal PATH changed or is not canonical');
+  if (current.inspection !== 'complete')
+    throw new Error('Reviewed terminal PATH metadata inspection is incomplete');
+  if (current.path !== reviewed)
+    throw new Error('Reviewed terminal PATH directory changed during validation');
   return current.path;
 }

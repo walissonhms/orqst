@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-03 — GUI tool precedence and explicit path failures
+
+- For a minimal GUI PATH, review selected native tool directories before installer
+  directories and system stubs; retain the declared order of a custom PATH.
+- Block unsafe/unavailable selected directories, distinguish safe path-drift reasons
+  and document that path-only persistence cannot detect trusted same-path replacement.
+- Test actual synthetic tool homonyms, creation refusal without writes and five
+  manifest PATH round trips. Preserve native executable hashes, credential whitelist,
+  provider gates and the existing client/gesture implementation.
+
 ## 2026-11-03 — Reviewed native CLI tool PATH
 
 - Use one passive canonical directory policy for CLI discovery and new Desktop

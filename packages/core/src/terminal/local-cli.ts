@@ -17,6 +17,7 @@ export interface LocalCliDiscovery {
   candidates: { launcher: string; canonical: string; origin: 'env' | 'fallback' }[];
   inspection: 'complete' | 'limited';
   rejectedDirectories: ReturnType<typeof localCliPathDirectories>['rejected'];
+  pathPrecedence: ReturnType<typeof localCliPathDirectories>['precedence'];
   version: null;
   authentication: 'unknown';
   execution: 'not_authorized';
@@ -59,6 +60,7 @@ export function discoverLocalClis(
       candidates,
       inspection: incomplete ? 'limited' : 'complete',
       rejectedDirectories: search.rejected,
+      pathPrecedence: search.precedence,
       version: null,
       authentication: 'unknown',
       execution: 'not_authorized',

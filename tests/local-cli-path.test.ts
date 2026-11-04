@@ -1,7 +1,15 @@
 // Disposable synthetic executables only. Installed providers and native credentials are never opened.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import test from 'node:test';
@@ -73,8 +81,8 @@ test('one passive path policy preserves environment priority, reports origins an
       join(selected, 'codex'),
     );
     assert.throws(() => terminalToolPath(alias), /canonical/);
-    assert.throws(() => terminalToolPath(`${f.env}${delimiter}${f.env}`), /canonical/);
-    assert.throws(() => terminalToolPath(`.${delimiter}${f.env}`), /canonical/);
+    assert.throws(() => terminalToolPath(`${f.env}${delimiter}${f.env}`), /duplicate directory/);
+    assert.throws(() => terminalToolPath(`.${delimiter}${f.env}`), /nonabsolute/);
   } finally {
     f.close();
   }
@@ -106,6 +114,104 @@ test('GUI minimal PATH discovers synthetic native installer locations without a 
   }
 });
 
+function syntheticTool(directory: string, name: string, output: string): void {
+  writeFileSync(
+    join(directory, name),
+    `#!${process.execPath}\nprocess.stdout.write(${JSON.stringify(output)});\n`,
+    { mode: 0o700 },
+  );
+}
+function runSyntheticTool(path: string, name: string): string {
+  const child = spawnSync(name, [], { env: { PATH: path }, encoding: 'utf8', timeout: 10000 });
+  assert.equal(child.status, 0, child.stderr);
+  return child.stdout;
+}
+
+test('GUI selected tool homonyms precede installer tools and system git stubs', () => {
+  const f = fixture();
+  try {
+    const tools = join(f.home, 'selected-tools');
+    mkdirSync(tools, { mode: 0o700 });
+    syntheticTool(tools, 'git', 'SYNTHETIC_SELECTED');
+    syntheticTool(f.local, 'git', 'SYNTHETIC_INSTALLER');
+    const gui = localCliPathDirectories('/usr/bin:/bin:/usr/sbin:/sbin', f.home, [tools]);
+    assert.equal(gui.precedence, 'selected-installers-system');
+    assert.equal(gui.directories[0]?.path, tools);
+    assert.equal(runSyntheticTool(gui.path, 'git'), 'SYNTHETIC_SELECTED');
+  } finally {
+    f.close();
+  }
+});
+
+test('GUI installer tool homonyms precede system git stubs without a selected directory', () => {
+  const f = fixture();
+  try {
+    syntheticTool(f.local, 'git', 'SYNTHETIC_INSTALLER');
+    const gui = localCliPathDirectories('/usr/bin:/bin:/usr/sbin:/sbin', f.home);
+    assert.equal(gui.precedence, 'selected-installers-system');
+    assert.equal(gui.directories[0]?.path, f.local);
+    assert.equal(runSyntheticTool(gui.path, 'git'), 'SYNTHETIC_INSTALLER');
+  } finally {
+    f.close();
+  }
+});
+
+test('custom environment PATH keeps its deliberate order and wins tool homonyms', () => {
+  const f = fixture();
+  try {
+    syntheticTool(f.env, 'fixture-tool', 'SYNTHETIC_ENV');
+    syntheticTool(f.local, 'fixture-tool', 'SYNTHETIC_INSTALLER');
+    const explicit = localCliPathDirectories(['/usr/bin', f.env].join(delimiter), f.home, [
+      f.local,
+    ]);
+    assert.equal(explicit.precedence, 'explicit-env-first');
+    assert.equal(explicit.directories[0]?.path, realpathSync('/usr/bin'));
+    assert.ok(explicit.path.indexOf('/usr/bin') < explicit.path.indexOf(f.local));
+    assert.equal(runSyntheticTool(explicit.path, 'fixture-tool'), 'SYNTHETIC_ENV');
+  } finally {
+    f.close();
+  }
+});
+
+test('explicit installer PATH priority and environment origin survive deduplication', () => {
+  const f = fixture();
+  try {
+    syntheticTool(f.env, 'fixture-tool', 'SYNTHETIC_ENV');
+    syntheticTool(f.local, 'fixture-tool', 'SYNTHETIC_INSTALLER');
+    const explicit = localCliPathDirectories([f.local, f.env, '/usr/bin'].join(delimiter), f.home, [
+      f.local,
+    ]);
+    assert.equal(explicit.precedence, 'explicit-env-first');
+    assert.deepEqual(explicit.directories[0], { path: f.local, origin: 'env' });
+    assert.equal(explicit.directories.filter(({ path }) => path === f.local).length, 1);
+    assert.equal(runSyntheticTool(explicit.path, 'fixture-tool'), 'SYNTHETIC_INSTALLER');
+  } finally {
+    f.close();
+  }
+});
+
+test('explicitly selected missing, writable, noncanonical or unrepresentable tool directories fail closed', () => {
+  const f = fixture();
+  try {
+    const alias = join(f.home, 'alias');
+    symlinkSync(f.env, alias);
+    const colon = join(f.home, 'synthetic:delimiter');
+    mkdirSync(colon, { mode: 0o700 });
+    for (const selected of [join(f.home, 'missing'), alias, colon, 'relative'])
+      assert.throws(
+        () => localCliPathDirectories('/usr/bin:/bin', f.home, [selected]),
+        /Selected CLI tool directory is unavailable or unsafe/,
+      );
+    chmodSync(f.env, 0o777);
+    assert.throws(
+      () => localCliPathDirectories('/usr/bin:/bin', f.home, [f.env]),
+      /Selected CLI tool directory is unavailable or unsafe/,
+    );
+  } finally {
+    f.close();
+  }
+});
+
 test('untrusted directories, changed aliases and exceeded budgets cannot become a reviewed child PATH', () => {
   const f = fixture();
   try {
@@ -118,7 +224,7 @@ test('untrusted directories, changed aliases and exceeded budgets cannot become 
     const reviewed = terminalToolPath(f.env);
     rmSync(f.env, { recursive: true });
     symlinkSync(f.local, f.env);
-    assert.throws(() => terminalToolPath(reviewed), /changed/);
+    assert.throws(() => terminalToolPath(reviewed), /no longer canonical/);
     const excess = Array.from({ length: 129 }, (_, index) => join(f.home, `absent-${index}`)).join(
       delimiter,
     );
@@ -224,3 +330,51 @@ test('discovery and every provider child environment use the exact reviewed PATH
     f.close();
   }
 });
+
+const roundTrips: {
+  name: string;
+  mutate?: (f: ReturnType<typeof fixture>) => void;
+  error?: RegExp;
+}[] = [
+  { name: 'unchanged canonical path remains usable' },
+  {
+    name: 'missing directory reports a safe missing/access reason',
+    mutate: (f) => rmSync(f.env, { recursive: true }),
+    error: /missing or inaccessible/,
+  },
+  {
+    name: 'permission drift reports a safe ownership/permissions reason',
+    mutate: (f) => chmodSync(f.env, 0o777),
+    error: /ownership or permissions changed/,
+  },
+  {
+    name: 'symlink replacement reports a canonicality reason',
+    mutate: (f) => {
+      rmSync(f.env, { recursive: true });
+      symlinkSync(f.local, f.env);
+    },
+    error: /no longer canonical/,
+  },
+  {
+    name: 'trusted replacement at the same path is not an inode-persistence guarantee',
+    mutate: (f) => {
+      rmSync(f.env, { recursive: true });
+      mkdirSync(f.env, { mode: 0o700 });
+    },
+  },
+];
+for (const entry of roundTrips) {
+  test(`reviewed PATH JSON round trip: ${entry.name}`, () => {
+    const f = fixture();
+    try {
+      const stored = JSON.parse(JSON.stringify({ toolPath: terminalToolPath(f.env) })) as {
+        toolPath: string;
+      };
+      entry.mutate?.(f);
+      if (entry.error) assert.throws(() => terminalToolPath(stored.toolPath), entry.error);
+      else assert.equal(terminalToolPath(stored.toolPath), stored.toolPath);
+    } finally {
+      f.close();
+    }
+  });
+}
