@@ -1,5 +1,14 @@
 # Electron retirement — ORQST
 
+## Policy and notification integration — 2026-11-04
+
+The [combined source report](tauri-policy-notifications-integration.md) records
+the ordered Codex documentation, webview policy and notification deliveries,
+the separate native-origin hook, 20 combined pure Node tests and explicit build
+and acceptance gates. The Codex historical cause remains unknown. The owner's
+existing `dist/native-preview-mcp-unavailable/ORQST Preview.app` is preserved;
+the only newly authorized package destination is `dist/native-preview-policy-notifications/`.
+
 ## Webview policy hardening — 2026-11-04
 
 The [pinned Tauri 2.12.5/Wry 0.57.1 review](../research/tauri-webview-policy.md)

@@ -1,5 +1,13 @@
 # Changelog
 
+## Combined policy and notification source — 2026-11-04
+
+- Integrate the documentation-only Codex review, supported webview hardening and
+  source-backed notification selection, preserving the native-origin hook as a
+  separate commit. The historical Codex failure is not corrected by this delivery.
+- Record [20 combined pure Node checks and explicit native/package gates](docs/development/tauri-policy-notifications-integration.md),
+  preserving the existing apps and all outstanding Electron parity limits.
+
 ## Webview policy hardening — 2026-11-04
 
 - Deny supported new permission requests with the existing Tauri global callback

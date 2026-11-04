@@ -1,5 +1,19 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Combined policy and notification source — 2026-11-04
+
+- [x] Integrate the documentation-only Codex review, webview hardening and
+      notification route in order, retaining the origin hook in its own commit.
+- [x] Review native origin/URI/SPA/download/permission boundaries and fresh
+      source-backed notification selection through the existing draft guard;
+      pass 20 distinct combined pure Node tests, lint/types/format/rustfmt/diff.
+- [ ] Complete the separately authorized serial native compilation and package
+      integrity checks from a published freeze; preserve existing apps and Node.
+- [ ] Accept actual OS/WebKit/provider/communication/Quit behavior and resolve
+      persistence/grant/unsupported-callback parity limits before removing Electron.
+
+See the [integration and build gates](../development/tauri-policy-notifications-integration.md).
+
 ## Webview policy hardening — 2026-11-04
 
 - [x] Compare locked Tauri/Wry permission/download defaults with Electron source;
