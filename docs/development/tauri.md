@@ -3,9 +3,9 @@
 The owner-approved desktop target is Tauri 2 with the existing React dashboard,
 Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
-validated. The observer is unchanged; prepared managed terminals can opt into
-a retained native workspace. Prepared structured agents have a separate opt-in Tauri
-bridge. Native exports and notifications remain in Electron.
+validated. The observer is unchanged; native-menu preparation or explicitly selected
+profiles can open a retained terminal workspace. Prepared structured agents have a
+separate opt-in Tauri bridge. Native exports and notifications remain in Electron.
 
 ## Build and run
 
@@ -225,3 +225,61 @@ denied, macOS Apple Silicon debug app bundle and all three packaged Tauri accept
 passed. The six new boundary/review tests also passed separately. Initial load-related
 suite failures and browser test-instrumentation corrections are recorded in the
 component review. Native/provider acceptance remains unchecked above.
+
+## Native terminal preparation — 2026-11-04
+
+On non-root macOS Apple Silicon, launch Tauri without `ORQST_TAURI_TERMINALS` and
+bring the dashboard to the foreground. The native **Prepare Tauri terminals** menu
+offers reviewed Codex or Claude and 1–8 independent same-provider terminals. Select
+the canonical native CLI executable and an empty disposable project folder through
+the native pickers. The shipped Node 24 is selected automatically. Neither an
+external setup command nor a hand-authored manifest is needed for this path.
+
+Review every configuration page, confirm file creation, then separately acknowledge
+shared native configuration/login/session effects after a future authorized start.
+Creation writes private skeletons and UUID manifests under the separate Tauri preview
+profile. It does not inspect credentials or launch a provider. The next complete
+manifest review authorizes opening the selected runtime and its private journals;
+opening does not start any CLI. Show a document from the existing native terminal
+menu; its Start button retains the existing exact native signed authorization.
+
+Cancelling the opening review preserves the completed files. Use **Review and open
+prepared terminals** to review those same files again. It neither clones their IDs
+nor provisions another set. A preparation can be cancelled and retried before its
+write latch; after a possible write, new creation remains unavailable in this run.
+Opening has a distinct single-attempt latch before Core admission. Uncertain
+failures retain their files/reservations and are not retried automatically. No
+retirement/reselection, state migration or process adoption is introduced.
+
+Only exact reviewed Codex/Claude binaries are accepted; the menu's version labels
+are reviewed contracts, not live authentication/version probes. Upgrading an installed
+CLI can therefore refuse preparation until its exact contract is reviewed. Native
+hooks, plugins and provider MCP configuration can cause effects after separately
+authorized startup. This flow disables ORQST MCP, offers no mixed-provider composition
+and does not select models. The dashboard remains an observer without Tauri execution
+capabilities. The preparation menu is separate from the independently evolving
+terminal workspace layout.
+
+Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test` (612 passed), `pnpm build`,
+`pnpm build:tauri-resources`, `pnpm accept:tauri-core`,
+`pnpm accept:tauri-terminals --authorize-synthetic`,
+`cargo test --manifest-path apps/tauri/src-tauri/Cargo.toml --locked` (four passed),
+Clippy with warnings denied and `pnpm build:tauri --debug --bundles app` passed.
+The focused preparation suite passed all 18 tests. The final native bundle was
+built, not opened for a native/provider acceptance cycle. The resources include the
+new self-contained Node helper and unchanged dependency notices. A shipped-helper
+check outside the checkout passed cancellation, wrong-ID and provider-pin rejection.
+The existing Vite chunk-size advisory remains. The central checklist retains the
+initial synthetic-fixture mistakes and the expanded full-run Analytics connection
+failure/Codex timeout during native compilation; the final complete retry passed
+without changing assertions or timeouts.
+
+The automated preparation checks use disposable synthetic binary substitutions and
+simulated native picker/consent responses. The existing packaged terminal acceptance
+uses real synthetic PTYs and the Tauri xterm bundle, with native IPC/focus/dialogs
+simulated. Neither is an installed Codex/Claude task or native dialog acceptance.
+Native macOS creation/start/stop, real providers, more than one preparation per run,
+arbitrary mixed teams, models, durable reconnect, platform packaging and all other
+Electron parity gaps remain pending. `validate:local`, `validate:live` and the full
+browser suite were not run; no ingestion code changed. See the
+[pinned source review and security note](../research/tauri-terminal-preparation.md).

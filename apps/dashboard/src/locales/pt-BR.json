@@ -915,5 +915,18 @@
     "next_prepared": "Seus arquivos preparados foram mantidos. Continue a revisão nativa para habilitar a abertura; não é preciso selecionar manifests manualmente.",
     "state_blocked": "Preparação precisa de atenção",
     "next_blocked": "A preparação não pôde terminar com segurança. Arquivos e reservas existentes foram preservados. Não há nova tentativa automática; consulte o menu nativo Terminal antes de prosseguir."
+  },
+  "tauriPreparation": {
+    "menu": "Preparar terminais Tauri",
+    "openPrepared": "Revisar e abrir terminais preparados…",
+    "executable": "Selecione o executável nativo revisado do Codex ou Claude (arquivo canônico; sem shim)",
+    "project": "Selecione uma pasta de projeto descartável e vazia para estes terminais",
+    "create": "Criar somente os manifests e estruturas privados revisados neste perfil Tauri? A configuração completa aparece abaixo. Será usado o Node 24 empacotado. Nenhuma CLI, login, tarefa, journal ou reserva de admissão é iniciada. A criação é separada da abertura e do início assinado. Escritas parciais são preservadas; escritas incertas não são repetidas.",
+    "createApprove": "Criar somente os arquivos revisados",
+    "acknowledge": "Declaro a versão da CLI nativa selecionada e reconheço que o início autorizado separadamente compartilha login, configuração e gravações de sessões nativas. Hooks, plugins e MCPs nativos podem gerar atividade ou custos. O aceite com provedores reais continua pendente. O MCP do ORQST fica desabilitado nesta preparação.",
+    "acknowledgeApprove": "Reconhecer efeitos nativos compartilhados",
+    "open": "Abrir estes terminais revisados no runtime Tauri? Revise cada página completa dos manifests. Isso inicializa Core, journals e admissão privada existentes para toda a seleção. Não inicia uma CLI; cada início ainda exige confirmação nativa assinada separada. A abertura tem uma única tentativa; admissões incertas continuam reservadas.",
+    "openApprove": "Abrir terminais revisados",
+    "denied": "A preparação ou abertura dos terminais foi recusada ou permanece incerta. Use um executável nativo canônico revisado e um projeto descartável vazio. A preparação não inicia CLI. Arquivos parciais e reservas são preservados. Uma abertura cancelada pode ser revisada novamente neste menu; escrita ou abertura incerta exige investigação antes de outra tentativa."
   }
 }

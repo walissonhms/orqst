@@ -50,6 +50,10 @@ code. The local macOS Apple Silicon debug bundle has startup/navigation/shutdown
 evidence; this is the first migration increment, not complete desktop parity.
 Prepared managed-terminal profiles can now opt into a retained Tauri workspace through
 `ORQST_TAURI_TERMINALS`; their existing Node broker, PTY and xterm are reused.
+The native **Prepare Tauri terminals** menu also prepares and reviews 1–8 Codex or
+Claude manifests using the bundled Node 24, native pickers and existing provisioning.
+Opening and signed CLI startup remain separate approvals; real-provider/native
+creation acceptance remains pending.
 Native terminal consent/provider parity remains unaccepted; exports/notifications
 and the complete managed workflow remain available in Electron. See [build, run and exact limits](docs/development/tauri.md) and the
 [component/license review](docs/research/tauri-core-reuse.md).

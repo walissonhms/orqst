@@ -915,5 +915,18 @@
     "next_prepared": "Your prepared files were kept. Continue their native review to enable opening; no manual manifest selection is needed.",
     "state_blocked": "Preparation needs attention",
     "next_blocked": "Preparation could not finish safely. Existing files and reservations were preserved. Automatic retry is unavailable; inspect the native Terminal menu before proceeding."
+  },
+  "tauriPreparation": {
+    "menu": "Prepare Tauri terminals",
+    "openPrepared": "Review and open prepared terminals…",
+    "executable": "Select the reviewed Codex or Claude native executable (canonical file; no shim)",
+    "project": "Select an empty disposable project folder for these terminals",
+    "create": "Create only the reviewed private manifests and skeletons in this Tauri profile? The complete configuration follows. The bundled Node 24 is used. No CLI, login, task, journal or admission claim starts. Creation is separate from opening and signed startup. A partial write is retained; no uncertain write is retried.",
+    "createApprove": "Create reviewed files only",
+    "acknowledge": "I declare the selected native CLI version and acknowledge that separately authorized startup shares native login, configuration and session writes. Native hooks, plugins and MCPs may cause activity or costs. Real-provider acceptance remains pending. ORQST MCP is disabled for this preparation.",
+    "acknowledgeApprove": "Acknowledge shared native effects",
+    "open": "Open these reviewed terminals in the Tauri runtime? Review every complete manifest page. This initializes the existing Core, journals and private admission for the entire selection. It does not start a CLI; each start still requires separate signed native confirmation. Opening is a single attempt; uncertain admission remains reserved.",
+    "openApprove": "Open reviewed terminals",
+    "denied": "Terminal preparation or opening was refused or remains uncertain. Use a canonical reviewed native binary and an empty disposable project. No CLI is started by preparation. Partial files and reservations are preserved. A cancelled opening can be reviewed again from this menu; an uncertain write or opening requires investigation before another attempt."
   }
 }

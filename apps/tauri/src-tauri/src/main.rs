@@ -3,6 +3,7 @@
 mod agents;
 mod sidecar;
 mod terminal;
+mod terminal_creation;
 
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -24,6 +25,7 @@ fn main() {
         .manage(terminal::Terminals::default())
         .manage(agents::Agents::default())
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request])
+        .manage(terminal_creation::Preparation::default())
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
                 .then(|| terminal::resource(context.app_handle(), request.uri())).flatten();
@@ -67,6 +69,11 @@ fn main() {
                         && url.query().is_none()
                 })
                 .on_new_window(|_, _| NewWindowResponse::Deny)
+                .on_page_load(|window, payload| {
+                    if payload.event() == tauri::webview::PageLoadEvent::Started {
+                        terminal_creation::invalidate(window.app_handle());
+                    }
+                })
                 .build()?;
             // Explicit opt-in only. A terminal failure does not replace or stop observation.
             if tauri::async_runtime::block_on(terminal::start(app.handle())).is_err() {
@@ -77,6 +84,7 @@ fn main() {
                 agents::stop(app.handle());
                 eprintln!("ORQST managed agents startup refused.");
             }
+            terminal_creation::install(app.handle())?;
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -87,6 +95,7 @@ fn main() {
             }
             if let tauri::RunEvent::Exit = event {
                 agents::stop_and_wait(app);
+                terminal_creation::stop(app);
                 terminal::stop_and_wait(app);
                 sidecar::stop(app);
             }

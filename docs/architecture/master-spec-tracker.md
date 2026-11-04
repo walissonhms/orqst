@@ -42,15 +42,15 @@ Links to older records preserve their original dates and scope.
 | --- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Tauri 2 starts the Node Core without Electron                       | **Partial** — a macOS Apple Silicon debug preview was built and opened; see [Tauri acceptance](../development/tauri.md#acceptance-and-remaining-work).                                                                                                     | Complete packaged, lifecycle, recovery and platform acceptance.                                                                              |
 | 2   | Preserve ORQST identity and reusable UI                             | **Partial** — shared dashboard and 1–8-pane Tauri workspace are implemented; [workspace evidence](../development/tauri-terminal-workspace.md).                                                                                                             | Complete native visual, accessibility and full migration acceptance.                                                                         |
-| 3   | Create Codex and Claude from UI without mandatory external setup    | **Partial** — Electron has a native preparation flow; Tauri requires prepared manifests. See [Studio preparation](../development/studio-preparation.md) and [Tauri terminals](../development/tauri.md#prepared-managed-terminals--2026-11-04).             | Implement and validate the complete Tauri UI flow with both real CLIs.                                                                       |
-| 4   | Add third and fourth agents without fixed A/B logic                 | **Partial** — Tauri retains 1–8 prepared PTY panes; Electron supports homogeneous teams and a reviewed two-member mixed pair.                                                                                                                              | Validate independent real 3/4-agent creation and mixed-provider teams; remove the fixed communication pair limitation.                       |
+| 3   | Create Codex and Claude from UI without mandatory external setup    | **Partial** — Tauri prepares Codex/Claude through native menus using the existing provisioner and review. See [native preparation](../development/tauri.md#native-terminal-preparation--2026-11-04).                                                       | Validate complete native creation and operation with both real CLIs.                                                                         |
+| 4   | Add third and fourth agents without fixed A/B logic                 | **Partial** — Tauri can prepare 1–8 same-provider Codex/Claude terminals and displays a retained workspace.                                                                                                                                                | Validate independent real 3/4-agent creation and mixed-provider teams; remove fixed communication pair limitation.                           |
 | 5   | Hide a pane without stopping its session; stop only on request      | **Partial** — retained Tauri workspace implements hide/show and separate stop; [workspace evidence](../development/tauri-terminal-workspace.md).                                                                                                           | Complete real native lifecycle and close/hide confirmation acceptance.                                                                       |
 | 6   | Maximize, resize and move panes without losing input/output         | **Partial** — Tauri implements retained grid, resize, names and reorder; synthetic and visual smoke evidence is in [workspace](../development/tauri-terminal-workspace.md).                                                                                | Validate full real PTY input/output, focus, scrollback, accessibility and native consent.                                                    |
 | 7   | Rename panes and mention stable unique handles with autocomplete    | **Partial** — Tauri has a retained PTY workspace and a separate, opt-in two-Codex structured client with names, handles and autocomplete. See [structured agents](../development/tauri.md#structured-agent-communication--2026-11-04).                     | Unify terminal identities and mentions in the Tauri multi-agent workflow; validate real delivery.                                            |
 | 8   | Assign/change orchestrator and edit communication permissions in UI | **Partial** — roles and directed permissions are available in the separate opt-in two-Codex Tauri structured client.                                                                                                                                       | Integrate roles and permissions with arbitrary supported terminals/teams; validate native authorization and real providers.                  |
 | 9   | Real directed mention delivery and verifiable return                | **Blocked** — Tauri structured communication has synthetic tests only; the real Codex attempt lost ownership before readiness. See [reconciliation](../development/codex-two-agent-acceptance.md#reconciling-the-blocked-attempt-before-another-real-run). | Decide quarantine/capacity policy; complete native reviews and real provider acceptance. Mixed-provider PTY MCP consent remains unported.    |
 | 10  | Message states represent real events                                | **Partial** — existing managed communication distinguishes acceptance, execution, result and unknown outcomes; see [mention research](../research/mention-communication.md).                                                                               | Demonstrate correct evidence and failure/unknown states end to end with real providers, including mixed pairs.                               |
-| 11  | Claude startup failure does not block Codex or a new terminal       | **Partial** — failure boundaries have synthetic coverage; mixed selection and recovery have limitations.                                                                                                                                                   | Prove the requested independent failure/retry scenario with real supported CLIs and Tauri.                                                   |
+| 11  | Claude startup failure does not block Codex or a new terminal       | **Partial** — synthetic tests cover preparation cancellation/drift and preserve existing runtimes.                                                                                                                                                         | Prove independent failure and retry with real CLIs in Tauri.                                                                                 |
 | 12  | Recovery/reconnect avoids duplicate processes                       | **Partial** — journals fence uncertain ownership; persisted Electron layouts do not reconnect processes. See [recovery](../development/cli-team-recovery.md).                                                                                              | Implement and validate scoped reconnect/recovery with real owned process evidence; do not reset uncertain reservations.                      |
 | 13  | Layout, teams and settings persist in SQLite                        | **Partial** — Electron and Tauri workspace preferences use private JSON; managed metadata uses existing journal rows.                                                                                                                                      | Deliver and validate SQLite persistence for layouts, teams and settings, including restart behavior.                                         |
 | 14  | Protect local Core and minimize desktop permissions                 | **Partial** — loopback/authentication and constrained Tauri terminal IPC are documented in the [security model](security-model.md) and [Tauri guide](../development/tauri.md).                                                                             | Complete security review and native/packaged acceptance of the final composition.                                                            |
@@ -144,3 +144,40 @@ coexistence in one native process, native consent or real provider communication
   is not a portable current-status source.
 - [Product requirements](product-requirements.md) — broader observability/analytics
   inventory; check it separately when changing those features.
+
+## Native Tauri preparation delivery — 2026-11-04
+
+The native menu now prepares 1–8 same-provider Codex/Claude manifests through
+existing ORQST provisioning and full selection review. The shipped Node is reused;
+no external setup or manual manifest is required. Creation, opening and signed CLI
+startup remain separate. Cancelled opening preserves files for a fresh native
+review; uncertain writes and Core admission are latched against automatic retry.
+See [workflow and validation](../development/tauri.md#native-terminal-preparation--2026-11-04)
+and [Anywh component/license review](../research/tauri-terminal-preparation.md).
+
+Criteria 3, 4 and 11 remain **Partial**. Synthetic provisioning and a compiled native
+menu are not native provider acceptance. Native creation/start/stop, real Codex and
+Claude tasks, models, arbitrary mixed teams, recovery, retirement and platform
+distribution remain pending. The independently developed Tauri workspace/layout
+is outside this increment. No Electron code path was replaced.
+
+Checks already completed for this delivery: the initial full Node run passed 609
+tests, the expanded focused suite passed 18, four Rust tests passed, Clippy with
+warnings denied passed, production build/resources and both existing packaged
+Tauri acceptances passed, and the final macOS debug `.app` was built. No native
+dialog/provider acceptance is claimed. A separate shipped-helper check outside the
+checkout passed cancellation, wrong-ID and production provider-pin rejection.
+
+Retained failures: the first focused run had three test-fixture Claude pin/inspector
+mismatches, corrected only in the synthetic bundle. An expanded complete Node run
+during native compilation reported 610 passed, one Analytics `ECONNRESET` failure
+and one Codex initialize timeout (55 seconds). No production guard, assertion or
+timeout was weakened. The final repeated-run result is recorded below.
+
+Final repeat after native compilation completed: `pnpm test` passed all 612 tests,
+with zero failures, cancellations or skips. `pnpm lint` and `pnpm typecheck` passed.
+The final `cargo test` passed four tests and `cargo clippy -- -D warnings` passed;
+`pnpm build:tauri --debug --bundles app` produced a macOS Apple Silicon debug
+application (159.96 MiB). It was built, not accepted through native dialogs or real
+providers. `pnpm build`, resource staging and both packaged Tauri acceptances passed
+earlier in this same increment. The existing Vite chunk advisory remains.

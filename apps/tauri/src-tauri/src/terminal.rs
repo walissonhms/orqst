@@ -403,9 +403,25 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         return Ok(());
     };
     let paths: Vec<String> = serde_json::from_str(&files)?;
+    start_selected(app, paths).await
+}
+
+pub fn is_running(app: &tauri::AppHandle) -> bool {
+    app.state::<Terminals>().0.lock().unwrap().is_some()
+}
+
+/// Paths originate only from startup configuration or the native provisioning review.
+pub async fn start_selected(
+    app: &tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if is_running(app) {
+        return Err("Managed terminals already open".into());
+    }
     if paths.is_empty() || paths.len() > 8 || paths.iter().any(|p| p.len() > 2048) {
         return Err("Invalid explicit managed terminal selection".into());
     }
+    let files = serde_json::to_string(&paths)?;
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");
     let admission = app.path().app_data_dir()?.join("managed-agents");
