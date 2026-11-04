@@ -2,9 +2,8 @@
 
 ## Tauri preview process boundary — 2026-11-04
 
-The native shell owns a fixed bundled Node executable and Bridge entry; there is
-no arbitrary renderer command, Tauri capability, remote origin grant, CLI launch,
-PTY endpoint or signing-key exposure. The shell plugin is used exclusively from
+The native shell owns a fixed bundled Node executable and Bridge entry. The observer
+has no Tauri capability, execution endpoint or signing-key exposure. The shell plugin is used exclusively from
 Rust. The Core receives an allowlisted environment, separate private application
 state and a stable native loopback origin (default port 4319). Port conflicts fail
 startup without attaching to another process. Existing HTTP/WebSocket authorization and
@@ -18,8 +17,28 @@ stderr continue draining after readiness without printing captured diagnostics. 
 exit waits for its fixed stdin shutdown, then can kill only its retained child; EOF
 also initiates Node cleanup. No stale PID, uncertain descendant or lost agent is
 adopted or restarted. This is not hard containment against a malicious same-user
-process replacing app resources. Managed-terminal native consent, trusted input,
-reconnection and full-platform packaging are not migrated yet.
+process replacing app resources. Reconnection and full-platform packaging remain unaccepted.
+
+An explicit `ORQST_TAURI_TERMINALS` manifest array starts a second fixed Node entry
+for managed execution. It reuses the existing private Core, PTY host and native broker;
+it does not import execution into the Bridge. Only `terminal-*` local webviews receive
+`terminal_request`/`terminal_view` capability. Native label and exact custom-protocol
+URL bind the slot; renderer fields never select a slot, manifest, executable or proof.
+The terminal document permits only its script/style and native IPC, denies frames,
+network connections, links/new windows and forms, and renders CLI output through the
+existing restricted xterm client. Native blur/hide revokes leases and pending grants;
+reload permanently fences that document. Private pipe messages and output are bounded,
+requests do not retry, and malformed renderer requests leave other slots usable.
+
+Native dialogs show the existing exact manifest/action with bounded quoted paste.
+On supported macOS the first and third buttons cancel; only the middle named button
+approves. No renderer answer is accepted. Signing keys, attachment IDs and input leases
+stay in the private Node broker. The Rust parent validates native focus/generation again
+after the dialog before returning consent; the broker checks its own revocation generation
+and challenge expiry before signing. The inherited pipe is the trusted native transport,
+not an authorization mechanism available to the dashboard or another HTTP client.
+Native consent/keyboard lifecycle acceptance is still incomplete; synthetic pipe consent
+does not establish it. MCP-enabled profiles are refused until their separate consent is ported.
 
 Security review: no observer endpoint, cookie, WebSocket/event shape, database schema
 or source-access policy changes. The new boundary is native → inherited stdio →

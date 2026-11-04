@@ -1,7 +1,7 @@
 import { build } from 'esbuild';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +49,60 @@ const result = await build({
   },
   metafile: true,
 });
+// Reuse the exact existing Node hosts and terminal renderer; no Electron runtime is shipped.
+const terminalResult = await build({
+  entryPoints: {
+    'tauri-terminal-host': 'apps/desktop/src/tauri-terminal-host.ts',
+    'managed-terminal-core': 'packages/core/src/terminal/host.ts',
+    'managed-terminal-host': 'packages/core/src/terminal/pty-host.ts',
+    'orqst-mcp-relay': 'packages/core/src/terminal/mcp-relay.ts',
+  },
+  absWorkingDir: root,
+  outdir: join(output, 'core'),
+  outExtension: { '.js': '.cjs' },
+  bundle: true,
+  platform: 'node',
+  target: 'node24',
+  format: 'cjs',
+  external: ['node-pty'],
+  metafile: true,
+});
+const clientResult = await build({
+  entryPoints: {
+    client: 'apps/tauri/src/terminal-client.ts',
+    style: 'apps/desktop/src/managed-terminal.css',
+  },
+  absWorkingDir: root,
+  outdir: join(output, 'terminal'),
+  bundle: true,
+  platform: 'browser',
+  target: 'safari17',
+  format: 'iife',
+  metafile: true,
+});
+await writeFile(
+  join(output, 'terminal/style.css'),
+  '\n.tauri-terminal .layout-toolbar { display: none; }\n',
+  { flag: 'a' },
+);
+if (process.platform === 'darwin' && process.arch === 'arm64') {
+  const require = createRequire(import.meta.url);
+  const source = dirname(require.resolve('node-pty/package.json'));
+  const metadata = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
+  if (metadata.version !== '1.1.0' || metadata.license !== 'MIT')
+    throw new Error('Unexpected PTY dependency');
+  const destination = join(output, 'core/terminal-pty');
+  await mkdir(join(destination, 'prebuilds/darwin-arm64'), { recursive: true });
+  await cp(join(source, 'lib'), join(destination, 'lib'), { recursive: true });
+  for (const file of ['package.json', 'LICENSE'])
+    await cp(join(source, file), join(destination, file));
+  for (const file of ['pty.node', 'spawn-helper'])
+    await cp(
+      join(source, 'prebuilds/darwin-arm64', file),
+      join(destination, 'prebuilds/darwin-arm64', file),
+    );
+  await chmod(join(destination, 'prebuilds/darwin-arm64/spawn-helper'), 0o700);
+}
 await cp(join(root, 'apps/dashboard/dist'), join(output, 'dashboard'), { recursive: true });
 for (const file of ['LICENSE', 'NOTICE'])
   await cp(join(root, file), join(output, 'licenses', file));
@@ -74,7 +128,7 @@ async function includePackage(file) {
   const { directory, manifest } = found;
   if (manifest.name.startsWith('@orqst/') || packages.has(manifest.name)) return;
   // These are the licenses in the selected closure. New grants need explicit review.
-  if (!['MIT', 'ISC', 'Apache-2.0'].includes(manifest.license)) {
+  if (!['MIT', 'ISC', 'Apache-2.0', 'Apache-2.0 OR MIT'].includes(manifest.license)) {
     throw new Error(`Unreviewed bundled dependency license: ${manifest.name}`);
   }
   const key = manifest.name.replaceAll('/', '-');
@@ -96,7 +150,11 @@ async function includePackage(file) {
   }
   return found;
 }
-for (const input of Object.keys(result.metafile.inputs)) {
+for (const input of Object.keys({
+  ...result.metafile.inputs,
+  ...terminalResult.metafile.inputs,
+  ...clientResult.metafile.inputs,
+})) {
   if (input.includes('node_modules/')) await includePackage(resolve(root, input));
 }
 async function includeDependencies(manifestFile) {
@@ -123,6 +181,7 @@ async function includeDependencies(manifestFile) {
   }
 }
 await includeDependencies(join(root, 'apps/dashboard/package.json'));
+await includePackage(createRequire(import.meta.url).resolve('node-pty/package.json'));
 await writeFile(
   join(output, 'licenses/dependencies.json'),
   JSON.stringify([...packages.values()], null, 2) + '\n',

@@ -3,8 +3,8 @@
 The owner-approved desktop target is Tauri 2 with the existing React dashboard,
 Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
-validated. This preview is an observer client; it does not yet expose Electron's
-managed-terminal, native-export or native-notification integrations.
+validated. The observer is unchanged; prepared managed terminals can opt into separate
+native windows. Native exports, notifications and the full managed workflow remain in Electron.
 
 ## Build and run
 
@@ -52,8 +52,8 @@ Standalone disposable Core checks omit `ORQST_PORT` to request an OS-selected po
 
 A second launch focuses the existing application before starting another Core.
 The child receives an explicit environment allowlist; `NODE_OPTIONS`, `NODE_PATH`
-and unrelated credentials are not inherited. No Tauri command handlers or renderer
-capabilities are granted. Navigation remains on the owned origin, new windows are
+and unrelated credentials are not inherited. The observer receives no Tauri command
+capability. Navigation remains on the owned origin, new windows are
 denied, and the existing Bridge CSP, cookie, Host/Origin checks and API/WebSocket
 validation remain authoritative.
 
@@ -70,7 +70,8 @@ five seconds for Core cleanup, then kills only the owned child if necessary.
 Parent pipe EOF also requests cleanup. A crashed Core is removed from native state
 only for its exact child identity. There is no automatic process respawn, stored-PID
 adoption or claim that a disconnected frontend recovered a process. The current
-preview has no managed tasks to keep alive after closing its shell.
+preview only disconnects explicitly selected managed hosts after native quit consent;
+owned descendant containment is not guaranteed. Hiding a terminal window keeps its host alive.
 
 ## Acceptance and remaining work
 
@@ -89,9 +90,9 @@ Node binary with synthetic source data, opens the built dashboard in Chromium,
 queries the colocated production Analytics worker and verifies graceful exit.
 This proves packaging and browser operation, not native WebKit/provider equivalence.
 
-The migration is **not complete**. Managed PTY/structured terminals still use
-Electron's native IPC; native dialogs, trusted input/signing, exports, menus/tray,
-OS notifications, durable reconnect and profile migration require incremental
+The migration is **not complete**. Prepared PTY terminals have the opt-in bridge below;
+structured terminals, native exports, menus/tray parity, OS notifications,
+durable reconnect and profile migration require incremental
 parity work. Teams, permissions, editable handles and actual CLI mention/return
 acceptance remain separate requirements of the master specification. This change
 does not run Codex, Claude or OpenCode, and does not certify any real-provider task.
@@ -99,3 +100,57 @@ does not run Codex, Claude or OpenCode, and does not certify any real-provider t
 Windows/Linux builds, macOS Intel, signed/notarized installers and the complete
 native transitive redistribution-notice audit have not been accepted. The local
 debug bundle is not a release candidate. See the [source review](../research/tauri-core-reuse.md).
+
+## Prepared managed terminals — 2026-11-04
+
+On non-root macOS Apple Silicon, select **fresh** manifests produced by the existing
+`terminal:setup` workflows. Set an explicit JSON array of canonical absolute paths
+before launching the preview:
+
+```sh
+export ORQST_TAURI_TERMINALS='["/absolute/private/terminal-a.json","/absolute/private/terminal-b.json"]'
+pnpm dev:tauri
+pnpm accept:tauri-terminals --authorize-synthetic
+```
+
+Omitting the variable keeps observer-only startup. Selection supports the existing
+1–8 same-provider contract and reviewed Codex/OpenCode pair. It retains executable
+hash/version checks, native-session acknowledgments, duplicate/overlap rejection,
+private file permissions and sticky admission. Existing journals are refused; never
+select profiles currently owned by Electron. MCP-enabled profiles are refused because
+their separate native delegation consent is not ported. Selection failure leaves the
+observer available and prints a fixed refusal without paths or backend diagnostics.
+
+Use the native **Managed Terminal** menu to show each prepared window. Start, connect
+output, enable input, bounded paste and stop use the existing native broker's signed
+grants. The shell creates the document; its command identity determines the slot.
+Closing or hiding a terminal window revokes input and preserves its process, document,
+scrollback and draft. Reopen from the same menu; no process is relaunched. Native window
+resize reaches the existing xterm fit and PTY resize transport. Reload permanently
+fences that document; it does not adopt or restart anything. Quitting asks to disconnect
+owned work, then closes the private Node hosts; arbitrary descendants are not contained.
+
+The Tauri frontend reuses Electron's terminal document, xterm client, schemas and
+Node hosts without importing the Electron runtime. Its two commands are available
+only to the dedicated custom-protocol windows. The dashboard stays a remote observer
+with zero native execution capability. No execution HTTP route or WebSocket message
+is added. See [native contract](../api/terminal-native.md) and the
+[component research](../research/tauri-managed-terminals.md).
+
+Checks for this increment: 579 Node tests, two Rust tests, Clippy with warnings denied,
+lint, typecheck, production build including Electron, macOS debug `.app`, and both
+packaged acceptance scripts passed. The terminal acceptance copies built resources
+outside the checkout and runs the real staged PTY with the clearly labeled C fixture;
+Chromium exercises the Tauri xterm bundle and private Node transport. Native IPC,
+focus and dialog consent are simulated in that acceptance. Real native inspection
+opened the observer, menu, terminal document/xterm and exact-action start dialog.
+It did **not** establish a successful native start/input/stop cycle: focus changed during
+the attempt and input was revoked. An earlier UI-tool timeout is not positive evidence.
+
+Remaining limits: full native focus/dialog/keyboard/hide/quit lifecycle acceptance,
+real Codex/Claude/OpenCode login/tasks, native retirement/reselection, creation through
+the dashboard, split/reordered panes, persistent layout, teams/mentions and MCP consent,
+durable reconnect, Windows/Linux/Intel and signed installers. Native retirement is absent;
+state/admission remain reserved rather than being deleted or automatically reused.
+No ingestion logic changed; `validate:local`, `validate:live`, full browser suite and
+real-provider acceptances were not run. Electron's implementation remains available.
