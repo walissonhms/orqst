@@ -1377,3 +1377,13 @@ forgery, stale responses and hidden input restoration. Saved membership/roles/la
 never restore a grant or adopt a process. The observer remains read-only; only the
 already reviewed selection is exposed. Native WebKit and provider acceptance are
 separate from synthetic Chromium/Node evidence.
+
+## Private incremental owned enrollment — 2026-11-04
+
+The [enrollment API](../api/terminal-enrollment.md) exists only on trusted inherited
+parent/Core IPC. It binds original Core epoch, one-use operation identity, CAS,
+prepared read-only workspace/Feature context and immutable source/admission
+revision. Admission grants no Start/attach/input. Exclusive durable records retain
+partial effects and capacity, with no automatic release/retry/adoption; timeout
+and stale acknowledgments do not disconnect or renew previous panes. Native
+presentation/layout and real-provider acceptance remain separate.

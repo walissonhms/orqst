@@ -1,5 +1,9 @@
 import { stableId } from '@orqst/shared';
-import { terminalSlotLimit } from '@orqst/protocol';
+import {
+  terminalSlotLimit,
+  terminalEnrollmentInspectionSchema,
+  terminalEnrollmentReceiptSchema,
+} from '@orqst/protocol';
 import { featureConfigurationDatabase } from './feature-configuration.js';
 import { terminalTeamDatabase } from './team-database.js';
 import { terminalLayoutDatabase } from './layout-database.js';
@@ -19,6 +23,7 @@ import { InteractiveMcpSession } from './interactive-mcp.js';
 import { terminalDigest } from './authority.js';
 import { terminalFile } from './codex-profile.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
+import { terminalEnrollmentFile, inspectTerminalEnrollment } from './enrollment-files.js';
 
 process.umask(0o077);
 if (!process.send || ![5, 6].includes(process.argv.length) || !/^v24\./.test(process.version))
@@ -30,6 +35,20 @@ async function start() {
   );
   const selection = inspectManagedTerminalFiles(files, limit);
   if (selection.some((slot) => slot.blocker)) throw new Error('Terminal profile blocked');
+  const enrollmentFiles = selection.map(({ config }, slot) =>
+    terminalEnrollmentFile(files[slot]!, config),
+  );
+  const initialMembers = enrollmentFiles.map(({ config, bindingDigest }, slot) => ({
+    ...terminalIdentity(config),
+    slot,
+    provider: interactiveProvider(config),
+    ...(config.model ? { requestedModel: config.model.value } : {}),
+    workspaceId: stableId('workspace', config.project),
+    featureId: config.preparation?.featureId ?? null,
+    admissionRevision: 0,
+    bindingDigest,
+    status: 'ready' as const,
+  }));
   const publicKey = createPublicKey({
     key: Buffer.from(process.argv[3]!, 'base64url'),
     type: 'spki',
@@ -144,6 +163,79 @@ async function start() {
       try {
         let value: unknown;
         switch (request.kind) {
+          case 'enrollmentInspect': {
+            const state = pair.enrollmentInspect(request.opId);
+            value = terminalEnrollmentInspectionSchema.parse({
+              ...state,
+              members: [...initialMembers, ...state.members],
+            });
+            break;
+          }
+          case 'enroll': {
+            let inspected: ReturnType<typeof inspectTerminalEnrollment> | undefined;
+            const receipt = pair.enroll(request.input, request.manifestFile, () => {
+              inspected = inspectTerminalEnrollment(
+                request.manifestFile,
+                request.input,
+                enrollmentFiles,
+              );
+              const reviewed = inspected;
+              const config = reviewed.candidate.config;
+              if (config.preparation?.preferencesDirectory !== process.argv[4])
+                throw new Error('Enrollment preferences scope changed');
+              const adapter = interactiveCliAdapter(
+                interactiveProvider(config),
+                'reuse-existing',
+                true,
+              );
+              const profiles = adapter.profiles(config);
+              const backend = adapter.backend(
+                request.manifestFile,
+                join(__dirname, 'managed-terminal-host.cjs'),
+              );
+              reviewed.validate();
+              return {
+                member: reviewed.member,
+                create: () => {
+                  // Last check before durable journal effects. Existing slots are never rebuilt.
+                  reviewed.validate();
+                  admission.assertOwner();
+                  const store = new Store(join(config.state, 'terminal.sqlite'));
+                  stores.push(store);
+                  const journal = store.terminalJournal(authority.epoch, { recover: false });
+                  reviewed.validate();
+                  return {
+                    profiles,
+                    journal,
+                    backend: {
+                      preflight: () => {
+                        reviewed.validate();
+                        backend.preflight?.();
+                      },
+                      validate: (profile) => {
+                        reviewed.validate();
+                        return backend.validate(profile);
+                      },
+                      start: (profile, events, identity) => {
+                        reviewed.validate();
+                        return backend.start(profile, events, identity);
+                      },
+                    },
+                  };
+                },
+              };
+            });
+            if (inspected && receipt.member) {
+              // Includes uncertain reservations: never reuse their identities or state paths.
+              enrollmentFiles.push(inspected.candidate);
+              if (receipt.status === 'ready') {
+                files.push(request.manifestFile);
+                selection.push({ config: inspected.candidate.config, blocker: undefined });
+              }
+            }
+            value = terminalEnrollmentReceiptSchema.parse(receipt);
+            break;
+          }
           case 'featureViewRead':
             value = features().readView();
             break;

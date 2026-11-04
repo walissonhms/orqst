@@ -226,3 +226,14 @@ The earlier uncertain fixture remains preserved, without adoption or cleanup.
 - [ ] Complete actual native picker/provisioning/opening, CLI Start/output/input,
       Settings reload → SPA Studio and final Quit acceptance.
 - [ ] Accept real providers and communication; preserve all earlier quarantines.
+
+## Private Core enrollment source increment — 2026-11-04
+
+- [x] Append one independent prepared CLI/model slot to the existing Pair using
+      durable epoch/opId/CAS reservations and receipts, without rebuilding old slots.
+- [x] Cover pure continuity, capacity, idempotency, partial-effect preservation,
+      source/context binding and isolated mocked-client timeout/late ACK.
+- [ ] Integrate/accept native service/Webview/layout/Feature append with real CLIs.
+
+See the [private contract and remaining limits](../api/terminal-enrollment.md).
+This source increment does not mark native/runtime/provider acceptance complete.

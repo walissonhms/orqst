@@ -33,6 +33,12 @@ export interface TerminalProfile {
   environmentProfile: string;
   permissions: string;
 }
+/** Private Core admission binding. It conveys no launch, attachment or input authority. */
+export interface TerminalStartBinding {
+  version: 1;
+  bindingDigest: string;
+  admissionRevision: number;
+}
 export interface TerminalEvents {
   started(): void;
   data(text: string): void;
@@ -94,13 +100,32 @@ export class TerminalSupervisor {
   private profiles = new Map<string, Readonly<TerminalProfile>>();
   private attempts = new Map<string, Attempt>();
   private closed = false;
+  private readonly startBinding?: Readonly<TerminalStartBinding>;
 
   constructor(
     private readonly authority: TerminalAuthority,
     private readonly backend: TerminalBackend,
     profiles: readonly TerminalProfile[],
     private readonly journal?: TerminalJournal,
+    startBinding?: TerminalStartBinding,
   ) {
+    if (startBinding !== undefined) {
+      if (
+        !startBinding ||
+        typeof startBinding !== 'object' ||
+        startBinding.version !== 1 ||
+        typeof startBinding.bindingDigest !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(startBinding.bindingDigest) ||
+        !Number.isSafeInteger(startBinding.admissionRevision) ||
+        startBinding.admissionRevision < 1
+      )
+        throw new Error('Invalid terminal enrollment start binding');
+      this.startBinding = Object.freeze({
+        version: 1,
+        bindingDigest: startBinding.bindingDigest,
+        admissionRevision: startBinding.admissionRevision,
+      });
+    }
     if (journal && journal.epoch !== authority.epoch)
       throw new Error('Terminal journal epoch mismatch');
     journal?.assertOwner();
@@ -132,7 +157,14 @@ export class TerminalSupervisor {
     // In-memory metadata remains bounded independently of optional durable retention.
     if (this.attempts.size >= 128) throw new Error('Terminal attempt limit exceeded');
     const id = randomUUID();
-    const digest = terminalDigest(JSON.stringify([profile, terminalPolicy]));
+    // Preserve the exact legacy bytes when no incremental admission binding exists.
+    const digest = terminalDigest(
+      JSON.stringify(
+        this.startBinding
+          ? ['orqst.terminal-start', 1, profile, terminalPolicy, this.startBinding]
+          : [profile, terminalPolicy],
+      ),
+    );
     const challenge = this.authority.prepare(clientId, { operation: 'start', target: id, digest });
     this.journal?.prepare({
       instanceId: id,

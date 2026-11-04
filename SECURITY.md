@@ -1,5 +1,15 @@
 # Security policy
 
+## Private incremental terminal enrollment — 2026-11-04
+
+Inherited trusted Core IPC can admit one prepared slot without granting Start,
+output or keyboard input. Epoch/opId/CAS, immutable source/revision binding,
+exclusive durable evidence and bounded isolated timeouts preserve prior slots.
+Partial effects retain capacity; inspection never retries/adopts an uncertain
+operation. No renderer path/proof authority, observer migration, credential read
+or public endpoint is added. See [contract and security review](docs/api/terminal-enrollment.md).
+Native/provider acceptance remains separate from pure mocked transport checks.
+
 ## Tauri Studio preparation — 2026-11-04
 
 The owned main dashboard now has one narrow `studio_request` capability for passive

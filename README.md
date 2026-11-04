@@ -1,5 +1,10 @@
 # ORQST
 
+The [private incremental Core enrollment API](docs/api/terminal-enrollment.md) can
+append prepared independent slots to the same owned Pair without rebuilding old
+supervisors. `ready` means admitted, with separate signed launch/output/input.
+Native Studio append integration and real CLI acceptance remain separate work.
+
 The [approved V6 package](docs/design/v6/README.md) is now the official UI/UX and
 functional architecture reference: Workspace → Feature → TerminalPane →
 AgentSession. See the [V6 inventory and checklist](docs/architecture/v6-feature-checklist.md)

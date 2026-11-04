@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Incremental owned Core enrollment — 2026-11-04
+
+The [private v1 enrollment contract](docs/api/terminal-enrollment.md) adds durable
+append-only admission, CAS/idempotent receipts and an existing-Core client API.
+Pure tests cover continuity and uncertainty; native service/Webview/layout wiring,
+real providers and packaging remain separate acceptance gates.
+
 ## Approved V6 feature architecture — 2026-11-04
 
 The [V6 reference](docs/design/v6/README.md) supersedes earlier product/UI directions
