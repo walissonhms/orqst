@@ -190,3 +190,22 @@ denied. Normal Codex Open remains a later, independent human action requiring it
 existing native grants and real started/owned-exit evidence. Recovery has not run
 against the real reservation, and no actual release, native/provider or Codex
 acceptance is claimed by source checks or packaging.
+
+## Native lint correction before the second source freeze
+
+The first published integrated freeze `1d5966a` passed locked/offline all-target
+Cargo tests in both modes: 80 passed and one pre-existing explicit fixture ignore
+per mode. Clippy with warnings denied then refused two new native expressions:
+eight parameters to the details function and an owned URI string comparison.
+Packaging stopped before native application build/bundle. The failed manifest/logs
+remain preserved in `/tmp/orqst-746-delivery/`.
+
+The narrow correction groups the three display labels as one array and reuses the
+existing unavailable-document response's exact scheme/authority/path-and-query
+predicate. URI equivalence is deliberately avoided because the locked HTTP crate
+compares scheme/authority case-insensitively; the new regression covers uppercase,
+query, encoded/dot paths and non-GET requests. No lint is suppressed or dependency
+changed. The second source tag is
+`delivery/2026-11-04-offline-recovery-source-r2`; resources and native checks must
+be regenerated from that published freeze before packaging resumes. Node/Core
+sources and the 151 passing synthetic cases are unchanged by this native fix.

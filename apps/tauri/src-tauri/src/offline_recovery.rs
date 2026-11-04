@@ -70,7 +70,11 @@ fn escaped(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 pub fn response(request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
-    let valid = request.method() == tauri::http::Method::GET && request.uri().to_string() == URL;
+    let uri = request.uri();
+    let valid = request.method() == tauri::http::Method::GET
+        && uri.scheme_str() == Some("orqst-recovery")
+        && uri.authority().map(|value| value.as_str()) == Some("local")
+        && uri.path_and_query().map(|value| value.as_str()) == Some("/index.html");
     let body = if valid {
         format!("<!doctype html><html><meta charset=utf-8><title>ORQST</title><main><h1>{}</h1><p>{}</p><p>{}</p></main></html>", escaped(&text("title")), escaped(&text("intro")), escaped(&text("instructions"))).into_bytes()
     } else {
@@ -216,9 +220,7 @@ fn review(
                     app,
                     window,
                     detail,
-                    text("title"),
-                    cancel,
-                    back,
+                    [text("title"), cancel, back],
                     generation,
                     deadline,
                 );
@@ -496,4 +498,36 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
     state.pending = None;
     diagnostic.record(Stage::HelperStream, Outcome::Eof, Effects::Unconfirmed);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn static_recovery_document_requires_exact_components_and_get() {
+        let request = |method: &str, url: &str| {
+            tauri::http::Request::builder()
+                .method(method)
+                .uri(url)
+                .body(Vec::new())
+                .unwrap()
+        };
+        assert_eq!(super::response(&request("GET", super::URL)).status(), 200);
+        for url in [
+            "orqst-recovery://LOCAL/index.html",
+            "ORQST-RECOVERY://local/index.html",
+            "orqst-recovery://local/INDEX.html",
+            "orqst-recovery://local/./index.html",
+            "orqst-recovery://local/%69ndex.html",
+            "orqst-recovery://local/index.html?",
+            "orqst-recovery://local/index.html?extra=1",
+            "orqst-recovery://other/index.html",
+        ] {
+            let response = super::response(&request("GET", url));
+            assert_eq!(response.status(), 404, "{url}");
+            assert!(response.body().is_empty());
+        }
+        for method in ["HEAD", "OPTIONS", "get", "POST"] {
+            assert_eq!(super::response(&request(method, super::URL)).status(), 404);
+        }
+    }
 }

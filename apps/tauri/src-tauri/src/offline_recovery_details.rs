@@ -128,15 +128,14 @@ pub fn details(
     app: &tauri::AppHandle,
     window: &tauri::WebviewWindow,
     detail: &str,
-    title: String,
-    cancel: String,
-    back: String,
+    labels: [String; 3],
     generation: u64,
     deadline: Instant,
 ) -> bool {
     if detail.len() > 64 * 1024 {
         return false;
     }
+    let [title, cancel, back] = labels;
     let detail = detail.to_owned();
     let window = window.clone();
     let native = app.clone();
