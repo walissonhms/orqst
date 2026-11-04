@@ -1,5 +1,14 @@
 # Changelog
 
+## Offline administrative recovery source — 2026-11-04
+
+Add an explicit private capture/release/finalize transaction, native kernel boot
+reader, independent administrative signature domain, committed WAL validation,
+sticky admission hooks and disposable failure/race fixtures. Original attempts and
+journal owners remain unchanged; the original marker is archived without exit
+claims. No production recovery entrypoint or Electron removal is enabled.
+See [private contract](docs/api/offline-reservation-recovery.md).
+
 ## Opening diagnostics integration — 2026-11-04
 
 Preserve original logger commits above the combined opening fixes, add FIFO/append-error regressions, and document source freeze, packaging boundaries and local log consultation. Existing reservations, public Stop and native authority are unchanged. See [integration](docs/development/tauri-opening-diagnostics-integration.md).

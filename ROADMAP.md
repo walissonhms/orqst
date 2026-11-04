@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## Offline recovery review gate — 2026-11-04
+
+Offline transaction source, positive prepared-only validation, committed WAL
+capture and deny-only admission hooks are implemented. Review independent native
+administrative trust/key persistence and full review before connecting a real
+entrypoint. Real recovery, CLI/native acceptance and Electron retirement remain
+pending. See [flow and remaining gates](docs/development/offline-reservation-recovery.md).
+
 ## Opening diagnostics delivery — 2026-11-04
 
 Reviewed logger source is integrated and focused checks pass. Serial packaging is gated on the published source freeze; actual results belong to its generated manifest. Native/provider opening and evidence-backed reservation review remain open. See [delivery boundary](docs/development/tauri-opening-diagnostics-integration.md).

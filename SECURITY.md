@@ -1,5 +1,15 @@
 # Security policy
 
+## Offline recovery authority review — 2026-11-04
+
+Offline non-dispatch recovery has a separate administrative signing domain and
+native kernel boot source, complete private capture and revalidation, and durable
+archive-before-release ordering. Deny-only admission hooks preserve its sticky
+gate through cancellation and uncertain effects. There is no renderer/HTTP/RPC
+recovery authority or native integration yet. Read the
+[threat model and integration prerequisites](docs/research/offline-reservation-recovery-contract.md)
+and [final durability boundary](docs/api/offline-reservation-recovery.md).
+
 ## Integrated diagnostic security review — 2026-11-04
 
 The integration preserves native document/request/owner fences and keyed append/EOF cleanup; public Stop is byte-identical to the combined opening source. FIFO and append-error regressions passed in the standalone runner. Logger failure cannot authorize retry or release reservations. No HTTP/WebSocket/cookie/static-serving change. See [integration and remaining limits](docs/development/tauri-opening-diagnostics-integration.md).

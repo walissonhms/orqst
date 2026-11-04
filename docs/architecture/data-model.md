@@ -1,5 +1,21 @@
 # Data model
 
+## Offline reservation artifacts — 2026-11-04
+
+No SQLite migration or journal-owner acquisition is added. Prepared attempts and
+all original journal data remain unchanged. A private recovery bundle stores
+`snapshot.json` (raw files plus identities/hashes and logical facts), `capture.json`
+(administrative signature), one exclusive release attempt, `archive.json`, prepared
+and completion receipts, and explicit finalization evidence. Every file is 0600
+and its directory 0700, with exclusive writes and file/directory fsync.
+
+`offline-recovery.json` and an operation lock deny ordinary admission during the
+transaction. Marker finalization preserves its original bytes at
+`recovered-<operationId>.marker.json`; it does not write an old runtime exit.
+Logical comparison permits WAL checkpoint byte changes with unchanged committed
+facts and stable base database identity. Unknown or uncertain evidence remains
+reserved. See [private artifact contract](../api/offline-reservation-recovery.md).
+
 ORQST persists normalized observations in a single local SQLite database,
 `orqst.db`, inside `ORQST_DATA_DIR` (default `~/.orqst`).
 

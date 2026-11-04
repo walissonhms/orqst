@@ -1,5 +1,14 @@
 # ORQST
 
+## Offline administrative recovery source — 2026-11-04
+
+The offline capture→kernel-fence verification→archive→explicit release transaction
+and disposable fixtures are implemented with a separate administrative authority.
+Sticky admission hooks prevent compatible controllers from crossing its gate.
+Native key persistence/menu integration and real-state use remain review gates;
+no kernel reboot, terminal opening or Electron removal is claimed.
+See [the executable fixture flow](docs/development/offline-reservation-recovery.md).
+
 ## Integrated opening diagnostics — 2026-11-04
 
 The opening fixes and reviewed bounded logger are integrated; 187 Node and 21 standalone Rust cases plus lint/types passed. Packaging evidence is recorded separately after publishing frozen source. No native/provider acceptance or reservation recovery is implied. See [integration, log location and remaining limits](docs/development/tauri-opening-diagnostics-integration.md).

@@ -1,5 +1,19 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Offline administrative recovery source — 2026-11-04
+
+- [x] Implement bounded full capture, native boot source and prepared-only logical
+      journal/enrollment revalidation without Store/recover/runtime adoption.
+- [x] Add separate administrative signing/review hooks, durable archive and new
+      non-dispatch/fence receipts, preserved marker and explicit finalization.
+- [x] Fence compatible new/late admission objects with persistent deny-only hooks.
+- [x] Add disposable synthetic success, corruption, failure, replay and race cases.
+- [ ] Review/integrate native administrative key persistence and complete native UI.
+- [ ] Separately authorize and validate a real pre-boot capture and kernel fence.
+- [ ] Validate actual CLI/native opening/owned exit, packaging and Electron removal.
+
+See [implemented flow and limits](../development/offline-reservation-recovery.md).
+
 ## Combined opening source — 2026-11-04
 
 - [x] Integrate UI-getter lock release and passive admission/startup diagnostics,

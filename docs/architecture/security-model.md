@@ -1,5 +1,24 @@
 # Security model
 
+## Offline administrative recovery — 2026-11-04
+
+Administrative recovery cannot inherit a runtime key or owner epoch. Trusted
+native composition must independently persist its Ed25519 trust anchor, display
+the entire review and sign only its exact recovery-domain challenge. The fixed
+native sysctl boot UUID must differ from the durably captured pre-boot UUID;
+app restart, sleep, PIDs, descriptor absence and generic consent never qualify.
+
+Source files are canonical/private, O_NOFOLLOW and identity checked; enumeration,
+per-file/aggregate reads, writes and review are bounded. Original SQLite/SHM is
+never opened through SQLite: committed WAL is checksum/salt validated and overlaid
+into a private immutable derived copy. All preserved attempt states must remain
+prepared, enrollments complete and owners/schemas/manifests logically identical.
+Private raw captures may contain sensitive metadata; they are not logs, exports
+or telemetry. Native same-user tampering/rollback and unpatched binaries are
+outside this boundary. Gate hooks are deny-only and no production entrypoint is
+connected. See [contract](../research/offline-reservation-recovery-contract.md)
+and [API/durability limits](../api/offline-reservation-recovery.md).
+
 ## Integrated opening diagnostics review — 2026-11-04
 
 The reviewed integration adds only optional local diagnostic projection: no observer HTTP/WebSocket execution authority, no content-bearing generic log, and no reservation recovery. The standalone runner verifies FIFO rejection and append failure in disposable fixtures. Native document/request/owner fences and public Stop remain intact. See [integration and machine-evidence boundary](../development/tauri-opening-diagnostics-integration.md).
