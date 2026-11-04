@@ -599,6 +599,7 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
             .disable_drag_drop_handler()
             .on_navigation(|url| url.as_str() == CHROME_URL)
             .on_new_window(|_, _| NewWindowResponse::Deny)
+            .on_download(|_, _| false)
             .on_page_load(|view, payload| {
                 if payload.event() == tauri::webview::PageLoadEvent::Started {
                     invalidate(view.app_handle(), view.label());

@@ -1265,6 +1265,7 @@ fn create_terminal_view(
         .disable_drag_drop_handler()
         .on_navigation(move |url| url.as_str() == expected)
         .on_new_window(|_, _| NewWindowResponse::Deny)
+        .on_download(|_, _| false)
         .on_page_load(move |window, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
                 let state = window.state::<Terminals>();

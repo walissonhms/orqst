@@ -1,5 +1,12 @@
 # Security policy
 
+Tauri now explicitly denies new webview permission requests reaching supported
+backend callbacks and rejects browser downloads in every owned webview builder.
+Dashboard document navigation additionally requires an existing SPA/session path.
+OS permissions, persisted browser decisions and unsupported backend callbacks are
+not proven by this policy. See [source-backed limits](docs/research/tauri-webview-policy.md).
+Native file/export authority and existing CSP/document/focus/capabilities remain unchanged.
+
 OpenCode's normal catalogue groups only native candidates individually verified
 against the same exact binary pin, retaining existing canonical PATH precedence.
 Native consent still reviews the chosen exact path/hash; manifests and signed Start

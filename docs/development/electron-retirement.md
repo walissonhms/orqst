@@ -1,5 +1,20 @@
 # Electron retirement — ORQST
 
+## Webview policy hardening — 2026-11-04
+
+The [pinned Tauri 2.12.5/Wry 0.57.1 review](../research/tauri-webview-policy.md)
+confirmed a media-permission default difference, platform download defaults and
+broader dashboard document paths. Source now uses supported permission/download
+denial callbacks and existing SPA route semantics. Exact unavailable/custom
+documents, CSP, capabilities/focus and native save/open/export remain intact.
+[Pure checks and native/platform gaps](tauri-webview-policy.md) keep the matrix's
+security acceptance and Electron removal gates open.
+
+Open gaps: default Tauri data-store persistence differs from Electron's
+non-persistent sessions; saved grants can bypass callbacks; macOS geolocation,
+browser notifications and clipboard-read have no Wry backend callback. Deny
+callbacks alone are not integral parity or native acceptance of these cases.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

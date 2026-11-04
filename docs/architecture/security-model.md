@@ -1,5 +1,14 @@
 # Security model
 
+## Tauri webview policy — 2026-11-04
+
+Supported new browser permission requests are denied by the global native callback;
+browser downloads are rejected in all four document builders. Dashboard navigation
+intersects the existing exact origin/credential/query/unavailable guard with the
+protocol's current SPA/session paths. This is not resource interception or an OS
+permission reset. Native save/open/export retain their existing signed/document/
+focus policy. See [pinned APIs/defaults and remaining native evidence](../research/tauri-webview-policy.md).
+
 OpenCode catalogue discovery collapses only candidates independently passing the
 same exact reviewed native binary SHA-256, using existing canonical tool-PATH order.
 This does not authorize execution: the exact chosen path/hash is disclosed in native

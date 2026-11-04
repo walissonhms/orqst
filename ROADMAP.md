@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Webview policy hardening — 2026-11-04
+
+Source now denies supported new webview permissions and browser downloads and
+matches the existing dashboard document-route policy. Pure path tests pass;
+coordinated native compilation, URL tests and platform/browser-default acceptance
+remain open. See [scope and gates](docs/development/tauri-webview-policy.md).
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

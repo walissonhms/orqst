@@ -8,12 +8,19 @@ mod sidecar;
 mod terminal;
 mod terminal_creation;
 mod unavailable;
+mod webview_policy;
 
-use tauri::webview::NewWindowResponse;
+use tauri::webview::{NewWindowResponse, PermissionResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+fn allowed_dashboard_navigation(url: &tauri::Url, origin: Option<&str>) -> bool {
+    unavailable::allowed_navigation(url, origin)
+        && (url.as_str() == unavailable::URL || webview_policy::dashboard_path_allowed(url.path()))
+}
 
 fn main() {
     tauri::Builder::default()
+        .on_permission_request(|_, _| PermissionResponse::Deny)
         // Adapted from Anywh lib.rs at the same pinned commit as sidecar.rs.
         // A second native launch focuses the first window before starting a Core.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -98,9 +105,10 @@ fn main() {
                 .min_inner_size(720.0, 480.0)
                 .on_navigation(move |url| {
                     // The owned dashboard has only narrow native export commands.
-                    unavailable::allowed_navigation(url, allowed_origin.as_deref())
+                    allowed_dashboard_navigation(url, allowed_origin.as_deref())
                 })
                 .on_new_window(|_, _| NewWindowResponse::Deny)
+                .on_download(|_, _| false)
                 .on_page_load(|window, payload| {
                     if payload.event() == tauri::webview::PageLoadEvent::Started {
                         terminal_creation::invalidate(window.app_handle());
@@ -156,4 +164,79 @@ fn main() {
                 sidecar::stop(app);
             }
         });
+}
+
+#[cfg(test)]
+mod webview_policy_tests {
+    use super::*;
+
+    #[test]
+    fn dashboard_navigation_keeps_bootstrap_spa_sessions_and_hashes() {
+        let origin = Some("http://127.0.0.1:4319");
+        for document in [
+            "http://127.0.0.1:4319/",
+            "http://127.0.0.1:4319/#models",
+            "http://127.0.0.1:4319/studio",
+            "http://127.0.0.1:4319/overview/sessions/synthetic#event",
+            "http://127.0.0.1:4319/overview/sessions/a%20b",
+            unavailable::URL,
+        ] {
+            assert!(
+                allowed_dashboard_navigation(&document.parse().unwrap(), origin),
+                "{document}"
+            );
+        }
+    }
+
+    #[test]
+    fn dashboard_navigation_rejects_non_documents_and_origin_expansion() {
+        let origin = Some("http://127.0.0.1:4319");
+        for document in [
+            "http://127.0.0.1:4319/api/bootstrap",
+            "http://127.0.0.1:4319/api/snapshot",
+            "http://127.0.0.1:4319/ws",
+            "http://127.0.0.1:4319/assets/app.js",
+            "http://127.0.0.1:4319/settings/",
+            "http://127.0.0.1:4319/%73ettings",
+            "http://127.0.0.1:4319/overview/sessions/%2F",
+            "http://127.0.0.1:4319/studio?x=1",
+            "http://user:pass@127.0.0.1:4319/studio",
+            "http://127.0.0.1:4320/studio",
+            "http://localhost:4319/studio",
+            "https://127.0.0.1:4319/studio",
+            "https://example.test/studio",
+            "file:///studio",
+            "data:text/html,synthetic",
+            "orqst-unavailable://other/index.html",
+            "orqst-unavailable://local/index.html?x=1",
+            "orqst-unavailable://local/index.html#retry",
+            "orqst-unavailable://user@local/index.html",
+            "orqst-unavailable://local:4319/index.html",
+        ] {
+            assert!(
+                !allowed_dashboard_navigation(&document.parse().unwrap(), origin),
+                "{document}"
+            );
+        }
+    }
+
+    #[test]
+    fn unavailable_startup_has_only_the_exact_static_document() {
+        assert!(allowed_dashboard_navigation(
+            &unavailable::URL.parse().unwrap(),
+            None
+        ));
+        for document in [
+            "http://127.0.0.1:4319/",
+            "http://127.0.0.1:4319/studio",
+            "orqst-unavailable://local/",
+            "orqst-unavailable://local/index.html?",
+            "orqst-unavailable://local/index.html#",
+        ] {
+            assert!(
+                !allowed_dashboard_navigation(&document.parse().unwrap(), None),
+                "{document}"
+            );
+        }
+    }
 }
