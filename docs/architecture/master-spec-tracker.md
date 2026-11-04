@@ -234,3 +234,15 @@ Integrated as `36a3d41` on top of the native coexistence correction: lint,
 typecheck, build, 629 Node tests (`--test-concurrency=2`), ten Rust tests, resource
 staging and packaged synthetic Core acceptance passed. Native visual acceptance
 remains unsuccessful as recorded in the delivery guide; no real provider ran.
+
+## Native file exports — 2026-11-04
+
+Integrated as `8eec11b` (source `5b963cd`), the Tauri dashboard can use the existing
+bounded Artifact and Analytics savers through a narrow native bridge. On the
+integrated branch, lint, typecheck, build, 637 Node tests (`--test-concurrency=2`),
+11 Rust tests, resource staging and `pnpm accept:tauri-files` passed. The first lint
+failed on security-document formatting after conflict resolution; formatting was
+corrected and lint passed. The packaged acceptance simulated native IPC, dialogs and
+editor opening. Genuine native WebKit dialogs/editor behavior and distribution
+remain unaccepted. See the [file contract and security review](../api/tauri-files.md)
+and [component research](../research/tauri-native-files.md).

@@ -1239,6 +1239,7 @@ macOS/Windows cannot withdraw delivered alerts. Clicks only restore the current
 owned window and callbacks are inert after shutdown. Platform/native acceptance
 and transitive redistribution review remain separate from synthetic tests.
 See the [native desktop guide](../development/tauri-native-desktop.md).
+
 ## Tauri native file exports
 
 The preview's owned main webview has a dynamically installed `file_request`

@@ -886,6 +886,7 @@ macOS/Windows cannot withdraw delivered alerts. Clicks only restore the current
 owned window and callbacks are inert after shutdown. Platform/native acceptance
 and transitive redistribution review remain separate from synthetic tests.
 See the [native desktop guide](docs/development/tauri-native-desktop.md).
+
 ## Tauri native file export boundary
 
 The Tauri main dashboard now has one dynamically scoped export command for its
