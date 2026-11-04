@@ -54,6 +54,19 @@ on the existing private host pipe, receiving
 `{kind: feature-reply,id,document,value: FeatureNativeReply}` in a separate bounded
 pending namespace. These envelopes are not renderer APIs. No caller supplies a
 workspace, path, process identity, execution proof or generic Core method.
+A malformed metadata request with valid correlation fields receives a denial;
+invalid correlation is ignored. Neither case shuts down the owned terminal Core.
+
+The only Tauri command is `feature_request(window: Webview, request: Value)`.
+`terminal::metadata_request(app, envelope, presentation)` is crate-internal;
+`presentation` is captured by Rust before the native focus await, never accepted
+from the renderer. Pending captures source/document/presentation. Exact main URL
+capabilities and the dedicated local chrome capability are scoped to their single
+Webview labels; Rust additionally checks parent and canonical URL. The custom
+chrome is local in Tauri's ACL model, while the dashboard has a fixed remote
+loopback origin. No capability is installed on terminal children or all Webviews.
+Timeout, navigation/close and transport failure drop correlation without reusing
+UUIDs; late/duplicate/different-kind replies resolve no new operation.
 
 Example visual selection, after a fresh snapshot/review:
 
@@ -74,3 +87,11 @@ generation via private `layout-generation`; the renderer cannot choose it.
 Stale generation/revision/viewport or invalid geometry is ignored in full before
 native state/visibility changes. Feature view/metadata revisions do not grant
 execution or native input. See [workflow/security/limits](../development/v6-feature-ui.md).
+
+The native insets are `{left:155,top:45,bottom:34}`, or `left:46` at logical width
+720 and below; a non-chrome layout uses zero insets. All integer bounds are checked
+against the actual native logical size before any state/geometry/show/hide change.
+`!suspended && (workspaceChrome || visible.length > 0)` controls workspace visibility:
+an empty Feature keeps its sidebar, suspension hides chrome as well, and no empty
+pane receives input focus. A separate native suspension fence prevents an obsolete
+ACK from reopening the workspace after dashboard/close/navigation/Quit.

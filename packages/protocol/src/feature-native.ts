@@ -87,6 +87,21 @@ export const featureNativeReplySchema = z
     'Missing Feature snapshot',
   );
 export type FeatureNativeReply = z.infer<typeof featureNativeReplySchema>;
+
+/** Private inherited pipe envelopes. Renderer commands accept only the inner request. */
+export const featureNativeEnvelopeSchema = z.strictObject({
+  kind: z.literal('feature-request'),
+  id: z.uuid(),
+  document: z.number().int().positive().safe(),
+  source: z.string().min(1).max(4096),
+  request: featureNativeRequestSchema,
+});
+export const featureNativeReplyEnvelopeSchema = z.strictObject({
+  kind: z.literal('feature-reply'),
+  id: z.uuid(),
+  document: featureNativeEnvelopeSchema.shape.document,
+  value: featureNativeReplySchema,
+});
 export interface DesktopFeatures {
   readonly contractVersion: 1;
   request(input: FeatureNativeRequest): Promise<FeatureNativeReply>;

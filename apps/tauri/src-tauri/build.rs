@@ -5,6 +5,7 @@ fn main() {
             "terminal_view",
             "agents_request",
             "file_request",
+            "feature_request",
         ]),
     ))
     .expect("native permission manifest");

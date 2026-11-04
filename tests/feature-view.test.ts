@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   featureNativeRequestSchema,
+  featureNativeEnvelopeSchema,
+  featureNativeReplyEnvelopeSchema,
   type FeatureNativeRequest,
   type FeatureNativeSnapshot,
 } from '@orqst/protocol';
@@ -423,6 +425,36 @@ test('metadata facade validates strict actions/replies and requires fresh activa
   assert.equal(
     (await broken.request({ contractVersion: 1, generation: 0, action: 'snapshot' })).status,
     'unavailable',
+  );
+});
+
+test('private metadata namespaces retain wire UUIDs and reject forged envelope fields', () => {
+  const envelope = {
+    kind: 'feature-request',
+    id: randomUUID(),
+    document: 1,
+    source: 'orqst-features://local/index.html',
+    request: { contractVersion: 1, generation: 0, action: 'snapshot' },
+  };
+  assert.equal(featureNativeEnvelopeSchema.safeParse(envelope).success, true);
+  for (const forged of [
+    { ...envelope, kind: 'request' },
+    { ...envelope, id: `feature-${envelope.id}` },
+    { ...envelope, document: 0 },
+    { ...envelope, focused: true },
+    { ...envelope, request: { ...envelope.request, source: envelope.source } },
+  ])
+    assert.equal(featureNativeEnvelopeSchema.safeParse(forged).success, false);
+  const reply = {
+    kind: 'feature-reply',
+    id: envelope.id,
+    document: 1,
+    value: { status: 'denied' },
+  };
+  assert.equal(featureNativeReplyEnvelopeSchema.safeParse(reply).success, true);
+  assert.equal(
+    featureNativeReplyEnvelopeSchema.safeParse({ ...reply, kind: 'reply' }).success,
+    false,
   );
 });
 

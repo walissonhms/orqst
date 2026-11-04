@@ -1354,3 +1354,15 @@ The native focus callback captures the Quit token and retained parent before
 sampling AppKit outside the state lock. Applying that sample requires the same
 token and parent, so a delayed sample cannot mark a replacement gate as presented
 or revoke it using another window's metadata. This adds no retry or authority.
+
+## Native Feature metadata facade
+
+The [Feature UI facade](../development/v6-feature-ui.md) is private native IPC,
+not an HTTP/WS execution endpoint. Rust binds exact Webview label, canonical URL,
+parent window, document generation and native focus to strict metadata actions.
+Narrow per-webview capabilities, bounded independent pending requests, CAS,
+bilateral native-review exclusion and presentation generation prevent identity
+forgery, stale responses and hidden input restoration. Saved membership/roles/layout
+never restore a grant or adopt a process. The observer remains read-only; only the
+already reviewed selection is exposed. Native WebKit and provider acceptance are
+separate from synthetic Chromium/Node evidence.

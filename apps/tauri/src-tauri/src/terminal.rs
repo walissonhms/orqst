@@ -28,7 +28,13 @@ struct Running {
     loaded: Vec<bool>,
     revoked: Vec<bool>,
     pending: HashMap<String, oneshot::Sender<Value>>,
+    metadata_pending: HashMap<String, MetadataPending>,
+    metadata_mutating: Option<String>,
+    layout_generation: u64,
+    layout_revision: u64,
+    presentation_suspended: bool,
     busy: Vec<bool>,
+    reviewing: Vec<bool>,
     sequence: u64,
     mcp_request: Option<(String, usize)>,
     mcp_denied: String,
@@ -44,8 +50,171 @@ struct Running {
     retired_notice: String,
 }
 
-fn review_available(retiring: bool, mcp_pending: bool, busy: &[bool]) -> bool {
-    !retiring && !mcp_pending && !busy.iter().any(|busy| *busy)
+struct MetadataPending {
+    document: u64,
+    generation: u64,
+    source: String,
+    sender: oneshot::Sender<Value>,
+}
+fn metadata_reply_matches(
+    value: &Value,
+    id: &str,
+    pending: &MetadataPending,
+    generation: u64,
+) -> bool {
+    value.as_object().is_some_and(|o| {
+        o.len() == 4
+            && ["kind", "id", "document", "value"]
+                .iter()
+                .all(|k| o.contains_key(*k))
+    }) && value["kind"] == "feature-reply"
+        && value["id"] == id
+        && value["document"].as_u64() == Some(pending.document)
+        && pending.generation == generation
+        && crate::features::valid_reply(&value["value"])
+}
+
+fn advance_layout(r: &mut Running) {
+    r.layout_generation = r.layout_generation.saturating_add(1);
+    let _ = r.child.write(
+        format!(
+            "{}\n",
+            json!({"kind":"layout-generation", "generation":r.layout_generation})
+        )
+        .as_bytes(),
+    );
+}
+
+pub(crate) fn metadata_generation(app: &tauri::AppHandle) -> Option<u64> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.layout_generation)
+}
+
+/// Revocation precedes the first async focus check. No saved metadata grants input.
+pub(crate) fn metadata_view_begin(app: &tauri::AppHandle) -> Option<u64> {
+    revoke_all(app);
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    let r = guard.as_mut()?;
+    advance_layout(r);
+    Some(r.layout_generation)
+}
+
+pub(crate) fn metadata_invalidate(app: &tauri::AppHandle) {
+    revoke_all(app);
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(r) = guard.as_mut() {
+        r.metadata_pending.clear();
+        r.metadata_mutating = None;
+        r.presentation_suspended = true;
+        advance_layout(r);
+        let _ = r.child.write(b"{\"kind\":\"layout-suspend\"}\n");
+    }
+}
+
+/// Internal allowlisted metadata transport, never an execution command or generic sender.
+pub(crate) async fn metadata_request(
+    app: &tauri::AppHandle,
+    envelope: Value,
+    generation: u64,
+) -> Value {
+    let unavailable = || json!({"status":"unavailable"});
+    if !crate::features::valid_envelope(&envelope) || presentation_blocked(app) {
+        return json!({"status":"denied"});
+    }
+    let id = envelope["id"].as_str().unwrap().to_owned();
+    let document = envelope["document"].as_u64().unwrap();
+    if !crate::features::document_current(app, envelope["source"].as_str().unwrap(), document) {
+        return json!({"status":"denied"});
+    }
+    let mutable = envelope["request"]["action"] != "snapshot";
+    let receiver = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return unavailable();
+        };
+        if r.layout_generation != generation || r.confirming_quit || r.exit_authorized {
+            return unavailable();
+        }
+        if r.metadata_pending.len() >= 8
+            || r.metadata_pending.contains_key(&id)
+            || (mutable
+                && (!review_available(
+                    r.retiring,
+                    r.mcp_request.is_some(),
+                    &r.reviewing,
+                    r.metadata_mutating.is_some(),
+                ) || r.native_dialog.is_some()))
+        {
+            return json!({"status":"busy"});
+        }
+        let bytes = format!("{envelope}\n");
+        if bytes.len() > 128 * 1024 {
+            return json!({"status":"denied"});
+        }
+        let (sender, receiver) = oneshot::channel();
+        r.metadata_pending.insert(
+            id.clone(),
+            MetadataPending {
+                document,
+                generation,
+                source: envelope["source"].as_str().unwrap().into(),
+                sender,
+            },
+        );
+        if mutable {
+            r.metadata_mutating = Some(id.clone());
+        }
+        if r.child.write(bytes.as_bytes()).is_err() {
+            r.metadata_pending.remove(&id);
+            if r.metadata_mutating.as_ref() == Some(&id) {
+                r.metadata_mutating = None;
+            }
+            return unavailable();
+        }
+        if matches!(
+            envelope["request"]["action"].as_str(),
+            Some("select" | "organize")
+        ) {
+            r.presentation_suspended = false;
+        }
+        receiver
+    };
+    let result = tokio::time::timeout(Duration::from_secs(15), receiver).await;
+    let received = matches!(&result, Ok(Ok(value)) if crate::features::valid_reply(value));
+    let valid = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return unavailable();
+        };
+        r.metadata_pending.remove(&id);
+        if r.metadata_mutating.as_ref() == Some(&id) {
+            r.metadata_mutating = None;
+        }
+        let valid = r.layout_generation == generation;
+        if valid && !received {
+            advance_layout(r);
+        }
+        valid
+    };
+    if !valid || presentation_blocked(app) {
+        return unavailable();
+    }
+    match result {
+        Ok(Ok(value)) if crate::features::valid_reply(&value) => value,
+        _ => unavailable(),
+    }
+}
+
+fn review_available(retiring: bool, mcp_pending: bool, busy: &[bool], metadata: bool) -> bool {
+    !retiring && !mcp_pending && !metadata && !busy.iter().any(|busy| *busy)
 }
 
 fn url(slot: usize) -> String {
@@ -180,16 +349,52 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{document_slot, review_available};
+    use super::{document_slot, metadata_reply_matches, review_available, MetadataPending};
+    use serde_json::json;
 
     #[test]
     fn mcp_and_retirement_reviews_exclude_each_other_and_inflight_panes() {
-        assert!(review_available(false, false, &[false, false]));
+        assert!(review_available(false, false, &[false, false], false));
         for (retiring, mcp) in [(true, false), (false, true), (true, true)] {
-            assert!(!review_available(retiring, mcp, &[false, false]));
+            assert!(!review_available(retiring, mcp, &[false, false], false));
         }
-        assert!(!review_available(false, false, &[true, false]));
-        assert!(!review_available(false, false, &[false, true]));
+        assert!(!review_available(false, false, &[true, false], false));
+        assert!(!review_available(false, false, &[false, true], false));
+        assert!(!review_available(false, false, &[false, false], true));
+    }
+    #[test]
+    fn metadata_pending_never_resolves_a_different_namespace_document_or_generation() {
+        let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let (sender, mut receiver) = tokio::sync::oneshot::channel();
+        let pending = MetadataPending {
+            document: 3,
+            generation: 4,
+            source: "orqst-features://local/index.html".into(),
+            sender,
+        };
+        let reply =
+            json!({"kind":"feature-reply", "id":id, "document":3, "value":{"status":"denied"}});
+        assert!(metadata_reply_matches(&reply, id, &pending, 4));
+        for (key, value) in [
+            ("kind", json!("reply")),
+            ("document", json!(2)),
+            ("id", json!("other")),
+            ("extra", json!(true)),
+        ] {
+            let mut forged = reply.clone();
+            forged[key] = value;
+            assert!(!metadata_reply_matches(&forged, id, &pending, 4));
+        }
+        assert!(!metadata_reply_matches(&reply, id, &pending, 5));
+        let mut requests = std::collections::HashMap::from([(id, pending)]);
+        requests
+            .remove(id)
+            .unwrap()
+            .sender
+            .send(reply["value"].clone())
+            .unwrap();
+        assert_eq!(receiver.try_recv().unwrap(), json!({"status":"denied"}));
+        assert!(!requests.contains_key(id)); // A duplicate or late ACK has no resolver.
     }
 
     #[test]
@@ -235,6 +440,10 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         return denied();
     };
     let app = window.app_handle().clone();
+    let passive = matches!(
+        request["action"].as_str(),
+        Some("read" | "snapshot" | "resize")
+    );
     if presentation_blocked(&app) {
         return denied();
     }
@@ -255,6 +464,7 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
             || !running.loaded.get(slot).copied().unwrap_or(false)
             || running.revoked[slot]
             || running.busy[slot]
+            || (running.metadata_mutating.is_some() && !passive)
         {
             return denied();
         }
@@ -277,9 +487,11 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         let (sender, receiver) = oneshot::channel();
         running.pending.insert(id.clone(), sender);
         running.busy[slot] = true;
+        running.reviewing[slot] = !passive;
         if running.child.write(bytes.as_bytes()).is_err() {
             running.pending.remove(&id);
             running.busy[slot] = false;
+            running.reviewing[slot] = false;
             return denied();
         }
         (id, running.generations[slot], receiver)
@@ -293,6 +505,7 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         };
         running.pending.remove(&id);
         running.busy[slot] = false;
+        running.reviewing[slot] = false;
         running.generations[slot] == generation && running.loaded[slot]
     };
     if !valid || presentation_blocked(&app) || self::slot(&window) != Some(slot) {
@@ -330,13 +543,14 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         .lock()
         .unwrap()
         .as_ref()
-        .is_some_and(|r| r.retiring);
+        .is_some_and(|r| r.retiring || r.metadata_mutating.is_some());
     if retiring || presentation_blocked(app) || !focused(&window).await {
         return json!(false);
     }
     // Revoke immediately, before the asynchronous Node layout update arrives.
-    revoke_all(app);
+    metadata_view_begin(app);
     if action == "dashboard" {
+        metadata_invalidate(app);
         if let Some(main) = app.get_webview_window("main") {
             let _ = main.show();
             let _ = main.set_focus();
@@ -413,62 +627,90 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
 }
 
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
-    // Late host replies cannot present or focus a window over a pending Quit review.
+    let handle = app.clone();
+    let value = value.clone();
+    let _ = app.run_on_main_thread(move || apply_layout_current(&handle, &value));
+}
+fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
         return;
     }
     let Some(window) = app.get_window("terminal-workspace") else {
         return;
     };
+    let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
+        return;
+    };
+    let logical = size.to_logical::<u32>(scale);
     let state = &value["state"];
     {
         let terminal = app.state::<Terminals>();
-        if let Some(r) = terminal.0.lock().unwrap().as_mut() {
-            r.layout = state.clone();
+        let mut guard = terminal.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return;
         };
+        if !crate::features::valid_layout(
+            value,
+            r.documents.len(),
+            logical.width,
+            logical.height,
+            r.layout_revision,
+            r.layout_generation,
+        ) || (r.presentation_suspended && state["suspended"] != true)
+        {
+            return;
+        }
+        r.layout_revision = value["revision"].as_u64().unwrap();
+        r.layout = state.clone();
     }
-    let Some(bounds) = value["bounds"].as_array() else {
-        return;
-    };
-    let visible = state["visible"].as_array().is_some_and(|s| !s.is_empty());
-    if !visible {
+    // The whole envelope is validated before any state, geometry or visibility change.
+    let show = crate::features::workspace_visible(state);
+    if !show {
         revoke_all(app);
         let _ = window.hide();
     }
-    for bound in bounds {
-        let Some(slot) = bound["slot"].as_u64() else {
-            continue;
-        };
+    if let Some(chrome) = app.get_webview("feature-workspace") {
+        if show {
+            let _ = chrome.show();
+        } else {
+            let _ = chrome.hide();
+        }
+    }
+    for bound in value["bounds"].as_array().unwrap() {
+        let slot = bound["slot"].as_u64().unwrap();
         let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
             continue;
         };
-        if bound["rect"].is_null() {
+        if bound["rect"].is_null() || !show {
             revoke(app, slot as usize, false);
             let _ = view.hide();
         } else {
             let rect = &bound["rect"];
-            let coordinates: Option<Vec<f64>> = ["x", "y", "width", "height"]
-                .iter()
-                .map(|k| {
-                    rect[*k]
-                        .as_f64()
-                        .filter(|v| v.is_finite() && *v >= 0.0 && *v <= 32768.0)
-                })
-                .collect();
-            let Some(c) = coordinates else { continue };
             let _ = view.set_bounds(tauri::Rect {
-                position: tauri::LogicalPosition::new(c[0], c[1]).into(),
-                size: tauri::LogicalSize::new(c[2], c[3]).into(),
+                position: tauri::LogicalPosition::new(
+                    rect["x"].as_f64().unwrap(),
+                    rect["y"].as_f64().unwrap(),
+                )
+                .into(),
+                size: tauri::LogicalSize::new(
+                    rect["width"].as_f64().unwrap(),
+                    rect["height"].as_f64().unwrap(),
+                )
+                .into(),
             });
             let _ = view.show();
         }
-        // Only trusted, JSON-serialized layout metadata is evaluated, never CLI output.
         let _ = view.eval(format!(
             "window.dispatchEvent(new CustomEvent('orqst-terminal-layout',{{detail:{state}}}));"
         ));
     }
-    if visible {
-        let _ = window.show();
+    if show
+        && !presentation_blocked(app)
+        && metadata_generation(app) == value["generation"].as_u64()
+    {
+        if !window.is_visible().unwrap_or(false) {
+            let _ = window.show();
+        }
         if let Some(slot) = value["focus"].as_u64() {
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -507,7 +749,7 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else { return };
-        if r.native_dialog.is_some() {
+        if r.native_dialog.is_some() || r.metadata_mutating.is_some() {
             drop(guard);
             send(app, json!({"kind":"confirm", "id":id, "accepted":false}));
             return;
@@ -580,8 +822,12 @@ async fn authorize_mcp(app: &tauri::AppHandle) {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else { return };
-        if !review_available(r.retiring, r.mcp_request.is_some(), &r.busy)
-            || count != 2
+        if !review_available(
+            r.retiring,
+            r.mcp_request.is_some(),
+            &r.busy,
+            r.metadata_mutating.is_some(),
+        ) || count != 2
             || !r.loaded[slot]
             || r.revoked.iter().any(|revoked| *revoked)
         {
@@ -662,8 +908,12 @@ async fn retire_selection(app: &tauri::AppHandle) {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else { return };
-        if !review_available(r.retiring, r.mcp_request.is_some(), &r.busy)
-            || !r.pending.is_empty()
+        if !review_available(
+            r.retiring,
+            r.mcp_request.is_some(),
+            &r.busy,
+            r.metadata_mutating.is_some(),
+        ) || !r.pending.is_empty()
             || !r.loaded[slot]
             || r.revoked[slot]
         {
@@ -827,7 +1077,13 @@ pub async fn start_selected(
         loaded: vec![false; count],
         revoked: vec![false; count],
         pending: HashMap::new(),
+        metadata_pending: HashMap::new(),
+        metadata_mutating: None,
+        layout_generation: 0,
+        layout_revision: 0,
+        presentation_suspended: true,
         busy: vec![false; count],
+        reviewing: vec![false; count],
         sequence: 0,
         mcp_request: None,
         mcp_denied: ready["mcpDenied"].as_str().unwrap_or("").into(),
@@ -888,6 +1144,7 @@ pub async fn start_selected(
                     }
                     drop(guard);
                     if reload {
+                        metadata_invalidate(&handle);
                         revoke(&handle, slot, true);
                     }
                 }
@@ -932,6 +1189,7 @@ pub async fn start_selected(
         }
         WindowEvent::CloseRequested { api, .. } => {
             api.prevent_close();
+            metadata_invalidate(&handle);
             revoke_all(&handle);
             send(&handle, json!({"kind":"layout-suspend"}));
             let _ = target.hide();
@@ -993,11 +1251,14 @@ pub async fn start_selected(
                 .lock()
                 .unwrap()
                 .as_ref()
-                .is_some_and(|r| r.retiring)
+                .is_some_and(|r| r.retiring || r.metadata_mutating.is_some())
             {
                 return;
             }
-            revoke_all(app);
+            metadata_view_begin(app);
+            if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+                r.presentation_suspended = false;
+            }
             send(app, json!({"kind":"layout-open", "slot":slot}));
         }
     });
@@ -1009,7 +1270,29 @@ pub async fn start_selected(
                     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
                         break;
                     };
-                    if value["kind"] == "reply" {
+                    if value["kind"] == "feature-reply" {
+                        if presentation_blocked(&app) {
+                            continue;
+                        }
+                        let Some(id) = value["id"].as_str() else {
+                            continue;
+                        };
+                        let state = app.state::<Terminals>();
+                        let mut guard = state.0.lock().unwrap();
+                        if let Some(r) = guard.as_mut() {
+                            let valid = r.metadata_pending.get(id).is_some_and(|p| {
+                                metadata_reply_matches(&value, id, p, r.layout_generation)
+                                    && crate::features::document_current(
+                                        &app, &p.source, p.document,
+                                    )
+                            });
+                            if valid {
+                                if let Some(pending) = r.metadata_pending.remove(id) {
+                                    let _ = pending.sender.send(value["value"].clone());
+                                }
+                            }
+                        }
+                    } else if value["kind"] == "reply" {
                         let Some(id) = value["id"].as_str() else {
                             break;
                         };
@@ -1160,6 +1443,13 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         let Some(r) = guard.as_mut() else {
             return false;
         };
+        if r.metadata_mutating.is_some() {
+            // Admission and the Quit latch share the same lock; no review can race a mutation.
+            advance_layout(r);
+            drop(guard);
+            revoke_all(app);
+            return true;
+        }
         if r.exit_authorized {
             return false;
         }
@@ -1167,6 +1457,8 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
             return true;
         }
         r.confirming_quit = true;
+        r.metadata_pending.clear();
+        advance_layout(r);
         (r.quit_notice.clone(), r.cancel.clone(), r.quit.clone())
     };
     revoke_all(app);
