@@ -64,6 +64,33 @@ test('one to eight retained Tauri documents use shared grid geometry and compact
   }
 });
 
+test('Feature resize restores the visible page without changing its three members or one-column preference', () => {
+  const { layout } = fixture(6);
+  layout.context(
+    {
+      axis: 'columns',
+      percent: 50,
+      columns: 1,
+      order: [0, 1, 2],
+      shown: [0, 1, 2],
+      active: 0,
+      maximized: null,
+      names: Array.from({ length: 6 }, () => ''),
+    },
+    () => {},
+  );
+  layout.resize(1440, 900);
+  // Chrome leaves 821px high: the existing 400px pane budget admits two rows.
+  assert.deepEqual(layout.snapshot().visible, [0, 1]);
+  layout.resize(720, 700);
+  assert.deepEqual(layout.snapshot().visible, [0]);
+  layout.resize(1440, 900);
+  assert.deepEqual(layout.snapshot().visible, [0, 1]);
+  assert.deepEqual(layout.snapshot().order, [0, 1, 2]);
+  assert.deepEqual(layout.snapshot().shown, [0, 1, 2]);
+  assert.equal(layout.snapshot().columns, 1);
+});
+
 test('passive layout updates never request native focus from the communication window', () => {
   const { layout, messages } = fixture(4);
   layout.open(0);

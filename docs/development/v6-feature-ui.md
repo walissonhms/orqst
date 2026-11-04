@@ -213,6 +213,23 @@ For this label-only correction, the renderer regression, lint, typecheck, regula
 build and resource staging with 17 notices passed. The broad Node suite and native
 checks were not rerun; no Rust/lifecycle contract changed.
 
+### Visible-page restoration assertion
+
+The next EN run passed the corrected editor flow and reached resize restoration,
+then failed an assertion expecting three visible panes. The existing shared
+`terminalGridPage` uses a 400px minimum pane height. The test had deliberately saved
+one column for the three-member Feature; at 1440×900 its 821px content height shows
+two members per page, while all three remain in `order`/`shown`. Runtime geometry
+is unchanged. Eight pure layout tests pass, including this exact resize scenario.
+
+The runner now waits for the selected Feature and `aria-busy=false` before capturing
+the wide view, then requires that exact visible page after shrinking/restoring and
+separately checks all three retained members. This replaces the incorrect fixed
+visible-count assumption without reducing identity, membership or persistence checks.
+The failed run again confirmed signed retirement and host exit; its six journals
+retain exit receipts. A capture made during an unfinished selection is excluded
+from final visual acceptance.
+
 ## Fragments for central integration
 
 - **Checklist:** Feature metadata CRUD/selection, reviewed-slot assignment and

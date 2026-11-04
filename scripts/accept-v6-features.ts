@@ -559,7 +559,12 @@ try {
     .getByRole('navigation', { name: ui.features.heading })
     .getByRole('button', { name: /Autenticação/ })
     .click();
+  await expect(workspace.locator('.feature-topbar strong')).toContainText('Autenticação');
+  await expect(workspace.locator('.feature-workspace')).toHaveAttribute('aria-busy', 'false');
+  await expect.poll(() => layout.order).toEqual([0, 1, 2]);
   await layoutWork;
+  const widePage = [...layout.visible];
+  assert.ok(widePage.length > 0);
   await workspace.screenshot({ path: join(artifacts, `functional-v6-${language}-1440x900.png`) });
   assert.equal((await workspace.locator('.feature-sidebar').boundingBox())?.width, 155);
   assert.equal((await workspace.locator('.feature-topbar').boundingBox())?.height, 45);
@@ -571,7 +576,9 @@ try {
   await workspace.screenshot({ path: join(artifacts, `functional-v6-${language}-720x700.png`) });
   await workspace.setViewportSize({ width: 1440, height: 900 });
   send({ kind: 'layout-resize', width: 1440, height: 900 });
-  await expect.poll(() => layout.visible.length).toBe(3);
+  await expect.poll(() => layout.visible).toEqual(widePage);
+  assert.deepEqual(layout.order, [0, 1, 2]);
+  assert.deepEqual(layout.shown, [0, 1, 2]);
   await layoutWork;
   assert.deepEqual(errors, []);
   assert.equal(layoutError, undefined);
