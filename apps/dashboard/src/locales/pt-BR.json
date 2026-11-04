@@ -800,7 +800,18 @@
     "displayName": "Nome de exibição do painel",
     "rename": "Renomear painel",
     "layoutSummary": "{{visible}} de {{shown}} painéis abertos visíveis · posição {{position}} de {{count}}. Use os botões dos painéis ou Focar outro painel para navegar.",
-    "layoutMemoryOnly": "O salvamento do layout ainda não foi confirmado. As alterações permanecem em memória."
+    "layoutMemoryOnly": "O salvamento do layout ainda não foi confirmado. As alterações permanecem em memória.",
+    "minimize": "Minimizar painel (manter processo)",
+    "paneMenu": "Menu do painel: navegação, configurações e detalhes",
+    "settingsLayout": "Configurações / layout",
+    "floatingUnavailable": "Layout encaixado. Geometria flutuante e layout por Feature não estão disponíveis neste contrato de terminal.",
+    "state_prepared": "Preparado",
+    "state_starting": "Iniciando",
+    "state_running": "Processo em execução",
+    "state_exited": "Encerrado",
+    "state_start_failed": "Falha ao iniciar",
+    "state_ownership_lost": "Posse perdida",
+    "unavailable": "Transporte nativo indisponível. Entrada de teclado desativada; estado do processo não confirmado."
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
