@@ -311,3 +311,8 @@ as did packaged synthetic Tauri structured communication with explicit manifest 
 assertions. Rust/native/real-provider/platform checks were not run for this increment.
 Criteria 4/7/8 remain partial: this link does not unify all editing/permissions or
 remove the fixed structured pair, and metadata does not recover processes.
+
+Integrated as `746a345` (source `db3a34a`): 678 Node tests
+(`--test-concurrency=2`), lint, typecheck, build, staged Tauri resources and the
+synthetic structured-agent acceptance passed in the main checkout. No real-provider
+or native WebKit acceptance was performed for this metadata change.
