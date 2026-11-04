@@ -5,6 +5,7 @@ mod desktop;
 mod features;
 mod files;
 mod local_diagnostics;
+mod offline_recovery;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -25,7 +26,12 @@ fn main() {
         // Adapted from Anywh lib.rs at the same pinned commit as sidecar.rs.
         // A second native launch focuses the first window before starting a Core.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            desktop::focus(app);
+            if let Some(window) = app.get_webview_window("offline-recovery") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            } else {
+                desktop::focus(app);
+            }
         }))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -38,7 +44,9 @@ fn main() {
         .manage(features::Features::default())
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request, terminal_creation::studio_request])
         .manage(terminal_creation::Preparation::default())
-        .on_window_event(|window,event| { terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })
+        .manage(offline_recovery::Recovery::default())
+        .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })
+        .register_uri_scheme_protocol("orqst-recovery", |_, request| offline_recovery::response(&request))
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
                 .then(|| terminal::resource(context.app_handle(), request.uri())).flatten();
@@ -82,6 +90,10 @@ fn main() {
         .setup(|app| {
             if let Ok(parent) = app.path().app_data_dir() {
                 local_diagnostics::install(parent);
+            }
+            // Fixed native entry is selected before observer/Core, file hosts or managed providers.
+            if offline_recovery::requested() {
+                return offline_recovery::install(app.handle());
             }
             let diagnostic = local_diagnostics::Attempt::begin();
             diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Started, local_diagnostics::Effects::Unconfirmed);

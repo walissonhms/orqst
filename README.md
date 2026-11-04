@@ -1394,3 +1394,11 @@ A best-effort bounded queue writes at most three private 1 MiB local segments; n
 content, credentials, private identities/paths, stderr or uploads enter the sink.
 Pure/source checks do not accept an installed app, provider or historical cause.
 See [location, retention, query, checks and limits](docs/development/local-diagnostics.md).
+
+## Dedicated offline administrative entry — source increment
+
+A native `--offline-recovery` mode now branches before observer/Core/PTY/provider
+startup, with a separately installed durable administrative anchor, complete
+scrollable native review and private phase-keyed transport over final service
+freeze `739870c`. Operator sequence, checks and pending native/integration gates
+are in [the dedicated recovery flow](docs/development/offline-native-recovery.md).

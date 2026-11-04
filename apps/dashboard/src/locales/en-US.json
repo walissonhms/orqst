@@ -1104,5 +1104,31 @@
     "observer": "The observer Core could not start or its connection was lost. Observation is unavailable.",
     "managed": "Managed terminal hosts may still be running. This screen does not determine their state or restart any process.",
     "recovery": "Automatic recovery is disabled. Review existing terminal windows before using the native Quit action. Restarting the app is not a safe retry of an owned managed session."
+  },
+  "offlineRecovery": {
+    "title": "Offline administrative recovery",
+    "intro": "This dedicated native mode starts no observer Core, terminal, PTY or provider. Use the native menu for each explicit phase.",
+    "instructions": "Install the independent administrative trust anchor first, then capture the complete reservation before an external kernel fence. Every phase requires a new full review. No automatic restart or recovery is performed.",
+    "install": "Install administrative trust anchor",
+    "capture": "Review and capture reservation (retain admission)",
+    "continueCapture": "Review capture continuation",
+    "release": "Review release preparation after kernel fence",
+    "continueRelease": "Review release continuation",
+    "finalize": "Review final administrative release commit",
+    "abort": "Review administrative abort (preserve reservation)",
+    "selectBundle": "Select a private recovery bundle in this application’s administrative recovery directory",
+    "approve": "Approve this phase",
+    "details": "Read complete details",
+    "cancel": "Cancel",
+    "back": "Back to summary",
+    "sessionEnded": "The private administrative helper session ended or became uncertain. This is not proof of helper exit or cancellation of an accepted operation. Preserve all recovery evidence; no helper was restarted or lease cleared.",
+    "installed": "The independent administrative anchor was installed. No reservation was captured or released.",
+    "captured": "The complete signed reservation snapshot was saved. The original reservation remains held.",
+    "capture_continued": "The signed capture continuation completed. The original reservation remains held.",
+    "release_prepared": "Administrative release is prepared. The original reservation is still present; a separate final commit review is required.",
+    "finalized": "The old administrative operation committed and its exact old controls were removed. This does not guarantee global capacity or authorize automatic Open.",
+    "finalized_controls_preserved": "The old administrative operation committed. Different or future controls were preserved; global capacity is not declared available.",
+    "aborted": "Administrative abort completed. The original reservation and every journal remain preserved.",
+    "unconfirmed": "The requested phase is blocked or its effects are uncertain. Preserve the reservation and all signed evidence. No automatic retry occurred."
   }
 }

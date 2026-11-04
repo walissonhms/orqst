@@ -1116,3 +1116,9 @@ Offline marker exclusion now relies on the continuously present original marker
 and existing legacy claim(wx) until the final signed/durable commit. Cleanup after
 that point never reads, renames or unlinks a future active marker; only exact old
 control objects can be removed. No atomicity across separate files is asserted.
+
+The dedicated offline administrative entry has no renderer capability or public
+recovery endpoint. Its independent fixed-path Ed25519 anchor is privately installed
+and revalidated across reviews; phase-keyed private ACKs and full read-only native
+details do not grant normal terminal authority. See [the native recovery boundary](docs/api/offline-native-recovery.md)
+for budgets, same-user/rollback limits, uncertain effects and remaining review gates.

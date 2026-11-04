@@ -1553,3 +1553,11 @@ intent and preparatory evidence. The present original marker excludes existing
 legacy wx claimants until this point; kernel boot fences its old owner. Future
 claims after commit are normal operations. Cleanup validates old held/control
 identities only and must not revalidate or mutate future runtime state.
+
+### Dedicated native administrative recovery
+
+The fixed offline entry branches before Core startup and uses an independently
+provisioned administrative signer, never a renderer or capture-supplied key.
+Native AppKit presentation/source/focus fences and private session/id/nonce/digest
+ACKs protect full review; private `0600`/`0700` canonical storage and durability
+checks reuse existing readers. See [the complete contract](../api/offline-native-recovery.md).

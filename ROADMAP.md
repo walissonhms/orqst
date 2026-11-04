@@ -797,3 +797,8 @@ remain required before terminal-opening acceptance.
 The offline final-point source now keeps the original marker until final approved
 commit; legacy wx claim exclusion no longer assumes gate-compatible installations.
 Native anchor/entry integration and actual platform acceptance remain separate.
+
+- Offline administrative native entry, independent durable anchor, complete AppKit
+  review and private phase transport implemented over final marker-preserving
+  service; serial integration/commit-TTL correction, packaging and actual native
+  kernel/UI/provider acceptance remain separate gates.

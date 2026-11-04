@@ -578,3 +578,11 @@ Offline preparation receipt v2 says release_prepared and binds the full original
 marker. finalized.json now contains a signed version-2 commit_prepared plan, not an
 outcome. Unique commit-observed records and completion.json describe the later
 namespace observation and exact old-control cleanup. No terminal schema changes.
+
+### Native administrative anchor
+
+Independent administrative key material lives at the fixed private AppData
+`administrative-recovery/anchor/identity.json`, with a signed installation preview;
+it is not an event, runtime epoch or legacy authority. Bundles remain separate,
+with phase-specific signed source snapshots and old-operation outcomes. No Store
+or observer database is opened by the dedicated entry. See [native recovery](../api/offline-native-recovery.md).

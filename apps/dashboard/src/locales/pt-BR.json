@@ -1104,5 +1104,31 @@
     "observer": "O Core observador não iniciou ou sua conexão foi perdida. A observação está indisponível.",
     "managed": "Os hosts de terminais gerenciados podem continuar em execução. Esta tela não determina seu estado nem reinicia processos.",
     "recovery": "A recuperação automática está desativada. Revise as janelas de terminal existentes antes de usar a ação Sair do menu nativo. Reiniciar o app não é uma repetição segura de uma sessão gerenciada própria."
+  },
+  "offlineRecovery": {
+    "title": "Recuperação administrativa offline",
+    "intro": "Este modo nativo dedicado não inicia Core observador, terminal, PTY ou provider. Use o menu nativo para cada fase explícita.",
+    "instructions": "Instale primeiro a âncora de confiança administrativa independente e capture a reserva completa antes de um fence externo do kernel. Cada fase exige nova revisão integral. Não há reinício ou recuperação automática.",
+    "install": "Instalar âncora de confiança administrativa",
+    "capture": "Revisar e capturar reserva (manter admissão)",
+    "continueCapture": "Revisar continuação da captura",
+    "release": "Revisar preparação de liberação após fence do kernel",
+    "continueRelease": "Revisar continuação da liberação",
+    "finalize": "Revisar commit final de liberação administrativa",
+    "abort": "Revisar cancelamento administrativo (preservar reserva)",
+    "selectBundle": "Selecione um bundle privado no diretório de recuperação administrativa deste aplicativo",
+    "approve": "Aprovar esta fase",
+    "details": "Ler detalhes completos",
+    "cancel": "Cancelar",
+    "back": "Voltar ao resumo",
+    "sessionEnded": "A sessão privada do helper administrativo terminou ou ficou incerta. Isso não prova saída do helper nem cancelamento de uma operação aceita. Preserve todas as evidências; nenhum helper foi reiniciado ou lease removida.",
+    "installed": "A âncora administrativa independente foi instalada. Nenhuma reserva foi capturada ou liberada.",
+    "captured": "O snapshot completo e assinado da reserva foi salvo. A reserva original permanece retida.",
+    "capture_continued": "A continuação assinada da captura foi concluída. A reserva original permanece retida.",
+    "release_prepared": "A liberação administrativa foi preparada. A reserva original continua presente; é necessária revisão separada do commit final.",
+    "finalized": "A operação administrativa antiga foi commitada e seus controles antigos exatos foram removidos. Isso não garante capacidade global nem autoriza Open automático.",
+    "finalized_controls_preserved": "A operação administrativa antiga foi commitada. Controles diferentes ou futuros foram preservados; a capacidade global não é declarada disponível.",
+    "aborted": "O cancelamento administrativo foi concluído. A reserva original e todos os journals permanecem preservados.",
+    "unconfirmed": "A fase solicitada está bloqueada ou seus efeitos são incertos. Preserve a reserva e todas as evidências assinadas. Não houve repetição automática."
   }
 }
