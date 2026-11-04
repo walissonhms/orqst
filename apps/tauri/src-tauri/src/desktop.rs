@@ -16,6 +16,8 @@ pub struct Desktop(Mutex<State>);
 #[derive(Default)]
 struct State {
     keep_running: bool,
+    quit_sequence: u64,
+    quit_review: Option<QuitPresentation>,
     enabled: bool,
     failed: bool,
     stopped: bool,
@@ -25,6 +27,30 @@ struct State {
     pending: usize,
     last_frame: Option<Instant>,
     ui: Option<Ui>,
+}
+
+struct QuitPresentation {
+    review: QuitReview,
+    // Retain the exact Tauri window handle; a later window reusing its label is not adopted.
+    parent: tauri::Window,
+}
+
+// Presentation evidence for one existing Quit gate, never a grant or a quit policy.
+#[derive(Debug)]
+struct QuitReview {
+    token: u64,
+    parent: String,
+    shown: bool,
+    revoked: bool,
+}
+impl QuitReview {
+    fn observe(&mut self, owns_key: bool, owns_sheet: bool) {
+        self.revoked |= !owns_key;
+        self.shown |= !self.revoked && owns_sheet;
+    }
+    fn accepted(&self, token: u64, parent: &str) -> bool {
+        self.token == token && self.parent == parent && self.shown && !self.revoked
+    }
 }
 
 #[derive(Clone)]
@@ -166,6 +192,127 @@ pub fn focus(app: &tauri::AppHandle) {
     }
 }
 
+// A native Quit review belongs to this app's real window, never a process-global
+// CFUserNotification. Explicit Quit may restore the existing dashboard from tray.
+pub(crate) fn quit_parent(app: &tauri::AppHandle) -> Option<tauri::Window> {
+    app.windows()
+        .into_values()
+        .find(|window| quit_parent_valid(window) && window.is_focused().unwrap_or(false))
+        .or_else(|| app.windows().into_values().find(quit_parent_valid))
+        .or_else(|| {
+            focus(app);
+            app.get_window("main").filter(quit_parent_valid)
+        })
+}
+
+fn quit_parent_valid(window: &tauri::Window) -> bool {
+    if !matches!(
+        window.label(),
+        "main" | "terminal-workspace" | "managed-agents"
+    ) || !window.is_visible().unwrap_or(false)
+        || window.is_minimized().unwrap_or(true)
+    {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    if !window.ns_window().is_ok_and(|pointer| !pointer.is_null()) {
+        return false;
+    }
+    true
+}
+
+pub(crate) fn begin_quit_review(app: &tauri::AppHandle, parent: &tauri::Window) -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    if !crate::terminal::install_quit_observer(app) {
+        return None;
+    }
+    let desktop = app.state::<Desktop>();
+    let mut state = desktop.0.lock().unwrap();
+    if state.quit_review.is_some() {
+        return None;
+    }
+    state.quit_sequence = state.quit_sequence.checked_add(1)?;
+    let token = state.quit_sequence;
+    state.quit_review = Some(QuitPresentation {
+        review: QuitReview { token, parent: parent.label().into(), shown: !cfg!(target_os = "macos"), revoked: false },
+        parent: parent.clone(),
+    });
+    Some(token)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn quit_deactivated(app: &tauri::AppHandle) {
+    if let Some(review) = app
+        .state::<Desktop>()
+        .0
+        .lock()
+        .unwrap()
+        .quit_review
+        .as_mut()
+    {
+        review.review.revoked = true;
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn quit_key_changed(app: &tauri::AppHandle) {
+    let parent = app
+        .state::<Desktop>()
+        .0
+        .lock()
+        .unwrap()
+        .quit_review
+        .as_ref()
+        .map(|review| review.parent.clone());
+    let Some(parent) = parent else { return };
+    let focus = crate::terminal::quit_window_focus(&parent);
+    if let Some(review) = app
+        .state::<Desktop>()
+        .0
+        .lock()
+        .unwrap()
+        .quit_review
+        .as_mut()
+    {
+        let review = &mut review.review;
+        review.observe(focus.is_some_and(|f| f.0), focus.is_some_and(|f| f.1));
+        if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+            eprintln!(
+                "ORQST_QUIT_PRESENTATION token={} shown={} revoked={}",
+                review.token, review.shown, review.revoked
+            );
+        }
+    }
+}
+
+pub(crate) fn finish_quit_review(app: &tauri::AppHandle, token: u64, parent: &str) -> bool {
+    let desktop = app.state::<Desktop>();
+    let mut state = desktop.0.lock().unwrap();
+    if !state
+        .quit_review
+        .as_ref()
+        .is_some_and(|review| review.review.token == token)
+    {
+        return false;
+    }
+    state
+        .quit_review
+        .take()
+        .is_some_and(|review| review.review.accepted(token, parent))
+}
+
+// rfd 0.17.2 maps unknown NSAlert responses to Cancel. Only the explicit second
+// custom button may authorize; never accept a default/Ok/Yes or a vanished parent.
+pub(crate) fn quit_approved(
+    result: &tauri_plugin_dialog::MessageDialogResult,
+    expected: &str,
+    parent_visible: bool,
+) -> bool {
+    parent_visible
+        && !expected.is_empty()
+        && matches!(result, tauri_plugin_dialog::MessageDialogResult::Custom(text) if text == expected)
+}
+
 fn refresh(app: &tauri::AppHandle) {
     let (ui, connected, pending, status) = {
         let state = app.state::<Desktop>();
@@ -286,7 +433,51 @@ pub fn disconnected(app: &tauri::AppHandle) {
     let _ = app.run_on_main_thread(move || refresh(&native));
 }
 
+#[cfg(target_os = "macos")]
+fn default_quit_index(children: usize, last_is_predefined: bool) -> Option<usize> {
+    // Source-verified Tauri 2.12.5 Menu::default macOS app submenu contract.
+    (children == 8 && last_is_predefined).then_some(7)
+}
+
 pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    {
+        // Tauri 2.12.5's fresh default app submenu ends in Muda's direct
+        // NSApp terminate: item. Route Cmd-Q through RequestExit and the existing
+        // two-host consent gates instead. Keep all other default/app/tray items.
+        let menu = Menu::default(app)?;
+        let items = menu.items()?;
+        let Some(tauri::menu::MenuItemKind::Submenu(app_menu)) = items.first() else {
+            return Err("Native application menu unavailable".into());
+        };
+        let children = app_menu.items()?;
+        let Some(index) = default_quit_index(
+            children.len(),
+            matches!(
+                children.last(),
+                Some(tauri::menu::MenuItemKind::Predefined(_))
+            ),
+        ) else {
+            return Err("Native Quit menu shape changed".into());
+        };
+        app_menu.remove_at(index)?;
+        app_menu.append(&MenuItem::with_id(
+            app,
+            "native-app-quit",
+            translate("tauriDesktop.quit"),
+            true,
+            Some("CmdOrCtrl+Q"),
+        )?)?;
+        app.set_menu(menu)?;
+        app.on_menu_event(|app, event| {
+            if event.id().as_ref() == "native-app-quit" {
+                if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+                    eprintln!("ORQST_QUIT_MENU request-exit");
+                }
+                app.exit(0);
+            }
+        });
+    }
     let open = MenuItem::with_id(
         app,
         "native-open",
@@ -518,5 +709,65 @@ mod tests {
         state.failed = true;
         assert!(state.accept(frame(), now).is_empty());
         assert_eq!(state.attempts, 0);
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod quit_tests {
+    #[test]
+    fn quit_sheet_evidence_is_parent_and_attempt_bound_and_revocation_is_permanent() {
+        let mut review = super::QuitReview {
+            token: 7,
+            parent: "terminal-workspace".into(),
+            shown: false,
+            revoked: false,
+        };
+        assert!(!review.accepted(7, "terminal-workspace"));
+        review.observe(true, true);
+        assert!(review.accepted(7, "terminal-workspace"));
+        assert!(!review.accepted(8, "terminal-workspace"));
+        assert!(!review.accepted(7, "main"));
+        review.observe(false, false); // App deactivation, unrelated key window or unavailable metadata.
+        review.observe(true, true); // Returning to the same sheet cannot restore it.
+        assert!(!review.accepted(7, "terminal-workspace"));
+    }
+
+    #[test]
+    fn quit_requires_the_explicit_custom_button_and_a_live_visible_parent() {
+        use tauri_plugin_dialog::MessageDialogResult;
+        let expected = "Acknowledge and disconnect";
+        assert!(super::quit_approved(
+            &MessageDialogResult::Custom(expected.into()),
+            expected,
+            true
+        ));
+        assert!(!super::quit_approved(
+            &MessageDialogResult::Custom(expected.into()),
+            expected,
+            false
+        ));
+        assert!(!super::quit_approved(
+            &MessageDialogResult::Custom(String::new()),
+            "",
+            true
+        ));
+        for result in [
+            MessageDialogResult::Ok,
+            MessageDialogResult::Yes,
+            MessageDialogResult::No,
+            MessageDialogResult::Cancel,
+            MessageDialogResult::Custom("Cancel".into()),
+        ] {
+            assert!(!super::quit_approved(&result, expected, true));
+        }
+    }
+
+    #[test]
+    fn replacing_the_direct_quit_requires_the_source_verified_default_menu_shape() {
+        assert_eq!(super::default_quit_index(8, true), Some(7));
+        for length in [0, 1, 7, 9] {
+            assert_eq!(super::default_quit_index(length, true), None);
+        }
+        assert_eq!(super::default_quit_index(8, false), None);
     }
 }

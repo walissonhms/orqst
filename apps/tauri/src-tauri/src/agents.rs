@@ -4,7 +4,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::menu::{Menu, MenuItem};
+use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
 use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
@@ -31,6 +31,11 @@ struct Running {
     quit: String,
     confirming_quit: bool,
     exit_authorized: bool,
+}
+
+// The submenu itself and unrelated app/tray/terminal IDs grant no navigation.
+fn menu_target(id: &str) -> Option<&'static str> {
+    (id == LABEL).then_some(LABEL)
 }
 
 fn document_matches(label: &str, source: &str) -> bool {
@@ -72,6 +77,9 @@ pub async fn agents_request(window: WebviewWindow, request: Value) -> Value {
         return denied();
     }
     let app = window.app_handle().clone();
+    if crate::terminal::presentation_blocked(&app) {
+        return denied();
+    }
     let mutation = request["action"] != "snapshot";
     let (id, generation, receiver) = {
         let state = app.state::<Agents>();
@@ -79,7 +87,7 @@ pub async fn agents_request(window: WebviewWindow, request: Value) -> Value {
         let Some(r) = guard.as_mut() else {
             return denied();
         };
-        if !r.loaded || r.revoked {
+        if !r.loaded || r.revoked || r.confirming_quit || r.exit_authorized {
             return denied();
         }
         if (mutation && r.busy) || r.pending.len() >= 8 {
@@ -125,7 +133,7 @@ pub async fn agents_request(window: WebviewWindow, request: Value) -> Value {
         }
         r.generation == generation && r.loaded && !r.revoked
     };
-    if !valid || !current(&window) {
+    if !valid || crate::terminal::presentation_blocked(&app) || !current(&window) {
         return denied();
     }
     match result {
@@ -138,6 +146,9 @@ pub async fn agents_request(window: WebviewWindow, request: Value) -> Value {
 }
 
 fn confirm(app: &tauri::AppHandle, value: &Value) {
+    if crate::terminal::presentation_blocked(app) {
+        return;
+    }
     let (Some(id), Some(request)) = (value["id"].as_str(), value["requestId"].as_str()) else {
         return;
     };
@@ -291,17 +302,28 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         Some(menu) => menu,
         None => Menu::default(app)?,
     };
-    menu.append(&MenuItem::with_id(
+    // macOS menu-bar entries must contain a submenu to expose their action.
+    let submenu = Submenu::with_id(
+        app,
+        "managed-agents-menu",
+        ready["title"].as_str().unwrap_or("ORQST"),
+        true,
+    )?;
+    submenu.append(&MenuItem::with_id(
         app,
         LABEL,
         ready["title"].as_str().unwrap_or("ORQST"),
         true,
         None::<&str>,
     )?)?;
+    menu.append(&submenu)?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
-        if event.id().as_ref() == LABEL {
-            if let Some(window) = app.get_webview_window(LABEL) {
+        if crate::terminal::presentation_blocked(app) {
+            return;
+        }
+        if let Some(label) = menu_target(event.id().as_ref()) {
+            if let Some(window) = app.get_webview_window(label) {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
@@ -409,6 +431,19 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
         }
     }
 }
+pub(crate) fn revoke_for_quit(app: &tauri::AppHandle) {
+    revoke(app, false);
+}
+
+pub(crate) fn exit_pending(app: &tauri::AppHandle) -> bool {
+    app.state::<Agents>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| r.confirming_quit || r.exit_authorized)
+}
+
 pub fn reset_exit(app: &tauri::AppHandle) {
     if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
         r.exit_authorized = false;
@@ -417,6 +452,9 @@ pub fn reset_exit(app: &tauri::AppHandle) {
 }
 
 pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
+    if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+        eprintln!("ORQST_QUIT_GATE agents");
+    }
     let fields = {
         let state = app.state::<Agents>();
         let mut guard = state.0.lock().unwrap();
@@ -432,16 +470,41 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         r.confirming_quit = true;
         (r.quit_notice.clone(), r.cancel.clone(), r.quit.clone())
     };
+    revoke(app, false);
+    let Some(parent) = crate::desktop::quit_parent(app) else {
+        reset_exit(app);
+        crate::terminal::reset_exit(app);
+        return true;
+    };
+    let Some(token) = crate::desktop::begin_quit_review(app, &parent) else {
+        reset_exit(app);
+        crate::terminal::reset_exit(app);
+        return true;
+    };
     let app = app.clone();
     app.dialog()
         .message(fields.0)
+        .parent(&parent)
         .buttons(MessageDialogButtons::YesNoCancelCustom(
             fields.1.clone(),
             fields.2.clone(),
             fields.1,
         ))
         .show_with_result(move |result| {
-            if matches!(result, MessageDialogResult::Custom(ref s) if s == &fields.2) {
+            if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+                eprintln!("ORQST_QUIT_RESULT agents {result:?}");
+            }
+            let presented = crate::desktop::finish_quit_review(&app, token, parent.label());
+            if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+                eprintln!("ORQST_QUIT_REVIEW token={token} presented={presented}");
+            }
+            if crate::desktop::quit_approved(
+                &result,
+                &fields.2,
+                presented
+                    && app.get_window(parent.label()).is_some()
+                    && parent.is_visible().unwrap_or(false),
+            ) {
                 if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
                     r.exit_authorized = true;
                 }
@@ -472,6 +535,25 @@ mod tests {
             ("managed-agents", "orqst-terminal://local/0/index.html"),
         ] {
             assert!(!document_matches(label, source));
+        }
+    }
+}
+
+#[cfg(test)]
+mod menu_tests {
+    #[test]
+    fn only_the_existing_agents_action_opens_its_window() {
+        assert_eq!(super::menu_target("managed-agents"), Some(super::LABEL));
+        for unrelated in [
+            "managed-agents-menu",
+            "quit",
+            "terminal-0",
+            "terminal-retire-selection",
+            "prepare-open",
+            "desktop-alerts",
+            "main",
+        ] {
+            assert_eq!(super::menu_target(unrelated), None);
         }
     }
 }

@@ -1312,3 +1312,20 @@ immutably, refuses pending WAL frames, reads allowlisted metadata and never clai
 ownership, checkpoints or releases capacity. It refuses a linked or group/world
 writable journal file. Neither diagnostic proves safe process adoption or native
 acceptance. See [quarantine](../development/codex-quarantine-capacity.md).
+
+Native terminal consent now distinguishes only the exact attached/key sheet of its
+own parent window on an active NSApp. Keyboard leases are suspended without renewal;
+application deactivation or another key window invalidates the pending review even
+while its parent is already non-key. Returning renews no generation, deadline, signed
+nonce or consumed proof. The exact WKWebView first responder remains mandatory after
+the dialog. No observer API or renderer capability is added. Native app-menu Quit
+uses the existing preventable exit/host-consent path rather than direct NSApp termination.
+
+Both existing Quit gates require a retained visible owned parent and an exact
+per-attempt presentation token. On macOS the native observer must see that parent's
+attached key sheet; deactivation or another key window permanently revokes the
+pending attempt. Missing presentation, unknown/default/cancel results and a missing
+parent deny exit. Input authority is revoked before review, without stopping an
+owned process; Cancel resets both partial authorizations and renews no authority.
+Late layout presentation is fenced while either gate is pending/authorized.
+This does not prove Dock/logout or final integrated native acceptance.
