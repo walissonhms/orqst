@@ -312,25 +312,64 @@ fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bo
         && url.username().is_empty()
         && url.password().is_none()
 }
-fn identity(view: &Webview) -> Option<(String, u64)> {
-    let state = view.state::<Features>();
-    let guard = state.0.lock().unwrap();
-    let source = view.url().ok()?.to_string();
-    if !document_matches(view.label(), view.window().label(), &source, &guard.origin) {
-        return None;
-    }
-    let document = if view.label() == "main" {
-        guard.main_document
+fn document_version(state: &State, main: bool) -> u64 {
+    if main {
+        state.main_document
     } else {
-        guard.chrome_document
+        state.chrome_document
+    }
+}
+// Snapshot before a potentially blocking UI getter, then reject invalidation during the wait.
+fn identity_from(
+    state: &Mutex<State>,
+    main: bool,
+    read_source: impl FnOnce() -> Option<String>,
+    matches: impl FnOnce(&str, &str) -> bool,
+) -> Option<(String, u64)> {
+    let expected = {
+        let guard = state.lock().unwrap();
+        (guard.origin.clone(), document_version(&guard, main))
     };
-    (document > 0).then_some((source, document))
+    let source = read_source()?;
+    let guard = state.lock().unwrap();
+    (expected.1 > 0
+        && guard.origin == expected.0
+        && document_version(&guard, main) == expected.1
+        && matches(&source, &guard.origin))
+    .then_some((source, expected.1))
+}
+fn identity(view: &Webview) -> Option<(String, u64)> {
+    let parent = view.window();
+    identity_from(
+        &view.state::<Features>().0,
+        view.label() == "main",
+        || view.url().ok().map(|url| url.to_string()),
+        |source, origin| document_matches(view.label(), parent.label(), source, origin),
+    )
 }
 pub(crate) fn document_current(app: &tauri::AppHandle, source: &str, document: u64) -> bool {
     ["main", "feature-workspace"].into_iter().any(|label| {
         app.get_webview(label)
             .is_some_and(|view| identity(&view) == Some((source.into(), document)))
     })
+}
+/// Getter-free final fence under Terminals. Invalidation drops Features before taking Terminals.
+pub(crate) fn document_version_current(
+    app: &tauri::AppHandle,
+    source: &str,
+    document: u64,
+) -> bool {
+    let state = app.state::<Features>();
+    let guard = state.0.lock().unwrap();
+    let main = source != CHROME_URL;
+    document > 0
+        && document_version(&guard, main) == document
+        && document_matches(
+            if main { "main" } else { "feature-workspace" },
+            if main { "main" } else { "terminal-workspace" },
+            source,
+            &guard.origin,
+        )
 }
 /// Same AppKit first-responder check as the terminal client; renderer focus is never proof.
 pub(crate) async fn focused(view: &Webview) -> bool {
@@ -416,6 +455,9 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     if crate::terminal::presentation_blocked(app) {
         return denied();
     }
+    let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
+        return json!({"status":"unavailable"});
+    };
     let presentation = if matches!(request["action"].as_str(), Some("select" | "organize")) {
         crate::terminal::metadata_view_begin(app)
     } else {
@@ -428,9 +470,9 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     if mutable && !focused(&window).await {
         return denied();
     }
-    if crate::terminal::presentation_blocked(app)
-        || crate::terminal::metadata_generation(app) != Some(presentation)
-        || identity(&window) != Some((source.clone(), document))
+    if identity(&window) != Some((source.clone(), document))
+        || crate::terminal::presentation_blocked(app)
+        || crate::terminal::metadata_context(app) != Some((epoch.clone(), presentation))
     {
         return denied();
     }
@@ -455,12 +497,13 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                     "source": source, "request": request,
                 }),
                 presentation,
+                &epoch,
             )
             .await;
             if !focus_then_current(async { !mutable || focused(&window).await }, || {
-                !crate::terminal::presentation_blocked(app)
-                    && crate::terminal::metadata_generation(app) == Some(presentation)
-                    && identity(&window) == Some((source, document))
+                identity(&window) == Some((source, document))
+                    && !crate::terminal::presentation_blocked(app)
+                    && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
             })
             .await
             {
@@ -505,24 +548,27 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                 guard.view_revision = revision;
                 guard.workspace_id = Some(workspace.into());
                 drop(guard);
-                publish(app, snapshot, presentation);
+                publish(app, snapshot, presentation, &epoch);
             }
             value
         },
-        |cancelled| crate::terminal::metadata_finish(app, &completion_id, cancelled),
+        |cancelled| crate::terminal::metadata_finish(app, &epoch, &completion_id, cancelled),
     )
     .await
 }
-fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64) {
+fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &str) {
     // Snapshot carries metadata only. It never shows/focuses a window or enables input.
     if crate::terminal::presentation_blocked(app)
-        || crate::terminal::metadata_generation(app) != Some(presentation)
+        || crate::terminal::metadata_context(app) != Some((epoch.into(), presentation))
     {
         return;
     }
     for label in ["main", "feature-workspace"] {
         if let Some(view) = app.get_webview(label) {
-            if identity(&view).is_some() {
+            if identity(&view).is_some()
+                && !crate::terminal::presentation_blocked(app)
+                && crate::terminal::metadata_context(app) == Some((epoch.into(), presentation))
+            {
                 let _ = view.eval(format!("window.dispatchEvent(new CustomEvent('orqst-native-feature-state',{{detail:{snapshot}}}));"));
             }
         }

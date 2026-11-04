@@ -96,6 +96,7 @@ struct MetadataPending {
     generation: u64,
     source: String,
     sender: oneshot::Sender<Value>,
+    owner: Arc<()>,
 }
 fn release_metadata(
     latch: &mut Option<String>,
@@ -110,10 +111,10 @@ fn release_metadata(
     }
     cancelled && owner
 }
-pub(crate) fn metadata_finish(app: &tauri::AppHandle, id: &str, cancelled: bool) {
+pub(crate) fn metadata_finish(app: &tauri::AppHandle, epoch: &str, id: &str, cancelled: bool) {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
-    if let Some(r) = guard.as_mut() {
+    if let Some(r) = guard.as_mut().filter(|r| r.epoch == epoch) {
         // Only the cancelled mutation's owner invalidates presentation, never another command.
         if release_metadata(
             &mut r.metadata_mutating,
@@ -141,6 +142,56 @@ fn metadata_reply_matches(
         && value["document"].as_u64() == Some(pending.document)
         && pending.generation == generation
         && crate::features::valid_reply(&value["value"])
+}
+
+// The document check can synchronously wait for UI. Only immutable ownership crosses that wait.
+fn take_metadata_reply(
+    state: &Mutex<Option<Running>>,
+    epoch: &str,
+    id: &str,
+    matches: impl Fn(&MetadataPending, u64) -> bool,
+    document_current: impl FnOnce(&str, u64) -> bool,
+    version_current: impl FnOnce(&str, u64) -> bool,
+) -> Option<MetadataPending> {
+    let (source, document, generation, owner) = {
+        let guard = state.lock().unwrap();
+        let r = guard.as_ref().filter(|r| r.epoch == epoch)?;
+        let pending = r.metadata_pending.get(id)?;
+        if !matches(pending, r.layout_generation) {
+            return None;
+        }
+        (
+            pending.source.clone(),
+            pending.document,
+            pending.generation,
+            pending.owner.clone(),
+        )
+    };
+    if !document_current(&source, document) {
+        return None;
+    }
+    let mut guard = state.lock().unwrap();
+    let r = guard.as_mut().filter(|r| r.epoch == epoch)?;
+    let pending = r.metadata_pending.get(id)?;
+    if r.layout_generation != generation
+        || pending.source != source
+        || pending.document != document
+        || !Arc::ptr_eq(&pending.owner, &owner)
+        || !matches(pending, r.layout_generation)
+        || !version_current(&source, document)
+    {
+        return None;
+    }
+    r.metadata_pending.remove(id)
+}
+
+pub(crate) fn metadata_context(app: &tauri::AppHandle) -> Option<(String, u64)> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| (r.epoch.clone(), r.layout_generation))
 }
 
 fn publish_layout_generation(r: &mut Running) {
@@ -204,6 +255,7 @@ pub(crate) async fn metadata_request(
     app: &tauri::AppHandle,
     envelope: Value,
     generation: u64,
+    epoch: &str,
 ) -> Value {
     let unavailable = || json!({"status":"unavailable"});
     if !crate::features::valid_envelope(&envelope) || presentation_blocked(app) {
@@ -215,13 +267,23 @@ pub(crate) async fn metadata_request(
         return json!({"status":"denied"});
     }
     let mutable = envelope["request"]["action"] != "snapshot";
+    let owner = Arc::new(());
     let receiver = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else {
             return unavailable();
         };
-        if r.layout_generation != generation || r.confirming_quit || r.exit_authorized {
+        if r.epoch != epoch
+            || r.layout_generation != generation
+            || r.confirming_quit
+            || r.exit_authorized
+            || !crate::features::document_version_current(
+                app,
+                envelope["source"].as_str().unwrap(),
+                document,
+            )
+        {
             return unavailable();
         }
         if r.metadata_pending.len() >= 8
@@ -248,6 +310,7 @@ pub(crate) async fn metadata_request(
                 generation,
                 source: envelope["source"].as_str().unwrap().into(),
                 sender,
+                owner: owner.clone(),
             },
         );
         if mutable {
@@ -276,8 +339,21 @@ pub(crate) async fn metadata_request(
         let Some(r) = guard.as_mut() else {
             return unavailable();
         };
-        r.metadata_pending.remove(&id);
-        let valid = r.layout_generation == generation;
+        if r.epoch != epoch {
+            return unavailable();
+        }
+        if let Some(pending) = r.metadata_pending.get(&id) {
+            if !Arc::ptr_eq(&pending.owner, &owner) {
+                return unavailable();
+            }
+            r.metadata_pending.remove(&id);
+        }
+        let valid = r.layout_generation == generation
+            && crate::features::document_version_current(
+                app,
+                envelope["source"].as_str().unwrap(),
+                document,
+            );
         let owner = r.metadata_mutating.as_ref() == Some(&id);
         if valid && !received && owner {
             advance_layout(r);
@@ -443,6 +519,7 @@ mod tests {
                 generation: 2,
                 source: "main".into(),
                 sender,
+                owner: std::sync::Arc::new(()),
             }
         };
         let mut latch = Some("current".to_owned());
@@ -496,6 +573,7 @@ mod tests {
             generation: 4,
             source: "orqst-features://local/index.html".into(),
             sender,
+            owner: std::sync::Arc::new(()),
         };
         let reply =
             json!({"kind":"feature-reply", "id":id, "document":3, "value":{"status":"denied"}});
@@ -1810,6 +1888,7 @@ pub async fn start_selected_with_open(
         }
     });
     let opening_app = app.clone();
+    let reply_epoch = ready["epoch"].as_str().map(str::to_owned);
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(event) = rx.recv().await {
@@ -1825,20 +1904,25 @@ pub async fn start_selected_with_open(
                         let Some(id) = value["id"].as_str() else {
                             continue;
                         };
+                        let Some(reply_epoch) = reply_epoch.as_deref() else {
+                            continue;
+                        };
                         let state = app.state::<Terminals>();
-                        let mut guard = state.0.lock().unwrap();
-                        if let Some(r) = guard.as_mut() {
-                            let valid = r.metadata_pending.get(id).is_some_and(|p| {
-                                metadata_reply_matches(&value, id, p, r.layout_generation)
-                                    && crate::features::document_current(
-                                        &app, &p.source, p.document,
-                                    )
-                            });
-                            if valid {
-                                if let Some(pending) = r.metadata_pending.remove(id) {
-                                    let _ = pending.sender.send(value["value"].clone());
-                                }
-                            }
+                        if let Some(pending) = take_metadata_reply(
+                            &state.0,
+                            reply_epoch,
+                            id,
+                            |pending, generation| {
+                                metadata_reply_matches(&value, id, pending, generation)
+                            },
+                            |source, document| {
+                                crate::features::document_current(&app, source, document)
+                            },
+                            |source, document| {
+                                crate::features::document_version_current(&app, source, document)
+                            },
+                        ) {
+                            let _ = pending.sender.send(value["value"].clone());
                         }
                     } else if value["kind"] == "enrollment-reply"
                         || value["kind"] == "enrollment-presented"
