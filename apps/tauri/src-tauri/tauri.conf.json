@@ -15,9 +15,9 @@
       "capabilities": [
         {
           "identifier": "owned-terminals",
-          "description": "Only dedicated local terminal windows can access the private native terminal client.",
+          "description": "Only dedicated local terminal webviews can access the private native terminal client.",
           "local": true,
-          "windows": ["terminal-*"],
+          "webviews": ["terminal-*"],
           "permissions": ["allow-terminal-request", "allow-terminal-view"]
         }
       ],

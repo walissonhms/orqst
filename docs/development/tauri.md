@@ -4,7 +4,7 @@ The owner-approved desktop target is Tauri 2 with the existing React dashboard,
 Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
 validated. The observer is unchanged; prepared managed terminals can opt into separate
-native windows. Native exports, notifications and the full managed workflow remain in Electron.
+retained native workspace. Native exports, notifications and the full managed workflow remain in Electron.
 
 ## Build and run
 
@@ -121,7 +121,7 @@ select profiles currently owned by Electron. MCP-enabled profiles are refused be
 their separate native delegation consent is not ported. Selection failure leaves the
 observer available and prints a fixed refusal without paths or backend diagnostics.
 
-Use the native **Managed Terminal** menu to show each prepared window. Start, connect
+Use the native **Managed Terminal** menu to show prepared panes in the retained workspace. Start, connect
 output, enable input, bounded paste and stop use the existing native broker's signed
 grants. The shell creates the document; its command identity determines the slot.
 Closing or hiding a terminal window revokes input and preserves its process, document,
@@ -130,11 +130,11 @@ resize reaches the existing xterm fit and PTY resize transport. Reload permanent
 fences that document; it does not adopt or restart anything. Quitting asks to disconnect
 owned work, then closes the private Node hosts; arbitrary descendants are not contained.
 
-The shared terminal document also serves the Electron workspace grid. The Tauri adapter
-supplies its complete layout state for each independent native window and supports
-native maximize/restore. Tauri does not yet provide the Electron grid, layout editing,
-persisted terminal names or drag reorder. These actions are not exposed in its layout
-toolbar, and the document heading is not draggable there.
+The shared terminal document serves both the Electron grid and the retained Tauri
+workspace. Tauri now keeps independent child webviews in one native window, with
+shared layout geometry, private UUID-based preferences, plain-text names, reorder,
+hide/show, maximize/restore and compact paging. See the
+[workspace workflow and remaining parity gates](tauri-terminal-workspace.md).
 
 The Tauri frontend reuses Electron's terminal document, xterm client, schemas and
 Node hosts without importing the Electron runtime. Its two commands are available
@@ -155,7 +155,7 @@ the attempt and input was revoked. An earlier UI-tool timeout is not positive ev
 
 Remaining limits: full native focus/dialog/keyboard/hide/quit lifecycle acceptance,
 real Codex/Claude/OpenCode login/tasks, native retirement/reselection, creation through
-the dashboard, split/reordered panes, persistent layout, teams/mentions and MCP consent,
+the dashboard, SQLite layout persistence, groups, teams/mentions and MCP consent,
 durable reconnect, Windows/Linux/Intel and signed installers. Native retirement is absent;
 state/admission remain reserved rather than being deleted or automatically reused.
 No ingestion logic changed; `validate:local`, `validate:live`, full browser suite and
