@@ -207,9 +207,21 @@ export class TerminalNativeBroker<Document extends object> {
   /** Native blur/transport loss. Invalidates pending dialogs and leases, never signals. */
   revokeInput(): void {
     this.generation++;
+    this.clearInputLeases(true);
+  }
+
+  /** Owned native sheet: revoke leases without renewing or replacing its pending review. */
+  suspendInput(): void {
+    this.clearInputLeases(false);
+  }
+
+  private clearInputLeases(invalidateAttachments: boolean): void {
     for (const [id, view] of this.views) {
+      const hadLease = view.lease !== undefined;
       view.lease = undefined;
-      if (!view.attachment) continue;
+      // A sheet must revoke an existing lease. With no lease, changing the
+      // attachment generation would cancel the explicit first input review itself.
+      if (!view.attachment || (!invalidateAttachments && !hadLease)) continue;
       try {
         void Promise.resolve(this.supervisor.revokeInput(id, view.attachment)).catch(() => {});
       } catch {
