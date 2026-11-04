@@ -167,6 +167,9 @@ importers:
 
   apps/tauri:
     dependencies:
+      '@orqst/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@tauri-apps/api':
         specifier: ^2.12.4
         version: 2.12.4

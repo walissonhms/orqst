@@ -803,6 +803,8 @@
     "layoutMemoryOnly": "Layout could not be saved. Changes remain in memory."
   },
   "managedAgents": {
+    "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",
+    "tauriRetired": "Pair retired after confirmed exits. Journals and uncertain outcomes are preserved. To select a fresh pair, safely quit and reopen the preview with new profiles.",
     "title": "Managed agents",
     "terminal": "Terminal",
     "model": "Exact model ID",
