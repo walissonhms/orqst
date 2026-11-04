@@ -140,6 +140,45 @@ This checkout has no Rust toolchain (`cargo`/`rustc` absent) and the volume has 
 `cgWindowNotFound` therefore remains **unexplained**; the next run must produce
 `window.json` before any native claim is made.
 
+## Focus after a native dialog (leading hypothesis, unproven)
+
+The retained-workspace run reported that the native _Start_ was denied **after** the
+permission dialog was accepted. Source inspection narrows the plausible causes; it does
+not prove one.
+
+- `terminal.rs:394` checks focus before the dialog, and `terminal.rs:426-434` checks it
+  once more inside the dialog completion callback, together with the generation,
+  MCP-request and document identity checks. `focused()` (`terminal.rs:63-120`) requires
+  the owned window to be visible and focused **and** the WKWebView to be the key
+  window's first responder.
+- The completion callback samples that predicate exactly once, immediately after a
+  sheet is dismissed. AppKit may return control before key-window and first-responder
+  restoration settles, and `focused()` has no bounded re-check, so one early sample can
+  deny a gesture the user did perform. The denial is fail-closed (the renderer receives
+  `accepted: false`), which is why it looks like "denied after consent" rather than a
+  crash.
+- Alternative causes that the same run cannot exclude: the webview was not the first
+  responder because the dialog returned focus to the window instead of the webview; the
+  window lost focus to another ORQST window; the generation or MCP request had already
+  been fenced; or the gesture used the wrong button (macOS maps the first/Escape button
+  to cancel and only the middle button to approve, `terminal.rs:420-423`).
+
+Decisive evidence, not implemented here: record a focus timeline in the private
+diagnostics, e.g. `focused()` observed at 0/100/250/500/1000 ms after the dialog
+completion plus the window's `is_focused`, `is_visible` and first-responder identity.
+A late `true` confirms the race; an always-`false` result points at the first-responder
+or fence checks instead. That instrumentation is Rust and cannot be compiled in this
+checkout.
+
+Proposed correction for a machine with the Rust toolchain (not applied, not compiled
+here): keep every existing predicate and add a bounded re-check used only by the
+post-dialog path, for example a helper that samples `focused(&window)` every 100 ms up
+to 2 s and returns `true` only on an actual `true` sample. The identity, generation,
+revocation, MCP-request and button checks stay unchanged, so this tolerates activation
+settling without approving an unfocused or superseded window. It must be accompanied by
+a Rust test for the bounded loop (timeout still denies) and the focus-timeline evidence
+above before any claim is made.
+
 ## Native checklist and current evidence
 
 - [x] Build a macOS ARM64 debug app without changing the preview identity.
@@ -157,6 +196,8 @@ This checkout has no Rust toolchain (`cargo`/`rustc` absent) and the volume has 
 - [ ] Record `window-observed` (bounds, layer, on-screen) for the owned fixture PID
       before attempting any native interaction; a missing/off-screen window is
       diagnosed from `window.json`, not guessed.
+- [ ] Record a post-dialog focus timeline (0/100/250/500/1000 ms) when a native Start
+      is denied after its confirmation, so the focus race is confirmed or excluded.
 - [ ] Edit directed routes/roles through native review; cancellation and returning
       from the PTY window must not approve an old communication challenge.
 - [ ] Cancel either stage of combined quit, then verify both surfaces ask again;
