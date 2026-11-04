@@ -36,6 +36,7 @@
     "accept:tauri-files": "tsx scripts/accept-tauri-files.ts",
     "accept:tauri-core": "tsx scripts/accept-tauri-core.ts",
     "accept:tauri-coexistence": "tsx scripts/accept-tauri-coexistence.ts",
+    "inspect:terminal-capacity": "tsx scripts/inspect-terminal-capacity.ts",
     "accept:tauri-terminals": "tsx scripts/accept-tauri-terminals.ts",
     "accept:tauri-terminal-mcp": "tsx scripts/accept-tauri-terminal-mcp.ts",
     "test:desktop": "tsx scripts/smoke-desktop.ts",
