@@ -1,5 +1,13 @@
 import { terminalSlotLimit } from '@orqst/protocol';
-// Native-menu provisioning only. No process, credential, native config or session reads.
+// Native provisioning only. No process, credential or captured session reads.
+import {
+  validateTerminalPreparationBinding,
+  type TerminalPreparationBinding,
+} from '../../../packages/core/src/terminal/preparation-context.js';
+import {
+  validateTerminalModelSelection,
+  type TerminalModelSelection,
+} from '../../../packages/core/src/terminal/model-selection.js';
 import { randomUUID } from 'node:crypto';
 import { lstatSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
@@ -49,6 +57,8 @@ export interface TerminalCreationInput {
   environment: NodeJS.ProcessEnv;
   mcp: boolean;
   openCodeStartupAuthorized?: boolean;
+  model?: TerminalModelSelection;
+  preparation?: TerminalPreparationBinding;
 }
 
 function overlaps(a: string, b: string): boolean {
@@ -73,7 +83,10 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   if (input.openCodeStartupAuthorized && !members.some(({ provider }) => provider === 'opencode'))
     throw new Error('OpenCode startup consent is provider-specific');
   terminalDirectory(input.project);
-  if (readdirSync(input.project).length) throw new Error('Select an empty disposable project');
+  if (!input.preparation && readdirSync(input.project).length)
+    throw new Error('Select an empty disposable project');
+  validateTerminalModelSelection(input.model);
+  validateTerminalPreparationBinding(input.preparation, input.project);
   const root = join(input.parent, `terminal-pair-${randomUUID()}`);
   const executables = members.map(({ executable }) => ({
     path: executable,
@@ -106,6 +119,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       node,
       toolPath,
       project: input.project,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.preparation ? { preparation: input.preparation } : {}),
       state: join(root, slot),
     };
     if (provider === 'codex') {
@@ -240,7 +255,10 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       if (JSON.stringify(toolDirectoryIdentities()) !== toolIdentities)
         throw new Error('Tool PATH directory identity changed');
       if (JSON.stringify(configs) !== snapshot || !current()) throw new Error('Creation changed');
-      if (readdirSync(input.project).length) throw new Error('Project is no longer empty');
+      validateTerminalModelSelection(input.model);
+      validateTerminalPreparationBinding(input.preparation, input.project);
+      if (!input.preparation && readdirSync(input.project).length)
+        throw new Error('Project is no longer empty');
       attempted = true; // Partial provisioning is retained; never delete/retry uncertain writes.
       const staging = root + '.pending';
       mkdirSync(staging, { mode: 0o700 });
@@ -271,10 +289,12 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
+      validateTerminalModelSelection(input.model);
+      validateTerminalPreparationBinding(input.preparation, input.project);
       if (
         !current() ||
         JSON.stringify(directoryIdentities()) !== identities ||
-        readdirSync(input.project).length
+        (!input.preparation && readdirSync(input.project).length)
       )
         throw new Error('Creation expired or changed before publication');
       renameSync(staging, root);
