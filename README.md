@@ -15,9 +15,10 @@ The [CLI/model preparation Core](docs/api/terminal-preparation.md) now discovers
 reviewed local executables and resolves workspace IDs without a file picker.
 Selected models reach the existing launch profiles and are revalidated before
 process creation. The [CLI → model → Open UI and native wiring](docs/development/terminal-product-open.md)
-are now integrated in source, with focused and renderer checks. Rust compilation,
-native/provider acceptance and live enrollment of additional terminals remain
-pending; the open Preview does not acquire these changes automatically.
+are now integrated in source, with focused and renderer checks. Private Core
+enrollment is implemented; its native service/Webview/layout integration, Rust
+compilation and native/provider acceptance remain pending. The open Preview does
+not acquire these changes automatically.
 
 Studio now uses one full-window Feature workspace when the native Feature bridge
 is available. **+ Terminal** opens preparation in a dismissible side panel;

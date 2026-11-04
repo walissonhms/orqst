@@ -273,6 +273,8 @@ See [workflow, evidence and pending live enrollment](../development/terminal-pro
       durable epoch/opId/CAS reservations and receipts, without rebuilding old slots.
 - [x] Cover pure continuity, capacity, idempotency, partial-effect preservation,
       source/context binding and isolated mocked-client timeout/late ACK.
+- [x] Integrate the Core commit and pass 77 session-free enrollment/Pair/supervisor/
+      broker regressions and TypeScript on main, without creating a Core or PTY.
 - [ ] Integrate/accept native service/Webview/layout/Feature append with real CLIs.
 
 See the [private contract and remaining limits](../api/terminal-enrollment.md).

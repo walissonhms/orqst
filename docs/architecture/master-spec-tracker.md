@@ -539,3 +539,23 @@ package remain unchecked for this increment. Heavy loads remain paused with abou
 Live enrollment is still required in the existing Core/Pair: admission alone must
 grant no startup/input authority, and rejected/uncertain results must preserve old
 members and receipts. See [workflow and limits](../development/terminal-product-open.md).
+
+## Incremental Core enrollment integration — 2026-11-04
+
+Integrated source `c1b89f8` as `86a3819`: the same Pair now admits prepared members
+with durable epoch/opId/CAS receipts, a fixed original capacity and conservative
+uncertainty. Private IPC enrollment timeouts preserve the existing Core connection;
+late ACKs do not append client slots. Enrolled Start challenges include copied,
+versioned admission/source binding while legacy digest bytes remain unchanged.
+The aggregate retirement archive has a bounded 1 MiB write/read allowance; the
+individual file limits and protected reservations are unchanged.
+
+On main, 77 session-free tests passed across enrollment, source validation, mocked
+IPC, Start binding, Pair continuity, supervisor and native broker. TypeScript and
+repository lint also passed. The source front reported 85 focused cases and a subsequent 11-case archive
+rerun; those overlapping runs are not an additional distinct-test total.
+
+Native service/layout/Feature/Webview append is the remaining integration in
+progress. No new Core, PTY, provider, native window or package was started by these
+checks. Cargo, resource staging, broad tests and general builds remain paused at
+about 3.1GiB free. See the [contract and acceptance limits](../api/terminal-enrollment.md).
