@@ -800,7 +800,7 @@
     "displayName": "Pane display name",
     "rename": "Rename pane",
     "layoutSummary": "{{visible}} of {{shown}} open panes visible · position {{position}} of {{count}}. Use the pane buttons or Focus other pane to navigate.",
-    "layoutMemoryOnly": "Layout could not be saved. Changes remain in memory."
+    "layoutMemoryOnly": "Layout saving is not confirmed. Changes remain in memory."
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",

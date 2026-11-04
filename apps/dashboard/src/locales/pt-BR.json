@@ -800,7 +800,7 @@
     "displayName": "Nome de exibição do painel",
     "rename": "Renomear painel",
     "layoutSummary": "{{visible}} de {{shown}} painéis abertos visíveis · posição {{position}} de {{count}}. Use os botões dos painéis ou Focar outro painel para navegar.",
-    "layoutMemoryOnly": "Não foi possível salvar o layout. Alterações permanecem em memória."
+    "layoutMemoryOnly": "O salvamento do layout ainda não foi confirmado. As alterações permanecem em memória."
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
