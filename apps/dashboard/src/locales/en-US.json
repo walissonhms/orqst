@@ -972,6 +972,8 @@
       "source_native-config": "Native configuration",
       "source_cli-cache": "Native CLI cache",
       "source_official-alias": "Official CLI alias",
+      "source_native-state": "Models chosen in this CLI",
+      "reviewFile": "The native dialog confirms the effects, not a manifest dump. The complete configuration of each terminal is written to its own terminal.json (owner-only) in the private managed root after you confirm, and can be inspected there before the separate Open confirmation.",
       "modelUnverified": "Login, model access and provider availability are checked by the native CLI when opened; no login or probe runs here.",
       "cliDefault": "CLI default",
       "defaultModel": "{{model}} (CLI default)",

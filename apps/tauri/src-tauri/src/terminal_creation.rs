@@ -257,6 +257,7 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                                                     | "native-config"
                                                     | "cli-cache"
                                                     | "official-alias"
+                                                    | "native-state"
                                             )
                                         )
                                         && m["isDefault"].is_boolean()
@@ -431,19 +432,15 @@ fn execute(
                 failure
                     .as_ref()
                     .map(|failure| {
+                        // Short localised outcome and reason. The stage stays in the in-window
+                        // notice, so one failure never raises a multi-paragraph native sheet.
                         format!(
-                            "{}\n\n{}: {}\n{}: {}",
+                            "{}\n\n{}",
                             translate(if failure.0["effects"] == "not_started" {
                                 "tauriPreparation.failure_not_started"
                             } else {
                                 "tauriPreparation.failure_possible"
                             }),
-                            translate("tauriPreparation.failureStage"),
-                            translate(&format!(
-                                "tauriPreparation.stage_{}",
-                                failure.0["stage"].as_str().unwrap()
-                            )),
-                            translate("tauriPreparation.failureReason"),
                             translate(&format!(
                                 "tauriPreparation.code_{}",
                                 failure.0["code"].as_str().unwrap()
@@ -712,13 +709,18 @@ fn run(
                         *stage = "review";
                         let approve = field(&value, "approve", 1024)?;
                         let cancel = field(&value, "cancel", 1024)?;
+                        let message = field(&value, "message", 4096)?;
+                        // An empty detail is the short consent form: the native sheet carries the
+                        // effects only, never a multi-kilobyte manifest dump.
+                        let detail = field(&value, "detail", 16384)?;
+                        let body = if detail.is_empty() {
+                            message.to_owned()
+                        } else {
+                            format!("{message}\n\n{detail}")
+                        };
                         let result = app
                             .dialog()
-                            .message(format!(
-                                "{}\n\n{}",
-                                field(&value, "message", 4096)?,
-                                field(&value, "detail", 16384)?,
-                            ))
+                            .message(body)
                             .parent(window)
                             .title(field(&value, "title", 1024)?)
                             .buttons(MessageDialogButtons::YesNoCancelCustom(

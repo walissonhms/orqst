@@ -294,6 +294,7 @@ export function TauriStudioPreparation({
         <summary>{t('studio.tauri.advanced')}</summary>
         <p>{t('studio.tauri.openHelp')}</p>
         <p>{t('studio.tauri.enrollmentLimit')}</p>
+        <p>{t('studio.tauri.reviewFile')}</p>
         {model && <p>{t(`studio.tauri.source_${model.source}`)}</p>}
         <p>
           {t(

@@ -972,6 +972,8 @@
       "source_native-config": "Configuração nativa",
       "source_cli-cache": "Cache nativo do CLI",
       "source_official-alias": "Alias oficial do CLI",
+      "source_native-state": "Modelos escolhidos neste CLI",
+      "reviewFile": "O diálogo nativo confirma os efeitos, não um despejo do manifesto. A configuração completa de cada terminal é gravada no próprio terminal.json (somente o dono) na raiz privada gerenciada após a confirmação, e pode ser inspecionada ali antes da confirmação Abrir separada.",
       "modelUnverified": "Login, acesso ao modelo e disponibilidade do provedor são verificados pelo CLI nativo ao abrir; nenhum login ou consulta ao provedor é executado aqui.",
       "cliDefault": "Padrão do CLI",
       "defaultModel": "{{model}} (padrão do CLI)",

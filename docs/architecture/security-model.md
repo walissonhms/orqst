@@ -1471,3 +1471,22 @@ entry, cache version and current freshness at provisioning and dispatch. Full na
 review, binary pins, Workspace/Feature checks, signed launch and native commit latches
 remain authoritative. No new observer API or retry is introduced. See [selection
 binding review](../research/terminal-catalog-selection-binding.md).
+
+## OpenCode preference catalogue and short native consent — 2026-11-04
+
+Two bounded changes, no new authority. (1) Passive OpenCode discovery also reads the
+CLI's own preference document (`<XDG_STATE_HOME|~/.local/state>/opencode/model.json`),
+a metadata file without credentials, decoding a subset of OpenCode's MIT
+`decodeModelPreference`. Entries become `native-state` choices with
+`availability:'unverified'`; a selected entry is its own evidence, so unrelated
+preference rotation cannot invalidate a reviewed choice while a removed entry is
+refused before any effect. (2) The selected/pair native consent sheet now carries the
+localised effects text only, and a failure sheet carries one outcome plus one reason.
+The complete configuration is written to owner-only `terminal.json` in the private
+managed root before the separate Open review; nothing about startup, shared native
+login/config/session writes, MCP, cost, uncertainty or the Open authorization was
+removed from the text. Focus/document/generation fences, the commit latch, effect
+accounting, grants, revalidation, receipts and the existing IPC schema are unchanged.
+No provider process, server, database read or credential access is introduced. See
+[catalogue and consent review](../research/opencode-model-catalog.md) and
+[delivery limits](../development/opencode-model-catalog-ux.md).

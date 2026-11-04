@@ -150,14 +150,10 @@ export async function prepareTauriTerminals(
       stage = 'review';
       const expires = now() + 60_000;
       const reviewed = () => current() && now() < expires;
-      for (const page of plan.pages) {
-        if (
-          !reviewed() ||
-          !(await ports.confirm(pair ? 'mcpPair' : 'selected', page)) ||
-          !reviewed()
-        )
-          return { status: 'cancelled', files: [] };
-      }
+      // The native sheet carries the consent text for the effects; the exact configuration is
+      // written to the reviewed private manifest, so no multi-kilobyte dump is shown modally.
+      if (!reviewed() || !(await ports.confirm(pair ? 'mcpPair' : 'selected', '')) || !reviewed())
+        return { status: 'cancelled', files: [] };
       stage = 'revalidation';
       const revalidate = () => {
         const rechecked = terminalPreparationCatalog(

@@ -214,3 +214,27 @@ uses `disabled`, `codemode`, `protocol` and an object timeout (`startup`, `catal
 `enabled`/numeric-timeout candidate. It remains blocked and non-executable. Native
 TUI/service attachment, fresh session routing, server exposure and descendant
 ownership remain unproved. See [provider evidence and limits](../development/claude-interactive-terminal.md#opencode-stays-blocked).
+
+## Model catalogue evidence — 2026-11-04
+
+Passive discovery never starts a provider process or server. Two native sources are
+read, both bounded to 2 MiB and 128 catalogue options:
+
+- configuration (`opencode.json`/`.jsonc`, project overrides) `model` and
+  `providers.models` / migrated `provider.models`, variants included;
+- the CLI's own preference document at
+  `<XDG_STATE_HOME|~/.local/state>/opencode/model.json`, decoded with a bounded
+  adaptation of OpenCode's MIT `decodeModelPreference` (`9bbb8ce`): `favorite`, then
+  `recent`, then saved `variant` keys.
+
+Preference entries are surfaced as `source: 'native-state'` with
+`availability: 'unverified'`. They are real references the CLI recorded, never an
+entitlement claim: login, access and effective model are resolved by the CLI at startup.
+Evidence for a selected entry is that entry alone, so another OpenCode session rotating
+its preferences does not invalidate a reviewed choice, while removing the chosen entry
+refuses before any effect.
+
+The complete list still requires `opencode models`, which resolves a native server
+(`ServerConnection.resolve`) and therefore has startup effects. That path stays
+unimplemented and needs explicit authorization; the proposed contract is in
+[the catalogue reuse audit](../research/opencode-model-catalog.md).

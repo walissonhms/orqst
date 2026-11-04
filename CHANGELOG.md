@@ -1,5 +1,16 @@
 # Changelog
 
+## OpenCode preference catalogue and short native consent — 2026-11-04
+
+OpenCode now offers the models its own preference document recorded
+(`favorite`/`recent`/saved `variant`), as unverified `native-state` choices, without
+starting a provider, server or reading a provider database; unrelated preference edits
+no longer invalidate a reviewed choice. Normal consent and failure sheets carry short
+localised effect text, and the complete configuration stays inspectable in the written
+owner-only manifest. See [reuse audit](docs/research/opencode-model-catalog.md) and
+[source-only delivery](docs/development/opencode-model-catalog-ux.md). Consented
+dynamic catalogue, native visual acceptance and packaging remain pending.
+
 ## Selected catalogue false invalidation — 2026-11-04
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
