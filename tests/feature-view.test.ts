@@ -248,10 +248,15 @@ test('empty Feature remains active chrome; a late selection/save ACK never reope
     f.layout.setNativeGeneration(2);
     f.layout.suspend();
     release();
-    assert.equal((await selection).status, 'ok');
+    assert.equal((await selection).status, 'unavailable');
+    assert.equal(f.db.readView().featureId, empty.featureId);
     assert.equal(f.layout.snapshot().suspended, true);
     f.core.features.saveView = saved;
+    const messagesBeforeRead = f.messages.length;
     await f.request({ action: 'snapshot' });
+    assert.equal(f.snapshot().view.featureId, empty.featureId);
+    assert.equal(f.snapshot().activeFeatureId, null);
+    assert.equal(f.messages.length, messagesBeforeRead);
     assert.equal(
       (
         await f.service.request({

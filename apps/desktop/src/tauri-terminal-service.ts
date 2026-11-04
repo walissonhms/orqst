@@ -62,7 +62,7 @@ export class TauriTerminalService {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
     this.panes = supervisors.map((supervisor, slot) => {
       const document = Object.freeze({ slot });
-      const state = { focused: false, busy: false, closed: false };
+      const state = { focused: false, busy: false, reviewing: false, closed: false };
       const authority = new TerminalAuthority(
         new Map([['desktop-managed', keys.publicKey]]),
         Date.now,
@@ -99,7 +99,7 @@ export class TauriTerminalService {
       this.retirement?.busy ||
       this.retirement?.fenced ||
       this.confirmations.size ||
-      this.panes.some((pane) => pane.state.busy)
+      this.panes.some((pane) => pane.state.reviewing)
     )
       return false;
     this.metadataBusy = true;
@@ -139,7 +139,13 @@ export class TauriTerminalService {
       } else pane.broker.revokeInput();
       return;
     }
-    if (this.metadataBusy) {
+    const passive =
+      message.kind === 'request' &&
+      (() => {
+        const request = terminalNativeRequestSchema.safeParse(message.request);
+        return request.success && ['read', 'snapshot', 'resize'].includes(request.data.action);
+      })();
+    if (this.metadataBusy && !passive) {
       this.send({
         kind: message.kind === 'retire' ? 'retirement' : 'reply',
         id: message.id,
@@ -205,6 +211,7 @@ export class TauriTerminalService {
       return;
     }
     pane.state.busy = true;
+    pane.state.reviewing = !['read', 'snapshot', 'resize'].includes(request.data.action);
     pane.state.focused = message.focused;
     try {
       const reply = await pane.broker.dispatch(pane.document, request.data);
@@ -221,6 +228,7 @@ export class TauriTerminalService {
       });
     } finally {
       pane.state.busy = false;
+      pane.state.reviewing = false;
     }
   }
 

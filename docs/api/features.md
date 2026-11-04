@@ -18,3 +18,59 @@ Feature remains legacy scope; it never matches an explicit Feature. Cross-Featur
 operations and qualified aliases are denied until an explicit workflow exists.
 Restoration never activates adapters or grants. These additive fields may be
 rejected by older strict readers; downgrade requires explicit compatibility review.
+
+## Narrow native metadata facade — v1
+
+`window.orqstFeatures.contractVersion === 1` provides `request(input)` on the
+owned native dashboard/chrome only. `featureNativeRequestSchema` and
+`featureNativeReplySchema` are the strict runtime definitions. Every input has
+`contractVersion: 1` and optimistic `generation` from the latest snapshot:
+
+| action     | Additional fields                                                         |
+| ---------- | ------------------------------------------------------------------------- |
+| `snapshot` | none                                                                      |
+| `create`   | `input: { name, description?, status? }`                                  |
+| `update`   | `featureId`, `input: { expectedRevision, name?, description?, status? }`  |
+| `assign`   | `featureId`, `slot: 0..7`, `expectedRevision`                             |
+| `select`   | `featureId` (UUID or null), `expectedRevision` of the persisted view      |
+| `organize` | `command`: `restore`, `show-all`, `columns-1`, `columns-2` or `columns-3` |
+
+Replies have `status: ok | denied | stale | busy | unavailable | archive_blocked`
+and optional `snapshot`; `ok` requires the snapshot. It contains
+`contractVersion: 1`, `storage: core`, `generation`, the fixed Workspace `{id,name}`,
+Feature records, the CAS preferred `view`, the actually presented `activeFeatureId`, reviewed `slots: [{slot,terminalId,provider}]` and
+`layoutSaved`. Names are presentation, never an address/identity. Null view means
+unassigned terminals. `activeFeatureId` changes only after a valid presentation commit;
+a preference saved after native invalidation may differ until the next explicit
+selection. Snapshot reads do not apply that late preference to the live view.
+Missing current-selection members remain metadata only.
+
+The Rust command derives label, parent window, URL, native document generation
+and wire UUID. Metadata requests/replies are bounded to 128 KiB with at most eight
+pending requests; the service caps a snapshot at 96 KiB and reports unavailable
+without closing the terminal Core if the catalog cannot fit (pagination is not
+implemented). It forwards only `{kind: feature-request,id,document,source,request}`
+on the existing private host pipe, receiving
+`{kind: feature-reply,id,document,value: FeatureNativeReply}` in a separate bounded
+pending namespace. These envelopes are not renderer APIs. No caller supplies a
+workspace, path, process identity, execution proof or generic Core method.
+
+Example visual selection, after a fresh snapshot/review:
+
+```json
+{
+  "contractVersion": 1,
+  "generation": 4,
+  "action": "select",
+  "featureId": "e10636eb-3a12-4094-9123-49a4cdad27b8",
+  "expectedRevision": 2
+}
+```
+
+Native layout messages add separate `generation`, increasing `revision`, actual
+`viewport: {width,height}`, exact `insets: {left,top,bottom}`, complete `state`,
+`focus` and all reviewed `bounds`. Only native code can advance the presentation
+generation via private `layout-generation`; the renderer cannot choose it.
+Stale generation/revision/viewport or invalid geometry is ignored in full before
+native state/visibility changes. Feature view/metadata revisions do not grant
+execution or native input. See [workflow/security/limits](../development/v6-feature-ui.md).
