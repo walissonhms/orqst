@@ -943,3 +943,8 @@ parent deny exit. Input authority is revoked before review, without stopping an
 owned process; Cancel resets both partial authorizations and renews no authority.
 Late layout presentation is fenced while either gate is pending/authorized.
 This does not prove Dock/logout or final integrated native acceptance.
+
+The native Feature metadata facade is scoped to the exact owned dashboard/chrome
+and reviewed terminal selection. It grants no process/input authority and exposes
+no generic Core/HTTP execution transport. Its document, CAS, review-exclusion and
+presentation fences are documented in [the security model](docs/architecture/security-model.md#native-feature-metadata-facade).

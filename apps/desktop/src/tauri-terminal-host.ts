@@ -10,7 +10,7 @@ import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { terminalDocument } from './terminal-document.js';
 import { terminalLayoutStore } from './terminal-layout-store.js';
 import { TauriTerminalLayout } from './tauri-terminal-layout.js';
-import { featureNativeReplySchema, featureNativeRequestSchema } from '@orqst/protocol';
+import { featureNativeReplySchema, featureNativeEnvelopeSchema } from '@orqst/protocol';
 import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 
@@ -99,12 +99,9 @@ async function start() {
     () => {},
   );
   await features.initialize();
-  const metadata = z.strictObject({
-    kind: z.literal('feature-request'),
-    id: z.uuid(),
-    document: z.number().int().positive().safe(),
-    source: z.string().min(1).max(4096),
-    request: featureNativeRequestSchema,
+  const correlation = z.object({
+    id: featureNativeEnvelopeSchema.shape.id,
+    document: featureNativeEnvelopeSchema.shape.document,
   });
   function shutdown() {
     if (closed) return;
@@ -164,7 +161,19 @@ async function start() {
       if (line === 'shutdown') return shutdown();
       try {
         const raw: unknown = JSON.parse(line);
-        const feature = metadata.safeParse(raw);
+        const feature = featureNativeEnvelopeSchema.safeParse(raw);
+        if (
+          !feature.success &&
+          raw &&
+          typeof raw === 'object' &&
+          Reflect.get(raw, 'kind') === 'feature-request'
+        ) {
+          const identity = correlation.safeParse(raw);
+          if (identity.success)
+            send({ kind: 'feature-reply', ...identity.data, value: { status: 'denied' } });
+          // A rejected metadata packet has no execution effect and never shuts down the Core.
+          continue;
+        }
         if (feature.success) {
           const message = feature.data;
           const mutable = message.request.action !== 'snapshot';

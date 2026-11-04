@@ -41,7 +41,8 @@
       "../dist/licenses/": "licenses/",
       "../dist/terminal/": "terminal/",
       "../dist/agents/": "agents/",
-      "../dist/files/": "files/"
+      "../dist/files/": "files/",
+      "../dist/features/": "features/"
     },
     "icon": [
       "../../desktop/resources/icons/orqst-32.png",

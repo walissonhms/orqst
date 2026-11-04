@@ -500,3 +500,14 @@ Feature key namespace; unscoped layouts/JSON remain intact and unassigned. Priva
 Core IPC fixes workspace from the reviewed project and derives terminal UUID from
 selected slots. Loading metadata never restores routes/grants/ownership. See
 [Feature contracts, bounds and rollback limits](../development/v6-feature-core.md).
+
+## Native Feature presentation context
+
+The private preferences Store additionally owns `feature_view_schema` version 1
+and `feature_views(workspace_id, feature_id, revision)`. A missing row is visual
+revision 0 with null Feature. Compare-and-save validates that a non-null UUID
+belongs to the fixed reviewed Workspace and increments its revision transactionally.
+This preferred view is distinct from process ownership, active tasks and native
+input. No observer `user_version`, legacy namespace, JSON layout, execution journal
+or provider history is migrated. Per-Feature UUID layout records continue using
+the existing complete-membership namespace. See [native contract](../api/features.md).

@@ -3,6 +3,7 @@
 mod agents;
 mod desktop;
 mod files;
+mod features;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -25,9 +26,10 @@ fn main() {
         .manage(terminal::Terminals::default())
         .manage(agents::Agents::default())
         .manage(files::Files::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request, files::file_request])
+        .manage(features::Features::default())
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request])
         .manage(terminal_creation::Preparation::default())
-        .on_window_event(terminal_creation::on_window_event)
+        .on_window_event(|window,event| { terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
                 .then(|| terminal::resource(context.app_handle(), request.uri())).flatten();
@@ -41,6 +43,15 @@ fn main() {
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 .body(body).expect("static terminal response")
+        })
+        .register_uri_scheme_protocol("orqst-features", |context, request| {
+            let resource = (request.method() == tauri::http::Method::GET)
+                .then(|| features::resource(context.app_handle(), request.uri())).flatten();
+            let (status,body,mime) = resource.map(|(b,m)|(200,b,m)).unwrap_or((404,Vec::new(),"text/plain"));
+            tauri::http::Response::builder().status(status).header("Content-Type",mime)
+                .header("Cache-Control","no-store").header("X-Content-Type-Options","nosniff")
+                .header("Content-Security-Policy","default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                .body(body).expect("static Feature response")
         })
         .register_uri_scheme_protocol("orqst-agents", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
@@ -60,6 +71,7 @@ fn main() {
             desktop::install(app.handle())?;
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle()))?;
             let allowed_origin = origin.clone();
+            let feature_client = features::configure(app.handle(), &origin)?;
             let file_client = match tauri::async_runtime::block_on(files::start(app.handle(), &origin)) {
                 Ok(client) => client,
                 Err(_) => {
@@ -73,6 +85,7 @@ fn main() {
                 .title("ORQST")
                 .user_agent("ORQSTTauri/0.1 ORQSTDesktop/0.1")
                 .initialization_script(file_client)
+                .initialization_script(feature_client)
                 .inner_size(1280.0, 860.0)
                 .min_inner_size(720.0, 480.0)
                 .on_navigation(move |url| {
@@ -87,6 +100,7 @@ fn main() {
                     if payload.event() == tauri::webview::PageLoadEvent::Started {
                         terminal_creation::invalidate(window.app_handle());
                         files::invalidate(window.app_handle());
+                        features::invalidate(window.app_handle(), "main");
                     }
                 })
                 .build()?;
@@ -96,6 +110,7 @@ fn main() {
             dashboard.on_window_event(move |event| {
                 if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed) {
                     files::invalidate(&export_handle);
+                    features::invalidate(&export_handle, "main");
                 }
                 if matches!(event, tauri::WindowEvent::Destroyed) {
                     files::stop(&export_handle);
@@ -106,6 +121,7 @@ fn main() {
                 terminal::stop(app.handle());
                 eprintln!("ORQST managed terminal startup refused.");
             }
+            features::install_workspace(app.handle())?;
             if tauri::async_runtime::block_on(agents::start(app.handle())).is_err() {
                 agents::stop(app.handle());
                 eprintln!("ORQST managed agents startup refused.");
