@@ -67,8 +67,9 @@ and dialogs are simulated; this does not establish native WebKit/provider accept
 The operational ceiling remains the existing selected 1–8 interactive terminal
 contract; there is no new A/B assumption or unlimited-team claim. This increment
 adds no provider/model catalog, handles, orchestrator roles or message states.
-Preference persistence follows the existing JSON contract and does not satisfy
-the full specification's SQLite persistence criterion. Existing journal admission
+Layout preferences now use [private SQLite with preserved JSON import](terminal-layout-sqlite.md).
+Full team/handle/permission configuration persistence remains pending, so the complete
+SQLite persistence criterion is still partial. Existing journal admission
 may refuse old profiles before visual preferences can be loaded; preferences are
 not a workaround for that boundary. The migration must not delete state to conceal
 this limit. The Tauri multiwebview API is behind an unstable feature and needs

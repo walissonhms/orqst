@@ -52,24 +52,7 @@ export async function createManagedTerminals(
   let retiring = false;
   let retired = false;
   let initialized = false;
-  let layoutStore: ReturnType<typeof terminalLayoutStore> | undefined;
-  let initialLayout: TerminalLayoutPreferences | undefined;
-  try {
-    layoutStore = terminalLayoutStore(
-      app.getPath('userData'),
-      selection.map(({ config }) => terminalIdentity(config).terminalId),
-    );
-    initialLayout = layoutStore.load();
-  } catch {
-    /* Invalid/unavailable preferences never block owned terminals. */
-  }
-  const panels = new TerminalPanels(window, {
-    initial: initialLayout,
-    save(state) {
-      if (!layoutStore) throw new Error('Layout storage unavailable');
-      layoutStore.save(state);
-    },
-  });
+  let panels!: TerminalPanels;
   const views: WebContentsView[] = [];
   const viewActions = new Map<
     number,
@@ -100,6 +83,27 @@ export async function createManagedTerminals(
           limit,
         );
     }
+    let layoutStore: ReturnType<typeof terminalLayoutStore> | undefined;
+    let initialLayout: TerminalLayoutPreferences | undefined;
+    try {
+      if (core) {
+        layoutStore = terminalLayoutStore(
+          app.getPath('userData'),
+          selection.map(({ config }) => terminalIdentity(config).terminalId),
+          core.layouts,
+        );
+        initialLayout = await layoutStore.load();
+      }
+    } catch {
+      // Unavailable/corrupt preferences never change process admission.
+    }
+    panels = new TerminalPanels(window, {
+      initial: initialLayout,
+      save(state) {
+        if (!layoutStore) throw new Error('Layout storage unavailable');
+        return layoutStore.save(state);
+      },
+    });
     for (const [slot, file] of files.entries()) {
       const open = await createPane(file, slot);
       openers.push(open);
@@ -110,7 +114,7 @@ export async function createManagedTerminals(
     router.close();
     core?.close();
     ipcMain.removeHandler('orqst:terminal-view');
-    panels.close();
+    panels?.close();
     for (const terminalSession of terminalSessions)
       terminalSession.protocol.unhandle('orqst-terminal');
     if (!effectsPossible) throw new TerminalPreCoreFailure('No admission or Core entered');

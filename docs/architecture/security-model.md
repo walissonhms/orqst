@@ -1290,3 +1290,15 @@ Native first-responder identity selects the reviewer for both actions; display
 layout and MCP source/worker roles grant no authority. No new capabilities or
 observer API changes are introduced. See the
 [combined checks and remaining gates](../development/tauri-retirement-mcp-integration.md).
+
+### Private SQLite terminal layouts — 2026-11-04
+
+The existing terminal Core is the only layout SQLite writer; Desktop holds no database
+dependency. Its inherited IPC accepts bounded strict visual records for the reviewed
+UUID selection only. No renderer path or process/grant field is accepted. The fixed
+private metadata database is separate from all observer/execution journals; importing
+legacy JSON never claims ownership, opens a journal, resumes a CLI or retires capacity.
+Directory and database/sidecar checks reject symlinks, hardlinks, other owners and
+non-private permissions. Original JSON is preserved. Same-user filesystem replacement
+races remain outside the existing boundary. Metadata-only RPC adds no HTTP, WebSocket,
+CSP, cookie or public execution change. See [contract](../api/terminal-native.md#private-layout-persistence-rpc--2026-11-04).

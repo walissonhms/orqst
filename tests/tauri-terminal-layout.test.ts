@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { TauriTerminalLayout } from '../apps/desktop/src/tauri-terminal-layout.js';
+import { terminalLayoutDatabase } from '../packages/core/src/terminal/layout-database.js';
 import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
 import type {
   TerminalLayoutPreferences,
@@ -109,11 +110,19 @@ test('hide, suspend, restore, reorder and plain-text rename retain stable slots'
   assert.deepEqual(layout.snapshot().visible, []);
 });
 
-test('focus and UUID-based preferences restore visual metadata without starting sessions', () => {
+test('focus and UUID-based preferences restore visual metadata without starting sessions', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orqst-tauri-layout-'));
   try {
     const identities = Array.from({ length: 4 }, () => randomUUID());
-    const store = terminalLayoutStore(root, identities);
+    const client = (ids: string[]) => {
+      const db = terminalLayoutDatabase(root, ids);
+      return terminalLayoutStore(root, ids, {
+        read: async () => db.read(),
+        save: async (record) => db.save(record),
+        import: async (record) => db.import(record),
+      });
+    };
+    const store = client(identities);
     const first = new TauriTerminalLayout(
       4,
       { save: store.save },
@@ -126,20 +135,15 @@ test('focus and UUID-based preferences restore visual metadata without starting 
     first.act(0, { moveTo: 2 });
     first.focus(3);
     first.act(3, 'maximize');
-    const initial = terminalLayoutStore(root, [...identities].reverse()).load()!;
+    await new Promise((resolve) => setImmediate(resolve));
+    const initial = (await client([...identities].reverse()).load())!;
     const next = fixture(4, initial);
     assert.deepEqual(next.layout.snapshot().visible, []);
     next.layout.open(0); // First menu entry restores the selected immutable identity.
     assert.equal(next.layout.snapshot().active, 0); // Old slot 3 is slot 0 after identity reorder.
     assert.deepEqual(next.layout.snapshot().visible, [0]);
     assert.equal(next.layout.snapshot().names[3], 'Frontend');
-    assert.equal(
-      terminalLayoutStore(
-        root,
-        identities.map(() => randomUUID()),
-      ).load(),
-      undefined,
-    );
+    assert.equal(await client(identities.map(() => randomUUID())).load(), undefined);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -175,4 +179,38 @@ test('failed preference writes leave the visual workspace usable and report memo
   assert.equal(layout.snapshot().names[0], 'Backend');
   layout.act(0, 'hide');
   assert.equal(layout.open(0), true);
+});
+
+test('asynchronous save acknowledgments cannot override newer state or reopen a suspended layout', async () => {
+  const writes: Array<{
+    state: TerminalLayoutPreferences;
+    resolve(): void;
+    reject(error: Error): void;
+  }> = [];
+  const messages: Array<{ state: TerminalLayoutState; focus: number | null }> = [];
+  const layout = new TauriTerminalLayout(
+    2,
+    {
+      save(state) {
+        return new Promise<void>((resolve, reject) => writes.push({ state, resolve, reject }));
+      },
+    },
+    (value) => messages.push(value as (typeof messages)[number]),
+    () => {},
+  );
+  layout.resize(1200, 900);
+  layout.open(0);
+  layout.act(0, { name: 'SYNTHETIC newest name' });
+  assert.equal(writes[0]!.state.names[0], ''); // Save received a snapshot, not mutable live state.
+  assert.equal(writes[1]!.state.names[0], 'SYNTHETIC newest name');
+  assert.equal(layout.snapshot().persisted, false);
+  layout.suspend();
+  writes[1]!.resolve();
+  await Promise.resolve();
+  assert.equal(layout.snapshot().persisted, true);
+  writes[0]!.reject(new Error('SYNTHETIC older save failed'));
+  await Promise.resolve();
+  assert.equal(layout.snapshot().persisted, true);
+  assert.deepEqual(layout.snapshot().visible, []);
+  assert.equal(messages.at(-1)!.focus, null);
 });

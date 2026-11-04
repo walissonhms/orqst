@@ -269,3 +269,35 @@ test('unavailable persistence reports memory-only while native views remain usab
   assert.equal(pane.owned.closes, 0);
   panels.close();
 });
+
+test('asynchronous preference failures retain views and obsolete replies cannot overwrite newer success', async () => {
+  const window = new Window();
+  const pending: Array<{ resolve(): void; reject(error: Error): void }> = [];
+  const panels = new TerminalPanels(window as unknown as BrowserWindow, {
+    save() {
+      return new Promise<void>((resolve, reject) => pending.push({ resolve, reject }));
+    },
+  });
+  const pane = new Pane();
+  panels.add(pane as unknown as WebContentsView, () => {});
+  const state = () =>
+    pane.owned.messages.at(
+      -1,
+    ) as import('../apps/desktop/src/terminal-layout.js').TerminalLayoutState;
+  panels.open(0);
+  panels.act(0, { name: 'SYNTHETIC newer name' });
+  assert.equal(state().persisted, false);
+  pending[1]!.resolve();
+  await Promise.resolve();
+  assert.equal(state().persisted, true);
+  pending[0]!.reject(new Error('SYNTHETIC obsolete failure'));
+  await Promise.resolve();
+  assert.equal(state().persisted, true);
+  panels.act(0, { name: 'SYNTHETIC latest edit' });
+  pending[2]!.reject(new Error('SYNTHETIC latest failure'));
+  await Promise.resolve();
+  assert.equal(state().persisted, false);
+  assert.equal(panels.visible(0), true);
+  assert.equal(pane.owned.closes, 0);
+  panels.close();
+});

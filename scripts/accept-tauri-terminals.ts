@@ -7,6 +7,8 @@ import { cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from '
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { DatabaseSync } from 'node:sqlite';
+import { terminalLayoutRecordSchema } from '@orqst/protocol';
 import type { TerminalLayoutState } from '../apps/desktop/src/terminal-layout.js';
 import { chromium, expect, type Page } from '@playwright/test';
 import { terminalNativeReplySchema, type TerminalNativeRequest } from '@orqst/protocol';
@@ -283,6 +285,20 @@ try {
   }
   await layoutWork;
   assert.equal(layoutError, undefined);
+  await expect.poll(() => layout.persisted).toBe(true);
+  const layoutFile = join(fixture, 'admission', 'terminal-layouts', 'preferences.sqlite');
+  const layoutDb = new DatabaseSync(layoutFile, { readOnly: true });
+  try {
+    const rows = layoutDb.prepare('SELECT metadata FROM terminal_layouts').all();
+    assert.equal(rows.length, 1);
+    const saved = terminalLayoutRecordSchema.parse(JSON.parse(String(rows[0]!.metadata)));
+    assert.equal(saved.columns, 3);
+    assert.ok(saved.names.some(({ name }) => name === '<script>plain name</script>'));
+    assert.equal(saved.order.length, count);
+  } finally {
+    layoutDb.close();
+  }
+
   assert.deepEqual(errors, []);
   assert.ok(confirmations.length >= count * 2);
   // Stop renderer polling before the exclusive, native-only retirement transaction.

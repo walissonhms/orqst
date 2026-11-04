@@ -13,33 +13,18 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { z } from 'zod';
+import {
+  terminalLayoutRecordSchema as layoutSchema,
+  type TerminalLayoutRecord,
+} from '@orqst/protocol';
 import {
   terminalDirectory,
   terminalFile,
 } from '../../../packages/core/src/terminal/codex-profile.js';
-import { terminalDisplayName, type TerminalLayoutPreferences } from './terminal-layout.js';
-
-const ids = z
-  .array(z.string().uuid())
-  .max(8)
-  .refine((value) => new Set(value).size === value.length);
-const layoutSchema = z.strictObject({
-  version: z.literal(1),
-  order: ids,
-  shown: ids,
-  active: z.string().uuid(),
-  maximized: z.string().uuid().nullable(),
-  axis: z.enum(['columns', 'rows']),
-  columns: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]),
-  percent: z.number().int().min(25).max(75),
-  names: z
-    .array(z.strictObject({ id: z.string().uuid(), name: z.string().refine(terminalDisplayName) }))
-    .max(8),
-});
+import { type TerminalLayoutPreferences } from './terminal-layout.js';
 
 /** Main-owned preferences only; neither renderer paths nor process/session recovery data. */
-export function terminalLayoutStore(userData: string, identities: string[]) {
+export function legacyTerminalLayoutStore(userData: string, identities: string[]) {
   const directory = join(realpathSync(userData), 'terminal-layouts');
   const key = createHash('sha256')
     .update(JSON.stringify([...identities].sort()))
@@ -136,6 +121,63 @@ export function terminalLayoutStore(userData: string, identities: string[]) {
           // Cleanup must not replace a write failure; a leftover private temp grants no authority.
         }
       }
+    },
+  };
+}
+
+/** Client-only UUID mapping and preserved JSON reader. SQLite lives in the owned Core. */
+export function terminalLayoutStore(
+  userData: string,
+  identities: string[],
+  backend: {
+    read(): Promise<TerminalLayoutRecord | null>;
+    save(record: TerminalLayoutRecord): Promise<unknown>;
+    import(record: TerminalLayoutRecord): Promise<TerminalLayoutRecord>;
+  },
+) {
+  const legacy = legacyTerminalLayoutStore(userData, identities);
+  const record = (state: TerminalLayoutPreferences) =>
+    layoutSchema.parse({
+      version: 1,
+      axis: state.axis,
+      columns: state.columns,
+      percent: state.percent,
+      order: state.order.map((index) => identities[index]),
+      shown: state.shown.map((index) => identities[index]),
+      active: identities[state.active],
+      maximized: state.maximized === null ? null : identities[state.maximized],
+      names: state.names.flatMap((name, index) => (name ? [{ id: identities[index], name }] : [])),
+    });
+  const decode = (raw: unknown): TerminalLayoutPreferences => {
+    const saved = layoutSchema.parse(raw);
+    if (
+      saved.order.length !== identities.length ||
+      saved.order.some((id) => !identities.includes(id))
+    )
+      throw new Error('Invalid layout identities');
+    return {
+      axis: saved.axis,
+      columns: saved.columns,
+      percent: saved.percent,
+      order: saved.order.map((id) => identities.indexOf(id)),
+      shown: saved.shown.map((id) => identities.indexOf(id)),
+      active: identities.indexOf(saved.active),
+      maximized: saved.maximized === null ? null : identities.indexOf(saved.maximized),
+      names: identities.map((id) => saved.names.find((name) => name.id === id)?.name ?? ''),
+    };
+  };
+  return {
+    async load(): Promise<TerminalLayoutPreferences | undefined> {
+      let saved = await backend.read();
+      if (saved === null) {
+        const previous = legacy.load();
+        if (!previous) return;
+        saved = await backend.import(record(previous));
+      }
+      return decode(saved);
+    },
+    async save(state: TerminalLayoutPreferences): Promise<void> {
+      await backend.save(record(state));
     },
   };
 }
