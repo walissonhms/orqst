@@ -229,3 +229,8 @@ consent gates and owned-Core cleanup. No observer capability or HTTP/WS change i
 introduced. This contributes to criteria 1, 5, 12 and 14; none is newly accepted.
 See the [delivery and platform checklist](../development/tauri-native-desktop.md)
 and [pinned source/dependency review](../research/tauri-native-desktop.md).
+
+Integrated as `36a3d41` on top of the native coexistence correction: lint,
+typecheck, build, 629 Node tests (`--test-concurrency=2`), ten Rust tests, resource
+staging and packaged synthetic Core acceptance passed. Native visual acceptance
+remains unsuccessful as recorded in the delivery guide; no real provider ran.
