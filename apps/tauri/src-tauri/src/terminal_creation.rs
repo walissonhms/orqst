@@ -1,5 +1,6 @@
 //! Native menu and Studio preparation reuse the same passive Node provisioning/selection flow.
 //! No arbitrary program, CLI invocation or observer API is exposed.
+use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -502,6 +503,23 @@ pub(crate) fn startup_error(code: &str) -> Box<dyn std::error::Error> {
     ))
 }
 
+/// Project only the existing typed failure; never classify or persist an error string.
+pub(crate) fn record_failure(
+    diagnostic: &Attempt,
+    error: &(dyn std::error::Error + 'static),
+    fallback: Stage,
+) {
+    if let Some(failure) = error.downcast_ref::<PreparationFailure>() {
+        diagnostic.record(
+            Stage::parse(failure.0["stage"].as_str().unwrap_or("")),
+            Outcome::parse(failure.0["code"].as_str().unwrap_or("")),
+            Effects::parse(failure.0["effects"].as_str().unwrap_or("")),
+        );
+    } else {
+        diagnostic.record(fallback, Outcome::Uncertain, Effects::Possible);
+    }
+}
+
 fn execute(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
@@ -510,8 +528,17 @@ fn execute(
     generation: u64,
     native_notice: bool,
 ) -> Value {
+    let diagnostic = Attempt::begin();
     let mut stage = "bootstrap";
-    let result = run(app, window, request, source, generation, &mut stage);
+    let result = run(
+        app,
+        window,
+        request,
+        source,
+        generation,
+        &mut stage,
+        &diagnostic,
+    );
     let failure = result.as_ref().err().map(|error| {
         error
             .downcast_ref::<PreparationFailure>()
@@ -519,6 +546,11 @@ fn execute(
             .unwrap_or_else(|| unknown_failure(stage))
     });
     let succeeded = result.is_ok();
+    if let Some(failure) = &failure {
+        record_failure(&diagnostic, failure, Stage::parse(stage));
+    } else {
+        diagnostic.record(Stage::Attempt, Outcome::Succeeded, Effects::Unconfirmed);
+    }
     // Completion never waits for dismissal of an informational error sheet. Sticky
     // committed/opened and Core ownership remain untouched.
     stop(app);
@@ -681,6 +713,7 @@ fn run(
     source: &str,
     generation: u64,
     stage: &mut &str,
+    diagnostic: &Attempt,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
     let admission = crate::terminal::preparation_admission(app)?;
@@ -727,6 +760,7 @@ fn run(
     {
         return Err("Unsupported native OpenCode configuration selector".into());
     }
+    diagnostic.record(Stage::HelperSpawn, Outcome::Requested, Effects::Unconfirmed);
     let (mut rx, child) = app
         .shell()
         .sidecar("orqst-node")?
@@ -758,6 +792,7 @@ fn run(
             )
         }))
         .spawn()?;
+    diagnostic.record(Stage::HelperSpawn, Outcome::Started, Effects::Unconfirmed);
     app.state::<Preparation>().0.lock().unwrap().child = Some(child);
     *stage = "request";
     let mut complete = None;
@@ -766,6 +801,10 @@ fn run(
     loop {
         let event = tauri::async_runtime::block_on(async {
             tokio::time::timeout(Duration::from_secs(310), rx.recv()).await
+        })
+        .map_err(|error| {
+            diagnostic.record(Stage::HelperStream, Outcome::Timeout, Effects::Unconfirmed);
+            error
         })?;
         match event {
             Some(CommandEvent::Stdout(bytes)) if bytes.len() <= 128 * 1024 => {
@@ -773,7 +812,14 @@ fn run(
                 if received > 512 * 1024 || complete.is_some() || !current() {
                     return Err("Preparation pipe refused".into());
                 }
-                let value: Value = serde_json::from_slice(&bytes)?;
+                let value: Value = serde_json::from_slice(&bytes).map_err(|error| {
+                    diagnostic.record(
+                        Stage::HelperStream,
+                        Outcome::ProtocolRejected,
+                        Effects::Unconfirmed,
+                    );
+                    error
+                })?;
                 if value["kind"] == "failure" {
                     if !exact(&value, &["kind", "failure"]) {
                         return Err("Invalid preparation failure".into());
@@ -815,6 +861,7 @@ fn run(
                             .unwrap_or(Value::Null)
                     }
                     Some("confirm") => {
+                        diagnostic.record(Stage::Review, Outcome::Requested, Effects::Unconfirmed);
                         *stage = "review";
                         let approve = field(&value, "approve", 1024)?;
                         let cancel = field(&value, "cancel", 1024)?;
@@ -890,6 +937,15 @@ fn run(
                                 .blocking_show_with_result();
                             matches!(result, MessageDialogResult::Custom(ref text) if text == approve)
                         };
+                        diagnostic.record(
+                            Stage::Review,
+                            if accepted {
+                                Outcome::Approved
+                            } else {
+                                Outcome::Declined
+                            },
+                            Effects::Unconfirmed,
+                        );
                         json!(accepted)
                     }
                     Some("commit")
@@ -905,6 +961,19 @@ fn run(
                         if allowed {
                             *stage = "provision";
                         }
+                        diagnostic.record(
+                            Stage::Commit,
+                            if allowed {
+                                Outcome::Allowed
+                            } else {
+                                Outcome::Refused
+                            },
+                            if allowed {
+                                Effects::Possible
+                            } else {
+                                Effects::Unconfirmed
+                            },
+                        );
                         json!(allowed)
                     }
                     _ => return Err("Unknown preparation request".into()),
@@ -920,8 +989,22 @@ fn run(
                     .write(bytes.as_bytes())?;
             }
             Some(CommandEvent::Stderr(_)) => {}
-            Some(CommandEvent::Terminated(exit)) if exit.code == Some(0) => break,
-            _ => return Err("Preparation host unavailable".into()),
+            Some(CommandEvent::Terminated(exit)) if exit.code == Some(0) => {
+                diagnostic.record(
+                    Stage::HelperComplete,
+                    Outcome::Succeeded,
+                    Effects::Unconfirmed,
+                );
+                break;
+            }
+            _ => {
+                diagnostic.record(
+                    Stage::HelperStream,
+                    Outcome::Uncertain,
+                    Effects::Unconfirmed,
+                );
+                return Err("Preparation host unavailable".into());
+            }
         }
     }
     *stage = if request["action"] == "catalog" {
@@ -951,6 +1034,11 @@ fn run(
         .as_array()
         .ok_or("Invalid preparation result")?;
     if result["status"] == "cancelled" && files.is_empty() {
+        diagnostic.record(
+            Stage::HelperComplete,
+            Outcome::Cancelled,
+            Effects::Unconfirmed,
+        );
         return Ok(json!({"status":"ok"}));
     }
     if files.is_empty()
@@ -975,6 +1063,7 @@ fn run(
     }
     if result["status"] == "open" && current() {
         *stage = "opening";
+        diagnostic.record(Stage::Opening, Outcome::Requested, Effects::Possible);
         // Latch before entering Core. Never retry uncertain admission, even on failure.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
         let live_enrollment = admission.is_some();
@@ -987,6 +1076,7 @@ fn run(
                 &files[0],
                 result["previousLayout"].clone(),
                 admission.as_ref().unwrap(),
+                diagnostic,
             ))
         } else {
             tauri::async_runtime::block_on(crate::terminal::start_selected_with_open(
@@ -996,6 +1086,7 @@ fn run(
                     request["action"].as_str(),
                     Some("create-selected" | "create-mcp-pair")
                 ),
+                diagnostic,
             ))
         };
         if let Err(error) = opened {

@@ -37,7 +37,7 @@ vocabulary!(Stage {
     Bootstrap => "bootstrap", Request => "request", Catalog => "catalog", Selection => "selection",
     Plan => "plan", Review => "review", Revalidation => "revalidation", Commit => "commit",
     Provision => "provision", Inspection => "inspection", FeatureAssignment => "feature_assignment",
-    Opening => "opening", CoreAdmission => "core_admission", CoreStartup => "core_startup",
+    Opening => "opening", CliOpening => "cli_opening", AdmissionPreflight => "admission_preflight", CoreAdmission => "core_admission", CoreStartup => "core_startup",
     HostSpawn => "host_spawn", HostStream => "host_stream", Enrollment => "enrollment",
     Presentation => "presentation", Unconfirmed => "unconfirmed",
 });
@@ -106,7 +106,7 @@ impl Attempt {
     pub fn record(&self, stage: Stage, outcome: Outcome, effects: Effects) {
         let Some(writer) = WRITER.get() else { return };
         let record = Record {
-            attempt: self.id.clone(),
+            attempt: self.id().to_owned(),
             unix_ms: millis(
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -264,6 +264,9 @@ mod disk {
             let lock = private_file(&dir.join("native.lock"))?;
             // One writer across concurrent app instances sharing this app-data directory.
             // Stale lock files are harmless: the OS releases the advisory lock at process exit.
+            if lock.metadata()?.len() != 0 {
+                return Err(refused());
+            }
             lock.try_lock().map_err(|_| refused())?;
             for name in ["native.jsonl", "native.1.jsonl", "native.2.jsonl"] {
                 let path = dir.join(name);

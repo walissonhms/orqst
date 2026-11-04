@@ -1,5 +1,6 @@
 //! Native-only client of ORQST's existing TerminalNativeBroker/Node host.
 //! The observer webview has no capability for these commands or this private pipe.
+use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -42,6 +43,8 @@ struct Running {
     loaded: Vec<bool>,
     revoked: Vec<bool>,
     pending_open: Vec<Option<OpeningIntent>>,
+    // Optional diagnostic correlation only; never consulted by an authority/lifecycle gate.
+    opening_diagnostics: Vec<Option<Attempt>>,
     pending: HashMap<String, oneshot::Sender<Value>>,
     metadata_pending: HashMap<String, MetadataPending>,
     metadata_mutating: Option<String>,
@@ -649,7 +652,48 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
 pub async fn terminal_request(window: Webview, request: Value) -> Value {
     dispatch_terminal_request(window, request, None).await
 }
+fn opening_outcome(status: Option<&str>, opening: Option<&str>) -> Outcome {
+    match (status, opening) {
+        (Some("ok"), Some("ready")) => Outcome::Ready,
+        (Some("ok"), Some("incomplete")) => Outcome::Uncertain,
+        (Some("cancelled"), _) => Outcome::Cancelled,
+        (Some("denied" | "busy" | "focus_required"), _) => Outcome::Refused,
+        _ => Outcome::Unconfirmed,
+    }
+}
+
 async fn dispatch_terminal_request(
+    window: Webview,
+    request: Value,
+    expected: Option<(u64, u64, Instant)>,
+) -> Value {
+    // Retain the originating preparation attempt for the first dispatch per member.
+    // Taking this optional tag cannot consume an intent, grant, pending reply or reservation.
+    let diagnostic = if request["action"] == "open" {
+        let diagnostic = slot(&window).and_then(|slot| {
+            let state = window.state::<Terminals>();
+            let mut guard = state.0.lock().unwrap();
+            guard
+                .as_mut()
+                .and_then(|r| r.opening_diagnostics.get_mut(slot))
+                .and_then(Option::take)
+        });
+        Some(diagnostic.unwrap_or_default())
+    } else {
+        None
+    };
+    if let Some(diagnostic) = &diagnostic {
+        diagnostic.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
+    }
+    let value = dispatch_terminal_request_inner(window, request, expected).await;
+    if let Some(diagnostic) = &diagnostic {
+        let outcome = opening_outcome(value["status"].as_str(), value["opening"].as_str());
+        diagnostic.record(Stage::CliOpening, outcome, Effects::Possible);
+    }
+    value
+}
+
+async fn dispatch_terminal_request_inner(
     window: Webview,
     request: Value,
     expected: Option<(u64, u64, Instant)>,
@@ -1519,6 +1563,28 @@ pub(crate) async fn enroll_selected(
     manifest: &str,
     previous_layout: Value,
     expected: &PreparationAdmission,
+    diagnostic: &Attempt,
+) -> Result<(), Box<dyn std::error::Error>> {
+    diagnostic.record(Stage::Enrollment, Outcome::Requested, Effects::Unconfirmed);
+    let result = enroll_selected_inner(app, manifest, previous_layout, expected, diagnostic).await;
+    diagnostic.record(
+        Stage::Enrollment,
+        if result.is_ok() {
+            Outcome::Succeeded
+        } else {
+            Outcome::Uncertain
+        },
+        Effects::Possible,
+    );
+    result
+}
+
+async fn enroll_selected_inner(
+    app: &tauri::AppHandle,
+    manifest: &str,
+    previous_layout: Value,
+    expected: &PreparationAdmission,
+    diagnostic: &Attempt,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !enrollment_available(app) {
         return Err("Native enrollment unavailable".into());
@@ -1601,6 +1667,7 @@ pub(crate) async fn enroll_selected(
         r.loaded.push(false);
         r.revoked.push(false);
         r.pending_open.push(None);
+        r.opening_diagnostics.push(Some(diagnostic.clone()));
         r.busy.push(false);
         r.reviewing.push(false);
         value
@@ -1611,6 +1678,7 @@ pub(crate) async fn enroll_selected(
     let creation_id = id.clone();
     let creation_cancelled = Arc::new(AtomicBool::new(false));
     let callback_cancelled = creation_cancelled.clone();
+    diagnostic.record(Stage::Presentation, Outcome::Requested, Effects::Possible);
     let creation_deadline = Instant::now() + Duration::from_secs(5);
     let scheduled = app.run_on_main_thread(move || {
         let context_current = handle
@@ -1713,6 +1781,7 @@ pub(crate) async fn enroll_selected(
     }
     r.enrollment_fenced = false;
     r.enrollment_request = None;
+    diagnostic.record(Stage::Presentation, Outcome::Ready, Effects::Possible);
     Ok(())
 }
 
@@ -1725,13 +1794,30 @@ pub async fn start_selected(
     app: &tauri::AppHandle,
     paths: Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    start_selected_with_open(app, paths, false).await
+    start_selected_with_open(app, paths, false, &Attempt::begin()).await
 }
 
 pub async fn start_selected_with_open(
     app: &tauri::AppHandle,
     paths: Vec<String>,
     operational_open: bool,
+    diagnostic: &Attempt,
+) -> Result<(), Box<dyn std::error::Error>> {
+    diagnostic.record(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
+    let result = start_selected_inner(app, paths, operational_open, diagnostic).await;
+    if let Err(error) = &result {
+        crate::terminal_creation::record_failure(diagnostic, error.as_ref(), Stage::CoreStartup);
+    } else {
+        diagnostic.record(Stage::Opening, Outcome::Ready, Effects::Possible);
+    }
+    result
+}
+
+async fn start_selected_inner(
+    app: &tauri::AppHandle,
+    paths: Vec<String>,
+    operational_open: bool,
+    diagnostic: &Attempt,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if is_running(app) {
         return Err("Existing Core requires explicit native enrollment".into());
@@ -1769,6 +1855,7 @@ pub async fn start_selected_with_open(
             )
         }))
         .spawn()?;
+    diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
         while let Some(event) = rx.recv().await {
             match event {
@@ -1807,6 +1894,7 @@ pub async fn start_selected_with_open(
             return Err(error);
         }
     };
+    diagnostic.record(Stage::CoreStartup, Outcome::Ready, Effects::Possible);
     let panes = ready["panes"]
         .as_array()
         .ok_or("Missing terminal documents")?;
@@ -1856,6 +1944,7 @@ pub async fn start_selected_with_open(
         loaded: vec![false; count],
         revoked: vec![false; count],
         pending_open: (0..count).map(|_| None).collect(),
+        opening_diagnostics: (0..count).map(|_| Some(diagnostic.clone())).collect(),
         pending: HashMap::new(),
         metadata_pending: HashMap::new(),
         metadata_mutating: None,
@@ -2022,11 +2111,14 @@ pub async fn start_selected_with_open(
     let host_owner = ready["admissionOwner"].as_str().unwrap().to_owned();
     let host_initial_files = paths.clone();
     let app = app.clone();
+    let diagnostic = diagnostic.clone();
     tauri::async_runtime::spawn(async move {
+        let mut stream_outcome = Outcome::Eof;
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) if bytes.len() <= 512 * 1024 => {
                     let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+                        stream_outcome = Outcome::ProtocolRejected;
                         break;
                     };
                     if value["kind"] == "feature-reply" {
@@ -2086,6 +2178,7 @@ pub async fn start_selected_with_open(
                         }
                     } else if value["kind"] == "reply" {
                         let Some(id) = value["id"].as_str() else {
+                            stream_outcome = Outcome::ProtocolRejected;
                             break;
                         };
                         let state = app.state::<Terminals>();
@@ -2097,6 +2190,7 @@ pub async fn start_selected_with_open(
                         }
                     } else if value["kind"] == "retirement" {
                         let Some(id) = value["id"].as_str() else {
+                            stream_outcome = Outcome::ProtocolRejected;
                             break;
                         };
                         let state = app.state::<Terminals>();
@@ -2111,6 +2205,7 @@ pub async fn start_selected_with_open(
                     } else if value["kind"] == "layout" {
                         apply_layout(&app, &value);
                     } else {
+                        stream_outcome = Outcome::ProtocolRejected;
                         break;
                     }
                 }
@@ -2119,9 +2214,17 @@ pub async fn start_selected_with_open(
                     exited.notify_one();
                     break;
                 }
-                _ => break,
+                CommandEvent::Error(_) => {
+                    stream_outcome = Outcome::TransportFailed;
+                    break;
+                }
+                _ => {
+                    stream_outcome = Outcome::ProtocolRejected;
+                    break;
+                }
             }
         }
+        diagnostic.record(Stage::HostStream, stream_outcome, Effects::Possible);
         let running = {
             let state = app.state::<Terminals>();
             let mut guard = state.0.lock().unwrap();
