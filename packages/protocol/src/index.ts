@@ -169,3 +169,5 @@ export * from './terminal-journal.js';
 export * from './pane-communication.js';
 export * from './managed-agents.js';
 export * from './terminal-capacity.js';
+
+export * from './studio.js';

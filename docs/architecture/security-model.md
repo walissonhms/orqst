@@ -1073,3 +1073,12 @@ complete review. Generic CLI/login consent is insufficient. This flow starts not
 real native effects were neither authorized nor run. Focus/expiry and later signed
 start/task gates remain. Filesystem roots are now refused as tool PATH entries.
 No HTTP, WebSocket, cookie, static-serving or environment-whitelist authority changes.
+
+### Studio preparation
+
+The versioned Desktop Studio facade admits only a bounded snapshot and named
+preparation/review/opening intents. It accepts no paths, manifest bytes, grants,
+provider prompts or process commands. Non-read requests require preload activation,
+authorized native sender and focus, then the existing parented path/hash/consent
+reviews. It cannot start a CLI or accept provider permissions. No HTTP/WS execution
+route was added; the Studio path uses the existing static dashboard security controls.

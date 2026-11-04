@@ -20,6 +20,8 @@ import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTerminalCreation } from './terminal-creation.js';
+import { discoverTerminalExecutable, discoverTerminalNode } from './terminal-discovery.js';
+import { studioRequestSchema, type StudioSnapshot } from '@orqst/protocol';
 import { TerminalPreCoreFailure } from './terminal-selection.js';
 import type { LocalCliProvider } from '../../../packages/core/src/terminal/local-cli.js';
 import { analyticsNativeRequestSchema } from '@orqst/protocol';
@@ -195,6 +197,7 @@ async function start(): Promise<void> {
   let quitting = false;
   let terminalCreationAttempted = false;
   let terminalCreationCompleted = false;
+  let createdTerminalFiles: string[] | undefined;
 
   function updateTerminalMenu(): void {
     const menu = Menu.getApplicationMenu();
@@ -237,6 +240,7 @@ async function start(): Promise<void> {
       terminalSelection = new TerminalSelection(Date.now, terminalLimit);
       terminalCreationAttempted = false;
       terminalCreationCompleted = false;
+      createdTerminalFiles = undefined;
     } finally {
       terminalOpening = false;
       nativeFileBusy = false;
@@ -244,7 +248,7 @@ async function start(): Promise<void> {
     }
   }
 
-  // The native menu is the sole entry. There is no renderer/IPC path or second-instance import.
+  // Both entry points use the same native review; renderer arguments never supply paths or grants.
   function terminalSelectionContext() {
     const target = window;
     const frame = target && !target.isDestroyed() ? target.webContents.mainFrame : undefined;
@@ -291,7 +295,10 @@ async function start(): Promise<void> {
     });
   }
 
-  async function createTerminalSelection(count = Math.min(2, terminalLimit)): Promise<void> {
+  async function createTerminalSelection(
+    count = Math.min(2, terminalLimit),
+    mixed = false,
+  ): Promise<void> {
     if (
       terminals ||
       terminalOpening ||
@@ -311,23 +318,28 @@ async function start(): Promise<void> {
     const current = () => Date.now() < expires && context.current();
     let files: string[] | undefined;
     try {
-      const providerResult = await dialog.showMessageBox(context.target!, {
-        title: i18n.t(count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam'),
-        message: i18n.t('managedTerminal.createProvider'),
-        buttons: [
-          i18n.t('terminalNative.cancel'),
-          ...['codex', 'claude', 'opencode'].map((provider) =>
-            i18n.t(`managedTerminal.createProvider_${provider}`),
-          ),
-        ],
-        defaultId: 0,
-        cancelId: 0,
-        noLink: true,
-      });
-      const provider: LocalCliProvider | undefined = (['codex', 'claude', 'opencode'] as const)[
-        providerResult.response - 1
-      ];
-      if (!current() || !provider) return;
+      const providers =
+        count === 2
+          ? (['codex', 'claude', 'opencode', 'codexOpenCode'] as const)
+          : (['codex', 'claude', 'opencode'] as const);
+      const providerResult = mixed
+        ? { response: 4 }
+        : await dialog.showMessageBox(context.target!, {
+            title: i18n.t(
+              count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam',
+            ),
+            message: i18n.t('managedTerminal.createProvider'),
+            buttons: [
+              i18n.t('terminalNative.cancel'),
+              ...providers.map((provider) => i18n.t(`managedTerminal.createProvider_${provider}`)),
+            ],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+      const choice = providers[providerResult.response - 1];
+      if (!current() || !choice) return;
+      const provider: LocalCliProvider = choice === 'codexOpenCode' ? 'codex' : choice;
       const choose = async (key: string, directory = false) => {
         if (!current()) return undefined;
         const result = await dialog.showOpenDialog(context.target!, {
@@ -342,9 +354,53 @@ async function start(): Promise<void> {
           ? result.filePaths[0]
           : undefined;
       };
-      const executable = await choose('createExecutable');
+      const home = process.env.HOME ?? app.getPath('home');
+      const searchPath = process.env.PATH ?? '';
+      const candidate = async (name: string, paths: string[], fallback: string) => {
+        if (!current()) return undefined;
+        // Even a single passive candidate is shown in the full final path/hash review.
+        if (paths.length === 1) return paths[0];
+        const detail = paths
+          .map((path, index) => `${index + 1}. ${path}`)
+          .join('\n')
+          .replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+        if (detail.length > 4096) throw new Error('Candidate review exceeds native display limit');
+        const result = await dialog.showMessageBox(context.target!, {
+          detail,
+          title: i18n.t('managedTerminal.discoverTitle', { provider: name }),
+          message: i18n.t(
+            paths.length ? 'managedTerminal.discoverChoose' : 'managedTerminal.discoverMissing',
+          ),
+          buttons: [
+            i18n.t('terminalNative.cancel'),
+            i18n.t('managedTerminal.discoverManual'),
+            ...paths.map((_path, index) =>
+              i18n.t('managedTerminal.discoverCandidate', { number: index + 1 }),
+            ),
+          ],
+          defaultId: 0,
+          cancelId: 0,
+          noLink: true,
+        });
+        if (!current() || !result.response) return undefined;
+        return result.response === 1 ? choose(fallback) : paths[result.response - 2];
+      };
+      const executable = await candidate(
+        provider,
+        discoverTerminalExecutable(provider, searchPath, home),
+        'createExecutable',
+      );
       if (!executable) return;
-      const node = await choose('createNode');
+      const companionExecutable =
+        choice === 'codexOpenCode'
+          ? await candidate(
+              'OpenCode',
+              discoverTerminalExecutable('opencode', searchPath, home),
+              'createExecutable',
+            )
+          : undefined;
+      if (choice === 'codexOpenCode' && !companionExecutable) return;
+      const node = await candidate('Node', discoverTerminalNode(searchPath, home), 'createNode');
       if (!node) return;
       const project = await choose('createProject', true);
       if (!project) return;
@@ -355,7 +411,7 @@ async function start(): Promise<void> {
               title: i18n.t(
                 count === 2 ? 'managedTerminal.createPair' : 'managedTerminal.createTeam',
               ),
-              message: i18n.t(`managedTerminal.createMcp_${provider}`),
+              message: i18n.t(`managedTerminal.createMcp_${choice}`),
               buttons: [
                 i18n.t('terminalNative.cancel'),
                 i18n.t('managedTerminal.createWithoutMcp'),
@@ -371,6 +427,9 @@ async function start(): Promise<void> {
         limit: terminalLimit,
         provider,
         executable,
+        ...(companionExecutable
+          ? { companion: { provider: 'opencode' as const, executable: companionExecutable } }
+          : {}),
         node,
         project,
         parent: app.getPath('userData'),
@@ -381,7 +440,7 @@ async function start(): Promise<void> {
       let plan = prepareTerminalCreation(creationInput);
       let openCodeStartupAuthorized = false;
       let startupChoice: number | undefined;
-      if (provider === 'opencode') {
+      if (provider === 'opencode' || choice === 'codexOpenCode') {
         for (const detail of plan.pages) {
           const consent = await dialog.showMessageBox(context.target!, {
             type: 'warning',
@@ -434,6 +493,7 @@ async function start(): Promise<void> {
       terminalCreationAttempted = true;
       files = plan.provision(reviewed);
       terminalCreationCompleted = true;
+      createdTerminalFiles = files;
     } catch {
       if (context.current())
         await dialog.showMessageBox(context.target!, {
@@ -546,6 +606,49 @@ async function start(): Promise<void> {
       updateTerminalMenu();
     }
   }
+  function studioSnapshot(): StudioSnapshot {
+    return {
+      count: terminals?.openers.length ?? terminalSelection.count,
+      limit: terminalLimit,
+      opened: !!terminals,
+      prepared: !!createdTerminalFiles,
+      canCreate: !terminals && !terminalSelection.locked && !terminalCreationAttempted,
+      canSelect: !terminals && !terminalSelection.locked,
+      busy: nativeFileBusy || terminalOpening,
+    };
+  }
+  ipcMain.handle('orqst:studio', async (event, raw: unknown) => {
+    const request = studioRequestSchema.safeParse(raw);
+    if (
+      !request.success ||
+      quitting ||
+      !window ||
+      !authorizedArtifactSender(event, window.webContents, browserSession, origin)
+    )
+      return { status: 'denied' };
+    const { action } = request.data;
+    if (action === 'snapshot') return { status: 'ok', snapshot: studioSnapshot() };
+    if (!window.isFocused() || !window.webContents.isFocused()) return { status: 'focus_required' };
+    if (nativeFileBusy || terminalOpening) return { status: 'busy' };
+    const state = studioSnapshot();
+    if (action === 'createMixed') {
+      if (!state.canCreate || terminalLimit < 2) return { status: 'denied' };
+      await createTerminalSelection(2, true);
+    } else if (action === 'create') {
+      if (!state.canCreate) return { status: 'denied' };
+      await createTerminalSelection();
+    } else if (action === 'select') {
+      if (!state.canSelect) return { status: 'denied' };
+      await reviewTerminalSelection();
+    } else if (action === 'resumeReview') {
+      if (!state.canSelect || !createdTerminalFiles) return { status: 'denied' };
+      await reviewTerminalSelection(createdTerminalFiles);
+    } else if (action === 'open') {
+      if (!state.count || (!state.opened && !state.canSelect)) return { status: 'denied' };
+      await openTerminalSelection(0);
+    }
+    return { status: 'ok', snapshot: studioSnapshot() };
+  });
   ipcMain.handle('orqst:managed-agents-open', (event) => {
     if (
       quitting ||
@@ -980,6 +1083,7 @@ async function start(): Promise<void> {
     ipcMain.removeHandler('orqst:save-markdown');
     ipcMain.removeHandler('orqst:analytics-export');
     ipcMain.removeHandler('orqst:managed-agents-open');
+    ipcMain.removeHandler('orqst:studio');
     stopped = true;
     clearTimeout(timer);
     for (const notification of activeNotifications) notification.close();

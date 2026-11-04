@@ -417,7 +417,7 @@ test('native IPC and preload keep narrow file/export/view channels and no generi
   const preload = await readFile('apps/desktop/src/preload.ts', 'utf8');
   assert.deepEqual(
     [...main.matchAll(/ipcMain\.handle\('([^']+)'/g)].map((match) => match[1]).sort(),
-    ['orqst:analytics-export', 'orqst:managed-agents-open', 'orqst:save-markdown'],
+    ['orqst:analytics-export', 'orqst:managed-agents-open', 'orqst:save-markdown', 'orqst:studio'],
   );
   const handler = main.slice(
     main.indexOf("ipcMain.handle('orqst:analytics-export'"),

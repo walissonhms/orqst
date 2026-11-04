@@ -6,6 +6,7 @@ const sessionPath = `/overview/sessions/${sourceId}`;
 const draftText = 'Synthetic route draft — exact text\n<script>inert</script>';
 const views = [
   ['overview', 'Overview'],
+  ['studio', 'Terminals / Studio'],
   ['workspaces', 'Workspace directory'],
   ['agents', 'Agents & integrations'],
   ['models', 'Most used models'],

@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   analyticsNativeRequestSchema,
+  studioRequestSchema,
+  studioReplySchema,
+  type DesktopStudio,
   managedAgentsOpenReplySchema,
   type ManagedAgentsOpenReply,
   type DesktopAnalytics,
@@ -83,3 +86,24 @@ const analytics: DesktopAnalytics = {
   },
 };
 contextBridge.exposeInMainWorld('orqstAnalytics', Object.freeze(analytics));
+
+let studioBusy = false;
+const studio: DesktopStudio = {
+  contractVersion: 1,
+  async request(raw) {
+    const parsed = studioRequestSchema.safeParse(raw);
+    if (!parsed.success) return { status: 'denied' };
+    if (studioBusy) return { status: 'busy' };
+    if (parsed.data.action !== 'snapshot' && !navigator.userActivation.isActive)
+      return { status: 'denied' };
+    studioBusy = true;
+    try {
+      return studioReplySchema.parse(await ipcRenderer.invoke('orqst:studio', parsed.data));
+    } catch {
+      return { status: 'unavailable' };
+    } finally {
+      studioBusy = false;
+    }
+  },
+};
+contextBridge.exposeInMainWorld('orqstStudio', Object.freeze(studio));

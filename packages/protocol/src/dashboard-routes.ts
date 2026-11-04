@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const dashboardViewSchema = z.enum([
   'overview',
+  'studio',
   'workspaces',
   'agents',
   'models',

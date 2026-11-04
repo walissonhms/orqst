@@ -265,3 +265,13 @@ return false. No public API/WebSocket or observer preload capability is added.
 `onLayout` receives only axis, percentage, visible slot indices and configured count.
 Layout mutations revoke input, never grant it, and preserve the existing PTY/process.
 Pair-only actions are disabled with one manifest. Preferences are memory-only.
+
+## Studio preparation facade
+
+The local observer preload exposes `orqstStudio` contract version 1 with a strict
+`request({action})` enum: `snapshot`, `createMixed`, `create`, `select`, `resumeReview`,
+`open`. The bounded reply contains status and optionally count/limit, opened/prepared,
+canCreate/canSelect and busy. It exposes no filesystem paths, grant or CLI operation.
+Native sender/focus/gesture validation and the existing native review chain are mandatory.
+See [Studio preparation security review](../development/studio-preparation.md#security-review).
+This is not an HTTP or WebSocket execution API.

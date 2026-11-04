@@ -53,6 +53,7 @@ import { useObservatory } from './use-observatory';
 import { isSessionLocation, sessionFromLocation } from './session-link';
 import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
 import { Agents } from './Agents';
+import { Studio } from './Studio';
 import { Workspaces } from './Workspaces';
 import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
@@ -926,7 +927,7 @@ export function App() {
                 <Folder size={16} />
               ) : page === 'artifacts' ? (
                 <FileText size={16} />
-              ) : page === 'agents' ? (
+              ) : page === 'agents' || page === 'studio' ? (
                 <Terminal size={16} />
               ) : (
                 <Activity size={16} />
@@ -1125,7 +1126,9 @@ export function App() {
             </div>
           )}
 
-          {view === 'settings' ? (
+          {view === 'studio' ? (
+            <Studio />
+          ) : view === 'settings' ? (
             <Settings
               appearance={appearance.appearance}
               onAppearance={appearance.setAppearance}

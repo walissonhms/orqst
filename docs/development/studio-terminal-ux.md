@@ -16,16 +16,15 @@ adds no operation, provider, permission, schema or network route.
 
 ## Create, review and open
 
-Use the native **Managed Terminal → Create and review terminal pair A/B…** menu.
-Choose one supported installed CLI, its canonical executable, the installed Node 24
-executable, and an existing empty disposable project folder shared by both slots.
-Only the reviewed version/hash is accepted. The client does not execute discovery
-commands or inspect credentials. Login remains unknown. Optional MCP setup and
-provider startup have separate reviews; configuring MCP does not prove delegation.
-Read the native review before creating files. Existing manifests can instead be
-selected through **Select and review existing terminal manifests…**.
+Use **Terminals / Studio** in the sidebar, then **Prepare Codex + OpenCode…**.
+The native menu also keeps the homogeneous presets and advanced existing-file selection.
+Passive discovery offers reviewed installed CLI candidates and the existing Node runtime;
+complete paths, hashes and native identity still require the existing native reviews.
+Choose an empty disposable project. No provider is started by preparation.
+See [Studio preparation and compatibility](studio-preparation.md) for exact steps,
+resume-review behavior and the distinction between static updates and Desktop relaunch.
 
-Open A and B through the same native menu. They appear in the **same window**,
+Choose **Open reviewed terminals** in Studio, or A/B through the native menu. They appear in the **same window**,
 initially side by side. Opening a panel starts no CLI. Each panel shows its slot,
 provider, selected project and owned-process lifecycle. It does not invent a model,
 usage total, authentication result or task state. T-001/T-002 are the existing local

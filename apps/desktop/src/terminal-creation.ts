@@ -41,6 +41,7 @@ export interface TerminalCreationInput {
   limit?: number;
   provider: LocalCliProvider;
   executable: string;
+  companion?: { provider: LocalCliProvider; executable: string };
   node: string;
   project: string;
   parent: string;
@@ -60,21 +61,30 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   if (!Number.isInteger(count) || count < 1 || count > terminalSlotLimit(input.limit))
     throw new Error('Terminal count exceeds configured capacity');
   if (input.mcp && count !== 2) throw new Error('MCP requires exactly two terminals');
-  if (input.openCodeStartupAuthorized && input.provider !== 'opencode')
+  const members = Array.from({ length: count }, (_, index) =>
+    index === 1 && input.companion ? input.companion : input,
+  );
+  if (
+    input.companion &&
+    (count !== 2 ||
+      [input.provider, input.companion.provider].sort().join(',') !== 'codex,opencode')
+  )
+    throw new Error('Only the reviewed Codex/OpenCode pair can mix providers');
+  if (input.openCodeStartupAuthorized && !members.some(({ provider }) => provider === 'opencode'))
     throw new Error('OpenCode startup consent is provider-specific');
   terminalDirectory(input.project);
   if (readdirSync(input.project).length) throw new Error('Select an empty disposable project');
   const root = join(input.parent, `terminal-pair-${randomUUID()}`);
-  const executable = {
-    path: input.executable,
-    sha256: terminalExecutableSha256(input.executable),
-  };
+  const executables = members.map(({ executable }) => ({
+    path: executable,
+    sha256: terminalExecutableSha256(executable),
+  }));
   const node = { path: input.node, sha256: terminalExecutableSha256(input.node) };
   const directories = new Set([input.parent, input.project, input.home]);
   const nativeRoots: string[] = [];
   const tools = localCliPathDirectories(input.environment.PATH ?? legacyTerminalPath, input.home, [
     dirname(input.node),
-    dirname(input.executable),
+    ...members.map(({ executable }) => dirname(executable)),
   ]);
   if (tools.inspection !== 'complete') throw new Error('CLI tool PATH review is incomplete');
   const toolPath = terminalToolPath(tools.path);
@@ -86,9 +96,9 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   };
   const toolIdentities = JSON.stringify(toolDirectoryIdentities());
-  const configs: InteractiveTerminalConfig[] = Array.from({ length: count }, (_, index) =>
-    String.fromCharCode(65 + index),
-  ).map((slot) => {
+  const configs: InteractiveTerminalConfig[] = members.map(({ provider }, index) => {
+    const slot = String.fromCharCode(65 + index);
+    const executable = executables[index]!;
     const common = {
       identity: { terminalId: randomUUID() },
       trust: 'native-same-user',
@@ -98,7 +108,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       project: input.project,
       state: join(root, slot),
     };
-    if (input.provider === 'codex') {
+    if (provider === 'codex') {
       if (executable.sha256 !== reviewedDesktopCodexBinary.sha256)
         throw new Error('No reviewed Codex binary');
       const codexHome = input.environment.CODEX_HOME ?? join(input.home, '.codex');
@@ -117,7 +127,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         interactive: { sharedNativeSessions: true, ...(input.mcp ? { mcp: true } : {}) },
       });
     }
-    if (input.provider === 'claude') {
+    if (provider === 'claude') {
       if (executable.sha256 !== reviewedProviderMcpBinaries.claude.sha256)
         throw new Error('No reviewed Claude binary');
       const claudeConfigDirectory = input.environment.CLAUDE_CONFIG_DIR;
@@ -224,7 +234,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       if (attempted || !current()) throw new Error('Creation unavailable');
       if (JSON.stringify(directoryIdentities()) !== identities)
         throw new Error('Creation directories changed');
-      for (const binary of [executable, node])
+      for (const binary of [...executables, node])
         if (terminalExecutableSha256(binary.path) !== binary.sha256)
           throw new Error('Creation executable changed');
       if (JSON.stringify(toolDirectoryIdentities()) !== toolIdentities)

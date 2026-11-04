@@ -1075,6 +1075,12 @@ structured provider and authenticated agent transport are validated together.
 
 ### Studio terminal workflow
 
+Use **Terminals / Studio → Prepare Codex + OpenCode…** in an updated Desktop to
+prepare a reviewed mixed pair without hand-written manifests or runtime path lookup.
+Passive discovery, native path/hash review, explicit OpenCode consent and individual
+start/input grants remain separate. See [Studio preparation](docs/development/studio-preparation.md)
+for the exact steps and older-Desktop/relaunch limits.
+
 Desktop terminal tabs show the project, provider and owned-process status,
 with a guided **Start CLI → Connect output → Enable keyboard input** sequence.
 Tabs and collapsible layout controls reuse the same two interactive documents in

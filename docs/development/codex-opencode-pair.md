@@ -1,5 +1,12 @@
 # Reviewed Codex/OpenCode pair
 
+## Studio preparation update
+
+The current Desktop exposes **Terminals / Studio → Prepare Codex + OpenCode…**.
+This supersedes the earlier manual-preparation limitation below; see
+[the current workflow and relaunch limits](studio-preparation.md). Native execution,
+OpenCode consent and real-provider acceptance remain separate gates.
+
 A newly loaded Desktop accepts exactly one Codex and one OpenCode manifest, in
 either order, in the same canonical project. The default two-slot limit suffices.
 Other mixed pairs and mixed selections of three through eight members are refused.

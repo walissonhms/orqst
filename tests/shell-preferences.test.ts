@@ -15,7 +15,7 @@ test('local shell preferences reject malformed storage and unsupported capabilit
   assert.deepEqual(
     parseShellPreferences(
       JSON.stringify({
-        view: 'studio',
+        view: 'not-implemented',
         workspaceId: '/'.repeat(4096),
         status: 'idle',
         collapsed: 'true',
@@ -50,15 +50,30 @@ test('local shell preferences reject malformed storage and unsupported capabilit
   assert.deepEqual(readShellPreferences(), defaultShellPreferences);
 });
 test('hash navigation admits only implemented views, leaving session identities to their existing resolver', () => {
-  for (const view of ['overview', 'workspaces', 'agents', 'models', 'settings', 'artifacts'])
+  for (const view of [
+    'overview',
+    'studio',
+    'workspaces',
+    'agents',
+    'models',
+    'settings',
+    'artifacts',
+  ])
     assert.equal(viewFromHash(`#${view}`), view);
-  for (const hash of ['', '#studio', '#session=synthetic', '#models?run=true', '#WORKSPACES'])
+  for (const hash of [
+    '',
+    '#not-implemented',
+    '#session=synthetic',
+    '#models?run=true',
+    '#WORKSPACES',
+  ])
     assert.equal(viewFromHash(hash), undefined);
 });
 
 test('clean paths and legacy view aliases resolve only implemented views', () => {
   for (const view of [
     'overview',
+    'studio',
     'workspaces',
     'agents',
     'models',

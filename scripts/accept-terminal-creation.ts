@@ -1,7 +1,17 @@
 // Explicit disposable Electron test. Native dialogs/focus and CLI pins are synthetic doubles.
 // Never opens a provider, credential, native database, quarantine or user profile.
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -35,6 +45,9 @@ try {
   const port = await bridge.start();
   const binary = await realpath(process.execPath);
   const hash = terminalExecutableSha256(binary);
+  await mkdir(join(root, '.local/bin'), { recursive: true, mode: 0o700 });
+  for (const name of ['codex', 'claude', 'opencode', 'node'])
+    await symlink(binary, join(root, '.local/bin', name));
   const output = join(root, 'desktop');
   await cp(resolve('apps/desktop/dist'), output, { recursive: true });
   await build({
@@ -70,6 +83,8 @@ try {
     { provider: 'claude', startupAuthorized: false },
     { provider: 'opencode', startupAuthorized: false },
     { provider: 'opencode', startupAuthorized: true },
+    { provider: 'codexOpenCode', startupAuthorized: false },
+    { provider: 'codexOpenCode', startupAuthorized: true },
   ]) {
     const profile = join(root, `profile-${provider}-${startupAuthorized}`);
     await mkdir(join(profile, 'managed-agents'), { recursive: true, mode: 0o700 });
@@ -95,6 +110,20 @@ try {
     });
     const observer = await desktop.firstWindow();
     await expect.poll(() => observer.url()).toBe(`http://127.0.0.1:${port}/`);
+    if (provider === 'codexOpenCode') {
+      const denied = await desktop.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()[0]!.webContents.executeJavaScript(
+          "window.orqstStudio.request({ action: 'createMixed' })",
+          false,
+        ),
+      );
+      assert.equal(denied.status, 'denied'); // executeJavaScript does not synthesize activation.
+      await observer.getByRole('combobox', { name: /Language|Idioma/ }).selectOption('pt-BR');
+      await observer.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
+      await expect(
+        observer.getByRole('button', { name: 'Preparar Codex + OpenCode…', exact: true }),
+      ).toBeEnabled();
+    }
     await desktop.evaluate(
       ({ BrowserWindow, dialog }, { project, binary, providerIndex, startupAuthorized }) => {
         const window = BrowserWindow.getAllWindows()[0]!;
@@ -128,7 +157,7 @@ try {
           )
             throw new Error('Unsafe confirmation default');
           const stage =
-            options!.buttons!.length === 4
+            options!.buttons!.length === 5
               ? 'provider'
               : options!.buttons!.length === 3 && options!.checkboxLabel
                 ? 'opencode-startup'
@@ -188,7 +217,7 @@ try {
       {
         project,
         binary,
-        providerIndex: ['codex', 'claude', 'opencode'].indexOf(provider),
+        providerIndex: ['codex', 'claude', 'opencode', 'codexOpenCode'].indexOf(provider),
         startupAuthorized,
       },
     );
@@ -205,18 +234,8 @@ try {
     assert.deepEqual(await readdir(join(profile, 'managed-agents')), ['active-pair.json']);
     await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticFocus', true));
     for (const cancellation of provider === 'codex'
-      ? [
-          'provider',
-          'choose-1',
-          'choose-2',
-          'choose-3',
-          'mcp',
-          'creation',
-          'checkbox',
-          'blur',
-          'navigation',
-        ]
-      : provider === 'opencode' && startupAuthorized
+      ? ['provider', 'choose-1', 'mcp', 'creation', 'checkbox', 'blur', 'navigation']
+      : ['opencode', 'codexOpenCode'].includes(provider) && startupAuthorized
         ? ['opencode-startup', 'startup-checkbox', 'startup-blur', 'startup-navigation']
         : []) {
       await desktop.evaluate((_electron, cancellation) => {
@@ -247,11 +266,34 @@ try {
       Reflect.set(globalThis, 'syntheticChoose', 0);
       Reflect.set(globalThis, 'syntheticStages', []);
     });
-    await desktop.evaluate(({ Menu }) => {
-      const item = Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-create')!;
-      item.click();
-      item.click(); // Busy native creation must ignore a concurrent duplicate gesture.
-    });
+    if (provider === 'codexOpenCode') {
+      if (!startupAuthorized)
+        await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticCancel', 'selection'));
+      await observer
+        .getByRole('button', { name: 'Preparar Codex + OpenCode…', exact: true })
+        .click();
+      if (!startupAuthorized) {
+        await expect(
+          observer.getByText('Arquivos preparados; revisão pendente', { exact: true }),
+        ).toBeVisible();
+        await expect(
+          observer.getByRole('button', { name: 'Abrir terminais revisados', exact: true }),
+        ).toBeDisabled();
+        assert.equal(
+          (await readdir(profile)).filter((name) => name.startsWith('terminal-pair-')).length,
+          1,
+        );
+        await desktop.evaluate(() => Reflect.set(globalThis, 'syntheticCancel', ''));
+        await observer
+          .getByRole('button', { name: 'Continuar revisão dos arquivos preparados…', exact: true })
+          .click();
+      }
+    } else
+      await desktop.evaluate(({ Menu }) => {
+        const item = Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-create')!;
+        item.click();
+        item.click(); // Busy native creation must ignore a concurrent duplicate gesture.
+      });
     await expect
       .poll(() =>
         desktop!.evaluate(
@@ -278,30 +320,43 @@ try {
       assert.equal(config.authentication.home ?? config.authentication.nativeIdentity.HOME, root);
       assert.deepEqual(
         (await readdir(config.state)).sort(),
-        provider === 'codex' ? ['codex', 'home', 'terminal.json', 'tmp'] : ['terminal.json', 'tmp'],
+        config.version === 1 ? ['codex', 'home', 'terminal.json', 'tmp'] : ['terminal.json', 'tmp'],
       );
     }
     if (provider === 'claude') {
       assert.notEqual(configs[0].sessionId, configs[1].sessionId);
       assert.equal(configs[0].interactive.strictMcpAcknowledged, true);
     }
-    if (provider === 'opencode')
-      assert.equal(configs[0].interactive.nativeStartupAuthorized, startupAuthorized);
-    if (provider === 'opencode' && startupAuthorized) {
-      assert.equal(configs[0].interactive.nativeDatabaseMigrationsAcknowledged, true);
-      assert.equal(configs[0].interactive.nativeStartupActivityAcknowledged, true);
+    const openCode = configs.find((config) => config.version === 3);
+    if (openCode) assert.equal(openCode.interactive.nativeStartupAuthorized, startupAuthorized);
+    if (provider === 'codexOpenCode') {
+      assert.equal(configs[0].version, 1);
+      assert.equal(configs[1].version, 3);
+      assert.notEqual(configs[0].identity.terminalId, configs[1].identity.terminalId);
+      assert.equal('nativeStartupAuthorized' in configs[0].interactive, false);
+      await expect(observer.getByText('Seleção revisada', { exact: true })).toBeVisible();
+    }
+    if (openCode && startupAuthorized) {
+      assert.equal(openCode.interactive.nativeDatabaseMigrationsAcknowledged, true);
+      assert.equal(openCode.interactive.nativeStartupActivityAcknowledged, true);
     }
     assert.equal(await readFile(marker, 'utf8'), reservation);
     const nextView = desktop.context().waitForEvent('page', { timeout: 15000 });
-    await desktop.evaluate(({ Menu }) =>
-      Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
-    );
+    if (provider === 'codexOpenCode')
+      await observer
+        .getByRole('button', { name: 'Abrir terminais revisados', exact: true })
+        .click();
+    else
+      await desktop.evaluate(({ Menu }) =>
+        Menu.getApplicationMenu()!.getMenuItemById('managed-terminal-open')!.click(),
+      );
     const terminal = await nextView;
     await expect(terminal.locator('#status')).toHaveAttribute('data-blocked', 'true');
     await expect(terminal.locator('#start')).toBeDisabled();
     await expect(terminal.locator('#login')).toBeDisabled();
-    if (provider !== 'opencode' || startupAuthorized)
+    if (!['opencode', 'codexOpenCode'].includes(provider) || startupAuthorized)
       await expect(terminal.locator('#status')).toContainText(/reconciliation|reconciliação/);
+    else await expect(terminal.locator('#status')).toContainText(/OpenCode/);
     await expect
       .poll(() =>
         desktop!.evaluate(
@@ -330,7 +385,7 @@ try {
     JSON.stringify({
       result: 'passed',
       scope:
-        'native-create-review-three-synthetic-pins-explicit-opencode-consent-preserved-reservations',
+        'native-Studio-ptBR-mixed-and-homogeneous-creation-passive-discovery-consent-preserved-reservations',
       providerExecution: 'NOT RUN',
       nativeFocusAndDialogs: 'INTERCEPTED',
     }),
