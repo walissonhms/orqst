@@ -1,3 +1,12 @@
+import {
+  terminalModelSelectionSchema,
+  terminalModelArguments,
+  validateTerminalModelSelection,
+} from './model-selection.js';
+import {
+  terminalPreparationBindingSchema,
+  validateTerminalPreparationBinding,
+} from './preparation-context.js';
 import { terminalIdentitySchema } from '@orqst/protocol';
 // Explicit native Desktop profiles only. External observation never imports this entry.
 import { join, relative } from 'node:path';
@@ -48,6 +57,8 @@ export const managedClaudeConfigSchema = z.strictObject({
   identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
+  model: z.lazy(() => terminalModelSelectionSchema).optional(),
+  preparation: z.lazy(() => terminalPreparationBindingSchema).optional(),
   sessionId: z.uuid(),
   authentication: z.strictObject({
     mode: z.literal('reuse-existing'),
@@ -73,6 +84,8 @@ export function interactiveProvider(
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
   managedClaudeConfigSchema.parse(config);
+  validateTerminalModelSelection(config.model);
+  validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
   if (config.executable.sha256 !== reviewedProviderMcpBinaries.claude.sha256)
     throw new Error('No reviewed launch contract for this exact Claude binary');
@@ -118,6 +131,7 @@ export function interactiveTerminalProfiles(
   config: InteractiveTerminalConfig,
   mcp?: TerminalMcpLaunch,
 ): TerminalProfile[] {
+  validateTerminalPreparationBinding(config.preparation, config.project);
   if (config.version === 1) return managedCodexProfiles(config, mcp);
   if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
@@ -144,7 +158,10 @@ export function interactiveTerminalProfiles(
       executableSha256: config.executable.sha256,
       executableVersion: config.executableVersion,
       cwd: config.project,
-      argv: candidate?.argv ?? ['--session-id', config.sessionId],
+      argv: [
+        ...(candidate?.argv ?? ['--session-id', config.sessionId]),
+        ...terminalModelArguments(config.model),
+      ],
       environmentProfile: 'claude-native-identity-no-inherited-credentials-v1',
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +

@@ -1,5 +1,14 @@
+import {
+  terminalModelSelectionSchema,
+  terminalModelArguments,
+  validateTerminalModelSelection,
+} from './model-selection.js';
+import {
+  terminalPreparationBindingSchema,
+  validateTerminalPreparationBinding,
+} from './preparation-context.js';
 import { terminalIdentitySchema } from '@orqst/protocol';
-// Explicit Desktop opt-in only. Never opens the native database or credential/config files.
+// Explicit Desktop opt-in only. Never opens native provider database or credential files.
 import { dirname, join, relative } from 'node:path';
 import { z } from 'zod';
 import { terminalToolPath, terminalToolPathSchema } from './local-cli-path.js';
@@ -31,6 +40,8 @@ export const managedOpenCodeConfigSchema = z.strictObject({
   identity: terminalIdentitySchema.optional(),
   project: path,
   state: path,
+  model: z.lazy(() => terminalModelSelectionSchema).optional(),
+  preparation: z.lazy(() => terminalPreparationBindingSchema).optional(),
   authentication: z.strictObject({
     mode: z.literal('reuse-existing'),
     nativeIdentity: opencodeNativeIdentitySchema,
@@ -51,6 +62,8 @@ export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 /** Also used before provisioning; checks directories only, never the DB or its ledger. */
 export function validateOpenCodeSelection(config: ManagedOpenCodeConfig): void {
   managedOpenCodeConfigSchema.parse(config);
+  validateTerminalModelSelection(config.model);
+  validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
   const opted = config.interactive;
   if (
@@ -114,6 +127,7 @@ export function openCodeTerminalProfiles(
   config: ManagedOpenCodeConfig,
   mcp?: TerminalMcpLaunch,
 ): TerminalProfile[] {
+  validateTerminalPreparationBinding(config.preparation, config.project);
   managedOpenCodeConfigSchema.parse(config);
   if (
     !config.interactive.nativeStartupAuthorized ||
@@ -136,7 +150,7 @@ export function openCodeTerminalProfiles(
       executableSha256: config.executable.sha256,
       executableVersion: config.executableVersion,
       cwd: config.project,
-      argv: ['--standalone'],
+      argv: ['--standalone', ...terminalModelArguments(config.model)],
       environmentProfile: 'opencode-native-identity-no-inherited-credentials-v1',
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
