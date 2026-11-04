@@ -101,9 +101,19 @@ function openTerminalFile(path: string, privateFile: boolean, maximumBytes: numb
   }
 }
 
-export function terminalFile(path: string, privateFile = false, maximumBytes = 16 * 1024): Buffer {
+export function terminalFile(
+  path: string,
+  privateFile = false,
+  maximumBytes = 16 * 1024,
+  expected?: { dev: bigint; ino: bigint },
+): Buffer {
   const fd = openTerminalFile(path, privateFile, maximumBytes);
   try {
+    if (expected) {
+      const opened = fstatSync(fd, { bigint: true });
+      if (opened.dev !== expected.dev || opened.ino !== expected.ino)
+        throw new Error('Terminal file identity changed');
+    }
     // Enforce the read budget even if a native writer grows the file after fstat.
     const buffer = Buffer.alloc(maximumBytes + 1);
     let length = 0;

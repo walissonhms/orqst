@@ -1493,3 +1493,14 @@ The complete plan persists afterwards in owner-only terminal.json. No credential
 configuration bodies are logged. The MIT copyright/license is included in distributed
 NOTICE, preserving existing attributions. See [research](../research/opencode-model-catalog.md)
 and [checks and acceptance limits](../development/opencode-model-catalog-ux.md).
+
+## Passive terminal admission diagnostics — 2026-11-04
+
+Reservation inspection is read-only, canonical, O_NOFOLLOW, owner/mode/inode checked
+and bounded to 16 KiB. Existing reservations are preserved; inspection never claims,
+reconciles or frees capacity. Same-Core evidence stays in native private argv/IPC.
+Startup errors expose fixed stage/code/effects only; unknown/EOF/timeout remains
+possible. Native commit/open evidence cannot be downgraded, and old append replies
+cannot release another owner/request's latch. Reader EOF takes/stops only its own
+owner/epoch/files host; public Stop retains its explicit global intent. No HTTP/WS, cookie, CSP or execution
+authority is added. See [scope and verification limits](../development/terminal-admission-diagnostics.md).

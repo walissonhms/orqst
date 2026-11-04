@@ -1,4 +1,8 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import {
+  terminalStartupHostFailure,
+  terminalStartupIdSchema,
+} from '../../../packages/core/src/terminal/startup-failure.js';
 import { join } from 'node:path';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
@@ -25,6 +29,8 @@ import { TauriTerminalService } from './tauri-terminal-service.js';
 
 process.umask(0o077);
 let activeCore: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
+// Correlation is supplied by the owned native parent; never an agent/renderer request.
+const startupId = terminalStartupIdSchema.parse(process.argv[5] ?? randomUUID());
 async function start() {
   if (
     process.platform !== 'darwin' ||
@@ -50,6 +56,7 @@ async function start() {
     keys.publicKey,
     directory,
     8, // Native-owned capacity, fixed for this Core lifetime; never renderer supplied.
+    startupId,
   );
   const i18n = createInstance();
   activeCore = core;
@@ -374,7 +381,10 @@ async function start() {
   readySent = true;
   send({
     kind: 'ready',
+    id: startupId,
     epoch: core.epoch,
+    admissionOwner: core.admissionOwner,
+    initialFiles: core.initialFiles,
     capacity: 8,
     layout: layout.snapshot(),
     title: translate('managedTerminal.title'),
@@ -410,8 +420,8 @@ async function start() {
     })),
   });
 }
-void start().catch(() => {
+void start().catch((error: unknown) => {
   activeCore?.close();
-  console.error('ORQST managed terminal startup refused.');
+  process.stdout.write(JSON.stringify(terminalStartupHostFailure(startupId, error)) + '\n');
   process.exitCode = 1;
 });

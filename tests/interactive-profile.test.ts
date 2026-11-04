@@ -116,6 +116,9 @@ test('native pair RPC admits reviewed Claude profile and identities and OpenCode
   assert.ok(
     terminalPairReadySchema.safeParse({
       type: 'ready',
+      id,
+      admissionOwner: id,
+      initialFiles: ['/synthetic/initial.json'],
       epoch: id,
       identities: [
         { slot: 0, terminalId: id, provider: 'codex' },

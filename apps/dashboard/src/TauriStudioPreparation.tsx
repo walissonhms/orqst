@@ -120,11 +120,14 @@ export function TauriStudioPreparation({
       </span>
       {stage !== 'empty' && <p className="studio-state">{t(`studio.tauri.state_${stage}`)}</p>}
       {failure && (
-        <p className="notice" role="alert">
-          {t(`tauriPreparation.failure_${failure.effects}`)} {t('tauriPreparation.failureStage')}:{' '}
-          {t(`tauriPreparation.stage_${failure.stage}`)}. {t('tauriPreparation.failureReason')}:{' '}
-          {t(`tauriPreparation.code_${failure.code}`)}.
-        </p>
+        <div className="notice" role="alert">
+          <p>{t(`tauriPreparation.code_${failure.code}`)}.</p>
+          <p>{t(`tauriPreparation.failure_${failure.effects}`)}</p>
+          <details>
+            <summary>{t('tauriPreparation.failureDetails')}</summary>
+            {t('tauriPreparation.failureStage')}: {t(`tauriPreparation.stage_${failure.stage}`)}.
+          </details>
+        </div>
       )}
       {!workspaceId && (
         <p className="notice" role="status">

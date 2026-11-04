@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Passive admission and startup reasons — 2026-11-04
+
+New selection checks an earlier terminal reservation before provisioning and before
+fork, while Core admission remains authoritative against races. Same-Core append
+uses private owner/epoch/files evidence and keyed reply consumption. Startup refusal,
+EOF and timeout retain bounded reasons and possible effects; Studio completion no
+longer waits for an error sheet. Source and synthetic/pure verification only: no
+reservation recovery, runtime launch or native/provider acceptance. See the
+[contract and limits](docs/development/terminal-admission-diagnostics.md).
+
 ## OpenCode saved models and native review — 2026-11-04
 
 Passive discovery now offers model references already saved by OpenCode 2.2.5,

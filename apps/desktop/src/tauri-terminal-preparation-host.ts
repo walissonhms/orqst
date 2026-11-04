@@ -1,4 +1,5 @@
 import { terminalPreparationContextSchema } from '../../../packages/core/src/terminal/preparation-context.js';
+import { desktopAdmissionContextSchema } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
@@ -130,6 +131,9 @@ async function main() {
       Date.now,
       process.argv[4]
         ? terminalPreparationContextSchema.parse(JSON.parse(process.argv[4]))
+        : undefined,
+      process.argv[5] && process.argv[5] !== 'null'
+        ? desktopAdmissionContextSchema.parse(JSON.parse(process.argv[5]))
         : undefined,
     );
     if (live) send({ kind: 'complete', ...result });

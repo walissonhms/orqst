@@ -12,7 +12,7 @@ import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { confirmTerminalAction } from './terminal-confirmation.js';
 import { createTerminalRuntimeRouter } from './terminal-runtime.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
-import { desktopAgentsAdmission } from '../../../packages/core/src/managed-codex/desktop-admission.js';
+import { inspectDesktopAdmission } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 import {
   terminalChallengeBytes,
   type TerminalChallenge,
@@ -66,11 +66,11 @@ export async function createManagedTerminals(
   let effectsPossible = false;
   try {
     if (!blocker) {
-      // Admission inspection can create its private directory. Anything from here is uncertain.
+      // The following Core connection may have effects; retain the existing attempt latch.
       effectsPossible = true;
       const directory = join(app.getPath('userData'), 'managed-agents');
       try {
-        desktopAgentsAdmission(directory, files); // Inspect old markers without claiming or reconciling.
+        inspectDesktopAdmission(directory); // Passive; never claim or reconcile old reservations.
       } catch {
         blocker = 'capacity_reserved';
       }

@@ -18,6 +18,8 @@ import { interactiveCliAdapter } from './interactive-adapters.js';
 import { ManagedTerminalPair } from './managed-pair.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
 import { desktopAgentsAdmission } from '../managed-codex/desktop-admission.js';
+import { DesktopAdmissionRefused } from '../managed-codex/desktop-admission-inspection.js';
+import { terminalStartupFailureSchema, terminalStartupIdSchema } from './startup-failure.js';
 import { terminalPairRPCSchema } from './rpc.js';
 import { InteractiveMcpSession } from './interactive-mcp.js';
 import { terminalDigest } from './authority.js';
@@ -26,9 +28,27 @@ import type { TerminalMcpLaunch } from './mcp-launch.js';
 import { terminalEnrollmentFile, inspectTerminalEnrollment } from './enrollment-files.js';
 
 process.umask(0o077);
-if (!process.send || ![5, 6].includes(process.argv.length) || !/^v24\./.test(process.version))
-  throw new Error('Private Node Core only');
+let startupStage: 'core_admission' | 'core_startup' = 'core_startup';
+const startupId = terminalStartupIdSchema.parse(process.argv[6]);
+function startupFailed(error: unknown) {
+  const failure = terminalStartupFailureSchema.parse({
+    type: 'startup-failure',
+    id: startupId,
+    failure: {
+      stage: startupStage,
+      code: error instanceof DesktopAdmissionRefused ? error.code : 'startup_failed',
+      effects: 'possible',
+    },
+  });
+  process.exitCode = 1;
+  if (process.connected)
+    process.send!(failure, () => {
+      if (process.connected) process.disconnect();
+    });
+}
 async function start() {
+  if (!process.send || process.argv.length !== 7 || !/^v24\./.test(process.version))
+    throw new Error('Private Node Core only');
   const files: string[] = JSON.parse(process.argv[2]!);
   const limit = terminalSlotLimit(
     process.argv[5] === undefined ? undefined : Number(process.argv[5]),
@@ -55,7 +75,9 @@ async function start() {
     format: 'der',
   });
   const authority = new TerminalAuthority(new Map([['desktop-managed', publicKey]]), Date.now);
-  const admission = desktopAgentsAdmission(process.argv[4]!, files);
+  startupStage = 'core_admission';
+  const admission = desktopAgentsAdmission(process.argv[4]!, files, authority.epoch);
+  startupStage = 'core_startup';
   const stores: Store[] = [];
   let pair!: ManagedTerminalPair;
   const mcp = selection[0]!.config.interactive?.mcp
@@ -325,23 +347,23 @@ async function start() {
     });
     send({
       type: 'ready',
+      id: startupId,
       epoch: authority.epoch,
+      admissionOwner: admission.owner,
+      initialFiles: [...files],
       identities: selection.map(({ config }, slot) => ({
         slot,
         ...terminalIdentity(config),
         provider: interactiveProvider(config),
       })),
     });
-  } catch {
+  } catch (error) {
+    startupFailed(error);
     authority.revoke('desktop-managed');
     pair?.close();
     await mcp?.close();
     for (const store of stores) store.close();
-    if (process.connected) process.disconnect();
     process.exitCode = 1;
   }
 }
-void start().catch(() => {
-  if (process.connected) process.disconnect();
-  process.exitCode = 1;
-});
+void start().catch(startupFailed);

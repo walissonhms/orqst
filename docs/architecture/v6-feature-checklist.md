@@ -1,5 +1,20 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Passive admission and startup diagnosis — 2026-11-04
+
+- [x] Passively refuse a previous reservation before provisioning/new fork; retain
+      authoritative Core admission and exclusive claim against races.
+- [x] Bind same-Core append to native owner/epoch/files and revalidate consumed
+      replies by Core and request identity before touching latches.
+- [x] Bind reader EOF cleanup to its exact owner/epoch/files; keep public Stop
+      intentional and perform stop effects outside the state mutex.
+- [x] Preserve bounded startup reasons and possible effects; complete Studio
+      without an error-sheet dismissal and keep stage details optional.
+- [ ] Full Tauri compilation/native/provider acceptance and evidence-backed review
+      of earlier reservations (excluded from this source increment).
+
+See [contract, tests and limits](../development/terminal-admission-diagnostics.md).
+
 ## Selected catalogue false invalidation — 2026-11-04
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated

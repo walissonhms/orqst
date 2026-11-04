@@ -8,6 +8,7 @@ import {
   terminalEnrollmentInputSchema,
 } from '@orqst/protocol';
 import { z } from 'zod';
+import { terminalStartupIdSchema } from './startup-failure.js';
 
 const id = z.string().uuid();
 const proof = z.strictObject({ challengeId: id, signature: z.string().min(1).max(128) });
@@ -144,7 +145,20 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
 
 export const terminalPairReadySchema = z.strictObject({
   type: z.literal('ready'),
+  id: terminalStartupIdSchema,
   epoch: id,
+  admissionOwner: id,
+  initialFiles: z
+    .array(
+      z
+        .string()
+        .startsWith('/')
+        .min(1)
+        .max(2048)
+        .refine((value) => !value.includes('\0')),
+    )
+    .min(1)
+    .max(TERMINAL_SLOT_CEILING),
   identities: z
     .array(
       z.strictObject({

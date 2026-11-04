@@ -76,6 +76,9 @@ export const terminalPreparationFailureSchema = z
       'inspection',
       'feature_assignment',
       'opening',
+      'admission_preflight',
+      'core_admission',
+      'core_startup',
     ]),
     code: z.enum([
       'failed',
@@ -84,15 +87,28 @@ export const terminalPreparationFailureSchema = z
       'capacity_exceeded',
       'review_too_large',
       'selection_blocked',
+      'capacity_reserved',
+      'admission_invalid',
+      'startup_failed',
+      'startup_timeout',
+      'startup_eof',
+      'startup_protocol',
     ]),
     effects: z.enum(['not_started', 'possible']),
   })
   .refine(
     (failure) =>
       failure.effects === 'possible' ||
-      !['bootstrap', 'provision', 'inspection', 'feature_assignment', 'opening'].includes(
-        failure.stage,
-      ),
+      (!failure.code.startsWith('startup_') &&
+        ![
+          'bootstrap',
+          'provision',
+          'inspection',
+          'feature_assignment',
+          'opening',
+          'core_admission',
+          'core_startup',
+        ].includes(failure.stage)),
   );
 export type TerminalPreparationFailure = z.infer<typeof terminalPreparationFailureSchema>;
 export const tauriStudioReplySchema = z.union([
