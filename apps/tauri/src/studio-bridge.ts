@@ -14,7 +14,7 @@ export function createTauriStudioClient(
     async request(input: Parameters<TauriStudio['request']>[0]) {
       const request = tauriStudioRequestSchema.safeParse(input, { jitless: true });
       if (!request.success) return { status: 'denied' as const };
-      if (request.data.action !== 'snapshot' && !activated())
+      if (!['snapshot', 'catalog'].includes(request.data.action) && !activated())
         return { status: 'focus_required' as const };
       try {
         const reply = tauriStudioReplySchema.safeParse(await send(request.data), { jitless: true });

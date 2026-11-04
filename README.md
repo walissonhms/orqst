@@ -32,10 +32,13 @@ native WebKit or real providers. The earlier fixture with missing exit receipts 
 still preserved and uncertain. Runtime enrollment and Floating remain open; saved
 metadata restores no authority. See [local native preview and remaining UI gaps](docs/development/v6-feature-ui.md#local-native-preview).
 
-Studio source now exposes Tauri's existing native preparation wizard for 1–8
-same-provider Codex/Claude terminals, with truthful shell-specific controls and
-EN/PT text. Preparation, opening and signed CLI Start remain separate; Electron's
-mixed preset stays separate. See [workflow, command and validation limits](docs/development/tauri-studio-preparation.md).
+Studio source now offers **+ Terminal → CLI → Model → Open** for Codex, Claude
+Code and OpenCode in an existing validated workspace, without Finder in the normal
+path. Advanced explicitly retains the manual folder/executable wizard. Native
+configuration review and operational Open consent preserve distinct signed
+start/output/keyboard grants. **Adding another independently selected terminal
+while the current host is open remains incomplete**; this first increment still
+admits one selection per app launch. See [workflow, checks and live-enrollment gap](docs/development/terminal-product-open.md).
 The currently open Preview app is not updated by this source increment.
 
 For the current master-specification checklist, evidence, blockers and update rules,

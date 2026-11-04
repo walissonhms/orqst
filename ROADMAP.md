@@ -44,6 +44,17 @@ For current master-specification acceptance and outstanding work, start with the
 [delivery tracker](docs/architecture/master-spec-tracker.md). Entries below retain
 their original dates and may have been superseded by later increments.
 
+## CLI/model/Open product increment — 2026-11-04
+
+The normal Tauri Studio source now selects an installed reviewed CLI and a
+Core-supplied model in the existing workspace without a Finder picker. Native
+operational Open composes startup/output/keyboard with three independently signed
+grants and preserves incomplete attempts. EN/PT pure/renderer coverage is separate
+from pending Cargo/native/provider/packaging acceptance. The existing selection
+remains one-shot per app launch: live enrollment of a second independently chosen
+CLI/model into the same Pair/Core is the next required part of this demand, not a
+completed capability. See [workflow and exact remaining work](docs/development/terminal-product-open.md).
+
 ## Native consent and menu correction — 2026-11-04
 
 The own-sheet correction preserves the exact reviewed operation while revoking input.

@@ -1,59 +1,90 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileCheck2, Terminal } from 'lucide-react';
-import type { TauriStudio, TauriStudioRequest, TauriStudioSnapshot } from '@orqst/protocol';
+import { FolderOpen, Terminal } from 'lucide-react';
+import type {
+  TauriStudio,
+  TauriStudioRequest,
+  TauriStudioSnapshot,
+  TerminalPreparationCatalog,
+} from '@orqst/protocol';
 
-/** Native setup only; the existing wizard owns paths, consent and opening. */
-export function TauriStudioPreparation({ native }: { native?: TauriStudio }) {
+type Scope = { workspaceId: string; featureId: string | null };
+type Provider = TerminalPreparationCatalog['providers'][number]['provider'];
+
+/** Core catalog + native review. The renderer never supplies executable or project paths. */
+export function TauriStudioPreparation({
+  native,
+  context,
+}: {
+  native?: TauriStudio;
+  context?: Scope;
+}) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<TauriStudioSnapshot>();
-  const [provider, setProvider] = useState<'codex' | 'claude'>('codex');
+  const [catalog, setCatalog] = useState<TerminalPreparationCatalog>();
+  const [provider, setProvider] = useState<Provider>('codex');
+  const [modelId, setModelId] = useState('');
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const sequence = useRef(0);
   const active = useRef(false);
   const inFlight = useRef(false);
+  const chosen = catalog?.providers.find((entry) => entry.provider === provider);
+  const model = chosen?.models.find((entry) => entry.id === modelId);
+  const workspaceId = context?.workspaceId ?? '';
+  const featureId = context?.featureId ?? null;
   const request = useCallback(
     async (input: TauriStudioRequest) => {
       if (!native || inFlight.current) return;
       const token = ++sequence.current;
-      if (input.action !== 'snapshot') {
-        inFlight.current = true;
-        setBusy(true);
-        setNotice('');
-      }
+      inFlight.current = true;
+      setBusy(true);
+      setNotice('');
       try {
         const reply = await native.request(input);
-        // Opening can deliberately move native focus and revoke the old generation.
-        // Read current capabilities after a snapshot-less reply; never repeat the mutation.
-        const current =
-          input.action !== 'snapshot' && !reply.snapshot
-            ? await native.request({ action: 'snapshot' })
-            : reply;
         if (!active.current || sequence.current !== token) return;
-        setSnapshot(current.snapshot);
-        setNotice(reply.status === 'ok' ? '' : reply.status);
+        if (reply.status === 'catalog') {
+          if (reply.catalog.workspaceId !== workspaceId || reply.catalog.featureId !== featureId) {
+            setNotice('denied');
+            setCatalog(undefined);
+            return;
+          }
+          setCatalog(reply.catalog);
+          setModelId(''); // A refreshed catalog always needs a current explicit choice.
+        } else {
+          // Opening may move focus/generation. Inspect once; never repeat a mutation.
+          const current =
+            input.action !== 'snapshot' && !reply.snapshot
+              ? await native.request({ action: 'snapshot' })
+              : reply;
+          if (!active.current || sequence.current !== token) return;
+          if (current.status !== 'catalog') setSnapshot(current.snapshot);
+          setNotice(reply.status === 'ok' ? '' : reply.status);
+        }
       } catch {
         if (active.current && sequence.current === token) setNotice('unavailable');
       } finally {
-        if (input.action !== 'snapshot') inFlight.current = false;
+        inFlight.current = false;
         if (active.current && sequence.current === token) setBusy(false);
       }
     },
-    [native],
+    [native, workspaceId, featureId],
   );
+  const refresh = useCallback(async () => {
+    await request({ action: 'snapshot' });
+    if (workspaceId) await request({ action: 'catalog', workspaceId, featureId });
+  }, [request, workspaceId, featureId]);
   useEffect(() => {
     active.current = true;
-    const refresh = () => void request({ action: 'snapshot' });
-    refresh();
-    window.addEventListener('focus', refresh);
+    setCatalog(undefined);
+    setModelId('');
+    void refresh();
     return () => {
       active.current = false;
       sequence.current++;
-      window.removeEventListener('focus', refresh);
     };
-  }, [request]);
+  }, [refresh]);
   const disabled = busy || !snapshot || snapshot.busy;
   const stage = !snapshot
     ? 'unavailable'
@@ -64,32 +95,112 @@ export function TauriStudioPreparation({ native }: { native?: TauriStudio }) {
         : snapshot.canCreate
           ? 'empty'
           : 'blocked';
+  const scopeMatches = catalog?.workspaceId === workspaceId && catalog?.featureId === featureId;
   return (
     <>
       <div className="studio-section-title">
         <Terminal size={20} />
-        <h2 id="studio-setup-title">{t('studio.setupTitle')}</h2>
+        <h2 id="studio-setup-title">{t('studio.tauri.openTitle')}</h2>
         <span className="studio-state">{t(`studio.tauri.state_${stage}`)}</span>
       </div>
-      <p>{t('studio.tauri.setupHelp')}</p>
+      <p>{t('studio.tauri.openHelp')}</p>
+      <p className="studio-boundary">{t('studio.tauri.enrollmentLimit')}</p>
+      {!workspaceId && (
+        <p className="notice" role="status">
+          {t('studio.tauri.chooseWorkspace')}
+        </p>
+      )}
       {notice && (
         <p className="notice" role="status">
           {t(notice === 'denied' ? 'studio.tauri.denied' : `studio.${notice}`)}
         </p>
       )}
-      <div className="studio-members">
+      <div className="studio-members studio-terminal-choice">
         <label>
           {t('studio.tauri.provider')}
           <select
             aria-label={t('studio.tauri.provider')}
             disabled={disabled || !snapshot?.canCreate}
             value={provider}
-            onChange={(event) => setProvider(event.target.value === 'claude' ? 'claude' : 'codex')}
+            onChange={(event) => {
+              setProvider(event.target.value as Provider);
+              setModelId('');
+            }}
           >
-            <option value="codex">{t('managedTerminal.createProvider_codex')}</option>
-            <option value="claude">{t('managedTerminal.createProvider_claude')}</option>
+            {(['codex', 'claude', 'opencode'] as const).map((value) => (
+              <option key={value} value={value}>
+                {t(`shell.adapters.${value}`)}
+              </option>
+            ))}
           </select>
         </label>
+        <label>
+          {t('studio.tauri.model')}
+          <select
+            aria-label={t('studio.tauri.model')}
+            disabled={disabled || !snapshot?.canCreate || chosen?.status !== 'available'}
+            value={modelId}
+            onChange={(event) => setModelId(event.target.value)}
+          >
+            <option value="">{t('studio.tauri.chooseModel')}</option>
+            {chosen?.models.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.source === 'cli-default'
+                  ? t('studio.tauri.cliDefault')
+                  : entry.isDefault
+                    ? t('studio.tauri.defaultModel', { model: entry.label })
+                    : entry.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {chosen && (
+        <p className="studio-next" role="status">
+          {t(`studio.tauri.catalog_${chosen.reason}`)}
+        </p>
+      )}
+      {model && (
+        <p className="studio-next">
+          {t(`studio.tauri.source_${model.source}`)} · {t('studio.tauri.modelUnverified')}
+        </p>
+      )}
+      <div className="studio-actions">
+        <button
+          className="button primary"
+          disabled={
+            disabled ||
+            !snapshot?.canCreate ||
+            !scopeMatches ||
+            chosen?.status !== 'available' ||
+            !model
+          }
+          onClick={() =>
+            snapshot &&
+            catalog &&
+            model &&
+            void request({
+              action: 'create-selected',
+              generation: snapshot.generation,
+              workspaceId,
+              featureId,
+              catalogId: catalog.catalogId,
+              provider,
+              modelId: model.id,
+              count: 1,
+            })
+          }
+        >
+          <Terminal size={16} />
+          {t('studio.tauri.open')}
+        </button>
+        <button className="button" disabled={!native || busy} onClick={() => void refresh()}>
+          {t('studio.refresh')}
+        </button>
+      </div>
+      <details className="studio-advanced">
+        <summary>{t('studio.tauri.advanced')}</summary>
+        <p>{t('studio.tauri.advancedHelp')}</p>
         <label>
           {t('studio.tauri.count')}
           <select
@@ -105,37 +216,30 @@ export function TauriStudioPreparation({ native }: { native?: TauriStudio }) {
             ))}
           </select>
         </label>
-      </div>
-      <div className="studio-actions">
-        <button
-          className="button primary"
-          disabled={disabled || !snapshot?.canCreate}
-          onClick={() =>
-            snapshot &&
-            void request({ action: 'create', generation: snapshot.generation, provider, count })
-          }
-        >
-          <FileCheck2 size={16} />
-          {t('studio.tauri.prepare')}
-        </button>
-        <button
-          className="button"
-          disabled={disabled || !snapshot?.canReview}
-          onClick={() =>
-            snapshot && void request({ action: 'review', generation: snapshot.generation })
-          }
-        >
-          <FileCheck2 size={16} />
-          {t('studio.continueReview')}
-        </button>
-        <button
-          className="button"
-          disabled={!native || busy}
-          onClick={() => void request({ action: 'snapshot' })}
-        >
-          {t('studio.refresh')}
-        </button>
-      </div>
+        <div className="studio-actions">
+          <button
+            className="button"
+            disabled={disabled || !snapshot?.canCreate || provider === 'opencode'}
+            onClick={() =>
+              snapshot &&
+              provider !== 'opencode' &&
+              void request({ action: 'create', generation: snapshot.generation, provider, count })
+            }
+          >
+            <FolderOpen size={16} />
+            {t('studio.tauri.choosePaths')}
+          </button>
+          <button
+            className="button"
+            disabled={disabled || !snapshot?.canReview}
+            onClick={() =>
+              snapshot && void request({ action: 'review', generation: snapshot.generation })
+            }
+          >
+            {t('studio.continueReview')}
+          </button>
+        </div>
+      </details>
       <p className="studio-next" role="status" aria-busy={busy || snapshot?.busy}>
         {busy
           ? t('studio.reviewing')

@@ -336,3 +336,25 @@
     transition: none !important;
   }
 }
+
+.feature-project-select {
+  display: block;
+}
+.feature-project-select select {
+  width: 100%;
+  min-width: 0;
+}
+.studio-terminal-choice > label {
+  min-width: 0;
+  flex: 1;
+}
+.studio-terminal-choice select {
+  width: 100%;
+  min-width: 0;
+}
+.studio-advanced {
+  margin-top: 16px;
+}
+.studio-advanced summary {
+  cursor: pointer;
+}

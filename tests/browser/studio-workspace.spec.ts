@@ -61,13 +61,11 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   }
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
-  const drawer = page.getByRole('dialog', { name: 'Terminal preparation', exact: true });
+  const drawer = page.getByRole('dialog', { name: 'Open terminal', exact: true });
   await expect(drawer).toBeVisible();
-  await expect(
-    drawer.getByRole('button', { name: 'Prepare and review terminals…', exact: true }),
-  ).toBeEnabled();
+  await expect(drawer.getByRole('button', { name: 'Open', exact: true })).toBeDisabled();
   await expect(drawer.getByText('Prepare Codex + OpenCode…', { exact: true })).toHaveCount(0);
-  await expect(drawer.getByLabel('CLI provider').locator('option')).toHaveCount(2);
+  await expect(drawer.getByLabel('CLI provider').locator('option')).toHaveCount(3);
   await expect(drawer.getByLabel('Terminal count').locator('option')).toHaveCount(8);
   await expect(drawer.getByText('This Desktop is running an older', { exact: false })).toHaveCount(
     0,
@@ -91,9 +89,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
   await expect(workspace).toBeVisible();
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
-  await expect(
-    page.getByRole('dialog', { name: 'Preparação de terminais', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Abrir terminal', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('studio-preparation-pt.png') });
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-pt.png') });

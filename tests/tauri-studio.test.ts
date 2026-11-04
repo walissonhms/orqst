@@ -151,3 +151,84 @@ test('native facade bootstraps supported dashboard documents before SPA return, 
     assert.equal(owned.orqstTauriStudio, undefined);
   }
 });
+
+const syntheticCatalog = {
+  contractVersion: 1,
+  workspaceId: 'synthetic-workspace',
+  featureId: null,
+  catalogId: 'a'.repeat(64),
+  providers: ['codex', 'claude', 'opencode'].map((provider) => ({
+    provider,
+    status: 'available',
+    reason: 'ready',
+    models: [
+      {
+        id: 'b'.repeat(64),
+        label: 'SYNTHETIC model',
+        source: 'cli-cache',
+        isDefault: false,
+        availability: 'unverified',
+      },
+    ],
+  })),
+};
+
+test('catalog loading is passive and selected opening carries scoped opaque IDs, never paths', async () => {
+  let activated = false;
+  const calls: unknown[] = [];
+  const client = createTauriStudioClient(
+    async (request) => {
+      calls.push(request);
+      return (request as { action: string }).action === 'catalog'
+        ? { status: 'catalog', catalog: syntheticCatalog }
+        : { status: 'ok', snapshot: empty };
+    },
+    () => activated,
+  );
+  const scope = { workspaceId: 'synthetic-workspace', featureId: null };
+  assert.equal((await client.request({ action: 'catalog', ...scope })).status, 'catalog');
+  const selected = {
+    action: 'create-selected',
+    generation: 1,
+    ...scope,
+    provider: 'opencode',
+    count: 1,
+    catalogId: 'a'.repeat(64),
+    modelId: 'b'.repeat(64),
+  } as const;
+  assert.equal((await client.request(selected)).status, 'focus_required');
+  activated = true;
+  assert.equal((await client.request(selected)).status, 'ok');
+  assert.deepEqual(calls, [{ action: 'catalog', ...scope }, selected]);
+  for (const request of [
+    { ...selected, project: '/SYNTHETIC' },
+    { ...selected, model: 'arbitrary' },
+    { ...selected, modelId: 'unknown' },
+    { ...selected, generation: undefined },
+    { ...selected, provider: 'other' },
+    { ...selected, count: 9 },
+    { action: 'catalog', ...scope, executable: '/SYNTHETIC' },
+  ]) {
+    assert.equal((await client.request(request as never)).status, 'denied');
+  }
+});
+
+test('catalog replies validate source, unverified availability and bounded provider/model data', () => {
+  assert.equal(
+    tauriStudioReplySchema.safeParse({ status: 'catalog', catalog: syntheticCatalog }).success,
+    true,
+  );
+  for (const catalog of [
+    { ...syntheticCatalog, providers: [] },
+    { ...syntheticCatalog, catalogId: 'forged' },
+    { ...syntheticCatalog, path: '/SYNTHETIC' },
+    {
+      ...syntheticCatalog,
+      providers: syntheticCatalog.providers.map((p) => ({
+        ...p,
+        models: [{ ...p.models[0], availability: 'entitled' }],
+      })),
+    },
+  ])
+    assert.equal(tauriStudioReplySchema.safeParse({ status: 'catalog', catalog }).success, false);
+});
