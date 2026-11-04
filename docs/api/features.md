@@ -67,6 +67,13 @@ chrome is local in Tauri's ACL model, while the dashboard has a fixed remote
 loopback origin. No capability is installed on terminal children or all Webviews.
 Timeout, navigation/close and transport failure drop correlation without reusing
 UUIDs; late/duplicate/different-kind replies resolve no new operation.
+After the final asynchronous focus sample, source/document, presentation epoch
+and Quit fences are rechecked together before any cache/publish/return decision.
+The mutating latch remains held through that final sample for every reply outcome.
+A command-scoped drop guard removes only its own pending UUID and releases only
+its own latch on success, denial, error, timeout or future cancellation. A cancelled
+mutation invalidates its pending presentation epoch; it renews no document, input
+lease or authority. A snapshot or obsolete guard cannot release another mutation.
 
 Example visual selection, after a fresh snapshot/review:
 

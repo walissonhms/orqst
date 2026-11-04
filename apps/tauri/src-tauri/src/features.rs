@@ -373,6 +373,36 @@ async fn focused(view: &Webview) -> bool {
     #[cfg(not(target_os = "macos"))]
     false
 }
+async fn focus_then_current(
+    focus: impl std::future::Future<Output = bool>,
+    current: impl FnOnce() -> bool,
+) -> bool {
+    let focused = focus.await;
+    focused && current()
+}
+struct MetadataCompletion<F: FnOnce(bool)> {
+    finish: Option<F>,
+    completed: bool,
+}
+impl<F: FnOnce(bool)> Drop for MetadataCompletion<F> {
+    fn drop(&mut self) {
+        if let Some(finish) = self.finish.take() {
+            finish(!self.completed);
+        }
+    }
+}
+async fn with_metadata_completion<T>(
+    work: impl std::future::Future<Output = T>,
+    finish: impl FnOnce(bool),
+) -> T {
+    let mut completion = MetadataCompletion {
+        finish: Some(finish),
+        completed: false,
+    };
+    let value = work.await;
+    completion.completed = true;
+    value
+}
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
@@ -414,56 +444,74 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         guard.sequence += 1;
         format!("00000000-6990-4000-8000-{:012x}", guard.sequence)
     };
-    let value = crate::terminal::metadata_request(app,json!({"kind":"feature-request","id":id,"document":document,"source":source,"request":request}),presentation).await;
-    if crate::terminal::presentation_blocked(app)
-        || crate::terminal::metadata_generation(app) != Some(presentation)
-        || identity(&window) != Some((source, document))
-        || (mutable && !focused(&window).await)
-    {
-        return denied();
-    }
-    if !valid_reply(&value) {
-        return json!({"status":"unavailable"});
-    }
-    if let Some(snapshot) = value.get("snapshot") {
-        let state = app.state::<Features>();
-        let mut guard = state.0.lock().unwrap();
-        let generation = snapshot["generation"].as_u64().unwrap();
-        let revision = snapshot["view"]["revision"].as_u64().unwrap();
-        let workspace = snapshot["workspace"]["id"].as_str().unwrap();
-        if generation < guard.snapshot_generation
-            || revision < guard.view_revision
-            || guard
-                .workspace_id
-                .as_ref()
-                .is_some_and(|id| id != workspace)
-        {
-            return json!({"status":"stale"});
-        }
-        for feature in snapshot["features"].as_array().unwrap() {
-            let id = feature["featureId"].as_str().unwrap();
-            let revision = feature["revision"].as_u64().unwrap();
-            if guard
-                .feature_revisions
-                .get(id)
-                .is_some_and(|known| revision < *known)
+    // Keep bilateral review exclusion through final focus/context validation and publication.
+    let completion_id = id.clone();
+    with_metadata_completion(
+        async {
+            let value = crate::terminal::metadata_request(
+                app,
+                json!({
+                    "kind": "feature-request", "id": id, "document": document,
+                    "source": source, "request": request,
+                }),
+                presentation,
+            )
+            .await;
+            if !focus_then_current(async { !mutable || focused(&window).await }, || {
+                !crate::terminal::presentation_blocked(app)
+                    && crate::terminal::metadata_generation(app) == Some(presentation)
+                    && identity(&window) == Some((source, document))
+            })
+            .await
             {
-                return json!({"status":"stale"});
+                return denied();
             }
-        }
-        for feature in snapshot["features"].as_array().unwrap() {
-            guard.feature_revisions.insert(
-                feature["featureId"].as_str().unwrap().into(),
-                feature["revision"].as_u64().unwrap(),
-            );
-        }
-        guard.snapshot_generation = generation;
-        guard.view_revision = revision;
-        guard.workspace_id = Some(workspace.into());
-        drop(guard);
-        publish(app, snapshot, presentation);
-    }
-    value
+            if !valid_reply(&value) {
+                return json!({"status":"unavailable"});
+            }
+            if let Some(snapshot) = value.get("snapshot") {
+                let state = app.state::<Features>();
+                let mut guard = state.0.lock().unwrap();
+                let generation = snapshot["generation"].as_u64().unwrap();
+                let revision = snapshot["view"]["revision"].as_u64().unwrap();
+                let workspace = snapshot["workspace"]["id"].as_str().unwrap();
+                if generation < guard.snapshot_generation
+                    || revision < guard.view_revision
+                    || guard
+                        .workspace_id
+                        .as_ref()
+                        .is_some_and(|id| id != workspace)
+                {
+                    return json!({"status":"stale"});
+                }
+                for feature in snapshot["features"].as_array().unwrap() {
+                    let id = feature["featureId"].as_str().unwrap();
+                    let revision = feature["revision"].as_u64().unwrap();
+                    if guard
+                        .feature_revisions
+                        .get(id)
+                        .is_some_and(|known| revision < *known)
+                    {
+                        return json!({"status":"stale"});
+                    }
+                }
+                for feature in snapshot["features"].as_array().unwrap() {
+                    guard.feature_revisions.insert(
+                        feature["featureId"].as_str().unwrap().into(),
+                        feature["revision"].as_u64().unwrap(),
+                    );
+                }
+                guard.snapshot_generation = generation;
+                guard.view_revision = revision;
+                guard.workspace_id = Some(workspace.into());
+                drop(guard);
+                publish(app, snapshot, presentation);
+            }
+            value
+        },
+        |cancelled| crate::terminal::metadata_finish(app, &completion_id, cancelled),
+    )
+    .await
 }
 fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64) {
     // Snapshot carries metadata only. It never shows/focuses a window or enables input.
@@ -687,6 +735,112 @@ mod tests {
         assert!(!name(&json!("\u{e0001}")));
         assert!(name(&json!("🦉".repeat(24))));
         assert!(!name(&json!("🦉".repeat(25))));
+    }
+    #[test]
+    fn invalidation_during_final_focus_wait_cannot_authorize_cache_publish_or_return() {
+        use std::future::Future;
+        use std::sync::Arc;
+        use std::task::{Context, Poll, Waker};
+        for invalidation in 0..5 {
+            let expected = (CHROME_URL.to_owned(), 1_u64, 2_u64, false);
+            let state = Arc::new(Mutex::new(expected.clone()));
+            let (sender, receiver) = tokio::sync::oneshot::channel();
+            let mut pending = Box::pin(focus_then_current(
+                async { receiver.await.unwrap_or(false) },
+                || *state.lock().unwrap() == expected,
+            ));
+            let mut context = Context::from_waker(Waker::noop());
+            assert_eq!(pending.as_mut().poll(&mut context), Poll::Pending);
+            {
+                let mut state = state.lock().unwrap();
+                match invalidation {
+                    1 => state.0 = "orqst-features://local/other.html".into(),
+                    2 => state.1 += 1,   // navigation/close changes document
+                    3 => state.2 += 1,   // native presentation changes independently
+                    4 => state.3 = true, // either Quit gate became pending
+                    _ => {}
+                }
+            }
+            sender.send(true).unwrap();
+            assert_eq!(
+                pending.as_mut().poll(&mut context),
+                Poll::Ready(invalidation == 0)
+            );
+        }
+    }
+    #[test]
+    fn command_drop_releases_once_during_metadata_or_final_focus_without_continuation() {
+        use std::cell::{Cell, RefCell};
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+        for cancel_during_focus in [false, true] {
+            let held = Cell::new(true);
+            let finishes = RefCell::new(Vec::new());
+            let published = Cell::new(false);
+            let (metadata_sender, metadata) = tokio::sync::oneshot::channel::<()>();
+            let (focus_sender, focus) = tokio::sync::oneshot::channel::<()>();
+            let mut command = Box::pin(with_metadata_completion(
+                async {
+                    metadata.await.unwrap();
+                    focus.await.unwrap();
+                    published.set(true);
+                },
+                |cancelled| {
+                    held.set(false);
+                    finishes.borrow_mut().push(cancelled);
+                },
+            ));
+            let mut context = Context::from_waker(Waker::noop());
+            assert_eq!(command.as_mut().poll(&mut context), Poll::Pending);
+            if cancel_during_focus {
+                metadata_sender.send(()).unwrap();
+                assert_eq!(command.as_mut().poll(&mut context), Poll::Pending);
+            }
+            // The command still excludes native reviews after the metadata reply.
+            assert!(held.get());
+            assert!(finishes.borrow().is_empty());
+            drop(command);
+            assert!(!held.get());
+            assert_eq!(*finishes.borrow(), vec![true]);
+            assert!(!published.get());
+            assert!(focus_sender.send(()).is_err());
+        }
+    }
+    #[test]
+    fn command_completion_keeps_exclusion_through_final_focus_for_every_reply_outcome() {
+        use std::cell::{Cell, RefCell};
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+        for outcome in ["ok", "denied", "stale", "unavailable", "timeout", "error"] {
+            let held = Cell::new(true);
+            let finishes = RefCell::new(Vec::new());
+            let (metadata_sender, metadata) = tokio::sync::oneshot::channel();
+            let (focus_sender, focus) = tokio::sync::oneshot::channel();
+            let mut command = Box::pin(with_metadata_completion(
+                async {
+                    let reply = metadata.await.unwrap();
+                    assert!(held.get());
+                    focus.await.unwrap();
+                    reply
+                },
+                |cancelled| {
+                    held.set(false);
+                    finishes.borrow_mut().push(cancelled);
+                },
+            ));
+            let mut context = Context::from_waker(Waker::noop());
+            assert_eq!(command.as_mut().poll(&mut context), Poll::Pending);
+            metadata_sender.send(outcome).unwrap();
+            assert_eq!(command.as_mut().poll(&mut context), Poll::Pending);
+            assert!(held.get());
+            assert!(finishes.borrow().is_empty());
+            focus_sender.send(()).unwrap();
+            assert_eq!(command.as_mut().poll(&mut context), Poll::Ready(outcome));
+            assert!(!held.get());
+            assert_eq!(*finishes.borrow(), vec![false]);
+            drop(command);
+            assert_eq!(finishes.borrow().len(), 1);
+        }
     }
 }
 

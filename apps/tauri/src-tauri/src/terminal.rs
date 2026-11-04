@@ -56,6 +56,34 @@ struct MetadataPending {
     source: String,
     sender: oneshot::Sender<Value>,
 }
+fn release_metadata(
+    latch: &mut Option<String>,
+    pending: &mut HashMap<String, MetadataPending>,
+    id: &str,
+    cancelled: bool,
+) -> bool {
+    let owner = latch.as_deref() == Some(id);
+    pending.remove(id);
+    if owner {
+        *latch = None;
+    }
+    cancelled && owner
+}
+pub(crate) fn metadata_finish(app: &tauri::AppHandle, id: &str, cancelled: bool) {
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(r) = guard.as_mut() {
+        // Only the cancelled mutation's owner invalidates presentation, never another command.
+        if release_metadata(
+            &mut r.metadata_mutating,
+            &mut r.metadata_pending,
+            id,
+            cancelled,
+        ) {
+            advance_layout(r);
+        }
+    }
+}
 fn metadata_reply_matches(
     value: &Value,
     id: &str,
@@ -173,8 +201,8 @@ pub(crate) async fn metadata_request(
         }
         if r.child.write(bytes.as_bytes()).is_err() {
             r.metadata_pending.remove(&id);
-            if r.metadata_mutating.as_ref() == Some(&id) {
-                r.metadata_mutating = None;
+            if r.metadata_mutating.as_deref() == Some(&id) {
+                advance_layout(r);
             }
             return unavailable();
         }
@@ -195,11 +223,9 @@ pub(crate) async fn metadata_request(
             return unavailable();
         };
         r.metadata_pending.remove(&id);
-        if r.metadata_mutating.as_ref() == Some(&id) {
-            r.metadata_mutating = None;
-        }
         let valid = r.layout_generation == generation;
-        if valid && !received {
+        let owner = r.metadata_mutating.as_ref() == Some(&id);
+        if valid && !received && owner {
             advance_layout(r);
         }
         valid
@@ -349,8 +375,53 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{document_slot, metadata_reply_matches, review_available, MetadataPending};
+    use super::{
+        document_slot, metadata_reply_matches, release_metadata, review_available, MetadataPending,
+    };
     use serde_json::json;
+
+    #[test]
+    fn metadata_cleanup_is_owned_and_snapshot_or_old_guard_cannot_release_another_mutation() {
+        let entry = || {
+            let (sender, _) = tokio::sync::oneshot::channel();
+            MetadataPending {
+                document: 1,
+                generation: 2,
+                source: "main".into(),
+                sender,
+            }
+        };
+        let mut latch = Some("current".to_owned());
+        let mut pending = std::collections::HashMap::from([
+            ("old".to_owned(), entry()),
+            ("snapshot".to_owned(), entry()),
+            ("current".to_owned(), entry()),
+        ]);
+        for id in ["old", "snapshot"] {
+            assert!(!release_metadata(&mut latch, &mut pending, id, true));
+            assert!(!pending.contains_key(id));
+            assert_eq!(latch.as_deref(), Some("current"));
+            assert!(pending.contains_key("current"));
+            assert!(!review_available(false, false, &[false], latch.is_some()));
+        }
+        assert!(!release_metadata(
+            &mut latch,
+            &mut pending,
+            "current",
+            false
+        ));
+        assert!(latch.is_none());
+        assert!(pending.is_empty());
+        latch = Some("next".into());
+        pending.insert("next".into(), entry());
+        assert!(!release_metadata(&mut latch, &mut pending, "current", true));
+        assert_eq!(latch.as_deref(), Some("next"));
+        assert!(pending.contains_key("next"));
+        assert!(release_metadata(&mut latch, &mut pending, "next", true));
+        assert!(latch.is_none());
+        assert!(pending.is_empty());
+        assert!(!release_metadata(&mut latch, &mut pending, "next", true));
+    }
 
     #[test]
     fn mcp_and_retirement_reviews_exclude_each_other_and_inflight_panes() {

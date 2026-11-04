@@ -125,12 +125,26 @@ startup. This correction has not been executed during the pause.
 
 Checks that start no sessions passed on the integrated branch: 53 focused
 SQLite/mock/layout/broker tests; lint, TypeScript and the regular dashboard/bridge/
-desktop build; Tauri resources with 17 dependency notices; 24 Rust unit tests,
+desktop build; Tauri resources with 17 dependency notices; 28 Rust unit tests,
 Clippy with warnings denied, and `cargo build --features custom-protocol`.
 Rust used the existing target691 serially with debug/incremental disabled. No
 application/bundle was launched, and no full native bundle or provider acceptance
 is claimed. An initial Rust type error and runner lint errors were corrected;
 the subsequent listed checks passed without weakening rules.
+
+Static owner review found that the final focus await could cross native
+invalidation after the earlier epoch/document check. A separate fix now awaits
+focus first and then jointly rechecks source/document, native epoch and both Quit
+fences before cache mutation, publication or returning metadata. Its pure Rust
+regression suspends the focus future, changes URL, document, epoch or Quit state,
+then resumes it; every changed context is denied. No session/window is started.
+The same fix keeps the metadata latch through the entire command, including the
+final focus wait after timeout/error/denial. Its drop guard cleans up only the
+owning UUID, including cancellation during either metadata or focus awaits.
+Cancellation invalidates the owner's native presentation epoch without renewing
+document generations, input leases or authority. Pure regressions cover both drop
+points, all reply outcomes, late/duplicate guards, snapshots and the review fence
+while the latch is held. No mutex spans an await and no operation is retried.
 
 The earlier broad Node run was interrupted (exit 130): 703 passed, four failed,
 two cancelled. ENOSPC is established only for the logs that report it; the 55s
