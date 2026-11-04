@@ -10,6 +10,11 @@ acceptance in the [V6 checklist](docs/architecture/v6-feature-checklist.md).
 Earlier A/B and pane-count limits describe subsets, not product scope. Native and
 provider acceptance remain release gates; preserve Electron until Tauri parity.
 
+Studio's nested dashboard frame is removed in source: one full-window Feature
+shell with preparation in a side panel. Responsive Chromium EN/PT verification
+passes; delivery to the running native Preview and native/provider acceptance are
+separate from that renderer result.
+
 First V6 increment: Feature identity/metadata/assignments, scoped team/layout
 configuration, private Core IPC and fail-closed alias/grant isolation are implemented.
 The shared terminal renderer now has compact chrome and an accessible pane menu.

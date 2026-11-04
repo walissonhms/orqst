@@ -883,6 +883,7 @@
     "oldDesktop": "This Desktop is running an older terminal interface. The updated Studio needs a later Desktop relaunch. Keep your drafts and running agents safe; nothing will restart here.",
     "desktopOnly": "Terminal preparation is available in the ORQST Desktop app. This browser remains an observer.",
     "setupTitle": "Terminal preparation",
+    "prepareTerminals": "Prepare terminals…",
     "setupHelp": "Suggested pair for a new empty test folder. Review the discovered CLI and Node paths before creating anything.",
     "preset": "Suggested new pair",
     "providerCandidate": "Installed binary review required",

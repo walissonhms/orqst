@@ -185,3 +185,15 @@ cross-Feature communication. See the latest [workflow evidence](../development/v
 Final checks passed 54 session-free Node tests, TypeScript, focused ESLint and
 formatting. Native packaging reused the existing compiled executable and passed
 strict local ad hoc signature verification; this does not accept native execution.
+
+## Full-window Studio correction — 2026-11-04
+
+- [x] Reproduce the nested dashboard/Feature chrome in the owner's open Preview.
+- [x] Replace it in source with one full-window Studio shell and one Feature sidebar.
+- [x] Move preparation into a dismissible drawer; keep the workspace mounted and
+      preserve Overview navigation and keyboard focus restoration.
+- [x] Pass three focused Chromium tests, including exact viewport bounds without
+      external scrolling at 1440/720/390/320 pixels and EN/PT drawer/navigation.
+- [ ] Package and accept this correction in native WebKit. The owner's running
+      Preview is preserved and still contains its earlier resources.
+- [ ] Complete the separate native Studio preparation bridge and provider acceptance.

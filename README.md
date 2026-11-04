@@ -6,6 +6,12 @@ AgentSession. See the [V6 inventory and checklist](docs/architecture/v6-feature-
 for implementation gaps and acceptance. The preserved prototype contains simulated
 content and is never a production terminal.
 
+Studio now uses one full-window Feature workspace when the native Feature bridge
+is available. **+ Terminal** opens preparation in a dismissible side panel;
+the back arrow returns to Overview. This removes the nested dashboard frame,
+duplicate navigation and page margins. Renderer EN/PT checks cover the layout;
+the previously opened Preview app keeps its packaged resources until replaced.
+
 The [private V6 Core foundation](docs/development/v6-feature-core.md) now persists
 Features, team proposals and layouts in SQLite, with Feature-local communication
 guards. The [shared terminal chrome](docs/development/v6-terminal-chrome.md) uses a

@@ -471,3 +471,14 @@ dashboard launch only. Tauri preparation still uses its native menu: Studio's ol
 Electron preparation bridge is absent and its relaunch notice is misleading. That
 UI port, native Feature/terminal/Quit flow, providers and the broader V6 gaps remain
 open. See the [current V6 checklist](v6-feature-checklist.md).
+
+## Full-window Studio correction — 2026-11-04
+
+The owner's manual Preview inspection identified a nested workspace frame with
+multiple sidebars/headers and unused margins. Source now composes one full-window
+Feature workspace; preparation opens from **+ Terminal** in a modal side panel.
+Three focused Chromium tests passed, including exact viewport bounds, compact
+windows, EN/PT navigation and focus restoration. Build, TypeScript and focused
+ESLint and full repository lint passed. No native/provider acceptance or broad-suite/Rust rerun is claimed.
+The open Preview remains preserved; native packaging and the functional Tauri
+preparation bridge are still outstanding. See the [workflow](../development/v6-feature-ui.md#full-window-studio-correction--2026-11-04).

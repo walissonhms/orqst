@@ -5,7 +5,7 @@ import { ArrowRight, Columns2, FileCheck2, FolderOpen, ShieldCheck, Terminal } f
 import type { StudioRequest, StudioSnapshot } from '@orqst/protocol';
 
 /** Navigation/preparation only. All choices and grants stay in the existing native flow. */
-export function Studio() {
+export function Studio({ preparationOnly = false }: { preparationOnly?: boolean }) {
   const { t } = useTranslation();
   const native = window.orqstStudio?.contractVersion === 1 ? window.orqstStudio : undefined;
   const desktop = !!window.orqstManagedAgents || navigator.userAgent.includes(' ORQSTDesktop/0.1');
@@ -57,7 +57,7 @@ export function Studio() {
             : 'blocked';
   return (
     <section className="studio-page" aria-labelledby="studio-title">
-      {window.orqstFeatures && <FeatureWorkspace />}
+      {!preparationOnly && window.orqstFeatures && <FeatureWorkspace />}
       <header className="studio-heading">
         <div>
           <p className="studio-eyebrow">{t('studio.eyebrow')}</p>

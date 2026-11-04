@@ -270,6 +270,35 @@ a remaining UI-port gap. Do not claim this app-opening check accepts native term
 Start, Feature switching, final Quit or provider communication. Those flows still
 need their native review. Preserve the open app while the owner tests it.
 
+## Full-window Studio correction — 2026-11-04
+
+Manual inspection of the running Preview exposed a real composition defect:
+`App` rendered the dashboard sidebar/header/page margins around `Studio`, which
+rendered a second Feature sidebar/header and preparation documentation beneath it.
+The Feature surface's viewport-derived height then overflowed the outer page.
+
+`StudioWorkspace` now composes one Feature workspace and a native HTML modal
+preparation drawer. `App` applies the dedicated `studio-shell` only on Studio with
+the version-1 native Feature bridge. Its content fills the viewport; the original
+dashboard navigation is restored on Overview. **+ Terminal** and the empty-state
+action open preparation; Escape/Close return focus without remounting the workspace.
+`Studio`'s `preparationOnly` prop prevents a second Feature workspace in the drawer.
+Browser-only and earlier Electron Studio behavior remain covered separately.
+
+The drawer reuses existing preparation; opening it grants no authority and starts
+no CLI. The Tauri preparation bridge remains a separate functional delivery. Native
+terminal documents, exact layout insets and Core/PTY lifecycle are unchanged.
+
+Verification: the dashboard build, TypeScript and full repository lint passed. All three
+targeted Playwright tests passed, including renderer-only native facades: exact
+workspace bounds and no outer document overflow at 1440×900, 720×700, 390×600 and
+320×600, a single Feature workspace, EN/PT navigation, drawer open/Escape/Close and
+focus restoration. No Core-owned PTY/provider or native WebKit acceptance was run
+for this shell change. The broad suite and Rust checks were not rerun. The open
+Preview's executable/resources are preserved while its owner tests.
+
+See the [pinned reference decision](../research/studio-full-window.md).
+
 ## Fragments for central integration
 
 - **Checklist:** Feature metadata CRUD/selection, reviewed-slot assignment and

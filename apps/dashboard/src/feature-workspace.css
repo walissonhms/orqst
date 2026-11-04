@@ -144,6 +144,7 @@
   min-width: 0;
 }
 .feature-topbar strong {
+  flex: 1;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;

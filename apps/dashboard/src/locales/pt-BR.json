@@ -883,6 +883,7 @@
     "oldDesktop": "Este Desktop está com a interface anterior de terminais. O Studio atualizado exige um relançamento posterior do Desktop. Preserve seus rascunhos e agentes em execução; nada será reiniciado aqui.",
     "desktopOnly": "A preparação de terminais está disponível no aplicativo ORQST Desktop. Este navegador continua como observador.",
     "setupTitle": "Preparação de terminais",
+    "prepareTerminals": "Preparar terminais…",
     "setupHelp": "Par sugerido para uma pasta de teste vazia. Revise os caminhos de CLI e Node encontrados antes de criar arquivos.",
     "preset": "Novo par sugerido",
     "providerCandidate": "Revisão do executável instalado",

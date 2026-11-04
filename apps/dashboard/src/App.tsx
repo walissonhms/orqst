@@ -54,6 +54,7 @@ import { isSessionLocation, sessionFromLocation } from './session-link';
 import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
 import { Agents } from './Agents';
 import { Studio } from './Studio';
+import { StudioWorkspace } from './StudioWorkspace';
 import { Workspaces } from './Workspaces';
 import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
@@ -863,7 +864,9 @@ export function App() {
     </>
   );
   return (
-    <div className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}`}>
+    <div
+      className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${view === 'studio' && window.orqstFeatures?.contractVersion === 1 ? ' studio-shell' : ''}`}
+    >
       <a
         className="skip-link"
         href="#main-content"
@@ -1127,7 +1130,11 @@ export function App() {
           )}
 
           {view === 'studio' ? (
-            <Studio />
+            window.orqstFeatures?.contractVersion === 1 ? (
+              <StudioWorkspace onOverview={() => navigate('overview')} />
+            ) : (
+              <Studio />
+            )
           ) : view === 'settings' ? (
             <Settings
               appearance={appearance.appearance}

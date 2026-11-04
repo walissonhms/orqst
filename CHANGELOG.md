@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-04 — Full-window Studio shell
+
+- Use one viewport-sized Workspace/Feature shell in native Studio, without the
+  outer dashboard sidebar, header, footer or page margins.
+- Keep preparation in a modal side panel opened by **+ Terminal**, with Escape,
+  focus restoration and an Overview navigation action. Keep the workspace mounted.
+- Verify exact viewport bounds at 1440, 720, 390 and 320 pixels and EN/PT navigation
+  in Chromium. This does not accept native terminal/provider execution or replace
+  the owner's running Preview app.
+
 ## 2026-11-04 — Packaged Feature acceptance EN/PT
 
 - Pass the complete packaged Chromium-facade workflow in both locales: six

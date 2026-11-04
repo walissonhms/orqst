@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   FeatureNativeRequest,
@@ -14,7 +14,15 @@ type Action = FeatureNativeRequest extends infer R
   : never;
 
 /** Shared native chrome/Studio metadata UI. Terminals remain retained native documents. */
-export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?: boolean }) {
+export function FeatureWorkspace({
+  nativeWorkspace = false,
+  navigation,
+  onPrepare,
+}: {
+  nativeWorkspace?: boolean;
+  navigation?: ReactNode;
+  onPrepare?: () => void;
+}) {
   const { t } = useTranslation();
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
@@ -145,9 +153,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
             ▣ <strong>{snapshot.workspace.name}</strong>
             <small>{snapshot.features.length}</small>
           </div>
-        ) : (
-          <p className="feature-help">{t('features.unavailable')}</p>
-        )}
+        ) : null}
         <h2>{t('features.heading')}</h2>
         <nav aria-label={t('features.heading')}>
           {snapshot?.features.map((feature) => (
@@ -331,6 +337,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
         </button>
       </aside>
       <header className="feature-topbar">
+        {navigation}
         <strong title={selected?.featureId}>
           {snapshot?.workspace.name ?? t('features.workspace')} /{' '}
           {selected?.name ?? t('features.unassigned')}
@@ -360,13 +367,23 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
           <button disabled title={t('features.delegationUnavailable')}>
             ↗ {t('features.delegate')}
           </button>
-          <button disabled title={t('features.creationUnavailable')}>
+          <button
+            disabled={!onPrepare}
+            onClick={onPrepare}
+            title={t(onPrepare ? 'studio.setupTitle' : 'features.creationUnavailable')}
+          >
             ＋ {t('features.terminal')}
           </button>
         </div>
       </header>
       <div className="feature-surface">
-        {!available.length && (
+        {onPrepare && !available.length ? (
+          <div className="feature-empty">
+            <h1>{t('studio.setupTitle')}</h1>
+            <p>{t('features.noUnassigned')}</p>
+            <button onClick={onPrepare}>{t('studio.prepareTerminals')}</button>
+          </div>
+        ) : !available.length ? (
           <p>
             {t(
               selected
@@ -376,7 +393,7 @@ export function FeatureWorkspace({ nativeWorkspace = false }: { nativeWorkspace?
                 : 'features.noUnassigned',
             )}
           </p>
-        )}
+        ) : null}
         {!nativeWorkspace && available.length > 0 && (
           <div>
             <p>{t('features.nativeView')}</p>
