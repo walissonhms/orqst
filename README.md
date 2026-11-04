@@ -10,8 +10,9 @@ The [incremental native terminal source](docs/development/terminal-native-enroll
 now appends a selected CLI/model to the same Core and retained native workspace,
 with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks
 pass; native compilation and a locally signed Preview package now also pass.
-Actual terminal opening/provider execution remains under acceptance, with the
-Codex opening refusal and OpenCode installation ambiguity still open.
+Actual terminal opening/provider execution remains under acceptance. The Codex
+opening refusal is unresolved; the existing Preview still has the earlier
+OpenCode discovery behavior until a new package is accepted.
 Earlier one-selection descriptions below record the previous increment. The open
 Preview keeps its existing executable/resources.
 

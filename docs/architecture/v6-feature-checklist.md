@@ -314,8 +314,9 @@ This source increment does not mark native/runtime/provider acceptance complete.
       build, dashboard/resources and local app bundle with strict deep signature
       verification. Recheck 111 packaged resources and preserve earlier binaries.
 - [ ] Accept actual native terminal opening, providers/models, cleanup and
-      communication. A native Codex opening refusal and OpenCode executable
-      ambiguity remain unresolved; no end-to-end acceptance is claimed.
+      communication. The native Codex opening refusal remains unresolved;
+      OpenCode discovery/model-default fixes are in source and still require
+      packaged acceptance. No end-to-end acceptance is claimed.
 
 See [exact checks and remaining limits](../development/terminal-native-enrollment.md).
 

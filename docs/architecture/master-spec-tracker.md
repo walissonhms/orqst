@@ -607,3 +607,19 @@ Heavy work was paused after ENOSPC during diagnostics. Unused Cargo caches were
 removed with no compiler or open files; apps/source/evidence remain intact. A
 subsequent filesystem check reported 28 GiB free; new builds remain serial and
 space-checked.
+
+## OpenCode discovery and full-TUI model defaults — 2026-11-04
+
+The integrated OpenCode fix keeps one option among independently verified copies
+of the same reviewed native bytes, retaining PATH precedence and exact path/hash
+consent. It replaces the unsupported full-TUI `--model` argument with a validated
+V2 model object in per-process `OPENCODE_CONFIG_CONTENT`, composed with the
+existing MCP document. No global config, alternate interface or new runtime is
+introduced. Native agent/managed settings, preferences and fallback may prevail;
+the selected initial default is not proof of the effective provider/model.
+
+Main integration reran 18 focused session-free cases, two pure OpenCode profile
+cases, TypeScript, repository lint and formatting successfully. No installed CLI, provider, Core or PTY was
+started. The active Preview remains untouched. Packaging/native opening, actual
+model behavior, dynamic catalogue and communication acceptance remain open.
+See [exact references and limits](../research/opencode-executable-equivalence.md).
