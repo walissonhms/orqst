@@ -275,7 +275,9 @@ See [workflow, evidence and pending live enrollment](../development/terminal-pro
       source/context binding and isolated mocked-client timeout/late ACK.
 - [x] Integrate the Core commit and pass 77 session-free enrollment/Pair/supervisor/
       broker regressions and TypeScript on main, without creating a Core or PTY.
-- [ ] Integrate/accept native service/Webview/layout/Feature append with real CLIs.
+- [x] Integrate native service/Webview/layout/Feature append in source; see the
+      native increment below for its checks.
+- [ ] Accept the integrated append with native WebKit and real CLIs.
 
 See the [private contract and remaining limits](../api/terminal-enrollment.md).
 This source increment does not mark native/runtime/provider acceptance complete.
@@ -288,6 +290,8 @@ This source increment does not mark native/runtime/provider acceptance complete.
 - [x] Fence late admission ACK, old presentation and incomplete native creation;
       preserve old terminals and uncertain evidence without automatic retry/adoption.
 - [x] Pass focused session-free continuity/layout/CAS and EN/PT xterm-facade checks.
+- [x] Integrate all three native/desktop commits on main; 46 focused cases,
+      TypeScript, Studio and actual-xterm synthetic-facade EN/PT checks pass.
 - [ ] Compile/test Rust and accept native WebKit, actual providers/models, cleanup
       and packaging. Source/facade success does not certify a running Preview.
 

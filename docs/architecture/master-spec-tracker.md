@@ -559,3 +559,25 @@ Native service/layout/Feature/Webview append is the remaining integration in
 progress. No new Core, PTY, provider, native window or package was started by these
 checks. Cargo, resource staging, broad tests and general builds remain paused at
 about 3.1GiB free. See the [contract and acceptance limits](../api/terminal-enrollment.md).
+
+## Native incremental enrollment source integration — 2026-11-04
+
+Integrated `c4a3168`, `03363cc` and `54d65df` as `1d88f5b`, `65010d1` and
+`40f8491`. The same host/Core now appends the service member, layout membership and
+one retained native Webview in source. Existing documents and xterm navigation are
+extended in place. Feature layouts travel through the trusted native preparation
+result and are extended only after confirmed admission.
+
+The follow-up closes two review findings: a queued Webview callback cannot begin
+after its creation deadline/cancellation, and failed presentation invalidates the
+original generation so a late layout cannot regain focus. The Core, reserved slots
+and original documents are preserved. Rustfmt checks pass; the new Rust regression
+cases have not been executed because Cargo is still paused.
+
+On integrated main, 46 session-free service/layout/Feature/document/Studio and
+mocked IPC tests passed, followed by TypeScript, repository lint and Studio/xterm renderer EN/PT
+checks. The xterm facade covers append without replacing the existing DOM or
+scrollback; it launches no PTY/provider. Native compilation, native
+WebKit/consent/model/provider behavior, complete cleanup and a new package remain
+unaccepted. The running Preview still uses its earlier resources. See
+[implementation and verification limits](../development/terminal-native-enrollment.md).

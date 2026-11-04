@@ -97,3 +97,8 @@ Two additional pure Rust source regressions cover queued callback expiry/cancel
 and old layout/intent rejection after presentation invalidation. Rustfmt parsing
 and diff checks passed; Cargo execution remains paused and these cases have not
 been run. The prior 43 Node and renderer checks are unchanged by this Rust-only fix.
+
+Integration on main reran 46 focused session-free cases (including mocked Core
+IPC), TypeScript, both Studio and xterm EN/PT renderer scripts, rustfmt and diff
+checks successfully. These checks do not compile or execute the Rust tests and
+do not update the open Preview.

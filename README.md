@@ -10,7 +10,8 @@ Preview keeps its existing executable/resources.
 The [private incremental Core enrollment API](docs/api/terminal-enrollment.md) can
 append prepared independent slots to the same owned Pair without rebuilding old
 supervisors. `ready` means admitted, with separate signed launch/output/input.
-Native Studio append integration and real CLI acceptance remain separate work.
+Native Studio append is integrated in source; compilation and real CLI acceptance
+remain separate work.
 
 The [approved V6 package](docs/design/v6/README.md) is now the official UI/UX and
 functional architecture reference: Workspace → Feature → TerminalPane →
@@ -23,8 +24,8 @@ reviewed local executables and resolves workspace IDs without a file picker.
 Selected models reach the existing launch profiles and are revalidated before
 process creation. The [CLI → model → Open UI and native wiring](docs/development/terminal-product-open.md)
 are now integrated in source, with focused and renderer checks. Private Core
-enrollment is implemented; its native service/Webview/layout integration, Rust
-compilation and native/provider acceptance remain pending. The open Preview does
+enrollment and its native service/Webview/layout integration are implemented in
+source; Rust compilation and native/provider acceptance remain pending. The open Preview does
 not acquire these changes automatically.
 
 Studio now uses one full-window Feature workspace when the native Feature bridge
