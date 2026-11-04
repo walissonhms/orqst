@@ -20,6 +20,7 @@ export type TerminalNativeReply =
   | {
       status: 'ok';
       instanceId: string;
+      opening?: 'ready' | 'incomplete';
       snapshot?: ReturnType<TerminalSupervisor['snapshot']>;
       output?: { bytes: Uint8Array; nextCursor: number; gap: boolean };
     };
@@ -85,13 +86,63 @@ export class TerminalNativeBroker<Document extends object> {
     const request = parsed.data;
     const generation = this.generation;
     try {
-      if (request.action === 'start') {
+      if (request.action === 'start' || request.action === 'open') {
         const prepared = await this.supervisor.prepare(this.clientId, request.profileId);
         const view: View = { profile: prepared.profile };
         // Also retain denied preparations within the supervisor's fixed attempt cap.
         this.views.set(prepared.attemptId, view);
-        const result = await this.confirm(document, generation, prepared.challenge, view);
+        const result = await this.confirm(
+          document,
+          generation,
+          prepared.challenge,
+          view,
+          {},
+          request.action === 'open' ? 'open' : undefined,
+        );
         if (result !== 'confirmed') return { status: result };
+        if (request.action === 'open') {
+          // One explicit native review covers these three operations on this exact
+          // immutable profile. Each operation still consumes its own signed challenge.
+          try {
+            await this.supervisor.launch(
+              prepared.attemptId,
+              this.proof(prepared.challenge, generation),
+            );
+            const attach = await this.supervisor.requestAttach(this.clientId, prepared.attemptId);
+            view.attachment = await this.supervisor.attach(
+              prepared.attemptId,
+              this.proof(attach, generation),
+            );
+            const input = await this.supervisor.requestInput(prepared.attemptId, view.attachment);
+            view.lease = await this.supervisor.enableInput(
+              prepared.attemptId,
+              view.attachment,
+              this.proof(input, generation),
+            );
+            // Async transports can lose the document after the final effect too.
+            this.assertCurrent(input, generation);
+            return { ...(await this.result(prepared.attemptId)), opening: 'ready' };
+          } catch {
+            // Launch may have succeeded. Keep its identity/receipt; never retry,
+            // signal, or adopt it. Remove only this document's output/input grants.
+            view.lease = undefined;
+            if (view.attachment) {
+              const attachment = view.attachment;
+              view.attachment = undefined;
+              try {
+                await this.supervisor.revokeInput(prepared.attemptId, attachment);
+              } catch {
+                /* Already unavailable. */
+              }
+              try {
+                await this.supervisor.detach(prepared.attemptId, attachment);
+              } catch {
+                /* Already unavailable. */
+              }
+            }
+            return { ...(await this.result(prepared.attemptId)), opening: 'incomplete' };
+          }
+        }
         await this.supervisor.launch(
           prepared.attemptId,
           this.proof(prepared.challenge, generation),
@@ -265,13 +316,14 @@ export class TerminalNativeBroker<Document extends object> {
     challenge: TerminalChallenge,
     view: View,
     detail: Pick<TerminalConfirmation, 'signal' | 'paste'> = {},
+    operation?: 'open',
   ): Promise<'confirmed' | 'denied' | 'cancelled'> {
     if (generation !== this.generation || !this.current(document, true)) return 'denied';
     if (challenge.operation === 'retire' || challenge.operation === 'delegate') return 'denied';
     const accepted = await this.host.confirm(
       document,
       Object.freeze({
-        operation: challenge.operation,
+        operation: operation ?? challenge.operation,
         instanceId: challenge.target,
         profile: view.profile,
         policy: terminalPolicy,
@@ -288,7 +340,7 @@ export class TerminalNativeBroker<Document extends object> {
     return 'confirmed';
   }
 
-  private proof(challenge: TerminalChallenge, generation: number) {
+  private assertCurrent(challenge: TerminalChallenge, generation: number): void {
     // Recheck synchronously at the effect boundary, after the asynchronous dialog.
     if (
       generation !== this.generation ||
@@ -296,6 +348,10 @@ export class TerminalNativeBroker<Document extends object> {
       challenge.expiresAt <= this.authority.now()
     )
       throw new Error('Native grant revoked');
+  }
+
+  private proof(challenge: TerminalChallenge, generation: number) {
+    this.assertCurrent(challenge, generation);
     return {
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), this.privateKey).toString(
@@ -304,7 +360,11 @@ export class TerminalNativeBroker<Document extends object> {
     };
   }
 
-  private async result(instanceId: string): Promise<TerminalNativeReply> {
-    return { status: 'ok', instanceId, snapshot: await this.supervisor.snapshot(instanceId) };
+  private async result(instanceId: string) {
+    return {
+      status: 'ok' as const,
+      instanceId,
+      snapshot: await this.supervisor.snapshot(instanceId),
+    };
   }
 }
