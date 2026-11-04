@@ -211,3 +211,10 @@ acceptance passed. Initial full-suite (627/628), Clippy and one staging failure
 reported `ENOSPC`; only this worktree's generated native intermediates/redundant
 staging copies were removed before successful retries. The complete final app is
 preserved. Synthetic/browser checks do not close the native checklist above.
+
+Integration as `d724d10` independently passed lint, typecheck, build and 628 Node
+tests with `--test-concurrency=2`. A further Rust rerun was intentionally interrupted
+when it began rebuilding dependencies on a nearly full disk; the six passing Rust
+tests and Clippy above are the contributor's checks, not an integration rerun. Two
+finished temporary Cargo target caches were cleaned to recover disk space. No native
+UI or provider acceptance was repeated during integration.
