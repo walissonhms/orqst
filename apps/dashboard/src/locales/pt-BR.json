@@ -928,5 +928,17 @@
     "open": "Abrir estes terminais revisados no runtime Tauri? Revise cada página completa dos manifests. Isso inicializa Core, journals e admissão privada existentes para toda a seleção. Não inicia uma CLI; cada início ainda exige confirmação nativa assinada separada. A abertura tem uma única tentativa; admissões incertas continuam reservadas.",
     "openApprove": "Abrir terminais revisados",
     "denied": "A preparação ou abertura dos terminais foi recusada ou permanece incerta. Use um executável nativo canônico revisado e um projeto descartável vazio. A preparação não inicia CLI. Arquivos parciais e reservas são preservados. Uma abertura cancelada pode ser revisada novamente neste menu; escrita ou abertura incerta exige investigação antes de outra tentativa."
+  },
+  "tauriDesktop": {
+    "connected": "Core conectado",
+    "offline": "Core indisponível",
+    "enabled": "Ativados; entrega pelo sistema não confirmada",
+    "disabled": "Alertas nativos desligados",
+    "failed": "Falha ao preparar alerta nativo; desligue e ligue para tentar novamente",
+    "exhausted": "Limite de alertas atingido nesta execução",
+    "limit": "Até 20 tentativas por execução; permissões, identidade e Foco se aplicam",
+    "background": "Manter ativo ao fechar a janela principal (nesta execução)",
+    "lifetime": "Sair encerra o Core próprio; hosts gerenciados exigem consentimento separado",
+    "quit": "Sair do ORQST e encerrar seu Core"
   }
 }

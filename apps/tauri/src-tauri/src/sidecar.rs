@@ -72,7 +72,8 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
         // Ignore process-wide ORQST_DATA_DIR: a running service may own that store.
         .env("ORQST_DATA_DIR", &data)
         .env("ORQST_PORT", port)
-        .env("ORQST_DEV", "0");
+        .env("ORQST_DEV", "0")
+        .env("ORQST_NATIVE_MONITOR", "1");
     let (mut rx, child) = command.spawn()?;
     let readiness = tokio::time::timeout(Duration::from_secs(30), async {
         let mut bytes = 0usize;
@@ -114,7 +115,11 @@ pub async fn start(app: &tauri::AppHandle) -> Result<String, Box<dyn std::error:
         // Drain both streams after readiness, including on a closed/hidden window.
         // A crash clears this exact child only; it never automatically restarts it.
         while let Some(event) = rx.recv().await {
+            if let CommandEvent::Stdout(ref line) = event {
+                crate::desktop::receive(&app, line);
+            }
             if let CommandEvent::Terminated(_) = event {
+                crate::desktop::disconnected(&app);
                 exited.notify_one();
                 let state = app.state::<DesktopCore>();
                 let mut running = state.0.lock().await;

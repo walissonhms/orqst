@@ -928,5 +928,17 @@
     "open": "Open these reviewed terminals in the Tauri runtime? Review every complete manifest page. This initializes the existing Core, journals and private admission for the entire selection. It does not start a CLI; each start still requires separate signed native confirmation. Opening is a single attempt; uncertain admission remains reserved.",
     "openApprove": "Open reviewed terminals",
     "denied": "Terminal preparation or opening was refused or remains uncertain. Use a canonical reviewed native binary and an empty disposable project. No CLI is started by preparation. Partial files and reservations are preserved. A cancelled opening can be reviewed again from this menu; an uncertain write or opening requires investigation before another attempt."
+  },
+  "tauriDesktop": {
+    "connected": "Core connected",
+    "offline": "Core unavailable",
+    "enabled": "Enabled; OS delivery is not confirmed",
+    "disabled": "Native alerts off",
+    "failed": "Native alert preparation failed; toggle off/on to retry",
+    "exhausted": "Alert limit reached for this run",
+    "limit": "Up to 20 attempts per run; OS permissions, identity and Focus apply",
+    "background": "Keep running when the main window closes (this run)",
+    "lifetime": "Quit stops the owned Core; managed hosts require separate consent",
+    "quit": "Quit ORQST and its owned Core"
   }
 }

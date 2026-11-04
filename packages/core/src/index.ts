@@ -310,3 +310,9 @@ export class ObserverCore {
     return this.releasing;
   }
 }
+
+export {
+  DesktopMonitor,
+  type DesktopMonitorSnapshot,
+  type NativeAlert,
+} from './desktop-monitor.js';
