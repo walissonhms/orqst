@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-04 — Native enrollment presentation fences
+
+- Cancel expired queued Webview creation before its native effect and invalidate
+  failed presentations so late layouts cannot regain focus.
+- Preserve the Core, admitted slots and prior documents; add pure Rust source
+  regressions, with Cargo execution still pending.
+
 ## 2026-11-04 — Native incremental terminal source
 
 - Append a selected CLI/model to the existing Core, broker service and retained

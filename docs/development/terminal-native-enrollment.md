@@ -82,3 +82,18 @@ Security review: inherited native parent/Core pipe only; no renderer manifest,
 proof, limit or execution endpoint, new listener, cookie/WebSocket/CSP change,
 credential read or observer migration. Reuse decisions and pin/license evidence
 are in the [native research record](../research/terminal-native-enrollment.md).
+
+## Queued callback and late layout correction
+
+The five-second UI callback now checks its original Core epoch/view, monotonic
+deadline, closed reply receiver and an atomic cancellation/claim token before
+creating a Webview. Timeout consumes that token; a queued callback cannot start
+creation after cancellation/expiry. Native scheduling/creation failure and the
+ten-second presentation failure reuse the existing generation/suspension fence,
+consume this operation's intent and reject late layouts. A newer Core/view is not
+suspended by an older failure. Core/admission/slots/documents remain preserved.
+
+Two additional pure Rust source regressions cover queued callback expiry/cancel
+and old layout/intent rejection after presentation invalidation. Rustfmt parsing
+and diff checks passed; Cargo execution remains paused and these cases have not
+been run. The prior 43 Node and renderer checks are unchanged by this Rust-only fix.

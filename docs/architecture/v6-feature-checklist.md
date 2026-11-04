@@ -292,3 +292,8 @@ This source increment does not mark native/runtime/provider acceptance complete.
       and packaging. Source/facade success does not certify a running Preview.
 
 See [exact checks and remaining limits](../development/terminal-native-enrollment.md).
+
+The native source follow-up also cancels expired queued UI creation and advances
+the existing presentation fence on creation/presentation failure. Pure Rust source
+cases cover callback cancellation and late layout refusal; only rustfmt parsing
+and diff validation were run for this follow-up, with Cargo still pending.
