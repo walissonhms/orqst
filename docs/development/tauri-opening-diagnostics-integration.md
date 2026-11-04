@@ -4,7 +4,8 @@ This delivery combines published opening source `87a1872` (code `5e2b034`)
 with original logger branch `fix/local-diagnostics-739`: `73bef77` (writer),
 `d4a408b` (hooks) and `7d97db5` (documentation). Merge commits preserve those
 originals. Abandoned candidates `7c2d38c` and `7957d9a` are not integrated.
-The source delivery tag is `delivery/2026-11-04-tauri-opening-diagnostics-source`.
+The initial source delivery tag is `delivery/2026-11-04-tauri-opening-diagnostics-source`.
+The corrected source freeze is `delivery/2026-11-04-tauri-opening-diagnostics-source-r2`.
 It identifies reviewed source, not runtime or provider acceptance.
 
 ## Review and security boundary
@@ -91,3 +92,16 @@ UI acceptance, consent or real reproduction is authorized here. The older global
 reservation still prevents opening and is not reconciled, adopted, removed or
 released by diagnostics. Terminal functionality and the cause of the historical
 alert/hang remain unproved. Root decides the next acceptance step.
+
+## Native gate correction before the second freeze
+
+The first published freeze `d6adcd6` passed the filtered dashboard/resource build
+and both locked/offline Cargo modes (76 tests passed per mode, one explicit FIFO
+fixture case ignored). All-target Clippy with `-D warnings` then refused two
+`map_err` closures used only for diagnostic side effects (`manual_inspect`). The
+minimal correction uses `inspect_err` with the original error retained unchanged.
+No lint is suppressed and no operation/authority behavior changes. The initial
+attempt stopped before native build/bundle/signing; its failed manifest and logs
+are preserved outside the new destination. The second freeze is published before
+repeating native checks and packaging. Later actual results remain in the generated
+manifest, not an assertion of runtime acceptance in this source document.
