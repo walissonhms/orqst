@@ -4,8 +4,10 @@
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
 cache/provider updates do not reject normal Open. Original cache expiry and native
-review/revalidation/launch fences remain enforced. See [reproduction and source-only
-checks](docs/development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+review/revalidation/launch fences remain enforced. The published freeze `7bfdca3`
+now has a [separate local package and actual checks](docs/development/terminal-catalog-selection-binding.md#verified-local-package).
+97 focused tests, full lint/types and filtered native packaging passed. Actual
+provider/native opening remains pending; the new app has not been started.
 
 The [shared terminal document URL](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
 now lives in pure policy, closing Tauri's active Electron type import paths while

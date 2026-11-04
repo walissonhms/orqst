@@ -4,13 +4,18 @@
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
 cache/provider updates do not reject normal Open. Original cache expiry and native
-review/revalidation/launch fences remain enforced. See [reproduction and source-only
-checks](../development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+review/revalidation/launch fences remain enforced. See [reproduction and package
+checks](../development/terminal-catalog-selection-binding.md). Real provider/native opening remains pending.
 
 - [x] Reproduce three isolated false invalidations against the published baseline.
 - [x] Bind selected evidence and retain cache expiry, review, commit and launch fences;
       97 focused checks, full typecheck and focal lint/format passed.
-- [ ] Integrate/package frozen source and validate actual native/provider opening.
+- [x] Integrate candidate `4eeeea2` with prior main `df0da2c`, publish freeze `7bfdca3`,
+      rerun the 97 focused cases once and pass full lint/types/format/diff.
+- [x] Build the separate local package serially on target691 with custom-protocol;
+      verify resources, original Node Developer ID and outer deep/strict signature;
+      preserve six earlier Preview trees and Coexistence698. No app was launched.
+- [ ] Validate actual native/provider opening and effective model in the exact new app.
 
 ## Shared document URL boundary — 2026-11-04
 

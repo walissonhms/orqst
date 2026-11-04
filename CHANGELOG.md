@@ -4,8 +4,11 @@
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
 cache/provider updates do not reject normal Open. Original cache expiry and native
-review/revalidation/launch fences remain enforced. See [reproduction and source-only
-checks](docs/development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+review/revalidation/launch fences remain enforced. Published freeze `7bfdca3` now
+has a [separate local package](docs/development/terminal-catalog-selection-binding.md#verified-local-package):
+97 focused checks, full lint/types, filtered build and current resource/Node/signature
+verification passed. All six earlier Previews and Coexistence698 remain unchanged.
+Actual provider/native opening remains pending; the new app has not been started.
 
 ## Shared document URL boundary — 2026-11-04
 

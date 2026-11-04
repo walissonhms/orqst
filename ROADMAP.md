@@ -4,8 +4,10 @@
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
 cache/provider updates do not reject normal Open. Original cache expiry and native
-review/revalidation/launch fences remain enforced. See [reproduction and source-only
-checks](docs/development/terminal-catalog-selection-binding.md). Real provider/native opening and packaging remain pending.
+review/revalidation/launch fences remain enforced. Published freeze `7bfdca3` now
+has a [verified local package](docs/development/terminal-catalog-selection-binding.md#verified-local-package)
+with 97 focused checks and current resource/Node/signature integrity. The next gate
+is explicit human native/provider testing; the new app has not been started.
 
 The [shared document URL boundary](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
 is split with pure checks and legacy Electron compatibility. Runtime/dependency

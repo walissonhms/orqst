@@ -58,3 +58,47 @@ Node integrity, outer ad-hoc signing without deep re-signing, and deep/strict
 verification. All earlier Preview trees and target691 Coexistence698 are preserved.
 Each heavy step requires at least 4 GiB free. No application is launched by this
 delivery; actual opening and effective model remain a separate human acceptance.
+
+## Verified local package
+
+Published source freeze: `7bfdca3d944e3f3615e20a1644f969d3792a9668`, annotated tag
+[`delivery/2026-11-04-codex-catalog-fix-source`](https://github.com/walissonhms/orqst/tree/delivery/2026-11-04-codex-catalog-fix-source).
+The source, candidate branch and tag were pushed atomically through `github-walisson`
+before generating resources or compiling. Subsequent package-report changes are
+Markdown only and do not change packaged code, configuration or locks.
+
+Local artifact: [ORQST Preview.app](../../dist/native-preview-codex-catalog-fix/ORQST%20Preview.app),
+with [build-manifest.json](../../dist/native-preview-codex-catalog-fix/build-manifest.json)
+and a short [technical report](../../dist/native-preview-codex-catalog-fix/technical-report.md).
+The manifest records frozen tracked-file hashes, commands, build environment,
+application/resource inventories, signatures, preserved trees and disk samples.
+Generated output and logs are not committed.
+
+| Current package check    | Result                                                                                                                           |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| Filtered dashboard build | Passed; existing Vite chunk-size and color-environment advisories remain                                                         |
+| Resource staging         | Passed, 17 dependency notices; existing additive staging retained                                                                |
+| Native build             | Passed, custom-protocol, locked/offline, existing target691, one job, incremental/debug info disabled and existing LLVM fallback |
+| Debug app bundle         | Passed, macOS arm64; approximately 190 MiB                                                                                       |
+| Configured resources     | All 114 files match staged inputs before and after signing                                                                       |
+| Runtime integrity        | Exact original Node 24.22.2 bytes and license match; original Developer ID signature retained                                    |
+| Outer signature          | Local ad-hoc, without deep re-signing; deep/strict verification passed                                                           |
+| Preservation             | Six older Preview trees and target691 Coexistence698 match complete pre-build contents/modes                                     |
+| Disk                     | Checked before, between and after heavy steps; minimum/final approximately 25.26 GiB, above the 4 GiB gate                       |
+
+Packaged native SHA-256:
+`5825b803db9a7fc8c94c42abff09722be3c5e2db17e7ebaa329e5ac6e9dcf8ac`.
+The worker's closed, clean worktree was removed with `git worktree remove` only
+after integration/push, local and remote branch preservation and an empty open-file
+check. Branch `fix/codex-catalog-changed` and its original commit remain preserved.
+
+This app has not been started. Source/synthetic checks and package integrity do
+not establish accepted native grants, successful real opening, effective model,
+provider entitlement, WebKit/OS behavior, real communication, final Quit or Electron
+retirement. The app is a local ad-hoc debug package, not notarized or release accepted.
+No provider/CLI/probe/Core/PTY runtime, human session, authentication database,
+uncertain reservation or quarantine was touched. No mutation retry, adoption,
+signal, reconciliation or deletion was attempted. Earlier attempts retain their
+unknown effects; only the newly reported failure establishes `catalog/not_started`.
+OpenCode's dynamic model catalogue and oversized native reviews remain separate
+work; this package contains no unfrozen DeepSeek changes.
