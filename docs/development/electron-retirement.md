@@ -8,6 +8,11 @@ the separate native-origin hook, 20 combined pure Node tests and explicit build
 and acceptance gates. The Codex historical cause remains unknown. The owner's
 existing `dist/native-preview-mcp-unavailable/ORQST Preview.app` is preserved;
 the only newly authorized package destination is `dist/native-preview-policy-notifications/`.
+That destination now contains the local app and generated manifest from published
+freeze `b54b7fe`: the same 59 Rust tests passed in each mode, with Clippy, filtered
+dashboard/resources/native build/bundle and final integrity/signature checks green.
+All six earlier app trees are unchanged. This package has not been started;
+actual OS/WebKit/provider behavior and Electron removal remain unaccepted.
 
 ## Webview policy hardening — 2026-11-04
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## Combined policy/notification local package — 2026-11-04
+
+- Package published freeze `b54b7fe` at the new isolated destination after the same
+  59 Rust tests in each mode, Clippy and filtered dashboard/resources/native build.
+- Verify 114 configured resources, original Node bytes/Developer ID signature and
+  outer ad hoc deep/strict signature; preserve all five prior Previews and
+  Coexistence 698. No app launch or native/provider acceptance is claimed.
+- Record [actual commands, warnings, scope and remaining parity](docs/development/tauri-policy-notifications-integration.md).
+
 ## Combined policy and notification source — 2026-11-04
 
 - Integrate the documentation-only Codex review, supported webview hardening and

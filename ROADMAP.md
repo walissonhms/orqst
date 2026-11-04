@@ -1,5 +1,14 @@
 # ORQST roadmap
 
+## Combined policy/notification package — 2026-11-04
+
+Published source `b54b7fe` is packaged locally: the same 59 Rust tests passed in
+each configuration, alongside Clippy, filtered dashboard/resources/native build,
+bundle and resource/Node/signature checks. See the
+[package and preservation evidence](docs/development/tauri-policy-notifications-integration.md).
+Native OS/WebKit/provider/communication/Quit acceptance, persisted-grant and
+data-store parity, and Electron removal remain open. The package was not started.
+
 ## Webview policy hardening — 2026-11-04
 
 Source now denies supported new webview permissions and browser downloads and

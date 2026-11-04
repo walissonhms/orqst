@@ -77,24 +77,44 @@ and the root build are outside this source verification.
 
 ## Published freeze and coordinated build gate
 
-Publish the complete clean source and delivery tag before any native compilation.
-The local generated manifest must retain the actual frozen SHA, toolchain,
-commands/exits, failures/reruns, source/resource hashes and preservation inventory.
-Compile serially in the existing coordinated target with locked/offline inputs,
-debug information and incremental compilation disabled, and one build job.
-Keep more than 4 GiB free between heavy steps.
+The complete clean source was published atomically before compilation as
+`b54b7feda15a797e3612c96e9c0fd5896c3732dc`, tagged
+[`delivery/2026-11-04-tauri-policy-notifications-integration`](https://github.com/walissonhms/orqst/tree/delivery/2026-11-04-tauri-policy-notifications-integration).
+All three original worker branches were published in the same atomic push.
+The local generated manifest retains the frozen SHA/tree/tracked-input hashes,
+toolchain, commands/exits, warnings, resource hashes and preservation inventory.
+Subsequent package-report edits change documentation only, without rebuilding or
+changing the source used by this package.
 
-The authorized new destination is only
-`dist/native-preview-policy-notifications/ORQST Preview.app`, with its adjacent
-`build-manifest.json`. Preserve the complete existing Preview and Coexistence 698
-apps and their binaries. Dashboard-only build, resource staging, custom-protocol
-native build and debug app bundle must precede outer-only ad hoc signing and final
-deep/strict verification. Preserve the bundled Node's original bytes and Developer
-ID signature. No package is started by this build authorization.
+New local artifact: [ORQST Preview.app](../../dist/native-preview-policy-notifications/ORQST%20Preview.app),
+with [build-manifest.json](../../dist/native-preview-policy-notifications/build-manifest.json).
+These generated files are not committed and are absent from a source-only checkout.
+Bundle identity is `dev.orqst.desktop.preview`. The final executable SHA-256 is
+`a9dd91cd7d99a8aed49389a537178ab4fa1b2f4233cd208eccc460a8d60a39d0`.
 
-Native compilation, the three URL-composition tests and new Rust notification
-tests remain pending at this source freeze. Record their actual results separately
-after execution; do not infer them from the pure Node/standalone Rust checks.
+| Current build evidence | Actual result                                                                                                                                                                      | Boundary                                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Rust default           | 59 passed, zero failed/ignored                                                                                                                                                     | Includes the three composed URL tests and new notification parse/ID/revocation/origin cases |
+| Rust custom-protocol   | Same 59 test names passed, zero failed/ignored                                                                                                                                     | Two configurations, not 118 distinct tests                                                  |
+| Clippy                 | All-targets custom-protocol with `-D warnings` passed                                                                                                                              | Locked/offline native graph; no weakened lint                                               |
+| Build/package          | Filtered dashboard, 17-notice resources, custom-protocol native build and debug app bundle passed                                                                                  | Local macOS Apple Silicon debug package; no runtime acceptance                              |
+| Integrity/signature    | 114 configured resources matched before/after signing; Node bytes/license and original Developer ID signature retained; outer ad hoc signature and deep/strict verification passed | No deep signing, notarization, release or cross-platform acceptance                         |
+| Preservation           | All five previous Preview app trees and target691 Coexistence 698 matched their pre-build file/directory/symlink/mode inventories and executable hashes                            | New app moved by same-volume rename into an absent destination; no old app replaced         |
+| Disk/toolchain         | Existing target691, Node 24.22.2/pnpm 10.34.9, Rust 1.99.1, one job, debug/incremental off; minimum 26.0187 GiB and final 26.0188 GiB free                                         | More than the required 4 GiB remained between heavy commands                                |
+
+All native test/Clippy/build/bundle/signature commands passed on their first run;
+no native failure, source correction or build rerun was needed. Source refs and
+tracked inputs were checked before each build step and after packaging. No open
+files were found in the three staging trees before the filtered dashboard build
+or resource script could replace generated files. No additional target, install,
+dependency/lock change or duplicate temporary Node runtime was created.
+
+The existing Vite large-chunk advisory and color-environment warnings remain;
+the intentional bundler `--no-sign` warning precedes the successful separate
+outer signing. Staging remains additive: its pre-existing root `.DS_Store` is
+inventoried and retained outside the configured resource map. The 114 configured
+resource matches do not claim a clean staging directory. No app, Core/PTY,
+provider, session/probe/authentication or uncertain-state operation was executed.
 
 ## Open acceptance and parity
 

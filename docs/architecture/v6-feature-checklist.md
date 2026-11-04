@@ -7,8 +7,10 @@
 - [x] Review native origin/URI/SPA/download/permission boundaries and fresh
       source-backed notification selection through the existing draft guard;
       pass 20 distinct combined pure Node tests, lint/types/format/rustfmt/diff.
-- [ ] Complete the separately authorized serial native compilation and package
-      integrity checks from a published freeze; preserve existing apps and Node.
+- [x] Complete serial native compilation from published freeze `b54b7fe`: the same
+      59 Rust tests pass in each configuration, Clippy and filtered dashboard/
+      resources/native build/bundle pass, 114 resources and Node/signatures match;
+      preserve all five prior Preview apps and Coexistence 698. New app not started.
 - [ ] Accept actual OS/WebKit/provider/communication/Quit behavior and resolve
       persistence/grant/unsupported-callback parity limits before removing Electron.
 

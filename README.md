@@ -1,5 +1,12 @@
 # ORQST
 
+The combined policy/notification source `b54b7fe` has a
+[new local Preview package and generated manifest](docs/development/tauri-policy-notifications-integration.md#published-freeze-and-coordinated-build-gate):
+59 Rust tests passed in each of two configurations, with Clippy, filtered build,
+114 resource matches and original Node/final signature verification. Five older
+Preview apps and Coexistence 698 are unchanged. The new app has not been started;
+OS/WebKit/provider acceptance and Electron retirement remain open.
+
 Tauri webview hardening now explicitly denies supported new permission requests
 and browser downloads, and limits dashboard documents to existing SPA routes.
 See [source defaults, checks and remaining native/platform acceptance](docs/development/tauri-webview-policy.md).
