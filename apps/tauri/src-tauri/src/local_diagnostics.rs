@@ -519,4 +519,38 @@ mod tests {
         assert_eq!(fs::read(active).unwrap(), [b'x'; 17]);
         fs::remove_dir_all(parent).unwrap();
     }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    #[ignore = "requires FIFO fixtures from scripts/test-local-diagnostics.mjs"]
+    fn fifo_without_reader_is_refused_without_waiting() {
+        use std::os::unix::fs::FileTypeExt;
+        for name in ["native.lock", "native.jsonl"] {
+            let parent = temporary();
+            fs::create_dir(parent.join("diagnostics")).unwrap();
+            let fifo = parent.join("diagnostics").join(name);
+            // The standalone runner creates disposable FIFOs before concurrent tests.
+            let fixtures = std::env::var_os("ORQST_DIAGNOSTIC_FIFO_FIXTURE")
+                .expect("standalone runner FIFO fixtures");
+            fs::rename(PathBuf::from(fixtures).join(name), &fifo).unwrap();
+            assert!(disk::Sink::open(&parent, 64).is_err());
+            assert!(fs::symlink_metadata(&fifo).unwrap().file_type().is_fifo());
+            fs::remove_dir_all(parent).unwrap();
+        }
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn append_error_preserves_unrelated_data_and_does_not_repair_the_sink() {
+        let parent = temporary();
+        let mut sink = disk::Sink::open(&parent, 64).unwrap();
+        let sentinel = parent.join("diagnostics/unrelated");
+        fs::write(&sentinel, b"synthetic sentinel").unwrap();
+        let active = parent.join("diagnostics/native.jsonl");
+        fs::create_dir(&active).unwrap();
+        assert!(sink.append(b"synthetic\n").is_err());
+        assert!(active.is_dir());
+        assert_eq!(fs::read(sentinel).unwrap(), b"synthetic sentinel");
+        fs::remove_dir_all(parent).unwrap();
+    }
 }

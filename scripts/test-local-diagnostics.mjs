@@ -29,7 +29,16 @@ try {
     ['--edition=2021', '-D', 'warnings', '--test', file, '-o', binary],
     { stdio: 'inherit', timeout: 30_000 },
   );
-  execFileSync(binary, [], { stdio: 'inherit', timeout: 30_000 });
+  // Create FIFO fixtures before concurrent Rust tests: spawning during a lock test
+  // can temporarily inherit its descriptor across fork, delaying lock release.
+  for (const name of ['native.lock', 'native.jsonl']) {
+    execFileSync('mkfifo', [join(directory, name)], { timeout: 5_000 });
+  }
+  execFileSync(binary, ['--include-ignored'], {
+    stdio: 'inherit',
+    timeout: 30_000,
+    env: { ...process.env, ORQST_DIAGNOSTIC_FIFO_FIXTURE: directory },
+  });
 } finally {
   rmSync(directory, { recursive: true });
 }
