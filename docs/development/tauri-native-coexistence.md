@@ -32,7 +32,22 @@ pnpm accept:tauri-coexistence --authorize-synthetic \
   'apps/tauri/src-tauri/target/debug/bundle/macos/ORQST Coexistence.app' combined
 ```
 
-The runner rejects the normal preview identity and requires an explicit synthetic
+The runner rejects the normal preview identity and a resident ORQST process with
+the same executable path or bundle identifier. It checks before fixture allocation
+and again immediately before launch; it never focuses, terminates or adopts an
+existing application. Quit a resident acceptance identity explicitly or build a
+separate identity. An external launch after the final check can still race, so a
+zero process exit must never be treated as native acceptance.
+
+The runner prints the canonical artifact path and native/Node executable hashes,
+and retains them with manifests and the reserved port in private `fixture.json`.
+The launch line reports the owned PID; private `exit.json` records PID, port,
+process exit code/signal and spawn failure. These are process evidence, not proof
+that a window rendered or a consent was accepted. A prebuilt app can predate the
+current checkout: verify its build provenance separately before accepting main.
+No Rust build is needed merely to run the preflight or record an existing bundle.
+
+It requires an explicit synthetic
 authorization, macOS ARM64 and a non-root user. It compiles the existing fixed C
 fixtures, pins them in fresh manifests and launches one native shell with both
 private hosts. HOME, temporary state, observer sources, admission and port are
@@ -50,6 +65,27 @@ manifest creation remains a separate acceptance obligation.
 
 The runner intentionally never reports a native test as passed. Record observed
 results for each checklist item; a zero exit code proves only native process exit.
+
+## Inspecting a native window safely
+
+Launch only through the isolated runner before selecting the exact running bundle
+identity in Computer Use. App selection can launch a missing application with the
+ordinary user environment; never use it as the initial fixture launcher. If the
+fixture exits, do not select it again until a fresh isolated run is established.
+Avoid a name shared with the resident preview or Electron app.
+
+`cgWindowNotFound` is an inspection failure, not evidence of successful rendering,
+missing native permissions or an application defect by itself. Inventory liveness,
+a process sample showing the AppKit event loop, and an owned Core serving the empty
+dashboard do not prove a capturable native window. Record the exact selection route
+(path or bundle ID), tool error and artifact hashes. Do not click guessed coordinates,
+change OS security settings or substitute Chromium for the native checklist.
+
+If inspection remains unavailable, interrupt only the owned runner. It forwards the
+signal only to its spawned native child. Retain the nonzero result and confirm the
+recorded PIDs/port are gone; this is an aborted attempt, not graceful quit or combined
+consent acceptance. Keep private evidence outside Git. See the
+[preflight source review](../research/tauri-native-acceptance.md).
 
 ## Native checklist and current evidence
 
