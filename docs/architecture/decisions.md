@@ -759,3 +759,29 @@ do not validate OpenCode descendants, and therefore cannot release its reservati
 The creation wizard remains homogeneous; native selection composes existing files.
 Synthetic process/transport evidence does not prove real login, human consent,
 model availability or A-to-B processing. See [client workflow](../development/codex-opencode-pair.md).
+
+## ADR-038 — Incremental Tauri shell with the existing Node Core
+
+**Status:** Owner-authorized migration target, first native preview implemented
+2026-11-04; full managed Desktop parity and distribution acceptance pending.
+
+The master Tauri/reuse/UI specification replaces Electron as the target shell,
+while preserving React, Node 24, SQLite and functioning managed services. Reference
+research precedes implementation and complex debugging: prioritize Anywh for
+Tauri/Core/CLI lifecycle, Tucano for explicit collaboration/routing, and Overclock
+for terminal experience. Compatible reuse needs exact source/commit/license,
+contract and dependency evidence; unknown source grants do not authorize copying.
+
+Introduce an opt-in Tauri preview with a packaged Node executable, self-contained
+Bridge/Analytics worker and the unchanged React build. Adapt Anywh's narrow native
+sidecar ownership and single-instance callback, with attribution and local-only
+security changes. Do not duplicate the CLI/session/communication managers. Keep
+the preview's state separate to avoid a second observer writing the running
+service's database. Preserve existing Electron commands until native terminal,
+trusted input/consent, export, notification and lifecycle parity is proved.
+
+This does not change the read-only observer or grant control over external
+sessions. Managed execution remains a separate authorized mode. A compiled native
+window is not evidence of real CLI delegation or recovered managed processes.
+See [reuse evidence](../research/tauri-core-reuse.md) and
+[build/acceptance scope](../development/tauri.md).

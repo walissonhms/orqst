@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-04 — Tauri preview with the existing Node Core
+
+- Add an opt-in Tauri 2 shell that packages Node 24, the existing Bridge/Core,
+  production Analytics worker and unchanged React dashboard. Preserve Electron
+  until native managed-terminal/export/notification parity is accepted.
+- Adapt attributed Anywh sidecar ownership and early single-instance handling;
+  keep renderer capabilities empty, state private and separate, startup bounded
+  and shutdown scoped to the owned process.
+- Add disposable process tests and an out-of-checkout packaged Core/browser check.
+  A local macOS Apple Silicon debug application has native navigation evidence;
+  real-provider tasks, full migration and multiplatform distribution remain pending.
+
 ## 2026-11-03 — Reviewed Codex/OpenCode pair
 
 - Allow exactly one Codex and one OpenCode manifest in native review and the shared

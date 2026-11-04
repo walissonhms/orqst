@@ -135,3 +135,5 @@ For a new contributor:
 
 - [Partial session model history](api/model-history.md) — normalized-event identifiers,
   bounded compact evidence, unavailable states and source-trust limits.
+- [Tauri preview](development/tauri.md) — build/run, private Node Core lifetime and
+  the remaining migration acceptance; [pinned reuse](research/tauri-core-reuse.md).

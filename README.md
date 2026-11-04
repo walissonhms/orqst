@@ -1,5 +1,16 @@
 # ORQST
 
+## Tauri 2 migration preview — 2026-11-04
+
+A separate Tauri 2 application now runs the existing React dashboard with a bundled
+Node 24 Core, SQLite and the production Analytics worker, without Electron. Its
+native child lifecycle and single-instance handling adapt pinned, attributed Anywh
+code. The local macOS Apple Silicon debug bundle has startup/navigation/shutdown
+evidence; this is the first migration increment, not complete desktop parity.
+Managed terminals and native exports/notifications still use the existing Electron
+application. See [build, run and exact limits](docs/development/tauri.md) and the
+[component/license review](docs/research/tauri-core-reuse.md).
+
 ## Bounded interactive terminal teams — 2026-11-03
 
 A newly loaded Desktop now supports **1–8 same-provider terminals in one project**,

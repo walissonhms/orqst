@@ -1,5 +1,32 @@
 # Security model
 
+## Tauri preview process boundary — 2026-11-04
+
+The native shell owns a fixed bundled Node executable and Bridge entry; there is
+no arbitrary renderer command, Tauri capability, remote origin grant, CLI launch,
+PTY endpoint or signing-key exposure. The shell plugin is used exclusively from
+Rust. The Core receives an allowlisted environment, separate private application
+state and a stable native loopback origin (default port 4319). Port conflicts fail
+startup without attaching to another process. Existing HTTP/WebSocket authorization and
+CSP remain unchanged. Navigation cannot leave that exact origin, credentials/query
+URLs are rejected and new windows are denied. Packaged `index.html` must be a regular
+file before readiness. Source sessions remain read-only under existing controls.
+
+Readiness is bounded and checked before creating the webview. A native single-instance
+plugin prevents a second application startup from creating a second Core. Stdout and
+stderr continue draining after readiness without printing captured diagnostics. Native
+exit waits for its fixed stdin shutdown, then can kill only its retained child; EOF
+also initiates Node cleanup. No stale PID, uncertain descendant or lost agent is
+adopted or restarted. This is not hard containment against a malicious same-user
+process replacing app resources. Managed-terminal native consent, trusted input,
+reconnection and full-platform packaging are not migrated yet.
+
+Security review: no observer endpoint, cookie, WebSocket/event shape, database schema
+or source-access policy changes. The new boundary is native → inherited stdio →
+existing Node Bridge. See [process contract](../api/desktop-sidecar.md),
+[source/license audit](../research/tauri-core-reuse.md) and
+[acceptance limits](../development/tauri.md).
+
 ## Codex/OpenCode pair security review — 2026-11-03
 
 The only heterogeneous selection allowed is exactly one Codex and one OpenCode in

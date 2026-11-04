@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ORQST Preview",
+  "version": "0.1.0",
+  "identifier": "dev.orqst.desktop.preview",
+  "build": {
+    "beforeDevCommand": "cd ../.. && pnpm build:tauri-resources",
+    "beforeBuildCommand": "cd ../.. && pnpm build:tauri-resources",
+    "frontendDist": "../dist/dashboard"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": {
+      "capabilities": [],
+      "csp": "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/orqst-node"],
+    "resources": {
+      "../dist/core/": "core/",
+      "../dist/dashboard/": "dashboard/",
+      "../dist/licenses/": "licenses/"
+    },
+    "icon": [
+      "../../desktop/resources/icons/orqst-32.png",
+      "../../desktop/resources/icons/orqst-128.png",
+      "../../desktop/resources/icons/orqst.icns",
+      "../../desktop/resources/icons/orqst.ico"
+    ]
+  }
+}

@@ -9,6 +9,9 @@ dist/
 coverage/
 playwright-report/
 test-results/
+/apps/tauri/src-tauri/target/
+/apps/tauri/src-tauri/binaries/
+/apps/tauri/src-tauri/gen/
 .DS_Store
 .overclock-app/
 .codex/

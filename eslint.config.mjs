@@ -5,6 +5,8 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      'apps/tauri/src-tauri/target/**',
+      'apps/tauri/src-tauri/gen/**',
       '**/node_modules/**',
       '.overclock-app/**',
       '.codex/**',

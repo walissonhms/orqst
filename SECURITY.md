@@ -1,5 +1,19 @@
 # Security policy
 
+## Tauri preview process boundary — 2026-11-04
+
+The opt-in Tauri preview starts only its fixed packaged Node Core in a separate
+private profile. It grants no renderer Tauri capabilities or executable commands,
+restricts navigation to its owned loopback origin and denies new windows. Node
+receives an environment allowlist, validates its packaged dashboard before READY,
+and retains the existing Bridge Host/Origin, cookie, WebSocket and CSP protections.
+Native shutdown addresses only the retained child; no provider execution, observed
+session control, stored-PID adoption or automatic respawn is added. Electron's
+managed execution and its signing authority are not exposed through this preview.
+See [implementation and remaining parity](docs/development/tauri.md) and the
+[private process contract](docs/api/desktop-sidecar.md). Complete native dependency
+redistribution notices and signed installers remain release prerequisites.
+
 ## Codex/OpenCode pair security review — 2026-11-03
 
 The only heterogeneous selection allowed is exactly one Codex and one OpenCode in
