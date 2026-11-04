@@ -14,6 +14,9 @@ use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
 use tokio::sync::Notify;
+#[cfg(target_os = "macos")]
+#[path = "terminal_focus.rs"]
+mod native_focus;
 
 #[derive(Default)]
 pub struct Terminals(Mutex<Option<Running>>);
@@ -29,6 +32,7 @@ struct Running {
     sequence: u64,
     mcp_request: Option<(String, usize)>,
     mcp_denied: String,
+    native_dialog: Option<(String, usize, u64)>,
     exited: Arc<Notify>,
     quit_notice: String,
     cancel: String,
@@ -119,6 +123,51 @@ async fn focused(view: &Webview) -> bool {
     false // Other platforms remain fail-closed until native child-focus is implemented.
 }
 
+// Developer-only metadata: no renderer control, content, pointer or title logging.
+// Sampling never restores focus and never participates in an authorization decision.
+#[cfg(target_os = "macos")]
+async fn trace_dialog_focus(view: Webview) {
+    let started = tokio::time::Instant::now();
+    for millis in [0, 100, 250, 500, 1000] {
+        tokio::time::sleep_until(started + Duration::from_millis(millis)).await;
+        let focus = focused(&view).await;
+        let (tx, rx) = oneshot::channel();
+        let _ = view.with_webview(move |native| {
+            // SAFETY: borrowed native objects are inspected synchronously on the UI thread.
+            let sample = unsafe {
+                use objc2::runtime::AnyObject;
+                use objc2::{msg_send, sel};
+                let webview = native.inner().cast::<AnyObject>();
+                let window: *mut AnyObject = msg_send![webview, window];
+                if window.is_null() { json!({"window": false}) } else {
+                    let key: bool = msg_send![window, isKeyWindow];
+                    let responder: *mut AnyObject = msg_send![window, firstResponder];
+                    if responder.is_null() { json!({"key": key, "responder": false}) } else {
+                        let is_view: bool = msg_send![responder, respondsToSelector: sel!(isDescendantOf:)];
+                        let within: bool = is_view && msg_send![responder, isDescendantOf: webview];
+                        json!({"key": key, "within": within, "class": (*responder).class().name().to_string_lossy()})
+                    }
+                }
+            };
+            let _ = tx.send(sample);
+        });
+        let native = tokio::time::timeout(Duration::from_secs(1), rx)
+            .await
+            .ok()
+            .and_then(Result::ok);
+        eprintln!(
+            "ORQST_TERMINAL_FOCUS {}",
+            json!({"atMs": millis, "elapsedMs": started.elapsed().as_millis(),
+            "focused": focus, "visible": view.window().is_visible().ok(),
+            "windowFocused": view.window().is_focused().ok(), "native": native})
+        );
+    }
+}
+
+fn focus_diagnostics() -> bool {
+    std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1")
+}
+
 fn send(app: &tauri::AppHandle, message: Value) -> bool {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
@@ -186,6 +235,9 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         return denied();
     };
     let app = window.app_handle().clone();
+    if presentation_blocked(&app) {
+        return denied();
+    }
     let focus = focused(&window).await;
     if focus {
         send(&app, json!({"kind":"layout-focus", "slot":slot}));
@@ -196,7 +248,9 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         let Some(running) = guard.as_mut() else {
             return denied();
         };
-        if running.retiring
+        if running.confirming_quit
+            || running.exit_authorized
+            || running.retiring
             || running.mcp_request.is_some()
             || !running.loaded.get(slot).copied().unwrap_or(false)
             || running.revoked[slot]
@@ -241,7 +295,7 @@ pub async fn terminal_request(window: Webview, request: Value) -> Value {
         running.busy[slot] = false;
         running.generations[slot] == generation && running.loaded[slot]
     };
-    if !valid || self::slot(&window) != Some(slot) {
+    if !valid || presentation_blocked(&app) || self::slot(&window) != Some(slot) {
         return denied();
     }
     match result {
@@ -277,7 +331,7 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         .unwrap()
         .as_ref()
         .is_some_and(|r| r.retiring);
-    if retiring || !focused(&window).await {
+    if retiring || presentation_blocked(app) || !focused(&window).await {
         return json!(false);
     }
     // Revoke immediately, before the asynchronous Node layout update arrives.
@@ -292,6 +346,46 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         app,
         json!({"kind": "layout-action", "slot": slot, "action": action})
     ))
+}
+
+#[cfg(target_os = "macos")]
+fn current_review(app: &tauri::AppHandle) -> bool {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| {
+            r.native_dialog
+                .as_ref()
+                .is_some_and(|(_, slot, generation)| {
+                    r.generations.get(*slot) == Some(generation)
+                        && r.loaded.get(*slot) == Some(&true)
+                        && r.revoked.get(*slot) == Some(&false)
+                })
+        })
+}
+
+#[cfg(target_os = "macos")]
+fn native_focus_lost(app: &tauri::AppHandle, reason: &str) {
+    if focus_diagnostics() {
+        eprintln!("ORQST_TERMINAL_REVOKE {reason}");
+    }
+    revoke_all(app);
+}
+
+#[cfg(target_os = "macos")]
+fn suspend_input(app: &tauri::AppHandle) {
+    let count = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map_or(0, |r| r.documents.len());
+    for slot in 0..count {
+        send(app, json!({"kind":"suspend-input", "slot":slot}));
+    }
 }
 
 fn revoke_all(app: &tauri::AppHandle) {
@@ -319,6 +413,10 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
 }
 
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
+    // Late host replies cannot present or focus a window over a pending Quit review.
+    if presentation_blocked(app) {
+        return;
+    }
     let Some(window) = app.get_window("terminal-workspace") else {
         return;
     };
@@ -382,6 +480,9 @@ fn apply_layout(app: &tauri::AppHandle, value: &Value) {
 }
 
 async fn confirm(app: &tauri::AppHandle, value: &Value) {
+    if presentation_blocked(app) {
+        return;
+    }
     let Some(slot) = value["slot"].as_u64().map(|v| v as usize) else {
         return;
     };
@@ -404,15 +505,24 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
     let request = value["requestId"].as_str().map(str::to_owned);
     let generation = {
         let state = app.state::<Terminals>();
-        let guard = state.0.lock().unwrap();
-        let Some(r) = guard.as_ref() else { return };
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else { return };
+        if r.native_dialog.is_some() {
+            drop(guard);
+            send(app, json!({"kind":"confirm", "id":id, "accepted":false}));
+            return;
+        }
         if request
             .as_ref()
             .is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot)))
         {
             return;
         }
-        r.generations.get(slot).copied()
+        let generation = r.generations.get(slot).copied();
+        if let Some(generation) = generation {
+            r.native_dialog = Some((id.clone(), slot, generation));
+        }
+        generation
     };
     let approve = fields[4].to_owned();
     let expected = approve.clone();
@@ -424,14 +534,20 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         .show_with_result(move |result| {
             tauri::async_runtime::spawn(async move {
                 let focused = focused(&window).await;
-                let current = app.state::<Terminals>().0.lock().unwrap().as_ref().and_then(|r| {
+                let current = app.state::<Terminals>().0.lock().unwrap().as_mut().and_then(|r| {
+                    if r.native_dialog.as_ref().is_some_and(|(dialog_id, _, _)| dialog_id == &id) { r.native_dialog = None; }
                     if r.revoked.get(slot).copied().unwrap_or(true)
                         || request.as_ref().is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot))) {
                         None
                     } else { r.generations.get(slot).copied() }
                 });
+                if focus_diagnostics() {
+                    eprintln!("ORQST_TERMINAL_CONSENT {}", json!({"result": format!("{result:?}"), "approved": matches!(result, MessageDialogResult::Custom(ref text) if text == &expected), "focused": focused, "generation": generation, "current": current}));
+                    #[cfg(target_os = "macos")]
+                    tauri::async_runtime::spawn(trace_dialog_focus(window.clone()));
+                }
                 let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
-                    && generation == current && self::slot(&window) == Some(slot) && focused;
+                    && generation == current && self::slot(&window) == Some(slot) && focused && !presentation_blocked(&app);
                 send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
             });
         });
@@ -439,6 +555,9 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
 
 /// Native menu only: no renderer command can select a grant, supply a proof or call MCP tools.
 async fn authorize_mcp(app: &tauri::AppHandle) {
+    if presentation_blocked(app) {
+        return;
+    }
     let count = app
         .state::<Terminals>()
         .0
@@ -518,6 +637,9 @@ async fn authorize_mcp(app: &tauri::AppHandle) {
 
 /// Native menu only: no renderer request can retire a selection or unlock startup.
 async fn retire_selection(app: &tauri::AppHandle) {
+    if presentation_blocked(app) {
+        return;
+    }
     let count = app
         .state::<Terminals>()
         .0
@@ -709,6 +831,7 @@ pub async fn start_selected(
         sequence: 0,
         mcp_request: None,
         mcp_denied: ready["mcpDenied"].as_str().unwrap_or("").into(),
+        native_dialog: None,
         exited: exited.clone(),
         quit_notice: ready["quitNotice"].as_str().unwrap_or("").into(),
         cancel: ready["cancel"].as_str().unwrap_or("").into(),
@@ -779,7 +902,31 @@ pub async fn start_selected(
     let handle = app.clone();
     let target = workspace.clone();
     workspace.on_window_event(move |event| match event {
-        WindowEvent::Focused(false) => revoke_all(&handle),
+        WindowEvent::Focused(focus) => {
+            #[cfg(target_os = "macos")]
+            {
+                if *focus {
+                    native_focus::install(&handle);
+                }
+                let native = native_focus::sample(&target);
+                if focus_diagnostics() {
+                    eprintln!("ORQST_TERMINAL_WINDOW focused={focus} native={native:?}");
+                }
+                if !focus {
+                    if native_focus::ready()
+                        && native.is_some_and(|n| n.owns_sheet(current_review(&handle)))
+                    {
+                        suspend_input(&handle);
+                    } else {
+                        native_focus_lost(&handle, "window-blur");
+                    }
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            if !focus {
+                revoke_all(&handle);
+            }
+        }
         WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
             resize(&handle, &target)
         }
@@ -817,6 +964,9 @@ pub async fn start_selected(
     menu.append(&submenu)?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
+        if presentation_blocked(app) {
+            return;
+        }
         if event.id().as_ref() == "terminal-authorize-mcp" {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -969,6 +1119,29 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) fn install_quit_observer(app: &tauri::AppHandle) -> bool {
+    native_focus::install(app)
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) fn quit_window_focus(window: &tauri::Window) -> Option<(bool, bool)> {
+    let focus = native_focus::sample(window)?;
+    Some((focus.owns_key(true), focus.owns_sheet(true)))
+}
+
+/// Shared presentation fence for metadata-only Feature replies during either Quit gate.
+pub(crate) fn presentation_blocked(app: &tauri::AppHandle) -> bool {
+    let terminal = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| r.confirming_quit || r.exit_authorized);
+    terminal || crate::agents::exit_pending(app)
+}
+
 /// Closing the application requires explicit consent to disconnect owned tasks.
 pub fn reset_exit(app: &tauri::AppHandle) {
     if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
@@ -978,6 +1151,9 @@ pub fn reset_exit(app: &tauri::AppHandle) {
 }
 
 pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
+    if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+        eprintln!("ORQST_QUIT_GATE terminal");
+    }
     let fields = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
@@ -993,16 +1169,42 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         r.confirming_quit = true;
         (r.quit_notice.clone(), r.cancel.clone(), r.quit.clone())
     };
+    revoke_all(app);
+    crate::agents::revoke_for_quit(app);
+    let Some(parent) = crate::desktop::quit_parent(app) else {
+        reset_exit(app);
+        crate::agents::reset_exit(app);
+        return true;
+    };
+    let Some(token) = crate::desktop::begin_quit_review(app, &parent) else {
+        reset_exit(app);
+        crate::agents::reset_exit(app);
+        return true;
+    };
     let app = app.clone();
     app.dialog()
         .message(fields.0)
+        .parent(&parent)
         .buttons(MessageDialogButtons::YesNoCancelCustom(
             fields.1.clone(),
             fields.2.clone(),
             fields.1,
         ))
         .show_with_result(move |result| {
-            if matches!(result, MessageDialogResult::Custom(ref s) if s == &fields.2) {
+            if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+                eprintln!("ORQST_QUIT_RESULT terminal {result:?}");
+            }
+            let presented = crate::desktop::finish_quit_review(&app, token, parent.label());
+            if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+                eprintln!("ORQST_QUIT_REVIEW token={token} presented={presented}");
+            }
+            if crate::desktop::quit_approved(
+                &result,
+                &fields.2,
+                presented
+                    && app.get_window(parent.label()).is_some()
+                    && parent.is_visible().unwrap_or(false),
+            ) {
                 if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
                     r.exit_authorized = true;
                 }
