@@ -1073,5 +1073,11 @@
     "creationUnavailable": "Use native preparation to create/review terminals. Assign only the available reviewed slots.",
     "loading": "Loading…",
     "switching": "Switching view…"
+  },
+  "tauriCoreUnavailable": {
+    "title": "Observer unavailable",
+    "observer": "The observer Core could not start or its connection was lost. Observation is unavailable.",
+    "managed": "Managed terminal hosts may still be running. This screen does not determine their state or restart any process.",
+    "recovery": "Automatic recovery is disabled. Review existing terminal windows before using the native Quit action. Restarting the app is not a safe retry of an owned managed session."
   }
 }
