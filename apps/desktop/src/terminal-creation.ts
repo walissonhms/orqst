@@ -65,6 +65,16 @@ export interface TerminalCreationInput {
   preparation?: TerminalPreparationBinding;
 }
 
+export interface TerminalCreationOverview {
+  project: string;
+  terminals: {
+    id: string;
+    provider: LocalCliProvider;
+    model: string | null;
+    role?: 'source' | 'worker';
+  }[];
+}
+
 function overlaps(a: string, b: string): boolean {
   return [relative(a, b), relative(b, a)].some((path) => path !== '..' && !path.startsWith('../'));
 }
@@ -261,6 +271,15 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   return {
     detail,
     pages,
+    overview: {
+      project: input.project,
+      terminals: configs.map((config, index) => ({
+        id: config.identity!.terminalId,
+        provider: members[index]!.provider,
+        model: config.model?.value ?? null,
+        ...(input.mcp ? { role: index === 0 ? ('source' as const) : ('worker' as const) } : {}),
+      })),
+    } satisfies TerminalCreationOverview,
     root,
     provision(current: () => boolean): string[] {
       if (attempted || !current()) throw new Error('Creation unavailable');

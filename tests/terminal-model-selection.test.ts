@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -250,6 +251,87 @@ test('workspace lookup is read-only, ID-bound and launch fences reject changed F
     features.saveView({ expectedRevision: 0, featureId: feature.featureId });
     assert.throws(() => validateTerminalPreparationBinding(binding, f.project), /Feature changed/);
     assert.equal(stableId('workspace', f.project), f.workspaceId);
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode saved nested model IDs revalidate semantically and selected variant drift refuses', () => {
+  const f = fixture();
+  try {
+    const state = join(f.home, '.local/state/opencode');
+    mkdirSync(state, { recursive: true, mode: 0o700 });
+    const file = join(state, 'model.json');
+    const write = (variant: string, other: string) =>
+      writeFileSync(
+        file,
+        JSON.stringify({
+          favorite: [{ providerID: 'synthetic', modelID: 'org/model' }],
+          variant: { 'synthetic/org/model': variant, 'other/model': other },
+        }),
+        { mode: 0o600 },
+      );
+    write('fast', 'initial');
+    const selected = discoverTerminalModels('opencode', f.project, f.home, {}).options.find(
+      ({ selection }) => selection.value === 'synthetic/org/model#fast',
+    )!.selection;
+    assert.deepEqual(openCodeModelConfiguration(selected), {
+      providerID: 'synthetic',
+      model: 'org/model',
+      variant: 'fast',
+    });
+    write('fast', 'irrelevant');
+    assert.equal(openCodeModelConfiguration(selected)?.model, 'org/model');
+    write('slow', 'irrelevant');
+    assert.throws(() => openCodeModelConfiguration(selected), /catalogue changed/);
+    assert.throws(
+      () => openCodeModelConfiguration({ ...selected, source: 'native-config' }),
+      /catalogue changed/,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode native state refuses unsafe files and bounds arrays, variants, IDs and options', () => {
+  const f = fixture();
+  try {
+    const state = join(f.home, '.local/state/opencode');
+    mkdirSync(state, { recursive: true, mode: 0o700 });
+    const file = join(state, 'model.json');
+    const write = (value: unknown) => writeFileSync(file, JSON.stringify(value), { mode: 0o600 });
+    const options = () => discoverTerminalModels('opencode', f.project, f.home, {}).options;
+    const entries = (count: number) =>
+      Array.from({ length: count }, (_, i) => ({ providerID: 'synthetic', modelID: `model-${i}` }));
+    for (const document of [
+      { recent: entries(65) },
+      { favorite: entries(65) },
+      { recent: [{ providerID: 'synthetic', modelID: 'x'.repeat(161) }] },
+      {
+        variant: Object.fromEntries(
+          entries(129).map((entry) => [`synthetic/${entry.modelID}`, 'fast']),
+        ),
+      },
+    ]) {
+      write(document);
+      assert.equal(options().length, 1);
+    }
+    write({
+      recent: entries(64),
+      favorite: entries(64).map((entry) => ({ ...entry, modelID: `favorite-${entry.modelID}` })),
+    });
+    assert.equal(options().length, 128);
+    write({ recent: entries(1) });
+    chmodSync(file, 0o666);
+    assert.throws(options, /Untrusted terminal file/);
+    chmodSync(file, 0o600);
+    writeFileSync(file, ' '.repeat(2 * 1024 * 1024 + 1));
+    assert.throws(options, /Untrusted terminal file/);
+    rmSync(file);
+    const target = join(state, 'other.json');
+    writeFileSync(target, '{}', { mode: 0o600 });
+    symlinkSync(target, file);
+    assert.throws(options, /Noncanonical file/);
   } finally {
     f.close();
   }

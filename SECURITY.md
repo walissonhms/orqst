@@ -1057,3 +1057,13 @@ entry, cache version and current freshness at provisioning and dispatch. Full na
 review, binary pins, Workspace/Feature checks, signed launch and native commit latches
 remain authoritative. No new observer API or retry is introduced. See [selection
 binding review](docs/research/terminal-catalog-selection-binding.md).
+
+## OpenCode saved-model and pre-write review integration — 2026-11-04
+
+The passive native preference reader keeps canonical/O_NOFOLLOW/owner/permission and
+bounded read/parse controls. Only selected model semantics bind revalidation. Native
+summary consent retains actual selections/effects and optional complete details before
+any commit; viewing details cannot authorize writes or bypass stale context. Exact
+operational Open and signed grants remain separate. No observer network surface,
+provider server/probe, auth DB or credential access is added. Root NOTICE distributes
+OpenCode's full pinned MIT grant. See [scope and checks](docs/development/opencode-model-catalog-ux.md).

@@ -466,20 +466,20 @@ Historical cause and mutable global catalog drift remain distinct: drift is a
 regression scenario, not a historical diagnosis. No Preview/runtime/provider
 operation was performed. See [implementation limits](../development/terminal-preparation-diagnostics.md).
 
-## OpenCode preference catalogue and native sheet size — 2026-11-04
+## OpenCode saved models and pre-write review — 2026-11-04
 
-- [x] Reuse OpenCode 2.2.5's own MIT preference document (pinned `9bbb8ce`) as a
-      passive catalogue source: real `provider/model[#variant]` choices with
-      `source:'native-state'` and `availability:'unverified'`, without a provider
-      process, server, credential or database read.
-- [x] Bind only the selected entry, so unrelated preference rotation never invalidates
-      a reviewed choice while a removed choice fails closed before effects.
-- [x] Shorten the normal consent and failure sheets to localised effect text; keep the
-      complete configuration in the owner-only written manifest and say where in
-      Advanced. No new dialog, window, action or runtime.
-- [x] Verify synthetic source-only behaviour: 80 focused selection/preparation cases,
-      32 IPC/UI/model cases, EN/PT key parity and static panel checks; types, ESLint and
-      Prettier on changed files.
-- [ ] Authorize, implement and accept the consented dynamic catalogue (private
-      disposable `opencode serve`, adaptation of Tucano `0501956`) and accept the
-      packaged native sheet visually. Neither is claimed here.
+- [x] Integrate the candidate on confirmed clean `f056c3a`; retain selected-evidence
+      fix `4eeeea2`, exact pins, original expiry, context/grants and native latches.
+- [x] Offer actual native favorite/recent/variant references, always unverified,
+      with bounded read/parse/option budgets and semantic selected revalidation.
+- [x] Fix nested model references; retain upstream MIT copyright and complete license
+      in source/distributed NOTICE, without dependency or lock changes.
+- [x] Show real CLI/model/project/identities/effects with optional complete details
+      before writes. Details cannot approve; the exact operational Open is unchanged.
+- [x] Pass 198 distinct focused Node cases, 62 Rust custom-protocol cases, Clippy
+      all targets with warnings denied, full typecheck/rustfmt; worker counts not added.
+- [x] Pass full lint/format.
+- [ ] Complete separate frozen package verification;
+      see [current delivery evidence](../development/opencode-model-catalog-ux.md).
+- [ ] Accept packaged native visuals, provider/effective model, communication, Quit
+      and Electron retirement. Dynamic catalogue remains unapproved/unimplemented.

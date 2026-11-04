@@ -9,6 +9,30 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+#[derive(Clone, Copy)]
+enum ReviewChoice {
+    Approve,
+    Details,
+    Back,
+    Cancel,
+}
+
+// Details are read-only and can never approve. Returning always requires the summary again.
+fn confirm_review(current: impl Fn() -> bool, mut show: impl FnMut(bool) -> ReviewChoice) -> bool {
+    while current() {
+        match show(false) {
+            ReviewChoice::Approve => return current(),
+            ReviewChoice::Details if current() => {
+                if !matches!(show(true), ReviewChoice::Back) {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
+    false
+}
+
 #[derive(Default)]
 pub struct Preparation(Mutex<State>);
 
@@ -709,29 +733,79 @@ fn run(
                         *stage = "review";
                         let approve = field(&value, "approve", 1024)?;
                         let cancel = field(&value, "cancel", 1024)?;
+                        let title = field(&value, "title", 1024)?;
                         let message = field(&value, "message", 4096)?;
-                        // An empty detail is the short consent form: the native sheet carries the
-                        // effects only, never a multi-kilobyte manifest dump.
                         let detail = field(&value, "detail", 16384)?;
-                        let body = if detail.is_empty() {
-                            message.to_owned()
+                        let summary = value
+                            .get("summary")
+                            .map(|_| field(&value, "summary", 4096))
+                            .transpose()?;
+                        let accepted = if let Some(summary) = summary {
+                            let details = field(&value, "details", 1024)?;
+                            let back = field(&value, "back", 1024)?;
+                            confirm_review(current, |full| {
+                                let (body, buttons) = if full {
+                                    (
+                                        detail.to_owned(),
+                                        MessageDialogButtons::OkCancelCustom(
+                                            back.into(),
+                                            cancel.into(),
+                                        ),
+                                    )
+                                } else {
+                                    (
+                                        format!("{summary}\n\n{message}"),
+                                        MessageDialogButtons::YesNoCancelCustom(
+                                            cancel.into(),
+                                            approve.into(),
+                                            details.into(),
+                                        ),
+                                    )
+                                };
+                                let result = app
+                                    .dialog()
+                                    .message(body)
+                                    .parent(window)
+                                    .title(title)
+                                    .buttons(buttons)
+                                    .blocking_show_with_result();
+                                match result {
+                                    MessageDialogResult::Custom(text) if full && text == back => {
+                                        ReviewChoice::Back
+                                    }
+                                    MessageDialogResult::Custom(text)
+                                        if !full && text == details =>
+                                    {
+                                        ReviewChoice::Details
+                                    }
+                                    MessageDialogResult::Custom(text)
+                                        if !full && text == approve =>
+                                    {
+                                        ReviewChoice::Approve
+                                    }
+                                    _ => ReviewChoice::Cancel,
+                                }
+                            })
                         } else {
-                            format!("{message}\n\n{detail}")
-                        };
-                        let result = app
-                            .dialog()
-                            .message(body)
-                            .parent(window)
-                            .title(field(&value, "title", 1024)?)
-                            .buttons(MessageDialogButtons::YesNoCancelCustom(
-                                cancel.into(),
-                                approve.into(),
-                                cancel.into(),
-                            ))
-                            .blocking_show_with_result();
-                        json!(
+                            let body = if detail.is_empty() {
+                                message.to_owned()
+                            } else {
+                                format!("{message}\n\n{detail}")
+                            };
+                            let result = app
+                                .dialog()
+                                .message(body)
+                                .parent(window)
+                                .title(title)
+                                .buttons(MessageDialogButtons::YesNoCancelCustom(
+                                    cancel.into(),
+                                    approve.into(),
+                                    cancel.into(),
+                                ))
+                                .blocking_show_with_result();
                             matches!(result, MessageDialogResult::Custom(ref text) if text == approve)
-                        )
+                        };
+                        json!(accepted)
                     }
                     Some("commit")
                         if matches!(
@@ -1155,6 +1229,7 @@ mod catalog_tests {
             "native-config",
             "cli-cache",
             "official-alias",
+            "native-state",
         ] {
             catalog["providers"][0]["models"][0]["source"] = json!(source);
             assert!(valid_catalog(&catalog, &request));
@@ -1164,5 +1239,76 @@ mod catalog_tests {
         catalog["providers"][0]["models"][0]["availability"] = json!("unverified");
         catalog["workspaceId"] = json!("another-workspace");
         assert!(!valid_catalog(&catalog, &request));
+    }
+}
+
+#[cfg(test)]
+mod review_tests {
+    use super::{confirm_review, ReviewChoice};
+    use std::cell::Cell;
+
+    #[test]
+    fn complete_details_return_to_summary_before_approval() {
+        let mut steps = vec![
+            (false, ReviewChoice::Details),
+            (true, ReviewChoice::Back),
+            (false, ReviewChoice::Approve),
+        ]
+        .into_iter();
+        assert!(confirm_review(
+            || true,
+            |full| {
+                let (expected, choice) = steps.next().unwrap();
+                assert_eq!(full, expected);
+                choice
+            }
+        ));
+        assert!(steps.next().is_none());
+    }
+
+    #[test]
+    fn details_cannot_approve_and_cancellation_refuses() {
+        for choice in [ReviewChoice::Approve, ReviewChoice::Cancel] {
+            let mut first = true;
+            assert!(!confirm_review(
+                || true,
+                |_| {
+                    if std::mem::take(&mut first) {
+                        ReviewChoice::Details
+                    } else {
+                        choice
+                    }
+                }
+            ));
+        }
+        assert!(!confirm_review(|| true, |_| ReviewChoice::Cancel));
+    }
+
+    #[test]
+    fn expired_or_stale_review_never_approves() {
+        let live = Cell::new(true);
+        assert!(!confirm_review(
+            || live.get(),
+            |_| {
+                live.set(false);
+                ReviewChoice::Approve
+            }
+        ));
+        live.set(true);
+        assert!(!confirm_review(
+            || live.get(),
+            |full| {
+                if full {
+                    live.set(false);
+                    ReviewChoice::Back
+                } else {
+                    ReviewChoice::Details
+                }
+            }
+        ));
+        assert!(!confirm_review(
+            || false,
+            |_| panic!("stale review displayed")
+        ));
     }
 }

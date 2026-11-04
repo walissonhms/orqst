@@ -973,7 +973,7 @@
       "source_cli-cache": "Cache nativo do CLI",
       "source_official-alias": "Alias oficial do CLI",
       "source_native-state": "Modelos escolhidos neste CLI",
-      "reviewFile": "O diálogo nativo confirma os efeitos, não um despejo do manifesto. A configuração completa de cada terminal é gravada no próprio terminal.json (somente o dono) na raiz privada gerenciada após a confirmação, e pode ser inspecionada ali antes da confirmação Abrir separada.",
+      "reviewFile": "Antes de criar arquivos, a confirmação nativa mostra as seleções e oferece Detalhes completos. O terminal.json privado preserva a mesma configuração completa depois.",
       "modelUnverified": "Login, acesso ao modelo e disponibilidade do provedor são verificados pelo CLI nativo ao abrir; nenhum login ou consulta ao provedor é executado aqui.",
       "cliDefault": "Padrão do CLI",
       "defaultModel": "{{model}} (padrão do CLI)",
@@ -1001,7 +1001,7 @@
     "denied": "Não foi possível confirmar a preparação ou abertura do terminal. Preserve os arquivos e reservas existentes e investigue antes de outra tentativa. Não há repetição automática.",
     "selected": "Revise este CLI, modelo e workspace antes de criar os arquivos privados do terminal e abrir seu runtime próprio. Login, configuração, hooks, plugins, MCPs e gravações de sessão nativos compartilhados podem causar atividade ou custos. A confirmação Abrir seguinte autoriza inicialização, saída e teclado em conjunto. Nenhuma tarefa ou login será enviado automaticamente. Resultados incertos são preservados.",
     "selectedApprove": "Continuar para Abrir terminal",
-    "mcpPair": "Revise cada página completa de configuração deste par experimental Codex/OpenCode. sourceTerminalId delega; workerTerminalId espera e retorna o mesmo taskId. Ambos habilitam explicitamente o MCP ORQST neste workspace. Codex reutiliza login/configuração/sessões nativas; OpenCode mescla a configuração MCP e reconhece migrações do banco nativo, hooks, plugins, MCPs, atividade inicial e possíveis custos. O Abrir assinado posterior é separado para cada CLI. Comunicação ainda exige um grant nativo separado para uma tarefa (até 120 segundos, 4096 bytes de tarefa, 8192 bytes de resultado). Preparar não envia tarefa, não aprova ferramentas do provedor nem comprova entrega, modelo efetivo ou aceite do provedor. Resultados incertos permanecem preservados.",
+    "mcpPair": "Revise este par experimental Codex/OpenCode; Detalhes completos estão disponíveis antes de criar arquivos. sourceTerminalId delega; workerTerminalId espera e retorna o mesmo taskId. Ambos habilitam explicitamente o MCP ORQST neste workspace. Codex reutiliza login/configuração/sessões nativas; OpenCode mescla a configuração MCP e reconhece migrações do banco nativo, hooks, plugins, MCPs, atividade inicial e possíveis custos. O Abrir assinado posterior é separado para cada CLI. Comunicação ainda exige um grant nativo separado para uma tarefa (até 120 segundos, 4096 bytes de tarefa, 8192 bytes de resultado). Preparar não envia tarefa, não aprova ferramentas do provedor nem comprova entrega, modelo efetivo ou aceite do provedor. Resultados incertos permanecem preservados.",
     "mcpPairApprove": "Aceitar configuração do par; continuar para Abrir",
     "stage_bootstrap": "Helper nativo",
     "stage_request": "Validação do pedido",
@@ -1024,7 +1024,13 @@
     "failure_not_started": "O terminal não foi aberto. Esta tentativa não entrou na criação de arquivos do terminal nem na abertura do runtime.",
     "failure_possible": "O resultado do terminal é incerto. Arquivos ou efeitos no runtime podem já existir. Preserve-os e investigue antes de outra tentativa; não há repetição automática.",
     "failureStage": "Etapa",
-    "failureReason": "Motivo"
+    "failureReason": "Motivo",
+    "reviewWorkspace": "Workspace: {{project}}",
+    "reviewTerminal": "{{provider}} · {{model}} · {{id}}",
+    "reviewDetails": "Detalhes completos…",
+    "reviewBack": "Voltar ao resumo",
+    "reviewSource": "Origem: {{provider}} · {{model}} · {{id}}",
+    "reviewWorker": "Destino: {{provider}} · {{model}} · {{id}}"
   },
   "tauriDesktop": {
     "connected": "Core conectado",

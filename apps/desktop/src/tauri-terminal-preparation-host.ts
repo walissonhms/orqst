@@ -20,6 +20,13 @@ async function main() {
     resources: { 'en-US': { translation: en }, 'pt-BR': { translation: pt } },
   });
   const translate = (key: string) => String(i18n.t(key));
+  // These are plain native strings, never HTML. Escape controls in values before adding line breaks.
+  const nativeText = (value: string) =>
+    value.replace(
+      /[\p{Cc}\p{Cf}]/gu,
+      (character) => `\\u{${character.codePointAt(0)!.toString(16)}}`,
+    );
+
   let sequence = 0;
   let live = true;
   let pending: { id: number; resolve(value: string | boolean | null): void } | undefined;
@@ -86,12 +93,35 @@ async function main() {
           });
           return typeof value === 'string' ? value : undefined;
         },
-        confirm: async (key, detail) =>
+        confirm: async (key, detail, overview) =>
           (await ask({
             kind: 'confirm',
             title: translate('managedTerminal.createTeam'),
             message: translate(`tauriPreparation.${key}`),
             detail,
+            ...(overview
+              ? {
+                  summary: [
+                    i18n.t('tauriPreparation.reviewWorkspace', {
+                      project: nativeText(overview.project),
+                      interpolation: { escapeValue: false },
+                    }),
+                    ...overview.terminals.map((terminal) =>
+                      i18n.t(
+                        `tauriPreparation.${terminal.role === 'source' ? 'reviewSource' : terminal.role === 'worker' ? 'reviewWorker' : 'reviewTerminal'}`,
+                        {
+                          id: terminal.id,
+                          provider: terminal.provider,
+                          model: terminal.model ?? translate('studio.prepare.cliDefault'),
+                          interpolation: { escapeValue: false },
+                        },
+                      ),
+                    ),
+                  ].join('\n'),
+                  details: translate('tauriPreparation.reviewDetails'),
+                  back: translate('tauriPreparation.reviewBack'),
+                }
+              : {}),
             cancel: translate('terminalNative.cancel'),
             approve: translate(`tauriPreparation.${key}Approve`),
           })) === true,

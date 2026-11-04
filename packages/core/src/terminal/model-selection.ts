@@ -122,7 +122,10 @@ export function validateTerminalModelSelection(selection: TerminalModelSelection
         : bytes === null
           ? null
           : terminalDigest(bytes);
-    if (file.openCodeModel && (selection.value !== file.openCodeModel || !digest))
+    if (
+      file.openCodeModel &&
+      (selection.source !== 'native-state' || selection.value !== file.openCodeModel || !digest)
+    )
       throw new Error('CLI model catalogue changed; reload the terminal picker');
     if (digest !== file.sha256)
       throw new Error('CLI model catalogue changed; reload the terminal picker');
@@ -153,6 +156,7 @@ export function openCodeModelConfiguration(selection: TerminalModelSelection | u
  * `packages/tui/src/model-preference.ts`, `decodeModelPreference`/`modelPreferenceKey`
  * at 9bbb8ce18c80f099e0e448775f59d965ead40a21; the file is always
  * `<XDG_STATE_HOME|~/.local/state>/opencode/model.json` (`context/local.tsx`).
+ * Copyright (c) 2025 opencode. MIT license and full attribution: root NOTICE.
  * This is a native preference log, never an entitlement or credential source.
  */
 const openCodeStateModelSchema = z.object({
@@ -162,7 +166,10 @@ const openCodeStateModelSchema = z.object({
 const openCodeStateSchema = z.object({
   recent: z.array(openCodeStateModelSchema).max(64).optional(),
   favorite: z.array(openCodeStateModelSchema).max(64).optional(),
-  variant: z.record(z.string().max(322), z.string().max(160)).optional(),
+  variant: z
+    .record(z.string().max(322), z.string().max(160))
+    .refine((value) => Object.keys(value).length <= 128)
+    .optional(),
 });
 
 /** `favorite` precedes `recent`; saved variants add their own `provider/model` references. */
@@ -190,15 +197,17 @@ function decodeOpenCodeState(bytes: Buffer) {
 /** Source evidence is the chosen reference only; unrelated preference edits stay irrelevant. */
 function openCodeStateDigest(state: ReturnType<typeof decodeOpenCodeState> | null, value: string) {
   if (!state) return null;
-  const [providerID, rest] = value.split('/');
-  const hash = rest!.indexOf('#');
-  const modelID = hash < 0 ? rest! : rest!.slice(0, hash);
+  const end = value.indexOf('/');
+  const providerID = value.slice(0, end);
+  const rest = value.slice(end + 1);
+  const hash = rest.indexOf('#');
+  const modelID = hash < 0 ? rest : rest.slice(0, hash);
   const entry = state.entries.find(
     (candidate) => candidate.provider === providerID && candidate.model === modelID,
   );
   if (!entry) return null;
   // A saved variant only counts when it is the exact reference recorded for this entry.
-  if (entry.variant !== (hash < 0 ? undefined : rest!.slice(hash + 1))) return null;
+  if (entry.variant !== (hash < 0 ? undefined : rest.slice(hash + 1))) return null;
   return terminalDigest(
     JSON.stringify(['opencode-model-state', providerID, modelID, entry.variant ?? null]),
   );

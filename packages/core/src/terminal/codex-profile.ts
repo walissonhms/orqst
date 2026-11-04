@@ -14,7 +14,6 @@ import {
   fstatSync,
   lstatSync,
   openSync,
-  readFileSync,
   readSync,
   realpathSync,
 } from 'node:fs';
@@ -105,7 +104,16 @@ function openTerminalFile(path: string, privateFile: boolean, maximumBytes: numb
 export function terminalFile(path: string, privateFile = false, maximumBytes = 16 * 1024): Buffer {
   const fd = openTerminalFile(path, privateFile, maximumBytes);
   try {
-    return readFileSync(fd);
+    // Enforce the read budget even if a native writer grows the file after fstat.
+    const buffer = Buffer.alloc(maximumBytes + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const bytes = readSync(fd, buffer, length, buffer.length - length, null);
+      if (bytes === 0) break;
+      length += bytes;
+    }
+    if (length > maximumBytes) throw new Error('Terminal file read budget exceeded');
+    return buffer.subarray(0, length);
   } finally {
     closeSync(fd);
   }

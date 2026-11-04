@@ -234,7 +234,7 @@ Evidence for a selected entry is that entry alone, so another OpenCode session r
 its preferences does not invalidate a reviewed choice, while removing the chosen entry
 refuses before any effect.
 
-The complete list still requires `opencode models`, which resolves a native server
+The dynamic CLI catalogue requires a query such as `opencode models`, which resolves a native server
 (`ServerConnection.resolve`) and therefore has startup effects. That path stays
-unimplemented and needs explicit authorization; the proposed contract is in
+unapproved and unimplemented; the source-backed incompatibilities are in
 [the catalogue reuse audit](../research/opencode-model-catalog.md).

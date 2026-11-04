@@ -114,9 +114,9 @@ launch profile argv and the exact selected nonempty project reaches `cwd`, witho
 calling a file picker or executing a provider. They also cover unknown IDs, drift,
 read-only database lookup, Feature fencing and source budgets, plus OpenCode native
 preference choices (stable across unrelated preference edits, refused when the chosen
-entry disappears) and the short consent sheet. Native UI, provider
-acceptance, resolved models/entitlements, dynamic OpenCode catalogue and platform
-packaging remain separate acceptance work. The active Preview bundle is unchanged.
+entry disappears) and the pre-write summary/complete-details contract. Native visuals, provider
+acceptance, resolved models/entitlements and dynamic OpenCode catalogue remain
+separate acceptance work. Existing Preview bundles are preserved.
 See [delivery and limits](../development/opencode-model-catalog-ux.md).
 
 Live enrollment of another terminal into an already running host is not implemented
@@ -162,3 +162,16 @@ client version and freshness, retaining the original deadline through refresh an
 at launch. Private manifests add optional `model.files[].codexModel` semantic proof;
 legacy source hashes retain their meaning. Public IPC shape is unchanged. See
 [format, invariants, source research and limits](../research/terminal-catalog-selection-binding.md).
+
+## Pre-write native summary and optional details — 2026-11-04
+
+The internal helper confirm envelope retains `kind/id/title/message/detail/cancel/approve`
+and optionally adds `summary/details/back` for selected or pair preparation. Summary
+contains the actual project and each CLI/model/id (plus source/worker for pairs).
+`detail` retains the complete immutable plan; it is exposed only on Full details.
+Native fields remain bounded (summary 4096, detail 16384, labels 1024 characters).
+Details cannot approve and Back returns to the summary; all context/deadline checks
+run again before commit and provisioning. No new renderer command or execution grant.
+Original exact operational Open remains independent. Saved model proof adds optional
+`model.files[].openCodeModel`; its digest binds only the selected provider/model/variant.
+The preference read budget is enforced during reads, not solely by initial file size.

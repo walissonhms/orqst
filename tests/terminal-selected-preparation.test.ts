@@ -133,8 +133,13 @@ function fixture(openCodeCopies = false) {
     choose: async () => {
       throw new Error('Finder must never participate');
     },
-    confirm: async (key: string, detail: string) => {
+    confirm: async (
+      key: string,
+      detail: string,
+      overview?: import('../apps/desktop/src/terminal-creation.js').TerminalCreationOverview,
+    ) => {
       confirmations.push(key);
+      if (overview) assert.equal(overview.project, project);
       assert.ok(detail.length <= 4096);
       return true;
     },
@@ -315,8 +320,8 @@ test('OpenCode review rejects a changed chosen executable instead of substitutin
         return true;
       };
       f.ports.confirm = async (_key, detail) => {
-        // The native sheet no longer carries paths or manifests.
-        assert.equal(detail, '');
+        // The complete pre-write configuration stays available through native Details.
+        assert.ok(detail.includes(join(f.root, 'bin/opencode')));
         const first = join(f.root, 'bin/opencode');
         if (change === 'removal') rmSync(first);
         else writeFileSync(first, Buffer.concat([readFileSync(binary), Buffer.from('DRIFT')]));
@@ -435,10 +440,24 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       const codex = catalog.catalog.providers.find((entry) => entry.provider === 'codex')!;
       const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
       const reviews: string[] = [];
-      f.ports.confirm = async (key, detail) => {
-        // Pair consent is one short sheet; the separate Open review still carries its profile.
-        if (key === 'mcpPair') assert.equal(detail, '');
-        else assert.ok(detail.length > 0 && detail.length <= 4096);
+      f.ports.confirm = async (key, detail, overview) => {
+        // Pair summary and optional Details exist before the first possible write.
+        if (key === 'mcpPair') {
+          const reviewed = JSON.parse(detail);
+          assert.equal(reviewed.terminals.length, 2);
+          assert.equal(overview?.project, f.project);
+          assert.deepEqual(
+            overview?.terminals.map((terminal) => terminal.role),
+            ['source', 'worker'],
+          );
+          assert.deepEqual(
+            overview?.terminals.map((terminal) => terminal.id),
+            reviewed.terminals.map(
+              (terminal: { identity: { terminalId: string } }) => terminal.identity.terminalId,
+            ),
+          );
+          assert.deepEqual(readdirSync(f.context.parent), []);
+        } else assert.ok(detail.length > 0 && detail.length <= 4096);
         reviews.push(key);
         return true;
       };
@@ -1011,10 +1030,14 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
     const chosen = opencode.models.find((entry) => entry.label === 'synthetic/variant-model#fast');
     assert.ok(chosen);
     const details: string[] = [];
-    f.ports.confirm = async (key, detail) => {
+    f.ports.confirm = async (key, detail, overview) => {
       assert.equal(key, 'selected');
-      // The native sheet carries the effects only; no manifest, path or identifier dump.
-      assert.equal(detail, '');
+      assert.equal(overview?.project, f.project);
+      assert.equal(overview?.terminals[0]?.provider, 'opencode');
+      assert.equal(overview?.terminals[0]?.model, 'synthetic/variant-model#fast');
+      assert.equal(overview?.terminals[0]?.id, JSON.parse(detail).terminals[0].identity.terminalId);
+      // No file is written before both concise summary and full Details are available.
+      assert.deepEqual(readdirSync(f.context.parent), []);
       details.push(detail);
       return true;
     };
@@ -1034,7 +1057,8 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
       f.trusted,
     );
     assert.equal(prepared.status, 'open');
-    assert.deepEqual(details, ['']);
+    assert.equal(details.length, 1);
+    assert.equal(JSON.parse(details[0]!).terminals[0].model.value, 'synthetic/variant-model#fast');
     const config = readInteractiveTerminalConfig(prepared.files[0]!);
     assert.equal(config.version, 3);
     assert.deepEqual(config.model, {
@@ -1148,3 +1172,75 @@ test('OpenCode native choice survives unrelated preference edits and refuses a r
     f.close();
   }
 });
+
+for (const change of ['unrelated', 'removed', 'variant'] as const) {
+  test(`OpenCode saved selection revalidates ${change} state after consent before commit`, async () => {
+    const f = fixture();
+    try {
+      const original = {
+        recent: [{ providerID: 'synthetic', modelID: 'chosen' }],
+        variant: { 'synthetic/chosen': 'fast' },
+      };
+      openCodeState(f, original);
+      const discovered = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(discovered.status, 'catalog');
+      const chosen = discovered.catalog.providers
+        .find((entry) => entry.provider === 'opencode')!
+        .models.find((entry) => entry.label === 'synthetic/chosen#fast')!;
+      let commits = 0;
+      f.ports.commit = async () => {
+        commits++;
+        return true;
+      };
+      f.ports.confirm = async () => {
+        openCodeState(
+          f,
+          change === 'unrelated'
+            ? { ...original, variant: { ...original.variant, 'other/model': 'slow' } }
+            : change === 'removed'
+              ? { recent: [], variant: {} }
+              : { ...original, variant: { 'synthetic/chosen': 'slow' } },
+        );
+        return true;
+      };
+      const attempt = prepareTauriTerminals(
+        {
+          action: 'create-selected',
+          workspaceId: f.workspaceId,
+          featureId: null,
+          catalogId: discovered.catalog.catalogId,
+          provider: 'opencode',
+          modelId: chosen.id,
+          count: 1,
+        },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      if (change === 'unrelated') {
+        assert.equal((await attempt).status, 'open');
+        assert.equal(commits, 1);
+      } else {
+        await assert.rejects(attempt, (error: unknown) => {
+          assert.deepEqual(Reflect.get(error as object, 'failure'), {
+            stage: 'revalidation',
+            code: 'catalog_changed',
+            effects: 'not_started',
+          });
+          return true;
+        });
+        assert.equal(commits, 0);
+        assert.deepEqual(readdirSync(f.context.parent), []);
+      }
+    } finally {
+      f.close();
+    }
+  });
+}

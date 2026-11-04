@@ -1,5 +1,14 @@
 # Changelog
 
+## OpenCode saved models and native review — 2026-11-04
+
+Passive discovery now offers model references already saved by OpenCode 2.2.5,
+with unverified availability; it does not claim a complete catalogue or effective
+model. Selected preparation shows actual choices/effects and optional complete
+details before any write. The full pinned MIT notice is retained. Native/provider
+acceptance and Electron retirement remain pending. See [integration, checks and
+package boundary](docs/development/opencode-model-catalog-ux.md).
+
 ## OpenCode preference catalogue and short native consent — 2026-11-04
 
 OpenCode now offers the models its own preference document recorded

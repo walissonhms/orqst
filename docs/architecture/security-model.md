@@ -1472,21 +1472,24 @@ review, binary pins, Workspace/Feature checks, signed launch and native commit l
 remain authoritative. No new observer API or retry is introduced. See [selection
 binding review](../research/terminal-catalog-selection-binding.md).
 
-## OpenCode preference catalogue and short native consent — 2026-11-04
+## OpenCode preference catalogue and native pre-write review — 2026-11-04
 
-Two bounded changes, no new authority. (1) Passive OpenCode discovery also reads the
-CLI's own preference document (`<XDG_STATE_HOME|~/.local/state>/opencode/model.json`),
-a metadata file without credentials, decoding a subset of OpenCode's MIT
-`decodeModelPreference`. Entries become `native-state` choices with
-`availability:'unverified'`; a selected entry is its own evidence, so unrelated
-preference rotation cannot invalidate a reviewed choice while a removed entry is
-refused before any effect. (2) The selected/pair native consent sheet now carries the
-localised effects text only, and a failure sheet carries one outcome plus one reason.
-The complete configuration is written to owner-only `terminal.json` in the private
-managed root before the separate Open review; nothing about startup, shared native
-login/config/session writes, MCP, cost, uncertainty or the Open authorization was
-removed from the text. Focus/document/generation fences, the commit latch, effect
-accounting, grants, revalidation, receipts and the existing IPC schema are unchanged.
-No provider process, server, database read or credential access is introduced. See
-[catalogue and consent review](../research/opencode-model-catalog.md) and
-[delivery limits](../development/opencode-model-catalog-ux.md).
+Passive discovery reads only the bounded native `opencode/model.json` preference
+metadata. It adds saved references, always unverified, never auth/SQLite or a dynamic
+provider query. Canonicality, O_NOFOLLOW, trusted owner/permissions and 2 MiB limits
+remain; the actual read now refuses post-fstat growth beyond its byte budget.
+Preference arrays are bounded to 64 each, variant keys and total choices to 128.
+Semantic selected-entry evidence tolerates unrelated edits and rejects selected
+removal/variant drift, including nested model IDs. Original TTL/context pins remain.
+
+Selected/pair consent shows actual project, CLI/model/terminal identities and effects.
+The same pre-write plan is available through optional Full details before committing.
+Only explicit summary approval can succeed; Details/Back cannot approve, and stale
+focus/document/generation/expiry cancels. The existing private confirmation envelope
+adds optional summary/details/back text, with bounded native fields; public renderer
+requests, exact operational Open, grants, latches and revalidation remain unchanged.
+No observer HTTP/WebSocket/cookie/CSP or native capability permission changes.
+The complete plan persists afterwards in owner-only terminal.json. No credentials or
+configuration bodies are logged. The MIT copyright/license is included in distributed
+NOTICE, preserving existing attributions. See [research](../research/opencode-model-catalog.md)
+and [checks and acceptance limits](../development/opencode-model-catalog-ux.md).

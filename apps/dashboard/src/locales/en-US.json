@@ -973,7 +973,7 @@
       "source_cli-cache": "Native CLI cache",
       "source_official-alias": "Official CLI alias",
       "source_native-state": "Models chosen in this CLI",
-      "reviewFile": "The native dialog confirms the effects, not a manifest dump. The complete configuration of each terminal is written to its own terminal.json (owner-only) in the private managed root after you confirm, and can be inspected there before the separate Open confirmation.",
+      "reviewFile": "Before creating files, the native confirmation shows the selections and offers Full details. The private terminal.json retains the same complete configuration afterwards.",
       "modelUnverified": "Login, model access and provider availability are checked by the native CLI when opened; no login or probe runs here.",
       "cliDefault": "CLI default",
       "defaultModel": "{{model}} (CLI default)",
@@ -1001,7 +1001,7 @@
     "denied": "Terminal preparation or opening could not be confirmed. Preserve any files and reservations and inspect before another attempt. No automatic retry is performed.",
     "selected": "Review this CLI, model and workspace before creating private terminal files and opening their owned runtime. Shared native login, configuration, hooks, plugins, MCPs and session writes can cause activity or costs. The subsequent Open confirmation authorizes startup, output and keyboard together. No task or login is submitted automatically. Unknown outcomes remain preserved.",
     "selectedApprove": "Continue to Open terminal",
-    "mcpPair": "Review every complete configuration page for this experimental Codex/OpenCode pair. sourceTerminalId delegates; workerTerminalId waits and returns the same taskId. Both members explicitly enable ORQST MCP in this workspace. Codex reuses native login/configuration/sessions; OpenCode merges MCP configuration and acknowledges native database migrations, hooks, plugins, MCPs, startup activity and possible costs. Subsequent signed Open is separate for each CLI. Communication still requires a separate native one-use task grant (at most 120 seconds, 4096 task bytes, 8192 result bytes). Preparation sends no task, grants no provider approval and proves no delivery, effective model or provider acceptance. Unknown outcomes remain preserved.",
+    "mcpPair": "Review this experimental Codex/OpenCode pair; Full details are available before creating files. sourceTerminalId delegates; workerTerminalId waits and returns the same taskId. Both members explicitly enable ORQST MCP in this workspace. Codex reuses native login/configuration/sessions; OpenCode merges MCP configuration and acknowledges native database migrations, hooks, plugins, MCPs, startup activity and possible costs. Subsequent signed Open is separate for each CLI. Communication still requires a separate native one-use task grant (at most 120 seconds, 4096 task bytes, 8192 result bytes). Preparation sends no task, grants no provider approval and proves no delivery, effective model or provider acceptance. Unknown outcomes remain preserved.",
     "mcpPairApprove": "Accept pair configuration; continue to Open",
     "stage_bootstrap": "Native helper",
     "stage_request": "Request validation",
@@ -1024,7 +1024,13 @@
     "failure_not_started": "The terminal was not opened. This attempt did not enter terminal file creation or runtime opening.",
     "failure_possible": "The terminal outcome is uncertain. Files or runtime effects may already exist. Preserve them and inspect before another attempt; no automatic retry is performed.",
     "failureStage": "Stage",
-    "failureReason": "Reason"
+    "failureReason": "Reason",
+    "reviewWorkspace": "Workspace: {{project}}",
+    "reviewTerminal": "{{provider}} · {{model}} · {{id}}",
+    "reviewDetails": "Full details…",
+    "reviewBack": "Back to summary",
+    "reviewSource": "Source: {{provider}} · {{model}} · {{id}}",
+    "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}"
   },
   "tauriDesktop": {
     "connected": "Core connected",

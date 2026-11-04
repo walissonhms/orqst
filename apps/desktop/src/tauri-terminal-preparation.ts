@@ -14,7 +14,11 @@ import {
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import { z } from 'zod';
-import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
+import {
+  prepareTerminalCreation,
+  type TerminalCreationInput,
+  type TerminalCreationOverview,
+} from './terminal-creation.js';
 import { TerminalSelection } from './terminal-selection.js';
 
 export const tauriPreparationSchema = z.discriminatedUnion('action', [
@@ -38,6 +42,7 @@ export interface TauriPreparationPorts {
   confirm(
     key: 'create' | 'acknowledge' | 'open' | 'selected' | 'mcpPair',
     detail: string,
+    overview?: TerminalCreationOverview,
   ): Promise<boolean>;
   /** Native latch precedes the first possible write, including an uncertain partial write. */
   commit(): Promise<boolean>;
@@ -150,9 +155,12 @@ export async function prepareTauriTerminals(
       stage = 'review';
       const expires = now() + 60_000;
       const reviewed = () => current() && now() < expires;
-      // The native sheet carries the consent text for the effects; the exact configuration is
-      // written to the reviewed private manifest, so no multi-kilobyte dump is shown modally.
-      if (!reviewed() || !(await ports.confirm(pair ? 'mcpPair' : 'selected', '')) || !reviewed())
+      // The summary and optional complete review come from the same immutable pre-write plan.
+      if (
+        !reviewed() ||
+        !(await ports.confirm(pair ? 'mcpPair' : 'selected', plan.detail, plan.overview)) ||
+        !reviewed()
+      )
         return { status: 'cancelled', files: [] };
       stage = 'revalidation';
       const revalidate = () => {

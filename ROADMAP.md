@@ -1,5 +1,14 @@
 # ORQST roadmap
 
+## OpenCode saved models and native review — 2026-11-04
+
+Passive discovery now offers model references already saved by OpenCode 2.2.5,
+with unverified availability; it does not claim a complete catalogue or effective
+model. Selected preparation shows actual choices/effects and optional complete
+details before any write. The full pinned MIT notice is retained. Native/provider
+acceptance and Electron retirement remain pending. See [integration, checks and
+package boundary](docs/development/opencode-model-catalog-ux.md).
+
 ## Selected catalogue false invalidation — 2026-11-04
 
 Source now binds the actual selected CLI/model/configuration/context, so unrelated
