@@ -253,3 +253,14 @@ corrected and lint passed. The packaged acceptance simulated native IPC, dialogs
 editor opening. Genuine native WebKit dialogs/editor behavior and distribution
 remain unaccepted. See the [file contract and security review](../api/tauri-files.md)
 and [component research](../research/tauri-native-files.md).
+
+## Interactive terminal MCP — 2026-11-04
+
+Integrated as `901e0b2` (source `a75e352`), Tauri can review a one-use MCP grant
+for two explicitly prepared interactive terminals. Resource staging, 11 Rust tests
+and the packaged two-PTY/stdio synthetic acceptance passed on integrated `main`, as
+did lint, typecheck, build and 646 Node tests (`--test-concurrency=2`).
+Unlike the contributor's isolated increment, this integration compiled Rust. Native
+focus/dialog acceptance, installed providers and real task return remain pending;
+native preparation still creates MCP-disabled profiles. See the [workflow and
+limits](../development/tauri-interactive-mcp.md).
