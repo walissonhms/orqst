@@ -5,9 +5,10 @@ import type {
   WebContents,
   WebFrameMain,
 } from 'electron';
+import { terminalDocumentURL } from './terminal-policy.js';
 
-// Reserved dedicated document. The observer document must never qualify as a terminal client.
-export const terminalDocumentURL = 'orqst-terminal://local/index.html';
+export { terminalDocumentURL } from './terminal-policy.js';
+
 export interface TerminalDocumentBinding {
   readonly frame: WebFrameMain;
   readonly generation: number;

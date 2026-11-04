@@ -1,5 +1,12 @@
 # Changelog
 
+## Shared document URL boundary — 2026-11-04
+
+- Move the reserved terminal URL into existing pure policy; retain the Electron
+  sender export and guard. Close Tauri's active Electron type import paths.
+- Record [closure and 10 pure checks](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04).
+  Electron runtime/dependencies and native/provider acceptance remain pending.
+
 ## Combined policy/notification local package — 2026-11-04
 
 - Package published freeze `b54b7fe` at the new isolated destination after the same

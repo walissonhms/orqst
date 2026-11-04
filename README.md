@@ -1,5 +1,9 @@
 # ORQST
 
+The [shared terminal document URL](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
+now lives in pure policy, closing Tauri's active Electron type import paths while
+preserving the legacy sender export. Electron retirement remains pending.
+
 The combined policy/notification source `b54b7fe` has a
 [new local Preview package and generated manifest](docs/development/tauri-policy-notifications-integration.md#published-freeze-and-coordinated-build-gate):
 59 Rust tests passed in each of two configurations, with Clippy, filtered build,

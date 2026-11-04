@@ -1,5 +1,9 @@
 # Master specification delivery tracker
 
+The [shared document URL boundary](../development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
+now closes Tauri's active Electron type import paths, preserving the legacy sender
+export. Pure checks pass; Electron removal and native/provider acceptance remain open.
+
 ## Core availability and explicit MCP pair integration — 2026-11-04
 
 Integrated deliveries `90509ca` (Core unavailable) and `8c458de` (explicit

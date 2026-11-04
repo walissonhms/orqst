@@ -1,5 +1,70 @@
 # Electron retirement — ORQST
 
+## Shared document URL boundary — 2026-11-04
+
+The existing pure `apps/desktop/src/terminal-policy.ts` now owns
+`terminalDocumentURL`. `terminal-sender.ts` imports and re-exports that same binding
+for existing Electron consumers. The reserved URL and sender guard are unchanged;
+the guard function is byte-identical to baseline `b54b7feda15a797e3612c96e9c0fd5896c3732dc`.
+No new helper, package or dependency is needed.
+
+The baseline had two active type-resolution paths, both under `apps/desktop/src/`:
+
+- `tauri-terminal-host.ts` → `terminal-document.ts` → `terminal-policy.ts` →
+  `terminal-sender.ts` → Electron types.
+- `tauri-agents-host.ts` → `managed-agents-document.ts` → `terminal-policy.ts` →
+  `terminal-sender.ts` → Electron types.
+
+Read-only TypeScript 6 module resolution traversed the 17 TypeScript entrypoints
+in `scripts/build-tauri-resources.mjs` plus `apps/dashboard/src/main.tsx`, following
+imports, exports, type references and literal dynamic imports/requires through
+local/workspace source. Its closure decreased from 180 to 179 source files; the
+sender was the only reached Electron-typed file and is now outside that closure.
+The three CSS imports use the existing Vite ambient declaration. A compiler-host
+check with Electron module resolution explicitly denied and that declaration
+included reproduced baseline TS2307 in the sender, then passed with zero Electron
+resolution attempts after the change. This is source/type evidence, not a bundle
+or runtime acceptance claim.
+
+Reuse review retained the existing ORQST policy/guard. At the inspected Anywh pin,
+[`platform/tauri.ts::inTauri`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/client/src/lib/platform/tauri.ts)
+only detects a browser global; it has no document/session/generation/focus contract.
+Tucano's [`main/index.ts::core:connect`](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f3e69a0948766/src/main/index.ts)
+and [`preload/index.ts`](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f3e69a0948766/src/preload/index.ts)
+depend on Electron MessagePort/IPC, not a reusable pure reserved-document helper.
+Decision: **keep existing ORQST**, without importing either bridge or its authority
+model. Both exact trees retain Apache-2.0 root LICENSE and no tracked NOTICE/COPYING;
+no upstream code, assets or dependencies are incorporated.
+
+Node 24.22.2/pnpm 10.34.9 checks: `pnpm typecheck`, `pnpm lint`, `git diff --check`
+and 10 existing pure Node cases passed. The focused cases are all of
+`terminal-document.test.ts` and `desktop-policy.test.ts`, only `dedicated sender
+denies` / `terminal network policy` in the mixed broker/runtime files, and only
+`native communication document` in `mention-routing.test.ts`. No Core, provider,
+PTY, native app, session or acceptance fixture was started. Full tests/build,
+Cargo/resources/package and native/provider acceptance were not run.
+
+Integration on published main `5aba121c1502b7cc738ddc77caeed6e574a4975e`
+retained candidate `82ead4cfccb4e498ecf01b556da84106b1a0c5f2` code byte for byte.
+The three documentation conflicts were resolved additively, preserving delivery
+723's package evidence. On this integrated source, the same 10 selected pure
+cases (7 + 2 + 1), full workspace typecheck and ESLint/Prettier passed again;
+diff checks passed. Temporary inspection scripts were adapted only for main's
+path and published baseline: the 18 entries still traverse 180 files before and
+179 after, with one denied Electron resolution/TS2307 before and zero attempts
+or diagnostics after. The sender guard is byte-identical to published main.
+These are this integration's source/pure results. The earlier 20 Node cases,
+59 Rust tests per configuration and package 723 remain separate historical
+checks; none were rerun or added to these totals. No build, resource staging,
+package, install, runtime, provider, Core/PTY, auth database or native acceptance
+was run. Existing Preview app trees were not modified; they do not contain this
+source-only increment. The delivery tag is
+`delivery/2026-11-04-shared-electron-types-integration`.
+
+Electron adapters, their typed tests, the dependency/lock closure and build/test
+scripts remain. The whole workspace still requires Electron types. All removal,
+parity, distribution and runtime acceptance gates below remain open.
+
 ## Policy and notification integration — 2026-11-04
 
 The [combined source report](tauri-policy-notifications-integration.md) records
@@ -142,12 +207,10 @@ repoint every consumer before relocating them; deleting the directory is unsafe.
 | Assets/licenses                     | `managed-terminal.css`, `managed-agents.css`, `apps/desktop/resources/icons/`, xterm, root LICENSE/NOTICE and staged Node/dependency notices                                                                                  |
 | Independent observer/Core           | `apps/bridge/src/desktop-sidecar.ts`, `packages/core/src/managed-codex/desktop*.ts`, Core monitor, database/adapters/protocol, `scripts/{build,dev,service,install-runtime}.mjs`; “desktop” in a name does not imply Electron |
 
-One concrete type dependency must be split before removal:
-`terminal-document.ts` → `terminal-policy.ts` → `terminal-sender.ts` imports the
-pure `terminalDocumentURL` from an Electron-typed module. Move that constant to
-an appropriate existing pure module and update consumers without cycles; retain
-Electron sender guards until their adapter is retired. Tree shaking is not proof
-that TypeScript can resolve without Electron.
+The [shared document URL split](#shared-document-url-boundary--2026-11-04) removes
+the concrete `terminal-policy.ts` → Electron-typed `terminal-sender.ts` edge for
+both Tauri documents. Electron sender guards and their legacy URL export remain
+until their adapter is retired. Tree shaking alone is not type-resolution evidence.
 
 The only direct Electron dependency is in `apps/desktop/package.json`. Its lock
 closure includes `@electron-internal/extract-zip`, `@electron/get` and downloader
@@ -216,7 +279,9 @@ results. Build checks and synthetic fixtures never close real acceptance boxes.
 
 ### P1 — remove Electron runtime/dependencies/scripts after parity gates
 
-- [ ] Split the pure constant/type boundary; remove only Electron adapters
+- [x] Split the shared pure document URL from the Electron sender module; preserve
+      the legacy export and exact sender/URL authority checks.
+- [ ] Remove only Electron adapters
       `main.ts`, preloads, `managed-terminal.ts`, `managed-agents.ts`,
       `terminal-panels.ts`, `terminal-runtime.ts`, sender/lifecycle/confirmation
       wrappers and `terminal-lab.ts` once equivalent Tauri coverage is retained.
