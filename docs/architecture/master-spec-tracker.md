@@ -270,3 +270,12 @@ Unlike the contributor's isolated increment, this integration compiled Rust. Nat
 focus/dialog acceptance, installed providers and real task return remain pending;
 native preparation still creates MCP-disabled profiles. See the [workflow and
 limits](../development/tauri-interactive-mcp.md).
+
+## Terminal retirement and MCP integration — 2026-11-04
+
+Commit `ba22c44` composes the existing signed retirement and interactive MCP consent
+with mutual exclusion and evidence-based fencing. The contributor recorded 670
+passing Node tests, 12 Rust tests, Clippy and synthetic two/eight-pane acceptances;
+see the [integration evidence](../development/tauri-retirement-mcp-integration.md).
+Human native UI/reselection, real provider execution and durable reconnect remain
+unaccepted. The earlier quarantined reservation remains unchanged.
