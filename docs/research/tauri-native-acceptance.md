@@ -56,3 +56,19 @@ consent change is made. Native binary hashes identify the tested artifact but do
 not attest its build provenance. Private run logs, PIDs and failed-attempt evidence
 belong outside Git; the runner retains its fixture metadata and exit result.
 See [the workflow](../development/tauri-native-coexistence.md).
+
+## WindowServer probe recheck — 2026-11-04
+
+Revalidated the same pinned Anywh revision,
+[`546f189c04415c3c5af5f40e3931a0a90b9aba31`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31):
+`client/src-tauri/src/lib.rs` (236 lines) still only shows and focuses the retained
+window in its `tauri_plugin_single_instance` callback (lines 88–93) and never changes
+the macOS activation policy; `LICENSE` is still Apache-2.0. **Decision: keep the
+existing ORQST lifecycle adaptation, copy nothing.** Anywh offers no WindowServer
+diagnostic, so the probe is original ORQST code over Apple's
+`CGWindowListCopyWindowInfo`; no third-party license or NOTICE obligation is added.
+
+The probe reads only window metadata for one explicitly owned PID. It is not an
+automation capability, does not capture pixels or titles, and cannot replace human
+consent. Tucano and Overclock remain out of scope for this increment because it adds
+no communication or visual behaviour.

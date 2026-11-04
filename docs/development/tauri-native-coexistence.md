@@ -87,6 +87,59 @@ recorded PIDs/port are gone; this is an aborted attempt, not graceful quit or co
 consent acceptance. Keep private evidence outside Git. See the
 [preflight source review](../research/tauri-native-acceptance.md).
 
+## WindowServer evidence probe (2026-11-04)
+
+`cgWindowNotFound` cannot distinguish three different situations: the application
+created no window, it created a window that is not on screen, or the inspection tool
+could not capture an existing window. The previous attempt produced no evidence for
+any of them, so every hypothesis stayed open. The acceptance runner now records
+WindowServer metadata for the process it owns.
+
+- `scripts/tauri/native-window-probe.swift` is original ORQST code (Apache-2.0, no
+  third-party fragment) using Apple's `CGWindowListCopyWindowInfo`. It filters by
+  owner PID and prints one bounded JSON object per run with window number, layer,
+  alpha, the on-screen flag, integer bounds and an owner name truncated to 64
+  characters. It does not capture pixels, window titles, paths, argv, environment or
+  credentials; it never activates, focuses, hides or stops the target; it needs no
+  TCC grant and works without Screen Recording permission.
+- `scripts/tauri/native-window.ts` compiles that source into the private fixture with
+  its own module cache, strictly validates the sample (zod, at most 32 windows) and
+  polls at most 90 seconds while the owned PID is alive. It reports exactly one of
+  `window-observed`, `window-exists-offscreen`, `no-window`, `process-exited`,
+  `probe-invalid` or `probe-unavailable`.
+- In the runner, a missing capture ends only its own child, records the reason in
+  `exit.json` and exits nonzero; `window.json` and a bounded 32 KiB
+  `native-stderr.log` remain in the private fixture. A capturable window is still not
+  acceptance: menus, consent, focus, input and quit remain manual checklist items.
+
+Hypotheses for the earlier failure and the evidence that now separates them:
+
+| Hypothesis                                            | Evidence produced by the next run                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------- |
+| The application never created its window              | `window.json` = `no-window`; app stderr and exit code retained                    |
+| A window exists but is off screen or minimized        | `window.json` = `window-exists-offscreen` with bounds and the on-screen flag      |
+| The fixture process exited during startup             | `window.json` = `process-exited` plus the recorded code/signal                    |
+| The window exists and only the inspection tool failed | `window.json` = `window-observed`, while the separate tool still reports an error |
+| The probe cannot run on this host                     | `window.json` = `probe-unavailable`; never counted as a pass                      |
+
+The probe was validated on 2026-11-04 on this machine without Rust: `swiftc`
+compiled it, a disposable AppKit fixture launched directly from a shell with an
+isolated `HOME`/`TMPDIR` was reported with `onscreen: true` and bounds `420×292`, and
+the same fixture after `orderOut` was reported with `onscreen: false`. Through
+`captureNativeWindow`, the same fixture reached `window-observed` on the first sample
+after 207 ms and a headless Node process reached `no-window` after five samples and
+1.46 s. The probe therefore detects a real window from a non-LaunchServices launch,
+distinguishes on-screen from off-screen and stops waiting as soon as evidence exists.
+`tests/tauri-native-window.test.ts` covers parsing, retry, deadline, process exit,
+invalid probe output and refusal paths with injected samples only; it launches no
+application.
+
+Not done here: the probe was not compiled into a Tauri build nor run against one.
+This checkout has no Rust toolchain (`cargo`/`rustc` absent) and the volume has about
+5.9 GiB free, so a debug Tauri build and its dependency target were not attempted.
+`cgWindowNotFound` therefore remains **unexplained**; the next run must produce
+`window.json` before any native claim is made.
+
 ## Native checklist and current evidence
 
 - [x] Build a macOS ARM64 debug app without changing the preview identity.
@@ -101,6 +154,9 @@ consent acceptance. Keep private evidence outside Git. See the
       and verify that a fresh explicit preparation is required.
 - [ ] Start/attach/input/stop the synthetic PTY through native signed dialogs;
       verify hide/show, resize, retained scrollback and no input after window switching.
+- [ ] Record `window-observed` (bounds, layer, on-screen) for the owned fixture PID
+      before attempting any native interaction; a missing/off-screen window is
+      diagnosed from `window.json`, not guessed.
 - [ ] Edit directed routes/roles through native review; cancellation and returning
       from the PTY window must not approve an old communication challenge.
 - [ ] Cancel either stage of combined quit, then verify both surfaces ask again;
@@ -157,6 +213,17 @@ Not run: full browser suite, `validate:local`/`validate:live` (ingestion unchang
 successful native WebKit/AppKit consent, installed-provider tests, other-platform
 builds or signed/notarized packaging. The failed native attempt remains unchecked
 in the checklist above.
+
+### WindowServer probe increment — 2026-11-04
+
+- `tsx --test tests/tauri-native-window.test.ts tests/tauri-coexistence-preflight.test.ts`:
+  9 passed (5 new probe regressions plus the existing preflight test).
+- `tsc --noEmit`, ESLint and Prettier over the changed TypeScript files: passed.
+- Probe compiled with `/usr/bin/swiftc` and validated against a disposable AppKit
+  fixture in an isolated `HOME`/`TMPDIR` as described above.
+- Not run here: `pnpm accept:tauri-coexistence` (no Tauri build on this machine), any
+  Rust build/test, native menus/dialogs/input, installed providers. Native acceptance
+  is unchanged and still unclaimed.
 
 Real Codex/Claude/OpenCode login/tasks, native creation/start/input/stop, installed
 provider mention/return, durable recovery, SQLite layout persistence, other platforms
