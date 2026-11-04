@@ -802,9 +802,8 @@ fn run(
         let event = tauri::async_runtime::block_on(async {
             tokio::time::timeout(Duration::from_secs(310), rx.recv()).await
         })
-        .map_err(|error| {
+        .inspect_err(|_| {
             diagnostic.record(Stage::HelperStream, Outcome::Timeout, Effects::Unconfirmed);
-            error
         })?;
         match event {
             Some(CommandEvent::Stdout(bytes)) if bytes.len() <= 128 * 1024 => {
@@ -812,13 +811,12 @@ fn run(
                 if received > 512 * 1024 || complete.is_some() || !current() {
                     return Err("Preparation pipe refused".into());
                 }
-                let value: Value = serde_json::from_slice(&bytes).map_err(|error| {
+                let value: Value = serde_json::from_slice(&bytes).inspect_err(|_| {
                     diagnostic.record(
                         Stage::HelperStream,
                         Outcome::ProtocolRejected,
                         Effects::Unconfirmed,
                     );
-                    error
                 })?;
                 if value["kind"] == "failure" {
                     if !exact(&value, &["kind", "failure"]) {
