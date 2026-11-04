@@ -38,13 +38,16 @@ With the correct key, `ssh -T` and `git ls-remote` alternate between success and
 | `git ls-remote --heads origin` (4 tries)  | 2 success / 2 refused |
 
 Verbose capture of a refusal shows the key offered and the server answering
-`SSH2_MSG_USERAUTH_FAILURE` without `PK_OK`, i.e. the edge rejects a registered key;
+`SSH2_MSG_USERAUTH_FAILURE` without `PK_OK`, i.e. authentication is rejected before
+the server requests a signature;
 a successful capture shows `PK_OK` → signed → `SUCCESS`. The failure is identical for
 both accounts and both ports, and a coordinated push of an exact SHA by another agent
-succeeded in the middle of the same window. That rules out the key, the alias, the
-host key, the account mapping and the repository permission as causes; the remaining
-explanation is an intermittent GitHub SSH edge/network condition, which a local
-configuration change cannot repair.
+succeeded in the middle of the same window. These results establish intermittency
+and weaken a permanently wrong key/account/permission explanation. They do not
+identify the root cause. A GitHub-side condition is a hypothesis; network path,
+effective client settings and server-side evidence would need correlation before
+attributing the failure to a specific edge. Do not change keys or accounts based
+on that hypothesis.
 
 ## Local configuration change (evidence-backed)
 
@@ -58,7 +61,7 @@ switched, the remote URL is unchanged and no history was rewritten.
 
 1. Coordinate first; publish only an explicit SHA/refspec, never a moving `HEAD`.
 2. Authenticate once and reuse the session (`ControlMaster`), because every extra
-   handshake is another chance of an edge refusal: for example
+   handshake is another chance of an authentication refusal: for example
    `ssh -M -S /tmp/orqst-origin-<pid> -o ControlPersist=600 -fN github-walisson`,
    then `GIT_SSH_COMMAND='ssh -o ControlPath=/tmp/orqst-origin-<pid>'`.
 3. Verify `git cat-file -e <sha>^{commit}` and the tag objects locally before sending;

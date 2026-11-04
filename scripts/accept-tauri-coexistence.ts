@@ -10,7 +10,11 @@ import {
   assertNoResidentCoexistenceApp,
   nativeBundleIdentifier,
 } from './tauri/coexistence-preflight.js';
-import { captureNativeWindow, compileNativeWindowProbe } from './tauri/native-window.js';
+import {
+  captureNativeWindow,
+  compileNativeWindowProbe,
+  observeNativeFixtureExit,
+} from './tauri/native-window.js';
 import {
   managedCodexSettings,
   terminalExecutableSha256,
@@ -123,6 +127,8 @@ const child = spawn(executable, [], {
   },
   stdio: ['ignore', 'ignore', 'pipe'],
 });
+// Subscribe before probing: the fixture may exit during the window wait.
+const exited = observeNativeFixtureExit(child);
 const pid = child.pid;
 assert.ok(pid !== undefined && pid > 1, 'native fixture did not start');
 console.log(JSON.stringify({ fixture, pid, port }));
@@ -141,12 +147,17 @@ if (probe === undefined) {
   window = { status: 'probe-unavailable', waitedMs: 0, samples: 0, windows: [] };
   await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
   console.log(JSON.stringify({ windowProbe: 'unavailable', cause: 'swiftc was not found' }));
+  failure = 'Native window probe is unavailable';
+  child.kill('SIGTERM');
 } else {
-  window = await captureNativeWindow(probe, pid, { timeoutMs: WINDOW_WAIT_MS });
+  window = await captureNativeWindow(probe, pid, {
+    timeoutMs: WINDOW_WAIT_MS,
+    alive: () => child.exitCode === null && child.signalCode === null,
+  });
   await writeFile(join(fixture, 'window.json'), JSON.stringify(window), { mode: 0o600 });
   console.log(JSON.stringify({ window }));
   // A process exit is not native acceptance, and an unfound window cannot be accepted.
-  if (window.status !== 'window-observed' && window.status !== 'window-exists-offscreen') {
+  if (window.status !== 'window-observed') {
     failure = `No capturable native window was observed for the owned process (${window.status})`;
     child.kill('SIGTERM');
   }
@@ -155,16 +166,11 @@ const deadline = setTimeout(() => child.kill('SIGTERM'), 600_000);
 const stop = () => child.kill('SIGTERM');
 process.once('SIGINT', stop);
 process.once('SIGTERM', stop);
-let spawnFailed = false;
-await once(child, 'exit')
-  .catch(() => {
-    spawnFailed = true;
-  })
-  .finally(() => {
-    clearTimeout(deadline);
-    process.removeListener('SIGINT', stop);
-    process.removeListener('SIGTERM', stop);
-  });
+const spawnFailed = await exited.finally(() => {
+  clearTimeout(deadline);
+  process.removeListener('SIGINT', stop);
+  process.removeListener('SIGTERM', stop);
+});
 // Keep private evidence/journals even on uncertain exit. Never release reservations.
 await writeFile(join(fixture, 'native-stderr.log'), stderrTail, { mode: 0o600 });
 const result = {

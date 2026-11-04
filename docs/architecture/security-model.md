@@ -1302,3 +1302,13 @@ Directory and database/sidecar checks reject symlinks, hardlinks, other owners a
 non-private permissions. Original JSON is preserved. Same-user filesystem replacement
 races remain outside the existing boundary. Metadata-only RPC adds no HTTP, WebSocket,
 CSP, cookie or public execution change. See [contract](../api/terminal-native.md#private-layout-persistence-rpc--2026-11-04).
+
+## Developer-only native and quarantine diagnostics — 2026-11-04
+
+The native acceptance probe reads WindowServer metadata for the fixture's owned
+PID, without pixels/titles or activation/input authority. It is not a production
+capability. Capacity inspection opens an explicitly selected terminal journal
+immutably, refuses pending WAL frames, reads allowlisted metadata and never claims
+ownership, checkpoints or releases capacity. It refuses a linked or group/world
+writable journal file. Neither diagnostic proves safe process adoption or native
+acceptance. See [quarantine](../development/codex-quarantine-capacity.md).

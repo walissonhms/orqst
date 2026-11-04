@@ -1,12 +1,17 @@
-// Synthetic WindowServer metadata only. No application is launched or inspected.
+// Synthetic WindowServer metadata and disposable Node children only. No native app or provider.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   CAPTURABLE_MIN_HEIGHT,
   CAPTURABLE_MIN_WIDTH,
   captureNativeWindow,
   compileNativeWindowProbe,
   parseNativeWindowSample,
+  observeNativeFixtureExit,
   runNativeWindowProbe,
   type NativeWindowSample,
 } from '../scripts/tauri/native-window.js';
@@ -58,8 +63,28 @@ test('probe samples accept only bounded WindowServer metadata', () => {
   assert.throws(() => parseNativeWindowSample(''));
 });
 
-test('a missing compiler is reported instead of silently passing', () => {
-  assert.equal(compileNativeWindowProbe('/tmp', '/nonexistent/swiftc-695'), undefined);
+test('a missing compiler is reported instead of silently passing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orqst-synthetic-missing-swift-'));
+  try {
+    assert.equal(compileNativeWindowProbe(root, '/nonexistent/swiftc-695'), undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('fixture exit remains observable after window inspection sees the process gone', async () => {
+  const child = spawn(process.execPath, ['-e', 'process.exit(0)'], { stdio: 'ignore' });
+  const exited = observeNativeFixtureExit(child);
+  await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+  assert.equal(child.exitCode, 0);
+  assert.equal(await exited, false);
+});
+
+test('fixture spawn failure is captured before a delayed result is consumed', async () => {
+  const child = spawn('/nonexistent/orqst-synthetic-fixture', [], { stdio: 'ignore' });
+  const exited = observeNativeFixtureExit(child);
+  await new Promise<void>((resolve) => child.once('error', () => resolve()));
+  assert.equal(await exited, true);
 });
 
 test('the first capturable window sample ends the bounded wait', async () => {

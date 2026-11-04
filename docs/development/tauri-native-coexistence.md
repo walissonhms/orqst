@@ -270,3 +270,13 @@ Real Codex/Claude/OpenCode login/tasks, native creation/start/input/stop, instal
 provider mention/return, durable recovery, SQLite layout persistence, other platforms
 and signed distribution remain unaccepted. The quarantined reservation is untouched.
 See [the pinned reuse review](../research/tauri-native-coexistence.md).
+
+### Integration hardening — 2026-11-04
+
+The runner subscribes to child exit immediately after spawn, before asynchronous
+window inspection, so an early exit remains observable. Inspection uses the owned
+child's exit state rather than probing an arbitrary reused PID. A missing compiler
+or a window that remains offscreen fails the runner explicitly and stops only its
+own child. Neither a visible-window sample nor process exit zero establishes human
+acceptance. Tests cover actual disposable Node child exit/spawn failure separately
+from synthetic WindowServer samples.

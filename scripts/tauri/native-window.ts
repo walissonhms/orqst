@@ -1,6 +1,7 @@
 // Read-only WindowServer evidence for an explicitly owned native process.
 // Developer-only acceptance support: no production module imports this file.
-import { execFileSync } from 'node:child_process';
+import { execFileSync, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
@@ -9,6 +10,14 @@ export const CAPTURABLE_MIN_WIDTH = 200;
 export const CAPTURABLE_MIN_HEIGHT = 150;
 export const PROBE_OUTPUT_LIMIT = 64 * 1024;
 export const PROBE_TIMEOUT_MS = 5_000;
+
+/** Subscribe immediately after spawn, before asynchronous window inspection. */
+export function observeNativeFixtureExit(child: ChildProcess): Promise<boolean> {
+  return once(child, 'exit').then(
+    () => false,
+    () => true,
+  );
+}
 
 const integer = z.number().int().safe();
 const windowSchema = z
