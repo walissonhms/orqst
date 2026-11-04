@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Packaged Feature acceptance EN/PT
+
+- Pass the complete packaged Chromium-facade workflow in both locales: six
+  synthetic PTYs, 15 switches 3/2/1, editing/archive refusal, persistence, resize,
+  original-process input, signed stops, retirement and host exit.
+- Correct the test's wide-page restoration assumption and wait for completed
+  metadata selection before screenshots; keep runtime geometry unchanged.
+- Generate the local native Preview app from the existing compiled executable and
+  current resources, verify its ad hoc signature and open it for manual review.
+  Native/provider acceptance and Tauri Studio preparation buttons remain incomplete.
+
 ## 2026-11-04 — Feature editor accessible names
 
 - Give the editor button, description and status fields explicit localized

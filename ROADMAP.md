@@ -14,9 +14,9 @@ First V6 increment: Feature identity/metadata/assignments, scoped team/layout
 configuration, private Core IPC and fail-closed alias/grant isolation are implemented.
 The shared terminal renderer now has compact chrome and an accessible pane menu.
 The native metadata facade and actual Feature sidebar/CRUD/selection are now
-connected to retained per-Feature docked layouts. Finish EN/PT acceptance and
-confirmed cleanup before claiming process continuity for the complete workflow;
-15 synthetic switches passed before EN failed on editor reopening. Floating, larger
+connected to retained per-Feature docked layouts. Packaged Chromium-facade EN/PT
+acceptance now passes with confirmed cleanup and 15 switches per locale. Native
+WebKit/provider acceptance and the Tauri Studio preparation bridge remain open. Floating, larger
 structured teams, model capability controls and authorized cross-Feature routes
 remain separate dependencies. See [Core](docs/development/v6-feature-core.md) and
 [chrome](docs/development/v6-terminal-chrome.md) for exact evidence and limits.

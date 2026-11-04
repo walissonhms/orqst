@@ -162,3 +162,26 @@ Native WebKit/provider acceptance and the broader V6 gaps remain unchanged.
 Label correction checks passed: renderer-only EN/PT, lint, typecheck, regular build
 and 17-notice resource staging. The broad suite/native checks were not rerun for
 this UI-only change.
+
+## Complete packaged EN/PT acceptance — 2026-11-04
+
+- [x] Pass EN and PT serially on `592ce02`: six synthetic PTYs, 15 switches 3/2/1
+      per locale, stable IDs/documents/scrollback and exactly six Starts.
+- [x] Exercise editor/status/archive refusal, per-Feature SQLite layout, input
+      revocation and explicit fresh input/PONG on every original process.
+- [x] Verify wide/compact geometry and restoration of the original visible page,
+      with all Feature members retained and without changing runtime paging rules.
+- [x] Complete signed stops/retirement and original-host exit before deleting each
+      successful fixture. The earlier uncertain fixture is preserved separately.
+- [x] Generate and open a locally signed native Preview app for owner inspection.
+- [ ] Port the Studio preparation buttons to Tauri; use the existing native menu
+      meanwhile. Correct its misleading older-Desktop/relaunch notice.
+- [ ] Accept the complete native WebKit flow, final Quit and real-provider behavior.
+
+These results supersede the earlier EN/PT pause for this workflow. They do not
+resolve the older missing receipts, native acceptance, Floating or N-member/
+cross-Feature communication. See the latest [workflow evidence](../development/v6-feature-ui.md).
+
+Final checks passed 54 session-free Node tests, TypeScript, focused ESLint and
+formatting. Native packaging reused the existing compiled executable and passed
+strict local ad hoc signature verification; this does not accept native execution.

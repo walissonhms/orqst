@@ -454,3 +454,20 @@ editor's accessible labels, while the edit button was named by its ellipsis.
 Explicit localized labels now pass a separate EN/PT regression with three
 save/rename/reopen cycles and no Core/host/PTY. A new six-PTY run of this correction
 has not been authorized or executed. Full native/provider acceptance is unchanged.
+
+## Complete packaged Feature acceptance — 2026-11-04
+
+Following explicit owner authorization, both packaged Chromium-facade EN/PT runs
+passed on `592ce02`: six PTYs, 15 switches 3/2/1 per locale, retained process/
+document/history identity, six Starts, editing/archive refusal, persisted Feature
+layouts, responsive page restoration and fresh original-process input. Signed
+retirement validated owned exits; active reservation removal and original-host
+exit were checked before successful fixture cleanup. The earlier uncertain fixture
+and failed-run evidence remain preserved.
+
+A locally signed native Preview app was generated without recompiling the removed
+Cargo caches, opened and navigated to Studio for owner testing. This proves app/
+dashboard launch only. Tauri preparation still uses its native menu: Studio's older
+Electron preparation bridge is absent and its relaunch notice is misleading. That
+UI port, native Feature/terminal/Quit flow, providers and the broader V6 gaps remain
+open. See the [current V6 checklist](v6-feature-checklist.md).

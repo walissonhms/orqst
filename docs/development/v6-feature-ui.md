@@ -230,6 +230,46 @@ The failed run again confirmed signed retirement and host exit; its six journals
 retain exit receipts. A capture made during an unfinished selection is excluded
 from final visual acceptance.
 
+### Complete packaged EN/PT follow-up
+
+The owner authorized continued synthetic acceptance, stopping on uncertain cleanup.
+On source `592ce02` (runtime UI from `d1fda50`), the complete EN and PT commands both
+passed serially. Each used six actual synthetic PTYs, exactly six Starts and 15
+Feature switches 3/2/1. They preserved instance IDs, documents and scrollback,
+exercised name/status edits and archive refusal, per-Feature SQLite layouts, input
+revocation and fresh explicit input/PONG from each original process, 1440×900 and
+720×700 geometry, signed stops and retirement. Core retirement validates every
+dispatched owned exit; the runner also checked the reservation was absent and the
+original host exited with code zero/no signal before removing each successful
+fixture. Failed fixtures and the original uncertain one remain preserved.
+
+This closes that packaged Chromium/facade acceptance only. Native focus, capabilities,
+WebKit geometry and real-provider behavior are not inferred from it. Earlier failures
+remain valid evidence for their exact source/test revisions.
+
+Final source verification also passed all 54 session-free Node tests (including
+the added page-restoration regression), TypeScript, focused ESLint and formatting.
+The broad Node suite was not rerun in this acceptance increment. No Rust source
+changed; native terminal/provider acceptance remains separate.
+
+### Local native preview
+
+The current local app is `dist/native-preview/ORQST Preview.app`. It was packaged
+with `tauri bundle --debug --bundles app --features custom-protocol --ci`, reusing
+the previously compiled native executable instead of rebuilding deleted Cargo
+caches. The initial linker signature did not seal the app resources; a local ad hoc
+bundle signature was applied and `codesign --verify --deep --strict` then passed.
+This is a local development preview, not notarized distribution.
+
+The app was opened and its native WebKit dashboard/Studio observed on its own
+loopback Core. Opening it starts no CLI automatically. Preparation currently uses
+the native **Prepare Tauri terminals** menu. The older Studio preparation buttons
+depend on the Electron `orqstStudio` bridge and remain unavailable in Tauri; its
+"older Desktop/relaunch" warning is misleading in this current native build and is
+a remaining UI-port gap. Do not claim this app-opening check accepts native terminal
+Start, Feature switching, final Quit or provider communication. Those flows still
+need their native review. Preserve the open app while the owner tests it.
+
 ## Fragments for central integration
 
 - **Checklist:** Feature metadata CRUD/selection, reviewed-slot assignment and
