@@ -99,6 +99,14 @@ try {
       const request = tauriStudioRequestSchema.parse(raw);
       calls.push(request);
       if (request.action === 'catalog') return { status: 'catalog', catalog };
+      if (request.action === 'create-mcp-pair') {
+        assert.equal(request.codexModelId, '1'.repeat(64));
+        assert.equal(request.openCodeModelId, '3'.repeat(64));
+        assert.equal(request.workspaceId, 'synthetic-workspace');
+        assert.equal(request.featureId, null);
+        assert.equal(snapshot.liveEnrollment, false);
+        return { status: 'denied', snapshot }; // No runtime; native-consent facade only.
+      }
       if (request.action === 'create-selected') {
         assert.deepEqual(request, {
           action: 'create-selected',
@@ -216,6 +224,55 @@ try {
         .length,
       0,
     );
+    // Fresh bilateral opt-in keeps separate models and source order. No task is submitted.
+    snapshot = { ...snapshot, canCreate: true, selectionLocked: false, liveEnrollment: false };
+    const optIn = drawer.getByLabel(locale.studio.tauri.mcpPairOptIn, { exact: true });
+    for (const [source, id, worker, workerId] of [
+      ['codex', '1', 'opencode', '3'],
+      ['opencode', '3', 'codex', '1'],
+    ] as const) {
+      await drawer.getByRole('button', { name: locale.studio.refresh, exact: true }).click();
+      await expect(optIn).not.toBeChecked();
+      await provider.selectOption(source);
+      await model.selectOption(id.repeat(64));
+      await optIn.check();
+      const pairOpen = drawer.getByRole('button', {
+        name: locale.studio.tauri.openMcpPair,
+        exact: true,
+      });
+      await expect(pairOpen).toBeDisabled();
+      await drawer
+        .getByLabel(
+          locale.studio.tauri.mcpWorkerModel.replace('{{provider}}', locale.shell.adapters[worker]),
+          {
+            exact: true,
+          },
+        )
+        .selectOption(workerId.repeat(64));
+      await expect(pairOpen).toBeEnabled();
+      for (const width of [720, 390, 320]) {
+        await page.setViewportSize({ width, height: 700 });
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          true,
+        );
+      }
+      await pairOpen.click();
+      await expect(pairOpen).toBeEnabled();
+      const last = tauriStudioRequestSchema.parse(
+        calls.filter((c) => tauriStudioRequestSchema.parse(c).action === 'create-mcp-pair').at(-1),
+      );
+      assert.equal(last.action, 'create-mcp-pair');
+      assert.equal(last.sourceProvider, source);
+    }
+    snapshot = { ...snapshot, liveEnrollment: true };
+    await drawer.getByRole('button', { name: locale.studio.refresh, exact: true }).click();
+    await expect(optIn).not.toBeChecked();
+    await expect(optIn).toBeDisabled();
+    assert.equal(
+      calls.filter((c) => tauriStudioRequestSchema.parse(c).action === 'create-mcp-pair').length,
+      2,
+    );
     for (const width of [1440, 720, 390, 320]) {
       await page.setViewportSize({ width, height: 700 });
       assert.equal(
@@ -256,7 +313,7 @@ try {
     assert.deepEqual(electronCalls, [{ action: 'snapshot' }, { action: 'createMixed' }]);
     await electron.close();
     console.log(
-      `${language}: scoped CLI/model/Open, unavailable catalog, no mutation retry, retained single shell, keyboard and 320px overflow passed (renderer only)`,
+      `${language}: scoped CLI/model/Open, explicit bilateral MCP models/direction, append denial, unavailable catalog, no mutation retry, retained single shell, keyboard and 320px overflow passed (renderer only)`,
     );
   }
 } finally {

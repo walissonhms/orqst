@@ -25,6 +25,8 @@ export function TauriStudioPreparation({
   const [catalog, setCatalog] = useState<TerminalPreparationCatalog>();
   const [provider, setProvider] = useState<Provider>('codex');
   const [modelId, setModelId] = useState('');
+  const [mcpPair, setMcpPair] = useState(false);
+  const [companionModelId, setCompanionModelId] = useState('');
   const [count, setCount] = useState(1);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -34,6 +36,9 @@ export function TauriStudioPreparation({
   const inFlight = useRef(false);
   const chosen = catalog?.providers.find((entry) => entry.provider === provider);
   const model = chosen?.models.find((entry) => entry.id === modelId);
+  const companionProvider = provider === 'codex' ? 'opencode' : 'codex';
+  const companion = catalog?.providers.find((entry) => entry.provider === companionProvider);
+  const companionModel = companion?.models.find((entry) => entry.id === companionModelId);
   const workspaceId = context?.workspaceId ?? '';
   const featureId = context?.featureId ?? null;
   const request = useCallback(
@@ -55,6 +60,8 @@ export function TauriStudioPreparation({
           }
           setCatalog(reply.catalog);
           setModelId(''); // A refreshed catalog always needs a current explicit choice.
+          setMcpPair(false);
+          setCompanionModelId('');
         } else {
           if (reply.failure) setFailure(reply.failure);
           // Opening may move focus/generation. Inspect once; never repeat a mutation.
@@ -84,6 +91,8 @@ export function TauriStudioPreparation({
     setFailure(undefined);
     setCatalog(undefined);
     setModelId('');
+    setMcpPair(false);
+    setCompanionModelId('');
     void refresh();
     const inspect = () => void refresh();
     window.addEventListener('focus', inspect);
@@ -137,6 +146,8 @@ export function TauriStudioPreparation({
             onChange={(event) => {
               setProvider(event.target.value as Provider);
               setModelId('');
+              setMcpPair(false);
+              setCompanionModelId('');
             }}
           >
             {(['codex', 'claude', 'opencode'] as const).map((value) => (
@@ -173,6 +184,64 @@ export function TauriStudioPreparation({
         </p>
       )}
       {model && <p className="studio-next">{t('studio.tauri.modelUnverified')}</p>}
+      {provider !== 'claude' && (
+        <div className="studio-members">
+          <label>
+            <input
+              type="checkbox"
+              checked={mcpPair}
+              disabled={disabled || !snapshot?.canCreate || snapshot.liveEnrollment}
+              onChange={(event) => {
+                setMcpPair(event.target.checked);
+                setCompanionModelId('');
+              }}
+            />
+            {t('studio.tauri.mcpPairOptIn')}
+          </label>
+          {mcpPair && (
+            <>
+              <p className="studio-next">
+                {t('studio.tauri.mcpPairHelp', {
+                  source: t(`shell.adapters.${provider}`),
+                  worker: t(`shell.adapters.${companionProvider}`),
+                })}
+              </p>
+              <label>
+                {t('studio.tauri.mcpWorkerModel', {
+                  provider: t(`shell.adapters.${companionProvider}`),
+                })}
+                <select
+                  aria-label={t('studio.tauri.mcpWorkerModel', {
+                    provider: t(`shell.adapters.${companionProvider}`),
+                  })}
+                  disabled={disabled || !snapshot?.canCreate || companion?.status !== 'available'}
+                  value={companionModelId}
+                  onChange={(event) => setCompanionModelId(event.target.value)}
+                >
+                  <option value="">{t('studio.tauri.chooseModel')}</option>
+                  {companion?.models.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.source === 'cli-default'
+                        ? t('studio.tauri.cliDefault')
+                        : entry.isDefault
+                          ? t('studio.tauri.defaultModel', { model: entry.label })
+                          : entry.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {companion && companion.reason !== 'ready' && (
+                <p className="studio-next" role="status">
+                  {t(`studio.tauri.catalog_${companion.reason}`)}
+                </p>
+              )}
+            </>
+          )}
+          {snapshot?.liveEnrollment && (
+            <p className="studio-next">{t('studio.tauri.mcpInitialOnly')}</p>
+          )}
+        </div>
+      )}
       <div className="studio-actions">
         <button
           className="button primary"
@@ -181,26 +250,41 @@ export function TauriStudioPreparation({
             !snapshot?.canCreate ||
             !scopeMatches ||
             chosen?.status !== 'available' ||
-            !model
+            !model ||
+            (mcpPair &&
+              (snapshot.liveEnrollment || companion?.status !== 'available' || !companionModel))
           }
           onClick={() =>
             snapshot &&
             catalog &&
             model &&
-            void request({
-              action: 'create-selected',
-              generation: snapshot.generation,
-              workspaceId,
-              featureId,
-              catalogId: catalog.catalogId,
-              provider,
-              modelId: model.id,
-              count: 1,
-            })
+            void request(
+              mcpPair && provider !== 'claude' && companionModel
+                ? {
+                    action: 'create-mcp-pair',
+                    generation: snapshot.generation,
+                    workspaceId,
+                    featureId,
+                    catalogId: catalog.catalogId,
+                    sourceProvider: provider,
+                    codexModelId: provider === 'codex' ? model.id : companionModel.id,
+                    openCodeModelId: provider === 'opencode' ? model.id : companionModel.id,
+                  }
+                : {
+                    action: 'create-selected',
+                    generation: snapshot.generation,
+                    workspaceId,
+                    featureId,
+                    catalogId: catalog.catalogId,
+                    provider,
+                    modelId: model.id,
+                    count: 1,
+                  },
+            )
           }
         >
           <Terminal size={16} />
-          {t('studio.tauri.open')}
+          {t(mcpPair ? 'studio.tauri.openMcpPair' : 'studio.tauri.open')}
         </button>
         <button className="button" disabled={!native || busy} onClick={() => void refresh()}>
           {t('studio.refresh')}

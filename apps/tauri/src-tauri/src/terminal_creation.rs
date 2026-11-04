@@ -140,6 +140,26 @@ fn valid_request(value: &Value) -> bool {
     match value["action"].as_str() {
         Some("snapshot") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
+        Some("create-mcp-pair") => {
+            exact(
+                value,
+                &[
+                    "action",
+                    "generation",
+                    "workspaceId",
+                    "featureId",
+                    "catalogId",
+                    "sourceProvider",
+                    "codexModelId",
+                    "openCodeModelId",
+                ],
+            ) && generation
+                && scope(value)
+                && digest(&value["catalogId"])
+                && digest(&value["codexModelId"])
+                && digest(&value["openCodeModelId"])
+                && matches!(value["sourceProvider"].as_str(), Some("codex" | "opencode"))
+        }
         Some("create-selected") => {
             exact(
                 value,
@@ -314,7 +334,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
             !guard.begin(
                 matches!(
                     request["action"].as_str(),
-                    Some("create" | "create-selected")
+                    Some("create" | "create-selected" | "create-mcp-pair")
                 ),
                 running,
             )
@@ -481,7 +501,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"review", "files":files})
     } else if matches!(
         request["action"].as_str(),
-        Some("catalog" | "create-selected")
+        Some("catalog" | "create-selected" | "create-mcp-pair")
     ) {
         let mut native = request.clone();
         native.as_object_mut().unwrap().remove("generation");
@@ -597,7 +617,9 @@ fn run(
     ]
     .iter()
     .any(|key| std::env::var_os(key).is_some());
-    if request["provider"] == "opencode" && unsupported_opencode {
+    if (request["provider"] == "opencode" || request["action"] == "create-mcp-pair")
+        && unsupported_opencode
+    {
         return Err("Unsupported native OpenCode configuration selector".into());
     }
     let (mut rx, child) = app
@@ -712,7 +734,7 @@ fn run(
                     Some("commit")
                         if matches!(
                             request["action"].as_str(),
-                            Some("create" | "create-selected")
+                            Some("create" | "create-selected" | "create-mcp-pair")
                         ) =>
                     {
                         let valid = current();
@@ -770,7 +792,10 @@ fn run(
     if result["status"] == "cancelled" && files.is_empty() {
         return Ok(json!({"status":"ok"}));
     }
-    if files.is_empty() || files.len() > 8 {
+    if files.is_empty()
+        || files.len() > 8
+        || (request["action"] == "create-mcp-pair" && files.len() != 2)
+    {
         return Err("Invalid preparation count".into());
     }
     let files: Vec<String> = files
@@ -802,7 +827,10 @@ fn run(
             tauri::async_runtime::block_on(crate::terminal::start_selected_with_open(
                 app,
                 files,
-                request["action"] == "create-selected",
+                matches!(
+                    request["action"].as_str(),
+                    Some("create-selected" | "create-mcp-pair")
+                ),
             ))
         };
         if let Err(error) = opened {
@@ -1083,6 +1111,26 @@ mod tests {
 mod catalog_tests {
     use super::{valid_catalog, valid_request};
     use serde_json::json;
+    #[test]
+    fn mcp_pair_requests_are_bilateral_and_cannot_supply_task_or_launch_authority() {
+        let pair = json!({"action":"create-mcp-pair","generation":3,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"sourceProvider":"codex","codexModelId":"b".repeat(64),"openCodeModelId":"c".repeat(64)});
+        assert!(valid_request(&pair));
+        let mut reverse = pair.clone();
+        reverse["sourceProvider"] = json!("opencode");
+        assert!(valid_request(&reverse));
+        reverse["sourceProvider"] = json!("claude");
+        assert!(!valid_request(&reverse));
+        for key in ["codexModelId", "openCodeModelId", "generation", "featureId"] {
+            let mut missing = pair.clone();
+            missing.as_object_mut().unwrap().remove(key);
+            assert!(!valid_request(&missing));
+        }
+        for key in ["count", "mcp", "proof", "task", "path", "sourceInstanceId"] {
+            let mut extra = pair.clone();
+            extra[key] = json!("SYNTHETIC");
+            assert!(!valid_request(&extra));
+        }
+    }
     #[test]
     fn selected_requests_bind_scope_and_opaque_models_without_native_paths() {
         let mut selected = json!({"action":"create-selected","generation":3,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"provider":"opencode","modelId":"b".repeat(64),"count":1});
