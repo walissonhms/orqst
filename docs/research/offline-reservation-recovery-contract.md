@@ -150,3 +150,33 @@ runtime authority. A kernel/filesystem recovery that yields neither exact phase
 stays ambiguous and reserved. All receipts before rename say preparation only;
 committed observation is separate. Snapshot non-dispatch remains scoped to the
 preserved attempts before this point, not future activity or pruned history.
+
+## Frozen enrollment binding refusal
+
+`snapshotOfflineReservation` reconstructs each journal only after checking its
+manifest against any incremental enrollment. The persisted `bindingDigest` comes
+from `terminalEnrollmentFile`: parsed config, manifest/state/project/executable/Node
+inode identities, original manifest bytes and model-source inode identities. A
+same-content replacement can therefore change the binding while WAL checksums,
+schema, epoch, workspace and prepared attempts still validate. Those journal facts
+do not authorize rebinding enrollment. No current digest is substituted for the
+frozen digest, and no historical inode is inferred from timestamps.
+
+The minimal synthetic regression replaces only a model-source inode after
+creating a ready enrollment. It produces `derived-0.sqlite`, refuses before the
+second derived image or native review, and preserves marker, enrollments, manifests,
+DB/WAL and incomplete inspection. This is a counterexample explaining the failure
+boundary, not evidence of which historical source changed on a user's machine.
+An existing digest alone cannot identify that component; its original preimage
+would be needed. A partial derived journal is never accepted as a capture.
+
+Re-inspected pinned [Anywh `instanceLock.ts`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/instanceLock.ts)
+(`acquireInstanceLock`/`takeLockFile`, Node fs/net/crypto/processTree), its architecture,
+agent-host and runtime documentation, and [Tucano `router.ts`](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f3e69a0948766/src/core/router.ts)
+(`routerPrompt`/`parseRoute`, shared types/engine). Exact roots retain Apache-2.0
+LICENSE and no tracked NOTICE. Neither supplies a frozen ORQST enrollment preimage
+or authority to replace it. Decision: keep the existing binding and private readers;
+adapt only typed failure reporting. No upstream code, dependency, lock/runtime
+mechanism or Overclock visual asset is incorporated. SQLite's
+[WAL format](https://sqlite.org/fileformat2.html#wal_file_format) remains unchanged;
+this correction does not loosen salts, checksums, commit or stale-tail rejection.

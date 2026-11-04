@@ -32,7 +32,11 @@ import {
   administrativeRequestSchema,
   type AdministrativeAction,
 } from '../apps/desktop/src/offline-recovery-wire.js';
-import { TauriOfflineRecovery } from '../apps/desktop/src/tauri-offline-recovery.js';
+import {
+  administrativeBlockedOutcome,
+  TauriOfflineRecovery,
+} from '../apps/desktop/src/tauri-offline-recovery.js';
+import { OfflineEnrollmentBindingChanged } from '../packages/core/src/terminal/offline-recovery-files.js';
 import {
   administrativeRecoveryBytes,
   type AdministrativeRecoveryChallenge,
@@ -57,6 +61,22 @@ const ack = (frame: Record<string, unknown>, approved = true) => ({
 
 // Explicit synthetic native grants; this helper never runs against the native app.
 const fixtureGrant = async () => performance.now() + 30_000;
+
+test('blocked diagnostics expose only a fixed typed code, never arbitrary errors or fields', () => {
+  const generic = { status: 'blocked', outcome: 'unconfirmed' };
+  for (const error of [
+    new Error('/SYNTHETIC/private-path owner-key stderr'),
+    { stage: 'inspection', code: 'enrollment_binding_changed' },
+    null,
+  ])
+    assert.deepEqual(administrativeBlockedOutcome(error), generic);
+  const typed = new OfflineEnrollmentBindingChanged();
+  Object.assign(typed, { stage: '/SYNTHETIC/private', code: 'SYNTHETIC-secret' });
+  assert.deepEqual(administrativeBlockedOutcome(typed), {
+    ...generic,
+    failure: { stage: 'inspection', code: 'enrollment_binding_changed' },
+  });
+});
 function reply(pipe: AdministrativeReviewPipe, frame: Record<string, unknown>, approved = true) {
   if (frame.kind === 'review') return pipe.answer(ack(frame, approved));
   pipe.authorized({

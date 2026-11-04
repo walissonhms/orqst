@@ -50,6 +50,7 @@ vocabulary!(Outcome {
     CapacityExceeded => "capacity_exceeded", ReviewTooLarge => "review_too_large",
     SelectionBlocked => "selection_blocked", CapacityReserved => "capacity_reserved",
     AdmissionInvalid => "admission_invalid", StartupFailed => "startup_failed",
+    EnrollmentBindingChanged => "enrollment_binding_changed",
     StartupTimeout => "startup_timeout", StartupEof => "startup_eof", StartupProtocol => "startup_protocol",
     Uncertain => "uncertain", Unconfirmed => "unconfirmed",
 });

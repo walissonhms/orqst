@@ -44,7 +44,9 @@ import {
 import {
   RECOVERY_GATE,
   snapshotOfflineReservation,
+  OfflineEnrollmentBindingChanged,
 } from '../packages/core/src/terminal/offline-recovery-files.js';
+import { administrativeBlockedOutcome } from '../apps/desktop/src/tauri-offline-recovery.js';
 
 function fixture(wal = false, journalNow?: () => number) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
@@ -585,6 +587,43 @@ for (const fault of ['symlink', 'privacy', 'budget', 'replaced_inode', 'capture_
       f.close();
     }
   });
+
+test('enrolled source inode drift refuses before review after only derived-0, with a fixed diagnostic', async () => {
+  const f = fixture(true);
+  try {
+    const before = [
+      f.marker,
+      f.intentFile,
+      f.receiptFile,
+      ...f.manifests,
+      ...f.databases.flatMap(({ file }) => [file, `${file}-wal`]),
+    ].map((file) => [file, readFileSync(file)] as const);
+    // Same content and manifest, different model-source inode: the frozen digest must still deny.
+    const model = join(f.root, 'model.json');
+    const bytes = readFileSync(model);
+    renameSync(model, `${model}.preserved`);
+    writeFileSync(model, bytes, { mode: 0o600 });
+    await assert.rejects(f.capture(), (error: unknown) => {
+      assert.ok(error instanceof OfflineEnrollmentBindingChanged);
+      assert.deepEqual(administrativeBlockedOutcome(error), {
+        status: 'blocked',
+        outcome: 'unconfirmed',
+        failure: { stage: 'inspection', code: 'enrollment_binding_changed' },
+      });
+      return true;
+    });
+    assert.equal(f.fullReviews.length, 0);
+    assert.equal(f.reviews.length, 0);
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    const inspection = readdirSync(bundle).find((name) => name.startsWith('inspection-'))!;
+    assert.deepEqual(readdirSync(join(bundle, inspection)), ['derived-0.sqlite']);
+    assert.ok(!existsSync(join(bundle, 'capture.json')));
+    assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
+    for (const [file, original] of before) assert.deepEqual(readFileSync(file), original);
+  } finally {
+    f.close();
+  }
+});
 
 test('pure WAL validation rejects truncated/corrupt/uncommitted frames and preserves source buffers', () => {
   const f = fixture(true);
