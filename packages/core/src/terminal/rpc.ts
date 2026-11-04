@@ -5,6 +5,7 @@ import {
   featureUpdateSchema,
   terminalTeamSaveSchema,
   TERMINAL_SLOT_CEILING,
+  terminalEnrollmentInputSchema,
 } from '@orqst/protocol';
 import { z } from 'zod';
 
@@ -60,6 +61,18 @@ export const terminalRPCReplySchema = z.union([
 
 /** Private Node pair transport. Renderer requests never select this slot or carry proofs. */
 export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
+  z.strictObject({ kind: z.literal('enrollmentInspect'), id, opId: id.optional() }),
+  z.strictObject({
+    kind: z.literal('enroll'),
+    id,
+    input: terminalEnrollmentInputSchema,
+    // Private inherited IPC only. This path never comes from a renderer payload.
+    manifestFile: z
+      .string()
+      .startsWith('/')
+      .max(2048)
+      .refine((value) => !value.includes('\0')),
+  }),
   z.strictObject({
     kind: z.literal('terminal'),
     slot: z

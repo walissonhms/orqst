@@ -511,3 +511,15 @@ This preferred view is distinct from process ownership, active tasks and native
 input. No observer `user_version`, legacy namespace, JSON layout, execution journal
 or provider history is migrated. Per-Feature UUID layout records continue using
 the existing complete-membership namespace. See [native contract](../api/features.md).
+
+## Incremental owned admission evidence — 2026-11-04
+
+The [private enrollment contract](../api/terminal-enrollment.md) preserves the
+original `active-pair.json` owner/files-set marker. Exclusive 0600 per-owner
+enrollment and receipt records in its private 0700 directory append opId, Core
+epoch, CAS revision, immutable slot/terminal UUID and source/context binding.
+Directory/file fsync precedes publication. Whole-Pair retirement archives these
+records together with every owned attempt; uncertain partial records reserve
+capacity and cannot retire. No observer Store/migration, native history or event
+payload is modified. Per-slot journals and their quotas remain unchanged; enrolled
+Start manifest digests additionally bind the copied admission revision/hash.

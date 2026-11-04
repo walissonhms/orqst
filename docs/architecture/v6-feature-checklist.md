@@ -266,3 +266,14 @@ Cargo, resource staging and broad build/test loads remain paused at approximatel
       selection remains one-shot per app launch; no second runtime is created.
 
 See [workflow, evidence and pending live enrollment](../development/terminal-product-open.md).
+
+## Private Core enrollment source increment — 2026-11-04
+
+- [x] Append one independent prepared CLI/model slot to the existing Pair using
+      durable epoch/opId/CAS reservations and receipts, without rebuilding old slots.
+- [x] Cover pure continuity, capacity, idempotency, partial-effect preservation,
+      source/context binding and isolated mocked-client timeout/late ACK.
+- [ ] Integrate/accept native service/Webview/layout/Feature append with real CLIs.
+
+See the [private contract and remaining limits](../api/terminal-enrollment.md).
+This source increment does not mark native/runtime/provider acceptance complete.

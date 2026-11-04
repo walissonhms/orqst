@@ -1395,3 +1395,13 @@ remain unchanged. Legacy Start grants startup only. Current selection remains
 one-shot per app launch; live enrollment needs its own ownership/admission review.
 Pure/renderer checks do not prove native/provider acceptance; Cargo remains pending
 while coordinated disk margin is unavailable.
+
+## Private incremental owned enrollment — 2026-11-04
+
+The [enrollment API](../api/terminal-enrollment.md) exists only on trusted inherited
+parent/Core IPC. It binds original Core epoch, one-use operation identity, CAS,
+prepared read-only workspace/Feature context and immutable source/admission
+revision. Admission grants no Start/attach/input. Exclusive durable records retain
+partial effects and capacity, with no automatic release/retry/adoption; timeout
+and stale acknowledgments do not disconnect or renew previous panes. Native
+presentation/layout and real-provider acceptance remain separate.

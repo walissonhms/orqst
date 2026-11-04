@@ -10,6 +10,7 @@ export * from './desktop-analytics.js';
 export * from './live-metrics.js';
 export * from './model-history.js';
 export * from './terminal-native.js';
+export * from './terminal-enrollment.js';
 
 export const statusSchema = z.enum([
   'running',

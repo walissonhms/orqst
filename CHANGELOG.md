@@ -23,6 +23,17 @@
 - Pure and headless renderer evidence does not accept Cargo/native/provider execution
   or packaging. See [workflow and verification](docs/development/terminal-product-open.md).
 
+## 2026-11-04 — Incremental enrollment in the existing owned Core
+
+- Append independent prepared CLI/model slots to the same Pair within its original
+  configured limit; preserve existing instances, output, supervisors and grants.
+- Persist exclusive reservation/receipt evidence with epoch/opId/CAS revision;
+  retain partial effects as uncertain without retry, rollback or capacity release.
+- Bind enrolled Start digests to copied Core admission revision/source identity;
+  preserve exact legacy digest bytes and separate launch/attach/input authority.
+- Add private inspect/enroll IPC and client timeout/late-ACK isolation. Pure tests
+  cover the contract; native integration and real-provider acceptance remain open.
+
 ## 2026-11-04 — Full-window Studio shell
 
 - Use one viewport-sized Workspace/Feature shell in native Studio, without the

@@ -7,6 +7,11 @@ import {
   type FeatureCreate,
   terminalLayoutRecordSchema,
   type TerminalLayoutRecord,
+  terminalEnrollmentInputSchema,
+  terminalEnrollmentInspectionSchema,
+  terminalEnrollmentReceiptSchema,
+  type TerminalEnrollmentInput,
+  type TerminalEnrollmentReceipt,
 } from '@orqst/protocol';
 import { fork } from 'node:child_process';
 import { randomUUID, type KeyObject } from 'node:crypto';
@@ -25,6 +30,7 @@ import {
 
 class CoreOperationDenied extends Error {}
 export class FeatureRevisionConflict extends Error {}
+export class TerminalEnrollmentUncertain extends Error {}
 
 /** Electron is a client: Node owns SQLite, lifecycle, grants and PTYs across view hide/detach. */
 export async function connectManagedTerminalCore(
@@ -61,6 +67,7 @@ export async function connectManagedTerminalCore(
   );
   let closed = false;
   let initialized = false;
+  let epoch = '';
   let identities: Array<{
     slot: number;
     terminalId: string;
@@ -81,6 +88,8 @@ export async function connectManagedTerminalCore(
       timer: ReturnType<typeof setTimeout>;
     }
   >();
+  // A timed-out enrollment is never replayed. Its late transport ACK cannot close old panes.
+  const enrollmentTimeouts = new Set<string>();
   const close = () => {
     if (closed) return;
     closed = true;
@@ -115,6 +124,7 @@ export async function connectManagedTerminalCore(
       )
         return close();
       identities = started.data.identities;
+      epoch = started.data.epoch;
       initialized = true;
       clearTimeout(startupTimer);
       ready();
@@ -123,6 +133,7 @@ export async function connectManagedTerminalCore(
     const parsed = terminalRPCReplySchema.safeParse(raw);
     if (!parsed.success) return close();
     const request = pending.get(parsed.data.id);
+    if (!request && enrollmentTimeouts.delete(parsed.data.id)) return;
     if (!request) return close();
     pending.delete(parsed.data.id);
     clearTimeout(request.timer);
@@ -138,7 +149,20 @@ export async function connectManagedTerminalCore(
         ...body,
         ...(body.kind === 'terminal' ? {} : { id }),
       });
-      pending.set(id, { resolve, reject, timer: setTimeout(close, 12000) });
+      const enrollment = body.kind === 'enroll' || body.kind === 'enrollmentInspect';
+      if (enrollment && enrollmentTimeouts.size >= 128)
+        return reject(new TerminalEnrollmentUncertain('Enrollment transport budget exhausted'));
+      const timer = setTimeout(() => {
+        if (!enrollment) return close();
+        pending.delete(id);
+        enrollmentTimeouts.add(id);
+        reject(
+          new TerminalEnrollmentUncertain(
+            'Enrollment reply unconfirmed; inspect opId without retry',
+          ),
+        );
+      }, 12000);
+      pending.set(id, { resolve, reject, timer });
       try {
         child.send(request, (error) => {
           if (error) close();
@@ -167,26 +191,93 @@ export async function connectManagedTerminalCore(
       throw error;
     }
   };
-  const supervisors = files.map(
-    (_file, slot) =>
-      Object.fromEntries(
-        terminalRPCSchema.options.map((schema) => {
-          const operation = schema.shape.operation.value;
-          return [
-            operation,
-            async (...args: unknown[]) => {
-              const request = terminalRPCSchema.parse({ id: randomUUID(), operation, args });
-              const result = await call({ kind: 'terminal', slot, request }, request.id);
-              if (operation !== 'read') return result;
-              const output = terminalRPCOutputSchema.parse(result);
-              return { ...output, bytes: Uint8Array.from(output.bytes) };
-            },
-          ];
-        }),
-      ) as TerminalNativeSupervisor,
-  );
+  const supervisor = (slot: number) =>
+    Object.fromEntries(
+      terminalRPCSchema.options.map((schema) => {
+        const operation = schema.shape.operation.value;
+        return [
+          operation,
+          async (...args: unknown[]) => {
+            const request = terminalRPCSchema.parse({ id: randomUUID(), operation, args });
+            const result = await call({ kind: 'terminal', slot, request }, request.id);
+            if (operation !== 'read') return result;
+            const output = terminalRPCOutputSchema.parse(result);
+            return { ...output, bytes: Uint8Array.from(output.bytes) };
+          },
+        ];
+      }),
+    ) as TerminalNativeSupervisor;
+  const supervisors = files.map((_file, slot) => supervisor(slot));
+  let enrollmentRevision = 0;
+  const enrollmentOperations = new Map<
+    string,
+    { key: string; receipt?: TerminalEnrollmentReceipt }
+  >();
   return {
     identities,
+    get epoch() {
+      return epoch;
+    },
+    async enrollmentInspect(opId?: string) {
+      const value = terminalEnrollmentInspectionSchema.parse(
+        await call({ kind: 'enrollmentInspect', ...(opId ? { opId } : {}) }),
+      );
+      if (value.epoch !== epoch) throw new TerminalEnrollmentUncertain('Enrollment epoch changed');
+      if (value.receipt && value.receipt.opId !== opId)
+        throw new TerminalEnrollmentUncertain('Enrollment inspection binding changed');
+      // Inspection is evidence only: never materialize a slot from a timed-out operation.
+      return value;
+    },
+    async enroll(input: TerminalEnrollmentInput, manifestFile: string) {
+      const validated = terminalEnrollmentInputSchema.parse(input);
+      if (input.epoch !== epoch) throw new Error('Enrollment epoch changed');
+      const key = JSON.stringify([validated, manifestFile]);
+      const prior = enrollmentOperations.get(input.opId);
+      if (prior) {
+        if (prior.key !== key) throw new Error('Enrollment operation rebound');
+        if (prior.receipt) return structuredClone(prior.receipt);
+        throw new TerminalEnrollmentUncertain(
+          'Enrollment already attempted; inspect opId without retry',
+        );
+      }
+      if (enrollmentOperations.size >= 128) throw new Error('Enrollment operation budget exceeded');
+      const operation: { key: string; receipt?: TerminalEnrollmentReceipt } = { key };
+      enrollmentOperations.set(input.opId, operation);
+      const receipt = terminalEnrollmentReceiptSchema.parse(
+        await call({ kind: 'enroll', input, manifestFile }),
+      );
+      if (
+        receipt.epoch !== epoch ||
+        receipt.opId !== input.opId ||
+        receipt.expectedRevision !== input.expectedRevision ||
+        receipt.workspaceId !== input.workspaceId ||
+        receipt.featureId !== input.featureId
+      )
+        throw new TerminalEnrollmentUncertain('Enrollment receipt binding changed');
+      if (receipt.status === 'ready') {
+        const member = receipt.member;
+        if (!member || member.status !== 'ready' || member.admissionRevision !== receipt.revision)
+          throw new TerminalEnrollmentUncertain('Enrollment receipt member changed');
+        const previous = identities[member.slot];
+        if (previous) {
+          if (previous.terminalId !== member.terminalId || previous.provider !== member.provider)
+            throw new TerminalEnrollmentUncertain('Enrollment slot rebound');
+        } else {
+          if (member.slot !== supervisors.length || receipt.revision !== enrollmentRevision + 1)
+            throw new TerminalEnrollmentUncertain('Enrollment continuity unconfirmed');
+          supervisors.push(supervisor(member.slot));
+          identities.push({
+            slot: member.slot,
+            terminalId: member.terminalId,
+            provider: member.provider,
+            ...(member.alias ? { alias: member.alias } : {}),
+          });
+          enrollmentRevision = receipt.revision;
+        }
+      }
+      operation.receipt = structuredClone(receipt);
+      return receipt;
+    },
     features: {
       list: async () => workspaceFeatureSchema.array().parse(await call({ kind: 'featureList' })),
       read: readFeature,

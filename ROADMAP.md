@@ -10,6 +10,13 @@ Core; restarting the app per terminal is not
 accepted as the normal workflow. Dynamic OpenCode catalogue, providers and native
 execution remain acceptance gaps. See [contract and limits](docs/api/terminal-preparation.md).
 
+## Incremental owned Core enrollment — 2026-11-04
+
+The [private v1 enrollment contract](docs/api/terminal-enrollment.md) adds durable
+append-only admission, CAS/idempotent receipts and an existing-Core client API.
+Pure tests cover continuity and uncertainty; native service/Webview/layout wiring,
+real providers and packaging remain separate acceptance gates.
+
 ## Approved V6 feature architecture — 2026-11-04
 
 The [V6 reference](docs/design/v6/README.md) supersedes earlier product/UI directions
