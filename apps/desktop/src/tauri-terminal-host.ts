@@ -102,7 +102,7 @@ async function start() {
   const metadata = z.strictObject({
     kind: z.literal('feature-request'),
     id: z.uuid(),
-    document: z.number().int().nonnegative().safe(),
+    document: z.number().int().positive().safe(),
     source: z.string().min(1).max(4096),
     request: featureNativeRequestSchema,
   });

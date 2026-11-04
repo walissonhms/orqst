@@ -23,6 +23,9 @@ import {
   terminalRPCSchema,
 } from '../../../packages/core/src/terminal/rpc.js';
 
+class CoreOperationDenied extends Error {}
+export class FeatureRevisionConflict extends Error {}
+
 /** Electron is a client: Node owns SQLite, lifecycle, grants and PTYs across view hide/detach. */
 export async function connectManagedTerminalCore(
   files: string[],
@@ -124,7 +127,7 @@ export async function connectManagedTerminalCore(
     pending.delete(parsed.data.id);
     clearTimeout(request.timer);
     if (parsed.data.ok) request.resolve(parsed.data.value);
-    else request.reject(new Error('Managed Terminal operation denied'));
+    else request.reject(new CoreOperationDenied('Managed Terminal operation denied'));
   });
   const call = (body: Record<string, unknown>, selectedId: string = randomUUID()) =>
     new Promise<unknown>((resolve, reject) => {
@@ -145,6 +148,25 @@ export async function connectManagedTerminalCore(
       }
     });
   await startup;
+  const readFeature = async (featureId: string) =>
+    workspaceFeatureSchema.parse(await call({ kind: 'featureRead', featureId }));
+  const readView = async () =>
+    featureViewStateSchema.parse(await call({ kind: 'featureViewRead' }));
+  const featureMutation = async (
+    body: Record<string, unknown>,
+    expectedRevision: number,
+    revision: () => Promise<number>,
+  ) => {
+    try {
+      return await call(body);
+    } catch (error) {
+      // Only an explicit Core refusal is eligible for a CAS diagnosis. Transport loss
+      // stays uncertain even if a later read could find a committed mutation.
+      if (error instanceof CoreOperationDenied && (await revision()) !== expectedRevision)
+        throw new FeatureRevisionConflict('Feature revision changed');
+      throw error;
+    }
+  };
   const supervisors = files.map(
     (_file, slot) =>
       Object.fromEntries(
@@ -167,19 +189,34 @@ export async function connectManagedTerminalCore(
     identities,
     features: {
       list: async () => workspaceFeatureSchema.array().parse(await call({ kind: 'featureList' })),
-      read: async (featureId: string) =>
-        workspaceFeatureSchema.parse(await call({ kind: 'featureRead', featureId })),
+      read: readFeature,
       create: async (input: Omit<FeatureCreate, 'workspaceId'>) =>
         workspaceFeatureSchema.parse(await call({ kind: 'featureCreate', input })),
       update: async (featureId: string, input: FeatureUpdate) =>
-        workspaceFeatureSchema.parse(await call({ kind: 'featureUpdate', featureId, input })),
+        workspaceFeatureSchema.parse(
+          await featureMutation(
+            { kind: 'featureUpdate', featureId, input },
+            input.expectedRevision,
+            async () => (await readFeature(featureId)).revision,
+          ),
+        ),
       assign: async (featureId: string, slot: number, expectedRevision: number) =>
         workspaceFeatureSchema.parse(
-          await call({ kind: 'featureAssign', featureId, slot, expectedRevision }),
+          await featureMutation(
+            { kind: 'featureAssign', featureId, slot, expectedRevision },
+            expectedRevision,
+            async () => (await readFeature(featureId)).revision,
+          ),
         ),
-      readView: async () => featureViewStateSchema.parse(await call({ kind: 'featureViewRead' })),
+      readView,
       saveView: async (input: { featureId: string | null; expectedRevision: number }) =>
-        featureViewStateSchema.parse(await call({ kind: 'featureViewSave', input })),
+        featureViewStateSchema.parse(
+          await featureMutation(
+            { kind: 'featureViewSave', input },
+            input.expectedRevision,
+            async () => (await readView()).revision,
+          ),
+        ),
       readLayout: async (featureId: string) => {
         const value = await call({ kind: 'featureLayoutRead', featureId });
         return value === null ? null : terminalLayoutRecordSchema.parse(value);

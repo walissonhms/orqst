@@ -17,6 +17,7 @@ import { TauriFeatureService } from '../apps/desktop/src/tauri-feature-service.j
 import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
 import { featureLayout } from '../apps/desktop/src/feature-layout.js';
 import { createFeatureClient } from '../apps/tauri/src/features-bridge.js';
+import { FeatureRevisionConflict } from '../apps/desktop/src/managed-terminal-core.js';
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-feature-view-'));
@@ -274,6 +275,72 @@ test('empty Feature remains active chrome; a late selection/save ACK never reope
     assert.deepEqual(f.layout.snapshot().visible, []);
     const last = f.messages.at(-1)!;
     assert.equal(last.focus, null);
+  } finally {
+    f.close();
+  }
+});
+
+test('selection revokes before metadata reads and a navigation during refresh cannot apply its view', async () => {
+  const f = fixture();
+  try {
+    const feature = f.db.create({ name: 'SYNTHETIC delayed refresh' });
+    await f.service.initialize();
+    let release!: () => void;
+    const list = f.core.features.list;
+    f.core.features.list = async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return list();
+    };
+    const before = f.revocations.length;
+    const pending = f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'select',
+      featureId: feature.featureId,
+      expectedRevision: 0,
+    });
+    assert.equal(f.revocations.length, before + 6);
+    while (!release) await new Promise((resolve) => setImmediate(resolve));
+    f.layout.setNativeGeneration(1);
+    f.layout.suspend();
+    f.core.features.list = list;
+    release();
+    assert.equal((await pending).status, 'unavailable');
+    await f.request({ action: 'snapshot' });
+    assert.equal(f.snapshot().activeFeatureId, null);
+    assert.equal(f.layout.snapshot().suspended, true);
+  } finally {
+    f.close();
+  }
+});
+
+test('confirmed CAS refusal stays distinct from uncertain transport without a write retry', async () => {
+  const f = fixture();
+  try {
+    const feature = f.db.create({ name: 'SYNTHETIC CAS' });
+    await f.service.initialize();
+    let writes = 0;
+    for (const [error, expected] of [
+      [new FeatureRevisionConflict(), 'stale'],
+      [new Error('transport'), 'unavailable'],
+    ] as const) {
+      f.core.features.update = async () => {
+        writes++;
+        throw error;
+      };
+      const result = await f.service.request({
+        contractVersion: 1,
+        generation: 0,
+        action: 'update',
+        featureId: feature.featureId,
+        input: { expectedRevision: feature.revision, name: 'SYNTHETIC edited' },
+      });
+      assert.equal(result.status, expected);
+    }
+    assert.equal(writes, 2);
+    assert.equal(f.db.read(feature.featureId).revision, 1);
   } finally {
     f.close();
   }

@@ -8,6 +8,7 @@ import {
   type WorkspaceFeature,
 } from '@orqst/protocol';
 import type { connectManagedTerminalCore } from './managed-terminal-core.js';
+import { FeatureRevisionConflict } from './managed-terminal-core.js';
 import { featureLayout } from './feature-layout.js';
 import type { TauriTerminalLayout } from './tauri-terminal-layout.js';
 import type { terminalLayoutStore } from './terminal-layout-store.js';
@@ -203,7 +204,8 @@ export class TauriFeatureService {
       const snapshot = this.snapshot();
       this.changed(snapshot);
       return { status: 'ok', snapshot };
-    } catch {
+    } catch (error) {
+      if (error instanceof FeatureRevisionConflict) return { status: 'stale' };
       // No automatic retry of a metadata command whose commit may have succeeded.
       return { status: 'unavailable' };
     } finally {
