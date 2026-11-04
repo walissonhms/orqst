@@ -70,6 +70,11 @@ No scenario is newly accepted. Two evidence rows apply to the existing items:
   read-only capacity inspection now exist, but keep **Partial**; no human/native test ran.
 - Rows 3, 5, 6, 8, 14, 16 stay **Partial**; row 9 stays **Blocked** pending the owner's
   quarantine/capacity decision quoted above.
+- Add the unproven focus race to the native blockers: the post-dialog confirmation in
+  `terminal.rs` samples `focused()` once right after sheet dismissal, which may deny a
+  real consent. The decisive focus timeline and a bounded re-check proposal are in
+  [native coexistence](../development/tauri-native-coexistence.md#focus-after-a-native-dialog-leading-hypothesis-unproven);
+  nothing was applied or compiled without a Rust toolchain.
 
 ## Security model (suggested one-line addition)
 
