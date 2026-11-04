@@ -80,3 +80,22 @@ See [security model](../architecture/security-model.md) and [remaining work](../
 Real provider tasks, full browser suite, source ingestion acceptances and other-platform
 or signed packaging were not run. Native retirement/reselection, split layout and MCP
 authorization are explicitly incomplete; no state is deleted to conceal those limits.
+
+## Integrated verification with mention routing — 2026-11-04
+
+The terminal integration was combined with the independently reviewed mention and
+permission changes from `ec5ec2b`. On the combined local tree, `pnpm lint`,
+`pnpm typecheck`, `pnpm test` and `pnpm build` passed; the full Node suite reported
+586 tests with no failures, cancellations or skips. The existing Vite chunk advisory
+remains. Building Tauri resources copied 18 JavaScript dependency notices for the
+macOS ARM64 target.
+
+`pnpm accept:tauri-terminals --authorize-synthetic` passed with packaged Node hosts,
+a real synthetic PTY and the Tauri xterm bundle, including signed start, attach,
+input, resize, stop and revocation. `pnpm accept:tauri-core` passed with the
+packaged observer, dashboard, cookie API and Analytics worker outside the checkout.
+Both checks use disposable synthetic data. Terminal native IPC, focus and dialogs
+were simulated; no installed provider ran. The existing source worktree's
+`apps/tauri/src-tauri/target/debug` remained absent after the owner requested its
+cleanup. Rust/native app tests in the prior section refer to the isolated worker
+tree, not a fresh native test of this combined tree.
