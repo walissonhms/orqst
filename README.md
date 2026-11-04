@@ -41,7 +41,11 @@ consent share selection-wide exclusion and document revocation; see the
 The [native coexistence fixture](docs/development/tauri-native-coexistence.md)
 opens isolated synthetic PTY/communication hosts in one Tauri process for human
 focus and permission checks. Native UI acceptance remains pending; returning from
-another ORQST window now cancels any pending dashboard preparation review.
+another ORQST window now cancels any pending dashboard preparation review. The native own-sheet path now
+preserves the exact pending review while suspending input; real deactivation or
+another key window still fences it. Managed agents has a native submenu, and app-menu
+Quit routes through the existing host consent gates. Native synthetic checks remain
+separate from provider, integrated V6 and platform acceptance.
 
 ## Explicit mention routing — 2026-11-04
 

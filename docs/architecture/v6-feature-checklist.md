@@ -85,3 +85,20 @@ prototype rendered at 1440×900 for visual inspection; its four panes are simula
 No V6 runtime or real-provider acceptance is claimed by this intake. Existing
 Node/Core/PTY/SQLite and pinned Anywh/Tucano code were inspected; decisions are in
 the [reuse review](../research/v6-feature-foundation.md).
+
+## Native consent increment — 2026-11-04
+
+- [x] Demonstrate own-sheet generation revocation with an explicit native affirmative
+      result; preserve the exact WKWebView/source/selection proof in the correction.
+- [x] Test cancellation, real revocation with return, expiration and input suspension
+      without renewal against the existing signed broker.
+- [x] Observe native synthetic start, attach, input/PONG, real PTY resize, hide/restore,
+      retained output and signed stop in the isolated coexistence fixture.
+- [x] Observe both native Quit cancellations, first-gate re-presentation and denial
+      of a late affirmative after another owned key window, in the isolated final fixture.
+- [ ] Observe real NSApp deactivation and final both-affirmative shutdown on that
+      final artifact; its runner deadline expired before the human deactivation step.
+- [ ] Revalidate the integrated V6 artifact and real providers; native fixture evidence
+      on the prior baseline does not accept Workspace/Feature workflows.
+
+See [the exact native evidence boundaries](../development/tauri-native-coexistence.md).

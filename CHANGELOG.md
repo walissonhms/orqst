@@ -14,6 +14,19 @@
 - Pass 710 integrated Node tests, EN/PT renderer checks and eight synthetic packaged
   PTYs. Feature UI/Floating, native acceptance and real-provider delivery remain open.
 
+## 2026-11-04 — Native own-sheet consent and menu routing
+
+- Distinguish an exact owned AppKit sheet from application deactivation or another
+  key window; suspend keyboard leases without renewing a pending signed review.
+- Keep first-responder, generation, expiration, nonce, selection and MCP/retirement
+  checks; returning to a revoked sheet cannot restore authority.
+- Expose Managed agents through a submenu and route app-menu Quit through the
+  existing two-host consent gates, preserving tray and close/background policy.
+- Bind both Quit gates to visible owned windows, deny unknown/default results and
+  fence late layout presentation until both reviews finish.
+- Record owned fixture launch metadata and bounded private focus evidence. Native
+  synthetic acceptance remains separate from real providers and integrated V6.
+
 ## 2026-11-04 — Native diagnostics and approved V6 reference
 
 - Preserve the approved V6 specifications/prototype with hashes and an explicit
