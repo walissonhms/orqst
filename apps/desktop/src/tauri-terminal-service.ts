@@ -60,39 +60,48 @@ export class TauriTerminalService {
     core?: TauriTerminalRetirementCore,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
-    this.panes = supervisors.map((supervisor, slot) => {
-      const document = Object.freeze({ slot });
-      const state = { focused: false, busy: false, reviewing: false, closed: false };
-      const authority = new TerminalAuthority(
-        new Map([['desktop-managed', keys.publicKey]]),
-        Date.now,
-      );
-      const broker = new TerminalNativeBroker(
-        authority,
-        supervisor,
-        'desktop-managed',
-        keys.privateKey,
-        document,
-        {
-          current: (target, focus) =>
-            !this.closed && !state.closed && target === document && (!focus || state.focused),
-          confirm: async (_document, details) => {
-            const detail = JSON.stringify(details, null, 2).replace(
-              /\p{Cf}/gu,
-              (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
-            );
-            if (detail.length > 4096 || (details.paste?.length ?? 0) > 1024) return false;
-            return this.confirm(
-              slot,
-              translate(`terminalNative.${details.operation}`),
-              detail,
-              details.operation === 'open' ? 'studio.tauri.open' : 'terminalNative.confirm',
-            );
-          },
+    this.panes = supervisors.map((supervisor, slot) => this.pane(supervisor, slot));
+  }
+
+  private pane(supervisor: TerminalNativeSupervisor, slot: number) {
+    const document = Object.freeze({ slot });
+    const state = { focused: false, busy: false, reviewing: false, closed: false };
+    const authority = new TerminalAuthority(
+      new Map([['desktop-managed', this.keys.publicKey]]),
+      Date.now,
+    );
+    const broker = new TerminalNativeBroker(
+      authority,
+      supervisor,
+      'desktop-managed',
+      this.keys.privateKey,
+      document,
+      {
+        current: (target, focus) =>
+          !this.closed && !state.closed && target === document && (!focus || state.focused),
+        confirm: async (_document, details) => {
+          const detail = JSON.stringify(details, null, 2).replace(
+            /\p{Cf}/gu,
+            (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
+          );
+          if (detail.length > 4096 || (details.paste?.length ?? 0) > 1024) return false;
+          return this.confirm(
+            slot,
+            this.translate(`terminalNative.${details.operation}`),
+            detail,
+            details.operation === 'open' ? 'studio.tauri.open' : 'terminalNative.confirm',
+          );
         },
-      );
-      return { document, state, broker };
-    });
+      },
+    );
+    return { document, state, broker };
+  }
+
+  /** Confirmed native enrollment only; previous document/broker/grants remain the same objects. */
+  append(slot: number, supervisor: TerminalNativeSupervisor): void {
+    if (this.closed || !this.metadataBusy || slot !== this.panes.length || slot >= 8)
+      throw new Error('Invalid native terminal append');
+    this.panes.push(this.pane(supervisor, slot));
   }
 
   /** Bilateral exclusion with the existing reviews; no new execution permission. */

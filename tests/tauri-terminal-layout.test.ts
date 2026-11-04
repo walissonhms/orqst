@@ -241,3 +241,21 @@ test('asynchronous save acknowledgments cannot override newer state or reopen a 
   assert.deepEqual(layout.snapshot().visible, []);
   assert.equal(messages.at(-1)!.focus, null);
 });
+
+test('confirmed append reserves one stable slot without changing old layout or publishing early', () => {
+  const f = fixture(2);
+  f.layout.open(0);
+  f.layout.act(0, { name: 'SYNTHETIC original' });
+  f.layout.act(0, 'maximize');
+  const before = f.layout.snapshot();
+  const publications = f.messages.length;
+  const revocations = f.revoked.length;
+  f.layout.append(2);
+  assert.equal(f.messages.length, publications);
+  assert.equal(f.revoked.length, revocations);
+  const after = f.layout.snapshot();
+  assert.deepEqual(after, { ...before, count: 3, names: [...before.names, ''] });
+  assert.throws(() => f.layout.append(2), /Invalid/);
+  assert.throws(() => f.layout.append(4), /Invalid/);
+  assert.equal(f.layout.open(2), false, 'Enrollment alone does not assign view membership');
+});

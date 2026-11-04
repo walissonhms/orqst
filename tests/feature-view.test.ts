@@ -17,6 +17,7 @@ import { terminalLayoutDatabase } from '../packages/core/src/terminal/layout-dat
 import { TauriTerminalLayout } from '../apps/desktop/src/tauri-terminal-layout.js';
 import { TauriFeatureService } from '../apps/desktop/src/tauri-feature-service.js';
 import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
+import { appendTerminalLayout } from '../apps/desktop/src/terminal-layout-enrollment.js';
 import { featureLayout } from '../apps/desktop/src/feature-layout.js';
 import { createFeatureClient } from '../apps/tauri/src/features-bridge.js';
 import { FeatureRevisionConflict } from '../apps/desktop/src/managed-terminal-core.js';
@@ -471,6 +472,86 @@ test('oversized metadata snapshot fails explicitly while the selected Core catal
     assert.equal(f.db.list().length, 50);
     assert.equal(f.db.readView().revision, 0);
     assert.deepEqual(f.layout.snapshot().order, [0, 1, 2, 3, 4, 5]);
+  } finally {
+    f.close();
+  }
+});
+
+test('live Feature append preserves saved order/names and uses membership CAS before presentation', async () => {
+  const f = fixture();
+  try {
+    let feature = f.db.create({ name: 'SYNTHETIC live append' });
+    for (const id of f.ids.slice(0, 2))
+      feature = f.db.assignTerminal(feature.featureId, id, feature.revision);
+    await f.service.initialize();
+    await f.request({ action: 'snapshot' });
+    assert.equal(
+      (
+        await f.service.request({
+          contractVersion: 1,
+          generation: 0,
+          action: 'select',
+          featureId: feature.featureId,
+          expectedRevision: 0,
+        })
+      ).status,
+      'ok',
+    );
+    f.layout.act(0, { name: 'SYNTHETIC retained' });
+    f.layout.act(0, 'move-later');
+    f.layout.act(0, { columns: 1 });
+    await f.layout.flush();
+    const previous = f.db.readLayout(feature.featureId)!;
+    const terminalId = randomUUID();
+    assert.throws(
+      () => f.db.assignTerminal(feature.featureId, terminalId, feature.revision - 1),
+      /Stale/,
+    );
+    assert.deepEqual(f.db.readLayout(feature.featureId), previous);
+    feature = f.db.assignTerminal(feature.featureId, terminalId, feature.revision);
+    f.db.saveLayout(feature.featureId, appendTerminalLayout(previous, feature.terminalIds));
+    f.ids.push(terminalId);
+    f.core.identities.push({ slot: 6, terminalId, provider: 'codex' });
+    f.layout.append(6);
+    const presentation = f.layout.presentationRevision();
+    assert.equal(await f.service.enrolled(6, presentation), true);
+    assert.deepEqual(f.layout.snapshot().order, [1, 0, 6]);
+    assert.equal(f.layout.snapshot().names[0], 'SYNTHETIC retained');
+    assert.equal(f.layout.snapshot().columns, 1);
+    assert.equal(f.layout.snapshot().active, 6);
+    await f.layout.flush();
+    assert.deepEqual(f.db.readLayout(feature.featureId)?.order, [...previous.order, terminalId]);
+    assert.equal(f.db.read(feature.featureId).revision, feature.revision);
+    assert.throws(() => appendTerminalLayout(previous, [terminalId]), /cannot replace/);
+  } finally {
+    f.close();
+  }
+});
+
+test('an old enrollment presentation ACK cannot reopen a suspended retained view', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    f.layout.open(0);
+    const before = f.layout.snapshot();
+    const presentation = f.layout.presentationRevision();
+    const list = f.core.features.list;
+    let release!: () => void;
+    f.core.features.list = async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return list();
+    };
+    const pending = f.service.enrolled(0, presentation);
+    while (!release) await new Promise((resolve) => setImmediate(resolve));
+    f.layout.setNativeGeneration(10);
+    f.layout.suspend();
+    release();
+    assert.equal(await pending, false);
+    assert.equal(f.layout.snapshot().suspended, true);
+    assert.deepEqual(f.layout.snapshot().order, before.order);
+    assert.equal(f.messages.at(-1)?.focus, null);
   } finally {
     f.close();
   }

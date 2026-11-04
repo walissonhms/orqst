@@ -48,7 +48,7 @@ try {
       await page.addInitScript({
         content: `
         Object.defineProperty(window,'orqstTerminal',{value:{contractVersion:1,request:window.syntheticNativeRequest}});
-        Object.defineProperty(window,'orqstTerminalPane',{value:{show:async()=>false,onLayout:()=>()=>{}}});
+        Object.defineProperty(window,'orqstTerminalPane',{value:{show:async()=>false,onLayout:(listener)=>{window.syntheticLayout=listener;return ()=>{};}}});
       `,
       });
       const html = terminalDocument({
@@ -105,6 +105,37 @@ try {
       }
       await expect.poll(() => calls.some((request) => request.action === 'read')).toBe(true);
       await expect(page.locator('.xterm')).toContainText('SYNTHETIC OUTPUT');
+      await page.evaluate(() => {
+        Reflect.set(window, 'syntheticOriginalXterm', document.querySelector('.xterm'));
+        Reflect.get(
+          window,
+          'syntheticLayout',
+        )({
+          count: 2,
+          order: [0, 1],
+          shown: [0, 1],
+          visible: [0, 1],
+          active: 1,
+          maximized: null,
+          axis: 'columns',
+          percent: 50,
+          columns: 2,
+          names: ['SYNTHETIC original', 'SYNTHETIC added'],
+          persisted: true,
+        });
+      });
+      await expect(page.locator('[data-tab="1"]')).toHaveCount(1);
+      await expect(page.locator('[data-tab="1"]')).toContainText('SYNTHETIC added');
+      await expect(page.locator('#focus-other')).toBeEnabled();
+      assert.equal(
+        await page.evaluate(
+          () => Reflect.get(window, 'syntheticOriginalXterm') === document.querySelector('.xterm'),
+        ),
+        true,
+        'Live membership must retain the original xterm and its scrollback',
+      );
+      await expect(page.locator('.xterm')).toContainText('SYNTHETIC OUTPUT');
+
       await page.locator('.xterm-helper-textarea').focus();
       await page.keyboard.type('k');
       await expect
