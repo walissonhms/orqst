@@ -299,3 +299,15 @@ Integrated as `9d4aee6` (source `d717d8a`): lint, typecheck, build, resource sta
 passed on the main checkout. Rust/native UI and real-provider tests were not run
 for this TypeScript/SQLite integration. The contributor's worktree remains active
 for the following identity increment and must not be removed yet.
+
+## Stable terminal identity link — 2026-11-04
+
+Structured Codex pane snapshots now retain the same reviewed terminal UUID used by
+PTY layout metadata, without replacing current pane/instance/epoch bindings. Legacy
+rows are compatible. Duplicate live/unavailable identities and external identity
+claims fail closed. See [implementation, checks and remaining catalog/team work](../development/terminal-identity-link.md).
+Lint, typecheck, build, resource staging and the complete 678-test Node suite passed,
+as did packaged synthetic Tauri structured communication with explicit manifest UUID
+assertions. Rust/native/real-provider/platform checks were not run for this increment.
+Criteria 4/7/8 remain partial: this link does not unify all editing/permissions or
+remove the fixed structured pair, and metadata does not recover processes.

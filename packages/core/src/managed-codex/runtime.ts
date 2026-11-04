@@ -27,6 +27,7 @@ import {
   terminalFile,
   type ManagedCodexConfig,
 } from '../terminal/codex-profile.js';
+import { terminalIdentity } from '../terminal/identity.js';
 import { CodexChannel, type CodexTransport } from './channel.js';
 import { CodexCommunicationAdapter, type CodexResultWriter } from './adapter.js';
 
@@ -350,6 +351,7 @@ export class CodexStructuredRuntime {
         manifestDigest: attempt.digest,
       });
       attempt.pane = this.communication.registerPane({
+        terminalId: terminalIdentity(attempt.config).terminalId,
         workspaceId: attempt.input.workspaceId,
         name: attempt.input.name,
         routing: attempt.input.mentionHandle

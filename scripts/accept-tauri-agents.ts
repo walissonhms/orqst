@@ -46,6 +46,7 @@ try {
   await mkdir(project, { mode: 0o700 });
   await mkdir(home, { mode: 0o700 });
   const files: string[] = [];
+  const terminalIds = [randomUUID(), randomUUID()];
   for (const slot of [0, 1]) {
     const state = join(fixture, `state-${slot}`);
     for (const directory of [state, ...['home', 'codex', 'tmp'].map((p) => join(state, p))])
@@ -53,6 +54,7 @@ try {
     const config: ManagedCodexConfig = {
       version: 1,
       trust: 'native-same-user',
+      identity: { terminalId: terminalIds[slot]! },
       executable: { path: executable, sha256: terminalExecutableSha256(executable) },
       node: { path: node, sha256: terminalExecutableSha256(node) },
       executableVersion: 'SYNTHETIC-NOT-CODEX',
@@ -171,6 +173,8 @@ try {
       await page.locator(`#model-${slot}`).fill('SYNTHETIC-model');
       await page.locator(`#start-${slot}`).click();
       await expect.poll(async () => (await snapshot()).slots[slot]?.pane?.state).toBe('ready');
+      assert.equal((await snapshot()).slots[slot]?.pane?.terminalId, terminalIds[slot]);
+      assert.notEqual((await snapshot()).slots[slot]?.pane?.paneId, terminalIds[slot]);
     }
     await expect(page.locator('#delegate')).toBeDisabled();
     assert.equal(

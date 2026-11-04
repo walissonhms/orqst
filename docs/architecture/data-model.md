@@ -476,3 +476,10 @@ reviewed sorted terminal UUID set; metadata validates against the pure protocol
 No journal owner, PID, grant, prompt, output, session or process status is stored.
 JSON import preserves the original and atomically fills only an absent selection.
 See [layout migration and remaining team scope](../development/terminal-layout-sqlite.md).
+
+Communication pane v1 also accepts an optional stable `terminalId` metadata link.
+It is persisted in existing validated pane JSON rows, without DDL or inferred
+backfill. Structured Codex supplies the reviewed terminal identity; old rows may
+omit it. It is never a message/grant target, native thread ID or process binding.
+Non-closed managed panes reserve the link uniquely; external panes cannot claim it.
+See [identity limits](../development/terminal-identity-link.md).

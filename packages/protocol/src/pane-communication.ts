@@ -37,6 +37,8 @@ export type PaneRoutingUpdate = z.infer<typeof paneRoutingUpdateSchema>;
 export const communicationPaneSchema = z.strictObject({
   schemaVersion: z.literal(1),
   paneId: z.uuid(),
+  /** Stable terminal metadata link only; live message targets still use paneId/binding. */
+  terminalId: z.uuid().optional(),
   workspaceId: id,
   displayId: z.string().regex(/^T-[0-9]{3,}$/),
   name: z.string().trim().min(1).max(100),
