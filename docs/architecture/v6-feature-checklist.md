@@ -1,5 +1,16 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Shared document URL boundary — 2026-11-04
+
+- [x] Reuse pure terminal policy for the reserved document URL, retaining the
+      Electron sender export and exact document/session/generation/focus guards.
+- [x] Close the Tauri host/renderer source import paths without Electron type
+      resolution; pass 10 existing pure cases, lint and full workspace typecheck.
+- [ ] Remove Electron adapters/dependency/scripts after the existing native,
+      provider, security, package and distribution gates are accepted.
+
+See [closure, source review and check scope](../development/electron-retirement.md#shared-document-url-boundary--2026-11-04).
+
 ## Combined policy and notification source — 2026-11-04
 
 - [x] Integrate the documentation-only Codex review, webview hardening and

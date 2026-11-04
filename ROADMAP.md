@@ -1,5 +1,9 @@
 # ORQST roadmap
 
+The [shared document URL boundary](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
+is split with pure checks and legacy Electron compatibility. Runtime/dependency
+removal still requires the existing parity and acceptance gates.
+
 ## Webview policy hardening — 2026-11-04
 
 Source now denies supported new webview permissions and browser downloads and

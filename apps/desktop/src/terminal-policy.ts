@@ -1,5 +1,5 @@
-import { terminalDocumentURL } from './terminal-sender.js';
-
+// Reserved dedicated document. The observer document must never qualify as a terminal client.
+export const terminalDocumentURL = 'orqst-terminal://local/index.html';
 export const terminalScriptURL = 'orqst-terminal://local/client.js';
 export const terminalStyleURL = 'orqst-terminal://local/style.css';
 

@@ -1,5 +1,9 @@
 # ORQST
 
+The [shared terminal document URL](docs/development/electron-retirement.md#shared-document-url-boundary--2026-11-04)
+now lives in pure policy, closing Tauri's active Electron type import paths while
+preserving the legacy sender export. Electron retirement remains pending.
+
 Tauri webview hardening now explicitly denies supported new permission requests
 and browser downloads, and limits dashboard documents to existing SPA routes.
 See [source defaults, checks and remaining native/platform acceptance](docs/development/tauri-webview-policy.md).
