@@ -280,3 +280,142 @@ or a window that remains offscreen fails the runner explicitly and stops only it
 own child. Neither a visible-window sample nor process exit zero establishes human
 acceptance. Tests cover actual disposable Node child exit/spawn failure separately
 from synthetic WindowServer samples.
+
+## Own-sheet correction and repeatable evidence — 2026-11-04
+
+The historical toolchain-absence statement above described that earlier checkout.
+The existing isolated Rust 1.99.1/Cargo toolchain at
+`/tmp/orqst-tauri-toolchain-676` is available with its matching `CARGO_HOME` and
+`RUSTUP_HOME`; Node 24.22.2/pnpm 10.34.9 are in the private ORQST toolchain. The
+reserved disposable `/tmp/orqst-691-target` can be reused without clearing it,
+with `CARGO_PROFILE_DEV_DEBUG=0`, `CARGO_PROFILE_TEST_DEBUG=0` and
+`CARGO_INCREMENTAL=0`. Do not remove a lock or another task's artifacts.
+
+The isolated `dev.orqst.coexistence698` build produced on-screen layer-0
+1280×860 windows from the runner-owned PID. Metadata and subsequent native
+inspection succeeded in this round. The older `cgWindowNotFound` is therefore not
+reproduced or retrospectively explained. Window existence still proves no keyboard,
+consent, provider or human acceptance.
+
+An instrumented run explicitly recorded the middle `Authorize once` result and a
+native own-sheet event changing the review generation 3→4. Immediate and later
+WKWebView responder samples were already valid. The correction therefore handles
+that proven event rather than waiting for focus to become valid. See the
+[source and security review](../research/tauri-native-acceptance.md#own-sheet-focus-investigation--2026-11-04).
+
+The original review remains current only for its own exact attached/key sheet on
+an active NSApp. Input is suspended during that sheet and requires the existing
+explicit input flow afterward. Cancel, expired authority, app deactivation, another
+key window, document reload/hide and selection revocation continue to deny. A
+native notification observer closes the deactivation/other-window gap while the
+parent is already non-key behind its sheet. Returning to it renews nothing.
+
+The runner now retains `launch.json` with its spawned PID, timestamp and artifact
+hashes, includes the PID in `window.json`, and incrementally preserves at most
+32 KiB of private native stderr. It opts into metadata-only post-dialog focus traces
+at 0/100/250/500/1000 ms. Samples include actual elapsed time, visibility, parent
+focus, responder class and descendant proof; window transitions record key/sheet
+relationships and revocation reasons. Diagnostics never restore focus or supply
+an authorization result. The application remains unchanged when that diagnostic
+environment flag is absent.
+
+Before **every** Computer Use interaction, verify the runner's actual child PID is
+still alive with the same process start and executable; correlate the Core's
+listening PID/parent chain, fixture project in native UI, and current artifact hashes.
+A bundle identifier, app name, PPID 1 or port alone proves no ownership. On any
+exit/timeout/identity mismatch, stop UI interaction until a new isolated runner
+launch has been established. Even querying a bound application after quit may
+relaunch it through LaunchServices; do not assume queries are passive.
+
+The first exploratory UI run is excluded from acceptance: a second process of the
+same identity appeared outside the runner, and it was signalled based on identity
+and timing without adequate ownership proof. That limitation and all logs/journals
+are preserved privately. Later correlated runs must stand on their own evidence;
+they do not validate the earlier process or justify signalling another unbound PID.
+
+Cmd-Q previously used the framework's direct native Quit and exited a correlated
+fixture with code 0 without consent. That check **failed**. The app-menu Quit now
+uses a custom Cmd-Q item that enters the existing two-host `ExitRequested` gates;
+it does not introduce a second quit policy. Tray and close/background behavior
+are retained. Dock/OS logout/force quit remain untested and are not covered by this
+menu-specific correction.
+
+### Parent-bound Quit review correction
+
+A second correlated artifact reached both existing `ExitRequested` gates but
+returned the affirmative custom result without a human/UI choice. This remains a
+**failed** Quit attempt, regardless of exit code. Source inspection of dialog
+2.8.4/rfd 0.17.2 showed distinct parentless CFUserNotification and parent-bound
+NSAlert sheet backends; absence of a parent is a backend hypothesis, not a proven
+explanation for the unsolicited result.
+
+Both gates now require an existing visible owned parent (dashboard, terminal
+workspace or Managed agents); explicit Quit may restore the retained dashboard.
+No valid parent means deny exit and clear both partial authorizations. Only the
+exact affirmative custom response with a still-visible retained parent authorizes
+a gate. Default, unknown, closed and cancellation results deny. The installed rfd
+NSAlert mapping returns Cancel for an unknown response. Keyboard authority is
+revoked before review, without stopping or disconnecting any owned process; Cancel
+does not renew input. Both cancellations reset both gates, so a subsequent attempt
+must review them all again. A shared presentation fence blocks late terminal layout
+responses while either gate is pending/authorized; Feature integration must retain
+that fence and add its separate layout-generation contract.
+
+A parent-bound comparative fixture displayed both sheets. Explicit terminal Cancel
+preserved the same app/Core; terminal affirmative then agents Cancel also preserved
+them; the next attempt displayed both again and exited only after both explicit
+UI affirmative clicks. Core/hosts/listener remained present before final approval
+and were absent after exit. This validates that fixture's app-menu path, not Dock,
+OS logout, force quit, real-provider cleanup or the earlier failed artifacts.
+
+The next rebuilt fixture repeated the unsolicited affirmative failure after native
+application deactivation, despite the parent being supplied. Its displayed sheet
+and exit code do **not** accept Quit. The earlier parent-bound comparative pass is
+retained separately and does not promote the subsequent artifact.
+
+The additional correction binds presentation evidence to one gate attempt/token
+and its exact owned parent. The existing native notification observer records the
+parent's attached/key sheet; app deactivation, an unrelated key window or unavailable
+metadata permanently invalidates that pending attempt. Returning to its sheet does
+not restore it. A custom affirmative after that revocation is denied, and default,
+unknown, missing-presentation and disappeared-parent results remain denied. This is
+an additional consent fence on the existing lifecycle gates; it adds no quit policy,
+process action, focus retry or delayed focus recheck. Unit coverage verifies the
+attempt/parent binding and irreversible revocation. Native revalidation of this
+last correction is limited to the observations below; full Quit acceptance is
+still pending.
+
+### Final isolated fixture coverage
+
+The final artifact was built from baseline `9d7abfc` plus the isolated native
+change, with pre-build source hashes retained privately. It is separate from
+published main `d79745f`. The final owned PID was checked against the runner's
+launch timestamp/executable, fixture UI project, bundled executable hashes and
+Core parent/listener before interactions. The final native executable SHA-256 is
+`fa9d59c65527105363cc06ab3c280406b1e4486b5b824d1d8661ec820d09f6d9`.
+
+Observed only in that fixture: Start accepted with current generation equal to its
+review generation; terminal Cancel preserved app/Core/owned synthetic process and
+listener; terminal affirmative followed by agents Cancel preserved the same PIDs
+and listener; subsequent Quit attempts presented the first gate again. Native
+sheet presentation was recorded per attempt. Activating another existing owned
+window through the macOS Window menu revoked that attempt. Returning to its sheet
+and explicitly choosing the affirmative custom button returned `presented=false`
+and denied exit, preserving app/Core/process. This is evidence of the other-window
+fence, not a real NSApp-deactivation test.
+
+The requested human NSApp-deactivation step did not occur before the runner's
+600-second deadline. Hide/Cmd-H attempts produced no native deactivation and are
+not counted. The final run ended by its authorized runner SIGTERM, so its nonzero
+runner result is preserved as timeout, not graceful Quit acceptance. No UI query
+was made after that PID ended. Final both-affirmative shutdown, real deactivation
+and integrated V6/provider acceptance remain pending. The earlier comparative
+both-affirmative exit belongs only to its earlier artifact.
+
+Executable checks for this increment: 702 Node tests, 29 focal broker/service
+cases, 11 native-window cases, lint/typecheck/build, the reduced-symbol Tauri app
+build and clippy with warnings denied passed. Rust presentation tests cover exact
+attempt/parent, missing presentation, default/unknown results and irreversible
+revocation; these are unit evidence. All 17 final Rust tests passed after the last native fixture ended. `cargo fmt --check` was also attempted and failed on existing
+inline Rust style and changed blocks; no repository-wide formatting rewrite was
+made. No real observer ingestion was changed or validated.

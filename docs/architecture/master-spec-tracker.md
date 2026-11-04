@@ -363,3 +363,24 @@ behavior changed, so `validate:local` was not run. No Rust build, native Tauri
 workflow, real provider inference or quarantine reconciliation was run. The V6
 source hashes were verified 6/6; inspecting its rendered prototype does not count
 as runtime implementation or native acceptance.
+
+## Own-sheet consent and native menu correction — 2026-11-04
+
+An isolated native affirmative review showed that the terminal's own attached sheet
+caused generation revocation while the app remained active. Post-dialog WKWebView
+focus was already valid; no delayed recheck is introduced. The correction preserves
+only that exact current review and suspends input; native deactivation/another key
+window still invalidates it. Managed agents now has a visible submenu. App-menu Quit
+routes to the existing two-host exit gates rather than direct NSApp termination.
+Native synthetic start/output/input/PONG, PTY resize and hide/restore/stop were
+observed on baseline `9d7abfc` plus the isolated native diff; this is not evidence for
+subsequently integrated V6 code or real providers. Quit and final checks are tracked
+in [native coexistence](../development/tauri-native-coexistence.md). No full criterion
+is newly accepted and the original quarantined reservation is unchanged.
+
+Final native fixture evidence is limited to both Quit cancellations, first-gate
+re-presentation and another-owned-key-window → late affirmative denied with the
+same app/Core/process/listener preserved. Real NSApp deactivation was not executed
+before the runner deadline; final both-affirmative shutdown and integrated V6
+acceptance remain pending. Build/clippy and executable tests do not promote those
+unobserved native steps.
