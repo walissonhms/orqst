@@ -25,6 +25,12 @@ publishing; do not force-push or overwrite a tag. A delivery tag is not a releas
 or evidence of completion. Do not tag or announce version 1.0 before all release
 criteria and owner acceptance are complete. Report any check or push that fails.
 
+Temporary agent worktrees may be used for parallel work. At the end of each delivery,
+verify that its work is integrated, committed and pushed and that it contains no
+unpreserved changes; then remove its worktree and disposable build artifacts with
+Git's worktree removal. Keep active worktrees, private runtime state, quarantines,
+user data and evidence that still needs preservation. Record any cleanup blocker.
+
 - **Not started**: no relevant implementation is established.
 - **Partial**: some code or coverage exists, but the full criterion is not met.
 - **Blocked**: a concrete dependency or decision prevents the next step; describe it.
