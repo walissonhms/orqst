@@ -118,6 +118,20 @@ test('Claude aliases have official provenance and OpenCode exposes only explicit
     ]);
     writeFileSync(
       join(f.home, '.config/opencode/opencode.json'),
+      JSON.stringify({
+        model: { providerID: 'synthetic', model: 'v2', variant: 'focused' },
+        providers: { synthetic: { models: { native: {}, disabled: { disabled: true } } } },
+      }),
+      { mode: 0o600 },
+    );
+    assert.deepEqual(
+      discoverTerminalModels('opencode', f.project, f.home, {}).options.map(
+        (entry) => entry.selection.value,
+      ),
+      [null, 'synthetic/v2#focused', 'synthetic/native'],
+    );
+    writeFileSync(
+      join(f.home, '.config/opencode/opencode.json'),
       '{/* JSONC is delegated to CLI */}',
       { mode: 0o600 },
     );
