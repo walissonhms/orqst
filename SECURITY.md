@@ -858,3 +858,14 @@ The renderer receives no shell, filesystem or dialog plugin permission. Existing
 Core directed/cycle/TTL/ownership checks and secret-free public snapshots are reused.
 Synthetic acceptance simulates invoke/focus/dialog decisions; human native and real
 provider acceptance remain pending. See the [native contract](docs/api/tauri-agents.md).
+
+## Tauri native file export boundary
+
+The Tauri main dashboard now has one dynamically scoped export command for its
+exact owned loopback origin and native document, without renderer filesystem,
+dialog, shell or managed-execution permissions. Paths remain in the private
+Rust/Node transport. Existing artifact/Analytics validators, one-use readings,
+secure destination checks and serializers are reused. Reload, parent loss and
+bounded timeouts revoke operations; uncertain writes are not retried. Standalone
+Bridge HTTP/cookie/CSP behavior is unchanged. See the
+[contract, security review and remaining limits](docs/api/tauri-files.md).

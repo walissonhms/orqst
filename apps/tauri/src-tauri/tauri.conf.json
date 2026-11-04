@@ -40,7 +40,8 @@
       "../dist/dashboard/": "dashboard/",
       "../dist/licenses/": "licenses/",
       "../dist/terminal/": "terminal/",
-      "../dist/agents/": "agents/"
+      "../dist/agents/": "agents/",
+      "../dist/files/": "files/"
     },
     "icon": [
       "../../desktop/resources/icons/orqst-32.png",

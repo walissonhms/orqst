@@ -5,7 +5,8 @@ Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
 validated. The observer is unchanged; native-menu preparation or explicitly selected
 profiles can open a retained terminal workspace. Prepared structured agents have a
-separate opt-in Tauri bridge. Native exports and notifications remain in Electron.
+separate opt-in Tauri bridge. Native file exports now reuse the Electron savers through a narrow Tauri bridge;
+OS notifications remain a separate parity gap.
 
 ## Build and run
 
@@ -53,8 +54,8 @@ Standalone disposable Core checks omit `ORQST_PORT` to request an OS-selected po
 
 A second launch focuses the existing application before starting another Core.
 The child receives an explicit environment allowlist; `NODE_OPTIONS`, `NODE_PATH`
-and unrelated credentials are not inherited. The observer receives no Tauri command
-capability. Navigation remains on the owned origin, new windows are
+and unrelated credentials are not inherited. The owned dashboard receives only a narrow native file-export capability;
+standalone observer browsers receive none. Navigation remains on the owned origin, new windows are
 denied, and the existing Bridge CSP, cookie, Host/Origin checks and API/WebSocket
 validation remain authoritative.
 
@@ -92,7 +93,7 @@ queries the colocated production Analytics worker and verifies graceful exit.
 This proves packaging and browser operation, not native WebKit/provider equivalence.
 
 The migration is **not complete**. Prepared PTY terminals have the opt-in bridge below;
-native exports, menus/tray parity, OS notifications,
+native export acceptance, menus/tray parity, OS notifications,
 durable reconnect and profile migration require incremental
 parity work. N-member teams and installed-provider CLI mention/return acceptance remain separate
 requirements of the master specification. Prepared structured permissions and editable
@@ -140,8 +141,8 @@ hide/show, maximize/restore and compact paging. See the
 
 The Tauri frontend reuses Electron's terminal document, xterm client, schemas and
 Node hosts without importing the Electron runtime. Its two commands are available
-only to the dedicated custom-protocol windows. The dashboard stays a remote observer
-with zero native execution capability. No execution HTTP route or WebSocket message
+only to the dedicated custom-protocol windows. The dashboard keeps zero native managed-execution capability; its file-export
+capability is separate. No execution HTTP route or WebSocket message
 is added. See [native contract](../api/terminal-native.md) and the
 [component research](../research/tauri-managed-terminals.md).
 
@@ -283,3 +284,66 @@ arbitrary mixed teams, models, durable reconnect, platform packaging and all oth
 Electron parity gaps remain pending. `validate:local`, `validate:live` and the full
 browser suite were not run; no ingestion code changed. See the
 [pinned source review and security note](../research/tauri-terminal-preparation.md).
+
+## Native file exports — 2026-11-04
+
+The existing artifact and Analytics controls now use native save/replacement dialogs
+in Tauri Preview. Extract a retained artifact and use **Save original Markdown…**,
+**Save draft Markdown…** or the corresponding **save and open** action. In Models,
+review a current reading and use **Export CSV** or **Export Markdown**. Analytics
+requires a new reading after every save attempt; use **Refresh** before exporting
+again. The native Analytics scope review precedes the picker. Paths and bytes stay
+in the native/Node path rather than returning to the dashboard.
+
+Both shells reuse the same secure Node savers and serializers. No Electron runtime,
+new filesystem plugin, new HTTP route or ingestion change is introduced. Existing
+path-based navigation/session links and no-eval CSP are preserved. Failed export-host
+startup leaves observation available; an uncertain timeout fences exports until the
+preview is restarted. See [contract/security](../api/tauri-files.md) and the
+[pinned Anywh review and integration checklist](../research/tauri-native-files.md).
+
+```sh
+pnpm build:tauri-resources
+pnpm accept:tauri-files
+```
+
+The acceptance copies the shipped Node/Core/file-host/client outside the checkout
+and uses actual dashboard artifact and Models buttons. Retained/draft Markdown,
+overwrite cancellation, save-and-open handoff, CSV/Markdown Analytics, reading
+consumption, real sidebar routes, rejected non-dashboard source URLs, private file
+permissions, source immutability and graceful shutdown are exercised. Native IPC,
+focus, pickers/reviews and the system editor handoff are simulated. This is not a
+human native WebKit/dialog/editor acceptance.
+
+The focused suite passed eight synthetic tests, including authenticated Bridge
+re-extraction, exact bytes, overwrite/symlink races, reload/parent-loss revocation,
+Analytics context revocation while busy and a VM regression against eval becoming
+unavailable after native initialization. Six Rust tests and Clippy with warnings
+denied passed. Production build, resource staging, packaged Core acceptance and
+packaged file-export acceptance passed. A macOS Apple Silicon debug `.app`
+(167.29 MiB) was built from the final route-aware bridge, without opening it for
+native acceptance. The existing Vite large-chunk advisory remains.
+
+Retained failures: initial focused fixtures expected the lexical temporary directory
+instead of the writer's canonical path and then omitted the corresponding test
+import; both were corrected without changing production guards. Initial browser
+acceptance used a function serialized by tsx whose name helper was unavailable in
+the page; only the simulated IPC initialization was corrected to literal script.
+ENOSPC interrupted log creation, runtime copying and a later native staging attempt.
+Only this delivery's generated Cargo target was cleaned. Runtime copies now prefer
+standalone copy-on-write copies where supported and retain mandatory hash checks;
+no other agent's files or caches were removed. Native builds were completed before
+the owner's subsequent low-disk instruction; no additional heavy build is required
+for reviewing this commit.
+
+Native dialog focus/save/cancel/overwrite/reload/quit, real default-editor display,
+Windows/Linux/Intel and signed/notarized installers remain pending. Electron must
+remain available. `validate:local`, `validate:live`, the full browser suite and real
+provider tasks were not run; ingestion/provider execution was not changed.
+
+Final complete Node run: `pnpm exec tsx --test --test-concurrency=2 tests/*.test.ts`
+passed all **631 tests**, with zero failures, cancellations or skips. The bounded
+concurrency matches the integration runs and does not change assertions/timeouts.
+`pnpm lint` and `pnpm typecheck` passed on the final source. The native bundle,
+focused eight-test suite, six Rust tests, Clippy and the path-based packaged
+file-export acceptance also passed on the final source.

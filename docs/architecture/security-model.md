@@ -1212,3 +1212,13 @@ The renderer receives no shell, filesystem or dialog plugin permission. Existing
 Core directed/cycle/TTL/ownership checks and secret-free public snapshots are reused.
 Synthetic acceptance simulates invoke/focus/dialog decisions; human native and real
 provider acceptance remain pending. See the [native contract](../api/tauri-agents.md).
+
+## Tauri native file exports
+
+The preview's owned main webview has a dynamically installed `file_request`
+capability at its exact Core origin, with native document/focus checks. It has no
+filesystem, dialog, shell or managed-execution plugin permission. The host reuses
+existing retained-content and Analytics validation and secure file writers; native
+pickers supply host-only paths through private pipes. No HTTP route, cookie, CSP or
+source-access policy changes. See the [security review](../api/tauri-files.md) for
+revocation, capacity, partial-write and native acceptance limitations.
