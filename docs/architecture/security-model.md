@@ -1504,3 +1504,16 @@ possible. Native commit/open evidence cannot be downgraded, and old append repli
 cannot release another owner/request's latch. Reader EOF takes/stops only its own
 owner/epoch/files host; public Stop retains its explicit global intent. No HTTP/WS, cookie, CSP or execution
 authority is added. See [scope and verification limits](../development/terminal-admission-diagnostics.md).
+
+## Native local diagnostics — 2026-11-04
+
+The optional Rust sink uses fixed stage/outcome/effects vocabularies, independent
+diagnostic UUIDs, a nonblocking bounded queue and one private bounded disk writer.
+No raw error, stderr, prompt/content, auth/config, ownership/proof or private path
+field is accepted. No HTTP/WebSocket/cookie/static capability changes are added.
+Existing native review, grants, latches, deadlines, keyed ownership cleanup and
+Core/PTY authority remain separate. First disk failure disables the optional sink;
+no fallback, retry or permission decision follows from its result. macOS/Linux
+use private modes, no-follow/special-file/owner checks and an advisory writer lock;
+same-user directory-replacement races are outside the guarantee. Other platforms
+disable disk logging. See [retention and source/acceptance boundary](../development/local-diagnostics.md).

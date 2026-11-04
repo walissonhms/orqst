@@ -542,3 +542,12 @@ legacy marker shape only as evidence of reserved capacity; it does not rewrite i
 or transfer ownership. Same-Core append compares owner/epoch/original manifest set
 from private ready. Per-owner enrollment/receipt files, prior bytes and SQLite
 schemas are unchanged. See [admission diagnostics](../development/terminal-admission-diagnostics.md).
+
+## Optional native diagnostic retention — 2026-11-04
+
+Native JSONL diagnostics are separate from SQLite/protocol observer events and
+carry no source/session records. Closed v1 fields are time/elapsed, diagnostic
+attempt UUID, stage/outcome/effects and dropped count. Each record is at most
+512 bytes, the queue holds 256 records, and three fixed segments retain at most
+3 MiB by size without an age guarantee. No schema migration, replay authority,
+reservation mutation or recovery behavior is added. See [contract and query](../development/local-diagnostics.md).

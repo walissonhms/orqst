@@ -1083,3 +1083,11 @@ Startup errors expose fixed stage/code/effects only; unknown/EOF/timeout remains
 possible. Native commit/open evidence cannot be downgraded, and old append replies
 cannot release another owner/request's latch. No HTTP/WS, cookie, CSP or execution
 authority is added. See [scope and verification limits](docs/development/terminal-admission-diagnostics.md).
+
+## Optional native diagnostic files
+
+The Tauri source has a closed, best-effort diagnostic sink under native app-data,
+with 0700/0600 permissions, record/queue/rotation budgets and no upload/API. It
+accepts no captured content, raw stderr, credentials or private ownership/paths.
+Diagnostic UUIDs grant no authority. Files can be incomplete or absent and cannot
+prove no effects. See [controls and limitations](docs/development/local-diagnostics.md).

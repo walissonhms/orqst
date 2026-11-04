@@ -800,3 +800,12 @@ This is a baseline description, not a previously published release entry.
 - Open the new native Preview and observe a successful preparation snapshot with
   enabled controls. Actual provisioning, CLI Start/input, providers and final Quit
   remain pending; earlier apps, data and uncertain executions are preserved.
+
+## Bounded local native diagnostics — 2026-11-04
+
+Tauri source now records allowlisted stages/outcomes/effects with an independent
+per-attempt UUID through preparation, startup, native opening and reader failures.
+A best-effort bounded queue writes at most three private 1 MiB local segments; no
+content, credentials, private identities/paths, stderr or uploads enter the sink.
+Pure/source checks do not accept an installed app, provider or historical cause.
+See [location, retention, query, checks and limits](docs/development/local-diagnostics.md).

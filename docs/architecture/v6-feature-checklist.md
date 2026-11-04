@@ -512,3 +512,13 @@ operation was performed. See [implementation limits](../development/terminal-pre
       see [current delivery evidence](../development/opencode-model-catalog-ux.md).
 - [ ] Accept packaged native visuals, provider/effective model, communication, Quit
       and Electron retirement. Dynamic catalogue remains unapproved/unimplemented.
+
+## Optional local diagnosis — 2026-11-04
+
+- [x] Implement private bounded diagnostic writer and allowlisted source hooks
+      above the combined mutex/admission freeze, preserving existing authority.
+- [x] Verify pure privacy/correlation/rotation/budget and mutex/ownership fragments.
+- [ ] Compile/package and validate log receipt in a separately authorized native
+      run; no historical-cause, provider or platform acceptance is implied.
+
+See [diagnostic contract and delivery limits](../development/local-diagnostics.md).
