@@ -22,3 +22,10 @@ See docs/research/tauri-core-reuse.md for component scope and acceptance.
 Source: client/src-tauri/src/lib.rs (run_with single-instance window callback)
 Destination: apps/tauri/src-tauri/src/main.rs
 Modified by ORQST to focus its own main window without deep-link forwarding.
+
+Additional Anywh source adapted at the same commit:
+Source: client/src/components/terminal/TerminalView.tsx (ResizeObserver lifecycle)
+Destination: apps/desktop/src/managed-terminal-client.ts
+Modified by ORQST to debounce container fitting and retain the existing bounded,
+permission-checked Core/PTY resize path; no WebSocket, tmux or WebGL code copied.
+See docs/research/terminal-workspace-layout.md for component scope and changes.

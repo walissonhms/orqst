@@ -11,6 +11,7 @@ import {
   readFile,
   readdir,
   realpath,
+  stat,
   rm,
   writeFile,
 } from 'node:fs/promises';
@@ -156,10 +157,9 @@ try {
     config.identity = { terminalId };
     await writeFile(file, JSON.stringify(config), { mode: 0o600 });
   }
-  let output = resolve('apps/desktop/dist');
+  const output = join(root, 'desktop');
+  await cp(resolve('apps/desktop/dist'), output, { recursive: true });
   if (mixed) {
-    output = join(root, 'desktop');
-    await cp(resolve('apps/desktop/dist'), output, { recursive: true });
     // Synthetic pin substitution is confined to disposable copies of all three process boundaries.
     for (const [entry, name] of [
       ['apps/desktop/src/main.ts', 'main.cjs'],
@@ -198,7 +198,11 @@ try {
   const bootstrap = join(root, 'bootstrap.cjs');
   await writeFile(
     bootstrap,
-    `require('electron').app.setPath('userData', ${JSON.stringify(profile)}); require(${JSON.stringify(join(output, 'main.cjs'))});`,
+    `const { app, dialog } = require('electron');
+     app.setPath('userData', ${JSON.stringify(profile)});
+     dialog.showMessageBoxSync = () => 1;
+     dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: true });
+     require(${JSON.stringify(join(output, 'main.cjs'))});`,
   );
   const port = await bridge.start();
   const require = createRequire(resolve('apps/desktop/package.json'));
@@ -253,7 +257,7 @@ try {
     );
   }
   try {
-    await expect.poll(() => desktop!.context().pages().length).toBe(count + 1);
+    await expect.poll(() => desktop!.context().pages().length, { timeout: 30000 }).toBe(count + 1);
   } catch (error) {
     console.log(
       JSON.stringify({
@@ -274,6 +278,7 @@ try {
           .catch(() => ({ closed: true })),
       }),
     );
+    await desktop.evaluate(({ app }) => app.exit(1));
     throw error;
   }
   await desktop.evaluate(({ BrowserWindow, dialog }) => {
@@ -336,9 +341,62 @@ try {
   for (const [slot, page] of panes.entries()) {
     await focus(slot);
     await page.locator('#start').click();
-    await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
+    try {
+      await expect(page.locator('#status')).toHaveAttribute('data-state', 'running');
+    } catch (error) {
+      console.log(
+        JSON.stringify({ slot, diagnostics, status: await page.locator('#status').textContent() }),
+      );
+      throw error;
+    }
     await page.locator('#attach').click();
-    await expect(page.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
+    try {
+      await expect(page.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI', {
+        timeout: 10000,
+      });
+    } catch (error) {
+      console.log(
+        JSON.stringify({
+          stage: 'synthetic-attach-output',
+          slot,
+          outputEvidence: await page.evaluate(async () => {
+            const instanceId = document.getElementById('instance')!.textContent!;
+            const result = await (
+              window as unknown as { orqstTerminal: DesktopTerminal }
+            ).orqstTerminal.request({ version: 1, action: 'read', instanceId, cursor: 0 });
+            const recordedOutput = result.status === 'ok' ? result.output : undefined;
+            return {
+              status: result.status,
+              bytes: recordedOutput?.bytes.length,
+              gap: recordedOutput?.gap,
+              marker: recordedOutput
+                ? new TextDecoder()
+                    .decode(Uint8Array.from(recordedOutput.bytes))
+                    .includes('SYNTHETIC:OWNED_TUI')
+                : false,
+              viewport: { width: innerWidth, height: innerHeight, hidden: document.hidden },
+              terminal: {
+                height: document.getElementById('terminal')!.clientHeight,
+                width: document.getElementById('terminal')!.clientWidth,
+              },
+            };
+          }),
+          diagnostics,
+          status: await page.locator('#status').textContent(),
+          geometry: await desktop.evaluate(({ BrowserWindow }) => {
+            const window = BrowserWindow.getAllWindows()[0]!;
+            return {
+              size: window.getContentSize(),
+              views: window.contentView.children.map((view) => ({
+                visible: view.getVisible(),
+                bounds: view.getBounds(),
+              })),
+            };
+          }),
+        }),
+      );
+      throw error;
+    }
   }
   const attempts = await Promise.all(panes.map((page) => page.locator('#instance').textContent()));
   assert.equal(new Set(attempts).size, count);
@@ -367,8 +425,8 @@ try {
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length),
     1,
   );
-  assert.equal(
-    await desktop.evaluate(
+  assert.ok(
+    (await desktop.evaluate(
       ({ BrowserWindow }) =>
         BrowserWindow.getAllWindows()[0]!.contentView.children.filter(
           (view) =>
@@ -376,8 +434,103 @@ try {
             (view as Electron.WebContentsView).webContents.getURL().startsWith('orqst-terminal:') &&
             view.getVisible(),
         ).length,
+    )) >= 2,
+  );
+  const layoutPage = panes[layoutSlot]!;
+  const documentMarker = randomUUID();
+  await layoutPage.evaluate(
+    (marker) => Reflect.set(window, 'syntheticDocumentMarker', marker),
+    documentMarker,
+  );
+  await layoutPage.locator('#pane-name').fill('<Review & UI>');
+  await layoutPage.locator('#rename-pane button').press('Enter');
+  await expect(layoutPage.locator('#pane-title')).toContainText('<Review & UI>');
+  assert.equal(await layoutPage.locator('#pane-title img').count(), 0);
+  await layoutPage.locator('#move-later').press('Space');
+  await expect.poll(async () => (await layoutPage.locator('[data-tab]').all()).length).toBe(count);
+  await layoutPage.locator('#maximize').press('Enter');
+  await expect(layoutPage.locator('#restore')).toBeFocused();
+  await layoutPage.locator('#restore').press('Enter');
+  await expect(layoutPage.locator('#maximize')).toBeFocused();
+  // Pointer reorder has a complete keyboard equivalent above, and moves no document.
+  await layoutPage
+    .locator('#pane-title')
+    .dragTo(layoutPage.locator(layoutSlot === 0 ? '#tab-b' : '#tab-a'));
+  await expect(layoutPage.locator('[data-tab]').first()).toHaveAttribute(
+    'data-tab',
+    String(layoutSlot),
+  );
+  await layoutPage.locator('#hide-pane').click();
+  await focus(layoutSlot);
+  assert.equal(
+    await layoutPage.evaluate(() => Reflect.get(window, 'syntheticDocumentMarker')),
+    documentMarker,
+  );
+  await expect(layoutPage.locator('#terminal')).toContainText('SYNTHETIC:OWNED_TUI');
+  await desktop.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setContentSize(700, 700),
+  );
+  await expect
+    .poll(() =>
+      desktop!.evaluate(
+        ({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]!.contentView.children.filter(
+            (view) =>
+              'webContents' in view &&
+              (view as Electron.WebContentsView).webContents
+                .getURL()
+                .startsWith('orqst-terminal:') &&
+              view.getVisible(),
+          ).length,
+      ),
+    )
+    .toBe(1);
+  await layoutPage.locator('#input').click();
+  await layoutPage.locator('.xterm-helper-textarea').pressSequentially('size', { delay: 20 });
+  await layoutPage.locator('.xterm-helper-textarea').press('Enter');
+  await expect(layoutPage.locator('#terminal')).toContainText(/SYNTHETIC:SIZE:\d+x\d+/);
+  await desktop.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setContentSize(1440, 1000),
+  );
+  await layoutPage.locator('#show-all').click();
+  await layoutPage.locator('#column-choice').selectOption('3');
+  await expect
+    .poll(() =>
+      desktop!.evaluate(
+        ({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]!.contentView.children.filter(
+            (view) =>
+              'webContents' in view &&
+              (view as Electron.WebContentsView).webContents
+                .getURL()
+                .startsWith('orqst-terminal:') &&
+              view.getVisible(),
+          ).length,
+      ),
+    )
+    .toBe(Math.min(count, 6));
+  const layoutDirectory = join(profile, 'terminal-layouts');
+  const layoutFile = join(
+    layoutDirectory,
+    (await readdir(layoutDirectory)).find((name) => name.endsWith('.json'))!,
+  );
+  const savedLayout = JSON.parse(await readFile(layoutFile, 'utf8'));
+  assert.equal(savedLayout.columns, 3);
+  assert.equal(savedLayout.order[0], ids[layoutSlot]);
+  assert.ok(
+    savedLayout.names.some(
+      (name: { id: string; name: string }) =>
+        name.id === ids[layoutSlot] && name.name === '<Review & UI>',
     ),
-    2,
+  );
+  assert.equal((await stat(layoutFile)).mode & 0o777, 0o600);
+  assert.deepEqual(
+    await Promise.all(panes.map((page) => page.locator('#instance').textContent())),
+    attempts,
+  );
+  assert.deepEqual(
+    await Promise.all(states.map((state) => readFile(join(state, 'terminal.json'), 'utf8'))),
+    manifestBytes,
   );
   // One explicit stop leaves seven live slots. A premature retirement cannot release admission.
   await focus(0);
@@ -467,6 +620,9 @@ try {
         crossSlotDenied: true,
         partialRetirementDenied: true,
         allRetired: true,
+        layout:
+          'grid, rename, keyboard/pointer reorder, maximize/restore, hide, compact paging, real PTY resize, private persistence',
+        stableDocumentsAndInstances: true,
         provider: 'not executed',
         nativeFocus: 'test double',
       }),
