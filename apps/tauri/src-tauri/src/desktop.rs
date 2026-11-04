@@ -1,5 +1,6 @@
 //! Native-only observer alerts and explicit window lifetime. No renderer capability.
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -26,6 +27,9 @@ struct State {
     attempts: usize,
     pending: usize,
     last_frame: Option<Instant>,
+    origin: Option<String>,
+    notification_id: i32,
+    routes: HashMap<i32, String>,
     ui: Option<Ui>,
 }
 
@@ -68,6 +72,15 @@ struct Ui {
 struct Alert {
     category: &'static str,
     silent: bool,
+    session_id: Option<String>,
+}
+
+fn session_id_valid(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 200
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b":_-".contains(&byte))
 }
 
 #[derive(Debug, PartialEq)]
@@ -101,9 +114,20 @@ fn parse_frame(line: &[u8]) -> Option<Option<Frame>> {
                 .iter()
                 .map(|value| {
                     let fields = value.as_object()?;
-                    if fields.len() != 2 {
+                    if fields.len() != 2 && fields.len() != 3 {
                         return None;
                     }
+                    let session_id = match fields.get("sessionId") {
+                        Some(value) => {
+                            let id = value.as_str()?;
+                            if !session_id_valid(id) {
+                                return None;
+                            }
+                            Some(id.to_owned())
+                        }
+                        None if fields.len() == 2 => None,
+                        None => return None,
+                    };
                     let category = match fields.get("category")?.as_str()? {
                         "completed" => "completed",
                         "failed" => "failed",
@@ -113,6 +137,7 @@ fn parse_frame(line: &[u8]) -> Option<Option<Frame>> {
                     Some(Alert {
                         category,
                         silent: fields.get("silent")?.as_bool()?,
+                        session_id,
                     })
                 })
                 .collect::<Option<Vec<_>>>()?;
@@ -122,9 +147,14 @@ fn parse_frame(line: &[u8]) -> Option<Option<Frame>> {
 }
 
 impl State {
+    fn revoke_routes(&mut self) {
+        self.generation = self.generation.wrapping_add(1);
+        self.routes.clear();
+    }
+
     fn disconnect(&mut self) {
         self.last_frame = None;
-        self.generation = self.generation.wrapping_add(1);
+        self.revoke_routes();
     }
 
     fn queue_frame(&mut self) -> bool {
@@ -157,12 +187,107 @@ impl State {
         self.last_frame = Some(now);
         // First attach, stale pipe and reconnect establish a baseline. Off consumes alerts.
         if !was_connected || !self.enabled || self.failed {
+            self.revoke_routes();
             return Vec::new();
         }
         let remaining = MAX_ATTEMPTS.saturating_sub(self.attempts);
         let alerts: Vec<_> = frame.alerts.into_iter().take(remaining).collect();
         self.attempts += alerts.len();
         alerts
+    }
+
+    fn register_notification(&mut self, alert: &Alert) -> Option<i32> {
+        self.notification_id = self.notification_id.checked_add(1)?;
+        let id = self.notification_id;
+        if let Some(session) = &alert.session_id {
+            self.routes.insert(id, session.clone());
+        }
+        Some(id)
+    }
+
+    fn take_route(&mut self, id: i32, now: Instant) -> Option<(String, u64)> {
+        let session = self.routes.remove(&id)?;
+        (self.enabled && !self.failed && self.connected(now) && self.origin.is_some())
+            .then_some((session, self.generation))
+    }
+}
+
+// Called only with the owned Core's ready origin, never a renderer-provided URL.
+pub fn configure(app: &tauri::AppHandle, origin: Option<&str>) {
+    cancel_navigation(app);
+    let desktop = app.state::<Desktop>();
+    let mut state = desktop.0.lock().unwrap();
+    state.disconnect();
+    state.origin = origin.map(str::to_owned);
+}
+
+fn route_url_valid(url: &tauri::Url, origin: &str) -> bool {
+    url.origin().ascii_serialization() == origin
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+}
+
+fn notification_action(
+    app: &tauri::AppHandle,
+    action: &tauri_plugin_notification::ActionPerformed,
+) {
+    let Some(id) = action_notification_id(action) else {
+        return;
+    };
+    let received = Instant::now();
+    let route = app
+        .state::<Desktop>()
+        .0
+        .lock()
+        .unwrap()
+        .take_route(id, received);
+    let Some((session, generation)) = route else {
+        return;
+    };
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let desktop = app.state::<Desktop>();
+        let state = desktop.0.lock().unwrap();
+        if received.elapsed() > FRESHNESS
+            || state.generation != generation
+            || !state.enabled
+            || state.failed
+            || !state.connected(Instant::now())
+        {
+            return;
+        }
+        let Some(origin) = &state.origin else { return };
+        let Some(window) = app.get_webview_window("main") else {
+            return;
+        };
+        if !window.url().is_ok_and(|url| route_url_valid(&url, origin)) {
+            return;
+        }
+        let payload = serde_json::json!({"sessionId": session});
+        // A view request only: the dashboard refreshes membership and keeps its draft guard.
+        let _ = window.eval(format!(
+            "window.dispatchEvent(new CustomEvent('orqst-native-session',{{detail:{payload}}}));"
+        ));
+        drop(state);
+        focus(&app);
+    });
+}
+
+fn action_notification_id(action: &tauri_plugin_notification::ActionPerformed) -> Option<i32> {
+    (action.action_id() == "tap")
+        .then(|| action.notification().map(|notification| notification.id()))
+        .flatten()
+}
+
+fn cancel_navigation(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let origin = app.state::<Desktop>().0.lock().unwrap().origin.clone();
+    if origin.is_some_and(|origin| window.url().is_ok_and(|url| route_url_valid(&url, &origin))) {
+        let _ = window
+            .eval("window.dispatchEvent(new CustomEvent('orqst-native-session',{detail:null}));");
     }
 }
 
@@ -237,7 +362,12 @@ pub(crate) fn begin_quit_review(app: &tauri::AppHandle, parent: &tauri::Window) 
     state.quit_sequence = state.quit_sequence.checked_add(1)?;
     let token = state.quit_sequence;
     state.quit_review = Some(QuitPresentation {
-        review: QuitReview { token, parent: parent.label().into(), shown: !cfg!(target_os = "macos"), revoked: false },
+        review: QuitReview {
+            token,
+            parent: parent.label().into(),
+            shown: !cfg!(target_os = "macos"),
+            revoked: false,
+        },
         parent: parent.clone(),
     });
     Some(token)
@@ -267,7 +397,9 @@ pub(crate) fn quit_key_changed(app: &tauri::AppHandle) {
         .quit_review
         .as_ref()
         .map(|review| (review.review.token, review.parent.clone()));
-    let Some((token, parent)) = parent else { return };
+    let Some((token, parent)) = parent else {
+        return;
+    };
     let focus = crate::terminal::quit_window_focus(&parent);
     if let Some(review) = app
         .state::<Desktop>()
@@ -344,6 +476,9 @@ fn refresh(app: &tauri::AppHandle) {
             status,
         )
     };
+    if !connected {
+        cancel_navigation(app);
+    }
     let Some(ui) = ui else { return };
     let connection = translate(if connected {
         "tauriDesktop.connected"
@@ -388,6 +523,8 @@ pub fn receive(app: &tauri::AppHandle, line: &[u8]) {
             let mut state = desktop.0.lock().unwrap();
             state.frame_queued = false;
             if state.stopped || state.generation != generation {
+                drop(state);
+                cancel_navigation(&native);
                 return;
             }
         }
@@ -406,6 +543,16 @@ pub fn receive(app: &tauri::AppHandle, line: &[u8]) {
 }
 
 fn apply_frame(app: &tauri::AppHandle, frame: Option<Frame>) {
+    if frame.is_none()
+        || !app
+            .state::<Desktop>()
+            .0
+            .lock()
+            .unwrap()
+            .connected(Instant::now())
+    {
+        cancel_navigation(app);
+    }
     let alerts = app
         .state::<Desktop>()
         .0
@@ -413,10 +560,20 @@ fn apply_frame(app: &tauri::AppHandle, frame: Option<Frame>) {
         .unwrap()
         .accept(frame, Instant::now());
     for alert in alerts {
+        let Some(id) = app
+            .state::<Desktop>()
+            .0
+            .lock()
+            .unwrap()
+            .register_notification(&alert)
+        else {
+            break;
+        };
         // Fixed category text only. No session ID, content, path or secret enters the OS.
         let mut notification = app
             .notification()
             .builder()
+            .id(id)
             .title("ORQST")
             .body(translate(&format!("desktopShell.alert.{}", alert.category)));
         if !alert.silent {
@@ -427,7 +584,12 @@ fn apply_frame(app: &tauri::AppHandle, frame: Option<Frame>) {
             });
         }
         if notification.show().is_err() {
-            app.state::<Desktop>().0.lock().unwrap().failed = true;
+            let desktop = app.state::<Desktop>();
+            let mut state = desktop.0.lock().unwrap();
+            state.failed = true;
+            state.revoke_routes();
+            drop(state);
+            cancel_navigation(app);
             break;
         }
     }
@@ -438,7 +600,10 @@ pub fn disconnected(app: &tauri::AppHandle) {
     app.state::<Desktop>().0.lock().unwrap().disconnect();
     // Never block the owned-child drain on a menu update during Exit cleanup.
     let native = app.clone();
-    let _ = app.run_on_main_thread(move || refresh(&native));
+    let _ = app.run_on_main_thread(move || {
+        cancel_navigation(&native);
+        refresh(&native);
+    });
 }
 
 #[cfg(target_os = "macos")]
@@ -565,7 +730,9 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
                 let mut state = desktop.0.lock().unwrap();
                 state.enabled = alerts.is_checked().unwrap_or(false);
                 state.failed = false;
+                state.revoke_routes();
                 drop(state);
+                cancel_navigation(app);
                 refresh(app);
             }
             _ => {}
@@ -578,7 +745,8 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         status,
     });
     let clicked = app.clone();
-    app.notification().on_action(move |_| focus(&clicked))?;
+    app.notification()
+        .on_action(move |action| notification_action(&clicked, action))?;
     let watched = app.clone();
     tauri::async_runtime::spawn(async move {
         loop {
@@ -615,8 +783,10 @@ pub fn stop(app: &tauri::AppHandle) {
         state.stopped = true;
         state.enabled = false;
         state.last_frame = None;
+        state.revoke_routes();
         state.ui.take()
     };
+    cancel_navigation(app);
     if let Some(ui) = ui {
         app.remove_tray_by_id(ui.tray.id());
     }
@@ -633,12 +803,13 @@ mod tests {
             alerts: vec![Alert {
                 category: "completed",
                 silent: true,
+                session_id: Some("synthetic-session".into()),
             }],
         })
     }
     #[test]
     fn pipe_accepts_only_bounded_fixed_metadata() {
-        assert_eq!(parse_frame(br#"ORQST_DESKTOP_STATE {"connected":true,"pending":2,"alerts":[{"category":"failed","silent":true}]}"#), Some(Some(Frame { pending: 2, alerts: vec![Alert { category: "failed", silent: true }] })));
+        assert_eq!(parse_frame(br#"ORQST_DESKTOP_STATE {"connected":true,"pending":2,"alerts":[{"category":"failed","silent":true}]}"#), Some(Some(Frame { pending: 2, alerts: vec![Alert { category: "failed", silent: true, session_id: None }] })));
         assert_eq!(
             parse_frame(br#"ORQST_DESKTOP_STATE {"connected":false}"#),
             Some(None)
@@ -717,6 +888,134 @@ mod tests {
         state.failed = true;
         assert!(state.accept(frame(), now).is_empty());
         assert_eq!(state.attempts, 0);
+    }
+
+    #[test]
+    fn route_identity_is_allowlisted_and_never_a_path_or_prose() {
+        for id in ["synthetic-session", "codex:123_abc", &"x".repeat(200)] {
+            assert!(session_id_valid(id));
+            let line = format!(
+                "ORQST_DESKTOP_STATE {}",
+                serde_json::json!({
+                    "connected":true,"pending":1,"alerts":[{"category":"failed","silent":true,"sessionId":id}]
+                })
+            );
+            assert_eq!(
+                parse_frame(line.as_bytes()).unwrap().unwrap().alerts[0]
+                    .session_id
+                    .as_deref(),
+                Some(id)
+            );
+        }
+        for id in [
+            "",
+            "/private/session",
+            "../secret",
+            "a b",
+            "a\n",
+            "a%20b",
+            "https://evil.test",
+            &"x".repeat(201),
+        ] {
+            assert!(!session_id_valid(id));
+        }
+        for value in [
+            serde_json::json!(null),
+            serde_json::json!(5),
+            serde_json::json!("/private/session"),
+        ] {
+            let line = format!(
+                "ORQST_DESKTOP_STATE {}",
+                serde_json::json!({
+                    "connected":true,"pending":1,"alerts":[{"category":"failed","silent":true,"sessionId":value}]
+                })
+            );
+            assert!(parse_frame(line.as_bytes()).is_none());
+        }
+    }
+
+    #[test]
+    fn callbacks_are_exact_one_use_and_revoked_by_disconnect_off_failure_staleness_or_stop() {
+        let now = Instant::now();
+        let alert = frame().unwrap().alerts.remove(0);
+        let mut state = State {
+            enabled: true,
+            origin: Some("http://127.0.0.1:4319".into()),
+            ..State::default()
+        };
+        state.accept(frame(), now);
+        let first = state.register_notification(&alert).unwrap();
+        let second = state.register_notification(&alert).unwrap();
+        assert_ne!(first, second);
+        assert!(state.take_route(999, now).is_none());
+        assert_eq!(
+            state.take_route(second, now).unwrap().0,
+            "synthetic-session"
+        );
+        assert!(state.take_route(second, now).is_none());
+        state.disconnect();
+        assert!(state.take_route(first, now).is_none());
+        for denial in ["off", "failed", "stale", "stopped", "origin"] {
+            state.enabled = true;
+            state.failed = false;
+            state.stopped = false;
+            state.origin = Some("http://127.0.0.1:4319".into());
+            state.last_frame = Some(now);
+            let id = state.register_notification(&alert).unwrap();
+            match denial {
+                "off" => state.enabled = false,
+                "failed" => state.failed = true,
+                "stopped" => state.stopped = true,
+                "origin" => state.origin = None,
+                _ => {}
+            }
+            let clicked = if denial == "stale" {
+                now + FRESHNESS + Duration::from_millis(1)
+            } else {
+                now
+            };
+            assert!(state.take_route(id, clicked).is_none(), "{denial}");
+        }
+    }
+
+    #[test]
+    fn selection_requires_the_current_owned_dashboard_origin() {
+        let origin = "http://127.0.0.1:4319";
+        assert!(route_url_valid(
+            &format!("{origin}/overview").parse().unwrap(),
+            origin
+        ));
+        for url in [
+            "http://127.0.0.1:4320/overview",
+            "http://localhost:4319/",
+            "http://user@127.0.0.1:4319/",
+            "http://127.0.0.1:4319/?x=1",
+            "orqst-unavailable://local/index.html",
+            "orqst-terminal://local/a/index.html",
+        ] {
+            assert!(!route_url_valid(&url.parse().unwrap(), origin));
+        }
+    }
+
+    #[test]
+    fn callback_uses_only_a_real_tap_with_a_returned_plugin_identifier() {
+        for (action, notification, expected) in [
+            ("tap", serde_json::json!({"id":7}), Some(7)),
+            ("dismiss", serde_json::json!({"id":7}), None),
+            ("other", serde_json::json!({"id":7}), None),
+            ("tap", serde_json::json!(null), None),
+            (
+                "tap",
+                serde_json::json!({"extra":{"sessionId":"inferred"}}),
+                None,
+            ),
+        ] {
+            let action: tauri_plugin_notification::ActionPerformed = serde_json::from_value(
+                serde_json::json!({"actionId": action,"notification":notification}),
+            )
+            .unwrap();
+            assert_eq!(action_notification_id(&action), expected);
+        }
     }
 }
 

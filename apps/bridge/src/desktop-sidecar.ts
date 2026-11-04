@@ -1,4 +1,4 @@
-import { DesktopMonitor } from '@orqst/core';
+import { DesktopMonitor, desktopNotificationFrame } from '@orqst/core';
 import { lstat, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { createBridge } from './app.js';
@@ -78,12 +78,8 @@ try {
             notifications: store.notifications(),
             preferences: store.preferences(),
           });
-          // Send categories/counts only: no source text, IDs, paths or credentials.
-          frame = {
-            connected: true,
-            pending: result.pending,
-            alerts: result.alerts.map(({ category, silent }) => ({ category, silent })),
-          };
+          // Only source-gated navigation identities enter this private pipe, never OS text.
+          frame = desktopNotificationFrame(result);
         } catch {
           monitor.disconnect();
           frame = { connected: false };

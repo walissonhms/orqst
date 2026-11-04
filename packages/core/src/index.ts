@@ -313,6 +313,7 @@ export class ObserverCore {
 
 export {
   DesktopMonitor,
+  desktopNotificationFrame,
   type DesktopMonitorSnapshot,
   type NativeAlert,
 } from './desktop-monitor.js';
