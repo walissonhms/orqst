@@ -26,6 +26,7 @@ const openCodeConfiguredModelSchema = z.object({
 const sourceFile = z.strictObject({
   path: z.string().startsWith('/').max(2048),
   codexModel: terminalModelValueSchema.optional(),
+  openCodeModel: terminalModelValueSchema.optional(),
   sha256: z
     .string()
     .regex(/^[a-f0-9]{64}$/)
@@ -33,7 +34,7 @@ const sourceFile = z.strictObject({
 });
 export const terminalModelSelectionSchema = z.strictObject({
   value: terminalModelValueSchema.nullable(),
-  source: z.enum(['cli-default', 'native-config', 'cli-cache', 'official-alias']),
+  source: z.enum(['cli-default', 'native-config', 'cli-cache', 'official-alias', 'native-state']),
   expiresAt: z.number().int().positive().safe().optional(),
   files: z.array(sourceFile).min(1).max(8),
 });
@@ -113,9 +114,16 @@ export function validateTerminalModelSelection(selection: TerminalModelSelection
       throw new Error('CLI model catalogue changed; reload the terminal picker');
     const digest = cache
       ? cachedModelDigest(cache, file.codexModel!)
-      : bytes === null
-        ? null
-        : terminalDigest(bytes);
+      : file.openCodeModel
+        ? openCodeStateDigest(
+            bytes === null ? null : decodeOpenCodeState(bytes),
+            file.openCodeModel,
+          )
+        : bytes === null
+          ? null
+          : terminalDigest(bytes);
+    if (file.openCodeModel && (selection.value !== file.openCodeModel || !digest))
+      throw new Error('CLI model catalogue changed; reload the terminal picker');
     if (digest !== file.sha256)
       throw new Error('CLI model catalogue changed; reload the terminal picker');
   }
@@ -139,7 +147,65 @@ export function openCodeModelConfiguration(selection: TerminalModelSelection | u
   });
 }
 
-/** Configured identifiers and cached picker entries are choices, never account entitlement. */
+/**
+ * OpenCode 2.2.5 records the models the person chose in its own state document.
+ * Adapted (bounded, preference-only subset) from its MIT-licensed
+ * `packages/tui/src/model-preference.ts`, `decodeModelPreference`/`modelPreferenceKey`
+ * at 9bbb8ce18c80f099e0e448775f59d965ead40a21; the file is always
+ * `<XDG_STATE_HOME|~/.local/state>/opencode/model.json` (`context/local.tsx`).
+ * This is a native preference log, never an entitlement or credential source.
+ */
+const openCodeStateModelSchema = z.object({
+  providerID: z.string().min(1).max(160),
+  modelID: z.string().min(1).max(160),
+});
+const openCodeStateSchema = z.object({
+  recent: z.array(openCodeStateModelSchema).max(64).optional(),
+  favorite: z.array(openCodeStateModelSchema).max(64).optional(),
+  variant: z.record(z.string().max(322), z.string().max(160)).optional(),
+});
+
+/** `favorite` precedes `recent`; saved variants add their own `provider/model` references. */
+function decodeOpenCodeState(bytes: Buffer) {
+  const document = openCodeStateSchema.parse(JSON.parse(bytes.toString('utf8')));
+  const entries: { provider: string; model: string; variant?: string }[] = [];
+  const add = (provider: string, model: string) => {
+    if (entries.some((entry) => entry.provider === provider && entry.model === model)) return;
+    const variant = document.variant?.[`${provider}/${model}`];
+    entries.push({
+      provider,
+      model,
+      ...(variant && variant !== 'default' ? { variant } : {}),
+    });
+  };
+  for (const entry of [...(document.favorite ?? []), ...(document.recent ?? [])])
+    add(entry.providerID, entry.modelID);
+  for (const key of Object.keys(document.variant ?? {})) {
+    const end = key.indexOf('/');
+    if (end > 0) add(key.slice(0, end), key.slice(end + 1));
+  }
+  return { document, entries };
+}
+
+/** Source evidence is the chosen reference only; unrelated preference edits stay irrelevant. */
+function openCodeStateDigest(state: ReturnType<typeof decodeOpenCodeState> | null, value: string) {
+  if (!state) return null;
+  const [providerID, rest] = value.split('/');
+  const hash = rest!.indexOf('#');
+  const modelID = hash < 0 ? rest! : rest!.slice(0, hash);
+  const entry = state.entries.find(
+    (candidate) => candidate.provider === providerID && candidate.model === modelID,
+  );
+  if (!entry) return null;
+  // A saved variant only counts when it is the exact reference recorded for this entry.
+  if (entry.variant !== (hash < 0 ? undefined : rest!.slice(hash + 1))) return null;
+  return terminalDigest(
+    JSON.stringify(['opencode-model-state', providerID, modelID, entry.variant ?? null]),
+  );
+}
+
+/** Passive CLI-owned catalogue/configuration evidence. Never execute a provider or inspect auth. */
+
 export function discoverTerminalModels(
   provider: LocalCliProvider,
   project: string,
@@ -170,10 +236,27 @@ export function discoverTerminalModels(
             join(project, 'opencode.json'),
             join(project, 'opencode.jsonc'),
           ];
-  const sources = paths.map((path) => {
-    const bytes = read(path);
-    return { path, bytes, sha256: bytes === null ? null : terminalDigest(bytes) };
-  });
+  // The native preference document is separate state, never merged into configuration evidence.
+  const openCodeStatePath =
+    provider === 'opencode'
+      ? join(environment.XDG_STATE_HOME ?? join(home, '.local', 'state'), 'opencode', 'model.json')
+      : null;
+  const readSources = (all: string[]) =>
+    all.map((path) => {
+      const bytes = read(path);
+      return { path, bytes, sha256: bytes === null ? null : terminalDigest(bytes) };
+    });
+  const sources = readSources(paths);
+  const stateSource = openCodeStatePath ? readSources([openCodeStatePath])[0]! : null;
+  let nativeState: ReturnType<typeof decodeOpenCodeState> | null = null;
+  if (stateSource?.bytes) {
+    try {
+      nativeState = decodeOpenCodeState(stateSource.bytes);
+    } catch {
+      // Unknown/unsafe preference documents stay CLI-owned; never guess a model from them.
+      nativeState = null;
+    }
+  }
   // Native defaults/configured models do not consume the picker cache.
   const files = sources
     .filter(({ path }) => !path.endsWith('models_cache.json'))
@@ -275,6 +358,16 @@ export function discoverTerminalModels(
     } catch {
       /* Unknown CLI configuration remains CLI-owned; never fabricate a catalogue. */
     }
+  }
+  // Models the person already chose in this CLI, in its own declared order. Availability stays
+  // unverified: a native preference is a real reference, not a credential or entitlement claim.
+  for (const entry of nativeState?.entries ?? []) {
+    const value = `${entry.provider}/${entry.model}${entry.variant ? `#${entry.variant}` : ''}`;
+    add(value, 'native-state', undefined, undefined, {
+      path: openCodeStatePath!,
+      openCodeModel: value,
+      sha256: openCodeStateDigest(nativeState, value),
+    });
   }
   return {
     limited,

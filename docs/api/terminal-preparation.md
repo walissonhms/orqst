@@ -33,10 +33,14 @@ never signals an already running process; it fences a pending new launch.
 The existing provisioning transaction can use a nonempty selected project only
 with this trusted Core binding. It never makes a substitute disposable project.
 The legacy advanced file-selection flow keeps its existing empty-project rule.
-One native selection review displays the exact manifests, model evidence, shared
-native identity and OpenCode startup acknowledgements before the first possible
-write. A selection too large for one 4096-character review is refused; the user can
-reduce its count. Process launch/output/keyboard permission is a separate native
+One native selection review displays the consent text for the exact manifests, model
+evidence, shared native identity and OpenCode startup acknowledgements before the first
+possible write. The sheet intentionally carries no manifest dump: the complete
+configuration of each terminal is written to its owner-only `terminal.json` in the
+private managed root, and the Studio panel states where to inspect it. A selection whose
+review text exceeds the native limit is still refused. Native failure sheets carry one
+outcome sentence and one reason sentence; the typed stage stays in the in-window notice.
+Process launch/output/keyboard permission is a separate native
 signed operation. There is no automatic installation, login, inference, resume,
 process adoption or retry after an uncertain write.
 
@@ -66,7 +70,12 @@ are checked again. No shell command string is constructed.
 - OpenCode 2.2.5: default and explicit native JSON `model` / `providers.models` (and migrated legacy `provider.models`)
   identifiers, including native V2 model references with optional variants. The dynamic catalogue is still unavailable here. Its `models`
   command resolves a native server, and the native cache lives in provider SQLite;
-  neither is accessed silently by passive discovery.
+  neither is accessed silently by passive discovery. Models the person already chose
+  are additionally read from the CLI's own preference document
+  (`<XDG_STATE_HOME|~/.local/state>/opencode/model.json`, `favorite`/`recent`/saved
+  `variant`) as `source: 'native-state'`: a real reference, never an entitlement, and
+  the selected entry alone is the evidence, so unrelated preference edits do not
+  invalidate a choice. See [the reuse audit](../research/opencode-model-catalog.md).
 
 Each source file is limited to 2 MiB, each provider to 128 options, and model
 identifiers to 160 safe characters. Unsupported TOML forms, JSONC and configuration
@@ -103,9 +112,12 @@ files are not returned as catalogue data or written to logs.
 Synthetic tests verify all three providers' selected identifiers reach the actual
 launch profile argv and the exact selected nonempty project reaches `cwd`, without
 calling a file picker or executing a provider. They also cover unknown IDs, drift,
-read-only database lookup, Feature fencing and source budgets. Native UI, provider
+read-only database lookup, Feature fencing and source budgets, plus OpenCode native
+preference choices (stable across unrelated preference edits, refused when the chosen
+entry disappears) and the short consent sheet. Native UI, provider
 acceptance, resolved models/entitlements, dynamic OpenCode catalogue and platform
 packaging remain separate acceptance work. The active Preview bundle is unchanged.
+See [delivery and limits](../development/opencode-model-catalog-ux.md).
 
 Live enrollment of another terminal into an already running host is not implemented
 by this Core increment. `ManagedTerminalPair`, its IPC client, native selection and

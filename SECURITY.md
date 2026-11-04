@@ -20,6 +20,16 @@ global settings are rewritten. Model evidence is revalidated before dispatch;
 native agent/managed settings, variant preferences and availability can override
 the initial default. Effective selection remains unverified without CLI evidence.
 
+OpenCode's passive catalogue also reads the CLI's own preference document
+(`<XDG_STATE_HOME|~/.local/state>/opencode/model.json`) — metadata, no credentials —
+and offers those references as `native-state` choices with unverified availability.
+Only the selected entry is source evidence, so unrelated preference rotation cannot
+invalidate a choice, and a removed entry is refused before any effect. The normal
+native consent and failure sheets now carry short localised effect text; the complete
+configuration stays in the owner-only written manifest, and no startup, shared
+identity, MCP, cost or uncertainty disclosure was removed. See
+[the catalogue and consent review](docs/research/opencode-model-catalog.md).
+
 ## Private incremental terminal enrollment — 2026-11-04
 
 Inherited trusted Core IPC can admit one prepared slot without granting Start,

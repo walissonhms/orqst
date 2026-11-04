@@ -315,7 +315,8 @@ test('OpenCode review rejects a changed chosen executable instead of substitutin
         return true;
       };
       f.ports.confirm = async (_key, detail) => {
-        assert.ok(detail.includes(join(f.root, 'bin/opencode')));
+        // The native sheet no longer carries paths or manifests.
+        assert.equal(detail, '');
         const first = join(f.root, 'bin/opencode');
         if (change === 'removal') rmSync(first);
         else writeFileSync(first, Buffer.concat([readFileSync(binary), Buffer.from('DRIFT')]));
@@ -433,18 +434,12 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       assert.equal(catalog.status, 'catalog');
       const codex = catalog.catalog.providers.find((entry) => entry.provider === 'codex')!;
       const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
-      const reviews: Array<{
-        communication: {
-          sourceTerminalId: string;
-          workerTerminalId: string;
-          separateTaskGrantRequired: boolean;
-        };
-        terminals: Array<{ identity: { terminalId: string }; model: { value: string } }>;
-      }> = [];
+      const reviews: string[] = [];
       f.ports.confirm = async (key, detail) => {
-        assert.equal(key, 'mcpPair');
-        assert.ok(detail.length <= 4096);
-        reviews.push(JSON.parse(detail));
+        // Pair consent is one short sheet; the separate Open review still carries its profile.
+        if (key === 'mcpPair') assert.equal(detail, '');
+        else assert.ok(detail.length > 0 && detail.length <= 4096);
+        reviews.push(key);
         return true;
       };
       const prepared = await prepareTauriTerminals(
@@ -466,16 +461,12 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       const configs = prepared.files.map(readInteractiveTerminalConfig);
       assert.equal(configs[0]!.version, sourceProvider === 'codex' ? 1 : 3);
       assert.equal(configs[1]!.version, sourceProvider === 'codex' ? 3 : 1);
-      assert.deepEqual(
-        reviews.flatMap((page) => page.terminals).map((entry) => entry.identity),
-        configs.map((config) => config.identity),
-      );
-      for (const page of reviews)
-        assert.deepEqual(page.communication, {
-          sourceTerminalId: configs[0]!.identity!.terminalId,
-          workerTerminalId: configs[1]!.identity!.terminalId,
-          separateTaskGrantRequired: true,
-        });
+      // The pair is reviewed once, and the reviewed configuration is the written manifest.
+      assert.deepEqual(reviews, ['mcpPair']);
+      for (const config of configs) {
+        const written = JSON.parse(readFileSync(join(config.state, 'terminal.json'), 'utf8'));
+        assert.deepEqual(written, config);
+      }
       assert.deepEqual(
         features.read(feature.featureId).terminalIds,
         configs.map((config) => config.identity!.terminalId),
@@ -525,7 +516,6 @@ for (const fault of [
   'codex-model',
   'opencode-model',
   'cancel',
-  'cancel-second',
   'expiry',
   'surface',
   'commit',
@@ -573,7 +563,7 @@ for (const fault of [
         if (fault === 'expiry') now += 60_000;
         if (fault === 'surface') current = false;
         if (fault === 'codex-drift' || fault === 'opencode-drift') drift(fault === 'codex-drift');
-        return fault !== 'cancel' && !(fault === 'cancel-second' && reviews === 2);
+        return fault !== 'cancel';
       };
       f.ports.commit = async () => {
         commits++;
@@ -581,7 +571,7 @@ for (const fault of [
         return fault !== 'commit';
       };
       const attempt = prepareTauriTerminals(request, f.context, f.ports, () => now, f.trusted);
-      if (['cancel', 'cancel-second', 'expiry', 'surface', 'commit'].includes(fault)) {
+      if (['cancel', 'expiry', 'surface', 'commit'].includes(fault)) {
         const result = await attempt;
         assert.equal(result.status, 'cancelled');
       } else {
@@ -593,7 +583,7 @@ for (const fault of [
         });
       }
       assert.equal(commits, fault === 'commit' || fault === 'companion-commit-drift' ? 1 : 0);
-      if (fault === 'cancel-second') assert.equal(reviews, 2);
+      assert.equal(reviews, fault === 'codex-model' || fault === 'opencode-model' ? 0 : 1);
       assert.deepEqual(readdirSync(f.context.parent), []);
     } finally {
       f.close();
@@ -945,6 +935,215 @@ test('catalog regression: opaque cache deadline cannot be extended or erased by 
     }
     assert.deepEqual(f.confirmations, []);
     assert.deepEqual(readdirSync(f.context.parent), []);
+  } finally {
+    f.close();
+  }
+});
+
+// OpenCode 2.2.5 writes the models the person chose to <state>/opencode/model.json
+// (packages/tui/src/context/local.tsx at 9bbb8ce). Synthetic fixture only.
+function openCodeState(f: ReturnType<typeof fixture>, document: unknown) {
+  const directory = join(f.home, '.local/state/opencode');
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  writeFileSync(join(directory, 'model.json'), JSON.stringify(document), { mode: 0o600 });
+}
+
+test('OpenCode native preference document becomes real, unverified model choices', async () => {
+  const f = fixture();
+  try {
+    openCodeState(f, {
+      recent: [
+        { providerID: 'synthetic', modelID: 'recent-model' },
+        { providerID: 'synthetic', modelID: 'variant-model' },
+      ],
+      favorite: [{ providerID: 'synthetic', modelID: 'favorite-model' }],
+      variant: { 'synthetic/variant-model': 'fast' },
+    });
+    const result = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'catalog');
+    const opencode = result.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+    assert.equal(opencode.status, 'available');
+    const labels = opencode.models.map((entry) => entry.label);
+    // Configured models keep precedence; the preference document adds the rest, never duplicates.
+    assert.ok(labels.includes('synthetic/model'));
+    assert.ok(labels.includes('synthetic/favorite-model'));
+    assert.ok(labels.includes('synthetic/recent-model'));
+    assert.ok(labels.includes('synthetic/variant-model#fast'));
+    assert.equal(labels.filter((label) => label === 'synthetic/recent-model').length, 1);
+    for (const label of [
+      'synthetic/favorite-model',
+      'synthetic/recent-model',
+      'synthetic/variant-model#fast',
+    ])
+      assert.equal(
+        opencode.models.find((entry) => entry.label === label)!.source,
+        'native-state',
+        label,
+      );
+    for (const entry of opencode.models) assert.equal(entry.availability, 'unverified');
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode native choice reaches the launch profile without a picker cache or provider run', async () => {
+  const f = fixture(true);
+  try {
+    openCodeState(f, {
+      recent: [{ providerID: 'synthetic', modelID: 'variant-model' }],
+      variant: { 'synthetic/variant-model': 'fast' },
+    });
+    const catalog = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(catalog.status, 'catalog');
+    const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+    const chosen = opencode.models.find((entry) => entry.label === 'synthetic/variant-model#fast');
+    assert.ok(chosen);
+    const details: string[] = [];
+    f.ports.confirm = async (key, detail) => {
+      assert.equal(key, 'selected');
+      // The native sheet carries the effects only; no manifest, path or identifier dump.
+      assert.equal(detail, '');
+      details.push(detail);
+      return true;
+    };
+    const prepared = await prepareTauriTerminals(
+      {
+        action: 'create-selected',
+        workspaceId: f.workspaceId,
+        featureId: null,
+        catalogId: catalog.catalog.catalogId,
+        provider: 'opencode',
+        modelId: chosen.id,
+        count: 1,
+      },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(prepared.status, 'open');
+    assert.deepEqual(details, ['']);
+    const config = readInteractiveTerminalConfig(prepared.files[0]!);
+    assert.equal(config.version, 3);
+    assert.deepEqual(config.model, {
+      value: 'synthetic/variant-model#fast',
+      source: 'native-state',
+      files: config.model!.files,
+    });
+    assert.ok(config.model!.files.some((file) => file.path.endsWith('/opencode/model.json')));
+    // The written manifest is the complete configuration that the short consent authorized.
+    assert.deepEqual(JSON.parse(readFileSync(join(config.state, 'terminal.json'), 'utf8')), config);
+  } finally {
+    f.close();
+  }
+});
+
+test('OpenCode native choice survives unrelated preference edits and refuses a removed choice', async () => {
+  const f = fixture();
+  try {
+    const base = {
+      recent: [{ providerID: 'synthetic', modelID: 'chosen-model' }],
+      favorite: [{ providerID: 'synthetic', modelID: 'other-model' }],
+      variant: {},
+    };
+    openCodeState(f, base);
+    const catalog = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(catalog.status, 'catalog');
+    const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+    const chosen = opencode.models.find((entry) => entry.label === 'synthetic/chosen-model');
+    assert.ok(chosen);
+    const request = {
+      action: 'create-selected' as const,
+      workspaceId: f.workspaceId,
+      featureId: null,
+      catalogId: catalog.catalog.catalogId,
+      provider: 'opencode' as const,
+      modelId: chosen.id,
+      count: 1,
+    };
+    // Another OpenCode session rotates its own preferences: the choice stays valid.
+    openCodeState(f, {
+      recent: [
+        { providerID: 'synthetic', modelID: 'chosen-model' },
+        { providerID: 'synthetic', modelID: 'third-model' },
+      ],
+      favorite: [{ providerID: 'synthetic', modelID: 'other-model' }],
+      variant: { 'synthetic/other-model': 'slow' },
+    });
+    const prepared = await prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted);
+    assert.equal(prepared.status, 'open');
+    assert.equal(
+      readInteractiveTerminalConfig(prepared.files[0]!).model!.value,
+      'synthetic/chosen-model',
+    );
+    // Removing the chosen entry before the click leaves no such choice to rebind.
+    const second = fixture();
+    try {
+      openCodeState(second, base);
+      const first = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: second.workspaceId, featureId: null },
+        second.context,
+        second.ports,
+        Date.now,
+        second.trusted,
+      );
+      assert.equal(first.status, 'catalog');
+      const cli = first.catalog.providers.find((entry) => entry.provider === 'opencode')!;
+      const pick = cli.models.find((entry) => entry.label === 'synthetic/chosen-model');
+      assert.ok(pick);
+      openCodeState(second, {
+        recent: [{ providerID: 'synthetic', modelID: 'third-model' }],
+        favorite: [],
+        variant: {},
+      });
+      await assert.rejects(
+        prepareTauriTerminals(
+          {
+            action: 'create-selected',
+            workspaceId: second.workspaceId,
+            featureId: null,
+            catalogId: first.catalog.catalogId,
+            provider: 'opencode',
+            modelId: pick.id,
+            count: 1,
+          },
+          second.context,
+          second.ports,
+          Date.now,
+          second.trusted,
+        ),
+        (error: unknown) => {
+          assert.deepEqual(Reflect.get(error as object, 'failure'), {
+            stage: 'selection',
+            code: 'selection_unavailable',
+            effects: 'not_started',
+          });
+          return true;
+        },
+      );
+      assert.deepEqual(second.confirmations, []);
+      assert.deepEqual(readdirSync(second.context.parent), []);
+    } finally {
+      second.close();
+    }
   } finally {
     f.close();
   }
