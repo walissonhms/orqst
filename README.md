@@ -16,8 +16,8 @@ coordination roles and directed communication permissions. Its task composer sug
 permitted `@handles` and resolves one explicit destination to the existing UUID-based
 Codex structured queue/result transport. Either member can be the source; all routes
 start denied and require native review, followed by separate exact-task authorization.
-This is still a two-Codex composition, separate from the interactive 1–8 PTY team and
-the Tauri observer preview. Native provider acceptance remains pending. See the
+This is still a two-Codex composition, separate from the interactive 1–8 PTY team;
+an opt-in Tauri structured client is described below. Native provider acceptance remains pending. See the
 [workflow and limits](docs/development/managed-agents-client.md#explicit-mentions-and-directed-permissions--2026-11-04)
 and [pinned component review](docs/research/mention-communication.md).
 
@@ -48,7 +48,7 @@ Node 24 Core, SQLite and the production Analytics worker, without Electron. Its
 native child lifecycle and single-instance handling adapt pinned, attributed Anywh
 code. The local macOS Apple Silicon debug bundle has startup/navigation/shutdown
 evidence; this is the first migration increment, not complete desktop parity.
-Prepared managed-terminal profiles can now opt into dedicated Tauri windows through
+Prepared managed-terminal profiles can now opt into a retained Tauri workspace through
 `ORQST_TAURI_TERMINALS`; their existing Node broker, PTY and xterm are reused.
 Native terminal consent/provider parity remains unaccepted; exports/notifications
 and the complete managed workflow remain available in Electron. See [build, run and exact limits](docs/development/tauri.md) and the

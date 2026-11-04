@@ -157,7 +157,7 @@ the attempt and input was revoked. An earlier UI-tool timeout is not positive ev
 
 Remaining limits: full native focus/dialog/keyboard/hide/quit lifecycle acceptance,
 real Codex/Claude/OpenCode login/tasks, native retirement/reselection, creation through
-the dashboard, SQLite layout persistence, groups, teams/mentions and MCP consent,
+the dashboard, SQLite layout persistence, PTY teams/mentions and MCP consent,
 durable reconnect, Windows/Linux/Intel and signed installers. Native retirement is absent;
 state/admission remain reserved rather than being deleted or automatically reused.
 No ingestion logic changed; `validate:local`, `validate:live`, full browser suite and
