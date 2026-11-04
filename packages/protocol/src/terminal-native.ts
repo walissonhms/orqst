@@ -8,6 +8,7 @@ const action = <Name extends string, T extends z.ZodRawShape>(name: Name, fields
   z.strictObject({ version: z.literal(1), action: z.literal(name), ...fields });
 
 export const terminalNativeRequestSchema = z.discriminatedUnion('action', [
+  action('open', { profileId: z.string().min(1).max(128) }),
   action('start', { profileId: z.string().min(1).max(128) }),
   action('attach', instance),
   action('input', instance),
@@ -37,6 +38,7 @@ export const terminalNativeReplySchema = z.union([
   z.strictObject({
     status: z.literal('ok'),
     instanceId: z.string().uuid(),
+    opening: z.enum(['ready', 'incomplete']).optional(),
     snapshot: z
       .strictObject({
         instanceId: z.string().uuid(),
@@ -67,7 +69,7 @@ export interface DesktopTerminal {
 
 /** Trusted native-only presentation data, never accepted from a renderer. */
 export interface TerminalNativeConfirmation {
-  readonly operation: 'start' | 'attach' | 'input' | 'paste' | 'stop';
+  readonly operation: 'open' | 'start' | 'attach' | 'input' | 'paste' | 'stop';
   readonly instanceId: string;
   readonly profile: Readonly<{
     id: string;

@@ -542,3 +542,81 @@ for (const invalidation of ['cancel', 'blur', 'expiry'] as const) {
     s.supervisor.shutdown();
   });
 }
+
+test('native Open reviews the concrete profile once and signs separate start, attach and input challenges', async () => {
+  const s = setup();
+  const reply = await s.send('open', { profileId: 'synthetic' });
+  assert.equal(reply.status, 'ok');
+  if (reply.status !== 'ok') throw new Error('Expected synthetic open');
+  assert.equal(reply.opening, 'ready');
+  assert.equal(s.starts(), 1);
+  assert.deepEqual(
+    s.confirmations.map(({ operation }) => operation),
+    ['open'],
+  );
+  assert.deepEqual(s.confirmations[0]!.profile.argv, ['/synthetic/fixture']);
+  assert.equal(
+    (await s.send('write', { instanceId: reply.instanceId, sequence: 0, text: 'x' })).status,
+    'ok',
+  );
+  assert.deepEqual(s.writes, ['x']);
+  assert.deepEqual(s.signals, []);
+});
+
+for (const stage of ['launch', 'requestAttach', 'attach', 'requestInput', 'enableInput'] as const) {
+  test(`native Open preserves its attempt and revokes grants after focus loss during ${stage}`, async () => {
+    let loseFocus = () => {};
+    const s = setup(
+      (supervisor) =>
+        new Proxy(supervisor, {
+          get(target, property) {
+            const value: unknown = Reflect.get(target, property);
+            if (property === stage)
+              return async (...args: unknown[]) => {
+                const result: unknown = await Reflect.apply(
+                  value as (...args: unknown[]) => unknown,
+                  target,
+                  args,
+                );
+                loseFocus();
+                return result;
+              };
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }) as unknown as TerminalNativeSupervisor,
+    );
+    loseFocus = () => {
+      s.focus(false);
+      s.broker.revokeInput();
+    };
+    const reply = await s.send('open', { profileId: 'synthetic' });
+    assert.equal(reply.status, 'ok');
+    if (reply.status !== 'ok') throw new Error('Expected retained synthetic attempt');
+    assert.equal(reply.opening, 'incomplete');
+    assert.equal(s.starts(), 1);
+    assert.deepEqual(s.signals, []);
+    s.focus(true);
+    assert.equal(
+      (await s.send('write', { instanceId: reply.instanceId, sequence: 0, text: 'never' })).status,
+      'denied',
+    );
+    assert.deepEqual(s.writes, []);
+    assert.equal(s.disposed(), 0);
+  });
+}
+
+test('native Open cancellation and expired consent never start a process', async () => {
+  for (const expired of [false, true]) {
+    const s = setup();
+    s.answer(async () => {
+      if (expired) s.advance();
+      return expired;
+    });
+    assert.equal(
+      (await s.send('open', { profileId: 'synthetic' })).status,
+      expired ? 'denied' : 'cancelled',
+    );
+    assert.equal(s.starts(), 0);
+    assert.deepEqual(s.signals, []);
+  }
+});
