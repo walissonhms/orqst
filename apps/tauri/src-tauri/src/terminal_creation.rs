@@ -304,12 +304,30 @@ fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bo
         && url.query().is_none()
         && url.fragment().is_none()
 }
+// The URL getter may wait for the UI thread. Never retain Preparation across it.
+fn identity_from(
+    state: &Mutex<State>,
+    read_source: impl FnOnce() -> Option<String>,
+    matches: impl FnOnce(&str, &str) -> bool,
+) -> Option<(String, u64)> {
+    let expected = {
+        let guard = state.lock().unwrap();
+        (guard.origin.clone(), guard.generation)
+    };
+    let source = read_source()?;
+    let guard = state.lock().unwrap();
+    (guard.origin == expected.0
+        && guard.generation == expected.1
+        && matches(&source, &guard.origin))
+    .then_some((source, expected.1))
+}
 fn identity(view: &Webview) -> Option<(String, u64)> {
-    let state = view.state::<Preparation>();
-    let guard = state.0.lock().unwrap();
-    let source = view.url().ok()?.to_string();
-    document_matches(view.label(), view.window().label(), &source, &guard.origin)
-        .then_some((source, guard.generation))
+    let parent = view.window();
+    identity_from(
+        &view.state::<Preparation>().0,
+        || view.url().ok().map(|url| url.to_string()),
+        |source, origin| document_matches(view.label(), parent.label(), source, origin),
+    )
 }
 fn snapshot(app: &tauri::AppHandle) -> Value {
     let running = crate::terminal::is_running(app);
