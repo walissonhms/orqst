@@ -137,3 +137,8 @@ controls were checked through a simulated native response. Native IPC, focus and
 dialogs, real providers, human accessibility acceptance and a fresh native Tauri
 build of this combined tree remain unvalidated. No output in the test represents a
 provider response or captured user activity.
+
+`pnpm accept:managed-agents --authorize-synthetic-agents` also passed on this
+combined tree: two owned structured fixture processes, deny-by-default mentions,
+signed directed permissions and correlated A-to-B-to-A results. The provider,
+native modal/focus and real-account acceptance limits remain unchanged.
