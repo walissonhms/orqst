@@ -1,4 +1,4 @@
-import { View, type BrowserWindow, type WebContentsView } from 'electron';
+import { View, type BrowserWindow, type WebContents, type WebContentsView } from 'electron';
 import {
   parseTerminalViewAction,
   terminalPaneBounds,
@@ -9,7 +9,12 @@ import {
 export class TerminalPanels {
   private readonly root = new View();
   private readonly dashboard: View;
-  private readonly panes: Array<{ view: WebContentsView; revoke(): void }> = [];
+  private readonly panes: Array<{
+    view: WebContentsView;
+    contents: WebContents;
+    attached: boolean;
+    revoke(): void;
+  }> = [];
   private readonly shown = new Set<number>();
   private closed = false;
   private axis: TerminalLayoutState['axis'] = 'columns';
@@ -25,9 +30,13 @@ export class TerminalPanels {
   }
 
   add(view: WebContentsView, revoke: () => void): number {
+    if (this.closed) throw new Error('Terminal panels already closed');
     const slot = this.panes.length;
-    this.panes.push({ view, revoke });
+    // Electron can clear view.webContents after destruction; retain the owned handle.
+    const pane = { view, contents: view.webContents, attached: false, revoke };
+    this.panes.push(pane);
     this.root.addChildView(view);
+    pane.attached = true;
     view.setVisible(false);
     this.layout();
     return slot;
@@ -39,13 +48,13 @@ export class TerminalPanels {
 
   open(slot: number): void {
     const pane = this.panes[slot];
-    if (this.closed || !pane || pane.view.webContents.isDestroyed()) return;
+    if (this.closed || !pane || pane.contents.isDestroyed()) return;
     this.shown.add(slot);
     if (this.window.isMinimized()) this.window.restore();
     this.window.show();
     this.layout();
     this.window.focus();
-    pane.view.webContents.focus();
+    pane.contents.focus();
   }
 
   /** Sender/activation checks belong to the dedicated native document binding. */
@@ -95,7 +104,7 @@ export class TerminalPanels {
     this.layout();
     const next = this.shown.values().next().value;
     if (next === undefined) this.window.webContents.focus();
-    else this.panes[next]?.view.webContents.focus();
+    else this.panes[next]?.contents.focus();
   }
 
   showDashboard(): void {
@@ -118,11 +127,11 @@ export class TerminalPanels {
       visible,
       count: this.panes.length,
     };
-    for (const [slot, { view }] of this.panes.entries()) {
+    for (const [slot, { view, contents }] of this.panes.entries()) {
       const position = visible.indexOf(slot);
-      if (view.webContents.isDestroyed()) continue;
+      if (contents.isDestroyed()) continue;
       view.setVisible(position !== -1);
-      view.webContents.send('orqst:terminal-layout', state);
+      contents.send('orqst:terminal-layout', state);
       if (position === -1) continue;
       view.setBounds(
         terminalPaneBounds(width, height, position, visible.length, this.axis, this.percent),
@@ -135,11 +144,12 @@ export class TerminalPanels {
     this.closed = true;
     this.window.removeListener('resize', this.layout);
     this.window.removeListener('closed', this.close);
-    for (const { view, revoke } of this.panes) {
+    for (const { view, contents, attached, revoke } of this.panes) {
       revoke();
-      this.root.removeChildView(view);
-      if (!view.webContents.isDestroyed()) view.webContents.close();
+      if (attached && !this.window.isDestroyed()) this.root.removeChildView(view);
+      if (!contents.isDestroyed()) contents.close();
     }
+    this.shown.clear();
     // A failed pair construction restores the live dashboard, including in-memory drafts.
     if (!this.window.isDestroyed()) {
       this.root.removeChildView(this.dashboard);
