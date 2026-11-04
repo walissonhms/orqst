@@ -9,6 +9,7 @@ import type { InteractiveMcpSession } from '../../../packages/core/src/terminal/
 import {
   TerminalNativeBroker,
   type TerminalNativeSupervisor,
+  type TerminalTeamBackend,
 } from '../../../packages/core/src/terminal/native-broker.js';
 import {
   TauriTerminalRetirement,
@@ -56,6 +57,7 @@ export class TauriTerminalService {
     private readonly translate: (key: string) => string,
     private readonly mcp?: TauriTerminalMcp,
     core?: TauriTerminalRetirementCore,
+    team?: TerminalTeamBackend,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
     this.panes = supervisors.map((supervisor, slot) => {
@@ -83,6 +85,7 @@ export class TauriTerminalService {
             return this.confirm(slot, translate(`terminalNative.${details.operation}`), detail);
           },
         },
+        team,
       );
       return { document, state, broker };
     });

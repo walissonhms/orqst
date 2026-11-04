@@ -1,3 +1,4 @@
+import { terminalTeamDocument } from './terminal-team-document.js';
 import { escapeHTML } from './policy.js';
 import { terminalScriptURL, terminalStyleURL } from './terminal-policy.js';
 
@@ -48,6 +49,7 @@ export function terminalDocument(options: {
   <p id="layout-feedback" role="status" data-summary="${text('layoutSummary')}" data-memory="${text('layoutMemoryOnly')}"></p>
   <p class="muted">${text('layoutHelp')}</p>
 </details></div>
+${terminalTeamDocument(options.translate)}
 <section class="process-controls" aria-label="${text('processControls')}">
   <div class="action-row">${['start', 'attach', 'input', 'detach', 'stop'].map(button).join('')}</div>
   <p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap'].map((key) => `data-${key}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>

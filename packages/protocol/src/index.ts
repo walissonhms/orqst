@@ -172,3 +172,5 @@ export * from './terminal-capacity.js';
 
 export * from './studio.js';
 export * from './terminal-workspace.js';
+
+export * from './terminal-team.js';

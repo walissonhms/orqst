@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { terminalTeamSaveSchema, terminalTeamStateSchema } from './terminal-team.js';
 import { terminalStateSchema } from './terminal-journal.js';
 
 // Experimental native-only contract. Never exposed by the observer Bridge or preload.
@@ -8,6 +9,8 @@ const action = <Name extends string, T extends z.ZodRawShape>(name: Name, fields
   z.strictObject({ version: z.literal(1), action: z.literal(name), ...fields });
 
 export const terminalNativeRequestSchema = z.discriminatedUnion('action', [
+  action('teamRead', {}),
+  action('teamSave', { input: terminalTeamSaveSchema }),
   action('start', { profileId: z.string().min(1).max(128) }),
   action('attach', instance),
   action('input', instance),
@@ -33,6 +36,11 @@ export const terminalNativeRequestSchema = z.discriminatedUnion('action', [
 export type TerminalNativeRequest = z.infer<typeof terminalNativeRequestSchema>;
 
 export const terminalNativeReplySchema = z.union([
+  z.strictObject({
+    status: z.literal('configuration'),
+    team: terminalTeamStateSchema,
+    terminalIds: z.array(z.uuid()).min(1).max(8),
+  }),
   z.strictObject({ status: z.enum(['denied', 'cancelled', 'busy', 'focus_required']) }),
   z.strictObject({
     status: z.literal('ok'),

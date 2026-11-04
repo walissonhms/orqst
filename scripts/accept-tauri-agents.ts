@@ -163,6 +163,38 @@ try {
     );
     await page.addScriptTag({ path: resolve('apps/tauri/dist/agents/client.js') });
     await expect(page.locator('#start-0')).toBeEnabled();
+    const team = page.locator('#terminal-team');
+    await team.locator('..').locator('summary').click();
+    await team.locator('[data-action=reload]').click();
+    await expect(team.locator('fieldset')).toHaveCount(2);
+    await team.locator('[data-field=team-name]').fill('SYNTHETIC shared proposal');
+    await team
+      .locator('fieldset')
+      .nth(0)
+      .locator('[data-field=name]')
+      .fill('SYNTHETIC saved coordinator');
+    await team.locator('fieldset').nth(0).locator('[data-field=role]').selectOption('orchestrator');
+    await team.locator('fieldset').nth(0).locator('input[type=checkbox]').check();
+    await team.locator('[data-action=save]').click();
+    await expect(team.locator('[data-team-status]')).toHaveText(en.terminalTeam.saved);
+    const savedTeam = await request({ version: 1, action: 'teamRead' });
+    assert.equal(savedTeam.team?.revision, 1);
+    assert.deepEqual(savedTeam.terminalIds, terminalIds);
+    assert.equal(
+      (await snapshot()).slots.every((slot) => slot === null),
+      true,
+    );
+    await team
+      .locator('fieldset')
+      .nth(0)
+      .locator('[data-field=name]')
+      .fill('SYNTHETIC unsaved edit');
+    await expect(team.locator('fieldset').nth(0).locator('[data-action=review]')).toBeDisabled();
+    await team.locator('[data-action=reload]').click();
+    await expect(team.locator('fieldset').nth(0).locator('[data-field=name]')).toHaveValue(
+      'SYNTHETIC saved coordinator',
+    );
+    await team.locator('..').locator('summary').click();
     approve = false;
     await page.locator('#model-0').fill('SYNTHETIC-model');
     await page.locator('#start-0').click();
@@ -189,6 +221,19 @@ try {
       ).status,
       'unavailable',
     );
+    await team.locator('..').locator('summary').click();
+    approve = false;
+    await team.locator('fieldset').nth(0).locator('[data-action=review]').click();
+    await expect(page.locator('#status')).toHaveText(en.managedAgents.cancelled);
+    assert.deepEqual((await snapshot()).slots[0]?.pane?.routing?.allowedTargetPaneIds, []);
+    approve = true;
+    await team.locator('fieldset').nth(0).locator('[data-action=review]').click();
+    await expect
+      .poll(async () => (await snapshot()).slots[0]?.pane?.routing?.handle)
+      .toBe('terminal-1');
+    await team.locator('..').locator('summary').click();
+    // Original exact routing/autocomplete/transport acceptance remains unchanged.
+    await page.locator('#handle-0').fill('terminal-a');
     await page.locator('#name-0').fill('Synthetic coordinator');
     await page.locator('#role-0').selectOption('orchestrator');
     await page.locator('#route-0').check();
@@ -244,6 +289,8 @@ try {
         result: 'passed',
         scope: 'packaged-tauri-client-and-node-structured-hosts',
         checks: [
+          'inert-sqlite-team-editor-roundtrip',
+          'cancelled-and-signed-saved-policy-review',
           'cancelled-start',
           'signed-starts',
           'deny-by-default',

@@ -184,6 +184,15 @@ export async function createManagedAgents(
         if (disposed) core.close();
         return refusal();
       }
+      if (r.action === 'teamRead' || r.action === 'teamSave') {
+        const value = await core.call({
+          operation: r.action,
+          ...(r.action === 'teamSave' ? { input: r.input } : {}),
+        });
+        return current(false)
+          ? managedAgentsReplySchema.parse({ status: 'ok', ...(value as object) })
+          : { status: 'denied' };
+      }
       let challenge: TerminalChallenge;
       let details: unknown;
       let task: ReturnType<DesktopManagedAgents['prepareTask']> | undefined;
@@ -205,11 +214,13 @@ export async function createManagedAgents(
         })) as ReturnType<DesktopManagedAgents['prepareTask']>;
         challenge = task.challenge;
         details = task.plan;
-      } else if (r.action === 'routing') {
+      } else if (r.action === 'routing' || r.action === 'teamRouting') {
         routing = (await core.call({
-          operation: 'prepareRouting',
+          operation: r.action === 'teamRouting' ? 'prepareTeamRouting' : 'prepareRouting',
           slot: r.slot,
-          update: r.update,
+          ...(r.action === 'teamRouting'
+            ? { expectedRevision: r.expectedRevision }
+            : { update: r.update }),
         })) as ReturnType<DesktopManagedAgents['prepareRouting']>;
         challenge = routing.challenge;
         details = routing.plan;
@@ -258,7 +269,7 @@ export async function createManagedAgents(
         await core.call({ operation: 'launch', slot: r.slot, proof });
       } else if (r.action === 'retire') await core.call({ operation: 'retire', proof });
       else if (r.action === 'stop') await core.call({ operation: 'stop', slot: r.slot, proof });
-      else if (r.action === 'routing')
+      else if (r.action === 'routing' || r.action === 'teamRouting')
         await core.call({ operation: 'applyRouting', changeId: routing!.changeId, proof });
       else
         await core.call({
@@ -273,7 +284,8 @@ export async function createManagedAgents(
         snapshot: await snapshot(),
       });
     } catch {
-      if (core && !retired) updateLifetime('uncertain');
+      if (core && !retired && r.action !== 'teamRead' && r.action !== 'teamSave')
+        updateLifetime('uncertain');
       return { status: 'unavailable', empty: !core };
     } finally {
       busy = false;

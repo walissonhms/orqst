@@ -1,3 +1,4 @@
+import { mountTerminalTeamEditor } from './terminal-team-editor.js';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import type { TerminalLayoutState, TerminalViewAction } from './terminal-layout.js';
@@ -467,3 +468,15 @@ const unsubscribeLayout = pane.onLayout((state) => {
     .replaceAll('{{count}}', String(state.count));
 });
 window.addEventListener('pagehide', unsubscribeLayout, { once: true });
+
+const teamEditor = document.querySelector<HTMLElement>('#terminal-team');
+if (teamEditor) {
+  const teamRequest = async (request: TerminalNativeRequest) => {
+    const reply = await client.request(request);
+    return reply.status === 'configuration' ? { ...reply, status: 'ok' } : { status: reply.status };
+  };
+  mountTerminalTeamEditor(teamEditor, {
+    read: () => teamRequest({ version: 1, action: 'teamRead' }),
+    save: (input) => teamRequest({ version: 1, action: 'teamSave', input }),
+  });
+}

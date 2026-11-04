@@ -1,3 +1,4 @@
+import { mountTerminalTeamEditor } from './terminal-team-editor.js';
 import type {
   ManagedAgentsRequest,
   ManagedAgentsReply,
@@ -136,7 +137,9 @@ async function request(r: ManagedAgentsRequest) {
   if (r.action !== 'snapshot') {
     busy = true;
     status.textContent = status.dataset.working ?? '';
-    document.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.disabled = true));
+    document.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+      if (!b.closest('#terminal-team')) b.disabled = true;
+    });
   }
   try {
     const reply = await client.request(r);
@@ -152,7 +155,9 @@ async function request(r: ManagedAgentsRequest) {
       lifetime.textContent = lifetime.dataset.idle ?? '';
     } else if (!busy) {
       // No snapshot is not evidence of an empty pair. Revoke stale mutation controls.
-      document.querySelectorAll<HTMLButtonElement>('button').forEach((b) => (b.disabled = true));
+      document.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+        if (!b.closest('#terminal-team')) b.disabled = true;
+      });
       const lifetime = document.querySelector<HTMLElement>('#lifetime')!;
       lifetime.textContent = lifetime.dataset.uncertain ?? '';
     }
@@ -202,3 +207,12 @@ const timer = setInterval(() => {
   });
 }, 1000);
 window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
+
+const teamEditor = document.querySelector<HTMLElement>('#terminal-team');
+if (teamEditor)
+  mountTerminalTeamEditor(teamEditor, {
+    read: () => client.request({ version: 1, action: 'teamRead' }),
+    save: (input) => client.request({ version: 1, action: 'teamSave', input }),
+    review: (slot, expectedRevision) =>
+      request({ version: 1, action: 'teamRouting', slot, expectedRevision }),
+  });

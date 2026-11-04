@@ -17,6 +17,7 @@ const service = new DesktopManagedAgents(
   }),
   nativeCodexBackend(join(__dirname, 'codex-structured-host.cjs')),
   desktopAgentsAdmission(process.argv[5]!, [process.argv[2]!, process.argv[3]!]),
+  process.argv[5]!,
 );
 let busy = false;
 process.on('message', async (raw: unknown) => {
@@ -34,6 +35,15 @@ process.on('message', async (raw: unknown) => {
     switch (r.operation) {
       case 'snapshot':
         value = service.snapshot();
+        break;
+      case 'teamRead':
+        value = service.readTeam();
+        break;
+      case 'teamSave':
+        value = service.saveTeam(r.input);
+        break;
+      case 'prepareTeamRouting':
+        value = service.prepareTeamRouting(r.slot, r.expectedRevision);
         break;
       case 'prepareRetire':
         value = service.prepareRetire();

@@ -5,9 +5,23 @@ import {
   paneRoutingUpdateSchema,
 } from './pane-communication.js';
 
+import { terminalTeamSaveSchema, terminalTeamStateSchema } from './terminal-team.js';
+
 const slot = z.number().int().min(0).max(1);
 export const managedAgentsRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot'), version: z.literal(1) }),
+  z.strictObject({ action: z.literal('teamRead'), version: z.literal(1) }),
+  z.strictObject({
+    action: z.literal('teamSave'),
+    version: z.literal(1),
+    input: terminalTeamSaveSchema,
+  }),
+  z.strictObject({
+    action: z.literal('teamRouting'),
+    version: z.literal(1),
+    slot,
+    expectedRevision: z.number().int().nonnegative().safe(),
+  }),
   z.strictObject({ action: z.literal('retire'), version: z.literal(1) }),
   z.strictObject({
     action: z.literal('routing'),
@@ -86,6 +100,8 @@ export type ManagedAgentsSnapshot = z.infer<typeof managedAgentsSnapshotSchema>;
 export const managedAgentsReplySchema = z.strictObject({
   status: z.enum(['ok', 'cancelled', 'busy', 'denied', 'focus_required', 'unavailable']),
   snapshot: managedAgentsSnapshotSchema.optional(),
+  team: terminalTeamStateSchema.optional(),
+  terminalIds: z.array(z.uuid()).length(2).optional(),
   empty: z.boolean().optional(),
 });
 export type ManagedAgentsReply = z.infer<typeof managedAgentsReplySchema>;

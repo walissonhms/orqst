@@ -64,6 +64,7 @@ async function start() {
     translate,
     mcpEnabled ? core : undefined,
     core,
+    { ...core.teams, terminalIds: core.identities.map((identity) => identity.terminalId) },
   );
   const store = terminalLayoutStore(
     directory,

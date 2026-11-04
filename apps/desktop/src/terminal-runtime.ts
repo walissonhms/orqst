@@ -163,7 +163,9 @@ function bindRuntime(
     const parsedRequest = terminalNativeRequestSchema.safeParse(raw);
     if (!parsedRequest.success) return { status: 'denied' };
     if (
-      ['start', 'attach', 'input', 'paste', 'write', 'stop'].includes(parsedRequest.data.action) &&
+      ['start', 'attach', 'input', 'paste', 'write', 'stop', 'teamRead', 'teamSave'].includes(
+        parsedRequest.data.action,
+      ) &&
       !authorizedTerminalSender(
         event,
         window,

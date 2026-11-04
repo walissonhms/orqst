@@ -433,6 +433,12 @@ export async function createManagedTerminals(
               confirm: (_document, details) =>
                 confirmTerminalAction(dialog, window, translate, details),
             },
+            core
+              ? {
+                  ...core.teams,
+                  terminalIds: core.identities.map((identity) => identity.terminalId),
+                }
+              : undefined,
           );
           revoke = () => broker.revokeInput();
           return {

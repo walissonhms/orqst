@@ -71,6 +71,14 @@ export class TauriAgentsService {
     if (!message.focused) return reply({ status: 'focus_required' });
     this.busy = true;
     try {
+      if (request.action === 'teamRead' || request.action === 'teamSave') {
+        const value = await this.core.call({
+          operation: request.action,
+          ...(request.action === 'teamSave' ? { input: request.input } : {}),
+        });
+        reply(current() ? { status: 'ok', ...(value as object) } : { status: 'denied' });
+        return;
+      }
       let challenge: TerminalChallenge;
       let details: unknown;
       let task: ReturnType<DesktopManagedAgents['prepareTask']> | undefined;
@@ -83,11 +91,13 @@ export class TauriAgentsService {
         })) as ReturnType<DesktopManagedAgents['prepareStart']>;
         challenge = prepared.challenge;
         details = prepared.manifest;
-      } else if (request.action === 'routing') {
+      } else if (request.action === 'routing' || request.action === 'teamRouting') {
         routing = (await this.core.call({
-          operation: 'prepareRouting',
+          operation: request.action === 'teamRouting' ? 'prepareTeamRouting' : 'prepareRouting',
           slot: request.slot,
-          update: request.update,
+          ...(request.action === 'teamRouting'
+            ? { expectedRevision: request.expectedRevision }
+            : { update: request.update }),
         })) as ReturnType<DesktopManagedAgents['prepareRouting']>;
         challenge = routing.challenge;
         details = routing.plan;
@@ -148,7 +158,7 @@ export class TauriAgentsService {
       };
       if (request.action === 'start')
         await this.core.call({ operation: 'launch', slot: request.slot, proof });
-      else if (request.action === 'routing')
+      else if (request.action === 'routing' || request.action === 'teamRouting')
         await this.core.call({ operation: 'applyRouting', changeId: routing!.changeId, proof });
       else if (request.action === 'delegate')
         await this.core.call({

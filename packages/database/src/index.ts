@@ -25,6 +25,7 @@ import {
 import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
+import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
 import { openTerminalJournal } from './terminal-journal.js';
@@ -208,6 +209,10 @@ export class Store {
     );
   }
   /** Opt-in metadata only; never called by observer startup or exposed over HTTP. */
+  terminalTeams() {
+    return openTerminalTeams(this.db, (action) => this.transaction(action));
+  }
+
   terminalLayouts() {
     return openTerminalLayouts(this.db, (action) => this.transaction(action));
   }

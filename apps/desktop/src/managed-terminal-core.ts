@@ -1,3 +1,4 @@
+import { terminalTeamStateSchema, type TerminalTeamSave } from '@orqst/protocol';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
   terminalSlotLimit,
@@ -161,6 +162,11 @@ export async function connectManagedTerminalCore(
   );
   return {
     identities,
+    teams: {
+      read: async () => terminalTeamStateSchema.parse(await call({ kind: 'teamRead' })),
+      save: async (input: TerminalTeamSave) =>
+        terminalTeamStateSchema.parse(await call({ kind: 'teamSave', input })),
+    },
     layouts: {
       read: async () => {
         const value = await call({ kind: 'layoutRead' });

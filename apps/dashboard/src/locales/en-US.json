@@ -863,7 +863,8 @@
     "state_ready": "Ready",
     "state_busy": "Busy",
     "state_unavailable": "Unavailable",
-    "state_closed": "Closed"
+    "state_closed": "Closed",
+    "confirm_teamRouting": "Save this identity and directed communication permission? Handles are unique within the workspace. Self-send and permission cycles are refused. This does not start a task or grant provider permissions."
   },
   "studio": {
     "eyebrow": "LOCAL DEVELOPER WORKSPACE",
@@ -942,5 +943,25 @@
     "background": "Keep running when the main window closes (this run)",
     "lifetime": "Quit stops the owned Core; managed hosts require separate consent",
     "quit": "Quit ORQST and its owned Core"
+  },
+  "terminalTeam": {
+    "title": "Saved team configuration",
+    "help": "Saved configuration is a proposal. Loading restores no processes or active permissions. Save before reviewing each member against live identity and current native consent.",
+    "name": "Team",
+    "memberName": "Name",
+    "handle": "Handle",
+    "role": "Role",
+    "worker": "Worker",
+    "reviewer": "Reviewer",
+    "orchestrator": "Orchestrator",
+    "targets": "May propose sending to",
+    "save": "Save proposal",
+    "reload": "Load saved proposal",
+    "review": "Review this member’s saved policy",
+    "saved": "Proposal saved in SQLite. No permissions activated.",
+    "unavailable": "Configuration unavailable or changed. Preserve your edits and explicitly reload before saving again.",
+    "working": "Working…",
+    "defaultName": "Team",
+    "ptyHelp": "Shared proposal for names, handles, roles and permissions. Saving or loading does not change pane titles/layout, start processes or activate PTY/MCP communication. Route review belongs to the compatible structured client."
   }
 }

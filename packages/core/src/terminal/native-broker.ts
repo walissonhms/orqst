@@ -1,6 +1,11 @@
 // Native-client boundary; never exposed by the observer Bridge or dashboard startup.
 import { sign, type KeyObject } from 'node:crypto';
-import { terminalNativeRequestSchema, type TerminalNativeConfirmation } from '@orqst/protocol';
+import {
+  terminalNativeRequestSchema,
+  type TerminalTeamState,
+  type TerminalTeamSave,
+  type TerminalNativeConfirmation,
+} from '@orqst/protocol';
 import {
   terminalChallengeBytes,
   type TerminalAuthority,
@@ -15,7 +20,14 @@ export interface TerminalNativeHost<Document extends object> {
   /** Must present a native confirmation, Cancel by default. No renderer answer is accepted. */
   confirm(document: Document, details: TerminalConfirmation): Promise<boolean>;
 }
+export interface TerminalTeamBackend {
+  terminalIds: string[];
+  read(): Promise<TerminalTeamState>;
+  save(input: TerminalTeamSave): Promise<TerminalTeamState>;
+}
+
 export type TerminalNativeReply =
+  | { status: 'configuration'; team: TerminalTeamState; terminalIds: string[] }
   | { status: 'denied' | 'cancelled' | 'busy' }
   | {
       status: 'ok';
@@ -67,6 +79,7 @@ export class TerminalNativeBroker<Document extends object> {
     private readonly privateKey: KeyObject,
     private readonly document: Document,
     private readonly host: TerminalNativeHost<Document>,
+    private readonly team?: TerminalTeamBackend,
   ) {
     if (
       !authority.isEnrolled(clientId) ||
@@ -85,6 +98,16 @@ export class TerminalNativeBroker<Document extends object> {
     const request = parsed.data;
     const generation = this.generation;
     try {
+      if (request.action === 'teamRead' || request.action === 'teamSave') {
+        if (!this.team || !this.current(document, true)) return { status: 'denied' };
+        const team =
+          request.action === 'teamRead'
+            ? await this.team.read()
+            : await this.team.save(request.input);
+        if (generation !== this.generation || !this.current(document, true))
+          return { status: 'denied' };
+        return { status: 'configuration', team, terminalIds: [...this.team.terminalIds] };
+      }
       if (request.action === 'start') {
         const prepared = await this.supervisor.prepare(this.clientId, request.profileId);
         const view: View = { profile: prepared.profile };

@@ -6,6 +6,15 @@ import en from '../apps/dashboard/src/locales/en-US.json';
 import pt from '../apps/dashboard/src/locales/pt-BR.json';
 import { terminalScriptURL, terminalStyleURL } from '../apps/desktop/src/terminal-policy.js';
 
+function translateChrome(locale: typeof en | typeof pt, key: string) {
+  const [namespace, field] = key.split('.');
+  assert.ok(namespace === 'managedTerminal' || namespace === 'terminalTeam', key);
+  const values = locale[namespace];
+  const value = Reflect.get(values, field!);
+  assert.equal(typeof value, 'string', key);
+  return value as string;
+}
+
 const document = (extra: Partial<Parameters<typeof terminalDocument>[0]> = {}) =>
   terminalDocument({
     language: 'en-US',
@@ -18,12 +27,7 @@ const document = (extra: Partial<Parameters<typeof terminalDocument>[0]> = {}) =
     nativeAuthentication: true,
     scope: 'reuseScope',
     terminalId: 'synthetic-core-uuid',
-    translate: (key) => {
-      const value =
-        en.managedTerminal[key.slice('managedTerminal.'.length) as keyof typeof en.managedTerminal];
-      assert.equal(typeof value, 'string', key);
-      return value;
-    },
+    translate: (key) => translateChrome(en, key),
     ...extra,
   });
 
@@ -65,14 +69,7 @@ test('blocked and single-pane selections retain navigation without suggesting la
 
 test('every emitted native chrome key exists in both shipped locales', () => {
   for (const locale of [en, pt]) {
-    const translate = (key: string) => {
-      const value =
-        locale.managedTerminal[
-          key.slice('managedTerminal.'.length) as keyof typeof locale.managedTerminal
-        ];
-      assert.equal(typeof value, 'string', key);
-      return value;
-    };
+    const translate = (key: string) => translateChrome(locale, key);
     for (const scope of ['scope', 'reuseScope', 'claudeScope', 'opencodeScope'])
       document({ translate, scope });
   }

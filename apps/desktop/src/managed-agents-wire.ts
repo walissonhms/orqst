@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paneRoutingUpdateSchema } from '@orqst/protocol';
+import { paneRoutingUpdateSchema, terminalTeamSaveSchema } from '@orqst/protocol';
 const slot = z.number().int().min(0).max(1);
 const proof = z.strictObject({
   challengeId: z.uuid(),
@@ -7,6 +7,14 @@ const proof = z.strictObject({
 });
 export const agentsHostRequestSchema = z.discriminatedUnion('operation', [
   z.strictObject({ id: z.uuid(), operation: z.literal('snapshot') }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('teamRead') }),
+  z.strictObject({ id: z.uuid(), operation: z.literal('teamSave'), input: terminalTeamSaveSchema }),
+  z.strictObject({
+    id: z.uuid(),
+    operation: z.literal('prepareTeamRouting'),
+    slot,
+    expectedRevision: z.number().int().nonnegative().safe(),
+  }),
   z.strictObject({ id: z.uuid(), operation: z.literal('prepareRetire') }),
   z.strictObject({ id: z.uuid(), operation: z.literal('retire'), proof }),
   z.strictObject({

@@ -1,4 +1,5 @@
 import { terminalSlotLimit } from '@orqst/protocol';
+import { terminalTeamDatabase } from './team-database.js';
 import { terminalLayoutDatabase } from './layout-database.js';
 import { terminalIdentity } from './identity.js';
 // UI-independent owned Terminal component. The observer composition never imports this entry.
@@ -104,6 +105,12 @@ async function start() {
         process.argv[4]!,
         selection.map(({ config }) => terminalIdentity(config).terminalId),
       );
+    const teams = () =>
+      terminalTeamDatabase(
+        process.argv[4]!,
+        selection.map(({ config }) => terminalIdentity(config).terminalId),
+        terminalDigest(selection[0]!.config.project),
+      );
     const send = (value: object) => {
       if (process.connected)
         process.send!(value, (error) => {
@@ -130,6 +137,12 @@ async function start() {
       try {
         let value: unknown;
         switch (request.kind) {
+          case 'teamRead':
+            value = teams().read();
+            break;
+          case 'teamSave':
+            value = teams().save(request.input);
+            break;
           case 'layoutRead':
             value = layouts().read();
             break;

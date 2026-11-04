@@ -1,5 +1,6 @@
 // Explicit disposable packaging acceptance. Native focus/dialogs are simulated; no provider runs.
 import assert from 'node:assert/strict';
+import en from '../apps/dashboard/src/locales/en-US.json';
 import { spawn, execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
@@ -220,6 +221,21 @@ try {
   send({ kind: 'layout-open', slot: 0 });
   await expect.poll(() => layout.visible.includes(0)).toBe(true);
   await layoutWork;
+  const team = page.locator('#terminal-team');
+  await team.locator('..').locator('summary').click();
+  await team.locator('[data-action=reload]').click();
+  await expect(team.locator('fieldset')).toHaveCount(count);
+  await team.locator('[data-field=team-name]').fill('SYNTHETIC PTY team');
+  await team.locator('fieldset').nth(0).locator('[data-field=handle]').fill('pty-orchestrator');
+  await team.locator('fieldset').nth(0).locator('[data-field=role]').selectOption('orchestrator');
+  await team.locator('[data-action=save]').click();
+  await expect(team.locator('[data-team-status]')).toHaveText(en.terminalTeam.saved);
+  await team.locator('[data-field=team-name]').fill('SYNTHETIC unsaved');
+  await team.locator('[data-action=reload]').click();
+  await expect(team.locator('[data-field=team-name]')).toHaveValue('SYNTHETIC PTY team');
+  await expect(team.locator('[data-action=review]')).toHaveCount(0);
+  assert.equal(await page.locator('#status').getAttribute('data-instance-id'), ids[0]);
+  await team.locator('..').locator('summary').click();
   await page.locator('#maximize').click();
   await expect(page.locator('#restore')).toBeVisible();
   await expect.poll(() => layout.visible).toEqual([0]);
@@ -289,6 +305,16 @@ try {
   const layoutFile = join(fixture, 'admission', 'terminal-layouts', 'preferences.sqlite');
   const layoutDb = new DatabaseSync(layoutFile, { readOnly: true });
   try {
+    const savedTeam = layoutDb.prepare('SELECT revision, metadata FROM terminal_teams').get()!;
+    assert.equal(savedTeam.revision, 1);
+    const teamConfiguration = JSON.parse(String(savedTeam.metadata)) as {
+      name: string;
+      members: Array<{ role: string; handle: string }>;
+    };
+    assert.equal(teamConfiguration.name, 'SYNTHETIC PTY team');
+    assert.equal(teamConfiguration.members.length, count);
+    assert.equal(teamConfiguration.members[0]?.handle, 'pty-orchestrator');
+    assert.equal(teamConfiguration.members[0]?.role, 'orchestrator');
     const rows = layoutDb.prepare('SELECT metadata FROM terminal_layouts').all();
     assert.equal(rows.length, 1);
     const saved = terminalLayoutRecordSchema.parse(JSON.parse(String(rows[0]!.metadata)));
