@@ -53,6 +53,7 @@ export const tauriStudioSnapshotSchema = z.strictObject({
   canCreate: z.boolean(),
   canReview: z.boolean(),
   selectionLocked: z.boolean(),
+  liveEnrollment: z.boolean().optional(),
 });
 export type TauriStudioSnapshot = z.infer<typeof tauriStudioSnapshotSchema>;
 export const tauriStudioReplySchema = z.union([

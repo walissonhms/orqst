@@ -140,3 +140,17 @@ Security review: the new actions exist only on inherited trusted parent/Core IPC
 No renderer proof/path authority, public listener, observer migration, credential
 read, implicit process cleanup or grant renewal is added. See the
 [pinned reuse review](../research/terminal-live-enrollment.md).
+
+## Native host integration source — 2026-11-04
+
+The retained Tauri host now consumes this contract over its existing inherited
+pipe. A native-only enroll packet supplies the reviewed manifest and captured
+previous Feature layout; the renderer cannot supply either. The host derives
+workspace/Feature from preparation, uses the original epoch and inspected revision,
+and appends a broker/document only after confirmed ready. A separately correlated
+presentation acknowledgment precedes native addition-latch release. No new public
+API is mounted. See [native transport, checks and gaps](../development/terminal-native-enrollment.md).
+
+The Studio snapshot has optional boolean `liveEnrollment` view metadata (omitted
+by older clients). It disables the initial-only Advanced picker while allowing
+the normal selected CLI/model path. It carries no capacity, manifest or grant.

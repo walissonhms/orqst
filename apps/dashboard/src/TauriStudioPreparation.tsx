@@ -80,7 +80,10 @@ export function TauriStudioPreparation({
     setCatalog(undefined);
     setModelId('');
     void refresh();
+    const inspect = () => void refresh();
+    window.addEventListener('focus', inspect);
     return () => {
+      window.removeEventListener('focus', inspect);
       active.current = false;
       sequence.current++;
     };
@@ -200,12 +203,18 @@ export function TauriStudioPreparation({
       </div>
       <details className="studio-advanced">
         <summary>{t('studio.tauri.advanced')}</summary>
-        <p>{t('studio.tauri.advancedHelp')}</p>
+        <p>
+          {t(
+            snapshot?.liveEnrollment
+              ? 'studio.tauri.advancedInitialOnly'
+              : 'studio.tauri.advancedHelp',
+          )}
+        </p>
         <label>
           {t('studio.tauri.count')}
           <select
             aria-label={t('studio.tauri.count')}
-            disabled={disabled || !snapshot?.canCreate}
+            disabled={disabled || !snapshot?.canCreate || snapshot.liveEnrollment}
             value={count}
             onChange={(event) => setCount(Number(event.target.value))}
           >
@@ -219,7 +228,9 @@ export function TauriStudioPreparation({
         <div className="studio-actions">
           <button
             className="button"
-            disabled={disabled || !snapshot?.canCreate || provider === 'opencode'}
+            disabled={
+              disabled || !snapshot?.canCreate || snapshot.liveEnrollment || provider === 'opencode'
+            }
             onClick={() =>
               snapshot &&
               provider !== 'opencode' &&

@@ -939,12 +939,12 @@
       "state_unavailable": "Native preparation unavailable",
       "state_empty": "Ready to prepare",
       "state_prepared": "Files prepared; opening review pending",
-      "state_locked": "Selection locked for this launch",
+      "state_locked": "Further additions unavailable",
       "state_blocked": "Preparation needs attention",
       "next_unavailable": "Refresh preparation or use the native Prepare Tauri terminals menu.",
       "next_empty": "Choose CLI and model, then Open. No Finder picker is used in this flow.",
       "next_prepared": "{{count}} prepared files are kept. Continue their native opening review; creation is not repeated.",
-      "next_locked": "A selection has entered opening or is already open. Use its native terminal window. Fresh selection requires confirmed retirement and a later launch; uncertain effects stay reserved.",
+      "next_locked": "The Core is at capacity, a review is active, or an addition is incomplete or uncertain. Earlier terminal documents and processes remain available. Uncertain additions are never retried or adopted.",
       "next_blocked": "A creation attempt may have written files. Automatic creation retry is blocked. Preserve the files and inspect the native preparation result.",
       "step_prepare": "Prepare and review",
       "step_prepare_help": "Choose Codex or Claude Code and 1–8 terminals. Native pickers select the reviewed executable and an empty test folder. Review hashes and shared native identity.",
@@ -962,6 +962,7 @@
       "chooseModel": "Choose a model",
       "advanced": "Advanced · folder and executable",
       "advancedHelp": "Use the legacy native wizard only to explicitly choose another executable and an empty test folder. This path prepares files; startup remains separate.",
+      "advancedInitialOnly": "Manual folder/executable preparation is available for the initial selection. Add a terminal to this Core with the CLI and model picker above.",
       "choosePaths": "Choose folder and executable…",
       "catalog_ready": "The installed executable matches the reviewed version. Choose a model to continue.",
       "catalog_executable_not_found": "No installation matching the reviewed CLI binary was found. The CLI may be absent or its version/hash may be unsupported. Install the reviewed version or inspect the executable in Advanced.",
@@ -974,7 +975,7 @@
       "modelUnverified": "Login, model access and provider availability are checked by the native CLI when opened; no login or probe runs here.",
       "cliDefault": "CLI default",
       "defaultModel": "{{model}} (CLI default)",
-      "enrollmentLimit": "This increment opens one selected terminal per app launch. Adding another CLI/model while it is running is not implemented yet; existing terminals are preserved."
+      "enrollmentLimit": "Additional selected terminals join the same running Core. A rejected or uncertain addition preserves earlier terminals; an uncertain result blocks further additions."
     }
   },
   "tauriPreparation": {

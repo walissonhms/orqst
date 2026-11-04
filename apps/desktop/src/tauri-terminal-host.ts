@@ -5,12 +5,21 @@ import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
-import { interactiveProvider } from '../../../packages/core/src/terminal/interactive-profile.js';
+import {
+  readInteractiveTerminalConfig,
+  interactiveProvider,
+} from '../../../packages/core/src/terminal/interactive-profile.js';
 import { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { terminalDocument } from './terminal-document.js';
 import { terminalLayoutStore } from './terminal-layout-store.js';
+import { terminalEnrollmentFile } from '../../../packages/core/src/terminal/enrollment-files.js';
+import { appendTerminalLayout } from './terminal-layout-enrollment.js';
 import { TauriTerminalLayout } from './tauri-terminal-layout.js';
-import { featureNativeReplySchema, featureNativeEnvelopeSchema } from '@orqst/protocol';
+import {
+  featureNativeReplySchema,
+  featureNativeEnvelopeSchema,
+  terminalLayoutRecordSchema,
+} from '@orqst/protocol';
 import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 
@@ -40,7 +49,7 @@ async function start() {
     join(__dirname, 'managed-terminal-core.cjs'),
     keys.publicKey,
     directory,
-    files.length,
+    8, // Native-owned capacity, fixed for this Core lifetime; never renderer supplied.
   );
   const i18n = createInstance();
   activeCore = core;
@@ -70,7 +79,7 @@ async function start() {
     mcpEnabled ? core : undefined,
     core,
   );
-  const store = terminalLayoutStore(
+  let store = terminalLayoutStore(
     directory,
     core.identities.map((identity) => identity.terminalId),
     core.layouts,
@@ -92,10 +101,12 @@ async function start() {
   const features = new TauriFeatureService(
     core,
     layout,
-    store,
+    { load: () => store.load(), save: (state) => store.save(state) },
     selection[0]!.config.project,
     async () => {
-      await Promise.all(selection.map((_, slot) => service.receive({ kind: 'revoke', slot })));
+      await Promise.all(
+        core.identities.map((_, slot) => service.receive({ kind: 'revoke', slot })),
+      );
     },
     () => {},
   );
@@ -116,11 +127,7 @@ async function start() {
   const visualMessageSchema = z.discriminatedUnion('kind', [
     z.strictObject({
       kind: z.literal('layout-action'),
-      slot: z
-        .number()
-        .int()
-        .min(0)
-        .max(files.length - 1),
+      slot: z.number().int().min(0).max(7),
       action: z.unknown(),
     }),
     z.strictObject({ kind: z.literal('layout-suspend') }),
@@ -130,19 +137,11 @@ async function start() {
     }),
     z.strictObject({
       kind: z.literal('layout-focus'),
-      slot: z
-        .number()
-        .int()
-        .min(0)
-        .max(files.length - 1),
+      slot: z.number().int().min(0).max(7),
     }),
     z.strictObject({
       kind: z.literal('layout-open'),
-      slot: z
-        .number()
-        .int()
-        .min(0)
-        .max(files.length - 1),
+      slot: z.number().int().min(0).max(7),
     }),
     z.strictObject({
       kind: z.literal('layout-resize'),
@@ -150,6 +149,126 @@ async function start() {
       height: z.number().int().min(1).max(32768),
     }),
   ]);
+
+  let nativeGeneration = 0;
+  let enrollmentBusy = false;
+  const enrollmentOperations = new Set<string>();
+  const presentations = new Map<
+    string,
+    { slot: number; generation: number; presentation: number }
+  >();
+  const enrollmentMessage = z.strictObject({
+    kind: z.literal('enroll'),
+    id: z.uuid(),
+    epoch: z.uuid(),
+    generation: z.number().int().nonnegative().safe(),
+    manifestFile: z.string().min(1).max(2048),
+    previousLayout: terminalLayoutRecordSchema.nullable(),
+  });
+  const enrollmentPresent = z.strictObject({
+    kind: z.literal('enrollment-present'),
+    id: z.uuid(),
+    generation: z.number().int().nonnegative().safe(),
+  });
+  const paneDocument = (config: ReturnType<typeof readInteractiveTerminalConfig>, slot: number) => {
+    const providers = selection.map(({ config }) =>
+      translate(`shell.adapters.${interactiveProvider(config)}`),
+    );
+    return {
+      profileId: `${interactiveProvider(config)}-terminal-v1`,
+      title: `${slot + 1} · ${providers[slot]}`,
+      html: terminalDocument({
+        language,
+        slot,
+        providers,
+        provider: providers[slot]!,
+        project: config.project,
+        version: config.executableVersion,
+        startProfile: `${interactiveProvider(config)}-terminal-v1`,
+        operationalOpen: true,
+        nativeAuthentication: !!config.authentication,
+        scope: config.authentication ? 'reuseScope' : 'scope',
+        terminalId: core.identities[slot]!.terminalId,
+        translate,
+      })
+        .replaceAll('orqst-terminal://local/client.js', 'client.js')
+        .replaceAll('orqst-terminal://local/style.css', 'style.css')
+        .replace('<body>', '<body class="tauri-terminal">'),
+    };
+  };
+  async function enroll(message: z.infer<typeof enrollmentMessage>) {
+    const reply = (value: object) => {
+      if (!closed) send({ kind: 'enrollment-reply', id: message.id, ...value });
+    };
+    // A duplicate pending operation must never receive a misleading pre-effect refusal.
+    if (enrollmentOperations.has(message.id)) return;
+    if (enrollmentOperations.size >= 128) return reply({ status: 'rejected' });
+    enrollmentOperations.add(message.id);
+    if (enrollmentBusy || !service.beginMetadata()) return reply({ status: 'rejected' });
+    enrollmentBusy = true;
+    const presentation = layout.presentationRevision();
+    try {
+      if (message.epoch !== core.epoch || message.generation !== nativeGeneration)
+        return reply({ status: 'rejected' });
+      const config = readInteractiveTerminalConfig(message.manifestFile);
+      if (!config.preparation) return reply({ status: 'rejected' });
+      await layout.flush();
+      const inspection = await core.enrollmentInspect();
+      if (closed || presentation !== layout.presentationRevision())
+        return reply({ status: 'rejected' });
+      const receipt = await core.enroll(
+        {
+          version: 1,
+          epoch: core.epoch,
+          opId: message.id,
+          expectedRevision: inspection.revision,
+          workspaceId: config.preparation.workspaceId,
+          featureId: config.preparation.featureId,
+        },
+        message.manifestFile,
+      );
+      if (closed) return;
+      if (receipt.status !== 'ready' || !receipt.member)
+        return reply({ status: receipt.status, receipt });
+      if (
+        terminalEnrollmentFile(message.manifestFile, config).bindingDigest !==
+        receipt.member.bindingDigest
+      )
+        throw new Error('Enrollment document source changed');
+      const slot = receipt.member.slot;
+      service.append(slot, core.supervisors[slot]!);
+      layout.append(slot);
+      selection.push({ config, blocker: undefined });
+      if (receipt.featureId !== null && message.previousLayout) {
+        const feature = await core.features.read(receipt.featureId);
+        await core.features.saveLayout(
+          receipt.featureId,
+          appendTerminalLayout(message.previousLayout, feature.terminalIds),
+        );
+      }
+      const previous = layout.snapshot();
+      store = terminalLayoutStore(
+        directory!,
+        core.identities.map((i) => i.terminalId),
+        core.layouts,
+      );
+      // Preserve the unassigned layout under its expanded UUID selection.
+      if (receipt.featureId === null && previous.order.length === slot)
+        await store.save({
+          ...previous,
+          order: [...previous.order, slot],
+          shown: [...previous.shown, slot],
+        });
+      presentations.set(message.id, { slot, generation: message.generation, presentation });
+      reply({ status: 'ready', receipt, pane: paneDocument(config, slot) });
+    } catch {
+      // The new operation alone is uncertain. Never shut down/recreate the original Core.
+      reply({ status: 'uncertain' });
+    } finally {
+      enrollmentBusy = false;
+      service.endMetadata();
+    }
+  }
 
   let pending = Buffer.alloc(0);
   process.stdin.on('data', (chunk: Buffer) => {
@@ -162,6 +281,34 @@ async function start() {
       if (line === 'shutdown') return shutdown();
       try {
         const raw: unknown = JSON.parse(line);
+        const enrollment = enrollmentMessage.safeParse(raw);
+        if (enrollment.success) {
+          void enroll(enrollment.data);
+          continue;
+        }
+        const present = enrollmentPresent.safeParse(raw);
+        if (present.success) {
+          const accepted = presentations.get(present.data.id);
+          presentations.delete(present.data.id); // One shot, including a stale presentation.
+          const finish = (ready: boolean) =>
+            send({
+              kind: 'enrollment-presented',
+              id: present.data.id,
+              ready,
+            });
+          if (
+            accepted &&
+            accepted.generation === nativeGeneration &&
+            present.data.generation === nativeGeneration &&
+            service.beginMetadata()
+          )
+            void features
+              .enrolled(accepted.slot, accepted.presentation)
+              .then(finish, () => finish(false))
+              .finally(() => service.endMetadata());
+          else finish(false);
+          continue;
+        }
         const feature = featureNativeEnvelopeSchema.safeParse(raw);
         if (
           !feature.success &&
@@ -201,8 +348,10 @@ async function start() {
         const visual = visualMessageSchema.safeParse(raw);
         if (visual.success) {
           const message = visual.data;
-          if (message.kind === 'layout-generation') layout.setNativeGeneration(message.generation);
-          else if (message.kind === 'layout-action') layout.act(message.slot, message.action);
+          if (message.kind === 'layout-generation') {
+            nativeGeneration = Math.max(nativeGeneration, message.generation);
+            layout.setNativeGeneration(message.generation);
+          } else if (message.kind === 'layout-action') layout.act(message.slot, message.action);
           else if (message.kind === 'layout-open') layout.open(message.slot);
           else if (message.kind === 'layout-focus') layout.focus(message.slot);
           else if (message.kind === 'layout-suspend') layout.suspend();
@@ -225,6 +374,8 @@ async function start() {
   readySent = true;
   send({
     kind: 'ready',
+    epoch: core.epoch,
+    capacity: 8,
     layout: layout.snapshot(),
     title: translate('managedTerminal.title'),
     quitNotice: translate('managedTerminal.quitNotice'),

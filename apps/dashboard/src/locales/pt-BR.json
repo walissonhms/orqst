@@ -939,12 +939,12 @@
       "state_unavailable": "Preparação nativa indisponível",
       "state_empty": "Pronto para preparar",
       "state_prepared": "Arquivos preparados; revisão de abertura pendente",
-      "state_locked": "Seleção bloqueada nesta execução",
+      "state_locked": "Novas adições indisponíveis",
       "state_blocked": "Preparação precisa de atenção",
       "next_unavailable": "Atualize a preparação ou use o menu nativo Preparar terminais Tauri.",
       "next_empty": "Escolha CLI e modelo e clique em Abrir. Este fluxo não abre o Finder.",
       "next_prepared": "{{count}} arquivos preparados foram mantidos. Continue a revisão nativa de abertura; a criação não será repetida.",
-      "next_locked": "Uma seleção entrou na abertura ou já está aberta. Use sua janela nativa de terminais. Uma nova seleção exige encerramento confirmado e uma execução posterior; efeitos incertos continuam reservados.",
+      "next_locked": "O Core atingiu a capacidade, há uma revisão ativa ou uma adição incompleta ou incerta. Documentos e processos anteriores continuam disponíveis. Adições incertas nunca são repetidas ou adotadas.",
       "next_blocked": "Uma tentativa de criação pode ter gravado arquivos. A repetição automática está bloqueada. Preserve os arquivos e verifique o resultado da preparação nativa.",
       "step_prepare": "Preparar e revisar",
       "step_prepare_help": "Escolha Codex ou Claude Code e de 1 a 8 terminais. Os seletores nativos escolhem o executável revisado e uma pasta de teste vazia. Revise hashes e identidade nativa compartilhada.",
@@ -962,6 +962,7 @@
       "chooseModel": "Escolha um modelo",
       "advanced": "Avançado · pasta e executável",
       "advancedHelp": "Use o assistente nativo antigo apenas para escolher explicitamente outro executável e uma pasta de teste vazia. Este caminho prepara arquivos; a inicialização continua separada.",
+      "advancedInitialOnly": "A preparação manual de pasta/executável está disponível para a seleção inicial. Adicione um terminal a este Core pelo seletor de CLI e modelo acima.",
       "choosePaths": "Escolher pasta e executável…",
       "catalog_ready": "O executável instalado corresponde à versão revisada. Escolha um modelo para continuar.",
       "catalog_executable_not_found": "Nenhuma instalação corresponde ao binário de CLI revisado. O CLI pode estar ausente ou sua versão/hash não ser compatível. Instale a versão revisada ou confira o executável em Avançado.",
@@ -974,7 +975,7 @@
       "modelUnverified": "Login, acesso ao modelo e disponibilidade do provedor são verificados pelo CLI nativo ao abrir; nenhum login ou consulta ao provedor é executado aqui.",
       "cliDefault": "Padrão do CLI",
       "defaultModel": "{{model}} (padrão do CLI)",
-      "enrollmentLimit": "Esta etapa abre um terminal selecionado por inicialização do app. Adicionar outro CLI/modelo enquanto ele está aberto ainda não foi implementado; os terminais existentes são preservados."
+      "enrollmentLimit": "Novos terminais selecionados entram no mesmo Core em execução. Rejeição ou incerteza preserva os anteriores; resultado incerto bloqueia novas adições."
     }
   },
   "tauriPreparation": {
