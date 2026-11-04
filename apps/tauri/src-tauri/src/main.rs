@@ -4,6 +4,7 @@ mod agents;
 mod desktop;
 mod features;
 mod files;
+mod local_diagnostics;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -79,8 +80,15 @@ fn main() {
             unavailable::response(&request)
         })
         .setup(|app| {
+            if let Ok(parent) = app.path().app_data_dir() {
+                local_diagnostics::install(parent);
+            }
+            let diagnostic = local_diagnostics::Attempt::begin();
+            diagnostic.record(local_diagnostics::Event::NativeSetupStarted);
             desktop::install(app.handle())?;
+            diagnostic.record(local_diagnostics::Event::CoreStartRequested);
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle())).ok();
+            diagnostic.record(if origin.is_some() { local_diagnostics::Event::CoreReady } else { local_diagnostics::Event::CoreUnavailable });
             desktop::configure(app.handle(), origin.as_deref());
             let allowed_origin = origin.clone();
             let feature_client = origin.as_deref().map(|origin| features::configure(app.handle(), origin)).transpose()?.unwrap_or_default();
@@ -132,6 +140,7 @@ fn main() {
             // An observer startup failure exposes no preparation or additional hosts.
             // Existing owned-host state is never stopped by this unavailable view.
             if origin.is_none() {
+                diagnostic.record(local_diagnostics::Event::NativeSetupReady);
                 return Ok(());
             }
             // Explicit opt-in only. A terminal failure does not replace or stop observation.
@@ -145,6 +154,7 @@ fn main() {
                 eprintln!("ORQST managed agents startup refused.");
             }
             terminal_creation::install(app.handle())?;
+            diagnostic.record(local_diagnostics::Event::NativeSetupReady);
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -157,6 +167,7 @@ fn main() {
                 if terminal::confirm_exit(app) || agents::confirm_exit(app) { api.prevent_exit(); }
             }
             if let tauri::RunEvent::Exit = event {
+                local_diagnostics::Attempt::begin().record(local_diagnostics::Event::NativeExit);
                 desktop::stop(app);
                 agents::stop_and_wait(app);
                 terminal_creation::stop(app);
