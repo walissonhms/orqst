@@ -177,3 +177,4 @@ export * from './terminal-team.js';
 export * from './features.js';
 
 export * from './feature-native.js';
+export * from './terminal-preparation.js';
