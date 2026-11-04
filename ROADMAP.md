@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## Offline approval usability gate — 2026-11-04
+
+Source separates immutable full review from the short proof window and preserves
+the original click deadline through native transport and Core commit checks.
+The observed pre-approval failure left an unauthenticated partial inspection;
+operator continuation and renewed native acceptance remain separate gates.
+See [contract, clocks and preserved-state limits](docs/development/offline-recovery-consent-clock.md).
+
 ## Offline recovery review gate — 2026-11-04
 
 Offline transaction source, positive prepared-only validation, committed WAL

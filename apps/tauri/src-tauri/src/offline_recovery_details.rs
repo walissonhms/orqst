@@ -1,10 +1,13 @@
 //! Plain-text scrollable AppKit details, using the existing objc2 dependency only.
 //! All native objects/getters are confined to the UI thread; no signing or application lock.
+use super::guard::{clock, ClockSample};
 use objc2::encode::{Encode, Encoding};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyClass, AnyObject, ClassBuilder, NSObject, Sel};
 use objc2::{msg_send, sel, ClassType};
+use std::cell::Cell;
 use std::ffi::c_void;
+use std::rc::Rc;
 use std::sync::OnceLock;
 use std::time::Instant;
 
@@ -19,6 +22,16 @@ struct Size {
 unsafe impl Encode for Size {
     const ENCODING: Encoding = Encoding::Struct("CGSize", &[f64::ENCODING, f64::ENCODING]);
 }
+pub struct SheetReply {
+    pub response: isize,
+    pub clicked: ClockSample,
+}
+struct Completion {
+    reply: Cell<Option<(isize, ClockSample)>>,
+    // Retain all callback targets even if the nested loop returns before completion.
+    _alert: Retained<AnyObject>,
+    _delegate: Retained<AnyObject>,
+}
 static DELEGATE: OnceLock<&'static AnyClass> = OnceLock::new();
 
 extern "C-unwind" fn ended(
@@ -26,10 +39,17 @@ extern "C-unwind" fn ended(
     _: Sel,
     _: *mut AnyObject,
     response: isize,
-    _: *mut c_void,
+    context: *mut c_void,
 ) {
     // SAFETY: AppKit invokes this delegate on its UI thread for this modal sheet only.
     unsafe {
+        // Retain targets through stopModal, including a callback after the caller returned.
+        let completion = (!context.is_null()).then(|| Rc::from_raw(context.cast::<Completion>()));
+        if let Some(completion) = &completion {
+            completion
+                .reply
+                .set(clock().map(|clicked| (response, clicked)));
+        }
         if let Some(class) = AnyClass::get(c"NSApplication") {
             let app: *mut AnyObject = msg_send![class, sharedApplication];
             let _: () = msg_send![app, stopModalWithCode: response];
@@ -117,11 +137,86 @@ unsafe fn show(
     let alert_window: *mut AnyObject = msg_send![&*alert, window];
     let cell: *mut AnyObject = msg_send![cancel_button, cell];
     let _: () = msg_send![alert_window, setDefaultButtonCell: cell];
-    // Use the documented selector delegate rather than introducing a block ABI/dependency.
-    // NSAlert's completion stops its nested modal loop, matching the existing dialog backend.
-    let _: () = msg_send![&*alert, beginSheetModalForWindow: parent, modalDelegate: &*delegate, didEndSelector: sel!(alertDidEnd:returnCode:contextInfo:), contextInfo: std::ptr::null_mut::<c_void>()];
-    let response: isize = msg_send![&*alert, runModal];
-    Some(response == 1001) // NSAlertSecondButtonReturn: Back; never approval.
+    let reply = run_sheet(&alert, &delegate, parent)?;
+    Some(reply.response == 1001) // Back, never approval.
+}
+unsafe fn run_sheet(
+    alert: &Retained<AnyObject>,
+    delegate: &Retained<AnyObject>,
+    parent: *mut AnyObject,
+) -> Option<SheetReply> {
+    let completion = Rc::new(Completion {
+        reply: Cell::new(None),
+        _alert: alert.clone(),
+        _delegate: delegate.clone(),
+    });
+    // AppKit consumes this reference in ended. If completion is uncertain, retain it rather
+    // than freeing a context/delegate that a later native callback may still address.
+    let context = Rc::into_raw(completion.clone()).cast::<c_void>();
+    let _: () = msg_send![&**alert, beginSheetModalForWindow: parent, modalDelegate: &**delegate, didEndSelector: sel!(alertDidEnd:returnCode:contextInfo:), contextInfo: context];
+    let response: isize = msg_send![&**alert, runModal];
+    let (observed, clicked) = completion.reply.get()?;
+    if response != observed {
+        return None;
+    }
+    Some(SheetReply { response, clicked })
+}
+
+pub fn summary(
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    labels: [String; 5],
+    generation: u64,
+    deadline: Instant,
+) -> Option<SheetReply> {
+    let [title, message, cancel, second, third] = labels;
+    let native = app.clone();
+    let window = window.clone();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            if !super::current(&native, &window, generation, deadline)
+                || !window.is_focused().unwrap_or(false)
+            {
+                return None;
+            }
+            // SAFETY: all objects and the completion context remain on AppKit's UI thread.
+            unsafe {
+                let alert = object(c"NSAlert")?;
+                let delegate: *mut AnyObject = msg_send![delegate_class()?, new];
+                let delegate = Retained::from_raw(delegate)?;
+                let title = string(&title)?;
+                let message = string(&message)?;
+                let _: () = msg_send![&*alert, setMessageText: &*title];
+                let _: () = msg_send![&*alert, setInformativeText: &*message];
+                let cancel = string(&cancel)?;
+                let button: *mut AnyObject = msg_send![&*alert, addButtonWithTitle: &*cancel];
+                if button.is_null() {
+                    return None;
+                }
+                for label in [second, third] {
+                    let label = string(&label)?;
+                    let _: *mut AnyObject = msg_send![&*alert, addButtonWithTitle: &*label];
+                }
+                let escape = string("\u{1b}")?;
+                let _: () = msg_send![button, setKeyEquivalent: &*escape];
+                let alert_window: *mut AnyObject = msg_send![&*alert, window];
+                let cell: *mut AnyObject = msg_send![button, cell];
+                let _: () = msg_send![alert_window, setDefaultButtonCell: cell];
+                run_sheet(
+                    &alert,
+                    &delegate,
+                    window.ns_window().ok()?.cast::<AnyObject>(),
+                )
+            }
+        })();
+        if result.is_none() {
+            super::uncertain(&native);
+        }
+        let _ = sender.send(result);
+    })
+    .ok()?;
+    receiver.recv().ok()?
 }
 
 pub fn details(
@@ -150,8 +245,11 @@ pub fn details(
             }
             // SAFETY: owned Tauri window and retained AppKit objects remain on the UI thread
             // through the modal loop. Text is inserted with setString, never interpreted as HTML.
-            let available =
-                unsafe { show(&window, &detail, &title, &cancel, &back) }.unwrap_or(false);
+            let result = unsafe { show(&window, &detail, &title, &cancel, &back) };
+            if result.is_none() {
+                super::uncertain(&native);
+            }
+            let available = result.unwrap_or(false);
             let _ =
                 sender.send(available && super::current(&native, &window, generation, deadline));
         })
@@ -159,7 +257,7 @@ pub fn details(
     {
         return false;
     }
-    // The caller and helper independently enforce the original 30-second deadline.
+    // This is a pre-consent read bounded only by the original session deadline.
     // Wait for this sheet's completion even after expiry: never put a second modal above
     // an uncertain first sheet or claim that it/helper exited merely because a timer fired.
     receiver.recv().unwrap_or(false)

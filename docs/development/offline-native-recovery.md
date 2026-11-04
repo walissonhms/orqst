@@ -209,3 +209,27 @@ changed. The second source tag is
 `delivery/2026-11-04-offline-recovery-source-r2`; resources and native checks must
 be regenerated from that published freeze before packaging resumes. Node/Core
 sources and the 151 passing synthetic cases are unchanged by this native fix.
+
+## Native pre-approval usability blocker — 2026-11-04
+
+Human native acceptance confirmed installation of the independent anchor, then
+exposed pre-approval expiry while reading complete capture details. Back returned
+blocked/unconfirmed before Approve. No capture approval was observed and the
+original reservation marker was independently verified unchanged. A partial
+private inspection remained without authenticated capture evidence; it must be
+preserved, not treated as rollback or a safely retryable transaction.
+
+Permanent acceptance checklist for the corrected source:
+
+- [ ] Package the reviewed correction separately; do not overwrite an active Preview.
+- [ ] Reuse the installed format-1 anchor; never request installation or regeneration.
+- [ ] Preserve incomplete inspections; no adopt/delete/repair or automatic retry.
+- [ ] Validate 20–60 seconds of full native reading before explicit Approve.
+- [ ] Validate native callback/transport delay, Cancel, Back, focus/document/session
+      revocation and original 30-second post-click expiry before any commit.
+- [ ] Any later operation on real state requires its own operator authorization;
+      source/synthetic tests do not grant release, reboot, capture or helper adoption.
+
+See [the new private contract and clock boundary](offline-recovery-consent-clock.md).
+No renewed native acceptance, Cargo, application build or packaging occurred in
+this correction. The prior real anchor and partial capture are outside its worktree.

@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { terminalDirectory } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   administrativeRecoveryBytes,
+  administrativeIntentBytes,
+  administrativeIntentDigest,
+  administrativeRecoveryIntent,
+  type AdministrativeRecoveryIntent,
   OfflineReservationRecovery,
 } from '../../../packages/core/src/terminal/offline-recovery.js';
 import {
@@ -33,6 +37,13 @@ export class TauriOfflineRecovery {
   private action?: AdministrativeAction;
   private sequence = 0;
   private busy = false;
+  private reviewed?: {
+    intent: Readonly<AdministrativeRecoveryIntent>;
+    detail: string;
+    fingerprint: string;
+    binding: string;
+  };
+  private signed?: { challenge: string; binding: string; deadline: number };
   constructor(
     private readonly parent: string,
     private readonly pipe: AdministrativeReviewPipe,
@@ -60,9 +71,9 @@ export class TauriOfflineRecovery {
           throw new Error('Invalid anchor installation');
         await installAdministrativeAnchor(
           this.parent,
-          (detail) =>
-            this.pipe.review('install', detail, 'orqst.administrative-anchor-installation'),
+          (detail, binding) => this.pipe.review('install', detail, binding),
           this.pipe.current,
+          (challenge, binding, check) => this.pipe.authorize(binding, challenge, check),
         );
         if (!this.pipe.current())
           throw new Error('Administrative installation effects are unconfirmed');
@@ -74,7 +85,9 @@ export class TauriOfflineRecovery {
         this.recovery = new OfflineReservationRecovery(
           {
             publicKey: anchor.publicKey,
-            review: async (challenge, detail) => {
+            review: async (intent, detail, fingerprint) => {
+              this.reviewed = undefined;
+              this.signed = undefined;
               const action = this.action;
               const phase =
                 action === 'continueCapture'
@@ -82,20 +95,58 @@ export class TauriOfflineRecovery {
                   : action === 'continueRelease'
                     ? 'release'
                     : action;
-              if (!action || challenge.phase !== phase || !this.pipe.current()) return null;
+              if (!action || intent.phase !== phase || !this.pipe.current()) return false;
               assertAdministrativeAnchor(this.parent, anchor);
-              const binding = JSON.stringify(challenge);
-              // The complete review is generated from validated source by the frozen recovery service.
-              const reviewed = JSON.parse(detail) as { challenge?: unknown };
-              if (JSON.stringify(reviewed.challenge) !== binding)
-                throw new Error('Administrative review binding changed');
-              if (!(await this.pipe.review(action, detail, binding)) || !this.pipe.current())
-                return null;
-              assertAdministrativeAnchor(this.parent, anchor);
-              if (binding !== JSON.stringify(challenge)) return null;
-              return sign(null, administrativeRecoveryBytes(challenge), anchor.privateKey).toString(
-                'base64url',
+              if (administrativeIntentDigest(intent, detail) !== fingerprint)
+                throw new Error('Administrative intent binding changed');
+              const binding = JSON.stringify({ intent, fingerprint });
+              const displayed = JSON.stringify(
+                { intentFingerprint: fingerprint, review: JSON.parse(detail) as unknown },
+                null,
+                2,
               );
+              if (!(await this.pipe.review(action, displayed, binding)) || !this.pipe.current())
+                return false;
+              assertAdministrativeAnchor(this.parent, anchor);
+              this.reviewed = { intent, detail, fingerprint, binding };
+              return true;
+            },
+            sign: async (challenge) => {
+              const reviewed = this.reviewed;
+              this.reviewed = undefined; // No second signature or stale ACK renewal.
+              if (
+                !reviewed ||
+                challenge.version !== 2 ||
+                challenge.intentDigest !== reviewed.fingerprint ||
+                administrativeIntentBytes(administrativeRecoveryIntent(challenge)) !==
+                  administrativeIntentBytes(reviewed.intent) ||
+                administrativeIntentDigest(reviewed.intent, reviewed.detail) !==
+                  reviewed.fingerprint
+              )
+                return null;
+              const serialized = JSON.stringify(challenge);
+              const granted = await this.pipe.authorize(reviewed.binding, serialized);
+              if (granted === null || !this.pipe.current()) return null;
+              assertAdministrativeAnchor(this.parent, anchor);
+              const deadline = Math.min(challenge.expiresAt, granted);
+              this.signed = { challenge: serialized, binding: reviewed.binding, deadline };
+              return {
+                signature: sign(
+                  null,
+                  administrativeRecoveryBytes(challenge),
+                  anchor.privateKey,
+                ).toString('base64url'),
+                validUntil: deadline,
+              };
+            },
+            revalidate: async (challenge) => {
+              const signed = this.signed;
+              if (!signed || signed.challenge !== JSON.stringify(challenge)) return null;
+              const granted = await this.pipe.authorize(signed.binding, signed.challenge, true);
+              if (granted === null || !this.pipe.current()) return null;
+              assertAdministrativeAnchor(this.parent, anchor);
+              signed.deadline = Math.min(signed.deadline, granted);
+              return signed.deadline;
             },
           },
           {
@@ -143,6 +194,8 @@ export class TauriOfflineRecovery {
         throw new Error('Administrative phase effects are unconfirmed after pipe close');
       return outcome;
     } finally {
+      this.reviewed = undefined;
+      this.signed = undefined;
       this.action = undefined;
       this.busy = false;
     }

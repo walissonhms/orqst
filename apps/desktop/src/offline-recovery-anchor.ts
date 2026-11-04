@@ -90,8 +90,10 @@ export function loadAdministrativeAnchor(parent: string) {
 /** A failed/partial existing installation is preserved, never repaired, rotated or adopted. */
 export async function installAdministrativeAnchor(
   parent: string,
-  review: (detail: string) => Promise<boolean>,
+  review: (detail: string, binding: string) => Promise<boolean>,
   current: () => boolean,
+  authorize: (challenge: string, binding: string, check?: boolean) => Promise<number | null>,
+  now = () => performance.now(),
 ) {
   const paths = recoveryLocations(parent);
   try {
@@ -101,22 +103,49 @@ export async function installAdministrativeAnchor(
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const keys = generateKeyPairSync('ed25519');
-  const installation = installationSchema.parse({
+  const intent = Object.freeze({
     domain: 'orqst.administrative-anchor-installation',
     version: 1,
     id: randomUUID(),
     directory: paths.anchor,
     fingerprint: terminalDigest(keys.publicKey.export({ type: 'spki', format: 'der' })),
-    nonce: randomUUID(),
-    expiresAt: performance.now() + 30_000,
   });
+  const detail = JSON.stringify(intent, null, 2);
+  const fingerprint = terminalDigest(
+    JSON.stringify([
+      'orqst.administrative-anchor-intent',
+      1,
+      intent.domain,
+      intent.version,
+      intent.id,
+      intent.directory,
+      intent.fingerprint,
+      detail,
+    ]),
+  );
+  const binding = JSON.stringify({ intent, fingerprint });
   if (
     !current() ||
-    !(await review(JSON.stringify(installation, null, 2))) ||
-    !current() ||
-    performance.now() >= installation.expiresAt
+    !(await review(
+      JSON.stringify({ intentFingerprint: fingerprint, review: intent }, null, 2),
+      binding,
+    )) ||
+    !current()
   )
     throw new Error('Administrative anchor installation denied');
+  const installation = installationSchema.parse({
+    ...intent,
+    nonce: randomUUID(),
+    expiresAt: now() + 30_000,
+  });
+  const challenge = JSON.stringify(installation);
+  const granted = await authorize(challenge, binding);
+  let deadline = Math.min(
+    installation.expiresAt,
+    granted !== null && Number.isFinite(granted) ? granted : -Infinity,
+  );
+  if (!current() || now() >= deadline)
+    throw new Error('Administrative anchor installation denied/expired');
   const signature = sign(null, Buffer.from(JSON.stringify(installation)), keys.privateKey).toString(
     'base64url',
   );
@@ -124,6 +153,10 @@ export async function installAdministrativeAnchor(
   // Exclusive directory is part of the transaction: partial material must remain visible.
   mkdirSync(paths.anchor, { mode: 0o700 });
   syncRecoveryDirectory(paths.root);
+  const checked = await authorize(challenge, binding, true);
+  deadline = Math.min(deadline, checked !== null && Number.isFinite(checked) ? checked : -Infinity);
+  if (!current() || now() >= deadline)
+    throw new Error('Administrative anchor installation denied/expired');
   writeRecoveryFile(
     join(paths.anchor, 'identity.json'),
     JSON.stringify({

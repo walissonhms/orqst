@@ -33,6 +33,11 @@ import { managedOpenCodeConfigSchema } from '../packages/core/src/terminal/openc
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import {
   administrativeRecoveryBytes,
+  administrativeIntentDigest,
+  administrativeIntentBytes,
+  administrativeIntentSchema,
+  administrativeRecoveryIntent,
+  type AdministrativeRecoveryIntent,
   OfflineReservationRecovery,
   type AdministrativeRecoveryChallenge,
 } from '../packages/core/src/terminal/offline-recovery.js';
@@ -183,6 +188,9 @@ function fixture(wal = false, journalNow?: () => number) {
   const reviews: AdministrativeRecoveryChallenge[] = [];
   const fullReviews: string[] = [];
   let reviewHook: ((challenge: Readonly<AdministrativeRecoveryChallenge>) => void) | undefined;
+  let readingHook: (() => void) | undefined;
+  let nativeDeadline: number | undefined;
+  let revalidationHook: (() => number | null) | undefined;
   let cancel = false;
   let fault: string | undefined;
   let boundaryHook: ((stage: string) => void) | undefined;
@@ -212,14 +220,31 @@ function fixture(wal = false, journalNow?: () => number) {
   };
   const authority = {
     publicKey: keys.publicKey,
-    review: async (challenge: Readonly<AdministrativeRecoveryChallenge>, fullReview: string) => {
-      reviews.push({ ...challenge });
+    review: async (
+      intent: Readonly<AdministrativeRecoveryIntent>,
+      fullReview: string,
+      fingerprint: string,
+    ) => {
+      assert.equal(Object.isFrozen(intent), true);
+      assert.equal('nonce' in intent, false);
+      assert.equal('expiresAt' in intent, false);
+      assert.equal(administrativeIntentDigest(intent, fullReview), fingerprint);
       fullReviews.push(fullReview);
-      reviewHook?.(challenge);
-      return cancel
-        ? null
-        : sign(null, administrativeRecoveryBytes(challenge), keys.privateKey).toString('base64url');
+      readingHook?.();
+      nativeDeadline = clock + 30_000;
+      return !cancel;
     },
+    sign: async (challenge: Readonly<AdministrativeRecoveryChallenge>) => {
+      reviews.push({ ...challenge });
+      reviewHook?.(challenge);
+      return {
+        signature: sign(null, administrativeRecoveryBytes(challenge), keys.privateKey).toString(
+          'base64url',
+        ),
+        validUntil: nativeDeadline!,
+      };
+    },
+    revalidate: async () => (revalidationHook ? revalidationHook() : nativeDeadline!),
   };
   const recovery = new OfflineReservationRecovery(authority, dependencies);
   return {
@@ -244,6 +269,12 @@ function fixture(wal = false, journalNow?: () => number) {
     recovery,
     authority,
     dependencies,
+    reading: (hook: typeof readingHook) => {
+      readingHook = hook;
+    },
+    revalidation: (hook: typeof revalidationHook) => {
+      revalidationHook = hook;
+    },
     advance: (milliseconds: number) => {
       clock += milliseconds;
     },
@@ -489,12 +520,12 @@ test('untrusted administrative key and generic runtime-domain signatures cannot 
     f.changeBoot();
     const other = generateKeyPairSync('ed25519');
     const recovery = new OfflineReservationRecovery(
-      { publicKey: other.publicKey, review: async () => 'x'.repeat(86) },
+      { ...f.authority, publicKey: other.publicKey },
       f.dependencies,
     );
     await assert.rejects(recovery.release(capture.bundle), /Untrusted administrative/);
     const runtime = new OfflineReservationRecovery(
-      { publicKey: f.authority.publicKey, review: async () => 'true' },
+      { ...f.authority, sign: async () => ({ signature: 'true', validUntil: 30_001 }) },
       f.dependencies,
     );
     await assert.rejects(runtime.release(capture.bundle), /approval/);
@@ -1268,7 +1299,10 @@ test('a release signature cannot serve as explicit finalization consent', async 
     await f.recovery.release(capture.bundle);
     const archive = JSON.parse(readFileSync(join(capture.bundle, 'archive.json'), 'utf8'));
     const next = new OfflineReservationRecovery(
-      { publicKey: f.authority.publicKey, review: async () => archive.signature },
+      {
+        ...f.authority,
+        sign: async () => ({ signature: archive.signature as string, validUntil: 30_001 }),
+      },
       f.dependencies,
     );
     await assert.rejects(next.finalize(capture.bundle), /approval/);
@@ -1653,6 +1687,220 @@ test('changed exact helper lease immediately before namespace commit preserves o
     await assert.rejects(f.recovery.finalize(capture.bundle), /operation_lease_changed/);
     assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
     assert.ok(!existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)));
+  } finally {
+    f.close();
+  }
+});
+
+for (const reading of [20_000, 40_000, 60_000])
+  test(`SYNTHETIC ${reading}ms full intent reading precedes fresh proof without consuming its 30 seconds`, async () => {
+    const f = fixture();
+    try {
+      f.reading(() => f.advance(reading));
+      const capture = await f.capture();
+      const proof = f.reviews[0]!;
+      assert.equal(proof.expiresAt, reading + 30_001);
+      assert.equal(proof.version, 2);
+      assert.equal(
+        proof.intentDigest,
+        administrativeIntentDigest(administrativeRecoveryIntent(proof), f.fullReviews[0]!),
+      );
+      assert.ok(existsSync(join(capture.bundle, 'capture.json')));
+    } finally {
+      f.close();
+    }
+  });
+
+test('the explicit semantic tuple covers every strict intent field and exact complete review bytes', async () => {
+  const f = fixture();
+  try {
+    await f.capture();
+    const intent = administrativeRecoveryIntent(f.reviews[0]!);
+    const fullReview = f.fullReviews[0]!;
+    const tuple = JSON.parse(administrativeIntentBytes(intent)) as unknown[];
+    assert.deepEqual(tuple, [
+      'orqst.administrative-recovery-intent',
+      1,
+      intent.domain,
+      intent.version,
+      intent.operationId,
+      intent.phase,
+      intent.owner,
+      intent.epoch,
+      intent.beforeBoot,
+      intent.currentBoot,
+      intent.snapshotDigest,
+      intent.currentDigest,
+      intent.directory,
+      intent.bundle,
+    ]);
+    const fingerprint = administrativeIntentDigest(intent, fullReview);
+    for (const key of Object.keys(intent) as (keyof typeof intent)[]) {
+      const changed = { ...intent, [key]: key === 'version' ? 1 : `${intent[key]}-changed` };
+      if (administrativeIntentSchema.safeParse(changed).success)
+        assert.notEqual(administrativeIntentDigest(changed, fullReview), fingerprint);
+      else assert.throws(() => administrativeIntentDigest(changed, fullReview));
+    }
+    assert.throws(() =>
+      administrativeIntentBytes({ ...intent, nonce: randomUUID() } as typeof intent),
+    );
+    const review = JSON.parse(fullReview) as Record<string, unknown>;
+    assert.equal(
+      review.rawSnapshotDigest,
+      JSON.parse(
+        readFileSync(
+          join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!, 'snapshot.json'),
+          'utf8',
+        ),
+      ).rawDigest,
+    );
+    for (const key of [
+      'intent',
+      'transaction',
+      'files',
+      'metadataRecords',
+      'membership',
+      'journals',
+      'rawSnapshotDigest',
+    ]) {
+      assert.notEqual(
+        administrativeIntentDigest(intent, JSON.stringify({ ...review, [key]: 'SYNTHETIC-drift' })),
+        fingerprint,
+      );
+    }
+    assert.notEqual(administrativeIntentDigest(intent, fullReview + '\n'), fingerprint);
+  } finally {
+    f.close();
+  }
+});
+
+for (const invalid of [NaN, Infinity, -Infinity, null])
+  test(`non-finite or absent native revalidation deadline ${invalid} cannot publish a gate`, async () => {
+    const f = fixture();
+    try {
+      f.revalidation(() => invalid);
+      await assert.rejects(f.capture(), /expired/);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    } finally {
+      f.close();
+    }
+  });
+
+for (const stage of ['capture', 'abort', 'release'] as const)
+  test(`expiry during ${stage} durability preserves the original reservation and denies subsequent effects`, async () => {
+    const f = fixture();
+    try {
+      if (stage === 'capture') {
+        f.boundary((point) => {
+          if (point === 'capture') f.advance(30_000);
+        });
+        await assert.rejects(f.capture(), /expired/);
+        assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+      } else {
+        const capture = await f.capture();
+        if (stage === 'abort') {
+          let approved = false;
+          f.review(() => {
+            approved = true;
+          });
+          f.synced(() => {
+            if (approved) {
+              approved = false;
+              f.advance(30_000);
+            }
+          });
+          await assert.rejects(f.recovery.abort(capture.bundle), /expired/);
+        } else {
+          f.changeBoot();
+          f.boundary((point) => {
+            if (point === 'archive') f.advance(30_000);
+          });
+          await assert.rejects(f.recovery.release(capture.bundle), /expired/);
+          assert.equal(existsSync(join(capture.bundle, 'receipt.json')), false);
+        }
+        assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), true);
+      }
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    } finally {
+      f.close();
+    }
+  });
+
+test('format one historical capture remains verifiable while every new phase issues version two', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    const file = join(capture.bundle, 'capture.json');
+    const envelope = JSON.parse(readFileSync(file, 'utf8'));
+    const { intentDigest, ...fields } = envelope.challenge as AdministrativeRecoveryChallenge;
+    assert.ok(intentDigest);
+    const legacy: AdministrativeRecoveryChallenge = { ...fields, version: 1 };
+    const historical = await f.authority.sign(legacy); // Explicit synthetic old-format fixture only.
+    writeFileSync(
+      file,
+      JSON.stringify({ ...envelope, challenge: legacy, signature: historical.signature }),
+    );
+    f.changeBoot();
+    assert.equal((await f.recovery.release(capture.bundle)).status, 'release_prepared');
+    assert.equal(f.reviews.at(-1)!.version, 2);
+    assert.ok(f.reviews.at(-1)!.intentDigest);
+    assert.equal((await f.recovery.finalize(capture.bundle)).releaseCommitted, true);
+  } finally {
+    f.close();
+  }
+});
+
+test('an unauthenticated partial inspection cannot continue or abort and remains byte-for-byte preserved', async () => {
+  const f = fixture();
+  try {
+    f.cancel();
+    await assert.rejects(f.capture());
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    const paths = readdirSync(bundle).flatMap((name) =>
+      readdirSync(join(bundle, name)).map((file) => join(bundle, name, file)),
+    );
+    const before = paths.map((path) => ({
+      path,
+      bytes: readFileSync(path),
+      inode: lstatSync(path).ino,
+    }));
+    assert.equal(existsSync(join(bundle, 'capture.json')), false);
+    for (const operation of ['continueCapture', 'abort', 'release', 'finalize'] as const)
+      await assert.rejects(f.recovery[operation](bundle), /missing_or_partial_capture/);
+    for (const file of before) {
+      assert.deepEqual(readFileSync(file.path), file.bytes);
+      assert.equal(lstatSync(file.path).ino, file.inode);
+    }
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+test('a shorter native grant survives repeated checks and cumulative sign plus fsync delay cannot commit', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    let checks = 0;
+    f.review((challenge) => {
+      if (challenge.phase === 'finalize') f.advance(20_000);
+    });
+    // The first native remainder narrows the proof ceiling to 29 seconds from click.
+    // A later overly generous callback must never move that retained deadline forward.
+    f.revalidation(() => (++checks === 1 ? 29_001 : 100_000));
+    f.boundary((stage) => {
+      if (stage === 'before_marker') f.advance(9_000);
+    });
+    await assert.rejects(f.recovery.finalize(capture.bundle), /expired/);
+    assert.ok(checks >= 2);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.equal(
+      existsSync(join(f.directory, `recovered-${capture.operationId}.marker.json`)),
+      false,
+    );
   } finally {
     f.close();
   }

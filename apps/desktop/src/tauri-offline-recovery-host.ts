@@ -53,6 +53,7 @@ async function main() {
       if (buffer.length) return close(); // No pipelining or old ACK queued for a later phase.
       if (typeof value !== 'object' || value === null) return close();
       if ('kind' in value && value.kind === 'answer') return pipe.answer(value);
+      if ('kind' in value && value.kind === 'authorized') return pipe.authorized(value);
       if (busy) return close();
       busy = true;
       void recovery
@@ -86,7 +87,7 @@ async function main() {
   process.stdin.on('error', close);
   process.stdout.on('error', close);
   process.stdin.resume();
-  send({ kind: 'ready', session: pipe.session });
+  send({ kind: 'ready', version: 2, session: pipe.session });
 }
 void main().catch(() => {
   process.exitCode = 1;

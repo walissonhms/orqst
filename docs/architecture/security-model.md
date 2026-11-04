@@ -1561,3 +1561,15 @@ provisioned administrative signer, never a renderer or capture-supplied key.
 Native AppKit presentation/source/focus fences and private session/id/nonce/digest
 ACKs protect full review; private `0600`/`0700` canonical storage and durability
 checks reuse existing readers. See [the complete contract](../api/offline-native-recovery.md).
+
+## Offline native consent clock — 2026-11-04
+
+The private owned-pipe protocol is now version 2. Immutable full-review consent
+precedes one fresh signed intention-bound challenge. Per-request nonces prevent
+replayed revalidation ACKs; native continuous time and `Instant` begin in AppKit
+before waking the worker. Core carries the conservative minimum deadline through
+source/lease checks and effects, including the final marker rename. No renderer
+key, HTTP/WS recovery authority, dependency or new public surface is added.
+Existing format-1 anchors and incomplete captures are preserved. Synchronous
+helper syscalls are not instantly interruptible by pipe/focus notifications.
+See [clock, threat and preserved-state limits](../development/offline-recovery-consent-clock.md).

@@ -5,14 +5,13 @@ RPC, recovery CLI or production menu. Source entry:
 `packages/core/src/terminal/offline-recovery.ts`. Native integration must first
 review the [authority contract](../research/offline-reservation-recovery-contract.md).
 
-`OfflineReservationRecovery` accepts `NativeAdministrativeRecovery`: an explicitly
-administrative Ed25519 public trust anchor and `review(challenge, fullReview)`.
-The trusted native parent must display the **complete** supplied review, Cancel
-by default, and sign `administrativeRecoveryBytes(challenge)` only after approval.
-It must refuse incomplete/truncated review. Reviews larger than 64 KiB fail closed.
-Keys from runtime epochs, renderer fields, capture files or generic consent are
-not acceptable trust anchors. Trusted native persistence of this independent key
-across boots is an integration prerequisite; this increment does not provision it.
+`OfflineReservationRecovery` accepts an independent administrative Ed25519 anchor
+and separate native `review(intent, fullReview, fingerprint)`, `sign(challenge)`
+and `revalidate(challenge)` callbacks. Review cannot issue a proof. Core creates
+one fresh version-2 challenge after explicit consent, signs its canonical
+`intentDigest`, and carries the smaller native effective deadline through effects.
+Historical version-1 signatures remain verifiable. See the
+[intention, clock transfer and commit contract](../development/offline-recovery-consent-clock.md).
 
 | Method                                        | Result / effects                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

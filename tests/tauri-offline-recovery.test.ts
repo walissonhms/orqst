@@ -55,6 +55,21 @@ const ack = (frame: Record<string, unknown>, approved = true) => ({
   approved,
 });
 
+// Explicit synthetic native grants; this helper never runs against the native app.
+const fixtureGrant = async () => performance.now() + 30_000;
+function reply(pipe: AdministrativeReviewPipe, frame: Record<string, unknown>, approved = true) {
+  if (frame.kind === 'review') return pipe.answer(ack(frame, approved));
+  pipe.authorized({
+    kind: 'authorized',
+    session: frame.session,
+    id: frame.id,
+    nonce: frame.nonce,
+    digest: frame.digest,
+    requestNonce: frame.requestNonce,
+    proofDigest: frame.proofDigest,
+    remainingMs: 29_999,
+  });
+}
 test('native installation signs the exact public preview and durably reloads an independent Ed25519 identity', async (t) => {
   const parent = temporary(t);
   let preview = '';
@@ -66,10 +81,14 @@ test('native installation signs the exact public preview and durably reloads an 
       return true;
     },
     () => true,
+    fixtureGrant,
   );
   const paths = recoveryLocations(parent),
     anchor = loadAdministrativeAnchor(parent);
-  assert.deepEqual(anchor.installation, JSON.parse(preview));
+  const { nonce, expiresAt, ...installedIntent } = anchor.installation;
+  assert.ok(nonce);
+  assert.ok(expiresAt);
+  assert.deepEqual(installedIntent, JSON.parse(preview).review);
   assert.equal(anchor.privateKey.asymmetricKeyType, 'ed25519');
   assert.equal(lstatSync(paths.anchor).mode & 0o777, 0o700);
   assert.equal(lstatSync(join(paths.anchor, 'identity.json')).mode & 0o777, 0o600);
@@ -89,6 +108,7 @@ test('native installation signs the exact public preview and durably reloads an 
       parent,
       async () => assert.fail('must not rotate'),
       () => true,
+      fixtureGrant,
     ),
   );
 });
@@ -105,6 +125,7 @@ for (const condition of ['cancel', 'drop'] as const)
           return condition !== 'cancel';
         },
         () => current,
+        fixtureGrant,
       ),
     );
     assert.deepEqual(readdirSync(parent), []);
@@ -125,6 +146,7 @@ for (const condition of [
       parent,
       async () => true,
       () => true,
+      fixtureGrant,
     );
     const paths = recoveryLocations(parent),
       file = join(paths.anchor, 'identity.json');
@@ -154,6 +176,7 @@ for (const condition of [
         parent,
         async () => assert.fail('partial anchor must not repair'),
         () => true,
+        fixtureGrant,
       ),
     );
   });
@@ -205,12 +228,11 @@ test('Cancel, expiry and close never authorize the next phase; replay cannot sat
   pipe.answer(old);
   assert.equal(await pending, false);
   pending = pipe.review('abort', 'SYNTHETIC', 'two');
-  clock += 30_001;
+  clock += 300_001;
   pipe.answer(ack(frame));
   assert.equal(await pending, false);
-  pending = pipe.review('abort', 'SYNTHETIC', 'three');
+  assert.throws(() => pipe.review('abort', 'SYNTHETIC', 'three'));
   pipe.answer(old);
-  assert.equal(await pending, false);
   assert.equal(pipe.current(), false);
   const dropped = new AdministrativeReviewPipe(() => {});
   pending = dropped.review('capture', 'SYNTHETIC', 'four');
@@ -262,14 +284,14 @@ test('private action schema accepts no renderer authority, paths, key, boot or s
     );
 });
 
-test('the actual review timer denies at 30 seconds without extending to the session deadline', async (t) => {
+test('the pre-consent read timer is bounded to 300 seconds without granting signing authority', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let frame: Record<string, unknown> = {};
   const pipe = new AdministrativeReviewPipe((value) => {
     frame = value as Record<string, unknown>;
   });
   const pending = pipe.review('capture', 'SYNTHETIC', 'binding');
-  t.mock.timers.tick(30_000);
+  t.mock.timers.tick(300_000);
   assert.equal(await pending, false);
   pipe.answer(ack(frame));
   assert.equal(pipe.current(), false);
@@ -338,8 +360,8 @@ test('native composition installs separately, captures complete WAL with persist
   let approved = true;
   const pipe = new AdministrativeReviewPipe((value) => {
     const frame = value as Record<string, unknown>;
-    reviews.push(frame);
-    queueMicrotask(() => pipe.answer(ack(frame, approved)));
+    if (frame.kind === 'review') reviews.push(frame);
+    queueMicrotask(() => reply(pipe, frame, approved));
   });
   const service = new TauriOfflineRecovery(parent, pipe, {
     bootUUID: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -405,10 +427,12 @@ for (const interruption of [
       parent,
       async () => true,
       () => true,
+      fixtureGrant,
     );
     let frame: Record<string, unknown> = {};
     const pipe = new AdministrativeReviewPipe((value) => {
       frame = value as Record<string, unknown>;
+      if (frame.kind === 'authorize') queueMicrotask(() => reply(pipe, frame));
     });
 
     const service = new TauriOfflineRecovery(parent, pipe, {
@@ -469,9 +493,10 @@ test('pipe loss after signed capture starts preserves durable effects and report
     parent,
     async () => true,
     () => true,
+    fixtureGrant,
   );
   const pipe = new AdministrativeReviewPipe((value) =>
-    queueMicrotask(() => pipe.answer(ack(value as Record<string, unknown>))),
+    queueMicrotask(() => reply(pipe, value as Record<string, unknown>)),
   );
   const service = new TauriOfflineRecovery(parent, pipe, {
     bootUUID: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -487,13 +512,13 @@ test('pipe loss after signed capture starts preserves durable effects and report
       action: 'capture',
       bundle: null,
     }),
-    /unconfirmed/,
+    /expired|unconfirmed/,
   );
   const paths = recoveryLocations(parent),
     bundle = join(paths.bundles, readdirSync(paths.bundles)[0]!);
   assert.ok(existsSync(join(bundle, 'capture.json')));
   assert.ok(existsSync(join(bundle, 'snapshot.json')));
-  assert.ok(existsSync(join(paths.admission, 'offline-recovery.json')));
+  assert.equal(existsSync(join(paths.admission, 'offline-recovery.json')), false);
   assert.deepEqual(readFileSync(f.marker), f.before[0]);
   assert.equal(pipe.current(), false);
 });
@@ -506,9 +531,10 @@ for (const scenario of ['final-commit', 'future-controls', 'interrupted-commit']
       parent,
       async () => true,
       () => true,
+      fixtureGrant,
     );
     const first = new AdministrativeReviewPipe((value) =>
-      queueMicrotask(() => first.answer(ack(value as Record<string, unknown>))),
+      queueMicrotask(() => reply(first, value as Record<string, unknown>)),
     );
     const before = new TauriOfflineRecovery(parent, first, {
       bootUUID: () => 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -532,10 +558,10 @@ for (const scenario of ['final-commit', 'future-controls', 'interrupted-commit']
       committed = false;
     const next = new AdministrativeReviewPipe((value) => {
       const frame = value as Record<string, unknown>;
-      phases.push(String(frame.action));
+      if (frame.kind === 'review') phases.push(String(frame.action));
       if (frame.action === 'finalize' && !committed)
         assert.deepEqual(readFileSync(f.marker), f.before[0]);
-      queueMicrotask(() => next.answer(ack(frame)));
+      queueMicrotask(() => reply(next, frame));
     });
     const future = JSON.stringify({
       version: 1,
@@ -601,3 +627,232 @@ for (const scenario of ['final-commit', 'future-controls', 'interrupted-commit']
     );
     next.close();
   });
+
+const authorizationAck = (frame: Record<string, unknown>, remainingMs = 29_999) => ({
+  kind: 'authorized',
+  session: frame.session,
+  id: frame.id,
+  nonce: frame.nonce,
+  digest: frame.digest,
+  requestNonce: frame.requestNonce,
+  proofDigest: frame.proofDigest,
+  remainingMs,
+});
+
+test('reading for 60 seconds grants no proof until a new explicit approval and native authorization', async () => {
+  let clock = 0,
+    frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe(
+    (value) => {
+      frame = value as Record<string, unknown>;
+    },
+    () => clock,
+  );
+  const preview = pipe.review('capture', 'SYNTHETIC complete intent', 'SYNTHETIC binding');
+  clock = 60_000;
+  assert.equal(frame.kind, 'review');
+  pipe.answer(ack(frame));
+  assert.equal(await preview, true);
+  const signing = pipe.authorize('SYNTHETIC binding', 'SYNTHETIC fresh challenge');
+  pipe.authorized(authorizationAck(frame, 29_000));
+  assert.equal(await signing, 89_000);
+  pipe.close();
+});
+
+test('native remaining time is transferred from helper sendTime, never ACK receiptTime', async () => {
+  let clock = 0,
+    frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe(
+    (value) => {
+      frame = value as Record<string, unknown>;
+    },
+    () => clock,
+  );
+  const preview = pipe.review('capture', 'SYNTHETIC', 'binding');
+  pipe.answer(ack(frame));
+  await preview;
+  clock = 20_000;
+  const signing = pipe.authorize('binding', 'challenge');
+  clock = 21_000;
+  pipe.authorized(authorizationAck(frame, 9_000));
+  assert.equal(await signing, 29_000);
+  pipe.close();
+});
+
+test('each revalidation has a fresh request nonce and rejects replay from check one into check two', async () => {
+  let frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe((value) => {
+    frame = value as Record<string, unknown>;
+  });
+  const preview = pipe.review('finalize', 'SYNTHETIC', 'binding');
+  pipe.answer(ack(frame));
+  await preview;
+  let pending = pipe.authorize('binding', 'challenge');
+  pipe.authorized(authorizationAck(frame));
+  await pending;
+  pending = pipe.authorize('binding', 'challenge', true);
+  const first = frame,
+    replay = authorizationAck(frame);
+  pipe.authorized(replay);
+  await pending;
+  pending = pipe.authorize('binding', 'challenge', true);
+  assert.notEqual(frame.requestNonce, first.requestNonce);
+  assert.notEqual(frame.proofDigest, first.proofDigest);
+  pipe.authorized(replay);
+  assert.equal(await pending, null);
+  assert.equal(pipe.current(), false);
+});
+
+for (const field of [
+  'session',
+  'id',
+  'nonce',
+  'digest',
+  'requestNonce',
+  'proofDigest',
+  'extra',
+  'remainingMs',
+])
+  test(`a changed ${field} authorization ACK cannot authorize signing`, async () => {
+    let frame: Record<string, unknown> = {};
+    const pipe = new AdministrativeReviewPipe((value) => {
+      frame = value as Record<string, unknown>;
+    });
+    const preview = pipe.review('capture', 'SYNTHETIC', 'binding');
+    pipe.answer(ack(frame));
+    await preview;
+    const pending = pipe.authorize('binding', 'challenge');
+    pipe.authorized({
+      ...authorizationAck(frame),
+      [field]: field === 'remainingMs' ? 30_001 : randomUUID(),
+    });
+    assert.equal(await pending, null);
+    assert.equal(pipe.current(), false);
+  });
+
+test('Cancel, details Back without approval, repeated signing and EOF never create or renew proof permission', async () => {
+  let frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe((value) => {
+    frame = value as Record<string, unknown>;
+  });
+  let pending = pipe.review('capture', 'SYNTHETIC', 'binding');
+  // Back emits no ACK; neither it nor a pending preview authorizes a challenge.
+  assert.equal(frame.kind, 'review');
+  pipe.answer(ack(frame, false));
+  assert.equal(await pending, false);
+  assert.equal(await pipe.authorize('binding', 'challenge'), null);
+  const fresh = new AdministrativeReviewPipe((value) => {
+    frame = value as Record<string, unknown>;
+  });
+  pending = fresh.review('capture', 'SYNTHETIC', 'binding');
+  fresh.answer(ack(frame));
+  await pending;
+  let signing = fresh.authorize('binding', 'challenge');
+  fresh.authorized(authorizationAck(frame));
+  await signing;
+  assert.equal(await fresh.authorize('binding', 'challenge'), null);
+  const dropped = new AdministrativeReviewPipe((value) => {
+    frame = value as Record<string, unknown>;
+  });
+  pending = dropped.review('capture', 'SYNTHETIC', 'binding');
+  dropped.answer(ack(frame));
+  await pending;
+  signing = dropped.authorize('binding', 'challenge');
+  dropped.close();
+  assert.equal(await signing, null);
+});
+
+test('a later review cannot restart the original 300 second session budget', async () => {
+  let clock = 0,
+    frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe(
+    (value) => {
+      frame = value as Record<string, unknown>;
+    },
+    () => clock,
+  );
+  let preview = pipe.review('capture', 'SYNTHETIC', 'first');
+  clock = 290_000;
+  pipe.answer(ack(frame, false));
+  await preview;
+  preview = pipe.review('capture', 'SYNTHETIC', 'second');
+  clock = 300_000;
+  pipe.answer(ack(frame));
+  assert.equal(await preview, false);
+  pipe.close();
+});
+
+for (const reading of [20_000, 60_000])
+  test(`anchor installation keeps format one and starts its short proof after ${reading}ms reading`, async (t) => {
+    const parent = temporary(t);
+    let clock = 0,
+      preview = '',
+      signed = '';
+    const installed = await installAdministrativeAnchor(
+      parent,
+      async (detail) => {
+        preview = detail;
+        clock += reading;
+        return true;
+      },
+      () => true,
+      async (challenge) => {
+        signed = challenge;
+        return clock + 29_000;
+      },
+      () => clock,
+    );
+    assert.equal(installed.version, 1);
+    assert.equal(installed.expiresAt, reading + 30_000);
+    assert.equal('nonce' in JSON.parse(preview).review, false);
+    assert.deepEqual(JSON.parse(signed), installed);
+    assert.equal(loadAdministrativeAnchor(parent).installation.fingerprint, installed.fingerprint);
+  });
+
+for (const point of ['sign', 'commit'] as const)
+  test(`anchor ${point} expiry denies publication without regenerating or cleaning partial material`, async (t) => {
+    const parent = temporary(t);
+    let clock = 0,
+      calls = 0;
+    await assert.rejects(
+      installAdministrativeAnchor(
+        parent,
+        async () => true,
+        () => true,
+        async () => {
+          calls++;
+          if ((point === 'sign' && calls === 1) || (point === 'commit' && calls === 2))
+            clock += 30_000;
+          return 30_000;
+        },
+        () => clock,
+      ),
+      /expired/,
+    );
+    const anchor = recoveryLocations(parent).anchor;
+    assert.equal(existsSync(join(anchor, 'identity.json')), false);
+    assert.equal(existsSync(anchor), point === 'commit');
+  });
+
+test('authorization near session expiry carries the absolute session cap through synchronous helper work', async () => {
+  let clock = 0,
+    frame: Record<string, unknown> = {};
+  const pipe = new AdministrativeReviewPipe(
+    (value) => {
+      frame = value as Record<string, unknown>;
+    },
+    () => clock,
+  );
+  const preview = pipe.review('capture', 'SYNTHETIC', 'binding');
+  clock = 299_000;
+  pipe.answer(ack(frame));
+  await preview;
+  const signing = pipe.authorize('binding', 'challenge');
+  pipe.authorized(authorizationAck(frame, 29_000));
+  assert.equal(await signing, 300_000);
+  const checking = pipe.authorize('binding', 'challenge', true);
+  clock = 300_000;
+  pipe.authorized(authorizationAck(frame, 29_000));
+  assert.equal(await checking, null);
+  pipe.close();
+});

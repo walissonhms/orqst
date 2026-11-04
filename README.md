@@ -1,5 +1,14 @@
 # ORQST
 
+## Offline approval clock correction — source only — 2026-11-04
+
+Complete offline review now precedes fresh, one-use proof issuance. Native consent
+is bounded from the actual AppKit response by uptime and continuous clocks;
+transport and durability consume that same 30-second window. Existing format-1
+anchors and unauthenticated partial inspections remain preserved. Packaging and
+renewed native acceptance remain pending.
+See [contract, clocks and preserved-state limits](docs/development/offline-recovery-consent-clock.md).
+
 ## Offline recovery source integration — 2026-11-04
 
 The dedicated administrative entry and marker-preserving transaction are integrated,

@@ -5,14 +5,14 @@ mod details;
 #[path = "offline_recovery_guard.rs"]
 mod guard;
 use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
-use guard::Presentation;
+use guard::{clock, ClockSample, Consent, Presentation};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -96,6 +96,12 @@ pub fn invalidate(app: &tauri::AppHandle) {
     let mut state = state.0.lock().unwrap();
     state.presentation.invalidate();
 }
+#[cfg(target_os = "macos")]
+fn uncertain(app: &tauri::AppHandle) {
+    let state = app.state::<Recovery>();
+    let mut state = state.0.lock().unwrap();
+    state.presentation.latch_uncertain();
+}
 pub fn on_window_event(window: &tauri::Window, event: &WindowEvent) {
     if matches!(event, WindowEvent::Focused(true)) && window.label() != "offline-recovery"
         || matches!(
@@ -143,17 +149,11 @@ fn current(
 ) -> bool {
     // Never call window/document getters while holding State.
     let source = document(window);
-    source
-        && Instant::now() < deadline
-        && !crate::terminal::presentation_blocked(app)
-        && app
-            .state::<Recovery>()
-            .0
-            .lock()
-            .unwrap()
-            .presentation
-            .generation
-            == generation
+    let context =
+        source && Instant::now() < deadline && !crate::terminal::presentation_blocked(app);
+    let state = app.state::<Recovery>();
+    let state = state.0.lock().unwrap();
+    context && !state.presentation.uncertain && state.presentation.generation == generation
 }
 fn review(
     app: &tauri::AppHandle,
@@ -161,8 +161,8 @@ fn review(
     action: &str,
     detail: &str,
     generation: u64,
-) -> bool {
-    let deadline = Instant::now() + Duration::from_secs(30);
+    deadline: Instant,
+) -> Option<ClockSample> {
     let mut detailed = false;
     while current(app, window, generation, deadline) {
         {
@@ -174,31 +174,33 @@ fn review(
         let details = text("details");
         let cancel = text("cancel");
         let back = text("back");
-        let result = app
-            .dialog()
-            .message(text(action))
-            .title(text("title"))
-            .parent(window)
-            .buttons(MessageDialogButtons::YesNoCancelCustom(
+        #[cfg(target_os = "macos")]
+        let reply = details::summary(
+            app,
+            window,
+            [
+                text("title"),
+                text(action),
                 cancel.clone(),
-                if detailed {
-                    approve.clone()
-                } else {
-                    details.clone()
-                },
-                if detailed {
-                    details.clone()
-                } else {
-                    cancel.clone()
-                },
-            ))
-            .blocking_show_with_result();
+                if detailed { approve } else { details.clone() },
+                if detailed { details } else { cancel.clone() },
+            ],
+            generation,
+            deadline,
+        );
+        #[cfg(not(target_os = "macos"))]
+        let reply: Option<(isize, ClockSample)> = None;
+        #[cfg(target_os = "macos")]
+        let reply = reply.map(|reply| (reply.response, reply.clicked));
+        let Some((result, clicked)) = reply else {
+            break;
+        };
         let shown = app.state::<Recovery>().0.lock().unwrap().presentation.shown;
         if !shown || !current(app, window, generation, deadline) {
             break;
         }
         match result {
-            MessageDialogResult::Custom(choice) if detailed && choice == approve => {
+            1001 if detailed => {
                 let source_current = current(app, window, generation, deadline);
                 let state = app.state::<Recovery>();
                 let mut state = state.0.lock().unwrap();
@@ -206,9 +208,9 @@ fn review(
                     .presentation
                     .accepted(generation, source_current, detailed);
                 state.presentation.reviewing = false;
-                return accepted;
+                return accepted.then_some(clicked);
             }
-            MessageDialogResult::Custom(choice) if choice == details => {
+            1001 | 1002 if detailed || result == 1001 => {
                 app.state::<Recovery>()
                     .0
                     .lock()
@@ -244,7 +246,7 @@ fn review(
         .unwrap()
         .presentation
         .reviewing = false;
-    false
+    None
 }
 fn exact(value: &Value, keys: &[&str]) -> bool {
     value.as_object().is_some_and(|object| {
@@ -275,6 +277,100 @@ fn review_frame(value: &Value, session: &str, action: &str) -> bool {
         && value["detail"]
             .as_str()
             .is_some_and(|s| !s.is_empty() && s.len() <= 64 * 1024)
+}
+fn challenge_frame(frame: &Value, action: &str) -> bool {
+    if frame["check"].as_bool().is_none() {
+        return false;
+    }
+    let Some(binding) = frame["binding"]
+        .as_str()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    else {
+        return false;
+    };
+    let Some(challenge) = frame["challenge"]
+        .as_str()
+        .filter(|s| s.len() <= 16384)
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+    else {
+        return false;
+    };
+    if !exact(&binding, &["intent", "fingerprint"])
+        || !digest(&binding["fingerprint"])
+        || (if action == "install" {
+            challenge["version"] != 1
+        } else {
+            challenge["intentDigest"] != binding["fingerprint"] || challenge["version"] != 2
+        })
+        || !crate::features::uuid(&challenge["nonce"])
+        || !challenge["expiresAt"]
+            .as_f64()
+            .is_some_and(|n| n.is_finite() && n > 0.0)
+    {
+        return false;
+    }
+    let semantic: &[&str] = if action == "install" {
+        &["domain", "version", "id", "directory", "fingerprint"]
+    } else {
+        &[
+            "domain",
+            "version",
+            "operationId",
+            "phase",
+            "owner",
+            "epoch",
+            "beforeBoot",
+            "currentBoot",
+            "snapshotDigest",
+            "currentDigest",
+            "directory",
+            "bundle",
+        ]
+    };
+    let intent = &binding["intent"];
+    let path = |value: &Value| {
+        value
+            .as_str()
+            .is_some_and(|s| s.starts_with('/') && s.len() <= 2048)
+    };
+    if !path(&intent["directory"]) {
+        return false;
+    }
+    if action == "install" {
+        if intent["domain"] != "orqst.administrative-anchor-installation"
+            || !crate::features::uuid(&intent["id"])
+            || !digest(&intent["fingerprint"])
+        {
+            return false;
+        }
+    } else {
+        let phase = match action {
+            "continueCapture" => "capture",
+            "continueRelease" => "release",
+            other => other,
+        };
+        if intent["domain"] != "orqst.administrative-recovery"
+            || intent["phase"] != phase
+            || !path(&intent["bundle"])
+            || !digest(&intent["snapshotDigest"])
+            || !digest(&intent["currentDigest"])
+            || ["operationId", "owner", "epoch", "beforeBoot", "currentBoot"]
+                .iter()
+                .any(|key| !crate::features::uuid(&intent[*key]))
+        {
+            return false;
+        }
+    }
+    let mut keys = semantic.to_vec();
+    keys.extend(["nonce", "expiresAt"]);
+    if action != "install" {
+        keys.push("intentDigest");
+    }
+    exact(&challenge, &keys)
+        && exact(&binding["intent"], semantic)
+        && semantic
+            .iter()
+            .all(|key| challenge[*key] == binding["intent"][*key])
 }
 fn completion_outcome(value: &Value, action: &str) -> bool {
     if value["status"] == "blocked" {
@@ -335,7 +431,7 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         let (session, sequence, generation) = {
             let state = app.state::<Recovery>(); let mut state = state.0.lock().unwrap();
             let Some(session) = state.session.clone() else { return };
-            if state.pending.is_some() { return; }
+            if !state.presentation.can_request(state.pending.is_some()) { return; }
             state.sequence += 1;
             let sequence = state.sequence; let generation = state.presentation.generation;
             state.pending = Some((sequence, action.into(), generation));
@@ -365,8 +461,9 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         state.child = None;
         state.pending = None;
         state.presentation.reviewing = false;
+        let uncertain = state.presentation.uncertain;
         drop(state);
-        if document(&window) && window.is_focused().unwrap_or(false) {
+        if !uncertain && document(&window) && window.is_focused().unwrap_or(false) {
             native
                 .dialog()
                 .message(text("sessionEnded"))
@@ -395,6 +492,7 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
     let deadline = Instant::now() + Duration::from_secs(300);
     let mut bytes = 0usize;
     let mut reviews = HashSet::new();
+    let mut consent: Option<(Value, Consent)> = None;
     while Instant::now() < deadline {
         let event = tauri::async_runtime::block_on(async {
             tokio::time::timeout(
@@ -414,7 +512,8 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                     let state = app.state::<Recovery>();
                     let mut state = state.0.lock().unwrap();
                     if state.session.is_some()
-                        || !exact(&value, &["kind", "session"])
+                        || !exact(&value, &["kind", "version", "session"])
+                        || value["version"] != 2
                         || !crate::features::uuid(&value["session"])
                     {
                         break;
@@ -438,15 +537,80 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                     {
                         break;
                     }
-                    let approved = review(
+                    consent = None;
+                    let clicked = review(
                         app,
                         window,
                         &action,
                         value["detail"].as_str().unwrap(),
                         generation,
+                        deadline,
                     );
+                    if let Some(clicked) = clicked {
+                        consent = Some((
+                            value.clone(),
+                            Consent::new(value["binding"].as_str().unwrap().to_owned(), clicked),
+                        ));
+                    }
+                    let approved = clicked.is_some();
                     let answer = json!({"kind":"answer", "session":session, "id":value["id"],"nonce":value["nonce"],"digest":value["digest"],"approved":approved});
                     if let Some(child) = app.state::<Recovery>().0.lock().unwrap().child.as_mut() {
+                        child.write(format!("{answer}\n").as_bytes())?;
+                    }
+                } else if exact(
+                    &value,
+                    &[
+                        "kind",
+                        "session",
+                        "id",
+                        "nonce",
+                        "digest",
+                        "binding",
+                        "challenge",
+                        "proofDigest",
+                        "check",
+                        "requestNonce",
+                    ],
+                ) && value["kind"] == "authorize"
+                {
+                    let Some((reviewed, lease)) = consent.as_mut() else {
+                        break;
+                    };
+                    if reviews.len() >= 256
+                        || value["session"] != session
+                        || value["id"] != reviewed["id"]
+                        || value["nonce"] != reviewed["nonce"]
+                        || value["digest"] != reviewed["digest"]
+                        || value["binding"] != reviewed["binding"]
+                        || !digest(&value["proofDigest"])
+                        || !crate::features::uuid(&value["requestNonce"])
+                        || !reviews.insert(value["requestNonce"].as_str().unwrap().to_owned())
+                        || !challenge_frame(&value, &action)
+                    {
+                        break;
+                    }
+                    let binding = value["binding"].as_str().unwrap();
+                    let challenge = value["challenge"].as_str().unwrap();
+                    let check = value["check"].as_bool().unwrap();
+                    // Validate source/generation/focus before sampling the original click's remainder.
+                    let source = current(app, window, generation, deadline)
+                        && window.is_focused().unwrap_or(false);
+                    let remaining = if source && lease.allows(binding, challenge, check) {
+                        clock().and_then(|now| lease.authorize(binding, challenge, check, now))
+                    } else {
+                        None
+                    };
+                    let state = app.state::<Recovery>();
+                    let mut state = state.0.lock().unwrap();
+                    if state.presentation.uncertain
+                        || state.presentation.generation != generation
+                        || state.session.as_deref() != Some(session.as_str())
+                        || state.pending.as_ref() != Some(&(id, action.clone(), generation))
+                    {
+                        break;
+                    }
+                    let answer = json!({"kind":"authorized", "session":session, "id":value["id"], "nonce":value["nonce"], "digest":value["digest"], "requestNonce":value["requestNonce"], "proofDigest":value["proofDigest"], "remainingMs":remaining.unwrap_or(0)});
+                    if let Some(child) = state.child.as_mut() {
                         child.write(format!("{answer}\n").as_bytes())?;
                     }
                 } else if exact(&value, &["kind", "session", "id", "status", "outcome"])
@@ -455,6 +619,7 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                     && value["id"] == id
                     && completion_outcome(&value, &action)
                 {
+                    consent = None;
                     app.state::<Recovery>().0.lock().unwrap().pending = None;
                     diagnostic.record(
                         Stage::HelperComplete,
@@ -465,7 +630,7 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                         },
                         Effects::Possible,
                     );
-                    if document(window) {
+                    if current(app, window, generation, deadline) {
                         app.dialog()
                             .message(text(value["outcome"].as_str().unwrap()))
                             .title(text("title"))
@@ -529,5 +694,117 @@ mod tests {
         for method in ["HEAD", "OPTIONS", "get", "POST"] {
             assert_eq!(super::response(&request(method, super::URL)).status(), 404);
         }
+    }
+}
+
+#[cfg(test)]
+mod approval_wire_tests {
+    use super::{challenge_frame, review_frame};
+    use serde_json::{json, Value};
+    fn frame() -> Value {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        let intent = json!({"domain":"orqst.administrative-recovery","version":2,
+            "operationId":id,"phase":"capture","owner":id,"epoch":id,
+            "beforeBoot":id,"currentBoot":id,"snapshotDigest":"a".repeat(64),
+            "currentDigest":"b".repeat(64),"directory":"/SYNTHETIC","bundle":"/SYNTHETIC/bundle"});
+        let fingerprint = "c".repeat(64);
+        let mut challenge = intent.clone();
+        challenge["intentDigest"] = json!(fingerprint);
+        challenge["nonce"] = json!("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+        challenge["expiresAt"] = json!(30_001);
+        json!({"binding": json!({"intent":intent,"fingerprint":fingerprint}).to_string(),
+            "challenge":challenge.to_string(),"check":false})
+    }
+    #[test]
+    fn review_envelope_is_exact_session_action_and_bounded_detail() {
+        let id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        let mut request = json!({"kind":"review","session":id,"id":id,"nonce":id,
+            "digest":"a".repeat(64),"action":"capture","binding":"SYNTHETIC","detail":"SYNTHETIC"});
+        assert!(review_frame(&request, id, "capture"));
+        assert!(!review_frame(&request, id, "release"));
+        assert!(!review_frame(
+            &request,
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "capture"
+        ));
+        request["detail"] = json!("x".repeat(64 * 1024 + 1));
+        assert!(!review_frame(&request, id, "capture"));
+    }
+    #[test]
+    fn every_semantic_field_must_equal_the_reviewed_intent() {
+        let original = frame();
+        assert!(challenge_frame(&original, "capture"));
+        let challenge: Value =
+            serde_json::from_str(original["challenge"].as_str().unwrap()).unwrap();
+        for key in [
+            "domain",
+            "version",
+            "operationId",
+            "phase",
+            "owner",
+            "epoch",
+            "beforeBoot",
+            "currentBoot",
+            "snapshotDigest",
+            "currentDigest",
+            "directory",
+            "bundle",
+            "intentDigest",
+        ] {
+            let mut changed = challenge.clone();
+            changed[key] = json!("SYNTHETIC-drift");
+            let mut request = original.clone();
+            request["challenge"] = json!(changed.to_string());
+            assert!(!challenge_frame(&request, "capture"), "{key}");
+        }
+        assert!(!challenge_frame(&original, "release"));
+    }
+    #[test]
+    fn strict_shape_and_version_one_are_not_new_recovery_authority() {
+        let original = frame();
+        for key in ["extra", "nonce", "expiresAt", "intentDigest", "version"] {
+            let mut challenge: Value =
+                serde_json::from_str(original["challenge"].as_str().unwrap()).unwrap();
+            match key {
+                "extra" => challenge[key] = json!(true),
+                "version" => challenge[key] = json!(1),
+                _ => {
+                    challenge.as_object_mut().unwrap().remove(key);
+                }
+            }
+            let mut request = original.clone();
+            request["challenge"] = json!(challenge.to_string());
+            assert!(!challenge_frame(&request, "capture"), "{key}");
+        }
+    }
+    #[test]
+    fn native_value_comparison_does_not_depend_on_json_map_order() {
+        let original = frame();
+        let challenge: Value =
+            serde_json::from_str(original["challenge"].as_str().unwrap()).unwrap();
+        let mut pairs: Vec<_> = challenge.as_object().unwrap().iter().collect();
+        pairs.reverse();
+        let reversed = format!(
+            "{{{}}}",
+            pairs
+                .into_iter()
+                .map(|(key, value)| format!("{key:?}:{value}"))
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let mut request = original;
+        request["challenge"] = json!(reversed);
+        assert!(challenge_frame(&request, "capture"));
+    }
+    #[test]
+    fn installation_keeps_exact_format_one_semantics_without_legacy_deadline_review() {
+        let intent = json!({"domain":"orqst.administrative-anchor-installation","version":1,
+            "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","directory":"/SYNTHETIC","fingerprint":"a".repeat(64)});
+        let mut challenge = intent.clone();
+        challenge["nonce"] = json!("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+        challenge["expiresAt"] = json!(60_000);
+        let frame = json!({"binding":json!({"intent":intent,"fingerprint":"b".repeat(64)}).to_string(),"challenge":challenge.to_string(),"check":false});
+        assert!(challenge_frame(&frame, "install"));
+        assert!(!challenge_frame(&frame, "capture"));
     }
 }

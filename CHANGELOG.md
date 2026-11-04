@@ -1,5 +1,14 @@
 # Changelog
 
+## Offline approval clock correction — 2026-11-04
+
+- Review immutable complete intention before a fresh version-2 recovery proof.
+- Start native consent at the AppKit delegate response; include suspension and
+  consume transport/durability time without renewing the original 30 seconds.
+- Correlate every authorization/check with a fresh nonce and preserve historical
+  anchor/capture verification plus incomplete inspections.
+  See [contract, clocks and preserved-state limits](docs/development/offline-recovery-consent-clock.md).
+
 ## Offline final commit ordering — 2026-11-04
 
 - Keep the original reservation continuously present through archive/preparatory

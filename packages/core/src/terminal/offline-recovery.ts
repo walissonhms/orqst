@@ -34,7 +34,8 @@ export function nativeKernelBootUUID(): string {
 
 export interface AdministrativeRecoveryChallenge {
   domain: 'orqst.administrative-recovery';
-  version: 1;
+  version: 1 | 2;
+  intentDigest?: string;
   operationId: string;
   phase: 'capture' | 'release' | 'finalize' | 'abort';
   nonce: string;
@@ -48,7 +49,71 @@ export interface AdministrativeRecoveryChallenge {
   directory: string;
   bundle: string;
 }
+/** Explicit semantic projection: volatile nonce/expiry are created only after consent. */
+export const administrativeIntentSchema = z.strictObject({
+  domain: z.literal('orqst.administrative-recovery'),
+  version: z.literal(2),
+  operationId: z.uuid(),
+  phase: z.enum(['capture', 'release', 'finalize', 'abort']),
+  owner: z.uuid(),
+  epoch: z.uuid(),
+  beforeBoot: z.uuid(),
+  currentBoot: z.uuid(),
+  snapshotDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  currentDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  directory: z.string().startsWith('/'),
+  bundle: z.string().startsWith('/'),
+});
+export type AdministrativeRecoveryIntent = z.infer<typeof administrativeIntentSchema>;
+export function administrativeRecoveryIntent(
+  source: AdministrativeRecoveryChallenge | AdministrativeRecoveryIntent,
+): AdministrativeRecoveryIntent {
+  return administrativeIntentSchema.parse({
+    domain: source.domain,
+    version: 2,
+    operationId: source.operationId,
+    phase: source.phase,
+    owner: source.owner,
+    epoch: source.epoch,
+    beforeBoot: source.beforeBoot,
+    currentBoot: source.currentBoot,
+    snapshotDigest: source.snapshotDigest,
+    currentDigest: source.currentDigest,
+    directory: source.directory,
+    bundle: source.bundle,
+  });
+}
+export function administrativeIntentBytes(intent: AdministrativeRecoveryIntent): string {
+  administrativeIntentSchema.parse(intent);
+  return JSON.stringify([
+    'orqst.administrative-recovery-intent',
+    1,
+    intent.domain,
+    intent.version,
+    intent.operationId,
+    intent.phase,
+    intent.owner,
+    intent.epoch,
+    intent.beforeBoot,
+    intent.currentBoot,
+    intent.snapshotDigest,
+    intent.currentDigest,
+    intent.directory,
+    intent.bundle,
+  ]);
+}
+export function administrativeIntentDigest(
+  intent: AdministrativeRecoveryIntent,
+  fullReview: string,
+) {
+  return terminalDigest(JSON.stringify([administrativeIntentBytes(intent), fullReview]));
+}
 export function administrativeRecoveryBytes(challenge: AdministrativeRecoveryChallenge): Buffer {
+  if (
+    (challenge.version === 2 && !/^[a-f0-9]{64}$/.test(challenge.intentDigest ?? '')) ||
+    (challenge.version === 1 && challenge.intentDigest !== undefined)
+  )
+    throw new Error('Invalid administrative challenge version/binding');
   // Fixed tuple/order and independent domain; no TerminalAuthority runtime proof is accepted.
   return Buffer.from(
     JSON.stringify([
@@ -66,6 +131,7 @@ export function administrativeRecoveryBytes(challenge: AdministrativeRecoveryCha
       challenge.currentDigest,
       challenge.directory,
       challenge.bundle,
+      ...(challenge.version === 2 ? [challenge.intentDigest] : []),
     ]),
   );
 }
@@ -73,11 +139,18 @@ export function administrativeRecoveryBytes(challenge: AdministrativeRecoveryCha
 export interface NativeAdministrativeRecovery {
   /** Trusted native administrative trust anchor, independently persisted across boots. */
   readonly publicKey: KeyObject;
-  /** Native full review, Cancel by default. Returns signature only after explicit approval. */
+  /** Complete immutable intention; this callback cannot request or create a proof. */
   review(
-    challenge: Readonly<AdministrativeRecoveryChallenge>,
+    intent: Readonly<AdministrativeRecoveryIntent>,
     fullReview: string,
-  ): Promise<string | null>;
+    fingerprint: string,
+  ): Promise<boolean>;
+  /** One fresh challenge after explicit consent. Deadline is in this helper's monotonic clock. */
+  sign(
+    challenge: Readonly<AdministrativeRecoveryChallenge>,
+  ): Promise<{ signature: string; validUntil: number } | null>;
+  /** Recheck the same consent/context, never renew it or create a second signature. */
+  revalidate(challenge: Readonly<AdministrativeRecoveryChallenge>): Promise<number | null>;
 }
 interface RecoveryDependencies {
   // This injection is for fixtures/native composition, never an IPC request field.
@@ -105,7 +178,11 @@ const captureSchema = z.strictObject({
   snapshotHash: z.string().regex(/^[a-f0-9]{64}$/),
   challenge: z.strictObject({
     domain: z.literal('orqst.administrative-recovery'),
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
+    intentDigest: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/)
+      .optional(),
     operationId: z.uuid(),
     phase: z.literal('capture'),
     nonce: z.uuid(),
@@ -176,22 +253,25 @@ export class OfflineReservationRecovery {
     const scratch = mkdtempSync(join(bundle, 'inspection-'));
     return snapshotOfflineReservation(directory, scratch);
   }
-  private async approve(
-    challenge: AdministrativeRecoveryChallenge,
+  private async approve<P extends AdministrativeRecoveryIntent['phase']>(
+    proposal: AdministrativeRecoveryIntent & { phase: P },
     snapshot: OfflineReservationSnapshot,
     transaction?: Record<string, unknown>,
   ) {
+    const phase = proposal.phase;
+    const intent = Object.freeze(administrativeIntentSchema.parse(proposal));
     const fullReview = JSON.stringify(
       {
         action:
-          challenge.phase === 'abort'
+          intent.phase === 'abort'
             ? 'Abort administrative recovery controls only; preserve the original reservation and every journal; no release or launch'
-            : challenge.phase === 'finalize'
+            : intent.phase === 'finalize'
               ? 'Explicitly finalize verified administrative recovery; no launch or old process exit claim'
-              : challenge.phase === 'capture'
+              : intent.phase === 'capture'
                 ? 'Capture privately before a kernel reboot; retain admission'
                 : 'Prepare durable administrative evidence after external kernel fence; retain the original reservation until separate final commit approval; no process exit claim',
-        challenge,
+        intent,
+        rawSnapshotDigest: snapshot.rawDigest,
         transaction: transaction ?? null,
         files: snapshot.files.map((file) => ({
           path: file.path,
@@ -217,23 +297,51 @@ export class OfflineReservationRecovery {
     );
     if (Buffer.byteLength(fullReview) > 64 * 1024)
       throw new Error('Complete native recovery review exceeds budget');
-    const signature = await this.authority.review(Object.freeze(challenge), fullReview);
+    const fingerprint = administrativeIntentDigest(intent, fullReview);
+    if (!(await this.authority.review(intent, fullReview, fingerprint)))
+      throw new Error('Administrative recovery approval denied');
+    const challenge = Object.freeze({
+      ...intent,
+      phase,
+      nonce: randomUUID(),
+      expiresAt: this.dependencies.now() + 30_000,
+      intentDigest: fingerprint,
+    });
+    const proof = await this.authority.sign(challenge);
+    const deadline = Math.min(challenge.expiresAt, proof?.validUntil ?? -Infinity);
     if (
-      signature === null ||
-      typeof signature !== 'string' ||
-      !/^[A-Za-z0-9_-]{86}$/.test(signature) ||
-      challenge.expiresAt <= this.dependencies.now() ||
+      !proof ||
+      !Number.isFinite(proof.validUntil) ||
+      !Number.isFinite(deadline) ||
+      deadline <= this.dependencies.now() ||
+      administrativeIntentDigest(intent, fullReview) !== fingerprint ||
+      !/^[A-Za-z0-9_-]{86}$/.test(proof.signature) ||
       this.used.has(challenge.nonce) ||
       !verify(
         null,
         administrativeRecoveryBytes(challenge),
         this.authority.publicKey,
-        Buffer.from(signature, 'base64url'),
+        Buffer.from(proof.signature, 'base64url'),
       )
     )
       throw new Error('Administrative recovery approval denied/expired/consumed');
     this.used.add(challenge.nonce);
-    return signature;
+    return { challenge, signature: proof.signature, deadline };
+  }
+  private async revalidate(approval: {
+    challenge: AdministrativeRecoveryChallenge;
+    deadline: number;
+  }) {
+    const renewed = await this.authority.revalidate(approval.challenge);
+    approval.deadline = Math.min(
+      approval.deadline,
+      renewed !== null && Number.isFinite(renewed) ? renewed : -Infinity,
+    );
+    this.assertApproval(approval);
+  }
+  private assertApproval(approval: { deadline: number }) {
+    if (!Number.isFinite(approval.deadline) || approval.deadline <= this.dependencies.now())
+      throw new Error('Administrative recovery approval expired');
   }
 
   /** Trusted native paths only. Creates its own exclusive bundle and sticky gate. */
@@ -248,13 +356,11 @@ export class OfflineReservationRecovery {
     const snapshot = this.snapshot(directory, bundle);
     const bytes = JSON.stringify(snapshot);
     const marker = sourceJSON(join(directory, 'active-pair.json')) as { owner: string };
-    const challenge: AdministrativeRecoveryChallenge = {
+    const proposal: AdministrativeRecoveryIntent = {
       domain: 'orqst.administrative-recovery',
-      version: 1,
+      version: 2,
       operationId,
       phase: 'capture',
-      nonce: randomUUID(),
-      expiresAt: this.dependencies.now() + 30_000,
       owner: marker.owner,
       epoch: snapshot.journals[0]!.logical.epoch,
       beforeBoot,
@@ -264,7 +370,9 @@ export class OfflineReservationRecovery {
       directory,
       bundle,
     };
-    const signature = await this.approve(challenge, snapshot);
+    const approval = await this.approve(proposal, snapshot);
+    const { challenge, signature } = approval;
+    await this.revalidate(approval);
     const gate = {
       version: 1,
       operationId,
@@ -280,6 +388,7 @@ export class OfflineReservationRecovery {
       this.snapshot(directory, bundle).rawDigest !== snapshot.rawDigest
     )
       throw new OfflineRecoveryBlocked('capture_source_changed', bundle);
+    this.assertApproval(approval);
     this.write(join(bundle, 'snapshot.json'), bytes);
     const capture = {
       version: 1 as const,
@@ -288,8 +397,16 @@ export class OfflineReservationRecovery {
       challenge,
       signature,
     };
+    this.assertApproval(approval);
     this.write(join(bundle, 'capture.json'), JSON.stringify(capture));
     this.dependencies.boundary?.('capture');
+    await this.revalidate(approval);
+    if (
+      this.boot() !== beforeBoot ||
+      this.snapshot(directory, bundle).rawDigest !== snapshot.rawDigest
+    )
+      throw new OfflineRecoveryBlocked('capture_source_changed', bundle);
+    this.assertApproval(approval);
     this.write(join(directory, RECOVERY_GATE), JSON.stringify(gate));
     this.dependencies.boundary?.('gate');
     exact(join(directory, RECOVERY_GATE), gate);
@@ -425,14 +542,14 @@ export class OfflineReservationRecovery {
         this.present(join(before.directory, 'offline-recovery-operation.lock'))
       )
         throw new OfflineRecoveryBlocked('release_continuation_required', bundle);
-      const challenge = {
-        ...before,
-        nonce: randomUUID(),
-        expiresAt: this.dependencies.now() + 30_000,
+      const proposal: AdministrativeRecoveryIntent = {
+        ...administrativeRecoveryIntent(before),
         currentBoot: boot,
         currentDigest: current.rawDigest,
       };
-      const signature = await this.approve(challenge, current);
+      const approval = await this.approve(proposal, current);
+      const { challenge, signature } = approval;
+      await this.revalidate(approval);
       if (
         this.boot() !== boot ||
         this.snapshot(before.directory, bundle).rawDigest !== current.rawDigest
@@ -445,6 +562,13 @@ export class OfflineReservationRecovery {
       this.syncFile(join(bundle, 'snapshot.json'));
       this.syncFile(join(bundle, 'capture.json'));
       const gateFile = join(before.directory, RECOVERY_GATE);
+      await this.revalidate(approval);
+      if (
+        this.boot() !== boot ||
+        this.snapshot(before.directory, bundle).rawDigest !== current.rawDigest
+      )
+        throw new OfflineRecoveryBlocked('capture_source_changed', bundle);
+      this.assertApproval(approval);
       if (!this.present(gateFile)) this.write(gateFile, JSON.stringify(this.gate(capture)));
       exact(gateFile, this.gate(capture));
       this.syncFile(gateFile);
@@ -490,19 +614,19 @@ export class OfflineReservationRecovery {
             throw new OfflineRecoveryBlocked('abort_denied_after_release_effect', bundle);
       };
       assertCurrent();
-      const challenge: AdministrativeRecoveryChallenge = {
-        ...before,
+      const proposal: AdministrativeRecoveryIntent = {
+        ...administrativeRecoveryIntent(before),
         phase: 'abort',
-        nonce: randomUUID(),
-        expiresAt: this.dependencies.now() + 30_000,
         currentBoot: boot,
         currentDigest: current.rawDigest,
       };
-      const signature = await this.approve(challenge, current, {
+      const approval = await this.approve(proposal, current, {
         phase: 'pre_release_abort',
         gate: this.gate(capture),
         originalReservationPreserved: true,
       });
+      const { challenge, signature } = approval;
+      await this.revalidate(approval);
       assertCurrent();
       const abortedFile = join(bundle, 'aborted.json');
       const record = { operationId: capture.operationId, challenge, signature };
@@ -541,9 +665,12 @@ export class OfflineReservationRecovery {
         );
       }
       this.syncFile(abortedFile);
+      await this.revalidate(approval);
       assertCurrent();
+      this.assertApproval(approval);
       if (this.present(lockFile)) unlinkSync(lockFile);
       this.sync(directory);
+      this.assertApproval(approval);
       unlinkSync(gateFile);
       this.sync(directory);
       return {
@@ -575,6 +702,8 @@ export class OfflineReservationRecovery {
     const lease = this.lease(bundle, currentBoot, continuation, capture.operationId);
     let cleanLease = false;
     let effect = false;
+    let approvalWindow:
+      { challenge: AdministrativeRecoveryChallenge; deadline: number } | undefined;
     try {
       const attempt = join(bundle, 'release-attempt.json');
       // Historical control is not consent. No nonce or signature is recovered from it.
@@ -608,15 +737,15 @@ export class OfflineReservationRecovery {
         const current = this.snapshot(directory, bundle);
         if (current.logicalDigest !== before.currentDigest)
           throw new Error('Recovery logical snapshot changed');
-        const challenge: AdministrativeRecoveryChallenge = {
-          ...before,
+        const proposal: AdministrativeRecoveryIntent = {
+          ...administrativeRecoveryIntent(before),
           phase: 'release',
-          nonce: randomUUID(),
-          expiresAt: this.dependencies.now() + 30_000,
           currentBoot,
           currentDigest: current.rawDigest,
         };
-        const signature = await this.approve(challenge, current);
+        const approval = await this.approve(proposal, current);
+        const { challenge, signature } = approval;
+        await this.revalidate(approval);
         exact(join(directory, RECOVERY_GATE), this.gate(capture));
         exact(lock, lockValue);
         if (
@@ -635,6 +764,8 @@ export class OfflineReservationRecovery {
           challenge,
           signature,
         };
+        this.assertApproval(approval);
+        approvalWindow = approval;
         effect = true; // A partial archive is an uncertain effect and must never be overwritten.
         this.write(archivePath, JSON.stringify(record));
         this.dependencies.boundary?.('archive');
@@ -666,25 +797,30 @@ export class OfflineReservationRecovery {
             ? sourceJSON(join(bundle, 'receipt.json'))
             : null,
         };
-        const challenge: AdministrativeRecoveryChallenge = {
-          ...before,
+        const proposal: AdministrativeRecoveryIntent = {
+          ...administrativeRecoveryIntent(before),
           phase: 'release',
-          nonce: randomUUID(),
-          expiresAt: this.dependencies.now() + 30_000,
           currentBoot,
           currentDigest: terminalDigest(
             JSON.stringify({ rawDigest: archive.current.rawDigest, transaction }),
           ),
         };
-        const signature = await this.approve(challenge, archive.current, transaction);
+        const approval = await this.approve(proposal, archive.current, transaction);
+        const { challenge, signature } = approval;
+        await this.revalidate(approval);
         assertCurrent();
+        this.assertApproval(approval);
+        approvalWindow = approval;
         this.write(
           join(bundle, `release-continuation-${challenge.nonce}.json`),
           JSON.stringify({ challenge, signature, transaction }),
         );
       }
       this.syncFile(archivePath);
+      if (!approvalWindow) throw new Error('Fresh release approval required');
+      await this.revalidate(approvalWindow);
       assertCurrent();
+      this.assertApproval(approvalWindow);
       const prepared = {
         version: 1,
         operationId: capture.operationId,
@@ -698,6 +834,7 @@ export class OfflineReservationRecovery {
         currentBoot: archive.challenge.currentBoot,
       };
       const preparedFile = join(bundle, 'receipt-prepared.json');
+      this.assertApproval(approvalWindow);
       if (!this.present(preparedFile)) this.write(preparedFile, JSON.stringify(prepared));
       exact(preparedFile, prepared);
       this.syncFile(preparedFile);
@@ -711,11 +848,13 @@ export class OfflineReservationRecovery {
         sourceMarkerIdentity: marker.identity,
       };
       const receiptFile = join(bundle, 'receipt.json');
+      this.assertApproval(approvalWindow);
       if (!this.present(receiptFile)) this.write(receiptFile, JSON.stringify(receipt));
       exact(receiptFile, receipt);
       this.syncFile(receiptFile);
       this.dependencies.boundary?.('receipt');
       assertCurrent();
+      this.assertApproval(approvalWindow);
       cleanLease = true;
       return { ...receipt, bundle, admissionBlocked: true as const };
     } catch (error) {
@@ -966,15 +1105,13 @@ export class OfflineReservationRecovery {
         };
       }
       if (!heldBefore) assertPrepared();
-      const challenge: AdministrativeRecoveryChallenge & { phase: 'finalize' } = {
-        ...before,
+      const proposal: AdministrativeRecoveryIntent & { phase: 'finalize' } = {
+        ...administrativeRecoveryIntent(before),
         phase: 'finalize',
-        nonce: randomUUID(),
-        expiresAt: this.dependencies.now() + 30_000,
         currentBoot,
         currentDigest: terminalDigest(JSON.stringify(plan)),
       };
-      const signature = await this.approve(challenge, archive.current, {
+      const approval = await this.approve(proposal, archive.current, {
         phase: heldBefore
           ? 'namespace_commit_observed_cleanup_only'
           : 'final_commit_original_marker_retained',
@@ -983,16 +1120,19 @@ export class OfflineReservationRecovery {
         heldMarker: heldBefore ? this.observedHeldMarker(marker, heldPath) : null,
         actionAfterCommit: 'Never touch active-pair.json or revalidate future owner activity',
       });
+      const { challenge, signature } = approval;
+      await this.revalidate(approval);
       if (this.boot() !== currentBoot) throw new Error('Recovery kernel boot changed');
       if (!heldBefore) assertPrepared();
-      const approval = { plan, challenge, signature };
+      this.assertApproval(approval);
+      const signedPlan = { plan, challenge, signature };
       this.write(
         join(bundle, `finalization-approval-${challenge.nonce}.json`),
-        JSON.stringify(approval),
+        JSON.stringify(signedPlan),
       );
       if (!intent) {
-        this.write(intentFile, JSON.stringify(approval));
-        intent = approval;
+        this.write(intentFile, JSON.stringify(signedPlan));
+        intent = signedPlan;
       }
       if (!intent) throw new Error('Durable commit intent unavailable');
       // Every preparatory record is explicitly durable before the only marker-absent point.
@@ -1004,6 +1144,7 @@ export class OfflineReservationRecovery {
         this.dependencies.boundary?.('commit_prepared');
         assertPrepared();
         this.dependencies.boundary?.('before_marker');
+        await this.revalidate(approval);
         assertPrepared();
         const currentLease = readRecoveryFile(lease.file);
         if (
@@ -1012,7 +1153,7 @@ export class OfflineReservationRecovery {
         )
           throw new OfflineRecoveryBlocked('operation_lease_changed', bundle);
         // Durability/source checks may outlast consent. Never extend or reuse its deadline.
-        if (challenge.expiresAt <= this.dependencies.now())
+        if (!Number.isFinite(approval.deadline) || approval.deadline <= this.dependencies.now())
           throw new OfflineRecoveryBlocked('final_commit_approval_expired', bundle);
         namespaceAttempted = true;
         // Protocol exclusion is marker-presence + legacy claim(wx), not an invented multi-file CAS.
@@ -1056,6 +1197,10 @@ export class OfflineReservationRecovery {
           continue;
         }
         if (JSON.stringify(current) !== JSON.stringify(control)) {
+          changedControls = true;
+          continue;
+        }
+        if (!Number.isFinite(approval.deadline) || this.dependencies.now() >= approval.deadline) {
           changedControls = true;
           continue;
         }
