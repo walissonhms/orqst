@@ -5,6 +5,7 @@ import {
   chmodSync,
   existsSync,
   fsyncSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -40,7 +41,7 @@ import {
   snapshotOfflineReservation,
 } from '../packages/core/src/terminal/offline-recovery-files.js';
 
-function fixture(wal = false) {
+function fixture(wal = false, journalNow?: () => number) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
   const directory = join(root, 'preferences');
   const recoveryRoot = join(root, 'captures');
@@ -168,6 +169,7 @@ function fixture(wal = false) {
       },
       epoch,
       false,
+      journalNow,
     );
     return { file, db, journal };
   });
@@ -185,12 +187,19 @@ function fixture(wal = false) {
   let fault: string | undefined;
   let syncCount = 0;
   let failSync = -1;
+  let failSyncFile: string | undefined;
   let clock = 1;
   const dependencies = {
     bootUUID: () => boot,
     now: () => clock,
     sync: (fd: number) => {
-      if (++syncCount === failSync) throw new Error('SYNTHETIC fsync failure');
+      if (
+        ++syncCount === failSync ||
+        (failSyncFile &&
+          existsSync(failSyncFile) &&
+          fstatSync(fd).ino === lstatSync(failSyncFile).ino)
+      )
+        throw new Error('SYNTHETIC fsync failure');
       fsyncSync(fd);
     },
     boundary: (stage: string) => {
@@ -247,6 +256,18 @@ function fixture(wal = false) {
     cancel: () => {
       cancel = true;
     },
+    allow: () => {
+      cancel = false;
+      reviewHook = undefined;
+    },
+    failFileSync: (file: string) => {
+      failSyncFile = file;
+    },
+    clearFault: () => {
+      failSyncFile = undefined;
+      fault = undefined;
+      failSync = -1;
+    },
     fault: (stage: string) => {
       fault = stage;
     },
@@ -287,13 +308,15 @@ test('different kernel boot + full prepared OpenCode/zero-attempt Codex archives
       assert.deepEqual(readFileSync(file), before[slot]![0]);
       assert.deepEqual(readFileSync(`${file}-wal`), before[slot]![1]);
     }
-    assert.equal(next.finalize(capture.bundle).status, 'finalized');
+    assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
     assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
-    assert.equal(f.reviews.length, 2);
+    assert.equal(f.reviews.length, 3);
     assert.match(f.fullReviews[1]!, /prepared/);
     assert.ok(f.fullReviews[1]!.includes(f.receiptFile));
+    assert.match(f.fullReviews[2]!, /heldMarker/);
+    assert.match(f.fullReviews[2]!, /released_admission_blocked/);
     await assert.rejects(next.release(capture.bundle));
-    assert.throws(() => next.finalize(capture.bundle));
+    await assert.rejects(next.finalize(capture.bundle));
   } finally {
     f.close();
   }
@@ -430,7 +453,7 @@ for (const stage of [
         } else assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
         await assert.rejects(f.recovery.release(capture.bundle)); // no retry after uncertain effects
       }
-      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), stage !== 'capture');
     } finally {
       f.close();
     }
@@ -572,13 +595,13 @@ test('full source directory membership detects a lifecycle receipt instead of tr
 });
 
 for (const syncNumber of [2, 3, 4, 5, 6, 7])
-  test(`capture fsync syscall failure ${syncNumber} keeps original marker and sticky gate`, async () => {
+  test(`capture fsync syscall failure ${syncNumber} keeps original reservation before publishing any incomplete capture`, async () => {
     const f = fixture();
     try {
       f.failSyncAt(syncNumber);
       await assert.rejects(f.capture(), /fsync failure/);
       assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
-      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), syncNumber >= 6);
       assert.throws(() => desktopAgentsAdmission(f.directory));
     } finally {
       f.close();
@@ -586,7 +609,7 @@ for (const syncNumber of [2, 3, 4, 5, 6, 7])
   });
 
 for (const syncNumber of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-  test(`release fsync syscall failure ${syncNumber} preserves evidence and forbids a second attempt`, async () => {
+  test(`release fsync syscall failure ${syncNumber} preserves evidence and requires fresh explicit authority`, async () => {
     const f = fixture();
     try {
       const capture = await f.capture();
@@ -599,7 +622,11 @@ for (const syncNumber of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
       );
       assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
       assert.throws(() => desktopAgentsAdmission(f.directory));
-      await assert.rejects(f.recovery.release(capture.bundle));
+      if (syncNumber >= 3 && syncNumber <= 6) {
+        const reviews = f.reviews.length;
+        assert.equal((await f.recovery.release(capture.bundle)).status, 'released');
+        assert.ok(f.reviews.length > reviews); // Known control-only failure is not approval.
+      } else await assert.rejects(f.recovery.release(capture.bundle));
     } finally {
       f.close();
     }
@@ -665,14 +692,7 @@ for (const state of ['running', 'ownership_lost', 'exited', 'start_failed'] as c
     }
   });
 
-for (const change of [
-  'journal',
-  'enrollment',
-  'held_marker',
-  'archive',
-  'receipt',
-  'boot',
-] as const)
+for (const change of ['journal', 'enrollment', 'held_marker', 'archive', 'receipt'] as const)
   test(`finalize denies changed ${change} after marker archive`, async () => {
     const f = fixture();
     try {
@@ -686,8 +706,7 @@ for (const change of [
         writeFileSync(join(f.directory, `recovered-${capture.operationId}.marker.json`), '{}');
       if (change === 'archive') writeFileSync(join(capture.bundle, 'archive.json'), '{}');
       if (change === 'receipt') writeFileSync(join(capture.bundle, 'receipt.json'), '{}');
-      if (change === 'boot') f.changeBoot();
-      assert.throws(() => f.recovery.finalize(capture.bundle));
+      await assert.rejects(f.recovery.finalize(capture.bundle));
       assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
       assert.throws(() => desktopAgentsAdmission(f.directory));
     } finally {
@@ -809,8 +828,465 @@ test('identical-byte held marker inode replacement cannot finalize recovery', as
     const replacement = `${held}.SYNTHETIC`;
     writeFileSync(replacement, readFileSync(held), { mode: 0o600 });
     renameSync(replacement, held);
-    assert.throws(() => f.recovery.finalize(capture.bundle), /identity/);
+    await assert.rejects(f.recovery.finalize(capture.bundle), /identity/);
     assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+  } finally {
+    f.close();
+  }
+});
+
+for (const mode of ['cancel', 'expired'] as const)
+  test(`explicit release review after ${mode} uses a new nonce and no inherited consent`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      f.changeBoot();
+      if (mode === 'cancel') f.cancel();
+      else f.review(() => f.advance(30_001));
+      await assert.rejects(f.recovery.release(capture.bundle), /approval/);
+      const denied = f.reviews.at(-1)!;
+      assert.ok(!existsSync(join(capture.bundle, 'archive.json')));
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      f.allow();
+      const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+      const result = await next.release(capture.bundle);
+      assert.equal(result.status, 'released');
+      assert.notEqual(f.reviews.at(-1)!.nonce, denied.nonce);
+      assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+    } finally {
+      f.close();
+    }
+  });
+
+for (const stage of ['capture', 'gate'] as const)
+  test(`signed capture interrupted at ${stage} has an explicit continuation`, async () => {
+    const f = fixture();
+    try {
+      f.fault(stage);
+      await assert.rejects(f.capture());
+      const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+      assert.ok(existsSync(join(bundle, 'capture.json')));
+      assert.ok(existsSync(join(bundle, 'snapshot.json')));
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      f.clearFault();
+      const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+      assert.equal((await next.continueCapture(bundle)).admissionBlocked, true);
+      f.changeBoot();
+      assert.equal((await next.release(bundle)).status, 'released');
+    } finally {
+      f.close();
+    }
+  });
+
+test('partial pre-gate capture does not publish a gate or consume the original reservation', async () => {
+  const f = fixture();
+  try {
+    f.fault('capture');
+    await assert.rejects(f.capture());
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    writeFileSync(join(bundle, 'capture.json'), '{');
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await assert.rejects(next.continueCapture(bundle), /missing_or_partial_capture/);
+    assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    f.clearFault();
+    const fresh = await f.capture();
+    assert.notEqual(fresh.bundle, bundle);
+    assert.equal(readFileSync(join(bundle, 'capture.json'), 'utf8'), '{');
+  } finally {
+    f.close();
+  }
+});
+
+test('legacy gate with partial capture remains ambiguous and is never adopted or erased', async () => {
+  const f = fixture();
+  try {
+    f.fault('gate');
+    await assert.rejects(f.capture());
+    const gate = readFileSync(join(f.directory, RECOVERY_GATE));
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    writeFileSync(join(bundle, 'capture.json'), '{');
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await assert.rejects(next.continueCapture(bundle), /missing_or_partial_capture/);
+    await assert.rejects(next.continueRelease(bundle), /missing_or_partial_capture/);
+    assert.deepEqual(readFileSync(join(f.directory, RECOVERY_GATE)), gate);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+for (const stage of ['archive', 'before_marker', 'after_marker', 'receipt'] as const)
+  for (const caller of ['same_returned_helper', 'new_boot_helper'] as const)
+    test(`explicit continuation of durable ${stage} from ${caller} neither overwrites nor invents exit`, async () => {
+      const f = fixture();
+      try {
+        const capture = await f.capture();
+        f.changeBoot();
+        f.fault(stage);
+        await assert.rejects(f.recovery.release(capture.bundle));
+        const archived = readFileSync(join(capture.bundle, 'archive.json'));
+        const blocked = new OfflineReservationRecovery(f.authority, f.dependencies);
+        await assert.rejects(
+          blocked.continueRelease(capture.bundle),
+          /same_boot_helper_fence_required/,
+        );
+        f.clearFault();
+        let next = f.recovery;
+        if (caller === 'new_boot_helper') {
+          f.changeBoot();
+          next = new OfflineReservationRecovery(f.authority, f.dependencies);
+        }
+        const reviewCount = f.reviews.length;
+        const result = await next.continueRelease(capture.bundle);
+        assert.equal(result.status, 'released');
+        assert.equal(f.reviews.length, reviewCount + 1);
+        assert.deepEqual(readFileSync(join(capture.bundle, 'archive.json')), archived);
+        assert.equal(f.databases[0]!.journal.read(f.attemptId)!.state, 'prepared');
+        assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+        assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+        await assert.rejects(next.continueRelease(capture.bundle));
+        await assert.rejects(next.finalize(capture.bundle));
+      } finally {
+        f.close();
+      }
+    });
+
+for (const mode of ['cancel', 'expired'] as const)
+  test(`finalization ${mode} retains admission and permits a new explicit native review`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      f.changeBoot();
+      await f.recovery.release(capture.bundle);
+      if (mode === 'cancel') f.cancel();
+      else f.review(() => f.advance(30_001));
+      await assert.rejects(f.recovery.finalize(capture.bundle), /approval/);
+      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      assert.ok(!existsSync(join(capture.bundle, 'finalized.json')));
+      f.allow();
+      const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+      assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+    } finally {
+      f.close();
+    }
+  });
+
+test('finalization continues after durable authority and interrupted lock unlink fsync on a new boot', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.failSyncAt(15);
+    await assert.rejects(f.recovery.finalize(capture.bundle), /fsync failure/);
+    assert.ok(existsSync(join(capture.bundle, 'finalized.json')));
+    assert.ok(!existsSync(join(f.directory, 'offline-recovery-operation.lock')));
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    f.clearFault();
+    f.changeBoot();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+  } finally {
+    f.close();
+  }
+});
+
+test('a later boot between release and finalize requires fresh finalization approval', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    const receipt = await f.recovery.release(capture.bundle);
+    f.changeBoot();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+    assert.equal(f.reviews.at(-1)!.phase, 'finalize');
+    assert.notEqual(f.reviews.at(-1)!.currentBoot, receipt.currentBoot);
+  } finally {
+    f.close();
+  }
+});
+
+test('owner change after archive blocks continuation before another approval', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    f.fault('archive');
+    await assert.rejects(f.recovery.release(capture.bundle));
+    f.clearFault();
+    writeFileSync(
+      f.marker,
+      JSON.stringify({ version: 1, owner: randomUUID(), manifests: [f.manifests[0]] }),
+    );
+    const reviews = f.reviews.length;
+    await assert.rejects(f.recovery.continueRelease(capture.bundle));
+    assert.equal(f.reviews.length, reviews);
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+  } finally {
+    f.close();
+  }
+});
+
+test('concurrent continuations on a later boot admit one fresh review', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    f.fault('archive');
+    await assert.rejects(f.recovery.release(capture.bundle));
+    f.clearFault();
+    f.changeBoot();
+    const first = new OfflineReservationRecovery(f.authority, f.dependencies);
+    const second = new OfflineReservationRecovery(f.authority, f.dependencies);
+    const reviews = f.reviews.length;
+    const results = await Promise.allSettled([
+      first.continueRelease(capture.bundle),
+      second.continueRelease(capture.bundle),
+    ]);
+    assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+    assert.equal(f.reviews.length, reviews + 1);
+  } finally {
+    f.close();
+  }
+});
+
+test('partial archive is preserved and cannot authorize continuation or marker removal', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    f.fault('archive');
+    await assert.rejects(f.recovery.release(capture.bundle));
+    f.clearFault();
+    writeFileSync(join(capture.bundle, 'archive.json'), '{');
+    await assert.rejects(f.recovery.continueRelease(capture.bundle));
+    assert.equal(readFileSync(join(capture.bundle, 'archive.json'), 'utf8'), '{');
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+for (const file of ['archive.json', 'receipt-prepared.json'] as const)
+  test(`continuation must re-fsync complete but uncertain ${file} before moving the marker`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      f.changeBoot();
+      const path = join(capture.bundle, file);
+      f.failFileSync(path);
+      await assert.rejects(f.recovery.release(capture.bundle), /fsync/);
+      const bytes = readFileSync(path);
+      await assert.rejects(f.recovery.continueRelease(capture.bundle), /fsync/);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.deepEqual(readFileSync(path), bytes);
+      f.clearFault();
+      assert.equal((await f.recovery.continueRelease(capture.bundle)).status, 'released');
+    } finally {
+      f.close();
+    }
+  });
+
+test('capture continuation confirms signed file durability before publishing a gate', async () => {
+  const f = fixture();
+  try {
+    f.review((challenge) => f.failFileSync(join(challenge.bundle, 'capture.json')));
+    await assert.rejects(f.capture(), /fsync/);
+    const bundle = join(f.recoveryRoot, readdirSync(f.recoveryRoot)[0]!);
+    f.allow();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await assert.rejects(next.continueCapture(bundle), /fsync/);
+    assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
+    f.clearFault();
+    assert.equal((await next.continueCapture(bundle)).admissionBlocked, true);
+  } finally {
+    f.close();
+  }
+});
+
+test('finalization re-fsyncs the exact released receipt before removing admission controls', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    f.failFileSync(join(capture.bundle, 'receipt.json'));
+    await assert.rejects(f.recovery.finalize(capture.bundle), /fsync/);
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    assert.ok(existsSync(join(f.directory, 'offline-recovery-operation.lock')));
+    f.clearFault();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    assert.equal((await next.finalize(capture.bundle)).status, 'finalized');
+  } finally {
+    f.close();
+  }
+});
+
+test('replacement of the retained operation lease cannot inherit continuation ownership', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    f.fault('archive');
+    await assert.rejects(f.recovery.release(capture.bundle));
+    f.clearFault();
+    const name = readdirSync(capture.bundle).find((name) => /^operation-.*\.lock$/.test(name))!;
+    const file = join(capture.bundle, name);
+    const replacement = file + '.replacement';
+    writeFileSync(replacement, readFileSync(file), { mode: 0o600 });
+    renameSync(replacement, file);
+    await assert.rejects(f.recovery.continueRelease(capture.bundle), /operation_lease_changed/);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+for (const state of ['capture_only', 'cancelled_release'] as const)
+  test(`explicit pre-effect abort from ${state} preserves the original global reservation`, async () => {
+    const f = fixture();
+    try {
+      const capture = await f.capture();
+      if (state === 'cancelled_release') {
+        f.changeBoot();
+        f.cancel();
+        await assert.rejects(f.recovery.release(capture.bundle));
+        f.allow();
+      }
+      const before = f.databases.map(({ file }) => readFileSync(file));
+      const result = await f.recovery.abort(capture.bundle);
+      assert.equal(result.originalReservationPreserved, true);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      for (const [index, { file }] of f.databases.entries())
+        assert.deepEqual(readFileSync(file), before[index]);
+      assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
+      assert.throws(() => desktopAgentsAdmission(f.directory)); // The original reservation still blocks Open.
+      await assert.rejects(f.recovery.continueCapture(capture.bundle), /operation_aborted/);
+      await assert.rejects(f.recovery.release(capture.bundle), /operation_aborted/);
+    } finally {
+      f.close();
+    }
+  });
+
+test('abort cancellation is not permission to remove controls and can be reviewed again explicitly', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.cancel();
+    await assert.rejects(f.recovery.abort(capture.bundle), /approval/);
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    assert.ok(!existsSync(join(capture.bundle, 'aborted.json')));
+    f.allow();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    assert.equal((await next.abort(capture.bundle)).status, 'aborted');
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+test('an archive effect forbids aborting controls even before marker rename', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    f.fault('archive');
+    await assert.rejects(f.recovery.release(capture.bundle));
+    f.clearFault();
+    await assert.rejects(f.recovery.abort(capture.bundle), /abort_denied_after_release_effect/);
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+test('partial admission control is preserved without treating matching operation path as ownership', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    writeFileSync(join(f.directory, RECOVERY_GATE), '{');
+    await assert.rejects(f.recovery.continueCapture(capture.bundle));
+    await assert.rejects(f.recovery.abort(capture.bundle));
+    assert.equal(readFileSync(join(f.directory, RECOVERY_GATE), 'utf8'), '{');
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
+
+test('retention counterexample: current prepared-only snapshot does not prove no historical dispatch', async () => {
+  let timestamp = 1;
+  const f = fixture(false, () => timestamp);
+  try {
+    const journal = f.databases[0]!.journal;
+    journal.transition(f.attemptId, 'starting');
+    journal.transition(f.attemptId, 'exited', { exitCode: 0 });
+    timestamp += 31 * 86400_000;
+    journal.prepare({
+      instanceId: randomUUID(),
+      clientId: 'SYNTHETIC-RETENTION',
+      projectId: terminalDigest(f.configs[0]!.project),
+      manifestDigest: 'a'.repeat(64),
+    });
+    assert.equal(journal.read(f.attemptId), undefined);
+    const capture = await f.capture();
+    const snapshot = JSON.parse(readFileSync(join(capture.bundle, 'snapshot.json'), 'utf8'));
+    assert.equal(snapshot.journals[0].logical.attempts.length, 1);
+    assert.equal(snapshot.journals[0].logical.attempts[0].state, 'prepared');
+  } finally {
+    f.close();
+  }
+});
+
+test('a release signature cannot serve as explicit finalization consent', async () => {
+  const f = fixture();
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    await f.recovery.release(capture.bundle);
+    const archive = JSON.parse(readFileSync(join(capture.bundle, 'archive.json'), 'utf8'));
+    const next = new OfflineReservationRecovery(
+      { publicKey: f.authority.publicKey, review: async () => archive.signature },
+      f.dependencies,
+    );
+    await assert.rejects(next.finalize(capture.bundle), /approval/);
+    assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    assert.ok(!existsSync(join(capture.bundle, 'finalized.json')));
+  } finally {
+    f.close();
+  }
+});
+
+test('valid SQLite WAL reuse with stale physical tail is conservatively unsupported, not historical non-dispatch proof', async () => {
+  const f = fixture(true);
+  try {
+    const { db, journal, file } = f.databases[0]!;
+    for (let index = 0; index < 20; index++)
+      journal.prepare({
+        instanceId: randomUUID(),
+        clientId: 'SYNTHETIC-WAL-REUSE',
+        projectId: terminalDigest(f.configs[0]!.project),
+        manifestDigest: 'a'.repeat(64),
+      });
+    db.exec('PRAGMA wal_checkpoint(PASSIVE)');
+    journal.prepare({
+      instanceId: randomUUID(),
+      clientId: 'SYNTHETIC-WAL-RESET',
+      projectId: terminalDigest(f.configs[0]!.project),
+      manifestDigest: 'a'.repeat(64),
+    });
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM terminal_attempts').get()!.count, 22);
+    assert.throws(
+      () => committedTerminalImage(readFileSync(file), readFileSync(`${file}-wal`)),
+      /frame binding/,
+    );
+    await assert.rejects(f.capture(), /frame binding/);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
   } finally {
     f.close();
   }

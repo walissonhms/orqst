@@ -567,3 +567,9 @@ attempt UUID, stage/outcome/effects and dropped count. Each record is at most
 512 bytes, the queue holds 256 records, and three fixed segments retain at most
 3 MiB by size without an age guarantee. No schema migration, replay authority,
 reservation mutation or recovery behavior is added. See [contract and query](../development/local-diagnostics.md).
+
+Offline recovery adds immutable release control v2, private per-boot helper leases,
+phase-specific continuation proofs, signed abort and signed finalization intent.
+These administrative records do not alter terminal schemas, attempts, owner rows
+or runtime authority. Existing archives/receipts are verified and re-fsynced, never
+overwritten; incomplete records remain preserved and denied.

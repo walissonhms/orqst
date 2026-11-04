@@ -540,3 +540,8 @@ operation was performed. See [implementation limits](../development/terminal-pre
       run; no historical-cause, provider or platform acceptance is implied.
 
 See [diagnostic contract and delivery limits](../development/local-diagnostics.md).
+
+Offline recovery continuation is source/fixture work only: explicit capture/release
+continuation, pre-effect abort preserving the reservation, and fresh signed async
+finalization. Durable native administrative identity, full native review and
+old-binary exclusion remain integration prerequisites; no native acceptance added.

@@ -14,7 +14,7 @@ binding across boots; a key discovered inside the capture is not a trust anchor.
 The native parent signs an exact, one-use, expiring recovery challenge only after
 showing its complete owner, epoch, snapshot digest, kernel boots and action.
 Cancellation is the default. There is no renderer boolean or renderer-supplied
-path/owner/boot/key. Capture and release have separate approvals and signature
+path/owner/boot/key. Capture, release, abort and finalization have separate phase approvals and signature
 domains from `orqst.terminal`. A generic approval cannot authorize release.
 
 The kernel source is `/usr/sbin/sysctl -n kern.bootsessionuuid` on macOS, with a
@@ -35,15 +35,15 @@ the changed kernel boot, never by a newly introduced advisory file.
    and canonical terminal attempt schemas. Only `prepared` (no exit) or zero
    attempts are eligible. All journal owner epochs must agree with enrollments
    and marker where present. Unknown versions, effects, records and states deny.
-2. Review capture natively. Exclusively create and fsync a sticky administrative
-   gate in the admission directory. New admission/preflight/claim/assertOwner and
+2. Review capture natively. Save and fsync the complete signed private bundle
+   before exclusively publishing and fsyncing its sticky administrative gate. New admission/preflight/claim/assertOwner and
    enrollment must deny that gate, including objects constructed before it.
    Capture raw private files, file identities, directory membership and logical
    facts to an exclusive private bundle; fsync files and directories. Revalidate
-   the whole source and kernel boot after the copy. Sign the completed capture.
+   the whole source and kernel boot before and after gate publication.
    Failure/cancel never deletes the marker or automatically retries.
-3. Only after a **different** native kernel boot: acquire an exclusive offline
-   operation lock; verify trusted administrative capture signature and gate;
+3. Only after a **different** native kernel boot: acquire an exclusive boot-scoped
+   helper lease and retain the operation-specific admission lock; verify trusted administrative capture signature and gate;
    re-read every original source. Exact immutable marker/manifests/enrollments,
    owner epochs and complete logical journal facts must agree. Checkpointed WAL
    bytes may differ only when the validated logical projection is identical.
@@ -56,8 +56,9 @@ the changed kernel boot, never by a newly introduced advisory file.
    marker, then fsync. A failure after a namespace mutation is uncertain; the
    sticky administrative gate continues denying admission. No rollback guesses.
    Release completion is a separate durable receipt, not an old runtime signature.
-   Gate removal is a separate finalizer allowed only against exact gate, completed
-   receipt and held marker. No automatic reopen/start/retry is part of recovery.
+   Gate removal requires a separate fresh signed finalization review against the
+   exact gate, completed receipt and held marker. Explicit continuations re-fsync
+   complete records whose previous durability was uncertain. No automatic reopen/start/retry is part of recovery.
 
 Ordinary legacy binaries cannot claim while the original marker exists, and
 cannot inherit its UUID through the current constructor. Compliant patched
@@ -106,3 +107,24 @@ append-only genesis certificate. Do not claim that no process ever ran in this
 AppData, or infer provenance of an old binary merely from schema version 2.
 The exact final-unlink/fsync uncertainty boundary is documented in the private
 API; durable archive/receipts and original marker bytes survive final cleanup.
+
+## Source correction after independent review — 2026-11-04
+
+The original 743 flow irreversibly consumed a bundle on Cancel/expiry and could
+publish a gate before saving the only authenticated capture. The correction keeps
+control persistence separate from consent, saves signed capture first, and adds
+explicit phase-specific continuation/abort. All effects still require exact source
+revalidation; fresh native approval is mandatory, including finalization.
+
+The helper lease is narrow administrative exclusion, not a new process manager.
+A returned invocation retains its exact lease identity in RAM; another process
+cannot inherit that fact. A different kernel boot fences earlier helpers. Same-
+boot crash without a retained authenticated child-exit relationship stays denied.
+Partial legacy capture/control cannot establish that missing relationship.
+Do not add PID scans, inferred exit, automatic stale-lock deletion or `recover:true`.
+The private API and development phase table define the remaining boundaries.
+
+The original pinned Anywh/Tucano lock/restore/stop/router sources were re-inspected:
+they supply no compatible legacy fencing or administrative trust anchor. Keep the
+existing ORQST readers, canonical validators, admission ordering and native helper
+transport; no upstream code, dependencies or runtime authority is incorporated.

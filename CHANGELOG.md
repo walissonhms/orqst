@@ -1,5 +1,13 @@
 # Changelog
 
+## Offline recovery continuation correction — 2026-11-04
+
+- Persist signed capture before its gate; allow fresh explicit release review after
+  control-only cancellation/expiry. Add verified continuation, pre-effect abort and
+  separately signed async finalization, with re-established file durability.
+- Preserve uncertain legacy/partial state and unknown same-boot helpers. No native
+  integration, real reservation operation, runtime/provider start or reboot.
+
 ## Offline administrative recovery source — 2026-11-04
 
 Add an explicit private capture/release/finalize transaction, native kernel boot

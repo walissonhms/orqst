@@ -1,5 +1,9 @@
 # ORQST
 
+Independent source review added explicit phase continuation/abort and fresh signed
+finalization; Cancel/expiry no longer consumes a control-only release. Partial or
+unauthenticated state remains denied. Native anchor/menu and real use remain gates.
+
 ## Offline administrative recovery source — 2026-11-04
 
 The offline capture→kernel-fence verification→archive→explicit release transaction

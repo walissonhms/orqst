@@ -789,3 +789,7 @@ A best-effort bounded queue writes at most three private 1 MiB local segments; n
 content, credentials, private identities/paths, stderr or uploads enter the sink.
 Pure/source checks do not accept an installed app, provider or historical cause.
 See [location, retention, query, checks and limits](docs/development/local-diagnostics.md).
+
+Offline recovery source now has verified explicit phase continuations; trusted
+administrative native persistence/review and compatibility-controlled real use
+remain required before terminal-opening acceptance.

@@ -2,6 +2,7 @@ import {
   constants,
   closeSync,
   fsyncSync,
+  fstatSync,
   lstatSync,
   openSync,
   opendirSync,
@@ -152,6 +153,23 @@ export function writeRecoveryFile(file: string, bytes: string | Buffer, sync = f
   } finally {
     closeSync(fd);
   }
+  syncRecoveryDirectory(dirname(file), sync);
+}
+
+/** Re-establish durability after an interrupted write; readable complete bytes alone are insufficient. */
+export function syncRecoveryFile(file: string, sync = fsyncSync) {
+  const before = readRecoveryFile(file, RECOVERY_LIMIT);
+  const fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const info = fstatSync(fd, { bigint: true });
+    if (String(info.dev) !== before.identity[0] || String(info.ino) !== before.identity[1])
+      throw new Error('Recovery file changed before durability confirmation');
+    sync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  if (JSON.stringify(readRecoveryFile(file, RECOVERY_LIMIT)) !== JSON.stringify(before))
+    throw new Error('Recovery file changed during durability confirmation');
   syncRecoveryDirectory(dirname(file), sync);
 }
 

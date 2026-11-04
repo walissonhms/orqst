@@ -1540,3 +1540,10 @@ no fallback, retry or permission decision follows from its result. macOS/Linux
 use private modes, no-follow/special-file/owner checks and an advisory writer lock;
 same-user directory-replacement races are outside the guarantee. Other platforms
 disable disk logging. See [retention and source/acceptance boundary](../development/local-diagnostics.md).
+
+Offline administrative continuation uses exclusive per-boot helper leases and
+exact operation/file identities. Only a returned invocation in the same helper,
+or a different authenticated kernel boot, permits continuing a retained lease.
+New reviews are mandatory; Cancel/expiry is not persisted approval. Known phase
+completion re-establishes archive/receipt durability before namespace mutation.
+A partial legacy control or unproven same-boot helper is never automatically cleared.

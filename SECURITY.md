@@ -1105,3 +1105,9 @@ with 0700/0600 permissions, record/queue/rotation budgets and no upload/API. It
 accepts no captured content, raw stderr, credentials or private ownership/paths.
 Diagnostic UUIDs grant no authority. Files can be incomplete or absent and cannot
 prove no effects. See [controls and limitations](docs/development/local-diagnostics.md).
+
+Offline recovery continuation keeps control records separate from phase consent.
+Boot-scoped exclusive helper leases never infer process exit from PID absence;
+partial/unknown controls stay reserved. Complete records are re-fsynced before
+namespace release. Abort preserves the original reservation; finalization requires
+a fresh independent administrative signature. No public/renderer API changed.
