@@ -926,7 +926,32 @@
     "state_prepared": "Arquivos preparados; revisão pendente",
     "next_prepared": "Seus arquivos preparados foram mantidos. Continue a revisão nativa para habilitar a abertura; não é preciso selecionar manifests manualmente.",
     "state_blocked": "Preparação precisa de atenção",
-    "next_blocked": "A preparação não pôde terminar com segurança. Arquivos e reservas existentes foram preservados. Não há nova tentativa automática; consulte o menu nativo Terminal antes de prosseguir."
+    "next_blocked": "A preparação não pôde terminar com segurança. Arquivos e reservas existentes foram preservados. Não há nova tentativa automática; consulte o menu nativo Terminal antes de prosseguir.",
+    "tauri": {
+      "unavailable": "A preparação de terminais Tauri está indisponível neste documento. Use o menu nativo Preparar terminais Tauri; arquivos e seleções existentes foram preservados.",
+      "setupHelp": "Prepare de 1 a 8 terminais Codex ou Claude Code em uma pasta de teste vazia. O mesmo fluxo do menu nativo revisa o executável, o Node 24 incluído e a identidade compartilhada antes de criar arquivos; a abertura tem revisão separada. O MCP do ORQST fica desativado.",
+      "provider": "Provedor CLI",
+      "count": "Quantidade de terminais",
+      "prepare": "Preparar e revisar terminais…",
+      "state_unavailable": "Preparação nativa indisponível",
+      "state_empty": "Pronto para preparar",
+      "state_prepared": "Arquivos preparados; revisão de abertura pendente",
+      "state_locked": "Seleção bloqueada nesta execução",
+      "state_blocked": "Preparação precisa de atenção",
+      "next_unavailable": "Atualize a preparação ou use o menu nativo Preparar terminais Tauri.",
+      "next_empty": "Escolha um provedor e de 1 a 8 terminais; conclua as revisões nativas. A preparação não inicia nenhum CLI.",
+      "next_prepared": "{{count}} arquivos preparados foram mantidos. Continue a revisão nativa de abertura; a criação não será repetida.",
+      "next_locked": "Uma seleção entrou na abertura ou já está aberta. Use sua janela nativa de terminais. Uma nova seleção exige encerramento confirmado e uma execução posterior; efeitos incertos continuam reservados.",
+      "next_blocked": "Uma tentativa de criação pode ter gravado arquivos. A repetição automática está bloqueada. Preserve os arquivos e verifique o resultado da preparação nativa.",
+      "step_prepare": "Preparar e revisar",
+      "step_prepare_help": "Escolha Codex ou Claude Code e de 1 a 8 terminais. Os seletores nativos escolhem o executável revisado e uma pasta de teste vazia. Revise hashes e identidade nativa compartilhada.",
+      "step_open": "Revisar a abertura separadamente",
+      "step_open_help": "O assistente nativo revisa cada manifesto preparado antes de abrir os terminais preservados. Cancelar a abertura mantém os arquivos preparados para nova revisão.",
+      "step_start": "Autorizar cada CLI separadamente",
+      "step_start_help": "Use o painel nativo para Iniciar CLI, conectar a saída e habilitar entrada, com as confirmações assinadas existentes. A preparação não envia tarefa nem login.",
+      "boundary": "A preparação Tauri suporta apenas equipes Codex ou Claude Code do mesmo provedor, com MCP do ORQST desativado. Escolha de modelo, presets mistos e aceite com provedores reais estão indisponíveis neste fluxo.",
+      "denied": "O contexto da preparação nativa mudou ou esta ação foi recusada. Atualize para consultar a seleção atual. Arquivos preparados e gravações ou aberturas incertas foram preservados; nenhuma alteração foi repetida."
+    }
   },
   "tauriPreparation": {
     "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",

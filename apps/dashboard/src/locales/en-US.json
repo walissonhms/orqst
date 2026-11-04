@@ -926,7 +926,32 @@
     "state_prepared": "Files prepared; review pending",
     "next_prepared": "Your prepared files were kept. Continue their native review to enable opening; no manual manifest selection is needed.",
     "state_blocked": "Preparation needs attention",
-    "next_blocked": "Preparation could not finish safely. Existing files and reservations were preserved. Automatic retry is unavailable; inspect the native Terminal menu before proceeding."
+    "next_blocked": "Preparation could not finish safely. Existing files and reservations were preserved. Automatic retry is unavailable; inspect the native Terminal menu before proceeding.",
+    "tauri": {
+      "unavailable": "Tauri terminal preparation is unavailable in this document. Use the native Prepare Tauri terminals menu; existing files and selections are preserved.",
+      "setupHelp": "Prepare 1–8 Codex or Claude Code terminals in one empty test folder. The same native menu flow reviews the executable, bundled Node 24 and shared identity before creating files, then separately reviews opening. ORQST MCP is disabled.",
+      "provider": "CLI provider",
+      "count": "Terminal count",
+      "prepare": "Prepare and review terminals…",
+      "state_unavailable": "Native preparation unavailable",
+      "state_empty": "Ready to prepare",
+      "state_prepared": "Files prepared; opening review pending",
+      "state_locked": "Selection locked for this launch",
+      "state_blocked": "Preparation needs attention",
+      "next_unavailable": "Refresh preparation or use the native Prepare Tauri terminals menu.",
+      "next_empty": "Choose a provider and 1–8 terminals, then complete the native reviews. Preparation starts no CLI.",
+      "next_prepared": "{{count}} prepared files are kept. Continue their native opening review; creation is not repeated.",
+      "next_locked": "A selection has entered opening or is already open. Use its native terminal window. Fresh selection requires confirmed retirement and a later launch; uncertain effects stay reserved.",
+      "next_blocked": "A creation attempt may have written files. Automatic creation retry is blocked. Preserve the files and inspect the native preparation result.",
+      "step_prepare": "Prepare and review",
+      "step_prepare_help": "Choose Codex or Claude Code and 1–8 terminals. Native pickers select the reviewed executable and an empty test folder. Review hashes and shared native identity.",
+      "step_open": "Review opening separately",
+      "step_open_help": "The native wizard reviews every prepared manifest before opening the retained terminal workspace. Cancelling opening keeps prepared files for a later review.",
+      "step_start": "Authorize each CLI separately",
+      "step_start_help": "Use the native terminal panel for Start CLI, output connection and keyboard input, with their existing signed confirmations. Preparation submits no task or login.",
+      "boundary": "Tauri preparation supports same-provider Codex or Claude Code teams only, with ORQST MCP disabled. Model choice, mixed presets and real-provider acceptance are not available through this flow.",
+      "denied": "The native preparation context changed or this action was refused. Refresh to inspect the current selection. Prepared files and uncertain writes or openings remain preserved; no mutation was retried."
+    }
   },
   "tauriPreparation": {
     "retireDenied": "Retirement was refused or could not be confirmed. Preserve the reservation, archives and journals. After a possibly dispatched authorization, this client stays locked; an archive may already exist. Quit and inspect the evidence before selecting fresh profiles. No automatic recovery or replay is performed.",
