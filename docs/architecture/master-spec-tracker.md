@@ -219,6 +219,13 @@ tests and Clippy above are the contributor's checks, not an integration rerun. T
 finished temporary Cargo target caches were cleaned to recover disk space. No native
 UI or provider acceptance was repeated during integration.
 
+The later acceptance-runner correction (`5a182dc`, source `704a5e8`) rejects a
+resident application with the same bundle identity or path and records the owned
+process and artifact hashes. The `cgWindowNotFound` cause remains unproved and no
+native acceptance was claimed. Integrated checks passed lint, typecheck, build and
+638 Node tests (`--test-concurrency=2`); the native UI was not rerun. See
+[native acceptance research](../research/tauri-native-acceptance.md).
+
 ## Native alerts, tray and close policy — 2026-11-04
 
 The Tauri preview now reuses Core's extracted Electron source-gated monitor over
