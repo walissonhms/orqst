@@ -5,7 +5,8 @@ Node 24 Core and SQLite. `apps/tauri` is the first runnable migration increment.
 Electron remains available through the existing commands until feature parity is
 validated. The observer is unchanged; native-menu preparation or explicitly selected
 profiles can open a retained terminal workspace. Prepared structured agents have a
-separate opt-in Tauri bridge. Native exports and notifications remain in Electron.
+separate opt-in Tauri bridge. Native exports remain in Electron; the preview now has
+a [native tray, source-gated alerts and explicit close policy](tauri-native-desktop.md).
 
 ## Build and run
 
@@ -66,7 +67,9 @@ Core still enforces private directory/database permissions. Codex source files
 remain read-only; `ORQST_CODEX_SESSIONS` can select a disposable acceptance source.
 No existing database or preference profile is migrated automatically.
 
-Closing the application requests shutdown on the private stdin pipe, waits up to
+By default, closing the main window requests application exit; a native per-run
+keep-running checkbox instead hides the retained window. Explicit Quit always
+passes through managed-host consent. Closing the application requests shutdown on the private stdin pipe, waits up to
 five seconds for Core cleanup, then kills only the owned child if necessary.
 Parent pipe EOF also requests cleanup. A crashed Core is removed from native state
 only for its exact child identity. There is no automatic process respawn, stored-PID
@@ -92,7 +95,7 @@ queries the colocated production Analytics worker and verifies graceful exit.
 This proves packaging and browser operation, not native WebKit/provider equivalence.
 
 The migration is **not complete**. Prepared PTY terminals have the opt-in bridge below;
-native exports, menus/tray parity, OS notifications,
+native exports, full menu parity, OS-notification delivery acceptance,
 durable reconnect and profile migration require incremental
 parity work. N-member teams and installed-provider CLI mention/return acceptance remain separate
 requirements of the master specification. Prepared structured permissions and editable

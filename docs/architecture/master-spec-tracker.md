@@ -218,3 +218,14 @@ when it began rebuilding dependencies on a nearly full disk; the six passing Rus
 tests and Clippy above are the contributor's checks, not an integration rerun. Two
 finished temporary Cargo target caches were cleaned to recover disk space. No native
 UI or provider acceptance was repeated during integration.
+
+## Native alerts, tray and close policy — 2026-11-04
+
+The Tauri preview now reuses Core's extracted Electron source-gated monitor over
+its existing private child pipe. Native tray unread/connection state, per-run
+notification opt-in, bounded fixed-text alerts/click restore and explicit
+background-close policy are implemented. Quit preserves the existing managed-host
+consent gates and owned-Core cleanup. No observer capability or HTTP/WS change is
+introduced. This contributes to criteria 1, 5, 12 and 14; none is newly accepted.
+See the [delivery and platform checklist](../development/tauri-native-desktop.md)
+and [pinned source/dependency review](../research/tauri-native-desktop.md).

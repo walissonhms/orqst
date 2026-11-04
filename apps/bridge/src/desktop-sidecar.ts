@@ -1,3 +1,4 @@
+import { DesktopMonitor } from '@orqst/core';
 import { lstat, realpath } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import { createBridge } from './app.js';
@@ -18,8 +19,10 @@ const app = createBridge({
   dashboardDir: resolve(dashboardDir),
 });
 let stopping: Promise<void> | undefined;
+let monitorTimer: ReturnType<typeof setInterval> | undefined;
 function shutdown(failed = false): void {
   if (failed) process.exitCode = 1;
+  clearInterval(monitorTimer);
   stopping ??= app.stop().catch(() => {
     process.exitCode = 1;
     console.error('ORQST Desktop Core shutdown failed.');
@@ -28,6 +31,7 @@ function shutdown(failed = false): void {
 }
 
 // The pipe is also the parent-liveness signal. No PID adoption or automatic respawn.
+process.stdout.on('error', () => shutdown(true));
 process.stdin.on('end', () => shutdown());
 process.stdin.on('error', () => shutdown(true));
 let commandBytes = 0;
@@ -49,7 +53,47 @@ try {
     throw new Error('Invalid Desktop dashboard');
   }
   const port = await app.start();
-  if (!stopping) process.stdout.write(`ORQST_CORE_READY ${port}\n`);
+  if (!stopping) {
+    process.stdout.write(`ORQST_CORE_READY ${port}\n`);
+    if (process.env.ORQST_NATIVE_MONITOR === '1') {
+      const monitor = new DesktopMonitor();
+      let lastPoll = 0;
+      const poll = () => {
+        if (stopping) return;
+        // Never queue a growing alert backlog if the native parent stops reading.
+        if (process.stdout.writableLength > 64 * 1024) {
+          monitor.disconnect();
+          return;
+        }
+        const now = Date.now();
+        if (now - lastPoll > 10_000) monitor.disconnect();
+        lastPoll = now;
+        let frame: object;
+        try {
+          const store = app.core.store;
+          const result = monitor.accept({
+            cursor: store.cursor(),
+            sessions: store.sessions(),
+            events: store.recentEvents(150),
+            notifications: store.notifications(),
+            preferences: store.preferences(),
+          });
+          // Send categories/counts only: no source text, IDs, paths or credentials.
+          frame = {
+            connected: true,
+            pending: result.pending,
+            alerts: result.alerts.map(({ category, silent }) => ({ category, silent })),
+          };
+        } catch {
+          monitor.disconnect();
+          frame = { connected: false };
+        }
+        process.stdout.write(`ORQST_DESKTOP_STATE ${JSON.stringify(frame)}\n`);
+      };
+      poll();
+      monitorTimer = setInterval(poll, 2000);
+    }
+  }
 } catch {
   console.error('ORQST Desktop Core startup failed.');
   shutdown(true);

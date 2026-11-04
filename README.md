@@ -59,8 +59,11 @@ The native **Prepare Tauri terminals** menu also prepares and reviews 1–8 Code
 Claude manifests using the bundled Node 24, native pickers and existing provisioning.
 Opening and signed CLI startup remain separate approvals; real-provider/native
 creation acceptance remains pending.
-Native terminal consent/provider parity remains unaccepted; exports/notifications
-and the complete managed workflow remain available in Electron. See [build, run and exact limits](docs/development/tauri.md) and the
+Native terminal consent/provider parity remains unaccepted. The Tauri preview now includes
+a native tray, source-gated per-run alerts and an explicit background-close option;
+OS delivery and full lifecycle acceptance remain pending. Exports and the complete
+managed workflow remain available in Electron. See the [native desktop workflow and checklist](docs/development/tauri-native-desktop.md),
+[build, run and exact limits](docs/development/tauri.md) and the
 [component/license review](docs/research/tauri-core-reuse.md).
 
 ## Bounded interactive terminal teams — 2026-11-03

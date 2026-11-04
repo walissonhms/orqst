@@ -1217,3 +1217,25 @@ The renderer receives no shell, filesystem or dialog plugin permission. Existing
 Core directed/cycle/TTL/ownership checks and secret-free public snapshots are reused.
 Synthetic acceptance simulates invoke/focus/dialog decisions; human native and real
 provider acceptance remain pending. See the [native contract](../api/tauri-agents.md).
+
+## Tauri native alerts and close policy — 2026-11-04
+
+Native alerts reuse the pure Electron source-gated monitor, extracted into Core.
+The fixed owned Node entry alone emits category/sound and bounded unread metadata
+over its private pipe; Rust rejects malformed, stale, excessive or extra fields.
+No captured content, path, session ID or credential enters the OS notification.
+The observer receives no notification, tray, shell or filesystem capability, and
+HTTP/WS/cookie/CSP/source-access controls are unchanged. The user-agent marker only
+suppresses duplicate browser notifications; it grants no authority.
+
+Native alerts and keep-running-on-close require separate per-run native opt-ins.
+Closing without background opt-in routes to existing managed-host exit consent and
+retains the document if consent is cancelled. Explicit Quit stops native admission
+before host/Core cleanup; hiding keeps the owned Core and document alive. Counts
+become unknown after a metadata gap. No process adoption or auto-restart is added.
+The OS receives only fixed translated category text, at most three attempts per
+poll and 20 per run. Plugin preparation is not proof of OS delivery/permission;
+macOS/Windows cannot withdraw delivered alerts. Clicks only restore the current
+owned window and callbacks are inert after shutdown. Platform/native acceptance
+and transitive redistribution review remain separate from synthetic tests.
+See the [native desktop guide](../development/tauri-native-desktop.md).

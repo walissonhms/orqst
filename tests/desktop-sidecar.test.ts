@@ -3,7 +3,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -381,6 +390,69 @@ test('Desktop Core can reopen a stable native origin without duplicating observe
   } finally {
     await first.dispose();
     await second?.dispose();
+    await rm(ctx.dir, { recursive: true, force: true });
+  }
+});
+
+test('native metadata pipe reuses live evidence, consumes replay and omits private content', async () => {
+  const ctx = await createFixture();
+  const run = launch(ctx, { env: { ORQST_NATIVE_MONITOR: '1' } });
+  type Frame = { connected: boolean; pending: number; alerts: object[] };
+  const frames = (): Frame[] =>
+    run
+      .stdout()
+      .split('\n')
+      .filter((line) => line.startsWith('ORQST_DESKTOP_STATE '))
+      .map((line) => JSON.parse(line.slice('ORQST_DESKTOP_STATE '.length)) as Frame);
+  async function until(check: () => boolean) {
+    const deadline = Date.now() + 10_000;
+    while (!check()) {
+      assert.ok(
+        Date.now() < deadline,
+        `native metadata frame deadline: ${run.stdout()} ${run.stderr()}`,
+      );
+      await new Promise((accept) => setTimeout(accept, 50));
+    }
+  }
+  try {
+    const port = await run.ready;
+    await until(() => frames().length > 0);
+    assert.deepEqual(frames()[0], { connected: true, pending: 0, alerts: [] });
+    const completion =
+      JSON.stringify({
+        ...record('event_msg', {
+          type: 'task_complete',
+          last_agent_message: 'PRIVATE SYNTHETIC RESULT',
+        }),
+        timestamp: new Date().toISOString(),
+      }) + '\n';
+    await appendFile(ctx.sessionFile, completion);
+    await until(() => frames().some((value) => value.alerts.length > 0));
+    const notified = frames().filter((value) => value.alerts.length > 0);
+    assert.deepEqual(notified, [
+      { connected: true, pending: 1, alerts: [{ category: 'completed', silent: true }] },
+    ]);
+    const length = frames().length;
+    await until(() => frames().length > length);
+    assert.equal(frames().filter((value) => value.alerts.length > 0).length, 1);
+    const current = await snapshot(
+      `http://127.0.0.1:${port}`,
+      await bootstrap(`http://127.0.0.1:${port}`),
+    );
+    assert.equal(current.notifications.length, 1);
+    assert.doesNotMatch(
+      run.stdout(),
+      /synthetic-desktop-session|private|PRIVATE|source|sessionId|token|cookie/i,
+    );
+    for (const line of run.stdout().split('\n')) assert.ok(Buffer.byteLength(line) <= 1024);
+    run.child.stdin!.end();
+    assert.equal((await run.exited).code, 0);
+    assert.equal(await readFile(ctx.sessionFile, 'utf8'), ctx.sessionContent + completion);
+    const stopped = run.stdout();
+    await new Promise((accept) => setTimeout(accept, 100));
+    assert.equal(run.stdout(), stopped);
+  } finally {
+    await run.dispose();
     await rm(ctx.dir, { recursive: true, force: true });
   }
 });
