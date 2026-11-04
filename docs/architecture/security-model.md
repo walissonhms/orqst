@@ -1,5 +1,22 @@
 # Security model
 
+## Tauri interactive MCP consent — 2026-11-04
+
+The native menu authorizes one bounded grant through the existing Core, never through
+the public terminal request schema or observer API. Exact native document, focus,
+request ID and revocation generation bind Cancel-default review. Node rejects late,
+cancelled, concurrent and expired consent before signing; Core revalidates owned
+source/worker identities, epoch, workspace, deadline and replay. Task/result calls
+remain in the existing private Unix/stdio transport. Neither approval nor writing
+terminal output proves delivery or model completion.
+
+Reload/destruction forwards `closeSlot` to Core to invalidate MCP. Hiding preserves
+the owned process and cancels only pending consent/input authority. Unknown native
+transport effects are fenced without retry; admission/quarantine is not reconciled
+or released. HTTP/WS/cookies/CSP, captured sources, credentials and filesystem
+permissions are unchanged. See the [component/security review](../research/tauri-interactive-mcp.md)
+and [validation limits](../development/tauri-interactive-mcp.md).
+
 ## Tauri preview process boundary — 2026-11-04
 
 The native terminal preparation menu adds only a fixed passive Node helper, not a

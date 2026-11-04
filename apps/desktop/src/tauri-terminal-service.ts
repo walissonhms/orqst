@@ -1,7 +1,11 @@
-import { randomUUID, type KeyObject } from 'node:crypto';
+import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
-import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
+import {
+  TerminalAuthority,
+  terminalChallengeBytes,
+} from '../../../packages/core/src/terminal/authority.js';
+import type { InteractiveMcpSession } from '../../../packages/core/src/terminal/interactive-mcp.js';
 import {
   TerminalNativeBroker,
   type TerminalNativeSupervisor,
@@ -19,7 +23,14 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('revoke'), slot }),
   z.strictObject({ kind: z.literal('close'), slot }),
   z.strictObject({ kind: z.literal('confirm'), id: z.uuid(), accepted: z.boolean() }),
+  z.strictObject({ kind: z.literal('authorizeMcp'), id: z.uuid(), slot, focused: z.boolean() }),
 ]);
+
+export interface TauriTerminalMcp {
+  prepareMcp(): Promise<unknown>;
+  authorizeMcp(proof: unknown): Promise<unknown>;
+  closeSlot(slot: number): Promise<unknown>;
+}
 
 /** Private parent pipe only. This service is never mounted on the observer HTTP/WS API. */
 export class TauriTerminalService {
@@ -29,12 +40,15 @@ export class TauriTerminalService {
     { slot: number; resolve(value: boolean): void }
   >();
   private closed = false;
+  private generation = 0;
+  private mcpBusy = false;
 
   constructor(
     supervisors: TerminalNativeSupervisor[],
-    keys: { publicKey: KeyObject; privateKey: KeyObject },
+    private readonly keys: { publicKey: KeyObject; privateKey: KeyObject },
     private readonly send: (value: object) => void,
-    translate: (key: string) => string,
+    private readonly translate: (key: string) => string,
+    private readonly mcp?: TauriTerminalMcp,
   ) {
     this.panes = supervisors.map((supervisor, slot) => {
       const document = Object.freeze({ slot });
@@ -96,13 +110,20 @@ export class TauriTerminalService {
     const pane = this.panes[message.slot];
     if (!pane) throw new Error('Unknown native terminal document');
     if (message.kind === 'revoke' || message.kind === 'close') {
+      this.generation++;
       pane.state.focused = false;
       for (const pending of [...this.confirmations.values()])
-        if (pending.slot === message.slot) pending.resolve(false);
+        if (pending.slot === message.slot || this.mcpBusy) pending.resolve(false);
       if (message.kind === 'close') {
         pane.state.closed = true;
         pane.broker.close();
+        // Reload/destruction invalidates the shared MCP grant, never just the view's lease.
+        await this.mcp?.closeSlot(message.slot);
       } else pane.broker.revokeInput();
+      return;
+    }
+    if (message.kind === 'authorizeMcp') {
+      await this.authorizeMcp(message);
       return;
     }
     const request = terminalNativeRequestSchema.safeParse(message.request);
@@ -110,7 +131,7 @@ export class TauriTerminalService {
       this.send({ kind: 'reply', id: message.id, value: { status: 'denied' } });
       return;
     }
-    if (pane.state.busy) {
+    if (pane.state.busy || this.mcpBusy) {
       this.send({ kind: 'reply', id: message.id, value: { status: 'busy' } });
       return;
     }
@@ -131,6 +152,70 @@ export class TauriTerminalService {
       });
     } finally {
       pane.state.busy = false;
+    }
+  }
+
+  /** Only the native menu can enter here; the public terminal request schema has no MCP action. */
+  private async authorizeMcp(message: {
+    id: string;
+    slot: number;
+    focused: boolean;
+  }): Promise<void> {
+    const reply = (status: 'ok' | 'denied' | 'busy' | 'cancelled') =>
+      this.send({ kind: 'reply', id: message.id, value: { status } });
+    if (!this.mcp || this.panes.length !== 2 || this.panes.some((p) => p.state.closed))
+      return reply('denied');
+    if (this.mcpBusy || this.panes.some((p) => p.state.busy)) return reply('busy');
+    if (!message.focused) return reply('denied');
+    this.mcpBusy = true;
+    const generation = this.generation;
+    const current = () => !this.closed && this.generation === generation;
+    try {
+      const prepared = (await this.mcp.prepareMcp()) as ReturnType<
+        InteractiveMcpSession['prepare']
+      >;
+      const detail = JSON.stringify(prepared.grant, null, 2).replace(
+        /\p{Cf}/gu,
+        (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
+      );
+      if (!current() || detail.length > 4096) return reply('denied');
+      const accepted = await new Promise<boolean>((resolve) => {
+        const id = randomUUID();
+        const timer = setTimeout(() => finish(false), 30_000);
+        const finish = (accepted: boolean) => {
+          clearTimeout(timer);
+          this.confirmations.delete(id);
+          resolve(accepted);
+        };
+        this.confirmations.set(id, { slot: message.slot, resolve: finish });
+        this.send({
+          kind: 'confirm',
+          id,
+          requestId: message.id,
+          slot: message.slot,
+          title: this.translate('managedTerminal.mcpAuthorize'),
+          message: this.translate('managedTerminal.mcpConfirm'),
+          detail,
+          cancel: this.translate('terminalNative.cancel'),
+          approve: this.translate('terminalNative.confirm'),
+        });
+      });
+      if (!accepted || !current()) return reply('cancelled');
+      if (Date.now() >= Math.min(prepared.challenge.expiresAt, prepared.grant.expiresAt))
+        return reply('denied');
+      await this.mcp.authorizeMcp({
+        challengeId: prepared.challenge.challengeId,
+        signature: sign(
+          null,
+          terminalChallengeBytes(prepared.challenge),
+          this.keys.privateKey,
+        ).toString('base64url'),
+      });
+      reply(current() ? 'ok' : 'denied');
+    } catch {
+      reply('denied');
+    } finally {
+      this.mcpBusy = false;
     }
   }
 

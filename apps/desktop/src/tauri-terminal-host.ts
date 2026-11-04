@@ -30,8 +30,7 @@ async function start() {
   const directory = process.argv[3];
   if (!directory) throw new Error('Private native admission directory required');
   const selection = inspectManagedTerminalFiles(files, files.length);
-  if (selection.some((p) => p.blocker || p.config.interactive?.mcp))
-    throw new Error('Blocked profile or unimplemented native MCP consent');
+  if (selection.some((p) => p.blocker)) throw new Error('Blocked terminal profile');
   const keys = generateKeyPairSync('ed25519');
   const core = await connectManagedTerminalCore(
     files,
@@ -57,7 +56,14 @@ async function start() {
       return shutdown();
     process.stdout.write(line);
   };
-  const service = new TauriTerminalService(core.supervisors, keys, send, translate);
+  const mcpEnabled = !!selection[0]!.config.interactive?.mcp;
+  const service = new TauriTerminalService(
+    core.supervisors,
+    keys,
+    send,
+    translate,
+    mcpEnabled ? core : undefined,
+  );
   const store = terminalLayoutStore(
     directory,
     core.identities.map((identity) => identity.terminalId),
@@ -160,6 +166,9 @@ async function start() {
     quitNotice: translate('managedTerminal.quitNotice'),
     cancel: translate('terminalNative.cancel'),
     quit: translate('managedAgents.disconnectQuit'),
+    mcpEnabled,
+    mcpAuthorize: translate('managedTerminal.mcpAuthorize'),
+    mcpDenied: translate('managedTerminal.mcpDenied'),
     panes: selection.map(({ config }, slot) => ({
       title: `${slot + 1} · ${providers[slot]}`,
       html: terminalDocument({

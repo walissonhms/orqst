@@ -27,6 +27,8 @@ struct Running {
     pending: HashMap<String, oneshot::Sender<Value>>,
     busy: Vec<bool>,
     sequence: u64,
+    mcp_request: Option<(String, usize)>,
+    mcp_denied: String,
     exited: Arc<Notify>,
     quit_notice: String,
     cancel: String,
@@ -373,13 +375,19 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         send(app, json!({"kind": "confirm", "id": id, "accepted": false}));
         return;
     }
-    let generation = app
-        .state::<Terminals>()
-        .0
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|r| r.generations[slot]);
+    let request = value["requestId"].as_str().map(str::to_owned);
+    let generation = {
+        let state = app.state::<Terminals>();
+        let guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else { return };
+        if request
+            .as_ref()
+            .is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot)))
+        {
+            return;
+        }
+        r.generations.get(slot).copied()
+    };
     let approve = fields[4].to_owned();
     let expected = approve.clone();
     let app = app.clone();
@@ -390,12 +398,97 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         .show_with_result(move |result| {
             tauri::async_runtime::spawn(async move {
                 let focused = focused(&window).await;
-                let current = app.state::<Terminals>().0.lock().unwrap().as_ref().map(|r| r.generations[slot]);
+                let current = app.state::<Terminals>().0.lock().unwrap().as_ref().and_then(|r| {
+                    if r.revoked.get(slot).copied().unwrap_or(true)
+                        || request.as_ref().is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot))) {
+                        None
+                    } else { r.generations.get(slot).copied() }
+                });
                 let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
                     && generation == current && self::slot(&window) == Some(slot) && focused;
                 send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
             });
         });
+}
+
+/// Native menu only: no renderer command can select a grant, supply a proof or call MCP tools.
+async fn authorize_mcp(app: &tauri::AppHandle) {
+    let count = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.documents.len())
+        .unwrap_or(0);
+    let mut selected = None;
+    for slot in 0..count {
+        if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+            if focused(&view).await {
+                selected = Some(slot);
+                break;
+            }
+        }
+    }
+    let Some(slot) = selected else { return };
+    let (id, generation, receiver) = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else { return };
+        if count != 2
+            || r.mcp_request.is_some()
+            || r.busy.iter().any(|busy| *busy)
+            || !r.loaded[slot]
+            || r.revoked.iter().any(|revoked| *revoked)
+        {
+            return;
+        }
+        r.sequence += 1;
+        let id = format!("00000000-0000-4000-8000-{:012x}", r.sequence);
+        let (sender, receiver) = oneshot::channel();
+        r.pending.insert(id.clone(), sender);
+        r.mcp_request = Some((id.clone(), slot));
+        let bytes = format!(
+            "{}\n",
+            json!({"kind":"authorizeMcp", "id":id, "slot":slot, "focused":true})
+        );
+        if r.child.write(bytes.as_bytes()).is_err() {
+            r.pending.remove(&id);
+            r.mcp_request = None;
+            drop(guard);
+            revoke(app, slot, true);
+            return;
+        }
+        (id, r.generations[slot], receiver)
+    };
+    let result = tokio::time::timeout(Duration::from_secs(35), receiver).await;
+    let notice = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else { return };
+        r.pending.remove(&id);
+        r.mcp_request = None;
+        match &result {
+            _ if generation != r.generations[slot] => None,
+            Ok(Ok(value)) if value["status"] == "ok" || value["status"] == "cancelled" => None,
+            _ => Some((r.mcp_denied.clone(), r.cancel.clone())),
+        }
+    };
+    if result.is_err() || matches!(result, Ok(Err(_))) {
+        // Ambiguous authorization must not be retried; retain admission/quarantine evidence.
+        revoke(app, slot, true);
+    }
+    if let Some((message, cancel)) = notice {
+        if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+            if focused(&view).await {
+                app.dialog()
+                    .message(message)
+                    .parent(&view.window())
+                    .buttons(MessageDialogButtons::OkCustom(cancel))
+                    .show(|_| {});
+            }
+        }
+    }
 }
 
 pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -487,6 +580,8 @@ pub async fn start_selected(
         pending: HashMap::new(),
         busy: vec![false; count],
         sequence: 0,
+        mcp_request: None,
+        mcp_denied: ready["mcpDenied"].as_str().unwrap_or("").into(),
         exited: exited.clone(),
         quit_notice: ready["quitNotice"].as_str().unwrap_or("").into(),
         cancel: ready["cancel"].as_str().unwrap_or("").into(),
@@ -573,9 +668,25 @@ pub async fn start_selected(
         _ => {}
     });
     resize(app, &workspace);
+    if ready["mcpEnabled"] == true {
+        submenu.append(&MenuItem::with_id(
+            app,
+            "terminal-authorize-mcp",
+            ready["mcpAuthorize"].as_str().unwrap_or("ORQST"),
+            true,
+            None::<&str>,
+        )?)?;
+    }
     menu.append(&submenu)?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
+        if event.id().as_ref() == "terminal-authorize-mcp" {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                authorize_mcp(&app).await;
+            });
+            return;
+        }
         if let Some(slot) = event
             .id()
             .as_ref()
