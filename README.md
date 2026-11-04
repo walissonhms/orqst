@@ -3,7 +3,9 @@
 The [incremental native terminal source](docs/development/terminal-native-enrollment.md)
 now appends a selected CLI/model to the same Core and retained native workspace,
 with Feature CAS, preserved layouts and uncertainty fences. Pure/renderer checks
-pass; native compilation, WebKit/provider execution and packaging remain pending.
+pass; native compilation and a locally signed Preview package now also pass.
+Actual terminal opening/provider execution remains under acceptance, with the
+Codex opening refusal and OpenCode installation ambiguity still open.
 Earlier one-selection descriptions below record the previous increment. The open
 Preview keeps its existing executable/resources.
 
@@ -25,7 +27,7 @@ Selected models reach the existing launch profiles and are revalidated before
 process creation. The [CLI → model → Open UI and native wiring](docs/development/terminal-product-open.md)
 are now integrated in source, with focused and renderer checks. Private Core
 enrollment and its native service/Webview/layout integration are implemented in
-source; Rust compilation and native/provider acceptance remain pending. The open Preview does
+source; Rust compilation passes and native/provider acceptance remains pending. The open Preview does
 not acquire these changes automatically.
 
 Studio now uses one full-window Feature workspace when the native Feature bridge

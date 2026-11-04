@@ -259,7 +259,8 @@ Cargo, resource staging and broad build/test loads remain paused at approximatel
       partial launch retains its attempt identity and never retries Start.
 - [x] Pure and renderer-only EN/PT cases cover the shared shell, catalog errors,
       model choice, keyboard/focus, overflow and partial continuation.
-- [ ] Run new Rust tests/clippy/build after coordinated disk margin permits Cargo.
+- [x] Run the integrated Rust tests (39), Clippy and custom-protocol build serially
+      after coordinated disk cleanup; no provider acceptance is implied.
 - [ ] Complete native WebKit/dialog/provider/model/packaging acceptance.
 - [ ] Add a second independently selected CLI/model to the same live Core/Pair,
       retaining old processes/documents and uncertain admission evidence. Current
@@ -292,12 +293,17 @@ This source increment does not mark native/runtime/provider acceptance complete.
 - [x] Pass focused session-free continuity/layout/CAS and EN/PT xterm-facade checks.
 - [x] Integrate all three native/desktop commits on main; 46 focused cases,
       TypeScript, Studio and actual-xterm synthetic-facade EN/PT checks pass.
-- [ ] Compile/test Rust and accept native WebKit, actual providers/models, cleanup
-      and packaging. Source/facade success does not certify a running Preview.
+- [x] Compile/test Rust (39 cases), Clippy with warnings denied, custom-protocol
+      build, dashboard/resources and local app bundle with strict deep signature
+      verification. Recheck 111 packaged resources and preserve earlier binaries.
+- [ ] Accept actual native terminal opening, providers/models, cleanup and
+      communication. A native Codex opening refusal and OpenCode executable
+      ambiguity remain unresolved; no end-to-end acceptance is claimed.
 
 See [exact checks and remaining limits](../development/terminal-native-enrollment.md).
 
 The native source follow-up also cancels expired queued UI creation and advances
 the existing presentation fence on creation/presentation failure. Pure Rust source
 cases cover callback cancellation and late layout refusal; only rustfmt parsing
-and diff validation were run for this follow-up, with Cargo still pending.
+and diff validation initially ran for this follow-up. The subsequent integrated
+39-case Rust run executed these regressions successfully.

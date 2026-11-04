@@ -581,3 +581,29 @@ scrollback; it launches no PTY/provider. Native compilation, native
 WebKit/consent/model/provider behavior, complete cleanup and a new package remain
 unaccepted. The running Preview still uses its earlier resources. See
 [implementation and verification limits](../development/terminal-native-enrollment.md).
+
+## Native build passed; opening acceptance still blocked — 2026-11-04
+
+The source `a48bce0` now has executable native verification: dashboard build,
+resources with 17 notices, 39 Rust tests, all-targets Clippy with warnings denied
+and custom-protocol build passed. The packaged feature also passed tests/Clippy.
+A separate local Preview was ad-hoc signed and strictly verified; 111 resources
+matched staging and earlier executable hashes were preserved. See the
+[package provenance and remaining acceptance](../development/terminal-native-enrollment.md#native-compilation-and-local-preview--2026-11-04).
+
+Native passive picker checks worked for Codex and Claude defaults. Actual OpenCode
+selection is blocked by multiple installations and an unavailable recovery path.
+A user Codex/gpt-6.1-sol opening was refused after configuration confirmation
+with a generic native alert; its exact subsequent stage is lost by current error
+handling. A plan-only diagnostic
+recognized the model without calling provision. No real CLI opening/communication
+is accepted, no uncertain attempt is automatically repeated, and existing state
+is preserved. The OpenCode front compared actual source in both references:
+Tucano has provider implementations; the inspected Anywh revision has Codex and
+Claude drivers but no OpenCode implementation. This distinction must remain
+explicit rather than advertising unsupported provider parity.
+
+Heavy work was paused after ENOSPC during diagnostics. Unused Cargo caches were
+removed with no compiler or open files; apps/source/evidence remain intact. A
+subsequent filesystem check reported 28 GiB free; new builds remain serial and
+space-checked.

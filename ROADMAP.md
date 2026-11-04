@@ -1,5 +1,21 @@
 # ORQST roadmap
 
+## Native terminal verification — 2026-11-04
+
+Integrated source `a48bce0` passed 39 Rust tests, packaged-feature tests, all-targets
+Clippy, dashboard/resources and a custom-protocol build. A separate local Preview
+was ad-hoc signed and verified, with 111 matching packaged resources. This closes
+the compile/package check, not actual provider acceptance.
+
+Actual opening remains blocked: a user Codex `gpt-6.1-sol` attempt failed after
+configuration confirmation; OpenCode discovery treats identical reviewed copies
+as ambiguous. The OpenCode source review additionally found that its full TUI
+does not consume the model flag currently emitted by ORQST. Fix discovery and
+the real model contract, expose bounded actionable failures, then validate native
+opening and communication. Preserve the active Preview and uncertain attempts;
+do not automatically retry or reconcile. See
+[verification and remaining limits](docs/development/terminal-native-enrollment.md).
+
 ## Native incremental terminal source — 2026-11-04
 
 Service, retained Webview, xterm navigation and Feature/layout append are now wired

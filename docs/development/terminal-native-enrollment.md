@@ -102,3 +102,39 @@ Integration on main reran 46 focused session-free cases (including mocked Core
 IPC), TypeScript, both Studio and xterm EN/PT renderer scripts, rustfmt and diff
 checks successfully. These checks do not compile or execute the Rust tests and
 do not update the open Preview.
+
+## Native compilation and local Preview — 2026-11-04
+
+On integrated source `a48bce0`, the dashboard build and Tauri resource staging
+(17 dependency notices) passed. The shared Cargo target then passed 39 Rust tests,
+Clippy `--all-targets -- -D warnings` and the `custom-protocol` build. Tests and
+Clippy also passed with that packaged feature enabled. The isolated toolchain
+needed its bin directory in PATH; its debug-strip helper also needed the existing
+LLVM library on `DYLD_FALLBACK_LIBRARY_PATH`. The final packaged-feature checks
+and build completed without that earlier tool warning. No lint was relaxed.
+
+The local ad-hoc signed app is
+`dist/native-preview-enrollment/ORQST Preview.app`; its sibling
+`build-manifest.json` records source/native/resource hashes. Strict deep signature
+verification passed, 111 resources matched staging, and earlier Preview and
+coexistence executables retained their recorded hashes. This is a local development
+package, not a notarized distribution or completed provider acceptance.
+
+Read-only native WebKit checks observed the new picker without Finder, the real
+passive Codex catalog and enabled Open after selecting CLI default for Codex and
+Claude Code. OpenCode was refused as multiple reviewed installations, while its
+suggested Advanced recovery is disabled. A user-reported Codex `gpt-6.1-sol`
+opening attempt showed the generic preparation/opening refusal after the user
+confirmed configuration. The exact subsequent failing stage is unavailable
+because the existing bridge discards the underlying exception.
+The selected model was recognized by a separate plan-only inspection; provisioning
+was never called in that diagnostic. These observations do not establish a CLI
+start, cleanup or communication result, and the user attempt must not be replayed
+or reconciled automatically.
+
+Disk space again reached ENOSPC during later diagnostics. Unused generated Cargo
+caches were removed only after compiler/process and open-file checks. Sources,
+packaged apps, owned state and all uncertain evidence were preserved. Heavy builds
+were paused. A later filesystem check reported 28 GiB available; any new build
+still requires a fresh space check and serial coordination. Disk exhaustion is
+not a proven retrospective explanation of the user's refusal.

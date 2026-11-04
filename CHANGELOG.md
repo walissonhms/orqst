@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-04 — Native build and local Preview verification
+
+- Pass 39 Rust tests, Clippy and custom-protocol build; package and locally sign
+  a separate Preview with 111 verified resources and preserved earlier binaries.
+- Keep actual CLI opening unaccepted: Codex reports a generic preparation/opening
+  refusal, and OpenCode's multiple-installation recovery remains blocked.
+- Preserve uncertain attempts and pause heavy work during renewed disk exhaustion;
+  a later filesystem check reported 28 GiB available.
+
 ## 2026-11-04 — Native enrollment presentation fences
 
 - Cancel expired queued Webview creation before its native effect and invalidate
