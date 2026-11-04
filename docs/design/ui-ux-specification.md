@@ -471,3 +471,13 @@ Unsupported native access has an honest unavailable state. The actual native wiz
 continues to own paths, review and separate opening; this introduces no Start,
 login, prompt, model choice or provider operation. See the
 [contract and remaining acceptance](../api/tauri-studio.md).
+
+## Tauri preparation failure feedback — 2026-11-04
+
+Preparation displays the localized bounded reason and possible effects first;
+stage information is in optional diagnostic details. Studio completion does not
+require dismissing an error sheet; native-menu informational failure notices are
+nonblocking. Existing native review and Start consent remain separate, and uncertain
+attempts gain no retry/recovery action. This is source and synthetic evidence only;
+actual native/provider acceptance remains pending. See the
+[integration and actual test scope](../development/tauri-opening-source-integration.md).

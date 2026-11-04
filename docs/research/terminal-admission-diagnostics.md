@@ -4,8 +4,8 @@ Baseline `19f68b4`; review is static source at the pinned revisions below. Exist
 separate research checkouts were used without starting upstream software. ORQST's
 AGENTS, current overview/managed-terminal design, reuse audit and approved V6 source
 package were consulted. The historical `docs/architecture/implementation-plan.md`
-and `tucano-audit.md` named by AGENTS are absent from this baseline; neither is
-recreated or rewritten. The current implementation remains the source of truth.
+and `tucano-audit.md` named by AGENTS are not versioned in this baseline; their
+local owner-supplied copies were read during integration and remain unchanged. The current implementation remains the source of truth.
 
 - [Anywh architecture](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/docs/architecture.md),
   [Agent Host](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/docs/agent-host.md)

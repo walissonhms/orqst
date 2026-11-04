@@ -1,5 +1,16 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Combined opening source — 2026-11-04
+
+- [x] Integrate UI-getter lock release and passive admission/startup diagnostics,
+      preserving post-wait ownership checks and keyed late append/EOF protection.
+- [x] Verify the original stop cleanup body and intentional public Stop; pass
+      187 synthetic Node and 8 pure Rust cases, lint/types/rustfmt/diff.
+- [ ] Integrate reviewed logger hooks and freeze combined source before one package build.
+- [ ] Complete full native compilation and actual native/provider opening acceptance.
+
+See [integration and actual test scope](../development/tauri-opening-source-integration.md).
+
 ## Passive admission and startup diagnosis — 2026-11-04
 
 - [x] Passively refuse a previous reservation before provisioning/new fork; retain

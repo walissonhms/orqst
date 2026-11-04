@@ -97,3 +97,11 @@ Previous reservations require evidence-backed review, never automatic clearing.
 Studio uses its existing in-window notice with optional stage details; native-menu
 error notices are nonblocking. Completion only releases transient busy state, not
 uncertain commit/open/ownership latches. No new renderer capability is introduced.
+
+## Native document wait ownership — 2026-11-04
+
+Preparation and Feature document identity snapshot native state before UI getters,
+release application mutexes for the wait, then revalidate source/version. Feature
+replies retain Core epoch, presentation/document and exact request ownership checks
+before consumption. This adds no renderer authority or public fields. See the
+[combined source review and native limits](../development/tauri-opening-source-integration.md).

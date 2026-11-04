@@ -126,3 +126,11 @@ No Cargo, build, staging, installation, dependency update, target creation, appl
 provider, CLI, Core, PTY, probe, authentication database or GUI was run. Full `pnpm test`,
 `pnpm build`, real-source acceptance and packaging were deliberately not run under
 this task's constraints. Available space was 25 GiB before and after these light checks.
+
+## Combined source integration — 2026-11-04
+
+Integrated as `029eae6`, followed by admission/startup source `5e2b034`. Both sets
+of reader identities and post-wait protections are retained. The combined run
+passed 187 synthetic Node and 8 pure Rust cases plus source checks, with no product
+build or real native/provider acceptance. See the
+[integration review and actual test scope](tauri-opening-source-integration.md).

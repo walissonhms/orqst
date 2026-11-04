@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Tauri opening source integration — 2026-11-04
+
+The combined source releases application state before document getters and
+revalidates ownership after waits. Passive admission, bounded startup reasons and
+keyed append/EOF cleanup preserve uncertain reservations and intentional Stop.
+The combined source passed 187 synthetic Node and 8 pure Rust cases plus
+lint/types/rustfmt; no product build or native/provider acceptance is claimed.
+Logger hooks and packaging await the next reviewed source freeze. See
+[integration, actual test scope and remaining gates](docs/development/tauri-opening-source-integration.md).
+
 ## Passive admission and startup reasons — 2026-11-04
 
 New selection checks an earlier terminal reservation before provisioning and before

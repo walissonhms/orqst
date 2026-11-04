@@ -103,3 +103,13 @@ the original cleanup; explicit public Stop retains its intentional unconditional
 take. A pure regression verifies replacement/absent/reinstalled hosts survive a late
 EOF and current-host cleanup is consumed once. This fixes a demonstrated source
 risk, not a proven cause of the historical hang.
+
+## Combined source integration — 2026-11-04
+
+This candidate is integrated with the UI-getter fix in `5e2b034`. The combined
+187-case Node log includes four synthetic private helper subprocess tests despite
+the requested negative-lookahead filter; the earlier exclusion statement above is
+not established by that filter and is not relied on. No app/Core/PTY/provider or
+real consent was exercised. See the [integration record](tauri-opening-source-integration.md)
+for actual checks, conflict resolution, cleanup comparison and remaining logger,
+package and native acceptance gates.
