@@ -855,28 +855,35 @@ export class PaneCommunication {
     });
   }
   private operation<T>(grant: Grant, action: (tx: CommunicationTransaction) => T): T {
-    const result = this.journal.transaction((tx) => {
-      try {
+    try {
+      return this.journal.transaction((tx) => {
         if (!this.valid(grant)) throw new Error('Grant expired or revoked');
-        return { ok: true as const, value: this.snapshot(() => action(tx)) };
-      } catch (error) {
-        this.audit(
-          tx,
-          {
-            workspaceId: grant.workspaceId,
-            paneId: grant.sourcePaneId,
-            featureId: grant.featureId,
-          },
-          'denied',
-          undefined,
-          grant.actorId,
-        );
-        return { ok: false as const, error };
+        return this.snapshot(() => action(tx));
+      });
+    } catch (error) {
+      // Admission and state changes must roll back before recording a denial.
+      // A fenced journal cannot accept the separate audit either.
+      try {
+        this.journal.transaction((tx) => {
+          this.audit(
+            tx,
+            {
+              workspaceId: grant.workspaceId,
+              paneId: grant.sourcePaneId,
+              featureId: grant.featureId,
+            },
+            'denied',
+            undefined,
+            grant.actorId,
+          );
+        });
+      } catch {
+        // Preserve the original failure when the denial cannot be recorded.
       }
-    });
-    if (!result.ok) throw result.error;
-    return result.value;
+      throw error;
+    }
   }
+
   private save(
     tx: CommunicationTransaction,
     m: CommunicationMessage,

@@ -939,3 +939,75 @@ test('local send fails closed without repairing a structurally damaged cross ide
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test(
+  'snapshot close failure rolls back local admission and state changes',
+  withFixture(async (f) => {
+    let fail = false;
+    const service = new PaneCommunication(
+      f.journal,
+      f.resolver,
+      f.now,
+      undefined,
+      undefined,
+      (action) => {
+        const result = action(
+          () => {
+            throw new Error('unexpected local read');
+          },
+          () => {
+            throw new Error('unexpected cross read');
+          },
+        );
+        if (fail) throw new Error('synthetic preferences close failure');
+        return result;
+      },
+    );
+    const authorize = () =>
+      service.authorize({
+        actorId: 'synthetic-agent',
+        workspaceId: f.a.workspaceId,
+        sourcePaneId: f.a.paneId,
+        targetPaneIds: [f.b.paneId],
+        expiresAt: f.now() + 800000,
+      });
+    const client = authorize();
+    const request = f.request();
+    const before = f.journal.transaction((tx) => tx.events(0));
+    fail = true;
+    assert.throws(() => client.send(request), /preferences close failure/);
+    assert.deepEqual(
+      f.journal.transaction((tx) => tx.messages()),
+      [],
+    );
+    const after = f.journal.transaction((tx) => tx.events(0));
+    assert.deepEqual(after.slice(0, before.length), before);
+    assert.deepEqual(
+      after.slice(before.length).map((event) => event.action),
+      ['denied'],
+    );
+    fail = false;
+    client.send(request);
+    const original = f.journal.transaction((tx) => tx.messages()[0]);
+    fail = true;
+    assert.throws(() => client.cancelQueued(request.messageId), /preferences close failure/);
+    assert.deepEqual(
+      f.journal.transaction((tx) => tx.messages()[0]),
+      original,
+    );
+    assert.throws(
+      () => service.reauthorize(client, request.messageId),
+      /preferences close failure/,
+    );
+    assert.deepEqual(
+      f.journal.transaction((tx) => tx.messages()[0]),
+      original,
+    );
+    f.advance(700001);
+    await assert.rejects(service.dispatchNext(f.b.paneId), /preferences close failure/);
+    assert.deepEqual(
+      f.journal.transaction((tx) => tx.messages()[0]),
+      original,
+    );
+  }),
+);
