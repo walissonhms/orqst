@@ -1433,6 +1433,7 @@ fn workspace_capability() -> tauri::ipc::CapabilityBuilder {
         .permission("allow-feature-request")
         .permission("allow-feature-prepare")
         .permission("allow-terminal-restore")
+        .permission("allow-feature-permissions")
 }
 
 pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -1658,6 +1659,66 @@ mod tests {
         resume.wait();
         assert!(!worker.join().unwrap());
         assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn permission_command_runtime_acl_is_only_the_exact_chrome() {
+        let mut context = crate::app_context();
+        let authority = context.runtime_authority_mut();
+        let local = tauri::ipc::Origin::Local;
+        assert!(authority
+            .resolve_access("feature_permissions", "main", "feature-workspace", &local)
+            .is_none());
+        authority.add_capability(workspace_capability()).unwrap();
+        assert!(authority
+            .resolve_access("feature_permissions", "main", "feature-workspace", &local)
+            .is_some());
+        for label in ["main", "terminal-0", "terminal-7", "managed-agents"] {
+            assert!(
+                authority
+                    .resolve_access("feature_permissions", "main", label, &local)
+                    .is_none(),
+                "{label}"
+            );
+        }
+        let correct = tauri::ipc::Origin::Remote {
+            url: CHROME_URL.parse().unwrap(),
+        };
+        assert!(authority
+            .resolve_access("feature_permissions", "main", "feature-workspace", &correct)
+            .is_some());
+        for wrong in [
+            "orqst-features://local/other.html",
+            "orqst-features://other/index.html",
+            "https://example.invalid/index.html",
+        ] {
+            let origin = tauri::ipc::Origin::Remote {
+                url: wrong.parse().unwrap(),
+            };
+            assert!(
+                authority
+                    .resolve_access("feature_permissions", "main", "feature-workspace", &origin)
+                    .is_none(),
+                "{wrong}"
+            );
+        }
+        for wrong in [
+            "orqst-features://local/index.html?x=1",
+            "orqst-features://local/index.html#x",
+            "orqst-features://local/other.html",
+        ] {
+            assert!(!permission_source_allowed(
+                "feature-workspace",
+                "main",
+                wrong
+            ));
+        }
+        assert!(!permission_source_allowed("terminal-0", "main", CHROME_URL));
+        assert!(!permission_source_allowed(
+            "feature-workspace",
+            "other",
+            CHROME_URL
+        ));
     }
 
     #[test]
