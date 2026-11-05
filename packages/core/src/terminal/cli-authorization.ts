@@ -48,6 +48,8 @@ const verifiedRecordSchema = legacyRecordSchema.extend({
   mode: z.enum(['tui', 'mcp']),
   executableVersion: z.string().min(1).max(64),
   contractRevision: z.string().min(1).max(128),
+  environmentProfile: z.string().min(1).max(2048),
+  cliAuthorizationScope: z.string().min(1).max(2048),
   signature: z.strictObject({
     valid: z.literal(true),
     teamId: z.string().min(1).max(64),
@@ -66,7 +68,14 @@ export interface TerminalCliEvidence {
 }
 export interface TerminalCliReview {
   previous: Record | undefined;
-  candidate: TerminalCliEvidence & { executable: string; permissionScope: string };
+  candidate: TerminalCliEvidence & {
+    executable: string;
+    permissionScope: string;
+    environmentProfile: string;
+    cliAuthorizationScope: string;
+    authorizationEpoch: string;
+  };
+  expectedEpoch?: string;
 }
 
 const permissionScope = (profile: Readonly<TerminalProfile>) =>
@@ -101,6 +110,12 @@ export class TerminalCliPolicyStore {
       if (lstatSync(file).nlink !== 1) throw new Error('Linked CLI policy');
       const value = recordSchema.parse(JSON.parse(terminalFile(file, true, 4096).toString('utf8')));
       if (value.executable !== profile.executable) throw new Error('CLI policy identity mismatch');
+      if (
+        value.version === 2 &&
+        terminalDigest(JSON.stringify([value.environmentProfile, value.cliAuthorizationScope])) !==
+          value.permissionScope
+      )
+        throw new Error('CLI policy scope mismatch');
       return value;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
@@ -240,8 +255,12 @@ export class TerminalCliPolicyStore {
         ...evidence,
         executable: profile.executable,
         permissionScope: permissionScope(profile),
+        environmentProfile: profile.environmentProfile,
+        cliAuthorizationScope: profile.cliAuthorizationScope,
+        authorizationEpoch: randomUUID(),
       };
-      if (!(await review({ previous, candidate }))) return 'blocked';
+      if (!(await review({ previous, candidate, ...(expectedEpoch ? { expectedEpoch } : {}) })))
+        return 'blocked';
       const verified = await verifiedCliSignature(verifier, provider, profile.executable);
       this.inspect(profile);
       if (
@@ -255,9 +274,11 @@ export class TerminalCliPolicyStore {
         scope: 'owned-local-terminal-v1',
         executable: profile.executable,
         executableSha256: profile.executableSha256,
-        authorizationEpoch: randomUUID(),
+        authorizationEpoch: candidate.authorizationEpoch,
         permissionScope: permissionScope(profile),
         state: 'allowed',
+        environmentProfile: profile.environmentProfile,
+        cliAuthorizationScope: profile.cliAuthorizationScope,
         provider,
         mode,
         executableVersion: evidence.version,

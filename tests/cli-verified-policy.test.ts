@@ -69,9 +69,19 @@ test('verified policy stores evidence and asks again for changed bytes, scope an
     assert.equal(await authorize('00000000-0000-4000-8000-000000000000'), 'allowed');
     assert.equal(reviews.length, 2);
     assert.equal(reviews[1]!.previous?.version, 2);
+    assert.equal(reviews[1]!.expectedEpoch, '00000000-0000-4000-8000-000000000000');
+    assert.notEqual(
+      reviews[1]!.previous!.authorizationEpoch,
+      reviews[1]!.candidate.authorizationEpoch,
+    );
     profile = { ...profile, cliAuthorizationScope: 'scope-b' };
     assert.equal(await authorize(), 'allowed');
     assert.equal(reviews.length, 3);
+    assert.equal(reviews[2]!.candidate.cliAuthorizationScope, 'scope-b');
+    assert.equal(
+      reviews[2]!.previous?.version === 2 && reviews[2]!.previous.cliAuthorizationScope,
+      'scope-a',
+    );
     const updated = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 9, 8, 7, 6]);
     writeFileSync(path, updated);
     profile = { ...profile, executableSha256: terminalDigest(updated) };
