@@ -593,7 +593,9 @@
     "stop": "Send this exact signal to this owned process? Exit is not guaranteed.",
     "cancel": "Cancel",
     "confirm": "Authorize once",
-    "open": "Open this exact CLI and model in this workspace, connect its output and enable keyboard input for up to two minutes?"
+    "open": "Open this exact CLI and model in this workspace, connect its output and enable keyboard input for up to two minutes?",
+    "authorizeCli": "Authorize local CLI",
+    "cliScope": "Allow normal use of terminals you open with this reviewed executable. Native provider approvals remain unchanged."
   },
   "overviewLayout": {
     "title": "Customize overview",

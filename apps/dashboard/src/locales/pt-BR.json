@@ -593,7 +593,9 @@
     "stop": "Enviar este sinal a este processo próprio? O encerramento não é garantido.",
     "cancel": "Cancelar",
     "confirm": "Autorizar uma vez",
-    "open": "Abrir este CLI e modelo neste workspace, conectar sua saída e habilitar o teclado por até dois minutos?"
+    "open": "Abrir este CLI e modelo neste workspace, conectar sua saída e habilitar o teclado por até dois minutos?",
+    "authorizeCli": "Autorizar CLI local",
+    "cliScope": "Permitir o uso normal dos terminais que você abrir com este executável revisado. As aprovações nativas do provedor continuam inalteradas."
   },
   "overviewLayout": {
     "title": "Personalizar visão geral",
