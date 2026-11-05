@@ -56,7 +56,6 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withTerminalPreferences(directory, (store) =>
         store.transaction(() => {
           const localPolicies = store.featurePermissions();
-          const crossPolicies = store.crossFeaturePermissions();
           const local: FeaturePermissionReader = (requested) => {
             if (requested.workspaceId !== workspaceId)
               throw new Error('Feature permission workspace denied');
@@ -65,10 +64,13 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
               permissions: localPolicies.read(scope(requested.featureId)),
             };
           };
-          const cross = (source: string, target: string) => ({
-            source: crossPolicies.read(scope(source)),
-            target: crossPolicies.read(scope(target)),
-          });
+          const cross = (source: string, target: string) => {
+            const crossPolicies = store.crossFeaturePermissions();
+            return {
+              source: crossPolicies.read(scope(source)),
+              target: crossPolicies.read(scope(target)),
+            };
+          };
           const result = action(local, cross);
           if (result && typeof (result as { then?: unknown }).then === 'function')
             throw new Error('Feature permission snapshot must be synchronous');

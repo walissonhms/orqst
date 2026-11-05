@@ -546,3 +546,65 @@ test('saved Feature policy only becomes a proposal after exact fresh live identi
     f.close();
   }
 });
+
+test('local permission snapshots do not open absent, future, or damaged cross policy schemas', () => {
+  for (const variant of ['absent', 'future', 'corrupt'] as const) {
+    const f = fixture();
+    try {
+      const feature = f.core.create({ name: 'SYNTHETIC isolated policy' });
+      const path = join(f.directory, 'terminal-layouts/preferences.sqlite');
+      const db = new DatabaseSync(path);
+      if (variant === 'future')
+        db.exec(
+          'CREATE TABLE cross_feature_permission_schema (singleton INTEGER PRIMARY KEY, version INTEGER); INSERT INTO cross_feature_permission_schema VALUES (1, 999)',
+        );
+      if (variant === 'corrupt')
+        db.exec(
+          "CREATE TABLE cross_feature_permission_schema (marker TEXT); INSERT INTO cross_feature_permission_schema VALUES ('preserve')",
+        );
+      const before = db
+        .prepare(
+          "SELECT name, sql FROM sqlite_master WHERE name LIKE 'cross_feature_permission%' ORDER BY name",
+        )
+        .all();
+      const data =
+        variant === 'absent'
+          ? []
+          : db.prepare('SELECT * FROM cross_feature_permission_schema').all();
+      db.close();
+      const local = f.core.withPermissionSnapshot((read) =>
+        read({ workspaceId: workspace, featureId: feature.featureId }),
+      );
+      assert.equal(local.feature.featureId, feature.featureId);
+      const after = new DatabaseSync(path);
+      assert.deepEqual(
+        after
+          .prepare(
+            "SELECT name, sql FROM sqlite_master WHERE name LIKE 'cross_feature_permission%' ORDER BY name",
+          )
+          .all(),
+        before,
+      );
+      if (variant !== 'absent')
+        assert.deepEqual(
+          after.prepare('SELECT * FROM cross_feature_permission_schema').all(),
+          data,
+        );
+      after.close();
+      if (variant === 'absent') {
+        const cross = f.core.withPermissionSnapshot((_local, read) =>
+          read(feature.featureId, feature.featureId),
+        );
+        assert.equal(cross.source.state.policy, null);
+      } else {
+        assert.throws(() =>
+          f.core.withPermissionSnapshot((_local, read) =>
+            read(feature.featureId, feature.featureId),
+          ),
+        );
+      }
+    } finally {
+      f.close();
+    }
+  }
+});
