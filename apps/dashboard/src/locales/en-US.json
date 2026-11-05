@@ -816,7 +816,8 @@
     "state_ownership_lost": "Ownership lost",
     "unavailable": "Native transport unavailable. Keyboard input is disabled; process state is unconfirmed.",
     "openingIncomplete": "Opening is incomplete. The process attempt is retained. Inspect its state and connect output or keyboard for this same instance; no new Start was attempted.",
-    "guide_openingIncomplete": "The attempt identity was retained but its current state is unavailable. Refresh this instance; do not start another process or remove its reservation."
+    "guide_openingIncomplete": "The attempt identity was retained but its current state is unavailable. Refresh this instance; do not start another process or remove its reservation.",
+    "authorization": "Authorize local CLI to continue."
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",

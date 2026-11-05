@@ -816,7 +816,8 @@
     "state_ownership_lost": "Posse perdida",
     "unavailable": "Transporte nativo indisponível. Entrada de teclado desativada; estado do processo não confirmado.",
     "openingIncomplete": "A abertura ficou incompleta. A tentativa do processo foi preservada. Confira o estado e conecte a saída ou teclado desta mesma instância; nenhum novo Start foi tentado.",
-    "guide_openingIncomplete": "A identidade da tentativa foi preservada, mas o estado atual está indisponível. Atualize esta instância; não inicie outro processo nem remova sua reserva."
+    "guide_openingIncomplete": "A identidade da tentativa foi preservada, mas o estado atual está indisponível. Atualize esta instância; não inicie outro processo nem remova sua reserva.",
+    "authorization": "Autorize o CLI local para continuar."
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",

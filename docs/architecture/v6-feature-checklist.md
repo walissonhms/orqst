@@ -625,3 +625,32 @@ See [delivery boundaries and actual evidence locations](../development/offline-c
 - [ ] Review/check the frozen native crate and package separately; accept actual button visibility on small screens/windows.
 
 See [source and acceptance limits](../research/native-consent-scroll.md).
+
+## Single-window frontend integration — 2026-11-05 (source state)
+
+Implemented in code on this branch, not validated on a machine:
+
+- One normal ORQST window: the owned terminals and the managed agent document are
+  child webviews of `main`; there is no second top-level window. The Feature
+  chrome follows the same parent. WebKit/AppKit acceptance is pending.
+- Single local CLI authorization (backend `541ebf0`): one `open` review, then
+  normal launch/attach/input; denied replies expose `authorization:
+  blocked|revoked` and the terminal chrome surfaces the single authorization
+  copy. Native acceptance is pending.
+- Feature + Terminal entry (`61eb2fd`, pane-766) is integrated in code; native
+  acceptance is pending.
+
+Open, not implemented:
+
+- Quit with owned processes. The reviewed private `shutdownOwned`/`retireOwned`
+  pipe is in progress in the backend increment. Until it lands, `CloseRequested`
+  keeps the current confirmation and must not call `app.exit(0)` while an owned
+  process runs. Real limitation: `prepareRetire` refuses unvalidated
+  OpenCode/version-3 descendants, so retirement can remain `uncertain` even
+  after the PTY exit.
+- Without an owner: sidebar refusal, OpenCode plugin, Codex warning, effective
+  models, mixed MCP and coexistence.
+
+Validated on this machine: `pnpm test` 1190/1190, `pnpm lint`, `pnpm typecheck`,
+`cargo check` and `cargo test` 100 passed / 1 ignored on the shared target.
+Real WebKit/AppKit and provider acceptance remain pending.

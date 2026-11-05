@@ -134,6 +134,7 @@ const show = (key: string) => {
     'gap',
     'focus_required',
     'unavailable',
+    'authorization',
   ].includes(key)
     ? 'error'
     : 'info';
@@ -159,7 +160,8 @@ async function send(
     const reply = suppliedReply ?? (await client.request(request));
     if (reply.status !== 'ok') {
       if (request.action === 'write' || request.action === 'paste') revoke();
-      show(reply.status);
+      // The single local CLI review is the only way forward; never bypass it here.
+      show(reply.authorization ? 'authorization' : reply.status);
       return reply;
     }
     if (request.action !== 'read' && request.action !== 'snapshot' && request.action !== 'resize')
