@@ -1206,3 +1206,16 @@ Full `pnpm test` not run in this round.
 
 Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
 `cargo test` 110 passed / 1 ignored.
+
+## Pane action separation — 2026-11-05 (source state)
+
+- [x] Hide and Disconnect output are view-only and grouped apart from process
+      actions; they never call stop/kill and produce no native process request.
+- [x] Stop sends SIGTERM with copy that exit is not guaranteed and keeps its
+      normal no-modal path; Terminate forces SIGKILL with destructive copy and keeps
+      its existing native review.
+- [x] EN/PT labels and group text exist in both locales; the pure action mapping is
+      tested (`5f661b7`).
+- [ ] Native WebKit acceptance of the grouped pane disclosure.
+
+Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 0.
