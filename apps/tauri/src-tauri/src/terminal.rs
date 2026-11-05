@@ -667,6 +667,17 @@ mod tests {
     }
 }
 
+/// Narrow document revocation for a terminated renderer. No process effect.
+pub fn revoke_document(app: &tauri::AppHandle, label: &str) {
+    let Some(slot) = label
+        .strip_prefix("terminal-")
+        .and_then(|value| value.parse::<usize>().ok())
+    else {
+        return;
+    };
+    revoke(app, slot, true);
+}
+
 fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
     {
         let state = app.state::<Terminals>();
@@ -1694,6 +1705,7 @@ fn create_terminal_view(
     let handle = app.clone();
     let expected = url(slot);
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(expected.parse()?))
+        .incognito(true)
         .focused(false)
         .disable_drag_drop_handler()
         .on_navigation(move |url| url.as_str() == expected)

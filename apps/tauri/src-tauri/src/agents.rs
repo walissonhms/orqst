@@ -124,6 +124,11 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
     let bytes = format!("{message}\n");
     bytes.len() <= 128 * 1024 && running.child.write(bytes.as_bytes()).is_ok()
 }
+/// Narrow document revocation for a terminated renderer. No process effect.
+pub fn revoke_document(app: &tauri::AppHandle) {
+    revoke(app, true);
+}
+
 fn revoke(app: &tauri::AppHandle, close: bool) {
     {
         let state = app.state::<Agents>();
@@ -345,6 +350,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
     let parent = app.get_window("main").ok_or("Missing main window")?;
     let view = parent.add_child(
         WebviewBuilder::new(LABEL, WebviewUrl::External(URL.parse()?))
+            .incognito(true)
             .focused(false)
             .disable_drag_drop_handler()
             .on_navigation(|url| url.as_str() == URL)

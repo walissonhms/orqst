@@ -7,6 +7,7 @@ mod files;
 mod host_phase;
 mod local_diagnostics;
 mod offline_recovery;
+mod renderer;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -21,12 +22,24 @@ fn allowed_dashboard_navigation(url: &tauri::Url, origin: Option<&str>) -> bool 
         && (url.as_str() == unavailable::URL || webview_policy::dashboard_path_allowed(url.path()))
 }
 
+/// Install the macOS termination callback before any webview exists.
+fn with_renderer_handler(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    #[cfg(target_os = "macos")]
+    {
+        builder.on_web_content_process_terminate(renderer::on_terminate)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        builder
+    }
+}
+
 fn main() {
     if offline_recovery::startup_arguments().is_err() {
         eprintln!("Invalid administrative recovery arguments");
         return;
     }
-    tauri::Builder::default()
+    with_renderer_handler(tauri::Builder::default())
         .on_permission_request(|_, _| PermissionResponse::Deny)
         // Adapted from Anywh lib.rs at the same pinned commit as sidecar.rs.
         // A second native launch focuses the first window before starting a Core.

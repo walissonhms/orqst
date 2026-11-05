@@ -439,6 +439,7 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
     }
     let window =
         WebviewWindowBuilder::new(app, "offline-recovery", WebviewUrl::External(URL.parse()?))
+            .incognito(true)
             .title(text("title"))
             .on_navigation(|url| url.as_str() == URL)
             .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)

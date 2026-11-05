@@ -71,6 +71,20 @@ pub fn response(request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Respons
         .expect("static unavailable response")
 }
 
+/// Explicit renderer-crash presentation. Never simulates observer loss or reloads the app.
+pub fn show_renderer_unavailable(app: &tauri::AppHandle) {
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let Some(window) = app.get_webview_window("main") else {
+            return;
+        };
+        if window.url().is_ok_and(|url| url.as_str() == URL) {
+            return;
+        }
+        let _ = window.navigate(URL.parse().expect("static unavailable URL"));
+    });
+}
+
 pub fn show(app: &tauri::AppHandle) {
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
