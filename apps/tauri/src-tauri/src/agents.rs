@@ -31,6 +31,8 @@ struct Running {
     quit: String,
     confirming_quit: bool,
     exit_authorized: bool,
+    presented: bool,
+    surface_epoch: u64,
 }
 
 // The submenu itself and unrelated app/tray/terminal IDs grant no navigation.
@@ -46,11 +48,72 @@ fn current(webview: &Webview) -> bool {
         .url()
         .is_ok_and(|url| document_matches(webview.label(), url.as_str()))
 }
-fn focused(webview: &Webview) -> bool {
-    // The dedicated document is the only child surface while shown; the single window
-    // owns visibility and key status, matching the previous native window contract.
+fn surface_epoch(app: &tauri::AppHandle) -> u64 {
+    app.state::<Agents>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map_or(0, |r| r.surface_epoch)
+}
+
+fn presented(app: &tauri::AppHandle) -> bool {
+    app.state::<Agents>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| r.presented && !r.revoked)
+}
+
+async fn focused(webview: &Webview) -> bool {
+    let app = webview.app_handle();
+    if !presented(app) {
+        return false;
+    }
+    let epoch = surface_epoch(app);
     let window = webview.window();
-    window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false)
+    if !window.is_visible().unwrap_or(false) || !window.is_focused().unwrap_or(false) {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = oneshot::channel();
+        if webview
+            .with_webview(move |native| {
+                // SAFETY: Tauri supplies the live WKWebView on the main thread;
+                // pointers are borrowed only for these synchronous AppKit messages.
+                let valid = unsafe {
+                    use objc2::runtime::AnyObject;
+                    use objc2::{msg_send, sel};
+                    let native = native.inner().cast::<AnyObject>();
+                    let window: *mut AnyObject = msg_send![native, window];
+                    if window.is_null() {
+                        false
+                    } else {
+                        let responder: *mut AnyObject = msg_send![window, firstResponder];
+                        if responder.is_null() {
+                            false
+                        } else {
+                            let is_view: bool =
+                                msg_send![responder, respondsToSelector: sel!(isDescendantOf:)];
+                            is_view && msg_send![responder, isDescendantOf: native]
+                        }
+                    }
+                };
+                let _ = tx.send(valid);
+            })
+            .is_err()
+        {
+            return false;
+        }
+        matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), rx).await,
+            Ok(Ok(true))
+        ) && surface_epoch(app) == epoch
+    }
+    #[cfg(not(target_os = "macos"))]
+    false
 }
 fn send(app: &tauri::AppHandle, message: Value) -> bool {
     let state = app.state::<Agents>();
@@ -84,6 +147,8 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
         return denied();
     }
     let mutation = request["action"] != "snapshot";
+    // Verify the native first responder before taking the state lock (never across an await).
+    let focus = focused(&window).await;
     let (id, generation, receiver) = {
         let state = app.state::<Agents>();
         let mut guard = state.0.lock().unwrap();
@@ -96,7 +161,6 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
         if (mutation && r.busy) || r.pending.len() >= 8 {
             return json!({"status": "busy"});
         }
-        let focus = focused(&window);
         if mutation && !focus {
             return json!({"status": "focus_required"});
         }
@@ -148,7 +212,7 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
     }
 }
 
-fn confirm(app: &tauri::AppHandle, value: &Value) {
+async fn confirm(app: &tauri::AppHandle, value: &Value) {
     if crate::terminal::presentation_blocked(app) {
         return;
     }
@@ -171,9 +235,10 @@ fn confirm(app: &tauri::AppHandle, value: &Value) {
             .filter(|r| r.loaded && !r.revoked && r.pending.contains_key(request))
             .map(|r| r.generation)
     };
+    let epoch = surface_epoch(app);
     if generation.is_none()
         || !current(&window)
-        || !focused(&window)
+        || !focused(&window).await
         || fields.iter().any(|s| s.len() > 16384)
     {
         send(app, json!({"kind": "confirm", "id": id, "accepted": false}));
@@ -193,8 +258,13 @@ fn confirm(app: &tauri::AppHandle, value: &Value) {
                 let guard = state.0.lock().unwrap();
                 guard.as_ref().is_some_and(|r| Some(r.generation) == generation && !r.revoked && r.pending.contains_key(&request))
             };
+            // The sync accept re-checks the same surface epoch; the async first-responder
+            // was verified before the sheet and the epoch changes on hide/reveal.
             let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
-                && active && current(&window) && focused(&window);
+                && active
+                && current(&window)
+                && presented(&app)
+                && surface_epoch(&app) == epoch;
             send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
         });
 }
@@ -264,6 +334,8 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         quit: ready["quit"].as_str().unwrap_or("").into(),
         confirming_quit: false,
         exit_authorized: false,
+        presented: false,
+        surface_epoch: 0,
     });
     let handle = app.clone();
     let parent = app.get_window("main").ok_or("Missing main window")?;
@@ -356,7 +428,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
                             }
                         }
                     } else if value["kind"] == "confirm" {
-                        confirm(&app, &value);
+                        confirm(&app, &value).await;
                     } else {
                         break;
                     }
@@ -439,6 +511,10 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
 }
 /// Hide the managed agent surface and revoke its pending work. Never signals.
 pub fn hide_surface(app: &tauri::AppHandle) {
+    if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
+        r.presented = false;
+        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+    }
     revoke(app, false);
     if let Some(view) = app.get_webview(LABEL) {
         let _ = view.hide();
@@ -448,6 +524,10 @@ pub fn hide_surface(app: &tauri::AppHandle) {
 /// The agent document is the only visible child surface while it is shown.
 fn raise(app: &tauri::AppHandle) {
     crate::terminal::suspend_surface(app);
+    if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
+        r.presented = true;
+        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+    }
     if let Some(view) = app.get_webview(LABEL) {
         let _ = view.show();
         let _ = view.set_focus();

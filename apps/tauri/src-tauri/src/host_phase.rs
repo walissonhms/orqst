@@ -56,12 +56,12 @@ pub fn consume_exit_evidence() -> bool {
     false
 }
 
-pub fn owned() -> bool {
-    phase() != Phase::NotStarted
-}
-
 pub fn lost_unknown() -> bool {
     phase() == Phase::LostUnknown
+}
+
+pub fn owned() -> bool {
+    phase() != Phase::NotStarted
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
