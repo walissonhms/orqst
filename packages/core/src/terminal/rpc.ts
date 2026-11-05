@@ -3,6 +3,7 @@ import {
   featureCreateSchema,
   featureViewSaveSchema,
   featureUpdateSchema,
+  featurePermissionSaveSchema,
   terminalTeamSaveSchema,
   TERMINAL_SLOT_CEILING,
   terminalEnrollmentInputSchema,
@@ -117,6 +118,14 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
       .min(0)
       .max(TERMINAL_SLOT_CEILING - 1),
     expectedRevision: z.number().int().positive().safe(),
+  }),
+  z.strictObject({ kind: z.literal('featurePermissionsRead'), id, featureId: id }),
+  z.strictObject({
+    kind: z.literal('featurePermissionsSave'),
+    id,
+    featureId: id,
+    actorId: z.string().min(1).max(128),
+    input: featurePermissionSaveSchema,
   }),
   z.strictObject({ kind: z.literal('featureTeamRead'), id, featureId: id }),
   z.strictObject({

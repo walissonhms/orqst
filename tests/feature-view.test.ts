@@ -45,6 +45,20 @@ function fixture() {
       readLayout: async (id: string) => db.readLayout(id),
       saveLayout: async (id: string, record: Parameters<typeof db.saveLayout>[1]) =>
         db.saveLayout(id, record),
+      readPermissions: async (id: string) => ({
+        schemaVersion: 1 as const,
+        workspaceId: (await db.readView()).workspaceId,
+        featureId: id,
+        revision: 0,
+        configuration: null,
+      }),
+      savePermissions: async (id: string) => ({
+        schemaVersion: 1 as const,
+        workspaceId: (await db.readView()).workspaceId,
+        featureId: id,
+        revision: 0,
+        configuration: null,
+      }),
     },
   };
   const legacyDb = terminalLayoutDatabase(directory, ids);

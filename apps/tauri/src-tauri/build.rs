@@ -9,6 +9,7 @@ fn main() {
             "file_request",
             "feature_request",
             "feature_prepare",
+            "feature_permissions",
             "studio_request",
         ]),
     ))

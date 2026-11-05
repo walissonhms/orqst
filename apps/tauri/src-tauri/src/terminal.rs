@@ -1249,6 +1249,16 @@ pub(crate) fn sheet_owned(window: &tauri::Window) -> bool {
     native_focus::sheet_owned(window)
 }
 
+/// Generic native sheet for another reviewed surface; same AppKit consent path.
+pub(crate) async fn confirm_sheet(
+    app: &tauri::AppHandle,
+    window: tauri::Window,
+    labels: [String; 5],
+    current: impl FnOnce() -> bool + Send + 'static,
+) -> bool {
+    native_consent::confirm(app, window, labels, current).await
+}
+
 fn revoke_all(app: &tauri::AppHandle) {
     let count = app
         .state::<Terminals>()

@@ -5,6 +5,10 @@ import {
   featureViewStateSchema,
   workspaceFeatureSchema,
 } from './features.js';
+import {
+  featurePermissionConfigurationSchema,
+  featurePermissionStateSchema,
+} from './feature-permissions.js';
 
 const base = { contractVersion: z.literal(1), generation: z.number().int().nonnegative().safe() };
 const featureId = z.uuid();
@@ -34,6 +38,18 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     ...base,
     action: z.literal('organize'),
     command: z.enum(['restore', 'show-all', 'columns-1', 'columns-2', 'columns-3']),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal('readPermissions'),
+    featureId,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal('savePermissions'),
+    featureId,
+    expectedRevision: z.number().int().nonnegative().safe(),
+    configuration: featurePermissionConfigurationSchema,
   }),
 ]);
 export type FeatureNativeRequest = z.input<typeof featureNativeRequestSchema>;
@@ -81,6 +97,7 @@ export const featureNativeReplySchema = z
   .strictObject({
     status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'archive_blocked']),
     snapshot: featureNativeSnapshotSchema.optional(),
+    permissions: featurePermissionStateSchema.optional(),
   })
   .refine(
     (value) => value.status !== 'ok' || value.snapshot !== undefined,

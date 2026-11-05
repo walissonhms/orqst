@@ -12,6 +12,8 @@ import {
 import {
   terminalSlotLimit,
   workspaceFeatureSchema,
+  featurePermissionStateSchema,
+  type FeaturePermissionSave,
   featureViewStateSchema,
   type FeatureUpdate,
   type FeatureCreate,
@@ -360,6 +362,14 @@ export async function connectManagedTerminalCore(
     },
     features: {
       list: async () => workspaceFeatureSchema.array().parse(await call({ kind: 'featureList' })),
+      readPermissions: async (featureId: string) =>
+        featurePermissionStateSchema.parse(
+          await call({ kind: 'featurePermissionsRead', featureId }),
+        ),
+      savePermissions: async (featureId: string, actorId: string, input: FeaturePermissionSave) =>
+        featurePermissionStateSchema.parse(
+          await call({ kind: 'featurePermissionsSave', featureId, actorId, input }),
+        ),
       read: readFeature,
       create: async (input: Omit<FeatureCreate, 'workspaceId'>) =>
         workspaceFeatureSchema.parse(await call({ kind: 'featureCreate', input })),

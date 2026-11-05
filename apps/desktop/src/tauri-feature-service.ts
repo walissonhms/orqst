@@ -203,6 +203,31 @@ export class TauriFeatureService {
           await this.present(request.featureId, true, presentation);
           break;
         }
+        case 'readPermissions': {
+          const permissions = await this.core.features.readPermissions(request.featureId);
+          return { status: 'ok', permissions, snapshot: this.snapshot() };
+        }
+        case 'savePermissions': {
+          try {
+            const permissions = await this.core.features.savePermissions(
+              request.featureId,
+              'desktop-native',
+              {
+                expectedRevision: request.expectedRevision,
+                configuration: request.configuration,
+              },
+            );
+            this.generation++;
+            await this.refresh();
+            return { status: 'ok', permissions, snapshot: this.snapshot() };
+          } catch {
+            return {
+              status: 'stale',
+              permissions: await this.core.features.readPermissions(request.featureId),
+              snapshot: this.snapshot(),
+            };
+          }
+        }
         case 'organize': {
           if (presentation !== this.layout.presentationRevision())
             throw new Error('Stale presentation');

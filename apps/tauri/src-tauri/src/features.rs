@@ -601,6 +601,209 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     }
     json!({"status":"ok"})
 }
+/// Permission writes are accepted only from the exact chrome child of main.
+pub(crate) fn permission_source_allowed(label: &str, parent: &str, source: &str) -> bool {
+    label == "feature-workspace" && parent == "main" && source == CHROME_URL
+}
+
+fn escape_plain(value: &str) -> String {
+    value
+        .chars()
+        .filter(|c| !c.is_control())
+        .flat_map(|c| match c {
+            '<' => "&lt;".chars().collect::<Vec<_>>(),
+            '>' => "&gt;".chars().collect(),
+            '&' => "&amp;".chars().collect(),
+            other => vec![other],
+        })
+        .collect()
+}
+
+/// Exact plain-text diff of the proposed policy against the current one.
+pub(crate) fn permission_diff(
+    feature: &str,
+    current_revision: u64,
+    current: &Value,
+    proposed: &Value,
+    labels: &HashMap<String, String>,
+) -> String {
+    let label = |id: &str| labels.get(id).cloned().unwrap_or_else(|| id.to_string());
+    let rules = |value: &Value| -> Vec<(String, String, Vec<String>)> {
+        value["rules"]
+            .as_array()
+            .map(|items| {
+                items
+                    .iter()
+                    .map(|rule| {
+                        let source = label(rule["sourceTerminalId"].as_str().unwrap_or(""));
+                        let target = label(rule["targetTerminalId"].as_str().unwrap_or(""));
+                        let ops = rule["operations"]
+                            .as_array()
+                            .map(|ops| {
+                                ops.iter()
+                                    .filter_map(|op| op.as_str().map(str::to_owned))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        (source, target, ops)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let before = rules(current);
+    let after = rules(proposed);
+    let mut lines = vec![
+        format!("Feature: {}", escape_plain(feature)),
+        format!("Revision: {} -> {}", current_revision, current_revision + 1),
+        String::new(),
+    ];
+    for (source, target, ops) in &after {
+        match before.iter().find(|(s, t, _)| s == source && t == target) {
+            None => lines.push(format!(
+                "ADDED {} -> {}: {}",
+                source,
+                target,
+                ops.join(", ")
+            )),
+            Some((_, _, old)) if old != ops => lines.push(format!(
+                "CHANGED {} -> {}: {} => {}",
+                source,
+                target,
+                old.join(", "),
+                ops.join(", ")
+            )),
+            _ => {}
+        }
+    }
+    for (source, target, ops) in &before {
+        if !after.iter().any(|(s, t, _)| s == source && t == target) && !ops.is_empty() {
+            lines.push(format!(
+                "REMOVED {} -> {}: {}",
+                source,
+                target,
+                ops.join(", ")
+            ));
+        }
+    }
+    if lines.len() == 3 {
+        lines.push("No effective change".into());
+    }
+    lines.join("\n")
+}
+
+#[tauri::command]
+pub async fn feature_permissions(window: Webview, request: Value) -> Value {
+    let denied = || json!({"status":"denied"});
+    let app = window.app_handle();
+    let source = window.url().map(|url| url.to_string()).unwrap_or_default();
+    if !permission_source_allowed(window.label(), window.window().label(), &source)
+        || !crate::terminal::sheet_owned(&window.window())
+        || crate::terminal::presentation_blocked(app)
+    {
+        return denied();
+    }
+    let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
+        return json!({"status":"unavailable"});
+    };
+    let presentation = crate::terminal::metadata_generation(app);
+    let Some(presentation) = presentation else {
+        return json!({"status":"unavailable"});
+    };
+    let feature_id = request["featureId"].as_str().unwrap_or_default().to_owned();
+    if feature_id.is_empty() {
+        return denied();
+    }
+    let read = json!({"action":"readPermissions","contractVersion":1,"generation":0,"featureId":feature_id});
+    let read_reply = crate::terminal::metadata_request(
+        app,
+        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000001","document":1,"source":source,"request":read}),
+        presentation,
+        &epoch,
+    )
+    .await;
+    if read_reply["status"] != "ok" {
+        return read_reply;
+    }
+    if request["action"] == "read" {
+        return read_reply;
+    }
+    let Some(expected) = request["expectedRevision"].as_u64() else {
+        return denied();
+    };
+    let current = read_reply["permissions"].clone();
+    if current["revision"].as_u64() != Some(expected) {
+        return json!({"status":"stale","permissions":current});
+    }
+    let mut labels = HashMap::new();
+    if let Some(slots) = read_reply["snapshot"]["slots"].as_array() {
+        for slot in slots {
+            if let (Some(id), Some(index)) = (slot["terminalId"].as_str(), slot["slot"].as_u64()) {
+                labels.insert(id.to_owned(), format!("T-{:03}", index + 1));
+            }
+        }
+    }
+    let feature_name = read_reply["snapshot"]["features"]
+        .as_array()
+        .and_then(|features| features.iter().find(|f| f["featureId"] == feature_id))
+        .and_then(|f| f["name"].as_str())
+        .unwrap_or("Feature")
+        .to_owned();
+    let detail = permission_diff(
+        &feature_name,
+        expected,
+        &current["configuration"],
+        &request["configuration"],
+        &labels,
+    );
+    let approved = crate::terminal::confirm_sheet(
+        app,
+        window.window(),
+        [
+            "Feature permissions".into(),
+            "Approve this exact policy change? From now on only the checked operations are allowed."
+                .into(),
+            detail,
+            "Cancel".into(),
+            "Approve".into(),
+        ],
+        || true,
+    )
+    .await;
+    if !approved {
+        return json!({"status":"cancelled"});
+    }
+    // Revalidate identity, focus and the current revision after the sheet.
+    let source_now = window.url().map(|url| url.to_string()).unwrap_or_default();
+    if !permission_source_allowed(window.label(), window.window().label(), &source_now)
+        || crate::terminal::presentation_blocked(app)
+    {
+        return denied();
+    }
+    let current_now = crate::terminal::metadata_request(
+        app,
+        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000002","document":1,"source":source_now,"request":read}),
+        presentation,
+        &epoch,
+    )
+    .await;
+    if current_now["permissions"]["revision"].as_u64() != Some(expected) {
+        return json!({"status":"stale","permissions":current_now["permissions"].clone()});
+    }
+    let save = json!({
+        "action":"savePermissions","contractVersion":1,"generation":0,
+        "featureId":feature_id,"expectedRevision":expected,
+        "configuration":request["configuration"],
+    });
+    crate::terminal::metadata_request(
+        app,
+        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000003","document":1,"source":source_now,"request":save}),
+        presentation,
+        &epoch,
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
@@ -1071,6 +1274,24 @@ mod tests {
                 "{wrong}"
             );
         }
+    }
+
+    #[test]
+    fn permission_diff_reports_the_exact_change_with_labels() {
+        let labels = HashMap::from([
+            ("a".to_owned(), "T-001".to_owned()),
+            ("b".to_owned(), "T-002".to_owned()),
+        ]);
+        let current = json!({"rules":[{"sourceTerminalId":"a","targetTerminalId":"b","operations":["view"]}]});
+        let proposed = json!({"rules":[
+            {"sourceTerminalId":"a","targetTerminalId":"b","operations":["view","execute"]},
+            {"sourceTerminalId":"b","targetTerminalId":"a","operations":["view"]}
+        ]});
+        let text = super::permission_diff("Feature <x>", 0, &current, &proposed, &labels);
+        assert!(text.contains("Feature: Feature &lt;x&gt;"));
+        assert!(text.contains("Revision: 0 -> 1"));
+        assert!(text.contains("CHANGED T-001 -> T-002: view => view, execute"));
+        assert!(text.contains("ADDED T-002 -> T-001: view"));
     }
 
     #[test]

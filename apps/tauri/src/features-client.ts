@@ -17,6 +17,16 @@ if (
     ),
   });
   if (location.href === 'orqst-features://local/index.html') {
+    Object.defineProperty(window, 'orqstFeaturePermissions', {
+      value: Object.freeze({
+        read: (featureId: string) =>
+          invoke('feature_permissions', { request: { action: 'read', featureId } }),
+        propose: (request: unknown) =>
+          invoke('feature_permissions', { request: { action: 'propose', ...(request as object) } }),
+      }),
+    });
+  }
+  if (location.href === 'orqst-features://local/index.html') {
     Object.defineProperty(window, 'orqstTerminalDock', {
       value: Object.freeze({
         restore: (slot: number, generation: number) =>

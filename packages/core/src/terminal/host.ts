@@ -306,6 +306,12 @@ async function start() {
             );
             break;
           }
+          case 'featurePermissionsRead':
+            value = features().readPermissions(request.featureId);
+            break;
+          case 'featurePermissionsSave':
+            value = features().savePermissions(request.featureId, request.actorId, request.input);
+            break;
           case 'featureTeamRead':
             value = features().readTeam(request.featureId);
             break;

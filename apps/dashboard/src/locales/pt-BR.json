@@ -1110,7 +1110,27 @@
     "switching": "Alternando visão…",
     "terminalCount": "{{count}} terminais",
     "dockLabel": "Minimizados",
-    "dockRestore": "Restaurar {{name}}"
+    "dockRestore": "Restaurar {{name}}",
+    "permissions": {
+      "title": "Permissões da Feature",
+      "help": "Só as operações origem → destino marcadas são permitidas quando existe policy. O renderer propõe; uma revisão nativa aprova a mudança exata.",
+      "revision": "Revisão {{revision}}",
+      "defaultState": "Sem policy: o padrão da Feature, a rota e o grant decidem. A primeira gravação cria a policy e, a partir dela, só as operações marcadas são permitidas.",
+      "empty": "Esta Feature ainda não tem terminais.",
+      "source": "Origem",
+      "selfBlocked": "Autoenvio bloqueado",
+      "delegate": "Delegar",
+      "execute": "Executar",
+      "view": "Ver",
+      "invalid": "Autoenvio, pares duplicados e ciclos de delegação não são permitidos.",
+      "propose": "Revisar e salvar policy",
+      "stale": "A policy mudou; revise a revisão atual e tente de novo.",
+      "cancelled": "Nenhuma mudança foi salva.",
+      "denied": "O pedido foi recusado.",
+      "busy": "Outra operação está em andamento.",
+      "unavailable": "A edição de permissões exige o Desktop nativo atual.",
+      "ok": "Policy salva."
+    }
   },
   "tauriCoreUnavailable": {
     "title": "Observador indisponível",

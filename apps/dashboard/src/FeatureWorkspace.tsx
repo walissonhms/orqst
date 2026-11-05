@@ -12,6 +12,7 @@ import {
   featureNoticeContext,
   type FeatureNoticeContext,
 } from './feature-notice.js';
+import { FeaturePermissions } from './FeaturePermissions.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 
 type Action = FeatureNativeRequest extends infer R
@@ -489,6 +490,7 @@ export function FeatureWorkspace({
           )}
         </div>
       )}
+      {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
       {nativeWorkspace && dock.length > 0 && (
         <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
           <span className="feature-dock-label">{t('features.dockLabel')}</span>

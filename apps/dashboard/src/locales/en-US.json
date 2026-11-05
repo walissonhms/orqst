@@ -1110,7 +1110,27 @@
     "switching": "Switching view…",
     "terminalCount": "{{count}} terminals",
     "dockLabel": "Minimized",
-    "dockRestore": "Restore {{name}}"
+    "dockRestore": "Restore {{name}}",
+    "permissions": {
+      "title": "Feature permissions",
+      "help": "Only the checked source → target operations are allowed once a policy exists. The renderer proposes; a native review approves the exact change.",
+      "revision": "Revision {{revision}}",
+      "defaultState": "No policy: the Feature default, route and grant decide. The first save creates the policy and only checked operations are allowed from then on.",
+      "empty": "This Feature has no terminals yet.",
+      "source": "Source",
+      "selfBlocked": "Self-send blocked",
+      "delegate": "Delegate",
+      "execute": "Execute",
+      "view": "View",
+      "invalid": "Self-send, duplicate pairs and delegate cycles are not allowed.",
+      "propose": "Review and save policy",
+      "stale": "The policy changed; review the current revision and try again.",
+      "cancelled": "No change was saved.",
+      "denied": "The request was refused.",
+      "busy": "Another operation is in progress.",
+      "unavailable": "Permission editing requires the current native Desktop.",
+      "ok": "Policy saved."
+    }
   },
   "tauriCoreUnavailable": {
     "title": "Observer unavailable",
