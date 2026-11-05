@@ -129,7 +129,8 @@ interface Props {
   messages: StudioMessage[];
   renderBody: (terminal: StudioTerminal) => ReactNode;
   onNewTerminal?: () => void;
-  onClose?: (id: string) => void;
+  /** Return `'minimize'` when the host keeps the terminal (hide from view only). */
+  onClose?: (id: string) => void | 'minimize';
   /** Local storage key for the arrangement of this Feature. */
   storageKey: string;
   now?: number;
@@ -746,7 +747,17 @@ export function TerminalStudio({
     if (!nativeLayout.current) return;
     const stage = stageRef.current;
     if (!stage) return;
-    const origin = stage.getBoundingClientRect();
+    // Rectangles are relative to the native content area: it starts under the toolbar
+    // (and the scope bar, when shown) at the left edge of the Studio.
+    const root = stage.closest('.ts-root')?.getBoundingClientRect();
+    const toolbar = stage
+      .closest('.ts-root')
+      ?.querySelector('.ts-toolbar')
+      ?.getBoundingClientRect();
+    const origin = {
+      left: root?.left ?? stage.getBoundingClientRect().left,
+      top: toolbar?.bottom ?? stage.getBoundingClientRect().top,
+    };
     const layout: NativePaneLayout[] = placed.map((pane) => {
       const hole = stage.querySelector<HTMLElement>(
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
@@ -1118,8 +1129,9 @@ export function TerminalStudio({
                       title={t('terminalStudio.hide')}
                       aria-label={t('terminalStudio.hide')}
                       onClick={() => {
-                        setState((current) => removePane(current, pane.id));
-                        onClose(pane.id);
+                        if (onClose(pane.id) === 'minimize')
+                          setState((current) => minimize(current, pane.id));
+                        else setState((current) => removePane(current, pane.id));
                       }}
                     >
                       <X size={14} />

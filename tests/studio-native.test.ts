@@ -86,6 +86,7 @@ test('studio terminals use only evidenced snapshot facts', () => {
     'only members of the active Feature',
   );
   assert.equal(terminals[0]!.model, 'gpt-synthetic');
+  assert.equal(terminals[0]!.name, 'Codex', 'the CLI name is shown, not the ID twice');
   assert.equal(terminals[0]!.startedAt, undefined);
   assert.equal(terminals[1]!.model, null, 'CLI default stays explicit');
   assert.equal(terminals[1]!.startedAt, 1000);

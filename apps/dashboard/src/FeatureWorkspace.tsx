@@ -695,6 +695,9 @@ export function FeatureWorkspace({
               )
             }
             onNewTerminal={canPrepare ? () => void prepare() : undefined}
+            // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
+            onClose={() => 'minimize' as const}
+            onMention={async () => 'unsupported' as const}
             {...(nativeWorkspace
               ? {
                   native: {

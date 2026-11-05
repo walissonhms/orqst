@@ -84,7 +84,7 @@
   font: inherit;
   color: inherit;
 }
-.feature-workspace button {
+.feature-workspace button:not(.ts-root button, .ntd button, .mc-root button) {
   cursor: pointer;
   border: 1px solid #493856;
   border-radius: 4px;
@@ -95,7 +95,7 @@
   cursor: default;
   opacity: 0.5;
 }
-.feature-workspace button:not(:disabled):hover {
+.feature-workspace button:not(:disabled):not(.ts-root button, .ntd button, .mc-root button):hover {
   background: #382847;
 }
 .feature-workspace :focus-visible {
@@ -331,7 +331,7 @@
   }
 }
 @media (pointer: coarse) {
-  .feature-workspace button {
+  .feature-workspace button:not(.ts-root button) {
     min-height: 44px;
   }
 }
@@ -594,4 +594,12 @@
 }
 .ts-open button:disabled {
   opacity: 0.5;
+}
+
+/* Native Studio matches the preview: spacing around the stage, plain toolbar buttons. */
+.feature-studio .ts-root {
+  background: var(--orqst-background);
+}
+.feature-studio .ts-native .ts-stage {
+  margin: var(--orqst-space-3);
 }

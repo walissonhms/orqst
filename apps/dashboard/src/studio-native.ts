@@ -36,6 +36,10 @@ export function studioTerminals(
     .filter((slot) => members.includes(slot.terminalId))
     .map((slot) => {
       const label = `T-${String(slot.slot + 1).padStart(3, '0')}`;
+      // A display name the user gave wins; otherwise the CLI name, never the ID twice.
+      const fallback = { codex: 'Codex', claude: 'Claude Code', opencode: 'OpenCode' }[
+        slot.provider
+      ];
       const pane = panes.find((entry) => entry.slot === slot.slot);
       const entry = fresh?.entries.find(
         (candidate) => candidate.slot === slot.slot && candidate.terminalId === slot.terminalId,
@@ -45,7 +49,7 @@ export function studioTerminals(
         id: slot.terminalId,
         uuid: slot.terminalId,
         label,
-        name: pane?.label || label,
+        name: pane?.label && pane.label !== label ? pane.label : fallback,
         provider: slot.provider,
         ...(slot.selectedModel === undefined ? {} : { model: slot.selectedModel }),
         // Agent state only from evidenced turns (owned Claude today); never from the process.
