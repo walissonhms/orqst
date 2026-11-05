@@ -58,6 +58,15 @@ anchor. No historical signature or physical map supplies that consent. The
 version-2 intent digest binds the **complete review text**, and the phase challenge
 binds the current RAW; final commit additionally binds its plan and current RAW.
 
+Before that final approval, and before the only namespace mutation, the current
+reservation records must still equal the released archive: every
+`snapshot.files` physical identity and the declared `physicalDifference` are
+compared with `archive.current`, and any change is refused as
+`pre_commit_physical_source_changed` with no new consent and no rename. A later
+kernel reboot is therefore a new physical generation, not a renewed consent for
+the already released archive. Model-source current metadata stays outside that
+pin, so the drift the existing contract permits is not narrowed.
+
 Every phase reruns the full current comparison after review/signing/revalidation
 and before its effects. Changed RAW, kernel boot, current critical metadata,
 controls or sources invalidate approval. Cancel/expiry preserves the reservation;
@@ -102,9 +111,29 @@ provider configuration content, native resources or preserved evidence are read
 or modified by these fixtures. Builds/Cargo and all real recovery effects are
 outside this delivery. See the delivery's actual check results before integration.
 
-Current source checks: 291 focused synthetic cases passed (offline recovery,
+An independent adversarial review of this increment found that a second kernel
+boot between release preparation and final commit was re-approved and then
+committed the namespace before failing the held-marker identity check. The final
+commit now pins the released physical records and refuses before approval and
+rename; regressions cover a second device generation with and without the
+historical capsule (no new approval, marker, gate and lock intact, no rename and
+no completion), the same-boot release-plus-commit flow, and permitted
+model-source drift outside `snapshot.files`.
+
+Known limits. A second kernel reboot between release preparation and final commit
+is refused without any effect, but the bundle then needs explicit owner handling;
+it is never silently committed. The device-difference path requires the enrollment
+executable and Node paths to be canonical, single-link and root- or user-owned, so
+a legitimately symlinked or hardlinked runtime path is refused (fail-closed). When
+the first captured record (the active marker) stays on an unchanged device while
+other records move, the comparison reports no difference and the refusal surfaces
+as a generic enrollment-binding error rather than `mixed physical device mapping`;
+this is a diagnostic limitation, not an admission path.
+
+Current source checks: 295 focused synthetic cases passed (offline recovery,
 terminal journal, enrollment, Tauri preparation, native helper wire and arguments), plus `pnpm lint`,
 `pnpm typecheck` and `git diff --check`. Full `pnpm test`, `pnpm build`, Cargo,
 real ingestion and native/real-state acceptance were not run. Initial local checks
 exposed a TypeScript mock optional return and an abort-continuation regression;
-both were corrected before the passing focused run.
+both were corrected before the passing focused run. The 291-case run belongs to
+the reviewed base commit; this increment adds four regressions.

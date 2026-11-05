@@ -206,6 +206,16 @@ function exact(file: string, value: unknown) {
   if (JSON.stringify(sourceJSON(file, RECOVERY_LIMIT)) !== JSON.stringify(value))
     throw new Error('Recovery durable record changed');
 }
+/** Physical identity of the reviewed reservation only; content and permitted
+ * model-source drift stay out of this pin. */
+function physicalRecords(snapshot: OfflineReservationSnapshot) {
+  return JSON.stringify({
+    files: [...snapshot.files]
+      .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
+      .map((file) => ({ path: file.path, identity: file.identity })),
+    physicalDifference: snapshot.physicalDifference ?? null,
+  });
+}
 
 /** Offline only. No Core, Store, journal owner acquisition, provider or automatic retry. */
 export class OfflineRecoveryBlocked extends Error {
@@ -1175,6 +1185,11 @@ export class OfflineReservationRecovery {
       const fresh = heldBefore ? archive.current : this.snapshot(directory, bundle, true);
       if (fresh.logicalDigest !== archive.current.logicalDigest)
         throw new OfflineRecoveryBlocked('pre_commit_logical_source_changed', bundle);
+      // The logical projection is device-invariant by design, so a second physical generation
+      // after release would otherwise reach the final approval and the only namespace mutation.
+      // The released archive stays the physical authority: refuse before consent or rename.
+      if (!heldBefore && physicalRecords(fresh) !== physicalRecords(archive.current))
+        throw new OfflineRecoveryBlocked('pre_commit_physical_source_changed', bundle);
       const assertPrepared = () => {
         if (
           this.boot() !== currentBoot ||

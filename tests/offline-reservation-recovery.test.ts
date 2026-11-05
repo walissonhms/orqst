@@ -2307,11 +2307,12 @@ function deviceNamespace() {
   const originalLstat = fs.lstatSync;
   const originalFstat = fs.fstatSync;
   let enabled = false;
+  let offset = 100n;
   const device = originalLstat(tmpdir()).dev;
   const map = <T extends { dev: number | bigint }>(info: T): T => {
     if (!enabled || BigInt(info.dev) !== BigInt(device)) return info;
     const result = Object.assign(Object.create(Object.getPrototypeOf(info)), info) as T;
-    result.dev = typeof info.dev === 'bigint' ? info.dev + 100n : info.dev + 100;
+    result.dev = typeof info.dev === 'bigint' ? info.dev + offset : info.dev + Number(offset);
     return result;
   };
   const lstat = mock.method(fs, 'lstatSync', (...args: Parameters<typeof originalLstat>) =>
@@ -2324,6 +2325,10 @@ function deviceNamespace() {
   return {
     enable: () => {
       enabled = true;
+    },
+    // A later external reboot is a different generation, never a renewed consent.
+    setOffset: (value: number) => {
+      offset = BigInt(value);
     },
     restore: () => {
       lstat.mock.restore();
@@ -2500,3 +2505,85 @@ for (const action of ['abort', 'continueCapture'] as const) {
     }
   });
 }
+
+// A second external reboot is a new physical generation, not a renewed consent for the
+// already released archive. The final commit must refuse before its approval and rename.
+for (const historical of [false, true]) {
+  test(`second device generation refuses final commit before approval/rename capsule=${historical}`, async () => {
+    const f = historicalFixture();
+    const plain = historical ? undefined : fixture();
+    const selected = plain ?? f;
+    const namespace = deviceNamespace();
+    try {
+      const captured = historical ? await f.captureHistorical() : await selected.capture();
+      selected.changeBoot();
+      namespace.enable();
+      const recovery = new OfflineReservationRecovery(selected.authority, selected.dependencies);
+      await recovery.release(captured.bundle);
+      const archiveBytes = readFileSync(join(captured.bundle, 'archive.json'));
+      const reviews = selected.reviews.length;
+      const gate = readFileSync(join(selected.directory, RECOVERY_GATE));
+      const lock = readFileSync(join(selected.directory, 'offline-recovery-operation.lock'));
+      const held = join(selected.directory, `recovered-${captured.operationId}.marker.json`);
+      // The device generation changes again before the separately approved final commit.
+      selected.changeBoot();
+      namespace.setOffset(200);
+      await assert.rejects(
+        recovery.finalize(captured.bundle),
+        /pre_commit_physical_source_changed/,
+      );
+      assert.equal(selected.reviews.length, reviews);
+      assert.equal(readFileSync(selected.marker, 'utf8'), selected.markerBytes);
+      assert.equal(existsSync(held), false);
+      assert.equal(existsSync(join(captured.bundle, 'finalized.json')), false);
+      assert.equal(existsSync(join(captured.bundle, 'completion.json')), false);
+      assert.deepEqual(readFileSync(join(captured.bundle, 'archive.json')), archiveBytes);
+      assert.deepEqual(readFileSync(join(selected.directory, RECOVERY_GATE)), gate);
+      assert.deepEqual(
+        readFileSync(join(selected.directory, 'offline-recovery-operation.lock')),
+        lock,
+      );
+    } finally {
+      namespace.restore();
+      plain?.close();
+      f.close();
+    }
+  });
+}
+
+test('released physical archive completes final commit in the same boot context', async () => {
+  const f = historicalFixture();
+  const namespace = deviceNamespace();
+  try {
+    const captured = await f.captureHistorical();
+    f.changeBoot();
+    namespace.enable();
+    const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await recovery.release(captured.bundle);
+    await recovery.finalize(captured.bundle);
+    assert.equal(existsSync(f.marker), false);
+    assert.ok(existsSync(join(f.directory, `recovered-${captured.operationId}.marker.json`)));
+    assert.ok(existsSync(join(captured.bundle, 'completion.json')));
+    assert.equal(f.reviews.length, 3);
+  } finally {
+    namespace.restore();
+    f.close();
+  }
+});
+
+test('final commit physical pin does not block permitted model source drift outside files', async () => {
+  // With no declared device difference the existing contract allows currentSources drift.
+  const f = historicalFixture();
+  try {
+    const captured = await f.captureHistorical();
+    f.changeBoot();
+    const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await recovery.release(captured.bundle);
+    f.replace();
+    await recovery.finalize(captured.bundle);
+    assert.equal(existsSync(f.marker), false);
+    assert.ok(existsSync(join(captured.bundle, 'completion.json')));
+  } finally {
+    f.close();
+  }
+});

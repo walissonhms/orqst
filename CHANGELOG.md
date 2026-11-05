@@ -873,4 +873,7 @@ fresh physical RAW for each phase. Current administrative consent explicitly
 accepts archiving only the reviewed reservation; it does not certify volume
 continuity or grant process/runtime authority. No new capture/anchor/phase is
 required. See [the exact contract and limits](docs/research/offline-cross-boot-admission.md).
-Real-state use, native acceptance and CLI/provider operation remain unvalidated.
+The final commit now pins the released reservation's physical records and declared
+difference, so a later device generation is refused before its approval and before
+the only marker rename. Real-state use, native acceptance and CLI/provider
+operation remain unvalidated.

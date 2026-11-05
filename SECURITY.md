@@ -1151,5 +1151,9 @@ enrollment digests must still agree. Existing fresh native review explicitly
 authorizes archiving the exact reservation without asserting filesystem/volume
 continuity; existing release and final-commit signatures remain separate.
 Launch/claim rules and future-owner cleanup boundaries stay unchanged.
+The final commit additionally pins the released reservation's current file
+identities and declared difference; a later device generation is refused as
+`pre_commit_physical_source_changed` before its approval and before the marker
+rename.
 See [the executable contract, research and pending acceptance](docs/research/offline-cross-boot-admission.md).
 No real-state use, native UI, build or provider acceptance is claimed here.
