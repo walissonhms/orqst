@@ -863,6 +863,14 @@ fn run(
                             .map(Value::String)
                             .unwrap_or(Value::Null)
                     }
+                    Some("cli-signature") => {
+                        if !exact(&value, &["kind", "id", "provider", "path"]) {
+                            return Err("Invalid CLI signature request".into());
+                        }
+                        let provider = field(&value, "provider", 16)?;
+                        let path = field(&value, "path", 2048)?;
+                        json!(current() && crate::cli_signature::verify_provider(path, provider))
+                    }
                     Some("confirm") => {
                         diagnostic.record(Stage::Review, Outcome::Requested, Effects::Unconfirmed);
                         *stage = "review";

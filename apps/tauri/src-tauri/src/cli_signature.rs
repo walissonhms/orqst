@@ -19,6 +19,20 @@ impl Provider {
     }
 }
 
+/// Rejects unknown providers and non-absolute or oversized paths at the private host boundary.
+pub fn verify_provider(path: &str, provider: &str) -> bool {
+    if path.len() > 2048 || path.contains('\0') || !Path::new(path).is_absolute() {
+        return false;
+    }
+    let provider = match provider {
+        "codex" => Provider::Codex,
+        "claude" => Provider::Claude,
+        "opencode" => Provider::OpenCode,
+        _ => return false,
+    };
+    verify(Path::new(path), provider)
+}
+
 /// Returns false for unavailable, unsigned, invalid or differently signed code.
 /// This verifies the code requirement, not notarization or behavior.
 #[cfg(target_os = "macos")]
@@ -109,5 +123,7 @@ mod tests {
         }
         std::fs::remove_file(&path).unwrap();
         assert!(!verify(&path, Provider::Codex));
+        assert!(!verify_provider("relative", "codex"));
+        assert!(!verify_provider("/synthetic", "unknown"));
     }
 }

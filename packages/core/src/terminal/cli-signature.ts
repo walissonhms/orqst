@@ -14,7 +14,7 @@ export interface CliSignatureVerifier {
   ): Promise<CliSignatureEvidence | undefined>;
 }
 
-const identities = Object.freeze({
+export const cliProviderIdentities = Object.freeze({
   codex: Object.freeze({ teamId: '2DC432GLL2', identifier: 'codex' }),
   claude: Object.freeze({ teamId: 'Q6L2SF6YDW', identifier: 'com.anthropic.claude-code' }),
   opencode: Object.freeze({ teamId: '5NZ4Q7NXJ4', identifier: 'opencode' }),
@@ -26,7 +26,7 @@ export async function verifiedCliSignature(
   executable: string,
 ): Promise<CliSignatureEvidence> {
   const evidence = await verifier.verify(provider, executable);
-  const expected = identities[provider];
+  const expected = cliProviderIdentities[provider];
   if (
     !evidence ||
     evidence.valid !== true ||

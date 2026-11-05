@@ -2,6 +2,7 @@ import { terminalPreparationContextSchema } from '../../../packages/core/src/ter
 import { desktopAdmissionContextSchema } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
+import { tauriCliSignatureVerifier } from './tauri-cli-signature.js';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
 import { prepareTauriTerminals, tauriPreparationFailure } from './tauri-terminal-preparation.js';
@@ -86,6 +87,7 @@ async function main() {
       { parent, home, node: process.execPath, environment: process.env },
       {
         current: () => live,
+        signatureVerifier: tauriCliSignatureVerifier(ask),
         choose: async (directory) => {
           const value = await ask({
             kind: 'pick',

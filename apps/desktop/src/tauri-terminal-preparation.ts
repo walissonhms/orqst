@@ -15,6 +15,7 @@ import {
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import { z } from 'zod';
+import type { CliSignatureVerifier } from '../../../packages/core/src/terminal/cli-signature.js';
 import {
   prepareTerminalCreation,
   type TerminalCreationInput,
@@ -44,6 +45,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 ]);
 
 export interface TauriPreparationPorts {
+  signatureVerifier?: CliSignatureVerifier;
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
   confirm(
