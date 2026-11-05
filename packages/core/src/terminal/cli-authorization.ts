@@ -379,6 +379,22 @@ export class TerminalCliPolicyStore {
     }
   }
 
+  /** A candidate version only; it grants nothing without verifiedEpoch. */
+  candidateVersion(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+  ): string | undefined {
+    try {
+      const record = this.load(profile);
+      return record?.version === 2 && record.provider === provider && record.mode === mode
+        ? record.executableVersion
+        : undefined;
+    } catch {
+      return;
+    }
+  }
+
   async verifiedEpoch(
     profile: Readonly<TerminalProfile>,
     provider: CliContractProvider,
