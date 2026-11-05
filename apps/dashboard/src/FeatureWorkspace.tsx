@@ -230,8 +230,7 @@ export function FeatureWorkspace({
         } as FeatureNativeRequest);
         if (!live.current) return;
         if (reply.canvas) setEvidence(reply.canvas);
-        const reported = (reply as { accountLimits?: { accounts?: unknown } }).accountLimits;
-        if (reported) setLimits(parseAccountLimits(reported.accounts));
+        if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
         if (reply.snapshot) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
@@ -785,6 +784,18 @@ export function FeatureWorkspace({
                   onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
                   onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
                   onOpenChange={setLimitsOpen}
+                  onRefresh={(accountId) =>
+                    void request({ action: 'accountLimits', command: 'refresh', accountId })
+                  }
+                  onToggleLock={(accountId) =>
+                    void request({
+                      action: 'accountLimits',
+                      command: limits.find((entry) => entry.id === accountId)?.locked
+                        ? 'unlock'
+                        : 'lock',
+                      accountId,
+                    })
+                  }
                 />
               ) : undefined
             }
