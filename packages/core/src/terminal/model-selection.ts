@@ -277,8 +277,8 @@ export function discoverTerminalModels(
     },
   ];
   let limited = true;
-  // Claude Code 2.1.178: official alias contract, not account availability.
-  // https://github.com/anthropics/claude-code/blob/64ceb97caab3fb898ece9a1b61e337470f805550/CHANGELOG.md
+  // Claude Code 2.1.178 and 2.1.318: reviewed aliases, not account availability.
+  // Passive 2.1.318 review: docs/research/claude-code-tauri.md (2026-11-05).
   // https://code.claude.com/docs/en/model-config#model-aliases
   const add = (
     value: unknown,

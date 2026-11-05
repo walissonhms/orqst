@@ -1095,6 +1095,19 @@ native same-user contract; shared auth/config/session writes, provider permissio
 and malicious same-user races are not hard containment. Synthetic composition and
 independent QA do not establish installed-provider or human-focus acceptance.
 
+## Claude TUI executable review — 2026-11-05
+
+Normal TUI discovery and provisioning admit the independently reviewed Claude
+2.1.318 version/hash. Existing 2.1.178 manifests and the old strict MCP contract
+remain separate; the new TUI pin cannot compose ORQST MCP. Native executable
+hashing has a finite 512 MiB budget with 64 KiB streaming reads and existing
+canonical/O_NOFOLLOW/owner/mode/Mach-O checks. Files above the budget are refused;
+the read loop also refuses growth beyond it. The existing volatile CLI-policy
+identity cache is unchanged, avoiding rehash on each key without persisting trust.
+Upgrades require another review/pin and fail closed as unreviewed version/hash.
+No public API/WS/cookie/static-serving or authority boundary changes. See
+[passive evidence and remaining native/provider gates](../research/claude-code-tauri.md).
+
 ## Explicit Claude native launch — 2026-11-03
 
 The separate Desktop native surface now accepts an exact-version/hash Claude manifest.
