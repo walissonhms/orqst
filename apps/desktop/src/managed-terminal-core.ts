@@ -368,13 +368,8 @@ export async function connectManagedTerminalCore(
           await call({ kind: 'featurePermissionsRead', featureId }),
         ),
       savePermissions: async (featureId: string, actorId: string, input: FeaturePermissionSave) => {
-        let reply: unknown;
-        try {
-          reply = await call({ kind: 'featurePermissionsSave', featureId, actorId, input });
-        } catch (error) {
-          if (error instanceof CoreOperationDenied) throw new FeaturePermissionUnavailable();
-          throw error; // Transport loss after dispatch cannot prove whether the commit happened.
-        }
+        // Even an explicit host failure may occur while closing the store after commit.
+        const reply = await call({ kind: 'featurePermissionsSave', featureId, actorId, input });
         if (
           reply &&
           typeof reply === 'object' &&
