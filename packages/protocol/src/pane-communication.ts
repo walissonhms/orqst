@@ -187,9 +187,11 @@ export interface CommunicationTransaction {
   crossRoutes(): CrossFeatureRoute[];
   saveCrossRoute(route: CrossFeatureRoute): void;
   crossMessages(): CrossFeatureMessage[];
+  auditCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
   insertCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
   updateCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
   crossEvents(): CrossFeatureAudit[];
+  crossAuthorityEvents(): CrossFeatureAudit[];
   panes(): CommunicationPane[];
   messages(): CommunicationMessage[];
   savePane(pane: CommunicationPane): void;

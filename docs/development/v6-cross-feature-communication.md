@@ -2,8 +2,8 @@
 
 This increment defines an opt-in Core/protocol/SQLite path for one `task.request`
 between two Features in the same Workspace. It has no production authority port,
-endpoint, dashboard wiring, adapter submission, or native confirmation. The injected
-port in tests is explicitly SYNTHETIC. It must not be used as production authority.
+endpoint, dashboard wiring, production adapter, or native confirmation. The injected
+ports in tests are explicitly SYNTHETIC. It must not be used as production authority.
 Existing local and unscoped communication continue through their existing path.
 
 Each Feature has a separate versioned cross-Feature policy. The source must contain
@@ -57,8 +57,8 @@ paths are unchanged and do not constitute one shared multi-recipient snapshot.
 ## Limits
 
 The journal remains additive: historical v1 messages are not rewritten. There is
-no production route, native signer, native picker, interactive MCP, provider
-submission, notification or native UI acceptance in this increment. A claimed
+no production route, native signer, native picker, interactive MCP, real provider
+submission or native UI acceptance in this increment. A claimed
 cross-Feature message is only a Core journal state, not provider acceptance or
 completion. Synthetic tests cannot prove the behavior of a future native signer
 or UI. Cross-Workspace is denied by the exact workspace and Feature membership
@@ -81,3 +81,23 @@ admission and claim. Local and cross admission share the history, per-target que
 and per-actor rate limits; both dispatch paths count active and uncertain work in
 the same target and global capacity. Local accounting reads this ledger without
 parsing cross message content. A failed ledger write rolls back cross admission.
+
+## Structured dispatch and observation
+
+An injected trusted adapter may submit only after content digest verification and
+a fresh bilateral claim. Its correlated evidence must match message, task, pane,
+attempt, instance and terminal epoch. Acceptance, delivery, execution and outcome
+are persisted only when reported; missing or invalid receipt, timeout and transport
+failure leave `outcome_unknown` without automatic retry. Provider facts already
+received remain recordable after policy revocation. Notifications are post-commit
+and revalidate bilateral view and authority inside the microtask. Parent tasks use
+exact IDs and correlation, verify the active destination as the next source, and
+apply the existing maximum depth and cycle checks.
+
+A separate versioned administrative audit records a verified grant presented for
+admission, a denial attributed to a verified grant, and an explicit revocation.
+Malformed or unverified proofs cannot establish an actor and do not create a
+purported actor audit. Administrative and message events contain IDs and states,
+not prompts, responses, paths, tokens or arbitrary errors. These ports remain
+unwired in production; synthetic adapters and two direct concurrent SQLite writers
+exercise the local contracts and uniqueness, not a real provider or native signer.

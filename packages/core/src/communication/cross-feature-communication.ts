@@ -1,8 +1,11 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import {
   communicationLimits,
   crossFeatureGrantSchema,
   crossFeatureRequestSchema,
+  crossFeatureProviderEvidenceSchema,
+  paneHandleSchema,
   type CommunicationJournal,
   type CommunicationPane,
   type CommunicationTransaction,
@@ -10,6 +13,8 @@ import {
   type CrossFeatureGrant,
   type CrossFeatureMessage,
   type CrossFeatureRequest,
+  type CrossFeatureProviderEvidence,
+  type CommunicationContent,
 } from '@orqst/protocol';
 import type { FeatureConfigurationDatabase } from '../terminal/feature-configuration.js';
 
@@ -18,6 +23,32 @@ export interface CrossFeatureAuthority {
   verify(grant: Readonly<CrossFeatureGrant>, proof: unknown): boolean;
 }
 type Snapshot = FeatureConfigurationDatabase['crossFeatureSnapshot'];
+export interface CrossFeatureAdapter {
+  ready(pane: Readonly<CommunicationPane>): boolean;
+  submit(
+    message: Readonly<CrossFeatureMessage>,
+    content: Uint8Array,
+    evidence: (event: CrossFeatureProviderEvidence) => void,
+  ): Promise<void>;
+}
+export interface CrossFeatureTransport {
+  adapter(paneId: string): CrossFeatureAdapter | undefined;
+  resolve(
+    grant: Readonly<CrossFeatureGrant>,
+    purpose: 'request' | 'result',
+    id: string,
+  ): Uint8Array;
+}
+const activeCross = (state: CrossFeatureMessage['state']) =>
+  [
+    'dispatching',
+    'accepted',
+    'delivered',
+    'running',
+    'waiting_approval',
+    'outcome_unknown',
+  ].includes(state);
+
 export const crossFeatureIntentDigest = (request: CrossFeatureRequest) =>
   createHash('sha256')
     .update(JSON.stringify(crossFeatureRequestSchema.parse(request)))
@@ -26,12 +57,14 @@ export const crossFeatureIntentDigest = (request: CrossFeatureRequest) =>
 /** Separate opt-in boundary. Never installed by the production composition. */
 export class CrossFeatureCommunication {
   private readonly admittedGrants = new Map<string, unknown>();
+  private readonly listeners = new Map<string, Set<(message: CrossFeatureMessage) => void>>();
 
   constructor(
     private readonly journal: CommunicationJournal,
     private readonly snapshot: Snapshot,
     private readonly authority: CrossFeatureAuthority,
     private readonly now: () => number = Date.now,
+    private readonly transport?: CrossFeatureTransport,
   ) {
     this.journal.enableCross();
   }
@@ -186,6 +219,7 @@ export class CrossFeatureCommunication {
       messageId: request.messageId,
       sourceRevision: g.sourceRevision,
       targetRevision: g.targetRevision,
+      state: message.state,
       outcome,
     };
   }
@@ -193,77 +227,142 @@ export class CrossFeatureCommunication {
     const grant = crossFeatureGrantSchema.parse(rawGrant);
     const request = crossFeatureRequestSchema.parse(rawRequest);
     if (
-      grant.deadline <= this.now() ||
-      grant.deadline > this.now() + communicationLimits.lifetimeMs ||
       grant.intentDigest !== crossFeatureIntentDigest(request) ||
       !this.authority.verify(grant, proof)
     )
       throw new Error('Cross-Feature authority denied');
-    const admitted = this.journal.transaction((tx) => {
-      this.check(tx, grant, 'task.request');
-      if (grant.deadline <= this.now() || !this.authority.verify(grant, proof))
-        throw new Error('Cross-Feature authority expired');
-      const local = tx.messages();
-      if (
-        local.some(
-          (m) =>
-            m.messageId === request.messageId ||
-            m.taskId === request.taskId ||
-            (m.workspaceId === grant.workspaceId &&
-              m.targetPaneId === grant.target.paneId &&
-              m.idempotencyKey === request.idempotencyKey),
-        )
-      )
-        throw new Error('Cross-Feature message identity conflict');
-      const all = tx.crossMessages();
-      if (
-        all.length + local.length >= communicationLimits.messages ||
-        all.filter((m) => m.state === 'queued' && m.grant.target.paneId === grant.target.paneId)
-          .length +
-          local.filter(
+    const proposed: CrossFeatureMessage = {
+      schemaVersion: 1,
+      grant,
+      request,
+      state: 'queued',
+      createdAt: this.now(),
+      updatedAt: this.now(),
+    };
+    if (
+      grant.deadline <= this.now() ||
+      grant.deadline > this.now() + communicationLimits.lifetimeMs
+    ) {
+      this.journal.transaction((tx) => tx.auditCross(proposed, this.audit(proposed, 'denied')));
+      throw new Error('Cross-Feature authority denied');
+    }
+    let admitted: CrossFeatureMessage;
+    try {
+      admitted = this.journal.transaction((tx) => {
+        this.check(tx, grant, 'task.request');
+        if (grant.deadline <= this.now() || !this.authority.verify(grant, proof))
+          throw new Error('Cross-Feature authority expired');
+        const local = tx.messages();
+        if (
+          local.some(
             (m) =>
-              m.targetPaneId === grant.target.paneId &&
-              m.deliveryState === 'queued' &&
-              m.taskState === 'pending',
-          ).length >=
-          communicationLimits.queuedPerPane ||
-        all.filter((m) => m.grant.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-          .length +
-          local.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-            .length >=
-          communicationLimits.admissionsPerMinute
-      )
-        throw new Error('Cross-Feature queue or rate limit');
-      const edges = all.map((m) => [m.grant.source.paneId, m.grant.target.paneId]);
-      edges.push(
-        ...local
-          .filter((m) => !['completed', 'failed', 'cancelled'].includes(m.taskState))
-          .map((m) => [m.sourcePaneId, m.targetPaneId]),
-      );
-      const reachable = (from: string, seen: Set<string>): boolean => {
-        if (from === grant.source.paneId) return true;
-        if (seen.has(from)) return false;
-        seen.add(from);
-        return edges.some(([a, b]) => a === from && b !== undefined && reachable(b, seen));
-      };
-      if (reachable(grant.target.paneId, new Set())) throw new Error('Cross-Feature cycle');
-      const timestamp = this.now();
-      const message: CrossFeatureMessage = {
-        schemaVersion: 1,
-        grant,
-        request,
-        state: 'queued',
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      tx.insertCross(message, this.audit(message, 'admitted'));
-      return message;
-    });
+              m.messageId === request.messageId ||
+              m.taskId === request.taskId ||
+              (m.workspaceId === grant.workspaceId &&
+                m.targetPaneId === grant.target.paneId &&
+                m.idempotencyKey === request.idempotencyKey),
+          )
+        )
+          throw new Error('Cross-Feature message identity conflict');
+        const all = tx.crossMessages();
+        if (
+          all.length + local.length >= communicationLimits.messages ||
+          all.filter((m) => m.state === 'queued' && m.grant.target.paneId === grant.target.paneId)
+            .length +
+            local.filter(
+              (m) =>
+                m.targetPaneId === grant.target.paneId &&
+                m.deliveryState === 'queued' &&
+                m.taskState === 'pending',
+            ).length >=
+            communicationLimits.queuedPerPane ||
+          all.filter((m) => m.grant.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+            .length +
+            local.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+              .length >=
+            communicationLimits.admissionsPerMinute
+        )
+          throw new Error('Cross-Feature queue or rate limit');
+        let depth = 0;
+        let parentId = request.parentTaskId ?? null;
+        let expectedPane = grant.source.paneId;
+        let expectedFeature = grant.source.featureId;
+        const ancestors = new Set([grant.target.paneId]);
+        while (parentId) {
+          if (
+            !request.correlationId ||
+            ancestors.has(expectedPane) ||
+            ++depth > communicationLimits.maxDepth
+          )
+            throw new Error('Cross-Feature parent cycle or depth denied');
+          ancestors.add(expectedPane);
+          const cross = all.find((m) => m.request.taskId === parentId);
+          const legacy = local.find((m) => m.taskId === parentId);
+          if (cross) {
+            if (
+              cross.grant.workspaceId !== grant.workspaceId ||
+              cross.grant.target.featureId !== expectedFeature ||
+              cross.grant.target.paneId !== expectedPane ||
+              cross.request.correlationId !== request.correlationId ||
+              ['completed', 'failed', 'outcome_unknown'].includes(cross.state)
+            )
+              throw new Error('Cross-Feature parent denied');
+            expectedPane = cross.grant.source.paneId;
+            expectedFeature = cross.grant.source.featureId;
+            parentId = cross.request.parentTaskId ?? null;
+          } else if (legacy) {
+            if (
+              legacy.workspaceId !== grant.workspaceId ||
+              legacy.featureId !== expectedFeature ||
+              legacy.targetPaneId !== expectedPane ||
+              legacy.correlationId !== request.correlationId ||
+              ['completed', 'failed', 'cancelled', 'outcome_unknown'].includes(legacy.taskState)
+            )
+              throw new Error('Cross-Feature parent denied');
+            expectedPane = legacy.sourcePaneId;
+            parentId = legacy.parentTaskId;
+          } else throw new Error('Cross-Feature parent unavailable');
+        }
+        if (ancestors.has(expectedPane)) throw new Error('Cross-Feature parent cycle denied');
+        const edges = all
+          .filter((m) => !['completed', 'failed'].includes(m.state))
+          .map((m) => [m.grant.source.paneId, m.grant.target.paneId]);
+        edges.push(
+          ...local
+            .filter((m) => !['completed', 'failed', 'cancelled'].includes(m.taskState))
+            .map((m) => [m.sourcePaneId, m.targetPaneId]),
+        );
+        const reachable = (from: string, seen: Set<string>): boolean => {
+          if (from === grant.source.paneId) return true;
+          if (seen.has(from)) return false;
+          seen.add(from);
+          return edges.some(([a, b]) => a === from && b !== undefined && reachable(b, seen));
+        };
+        if (reachable(grant.target.paneId, new Set())) throw new Error('Cross-Feature cycle');
+        const timestamp = this.now();
+        const message: CrossFeatureMessage = {
+          schemaVersion: 1,
+          grant,
+          request,
+          depth,
+          state: 'queued',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        };
+        tx.auditCross(message, this.audit(message, 'grant_issued'));
+        tx.insertCross(message, this.audit(message, 'admitted'));
+        return message;
+      });
+    } catch (error) {
+      this.journal.transaction((tx) => tx.auditCross(proposed, this.audit(proposed, 'denied')));
+      throw error;
+    }
     this.admittedGrants.set(grant.grantId, proof);
+    this.notify(admitted);
     return admitted;
   }
   claim(messageId: string): CrossFeatureMessage | undefined {
-    return this.journal.transaction((tx) => {
+    const result = this.journal.transaction((tx) => {
       const message = tx.crossMessages().find((m) => m.request.messageId === messageId);
       if (
         !message ||
@@ -278,8 +377,7 @@ export class CrossFeatureCommunication {
           return undefined;
         if (
           target.state !== 'ready' ||
-          tx.crossMessages().filter((m) => ['dispatching', 'outcome_unknown'].includes(m.state))
-            .length +
+          tx.crossMessages().filter((m) => activeCross(m.state)).length +
             tx
               .messages()
               .filter(
@@ -301,11 +399,7 @@ export class CrossFeatureCommunication {
             ) ||
           tx
             .crossMessages()
-            .some(
-              (m) =>
-                m.grant.target.paneId === target.paneId &&
-                ['dispatching', 'outcome_unknown'].includes(m.state),
-            )
+            .some((m) => m.grant.target.paneId === target.paneId && activeCross(m.state))
         )
           return undefined;
       } catch {
@@ -315,11 +409,14 @@ export class CrossFeatureCommunication {
       const claimed: CrossFeatureMessage = {
         ...message,
         state: 'dispatching',
+        attemptId: randomUUID(),
         updatedAt: this.now(),
       };
       tx.updateCross(claimed, this.audit(claimed, 'dispatch_claimed'));
       return claimed;
     });
+    if (result) this.notify(result);
+    return result;
   }
   view(
     messageId: string,
@@ -345,5 +442,200 @@ export class CrossFeatureCommunication {
       }
       return message;
     });
+  }
+  /** Exact Feature ID is required; duplicate or missing handles are never guessed. */
+  resolveTarget(workspaceId: string, featureId: string, handle: string): CommunicationPane {
+    z.string()
+      .regex(/^[a-zA-Z0-9_-]{1,128}$/)
+      .parse(workspaceId);
+    z.uuid().parse(featureId);
+    paneHandleSchema.parse(handle);
+    return this.journal.transaction((tx) => {
+      const candidates = tx
+        .panes()
+        .filter(
+          (p) =>
+            p.workspaceId === workspaceId &&
+            p.featureId === featureId &&
+            p.routing?.handle === handle &&
+            p.ownership === 'managed' &&
+            !['closed', 'unavailable'].includes(p.state),
+        );
+      if (candidates.length !== 1) throw new Error('Cross-Feature target missing or ambiguous');
+      const target = candidates[0]!;
+      const { target: snapshot } = this.snapshot(featureId, featureId);
+      if (
+        snapshot.feature.workspaceId !== workspaceId ||
+        snapshot.feature.featureId !== featureId ||
+        snapshot.feature.status === 'archived' ||
+        !target.terminalId ||
+        !snapshot.feature.terminalIds.includes(target.terminalId)
+      )
+        throw new Error('Cross-Feature target scope denied');
+      return target;
+    });
+  }
+  revoke(messageId: string, grant: CrossFeatureGrant, proof: unknown): void {
+    const parsed = crossFeatureGrantSchema.parse(grant);
+    if (!this.authority.verify(parsed, proof) || !this.admittedGrants.has(parsed.grantId))
+      throw new Error('Cross-Feature revocation denied');
+    this.admittedGrants.delete(parsed.grantId);
+    this.journal.transaction((tx) => {
+      const message = tx
+        .crossMessages()
+        .find((m) => m.request.messageId === messageId && m.grant.grantId === parsed.grantId);
+      if (!message || JSON.stringify(message.grant) !== JSON.stringify(parsed))
+        throw new Error('Cross-Feature message unavailable');
+      tx.auditCross(message, this.audit(message, 'revoked'));
+    });
+  }
+  subscribe(
+    messageId: string,
+    grant: CrossFeatureGrant,
+    proof: unknown,
+    listener: (m: CrossFeatureMessage) => void,
+  ): () => void {
+    if (!this.view(messageId, grant, proof)) throw new Error('Cross-Feature view denied');
+    const listeners = this.listeners.get(messageId) ?? new Set();
+    const guarded = (message: CrossFeatureMessage) => {
+      if (this.view(messageId, grant, proof)) listener(message);
+    };
+    listeners.add(guarded);
+    this.listeners.set(messageId, listeners);
+    return () => {
+      listeners.delete(guarded);
+      if (!listeners.size) this.listeners.delete(messageId);
+    };
+  }
+  private notify(message: CrossFeatureMessage): void {
+    const listeners = this.listeners.get(message.request.messageId);
+    if (!listeners) return;
+    for (const listener of listeners)
+      queueMicrotask(() => {
+        if (!listeners.has(listener)) return;
+        try {
+          listener(structuredClone(message));
+        } catch {
+          /* Consumer failure does not alter journal facts. */
+        }
+      });
+  }
+  private content(
+    grant: CrossFeatureGrant,
+    purpose: 'request' | 'result',
+    ref: CommunicationContent,
+  ): Uint8Array {
+    if (!this.transport) throw new Error('Cross-Feature transport unavailable');
+    const value = this.transport.resolve(Object.freeze(structuredClone(grant)), purpose, ref.id);
+    if (
+      !(value instanceof Uint8Array) ||
+      value.byteLength !== ref.bytes ||
+      createHash('sha256').update(value).digest('hex') !== ref.sha256
+    )
+      throw new Error('Cross-Feature content unavailable');
+    return Uint8Array.from(value);
+  }
+  async dispatch(messageId: string): Promise<CrossFeatureMessage | undefined> {
+    const prepared = this.journal.transaction((tx) => {
+      const message = tx.crossMessages().find((m) => m.request.messageId === messageId);
+      if (
+        !message ||
+        message.state !== 'queued' ||
+        !this.admittedGrants.has(message.grant.grantId) ||
+        message.grant.deadline <= this.now()
+      )
+        return undefined;
+      const { target } = this.check(tx, message.grant, 'task.request');
+      if (!this.authority.verify(message.grant, this.admittedGrants.get(message.grant.grantId)))
+        return undefined;
+      const adapter = this.transport?.adapter(target.paneId);
+      if (!adapter || !adapter.ready(target)) return undefined;
+      return { adapter, content: this.content(message.grant, 'request', message.request.payload) };
+    });
+    if (!prepared) return undefined;
+    const claim = this.claim(messageId);
+    if (!claim) return undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        prepared.adapter.submit(structuredClone(claim), prepared.content, (event) =>
+          this.evidence(claim, event),
+        ),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Cross-Feature dispatch timeout')),
+            communicationLimits.dispatchMs,
+          );
+        }),
+      ]);
+      const stillDispatching = this.journal.transaction((tx) =>
+        tx
+          .crossMessages()
+          .some((m) => m.request.messageId === messageId && m.state === 'dispatching'),
+      );
+      if (stillDispatching) this.uncertain(messageId);
+    } catch {
+      this.uncertain(messageId);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    return this.journal.transaction((tx) =>
+      tx.crossMessages().find((m) => m.request.messageId === messageId),
+    );
+  }
+  private evidence(claim: CrossFeatureMessage, raw: CrossFeatureProviderEvidence): void {
+    const event = crossFeatureProviderEvidenceSchema.parse(raw);
+    const updated = this.journal.transaction((tx) => {
+      const message = tx
+        .crossMessages()
+        .find((m) => m.request.messageId === claim.request.messageId);
+      const pane = tx.panes().find((p) => p.paneId === claim.grant.target.paneId);
+      if (
+        !message ||
+        !pane?.binding ||
+        ['closed', 'unavailable'].includes(pane.state) ||
+        event.messageId !== message.request.messageId ||
+        event.taskId !== message.request.taskId ||
+        event.targetPaneId !== message.grant.target.paneId ||
+        event.attemptId !== message.attemptId ||
+        event.instanceId !== pane.binding.instanceId ||
+        event.terminalEpoch !== pane.binding.terminalEpoch ||
+        JSON.stringify(pane.binding) !== JSON.stringify(message.grant.target.binding)
+      )
+        throw new Error('Cross-Feature provider correlation denied');
+      if (
+        ['accepted', 'delivered'].includes(event.event)
+          ? !pane.capabilities.canAcknowledge
+          : !pane.capabilities.canReportTaskCompletion
+      )
+        throw new Error('Cross-Feature provider capability denied');
+      const state = event.event === 'started' ? 'running' : event.event;
+      if (event.result) this.content(message.grant, 'result', event.result);
+      const next: CrossFeatureMessage = {
+        ...message,
+        state,
+        evidenceId: event.evidenceId,
+        ...(event.result ? { result: event.result } : {}),
+        updatedAt: Math.max(this.now(), message.updatedAt),
+      };
+      tx.updateCross(next, this.audit(next, 'provider_evidence'));
+      return next;
+    });
+    this.notify(updated);
+  }
+  private uncertain(messageId: string): void {
+    const changed = this.journal.transaction((tx) => {
+      const message = tx.crossMessages().find((m) => m.request.messageId === messageId);
+      if (!message || !activeCross(message.state) || message.state === 'outcome_unknown')
+        return undefined;
+      const next: CrossFeatureMessage = {
+        ...message,
+        state: 'outcome_unknown',
+        updatedAt: Math.max(this.now(), message.updatedAt),
+      };
+      tx.updateCross(next, this.audit(next, 'outcome_unknown'));
+      return next;
+    });
+    if (changed) this.notify(changed);
   }
 }

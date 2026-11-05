@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { communicationContentSchema, communicationPaneSchema } from './pane-communication.js';
+import {
+  communicationContentSchema,
+  communicationLimits,
+  communicationPaneSchema,
+} from './pane-communication.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const revision = z.number().int().nonnegative().safe();
@@ -72,6 +76,8 @@ export const crossFeatureRequestSchema = z.strictObject({
   messageId: z.uuid(),
   taskId: z.uuid(),
   idempotencyKey: id,
+  correlationId: z.uuid().optional(),
+  parentTaskId: z.uuid().nullable().optional(),
   payload: communicationContentSchema,
 });
 export type CrossFeatureRequest = z.infer<typeof crossFeatureRequestSchema>;
@@ -80,7 +86,21 @@ export const crossFeatureMessageSchema = z.strictObject({
   schemaVersion: z.literal(1),
   grant: crossFeatureGrantSchema,
   request: crossFeatureRequestSchema,
-  state: z.enum(['queued', 'dispatching', 'outcome_unknown']),
+  state: z.enum([
+    'queued',
+    'dispatching',
+    'accepted',
+    'delivered',
+    'running',
+    'waiting_approval',
+    'completed',
+    'failed',
+    'outcome_unknown',
+  ]),
+  depth: z.number().int().min(0).max(communicationLimits.maxDepth).optional(),
+  attemptId: z.uuid().optional(),
+  evidenceId: id.optional(),
+  result: communicationContentSchema.optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });
@@ -104,7 +124,16 @@ export const crossFeatureAuditSchema = z.strictObject({
   messageId: z.uuid(),
   sourceRevision: revision,
   targetRevision: revision,
-  outcome: z.enum(['admitted', 'dispatch_claimed', 'outcome_unknown']),
+  state: crossFeatureMessageSchema.shape.state.optional(),
+  outcome: z.enum([
+    'grant_issued',
+    'denied',
+    'revoked',
+    'admitted',
+    'dispatch_claimed',
+    'provider_evidence',
+    'outcome_unknown',
+  ]),
 });
 export type CrossFeatureAudit = z.infer<typeof crossFeatureAuditSchema>;
 
@@ -130,3 +159,21 @@ export interface CrossFeatureUsage {
   state: CrossFeatureMessage['state'];
   createdAt: number;
 }
+
+export const crossFeatureProviderEvidenceSchema = z
+  .strictObject({
+    messageId: z.uuid(),
+    taskId: z.uuid(),
+    targetPaneId: z.uuid(),
+    attemptId: z.uuid(),
+    instanceId: z.uuid(),
+    terminalEpoch: z.uuid(),
+    evidenceId: id,
+    event: z.enum(['accepted', 'delivered', 'started', 'waiting_approval', 'completed', 'failed']),
+    result: communicationContentSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.event === 'completed') !== (value.result !== undefined))
+      ctx.addIssue({ code: 'custom', message: 'Only completion requires a result reference' });
+  });
+export type CrossFeatureProviderEvidence = z.infer<typeof crossFeatureProviderEvidenceSchema>;

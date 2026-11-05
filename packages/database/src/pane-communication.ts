@@ -68,7 +68,9 @@ export function openCommunicationJournal(
               messageId: z.uuid().parse(row.message_id),
               actorId: z.string().min(1).max(128).parse(row.actor_id),
               targetPaneId: z.uuid().parse(row.target_id),
-              state: z.enum(['queued', 'dispatching', 'outcome_unknown']).parse(row.state),
+              state: crossFeatureMessageSchema.shape.state.safeParse(row.state).success
+                ? crossFeatureMessageSchema.shape.state.parse(row.state)
+                : ('outcome_unknown' as const),
               createdAt: z.number().int().nonnegative().safe().parse(row.created_at),
             }))
         : [],
@@ -93,6 +95,20 @@ export function openCommunicationJournal(
             .all()
             .map((row) => crossFeatureMessageSchema.parse(JSON.parse(String(row.metadata))))
         : [],
+    crossAuthorityEvents: () =>
+      crossExists()
+        ? db
+            .prepare(
+              'SELECT sequence, metadata FROM cross_feature_authority_audit ORDER BY sequence',
+            )
+            .all()
+            .map((row) =>
+              crossFeatureAuditSchema.parse({
+                ...JSON.parse(String(row.metadata)),
+                sequence: row.sequence,
+              }),
+            )
+        : [],
     crossEvents: () =>
       crossExists()
         ? db
@@ -105,6 +121,12 @@ export function openCommunicationJournal(
               }),
             )
         : [],
+    auditCross: (input, event) => {
+      const message = crossFeatureMessageSchema.parse(input);
+      if (!['grant_issued', 'denied', 'revoked'].includes(event.outcome))
+        throw new Error('Invalid cross-Feature administrative audit');
+      crossAudit(message, event, event.outcome, true);
+    },
     insertCross: (input, event) => {
       const message = crossFeatureMessageSchema.parse(input);
       if (message.state !== 'queued') throw new Error('Invalid cross-Feature admission');
@@ -136,24 +158,41 @@ export function openCommunicationJournal(
     updateCross: (input, event) => {
       const message = crossFeatureMessageSchema.parse(input);
       const old = tx.crossMessages().find((m) => m.request.messageId === message.request.messageId);
+      const transitions: Record<string, string[]> = {
+        queued: ['dispatching'],
+        dispatching: ['accepted', 'outcome_unknown'],
+        accepted: ['delivered', 'running', 'waiting_approval', 'outcome_unknown'],
+        delivered: ['running', 'waiting_approval', 'outcome_unknown'],
+        running: ['waiting_approval', 'completed', 'failed', 'outcome_unknown'],
+        waiting_approval: ['running', 'outcome_unknown'],
+      };
       if (
         !old ||
-        old.state !== 'queued' ||
-        message.state !== 'dispatching' ||
+        !transitions[old.state]?.includes(message.state) ||
         JSON.stringify(old.grant) !== JSON.stringify(message.grant) ||
         JSON.stringify(old.request) !== JSON.stringify(message.request) ||
-        old.createdAt !== message.createdAt
+        old.createdAt !== message.createdAt ||
+        old.depth !== message.depth ||
+        message.updatedAt < old.updatedAt ||
+        (old.attemptId !== undefined && old.attemptId !== message.attemptId) ||
+        (message.state === 'dispatching' && !message.attemptId)
       )
         throw new Error('Invalid cross-Feature transition');
       db.prepare('UPDATE cross_feature_messages SET metadata=? WHERE message_id=?').run(
         JSON.stringify(message),
         message.request.messageId,
       );
-      db.prepare('UPDATE cross_feature_usage SET state=? WHERE message_id=?').run(
-        message.state,
-        message.request.messageId,
-      );
-      crossAudit(message, event, 'dispatch_claimed');
+      const usage = db
+        .prepare('UPDATE cross_feature_usage SET state=? WHERE message_id=?')
+        .run(message.state, message.request.messageId);
+      if (usage.changes !== 1) throw new Error('Cross-Feature usage missing');
+      const outcome =
+        message.state === 'dispatching'
+          ? 'dispatch_claimed'
+          : message.state === 'outcome_unknown'
+            ? 'outcome_unknown'
+            : 'provider_evidence';
+      crossAudit(message, event, outcome);
     },
     panes: () =>
       db
@@ -279,15 +318,17 @@ export function openCommunicationJournal(
     message: import('@orqst/protocol').CrossFeatureMessage,
     event: Omit<import('@orqst/protocol').CrossFeatureAudit, 'sequence'>,
     outcome: import('@orqst/protocol').CrossFeatureAudit['outcome'],
+    authority = false,
   ) => {
+    const table = authority ? 'cross_feature_authority_audit' : 'cross_feature_audit';
     const g = message.grant;
     if (
-      Number(db.prepare('SELECT COUNT(*) AS n FROM cross_feature_audit').get()?.n) >=
+      Number(db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n) >=
       communicationLimits.auditEvents
     )
       throw new Error('Cross-Feature audit capacity');
     const sequence = Number(
-      db.prepare('SELECT COALESCE(MAX(sequence),0)+1 AS n FROM cross_feature_audit').get()?.n,
+      db.prepare(`SELECT COALESCE(MAX(sequence),0)+1 AS n FROM ${table}`).get()?.n,
     );
     const audit = crossFeatureAuditSchema.parse({ ...event, sequence });
     if (
@@ -307,7 +348,7 @@ export function openCommunicationJournal(
       audit.targetRevision !== g.targetRevision
     )
       throw new Error('Invalid cross-Feature audit scope');
-    db.prepare('INSERT INTO cross_feature_audit(sequence, metadata) VALUES (?,?)').run(
+    db.prepare(`INSERT INTO ${table}(sequence, metadata) VALUES (?,?)`).run(
       sequence,
       JSON.stringify(event),
     );
@@ -328,6 +369,8 @@ export function openCommunicationJournal(
         UNIQUE(workspace_id,target_id,idempotency_key));
       CREATE TABLE IF NOT EXISTS cross_feature_audit (
         sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));
+      CREATE TABLE IF NOT EXISTS cross_feature_authority_audit (
+        sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));
       CREATE TABLE IF NOT EXISTS cross_feature_usage (
         message_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, target_id TEXT NOT NULL,
         state TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -341,7 +384,8 @@ export function openCommunicationJournal(
       throw new Error('Unsupported cross-Feature journal schema');
     db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_owner
       (singleton INTEGER PRIMARY KEY CHECK(singleton=1), epoch TEXT NOT NULL)`);
-    for (const message of tx.crossMessages())
+    const retained = tx.crossMessages();
+    for (const message of retained) {
       db.prepare('INSERT OR IGNORE INTO cross_feature_usage VALUES (?,?,?,?,?)').run(
         message.request.messageId,
         message.grant.actorId,
@@ -349,10 +393,34 @@ export function openCommunicationJournal(
         message.state,
         message.createdAt,
       );
+      const usage = db
+        .prepare(
+          'SELECT actor_id,target_id,state,created_at FROM cross_feature_usage WHERE message_id=?',
+        )
+        .get(message.request.messageId);
+      if (
+        !usage ||
+        usage.actor_id !== message.grant.actorId ||
+        usage.target_id !== message.grant.target.paneId ||
+        usage.state !== message.state ||
+        usage.created_at !== message.createdAt
+      )
+        throw new Error('Cross-Feature usage inconsistent');
+    }
+    if (
+      Number(db.prepare('SELECT COUNT(*) AS n FROM cross_feature_usage').get()?.n) !==
+      retained.length
+    )
+      throw new Error('Cross-Feature usage history incomplete');
     const prior = db.prepare('SELECT epoch FROM cross_feature_owner WHERE singleton=1').get();
     if (existed && (!prior || prior.epoch !== epoch)) {
       for (const message of tx.crossMessages()) {
-        if (message.state !== 'dispatching') continue;
+        if (
+          !['dispatching', 'accepted', 'delivered', 'running', 'waiting_approval'].includes(
+            message.state,
+          )
+        )
+          continue;
         const g = message.grant;
         const timestamp = Math.max(now(), message.updatedAt);
         const recovered = { ...message, state: 'outcome_unknown' as const, updatedAt: timestamp };

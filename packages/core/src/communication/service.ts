@@ -64,6 +64,15 @@ export type CommunicationResolver = (
   scope: Readonly<CommunicationContentScope>,
   contentId: string,
 ) => Uint8Array;
+const crossActive = (state: string) =>
+  [
+    'dispatching',
+    'accepted',
+    'delivered',
+    'running',
+    'waiting_approval',
+    'outcome_unknown',
+  ].includes(state);
 const terminalTask = (message: CommunicationMessage) =>
   ['completed', 'failed', 'cancelled', 'outcome_unknown'].includes(message.taskState);
 const active = (message: CommunicationMessage) =>
@@ -412,9 +421,9 @@ export class PaneCommunication {
         !pane.capabilities.canReportTaskCompletion ||
         !adapter.ready(pane) ||
         messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
-        tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && m.state !== 'queued') ||
+        tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && crossActive(m.state)) ||
         messages.filter(active).length +
-          tx.crossUsage().filter((m) => m.state !== 'queued').length >=
+          tx.crossUsage().filter((m) => crossActive(m.state)).length >=
           communicationLimits.activeTasks
       )
         return undefined;
@@ -585,8 +594,6 @@ export class PaneCommunication {
       throw new Error('Feature permission denied or revision changed');
     const messages = tx.messages();
     const crossUsage = tx.crossUsage();
-    if (messages.length + crossUsage.length >= communicationLimits.messages)
-      throw new Error('Message history capacity');
     const duplicate = messages.find(
       (m) =>
         m.workspaceId === request.workspaceId &&
@@ -608,6 +615,8 @@ export class PaneCommunication {
         throw new Error('Idempotency conflict');
       return duplicate;
     }
+    if (messages.length + crossUsage.length >= communicationLimits.messages)
+      throw new Error('Message history capacity');
     if (messages.some((m) => m.messageId === request.messageId || m.taskId === request.taskId))
       throw new Error('Message or task identity already used');
     if (
