@@ -109,6 +109,15 @@ for (const provider of ['claude', 'opencode'] as const)
             {
               name: 'synthetic-reviewed-hash-only',
               setup(builder: PluginBuild) {
+                // Only this isolated synthetic bundle injects a signature verifier; production never does.
+                builder.onResolve({ filter: /cli-system-signature\.js$/ }, () => ({
+                  path: 'synthetic-signature',
+                  namespace: 'synthetic-signature',
+                }));
+                builder.onLoad({ filter: /.*/, namespace: 'synthetic-signature' }, () => ({
+                  contents: 'export const verifySystemCliSignature = () => true;',
+                  loader: 'js',
+                }));
                 builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
                   contents: readFileSync(args.path, 'utf8')
                     .replace(reviewedProviderMcpBinaries.claude.sha256, hash)

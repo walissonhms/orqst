@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { constants } from 'node:os';
 import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
-import { terminalFile } from './codex-profile.js';
+import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
+import { verifySystemCliSignature } from './cli-system-signature.js';
 import {
+  interactiveProvider,
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
   readInteractiveTerminalConfig,
@@ -33,6 +35,10 @@ async function start(): Promise<void> {
   };
   let child: IPty;
   try {
+    if (!verifySystemCliSignature(interactiveProvider(config), profile.executable))
+      throw new Error('CLI signature unavailable or invalid');
+    if (terminalExecutableSha256(profile.executable) !== profile.executableSha256)
+      throw new Error('CLI changed before PTY spawn');
     child = spawn(profile.executable, [...profile.argv], {
       cwd: profile.cwd,
       env: interactiveTerminalEnvironment(config, mcp),
