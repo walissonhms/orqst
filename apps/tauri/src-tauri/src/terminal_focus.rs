@@ -25,6 +25,16 @@ impl Focus {
     }
 }
 
+/// NSApp is active for this exact window; a sheet does not change that.
+pub(crate) fn app_active(window: &tauri::Window) -> bool {
+    sample(window).is_some_and(|focus| focus.active)
+}
+
+/// The current sheet is attached to this exact parent and owns the key window.
+pub(crate) fn sheet_owned(window: &tauri::Window) -> bool {
+    sample(window).is_some_and(|focus| focus.owns_sheet(true))
+}
+
 // Call only on the AppKit UI thread. Native pointer identity never leaves this call.
 pub(super) fn sample(window: &tauri::Window) -> Option<Focus> {
     let pointer = window.ns_window().ok()?;
@@ -58,6 +68,7 @@ extern "C-unwind" fn deactivated(_: &AnyObject, _: Sel, _: *mut AnyObject) {
         crate::desktop::quit_deactivated(app);
         crate::terminal_creation::invalidate(app);
         crate::offline_recovery::invalidate(app);
+        crate::agents::invalidate_review(app);
         super::native_focus_lost(app, "application-deactivated");
     }
 }

@@ -1142,6 +1142,14 @@ pub async fn quit_owned(app: tauri::AppHandle) {
     }
 }
 
+pub(crate) fn app_active(window: &tauri::Window) -> bool {
+    native_focus::app_active(window)
+}
+
+pub(crate) fn sheet_owned(window: &tauri::Window) -> bool {
+    native_focus::sheet_owned(window)
+}
+
 fn revoke_all(app: &tauri::AppHandle) {
     let count = app
         .state::<Terminals>()

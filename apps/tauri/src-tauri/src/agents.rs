@@ -258,13 +258,17 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
                 let guard = state.0.lock().unwrap();
                 guard.as_ref().is_some_and(|r| Some(r.generation) == generation && !r.revoked && r.pending.contains_key(&request))
             };
-            // The sync accept re-checks the same surface epoch; the async first-responder
-            // was verified before the sheet and the epoch changes on hide/reveal.
+            // A delayed Yes only counts with the same token, an active app, the expected
+            // key sheet and the surface still presented; deactivation bumps the epoch.
             let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
                 && active
                 && current(&window)
-                && presented(&app)
-                && surface_epoch(&app) == epoch;
+                && sheet_accepts(
+                    surface_epoch(&app) == epoch,
+                    crate::terminal::app_active(&window.window()),
+                    crate::terminal::sheet_owned(&window.window()),
+                    presented(&app),
+                );
             send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
         });
 }
@@ -558,6 +562,24 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         _ => {}
     }
 }
+/// Accept a sheet only with a current token, active app, the expected key sheet and
+/// the surface still presented. Pure so the delayed/other-window cases are testable.
+pub(crate) fn sheet_accepts(
+    token_current: bool,
+    app_active: bool,
+    key_is_sheet: bool,
+    surface_presented: bool,
+) -> bool {
+    token_current && app_active && key_is_sheet && surface_presented
+}
+
+/// A deactivation invalidates the sheet token even if the parent was already unfocused.
+pub fn invalidate_review(app: &tauri::AppHandle) {
+    if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
+        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+    }
+}
+
 /// Whether the structured-agent host is running in this app lifetime.
 pub fn owned_active(app: &tauri::AppHandle) -> bool {
     app.state::<Agents>().0.lock().unwrap().is_some()
@@ -652,6 +674,15 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
 #[cfg(test)]
 mod tests {
     use super::document_matches;
+    #[test]
+    fn a_delayed_sheet_yes_requires_current_token_active_app_and_key_sheet() {
+        assert!(super::sheet_accepts(true, true, true, true));
+        assert!(!super::sheet_accepts(true, false, true, true));
+        assert!(!super::sheet_accepts(true, true, false, true));
+        assert!(!super::sheet_accepts(true, true, true, false));
+        assert!(!super::sheet_accepts(false, true, true, true));
+    }
+
     #[test]
     fn managed_agent_capability_is_bound_to_its_webview_only() {
         let conf = include_str!("../tauri.conf.json");
