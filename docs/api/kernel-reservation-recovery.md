@@ -41,6 +41,10 @@ attempt; it does not require reboot. An actor outside ORQST manually changing th
 marker is outside this protocol. Electron `userData` and Tauri `app_data_dir` are
 separate admission namespaces.
 
+Mutation and per-marker predecessor chains have a 128-entry budget; the existing
+directory-enumeration budget can refuse sooner. Exhaustion denies further recovery
+rather than recycling or deleting old evidence.
+
 The exact reviewed marker is opened without following links and bound by device,
 inode and SHA-256. A per-marker exclusive recovery lock records a unique destination.
 The marker is rechecked and `renameatx_np(RENAME_EXCL)` moves it within the same
