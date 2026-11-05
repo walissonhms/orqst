@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
+import {
+  kernelProcessIdentitySchema,
+  type KernelProcessIdentity,
+} from '../../../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
 
 // Administrative-only budgets. Ordinary preparation retains its existing 16 KiB detail cap.
 export const ADMIN_REVIEW_BYTES = 64 * 1024;
@@ -54,6 +58,11 @@ export class AdministrativeReviewPipe {
     resolve(value: boolean): void;
   };
   private signedChallenge?: string;
+  private kernelPending?: {
+    id: string;
+    timer: ReturnType<typeof setTimeout>;
+    resolve(value: unknown): void;
+  };
   private consent?: { id: string; nonce: string; digest: string; binding: string };
   private authorization?: {
     request: NonNullable<AdministrativeReviewPipe['consent']>;
@@ -72,6 +81,9 @@ export class AdministrativeReviewPipe {
   current = () => this.live;
   close() {
     this.live = false;
+    if (this.kernelPending) clearTimeout(this.kernelPending.timer);
+    this.kernelPending?.resolve(null);
+    this.kernelPending = undefined;
     this.consent = undefined;
     if (this.authorization) clearTimeout(this.authorization.timer);
     this.authorization?.resolve(null);
@@ -79,6 +91,46 @@ export class AdministrativeReviewPipe {
     if (this.pending) clearTimeout(this.pending.timer);
     this.pending?.resolve(false);
     this.pending = undefined;
+  }
+  private kernelQuery(operation: 'self' | 'exists', identity?: KernelProcessIdentity) {
+    if (!this.live || this.kernelPending || this.now() >= this.sessionDeadline)
+      return Promise.resolve(null);
+    const id = randomUUID();
+    return new Promise<unknown>((resolve) => {
+      const timer = setTimeout(() => this.close(), 30_000);
+      timer.unref();
+      this.kernelPending = { id, timer, resolve };
+      this.send({ kind: 'kernel-query', session: this.session, id, operation, identity });
+    });
+  }
+  async kernelIdentity() {
+    return kernelProcessIdentitySchema.parse(await this.kernelQuery('self'));
+  }
+  async kernelOwnerExists(identity: KernelProcessIdentity) {
+    return z.boolean().parse(await this.kernelQuery('exists', identity));
+  }
+  kernelAnswer(value: unknown) {
+    const parsed = z
+      .strictObject({
+        kind: z.literal('kernel-answer'),
+        session: z.uuid(),
+        id: z.uuid(),
+        result: z.unknown(),
+      })
+      .safeParse(value);
+    const pending = this.kernelPending;
+    if (
+      !parsed.success ||
+      !pending ||
+      parsed.data.session !== this.session ||
+      parsed.data.id !== pending.id
+    ) {
+      this.close();
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.kernelPending = undefined;
+    pending.resolve(parsed.data.result);
   }
   review(action: AdministrativeAction, detail: string, binding: string): Promise<boolean> {
     // Preserve every character visibly; bidi/format controls cannot spoof a native path or record.

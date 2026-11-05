@@ -163,6 +163,8 @@ export class TauriOfflineRecovery {
             },
           },
           {
+            mutationExecutor: () => this.pipe.kernelIdentity(),
+            mutationOwnerExists: (identity) => this.pipe.kernelOwnerExists(identity),
             ...this.dependencies,
             // A dropped/revoked pipe cannot authorize a proof after the async review returns.
             now: () =>

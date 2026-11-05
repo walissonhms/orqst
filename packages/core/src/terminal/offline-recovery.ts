@@ -4,6 +4,8 @@ import { fsyncSync, lstatSync, mkdirSync, mkdtempSync, renameSync, unlinkSync } 
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { terminalDigest } from './authority.js';
+import { acquireAdmissionMutation } from './admission-mutation.js';
+import type { KernelProcessIdentity } from '../managed-codex/kernel-lifecycle-receipt.js';
 import { terminalDirectory } from './codex-profile.js';
 import { historicalBindingEvidenceSchema } from './offline-historical-binding.js';
 import {
@@ -158,6 +160,8 @@ interface RecoveryDependencies {
   bootUUID(): string;
   now(): number;
   sync(fd: number): void;
+  mutationExecutor?(): Promise<KernelProcessIdentity>;
+  mutationOwnerExists?(identity: KernelProcessIdentity): Promise<boolean>;
   /** Test fault injection at durability boundaries. Production composition omits it. */
   boundary?(
     stage:
@@ -286,7 +290,12 @@ export class OfflineReservationRecovery {
     );
     return { evidence, sha256: record.sha256, bytes: record.bytes, record };
   }
-  private snapshot(directory: string, bundle: string, admitPhysicalDifference = false) {
+  private snapshot(
+    directory: string,
+    bundle: string,
+    admitPhysicalDifference = false,
+    ignoredMutationNames: readonly string[] = [],
+  ) {
     const historical = this.historicalEvidence(bundle);
     const scratch = mkdtempSync(join(bundle, 'inspection-'));
     const signed =
@@ -297,7 +306,14 @@ export class OfflineReservationRecovery {
       signed && this.boot() !== signed.before.beforeBoot
         ? offlineSnapshotSchema.parse(sourceJSON(join(bundle, 'snapshot.json'), RECOVERY_LIMIT))
         : undefined;
-    return snapshotOfflineReservation(directory, scratch, historical, saved);
+    return snapshotOfflineReservation(
+      directory,
+      scratch,
+      historical,
+      saved,
+      undefined,
+      ignoredMutationNames,
+    );
   }
   private async approve<P extends AdministrativeRecoveryIntent['phase']>(
     proposal: AdministrativeRecoveryIntent & { phase: P },
@@ -1058,6 +1074,15 @@ export class OfflineReservationRecovery {
     const { capture, before } = this.captureRecord(bundle);
     const archive = this.archiveRecord(bundle, capture);
     const directory = before.directory;
+    if (!this.dependencies.mutationExecutor || !this.dependencies.mutationOwnerExists)
+      throw new Error('Native admission mutation authority unavailable');
+    const executor = await this.dependencies.mutationExecutor();
+    const mutation = await acquireAdmissionMutation(directory, executor, (identity) =>
+      this.dependencies.mutationOwnerExists!(identity),
+    );
+    const ignoredMutationNames = mutation.names.filter(
+      (name) => !archive.current.membership.includes(name),
+    );
     const currentBoot = this.boot();
     if (currentBoot === before.beforeBoot) throw new Error('Different kernel boot required');
     const marker = this.sourceMarker(archive.current, directory);
@@ -1192,7 +1217,9 @@ export class OfflineReservationRecovery {
           throw new OfflineRecoveryBlocked('completion_record_uncertain_commit_preserved', bundle);
         throw new OfflineRecoveryBlocked('already_finalized_original_commit_preserved', bundle);
       }
-      const fresh = heldBefore ? archive.current : this.snapshot(directory, bundle, true);
+      const fresh = heldBefore
+        ? archive.current
+        : this.snapshot(directory, bundle, true, ignoredMutationNames);
       if (fresh.logicalDigest !== archive.current.logicalDigest)
         throw new OfflineRecoveryBlocked('pre_commit_logical_source_changed', bundle);
       // The logical projection is device-invariant by design, so a second physical generation
@@ -1201,10 +1228,11 @@ export class OfflineReservationRecovery {
       if (!heldBefore && physicalRecords(fresh) !== physicalRecords(archive.current))
         throw new OfflineRecoveryBlocked('pre_commit_physical_source_changed', bundle);
       const assertPrepared = () => {
+        mutation.validate();
         if (
           this.boot() !== currentBoot ||
           this.present(heldPath) ||
-          this.snapshot(directory, bundle, true).rawDigest !== fresh.rawDigest
+          this.snapshot(directory, bundle, true, ignoredMutationNames).rawDigest !== fresh.rawDigest
         )
           throw new OfflineRecoveryBlocked('pre_commit_source_changed', bundle);
         exact(gateFile, this.gate(capture));

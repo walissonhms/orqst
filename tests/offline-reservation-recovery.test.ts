@@ -1,4 +1,5 @@
 import { releaseKernelReservation } from '../packages/core/src/terminal/kernel-release.js';
+import { acquireAdmissionMutation } from '../packages/core/src/terminal/admission-mutation.js';
 import {
   beginKernelRelease,
   reconcileKernelRelease,
@@ -227,6 +228,17 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false) {
   let clock = 1;
   const dependencies = {
     bootUUID: () => boot,
+    mutationExecutor: async () => ({
+      boot,
+      pid: process.pid,
+      ppid: process.ppid,
+      uid: process.getuid!(),
+      startSec: 1,
+      startUsec: 0,
+      sid: 1,
+      pgid: 1,
+    }),
+    mutationOwnerExists: async () => false,
     now: () => clock,
     sync: (fd: number) => {
       if (
@@ -345,6 +357,31 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false) {
     },
   };
 }
+
+test('offline finalization refuses a live admission mutation owner before review', async () => {
+  const f = fixture(true);
+  try {
+    const capture = await f.capture();
+    f.changeBoot();
+    const next = new OfflineReservationRecovery(f.authority, f.dependencies);
+    await next.release(capture.bundle);
+    await acquireAdmissionMutation(
+      f.directory,
+      await f.dependencies.mutationExecutor(),
+      async () => true,
+    );
+    const fenced = new OfflineReservationRecovery(f.authority, {
+      ...f.dependencies,
+      mutationOwnerExists: async () => true,
+    });
+    const count = f.reviews.length;
+    await assert.rejects(fenced.finalize(capture.bundle), /mutation in progress/);
+    assert.equal(f.reviews.length, count);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    f.close();
+  }
+});
 
 test('different kernel boot + full prepared OpenCode/zero-attempt Codex archives honestly, then explicit finalize', async () => {
   const f = fixture(true);

@@ -577,6 +577,51 @@ fn run(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), Box<dyn std
                 let Some((id, action, generation)) = pending else {
                     break;
                 };
+                #[cfg(target_os = "macos")]
+                if value["kind"] == "kernel-query" {
+                    let query_id = value["id"]
+                        .as_str()
+                        .filter(|_| crate::features::uuid(&value["id"]));
+                    if value["session"] != session || query_id.is_none() {
+                        break;
+                    }
+                    let result = match value["operation"].as_str() {
+                        Some("self") if exact(&value, &["kind", "session", "id", "operation"]) => {
+                            let pid = app
+                                .state::<Recovery>()
+                                .0
+                                .lock()
+                                .unwrap()
+                                .child
+                                .as_ref()
+                                .map(CommandChild::pid);
+                            pid.and_then(|pid| {
+                                crate::terminal_kernel_identity::read_process(pid).ok()
+                            })
+                            .map(|identity| identity.as_json())
+                        }
+                        Some("exists")
+                            if exact(
+                                &value,
+                                &["kind", "session", "id", "operation", "identity"],
+                            ) =>
+                        {
+                            crate::terminal_kernel_identity::KernelIdentity::from_json(
+                                &value["identity"],
+                            )
+                            .and_then(|identity| {
+                                crate::terminal_kernel_scan::mutation_owner_exists(&identity).ok()
+                            })
+                            .map(Value::Bool)
+                        }
+                        _ => None,
+                    };
+                    let answer = json!({"kind":"kernel-answer", "session":session, "id":query_id.unwrap(), "result":result});
+                    if let Some(child) = app.state::<Recovery>().0.lock().unwrap().child.as_mut() {
+                        child.write(format!("{answer}\n").as_bytes())?;
+                    }
+                    continue;
+                }
                 if review_frame(&value, &session, &action) {
                     if reviews.len() >= 256
                         || !reviews.insert(value["id"].as_str().unwrap().to_owned())

@@ -272,6 +272,7 @@ export function snapshotOfflineReservation(
   },
   signedHistorical?: OfflineReservationSnapshot,
   inspectionMode?: 'kernel',
+  ignoredMutationNames: readonly string[] = [],
 ) {
   if (inspectionMode && (historical || signedHistorical))
     throw new Error('Kernel inspection cannot use historical fallback');
@@ -590,7 +591,7 @@ export function snapshotOfflineReservation(
       ? { historicalBinding: historicalBindingLogical(historicalBinding) }
       : {}),
     marker,
-    membership,
+    membership: membership.filter((name) => !ignoredMutationNames.includes(name)),
     immutable: files
       .filter(
         (file) =>

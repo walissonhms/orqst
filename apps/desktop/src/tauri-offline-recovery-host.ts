@@ -54,6 +54,7 @@ async function main() {
       if (typeof value !== 'object' || value === null) return close();
       if ('kind' in value && value.kind === 'answer') return pipe.answer(value);
       if ('kind' in value && value.kind === 'authorized') return pipe.authorized(value);
+      if ('kind' in value && value.kind === 'kernel-answer') return pipe.kernelAnswer(value);
       if (busy) return close();
       busy = true;
       void recovery

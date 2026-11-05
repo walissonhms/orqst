@@ -59,6 +59,32 @@ pub struct KernelIdentity {
     pub pgid: u32,
 }
 
+impl KernelIdentity {
+    pub fn as_json(&self) -> serde_json::Value {
+        serde_json::json!({"boot":self.boot,"pid":self.pid,"ppid":self.ppid,"uid":self.uid,
+            "startSec":self.start_sec,"startUsec":self.start_usec,"sid":self.sid,"pgid":self.pgid})
+    }
+
+    pub fn from_json(value: &serde_json::Value) -> Option<Self> {
+        if value.as_object()?.len() != 8 || !crate::features::uuid(&value["boot"]) {
+            return None;
+        }
+        let number = |field: &str| value[field].as_u64();
+        let result = Self {
+            boot: value["boot"].as_str()?.to_owned(),
+            pid: u32::try_from(number("pid")?).ok()?,
+            ppid: u32::try_from(number("ppid")?).ok()?,
+            uid: u32::try_from(number("uid")?).ok()?,
+            start_sec: number("startSec")?,
+            start_usec: number("startUsec")?,
+            sid: u32::try_from(number("sid")?).ok()?,
+            pgid: u32::try_from(number("pgid")?).ok()?,
+        };
+        (result.pid > 0 && result.sid > 0 && result.pgid > 0 && result.start_usec < 1_000_000)
+            .then_some(result)
+    }
+}
+
 fn boot_uuid() -> io::Result<String> {
     let mut data = [0_u8; 64];
     let mut len = data.len();

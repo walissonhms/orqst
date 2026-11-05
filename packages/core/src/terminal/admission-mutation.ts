@@ -66,7 +66,7 @@ export async function acquireAdmissionMutation(
         }
       };
       validate();
-      return { lock, name, validate };
+      return { lock, name, names: [...chain.map((item) => item.name), name], validate };
     }
     if (existing.lock.predecessor !== predecessor)
       throw new Error('Invalid mutation lock predecessor');

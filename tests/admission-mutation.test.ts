@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { build } from 'esbuild';
 import { acquireAdmissionMutation } from '../packages/core/src/terminal/admission-mutation.js';
+import { AdministrativeReviewPipe } from '../apps/desktop/src/offline-recovery-wire.js';
 
 function syntheticIdentity() {
   return {
@@ -19,6 +20,25 @@ function syntheticIdentity() {
     pgid: 1,
   };
 }
+
+test('private kernel reply is bound to the request and rejects malformed identity', async () => {
+  const frames: object[] = [];
+  const pipe = new AdministrativeReviewPipe((frame) => frames.push(frame));
+  const pending = pipe.kernelIdentity();
+  const request = frames[0] as { id: string };
+  pipe.kernelAnswer({
+    kind: 'kernel-answer',
+    session: pipe.session,
+    id: request.id,
+    result: syntheticIdentity(),
+  });
+  assert.equal((await pending).pid, process.pid);
+  const invalid = pipe.kernelIdentity();
+  const second = frames[1] as { id: string };
+  pipe.kernelAnswer({ kind: 'kernel-answer', session: pipe.session, id: second.id, result: null });
+  await assert.rejects(invalid);
+  pipe.close();
+});
 
 test('unreadable or partial mutation lock fails closed', async () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mutation-')));
