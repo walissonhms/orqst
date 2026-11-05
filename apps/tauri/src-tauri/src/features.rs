@@ -367,7 +367,8 @@ pub(crate) fn document_version_current(
         && document_version(&guard, main) == document
         && document_matches(
             if main { "main" } else { "feature-workspace" },
-            if main { "main" } else { "main" },
+            // Both surfaces are child webviews of the single main window.
+            "main",
             source,
             &guard.origin,
         )
