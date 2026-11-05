@@ -19,7 +19,7 @@ test('switching Features discards old permission reads and proposals', async () 
         window.calls = [];
         window.orqstFeaturePermissions = {
           read: (id) => new Promise(resolve => window.pending.push({id, resolve})),
-          propose: async (request) => { window.calls.push(request); return {status:'ok'}; },
+          propose: async (request) => { window.calls.push(request); if (window.rejectProposal) throw new Error('response lost after commit'); return {status:'ok'}; },
         };
         const i18n = createInstance();
         await i18n.init({lng:'en-US', resources:{'en-US':{translation:en}}});
@@ -73,7 +73,14 @@ test('switching Features discards old permission reads and proposals', async () 
       }),
     );
     await page.waitForFunction(() => !document.querySelector('button')?.disabled);
+    await page.evaluate(() => Reflect.set(window, 'rejectProposal', true));
     await propose.click();
+    await page
+      .getByText(
+        'The policy save may have completed. Read the current policy before proposing another change.',
+      )
+      .waitFor();
+    assert.equal(await propose.isDisabled(), true);
     const calls = await page.evaluate(() => Reflect.get(window, 'calls'));
     assert.equal(calls.length, 1);
     assert.equal(calls[0].featureId, 'a');

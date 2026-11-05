@@ -75,7 +75,8 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
       if (reply.status === 'unknown') setRevision(null);
       if (reply.status !== 'ok') setNotice(reply.status);
     } catch {
-      setNotice('unavailable');
+      setRevision(null);
+      setNotice('unknown');
     } finally {
       setBusy(false);
     }
