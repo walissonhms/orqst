@@ -15,6 +15,7 @@ import {
   createLifecycleReceipt,
   readLifecycleReceipt,
 } from '../packages/core/src/managed-codex/lifecycle-receipt.js';
+import { assertDurableAcceptanceRoot } from '../scripts/terminal/acceptance-root.js';
 
 test('acceptance rejects a correct root receipt when the actual worker marker is missing or wrong', () => {
   const marker = 'ORQST_B_SYNTHETIC';
@@ -86,5 +87,16 @@ test('acceptance requires matching durable and still-owned exits, preserving sig
   } finally {
     closeSync(fd);
     rmSync(state, { recursive: true, force: true });
+  }
+});
+
+test('real acceptance roots must be durable and never system temporary paths', () => {
+  const ephemeral = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-acceptance-root-')));
+  try {
+    assert.throws(() => assertDurableAcceptanceRoot(ephemeral), /durable/);
+    assert.throws(() => assertDurableAcceptanceRoot(join(ephemeral, 'absent')));
+    assert.equal(assertDurableAcceptanceRoot(ephemeral, []), ephemeral);
+  } finally {
+    rmSync(ephemeral, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 // Explicit developer acceptance ONLY. No provider runs without both human authorization flags.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
-import { existsSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -36,6 +36,7 @@ import {
   sourceCheckSummary,
   type SourceCheckRecord,
 } from './terminal/two-agent-source-guard.js';
+import { assertDurableAcceptanceRoot } from './terminal/acceptance-root.js';
 import {
   readLifecycleReceipt,
   type LifecycleBinding,
@@ -69,7 +70,7 @@ assert.equal(process.platform, 'darwin');
 assert.equal(process.arch, 'arm64');
 assert.notEqual(process.getuid?.(), 0);
 process.umask(0o077);
-const root = realpathSync(values['acceptance-root']);
+const root = assertDurableAcceptanceRoot(values['acceptance-root']);
 terminalDirectory(root, true);
 const project = join(root, 'project');
 assert.deepEqual(
