@@ -978,3 +978,24 @@ no restore action. The increment needs: native forwarding of the layout state to
 Feature chrome, one restore action for a hidden slot, and the dock UI. Minimize must
 only hide the view; it never stops the process, PTY, identity or scrollback, and
 focus/input suspends while minimized. Not implemented in this round.
+
+## Owned shutdown integration — 2026-11-05 (source state)
+
+- [x] Backend owned shutdown pipe (`shutdownOwned`/`retireOwned`/`closePreservedOwned`),
+      durable pending-pair with Core-only rename, crash-point tests and the 64 cap —
+      implemented in code + tests (`0a8c488`, integrated `6e75a43`; focused 51/51,
+      cargo 100 passed / 1 ignored).
+- [ ] Quit wiring in `desktop.rs` (ready → retireOwned → exit;
+      exited_retirement_unavailable → closePreservedOwned → exit preserving the
+      pending; uncertain/busy/denied → stay with an inline EN/PT error). Not wired
+      yet; the current Quit confirmation stays.
+- [ ] Native acceptance of the Quit path.
+- [ ] Managed-agents host shutdown is not covered by this pipe; its gate stays and
+      is documented as an open gap.
+- [ ] Open: user path to reduce pending exits (no eviction/TTL/delete).
+- [ ] Open: cross-launch retirement only through the offline non-dispatch path.
+- [ ] Risk: the codex-native-initialize fixture runs near the 55s limit (isolated
+      3/3 pass; baseline pass).
+
+- corrigido: dock minimized WIP preserved on `wip/dock-755` (`2942899`), not part of
+  this integration; the chrome UI is still pending.
