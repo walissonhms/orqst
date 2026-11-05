@@ -11,6 +11,9 @@ if (
     value: createFeatureClient(
       (request) => invoke('feature_request', { request }),
       () => navigator.userActivation.isActive,
+      location.href === 'orqst-features://local/index.html'
+        ? (request) => invoke('feature_prepare', { request })
+        : undefined,
     ),
   });
   window.addEventListener('orqst-native-feature-state', (event) => {

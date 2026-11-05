@@ -102,7 +102,21 @@ export const featureNativeReplyEnvelopeSchema = z.strictObject({
   document: featureNativeEnvelopeSchema.shape.document,
   value: featureNativeReplySchema,
 });
+/** Passive native navigation only; deliberately separate from Core metadata requests. */
+export const featurePreparationRequestSchema = z.strictObject({
+  ...base,
+  workspaceId: featureViewStateSchema.shape.workspaceId,
+  featureId: featureId.nullable(),
+  expectedRevision: z.number().int().nonnegative().safe(),
+});
+export type FeaturePreparationRequest = z.infer<typeof featurePreparationRequestSchema>;
+export const featurePreparationReplySchema = z.strictObject({
+  status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable']),
+});
+export type FeaturePreparationReply = z.infer<typeof featurePreparationReplySchema>;
+
 export interface DesktopFeatures {
   readonly contractVersion: 1;
   request(input: FeatureNativeRequest): Promise<FeatureNativeReply>;
+  showPreparationDrawer?(input: FeaturePreparationRequest): Promise<FeaturePreparationReply>;
 }

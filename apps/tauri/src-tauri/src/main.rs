@@ -46,7 +46,7 @@ fn main() {
         .manage(agents::Agents::default())
         .manage(files::Files::default())
         .manage(features::Features::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request, terminal_creation::studio_request])
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, terminal_creation::studio_request])
         .manage(terminal_creation::Preparation::default())
         .manage(offline_recovery::Recovery::default())
         .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })

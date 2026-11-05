@@ -7,6 +7,7 @@ fn main() {
             "agents_request",
             "file_request",
             "feature_request",
+            "feature_prepare",
             "studio_request",
         ]),
     ))

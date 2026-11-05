@@ -138,11 +138,37 @@ export function FeatureWorkspace({
     if (result === 'ok' && version === editorVersion.current) closeEditor();
   }
   const unavailable = !native || !snapshot;
-  const prepare = () =>
-    onPrepare?.({
-      workspaceId: snapshot?.workspace.id ?? workspaceId,
-      featureId: snapshot?.activeFeatureId ?? null,
-    });
+  const canPrepare =
+    !!onPrepare || (nativeWorkspace && !!native?.showPreparationDrawer && !!snapshot);
+  async function prepare() {
+    if (working.current) return;
+    if (onPrepare) {
+      onPrepare({
+        workspaceId: snapshot?.workspace.id ?? workspaceId,
+        featureId: snapshot?.activeFeatureId ?? null,
+      });
+      return;
+    }
+    if (!nativeWorkspace || !native?.showPreparationDrawer || !snapshot) return;
+    working.current = true;
+    setBusy(true);
+    setNotice('');
+    try {
+      const reply = await native.showPreparationDrawer({
+        contractVersion: 1,
+        generation: snapshot.generation,
+        workspaceId: snapshot.workspace.id,
+        featureId: snapshot.activeFeatureId,
+        expectedRevision: snapshot.view.revision,
+      });
+      if (live.current && reply.status !== 'ok') setNotice(reply.status);
+    } catch {
+      if (live.current) setNotice('unavailable');
+    } finally {
+      working.current = false;
+      if (live.current) setBusy(false);
+    }
+  }
   return (
     <section
       className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
@@ -397,20 +423,22 @@ export function FeatureWorkspace({
             ↗ {t('features.delegate')}
           </button>
           <button
-            disabled={!onPrepare}
-            onClick={prepare}
-            title={t(onPrepare ? 'studio.setupTitle' : 'features.creationUnavailable')}
+            disabled={busy || !canPrepare}
+            onClick={() => void prepare()}
+            title={t(canPrepare ? 'studio.setupTitle' : 'features.creationUnavailable')}
           >
             ＋ {t('features.terminal')}
           </button>
         </div>
       </header>
       <div className="feature-surface">
-        {onPrepare && !available.length ? (
+        {canPrepare && !available.length ? (
           <div className="feature-empty">
             <h1>{t('studio.setupTitle')}</h1>
             <p>{t('features.noUnassigned')}</p>
-            <button onClick={prepare}>{t('studio.prepareTerminals')}</button>
+            <button disabled={busy} onClick={() => void prepare()}>
+              {t('studio.prepareTerminals')}
+            </button>
           </div>
         ) : !available.length ? (
           <p>
