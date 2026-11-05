@@ -6,6 +6,8 @@ use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 
+const TEST_EPOCH: &str = "11111111-1111-4111-8111-111111111111";
+
 #[derive(Clone, Copy)]
 enum GateMutation {
     Start,
@@ -30,6 +32,8 @@ struct Script {
     log: Vec<String>,
     pending: PendingReplies,
     next_id: usize,
+    request_ids: VecDeque<String>,
+    host_epoch: Option<String>,
     sent: Vec<(String, String)>,
     timers: Vec<Duration>,
     now_ms: u64,
@@ -83,6 +87,9 @@ impl AgentsGate for FakePorts {
 impl TerminalPipe for FakePorts {
     fn request_id(&self) -> String {
         let mut script = self.script.lock().unwrap();
+        if let Some(id) = script.request_ids.pop_front() {
+            return id;
+        }
         script.next_id += 1;
         format!("synthetic-{}", script.next_id)
     }
@@ -94,7 +101,12 @@ impl TerminalPipe for FakePorts {
         if script.fail_send {
             return None;
         }
-        Some(script.pending.register(id.into()))
+        let epoch = script
+            .host_epoch
+            .as_deref()
+            .unwrap_or(TEST_EPOCH)
+            .to_owned();
+        script.pending.register(id.into(), kind, &epoch)
     }
 
     fn cancel(&self, id: &str) {
@@ -309,9 +321,7 @@ impl Harness {
     }
 
     fn reply(&mut self, kind: &str, status: &str) {
-        self.dispatch(Event::Reply(
-            json!({"kind":kind,"id":self.current_id(),"status":status,"uncertain":[]}),
-        ));
+        self.dispatch(Event::Reply(valid_reply(kind, &self.current_id(), status)));
         self.drain();
     }
 
@@ -385,7 +395,7 @@ fn preserved_close_requires_closed_and_exits_once() {
 fn uncertain_preserves_the_fence_and_the_reported_inventory() {
     let mut h = Harness::new(true, false);
     h.quit();
-    let uncertain = json!([{"slot":0,"instanceId":"synthetic-owned","reason":"timeout"}]);
+    let uncertain = json!([{"slot":0,"instanceId":TEST_EPOCH,"reason":"timeout"}]);
     h.dispatch(Event::Reply(json!({"kind":"owned-shutdown","id":h.current_id(),"status":"uncertain","uncertain":uncertain})));
     h.drain();
     assert_eq!(h.allowed(), 0);
@@ -403,6 +413,9 @@ fn explicit_prefence_refusal_rolls_back_and_all_other_refusals_keep_the_fence() 
         let mut h = Harness::new(true, false);
         h.quit();
         h.reply("owned-shutdown", status);
+        if matches!(status, "busy" | "denied") {
+            h.dispatch(Event::Advance(8_000));
+        }
         assert_eq!(h.allowed(), 0);
         assert_eq!(
             h.phase(),
@@ -618,9 +631,11 @@ fn eof_between_final_reply_and_exit_requested_preserves_only_confirmed_evidence(
         if eof_first {
             h.dispatch(Event::Eof);
         }
-        h.dispatch(Event::Reply(
-            json!({"kind":"retirement","id":h.current_id(),"status":"retired"}),
-        ));
+        h.dispatch(Event::Reply(valid_reply(
+            "retirement",
+            &h.current_id(),
+            "retired",
+        )));
         if !eof_first {
             assert_eq!(h.phase(), Phase::ExitEvidenceConfirmed);
             h.dispatch(Event::Eof);
@@ -776,30 +791,177 @@ fn real_node_service_transcripts_keep_the_coordinator_fenced() {
         assert_eq!(transcript["nodeFenced"], true);
         assert_eq!(transcript["signals"], 1);
         let mut h = Harness::new(true, false);
+        {
+            let mut script = h.ports.script.lock().unwrap();
+            script.host_epoch = Some(
+                transcript["ready"]["evidence"]["epoch"]
+                    .as_str()
+                    .unwrap()
+                    .into(),
+            );
+            // Replay the real native request IDs and causal request order, not rewritten replies.
+            script.request_ids = ["ready", "denied", "busyRetry", "retry"]
+                .iter()
+                .map(|key| transcript[*key]["id"].as_str().unwrap().to_owned())
+                .collect();
+        }
         h.quit();
-        let mut ready = transcript["ready"].clone();
-        ready["id"] = json!(h.current_id());
-        h.dispatch(Event::Reply(ready));
+        assert_eq!(h.current_id(), transcript["ready"]["id"].as_str().unwrap());
+        h.dispatch(Event::Reply(transcript["ready"].clone()));
         h.drain();
         assert_eq!(h.sent_kinds(), ["shutdownOwned", "retireOwned"]);
+        assert_eq!(h.current_id(), transcript["denied"]["id"].as_str().unwrap());
         h.dispatch(Event::Advance(8_000));
         assert_eq!(h.phase(), Phase::ShutdownInFlight);
         h.quit();
-        let mut busy = transcript["busyRetry"].clone();
-        busy["id"] = json!(h.current_id());
-        h.dispatch(Event::Reply(busy));
+        assert_eq!(
+            h.current_id(),
+            transcript["busyRetry"]["id"].as_str().unwrap()
+        );
+        h.dispatch(Event::Reply(transcript["busyRetry"].clone()));
         assert_eq!(h.phase(), Phase::ShutdownInFlight);
+        assert!(!h.in_flight());
         assert_eq!(h.allowed(), 0);
-        if transcript["hold"] == "retire" {
-            h.quit();
-            let mut retry = transcript["retry"].clone();
-            retry["id"] = json!(h.current_id());
-            h.dispatch(Event::Reply(retry));
-            assert_eq!(h.phase(), Phase::ShutdownInFlight);
-            assert_eq!(h.allowed(), 0);
-        }
-        // A late denied retirement ACK cannot consume a new shutdown waiter.
+        // Retirement ACK arrives after its deadline; its original ID stays cancelled.
         h.dispatch(Event::Reply(transcript["denied"].clone()));
         assert_eq!(h.phase(), Phase::ShutdownInFlight);
+        h.quit();
+        assert_eq!(h.current_id(), transcript["retry"]["id"].as_str().unwrap());
+        h.dispatch(Event::Reply(transcript["retry"].clone()));
+        assert_eq!(h.phase(), Phase::ShutdownInFlight);
+        assert!(!h.in_flight());
+        assert_eq!(h.allowed(), 0);
+        assert_eq!(
+            h.sent_kinds(),
+            [
+                "shutdownOwned",
+                "retireOwned",
+                "shutdownOwned",
+                "shutdownOwned"
+            ]
+        );
+        assert!(h.ports.script.lock().unwrap().request_ids.is_empty());
     }
+}
+
+fn valid_reply(kind: &str, id: &str, status: &str) -> Value {
+    let mut value = json!({"kind":kind,"id":id,"status":status});
+    match kind {
+        "owned-shutdown" => {
+            value["uncertain"] = json!([]);
+            if matches!(status, "ready" | "exited_retirement_unavailable") {
+                value["evidence"] = json!({"epoch":TEST_EPOCH,"attempts":[]});
+                if status == "exited_retirement_unavailable" {
+                    value["reason"] = json!("retirement_unavailable");
+                }
+            }
+        }
+        "retirement" => value["fenced"] = json!(true),
+        _ => {}
+    }
+    value
+}
+
+#[test]
+fn every_crossed_reply_kind_preserves_the_current_waiter() {
+    let stages = [
+        ("shutdownOwned", "owned-shutdown", "ready"),
+        ("retireOwned", "retirement", "retired"),
+        ("closePreservedOwned", "owned-shutdown-closed", "closed"),
+    ];
+    for (request, expected, status) in stages {
+        for (_, other, other_status) in stages {
+            if other == expected {
+                continue;
+            }
+            let mut pending = PendingReplies::default();
+            let mut receiver = pending
+                .register("current".into(), request, TEST_EPOCH)
+                .unwrap();
+            // Crossed kind with either the expected status or its own valid status.
+            for wrong_status in [status, other_status] {
+                assert!(!pending.deliver(valid_reply(other, "current", wrong_status)));
+                assert!(matches!(
+                    receiver.try_recv(),
+                    Err(oneshot::error::TryRecvError::Empty)
+                ));
+            }
+            let good = valid_reply(expected, "current", status);
+            assert!(pending.deliver(good.clone()));
+            assert_eq!(receiver.try_recv().unwrap(), good);
+            assert!(!pending.deliver(good.clone())); // Duplicate.
+            let _late = pending
+                .register("expired".into(), request, TEST_EPOCH)
+                .unwrap();
+            pending.cancel("expired");
+            assert!(!pending.deliver(valid_reply(expected, "expired", status)));
+            assert!(!pending.deliver(good));
+        }
+    }
+}
+
+#[test]
+fn malformed_step_schemas_and_foreign_epochs_do_not_consume_waiters_or_create_evidence() {
+    for (request, kind, status) in [
+        ("shutdownOwned", "owned-shutdown", "ready"),
+        ("retireOwned", "retirement", "retired"),
+        ("closePreservedOwned", "owned-shutdown-closed", "closed"),
+    ] {
+        let mut pending = PendingReplies::default();
+        let mut receiver = pending
+            .register("current".into(), request, TEST_EPOCH)
+            .unwrap();
+        let good = valid_reply(kind, "current", status);
+        let mut bad = good.clone();
+        bad["extra"] = json!(true);
+        assert!(!pending.deliver(bad));
+        let mut bad = good.clone();
+        bad["status"] = json!("made-up");
+        assert!(!pending.deliver(bad));
+        let mut bad = good.clone();
+        bad.as_object_mut().unwrap().remove("status");
+        assert!(!pending.deliver(bad));
+        if kind == "owned-shutdown" {
+            let mut bad = good.clone();
+            bad["evidence"]["epoch"] = json!("22222222-2222-4222-8222-222222222222");
+            assert!(!pending.deliver(bad));
+            let mut bad = good.clone();
+            bad.as_object_mut().unwrap().remove("evidence");
+            assert!(!pending.deliver(bad));
+            let mut bad = good.clone();
+            bad["uncertain"] = json!({});
+            assert!(!pending.deliver(bad));
+            let mut bad = good.clone();
+            bad["reason"] = json!("timeout");
+            assert!(!pending.deliver(bad));
+            for state in ["running", "starting", "ownership_lost", "exited"] {
+                let mut bad = good.clone();
+                bad["evidence"]["attempts"] =
+                    json!([{"slot":0,"instanceId":TEST_EPOCH,"epoch":TEST_EPOCH,"state":state}]);
+                assert!(!pending.deliver(bad));
+            }
+        } else if kind == "retirement" {
+            let mut bad = good.clone();
+            bad["fenced"] = json!(false);
+            assert!(!pending.deliver(bad));
+        }
+        assert!(matches!(
+            receiver.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+        assert!(pending
+            .register("current".into(), request, TEST_EPOCH)
+            .is_none());
+        assert!(pending.deliver(good));
+        assert!(receiver.try_recv().is_ok());
+    }
+    let mut h = Harness::new(true, false);
+    h.quit();
+    let id = h.current_id();
+    h.dispatch(Event::Reply(valid_reply("retirement", &id, "retired")));
+    assert_eq!(h.allowed(), 0);
+    assert_eq!(h.sent_kinds(), ["shutdownOwned"]);
+    assert_eq!(h.phase(), Phase::ShutdownInFlight);
+    h.dispatch(Event::Advance(8_000));
+    assert_eq!(h.phase(), Phase::ShutdownInFlight);
 }

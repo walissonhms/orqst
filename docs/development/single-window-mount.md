@@ -178,3 +178,14 @@ The previous pinned Anywh review was revalidated against the same checkout SHA
 NOTICE). Decision remains **keep the existing ORQST implementation**: Anywh's
 Node process/hibernation/tree-sweep lifecycle cannot supply native Rust proof or
 focus fences. No external code, assets or dependencies were incorporated.
+
+### Reply router correction
+
+`PendingReplies` now records ID, expected kind and host epoch and validates each
+step before removing its waiter. Tests exercise all six crossed kind pairs with
+the current ID (both the correct-stage status and the other kind's valid status),
+duplicate/late replies, unknown fields/statuses, missing evidence, foreign epoch,
+invalid uncertainty shape and retirement without a fence. Incorrect packets do
+not consume the waiter or generate exit evidence. Existing circuit fakes now emit
+the same required fields as the real service; invalid legacy busy/denied packets
+remain pending until timeout and preserve the native fence.

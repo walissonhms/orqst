@@ -41,14 +41,199 @@ pub trait Timer {
 
 /// The same ID router is used by the native reader and the scripted test transport.
 /// Dropping it on EOF drops waiters; absence never manufactures a reply or evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ReplyKind {
+    Shutdown,
+    Retirement,
+    Closed,
+}
+
+impl ReplyKind {
+    fn for_request(request: &str) -> Option<Self> {
+        match request {
+            "shutdownOwned" => Some(Self::Shutdown),
+            "retireOwned" => Some(Self::Retirement),
+            "closePreservedOwned" => Some(Self::Closed),
+            _ => None,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Shutdown => "owned-shutdown",
+            Self::Retirement => "retirement",
+            Self::Closed => "owned-shutdown-closed",
+        }
+    }
+
+    fn valid(self, value: &Value, epoch: &str) -> bool {
+        if value["kind"] != self.name() {
+            return false;
+        }
+        let status = value["status"].as_str();
+        match self {
+            Self::Shutdown => {
+                fields(
+                    value,
+                    &["kind", "id", "status", "uncertain"],
+                    &["reason", "evidence"],
+                ) && matches!(
+                    status,
+                    Some(
+                        "ready"
+                            | "exited_retirement_unavailable"
+                            | "uncertain"
+                            | "refused_prefence"
+                            | "fenced"
+                    )
+                ) && value["uncertain"].as_array().is_some_and(|items| {
+                    items.len() <= 1024
+                        && items.iter().all(|item| {
+                            fields(item, &["slot", "instanceId", "reason"], &[])
+                                && slot(&item["slot"])
+                                && crate::features::uuid(&item["instanceId"])
+                                && matches!(
+                                    item["reason"].as_str(),
+                                    Some(
+                                        "timeout"
+                                            | "ownership_lost"
+                                            | "transport"
+                                            | "retirement_unavailable"
+                                    )
+                                )
+                        })
+                }) && value.get("reason").is_none_or(|reason| {
+                    matches!(
+                        reason.as_str(),
+                        Some("timeout" | "transport" | "retirement_unavailable")
+                    )
+                }) && value
+                    .get("evidence")
+                    .is_none_or(|evidence| inventory(evidence, epoch))
+                    && match status {
+                        Some("ready" | "exited_retirement_unavailable") => {
+                            value.get("evidence").is_some_and(released_inventory)
+                                && value["uncertain"].as_array().is_some_and(Vec::is_empty)
+                                && if status == Some("ready") {
+                                    value.get("reason").is_none()
+                                } else {
+                                    value["reason"] == "retirement_unavailable"
+                                }
+                        }
+                        Some("refused_prefence" | "fenced") => {
+                            value.get("evidence").is_none()
+                                && value.get("reason").is_none()
+                                && value["uncertain"].as_array().is_some_and(Vec::is_empty)
+                        }
+                        _ => true,
+                    }
+            }
+            Self::Retirement => {
+                fields(value, &["kind", "id", "status", "fenced"], &[])
+                    && matches!(status, Some("retired" | "cancelled" | "denied" | "busy"))
+                    && value["fenced"].is_boolean()
+                    && (status != Some("retired") || value["fenced"] == true)
+            }
+            Self::Closed => {
+                fields(value, &["kind", "id", "status"], &[])
+                    && matches!(status, Some("closed" | "denied"))
+            }
+        }
+    }
+}
+
+fn fields(value: &Value, required: &[&str], optional: &[&str]) -> bool {
+    value.as_object().is_some_and(|object| {
+        required.iter().all(|key| object.contains_key(*key))
+            && object
+                .keys()
+                .all(|key| required.contains(&key.as_str()) || optional.contains(&key.as_str()))
+    })
+}
+
+fn slot(value: &Value) -> bool {
+    value.as_u64().is_some_and(|n| n < 8)
+}
+
+fn safe_integer(value: &Value) -> bool {
+    value
+        .as_i64()
+        .is_some_and(|n| n.unsigned_abs() <= 9_007_199_254_740_991)
+}
+
+fn inventory(value: &Value, epoch: &str) -> bool {
+    fields(value, &["epoch", "attempts"], &[])
+        && value["epoch"] == epoch
+        && crate::features::uuid(&value["epoch"])
+        && value["attempts"].as_array().is_some_and(|attempts| {
+            attempts.len() <= 1024
+                && attempts.iter().all(|attempt| {
+                    fields(
+                        attempt,
+                        &["slot", "instanceId", "epoch", "state"],
+                        &["exit"],
+                    ) && slot(&attempt["slot"])
+                        && crate::features::uuid(&attempt["instanceId"])
+                        && attempt["epoch"] == epoch
+                        && matches!(
+                            attempt["state"].as_str(),
+                            Some(
+                                "prepared"
+                                    | "starting"
+                                    | "running"
+                                    | "exited"
+                                    | "start_failed"
+                                    | "ownership_lost"
+                            )
+                        )
+                        && attempt.get("exit").is_none_or(|exit| {
+                            fields(exit, &["exitCode"], &["signal"])
+                                && safe_integer(&exit["exitCode"])
+                                && exit.get("signal").is_none_or(safe_integer)
+                        })
+                })
+        })
+}
+
+fn released_inventory(evidence: &Value) -> bool {
+    evidence["attempts"].as_array().is_some_and(|attempts| {
+        attempts.iter().all(|attempt| {
+            matches!(attempt["state"].as_str(), Some("prepared" | "start_failed"))
+                || (attempt["state"] == "exited" && attempt.get("exit").is_some())
+        })
+    })
+}
+
+struct PendingReply {
+    kind: ReplyKind,
+    epoch: String,
+    sender: oneshot::Sender<Value>,
+}
+
 #[derive(Default)]
-pub struct PendingReplies(HashMap<String, oneshot::Sender<Value>>);
+pub struct PendingReplies(HashMap<String, PendingReply>);
 
 impl PendingReplies {
-    pub fn register(&mut self, id: String) -> oneshot::Receiver<Value> {
+    pub fn register(
+        &mut self,
+        id: String,
+        request: &str,
+        epoch: &str,
+    ) -> Option<oneshot::Receiver<Value>> {
+        let kind = ReplyKind::for_request(request)?;
+        if self.0.contains_key(&id) {
+            return None;
+        }
         let (sender, receiver) = oneshot::channel();
-        self.0.insert(id, sender);
-        receiver
+        self.0.insert(
+            id,
+            PendingReply {
+                kind,
+                epoch: epoch.into(),
+                sender,
+            },
+        );
+        Some(receiver)
     }
 
     pub fn cancel(&mut self, id: &str) {
@@ -63,11 +248,19 @@ impl PendingReplies {
     }
 
     pub fn deliver(&mut self, value: Value) -> bool {
-        if !Self::is_reply(&value) {
+        let Some(id) = value["id"].as_str() else {
+            return false;
+        };
+        let Some(pending) = self.0.get(id) else {
+            return false;
+        };
+        // Invalid replies never consume the waiter, including another allowed kind.
+        if !pending.kind.valid(&value, &pending.epoch) {
             return false;
         }
-        let sender = value["id"].as_str().and_then(|id| self.0.remove(id));
-        sender.is_some_and(|sender| sender.send(value).is_ok())
+        self.0
+            .remove(id)
+            .is_some_and(|pending| pending.sender.send(value).is_ok())
     }
 }
 
