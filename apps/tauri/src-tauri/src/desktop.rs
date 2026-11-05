@@ -780,11 +780,23 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
 
 /// Every exit point uses this single latched entry. No direct exit with an owned host.
 pub fn request_quit(app: &tauri::AppHandle) {
-    let phase = crate::host_phase::phase();
+    // Never create the agents dialog when the exit is already impossible or in flight.
+    if crate::host_phase::phase() == crate::host_phase::Phase::LostUnknown {
+        crate::terminal::quit_blocked_public(app, "host_lost");
+        return;
+    }
+    if QUIT_IN_FLIGHT.load(Ordering::SeqCst) {
+        return;
+    }
     let agents = crate::agents::owned_active(app);
     let gate = agents && crate::agents::confirm_exit(app);
-    let in_flight = QUIT_IN_FLIGHT.load(Ordering::SeqCst);
-    match crate::host_phase::quit_decision(phase, agents, gate, in_flight) {
+    // The gate may have taken time; a concurrent host loss invalidates the next step.
+    if crate::host_phase::phase() == crate::host_phase::Phase::LostUnknown {
+        crate::terminal::quit_blocked_public(app, "host_lost");
+        return;
+    }
+    let phase = crate::host_phase::phase();
+    match crate::host_phase::quit_decision(phase, agents, gate, false) {
         crate::host_phase::QuitDecision::BlockedLost => {
             crate::terminal::quit_blocked_public(app, "host_lost");
         }
