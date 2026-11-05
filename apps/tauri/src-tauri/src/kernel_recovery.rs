@@ -9,6 +9,16 @@ use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 #[derive(Default)]
 pub struct KernelRecovery(Mutex<bool>);
 
+fn same_review(
+    approved: &Value,
+    request: &Value,
+    age: Duration,
+    focused: bool,
+    rechecked: bool,
+) -> bool {
+    rechecked && focused && age < Duration::from_secs(30) && approved == request
+}
+
 pub fn start(app: &tauri::AppHandle) {
     let state = app.state::<KernelRecovery>();
     let mut busy = state.0.lock().unwrap();
@@ -234,11 +244,15 @@ fn run(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some("revalidate") => {
-                authorized = rechecked
-                    && !authorized
-                    && window.is_focused().unwrap_or(false)
+                authorized = !authorized
                     && approved.as_ref().is_some_and(|(intent, time)| {
-                        *intent == frame["intent"] && time.elapsed() < Duration::from_secs(30)
+                        same_review(
+                            intent,
+                            &frame["intent"],
+                            time.elapsed(),
+                            window.is_focused().unwrap_or(false),
+                            rechecked,
+                        )
                     });
                 answer = json!(authorized);
             }
@@ -292,4 +306,48 @@ fn run(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             .blocking_show();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn reviewed_intent_expires_and_requires_fresh_scope_and_focus() {
+        let reviewed = json!({"synthetic": "one"});
+        assert!(same_review(
+            &reviewed,
+            &reviewed,
+            Duration::from_secs(29),
+            true,
+            true
+        ));
+        assert!(!same_review(
+            &reviewed,
+            &reviewed,
+            Duration::from_secs(30),
+            true,
+            true
+        ));
+        assert!(!same_review(
+            &reviewed,
+            &reviewed,
+            Duration::ZERO,
+            false,
+            true
+        ));
+        assert!(!same_review(
+            &reviewed,
+            &reviewed,
+            Duration::ZERO,
+            true,
+            false
+        ));
+        assert!(!same_review(
+            &reviewed,
+            &json!({"synthetic":"other"}),
+            Duration::ZERO,
+            true,
+            true
+        ));
+    }
 }

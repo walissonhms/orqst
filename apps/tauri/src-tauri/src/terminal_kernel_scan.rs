@@ -115,6 +115,9 @@ pub fn recorded_identity_exists(
     let Some(current) = one_optional(identity.pid)? else {
         return Ok(false);
     };
+    if current.start_usec >= 1_000_000 {
+        return Err(io::Error::other("Invalid kernel process start"));
+    }
     if current.start_sec != identity.start_sec || current.start_usec != identity.start_usec {
         return Ok(false);
     }
