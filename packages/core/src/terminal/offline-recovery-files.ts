@@ -302,6 +302,21 @@ export function snapshotOfflineReservation(
   const membership = names();
   const files = [take(join(directory, 'active-pair.json'))];
   const marker = desktopAdmissionMarkerSchema.parse(json(files[0]!));
+  const assertNoKernelRecovery = () => {
+    if (inspectionMode === 'kernel') return;
+    const source = files[0]!;
+    const lock = join(
+      directory,
+      `release-${source.identity[0]}-${source.identity[1]}-${source.sha256}.lock`,
+    );
+    try {
+      lstatSync(lock);
+      throw new Error('Kernel reservation recovery in progress or uncertain');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  };
+  assertNoKernelRecovery();
   if (historical) files.push(historical.record);
   if (!marker.manifests.length || new Set(marker.manifests).size !== marker.manifests.length)
     throw new Error('Recovery initial manifests incomplete');
@@ -564,6 +579,7 @@ export function snapshotOfflineReservation(
     ) !== JSON.stringify(historicalBinding.currentSources)
   )
     throw new Error('Recovery model source metadata changed');
+  assertNoKernelRecovery();
   // Raw journal/WAL bytes and file metadata are captured separately from checkpoint-stable facts.
   const historicalFile = (file: ReturnType<typeof readRecoveryFile>) =>
     difference

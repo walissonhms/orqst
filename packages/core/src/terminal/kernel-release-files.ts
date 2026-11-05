@@ -1,7 +1,9 @@
+import { assertNoOfflineRecovery } from '../managed-codex/offline-recovery-gate.js';
 import { readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
+import { terminalDigest } from './authority.js';
 import {
   readRecoveryFile,
   syncRecoveryDirectory,
@@ -20,6 +22,30 @@ const releaseLockSchema = z.strictObject({
   destination: z.string().regex(/^released-marker-[0-9a-f-]{36}\.json$/),
 });
 export type KernelReleaseLock = z.infer<typeof releaseLockSchema>;
+const decisionSchema = z.strictObject({
+  version: z.literal(1),
+  status: z.literal('released'),
+  reason: z.literal('absence_proven'),
+  scope: z.literal('original_sessions'),
+  limitation: z.literal('descendants_not_validated'),
+  intent: z.strictObject({
+    domain: z.literal('orqst.kernel-reservation-release'),
+    version: z.literal(1),
+    operationId: z.uuid(),
+    evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
+    marker: identitySchema,
+    destination: z.string(),
+    sessions: z.array(z.number().int().positive().safe()).min(1).max(128),
+    scans: z.strictObject({
+      processCount: z.number().int().nonnegative().safe(),
+      intervalMs: z.number().int().positive().max(10_000),
+      scans: z.literal(2),
+    }),
+    limitation: z.literal('descendants_not_validated'),
+  }),
+  intentDigest: z.string().regex(/^[a-f0-9]{64}$/),
+  archivedMarker: z.string(),
+});
 const observationSchema = z.strictObject({
   version: z.literal(1),
   id: z.uuid(),
@@ -66,6 +92,7 @@ function readLock(directory: string, file: string) {
 
 /** Lock one exact inode forever; an existing lock is never overwritten or removed. */
 export function beginKernelRelease(directory: string) {
+  assertNoOfflineRecovery(directory);
   const marker = markerIdentity(join(directory, 'active-pair.json'));
   const id = randomUUID();
   const lock = releaseLockSchema.parse({
@@ -83,6 +110,7 @@ export function beginKernelRelease(directory: string) {
 
 /** Recheck the exact reviewed source immediately before calling the native exclusive rename. */
 export function verifyKernelReleaseSource(directory: string, name: string) {
+  assertNoOfflineRecovery(directory);
   const lock = readLock(directory, name);
   if (!equal(markerIdentity(join(directory, 'active-pair.json')), lock.marker))
     throw new Error('Release marker changed');
@@ -92,6 +120,22 @@ export function verifyKernelReleaseSource(directory: string, name: string) {
 /** Crash reconciliation is evidence-only; it never renames, restores or removes a marker. */
 export function reconcileKernelRelease(directory: string, name: string) {
   const lock = readLock(directory, name);
+  const completed = join(directory, `release-decision-${lock.id}.json`);
+  if (maybeIdentity(completed)) {
+    const decision = decisionSchema.parse(
+      JSON.parse(Buffer.from(readRecoveryFile(completed).bytes, 'base64').toString('utf8')),
+    );
+    if (
+      decision.intent.operationId !== lock.id ||
+      !equal(decision.intent.marker, lock.marker) ||
+      decision.intent.destination !== lock.destination ||
+      decision.archivedMarker !== lock.destination ||
+      terminalDigest(JSON.stringify(decision.intent)) !== decision.intentDigest ||
+      !equal(maybeIdentity(join(directory, lock.destination)), lock.marker)
+    )
+      throw new Error('Release decision binding changed');
+    return { status: 'released' as const, lock };
+  }
   const current = maybeIdentity(join(directory, 'active-pair.json'));
   if (equal(current, lock.marker)) return { status: 'review_required' as const, lock };
   const archived = maybeIdentity(join(directory, lock.destination));

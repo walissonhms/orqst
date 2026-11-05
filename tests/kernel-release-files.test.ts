@@ -145,3 +145,24 @@ test('two processes cannot lock the same marker and a post-rename crash is recon
     f.close();
   }
 });
+
+test('an existing offline fence prevents a kernel release, including a late fence before commit', () => {
+  const first = fixture();
+  try {
+    writeFileSync(join(first.directory, 'offline-recovery.json'), 'SYNTHETIC', { mode: 0o600 });
+    assert.throws(() => beginKernelRelease(first.directory), /offline recovery/);
+  } finally {
+    first.close();
+  }
+  const second = fixture();
+  try {
+    const { name } = beginKernelRelease(second.directory);
+    writeFileSync(join(second.directory, 'offline-recovery-operation.lock'), 'SYNTHETIC', {
+      mode: 0o600,
+    });
+    assert.throws(() => verifyKernelReleaseSource(second.directory, name), /offline recovery/);
+    assert.equal(readFileSync(second.marker, 'utf8'), 'SYNTHETIC-ORIGINAL\n');
+  } finally {
+    second.close();
+  }
+});

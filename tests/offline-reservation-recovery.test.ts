@@ -1,3 +1,8 @@
+import { releaseKernelReservation } from '../packages/core/src/terminal/kernel-release.js';
+import {
+  beginKernelRelease,
+  reconcileKernelRelease,
+} from '../packages/core/src/terminal/kernel-release-files.js';
 import { snapshotKernelReservation } from '../packages/core/src/terminal/kernel-reservation-snapshot.js';
 import {
   createLifecycleReceipt,
@@ -671,6 +676,91 @@ test('pure WAL validation rejects truncated/corrupt/uncommitted frames and prese
   }
 });
 
+test('synthetic native approval releases exact kernel reservation once and records scoped absence', async () => {
+  const f = fixture();
+  try {
+    writeFileSync(
+      f.marker,
+      JSON.stringify({ version: 1, owner: f.owner, epoch: f.epoch, manifests: [f.manifests[0]] }),
+      { mode: 0o600 },
+    );
+    f.databases[0]!.journal.transition(f.attemptId, 'starting');
+    const binding = {
+      instanceId: f.attemptId,
+      epoch: f.epoch,
+      manifestDigest: 'a'.repeat(64),
+      configDigest: terminalDigest(readFileSync(f.manifests[0]!)),
+    };
+    const fd = createLifecycleReceipt(f.configs[0]!.state, binding);
+    const lifecycle = armLifecycleReceipt(fd, binding.configDigest);
+    await lifecycle.record({ type: 'started' });
+    closeSync(fd);
+    const core = {
+      boot: randomUUID(),
+      pid: 100,
+      ppid: 1,
+      uid: 501,
+      startSec: 1,
+      startUsec: 1,
+      sid: 100,
+      pgid: 100,
+    };
+    const host = { ...core, pid: 101, ppid: 100, startUsec: 2 };
+    const leader = { ...host, pid: 102, ppid: 101, startUsec: 3, sid: 102, pgid: 102 };
+    const writer = createKernelLifecycleReceipt(f.configs[0]!.state, {
+      ...binding,
+      owner: f.owner,
+    });
+    writer.core(core);
+    writer.host(host);
+    writer.leader(leader);
+    writer.close();
+    const before = lstatSync(f.marker, { bigint: true });
+    const scratch1 = join(f.root, 'kernel-one');
+    const scratch2 = join(f.root, 'kernel-two');
+    mkdirSync(scratch1, { mode: 0o700 });
+    mkdirSync(scratch2, { mode: 0o700 });
+    let scans = 0;
+    let reviews = 0;
+    const result = await releaseKernelReservation(f.directory, scratch1, scratch2, {
+      scan: async (identities, sessions) => {
+        scans++;
+        assert.equal(identities.length, 3);
+        assert.deepEqual(sessions, [102]);
+        return { processCount: 10, intervalMs: 100, scans: 2 };
+      },
+      review: async (intent) => {
+        reviews++;
+        assert.equal(intent.limitation, 'descendants_not_validated');
+        return true;
+      },
+      revalidate: async () => true,
+      rename: async (lock) => {
+        renameSync(f.marker, join(f.directory, lock.destination));
+      },
+    });
+    assert.equal(scans, 2);
+    assert.equal(reviews, 1);
+    assert.equal(result.reason, 'absence_proven');
+    assert.equal(result.limitation, 'descendants_not_validated');
+    assert.equal(
+      lstatSync(join(f.directory, result.archivedMarker), { bigint: true }).ino,
+      before.ino,
+    );
+    assert.equal(existsSync(f.marker), false);
+    const name = `release-${before.dev}-${before.ino}-${terminalDigest(f.markerBytes)}.lock`;
+    // The fixture updates marker bytes above, so find the exact stored lock from its directory.
+    const lock = readdirSync(f.directory).find(
+      (entry) => entry.startsWith('release-') && entry.endsWith('.lock'),
+    )!;
+    assert.notEqual(lock, name);
+    assert.equal(reconcileKernelRelease(f.directory, lock).status, 'released');
+    assert.equal(f.databases[0]!.journal.read(f.attemptId)?.state, 'starting');
+  } finally {
+    f.close();
+  }
+});
+
 test('kernel snapshot binds every recorded dispatch and preserves unknown journal state', async () => {
   const f = fixture();
   try {
@@ -720,6 +810,22 @@ test('kernel snapshot binds every recorded dispatch and preserves unknown journa
     const other = join(f.root, 'offline-scratch');
     mkdirSync(other, { mode: 0o700 });
     assert.throws(() => snapshotOfflineReservation(f.directory, other), /lifecycle/);
+  } finally {
+    f.close();
+  }
+});
+
+test('offline snapshot refuses an active kernel lock on the same marker', () => {
+  const f = fixture();
+  try {
+    beginKernelRelease(f.directory);
+    const scratch = join(f.root, 'offline-kernel-fence');
+    mkdirSync(scratch, { mode: 0o700 });
+    assert.throws(
+      () => snapshotOfflineReservation(f.directory, scratch),
+      /Kernel reservation recovery/,
+    );
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
   } finally {
     f.close();
   }
