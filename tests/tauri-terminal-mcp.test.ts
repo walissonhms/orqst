@@ -129,12 +129,19 @@ async function fixture(
       ) as TerminalNativeSupervisor,
   );
   const calls = { prepareMcp: 0, prepareRetire: 0, retire: 0, close: 0 };
+  const preparations: ReturnType<InteractiveMcpSession['prepare']>[] = [];
+  const proofs: unknown[] = [];
   const port: TauriTerminalMcp = {
     prepareMcp: async () => {
       calls.prepareMcp++;
-      return session.prepare();
+      const prepared = session.prepare();
+      preparations.push(prepared);
+      return prepared;
     },
-    authorizeMcp: async (proof) => session.authorize(proof),
+    authorizeMcp: async (proof) => {
+      proofs.push(proof);
+      session.authorize(proof);
+    },
     closeSlot: async (slot) => {
       session.invalidate();
       pair.closeSlot(slot);
@@ -212,6 +219,8 @@ async function fixture(
     signals,
     port,
     calls,
+    preparations,
+    proofs,
     journals,
     retire(slot = 0) {
       const id = randomUUID();
@@ -286,9 +295,45 @@ test('Tauri native signed consent completes Core/socket A -> B -> A without PTY 
       taskId: delivered.taskId,
       result: 'SYNTHETIC result',
     });
-    const replay = f.authorize();
-    await replay.pending;
-    assert.equal(f.status(replay.id), 'denied');
+    // Split replay vs new native grant: a fresh request is not a replay of the old proof.
+    assert.throws(() => f.session.authorize(f.proofs[0]));
+    const cancelled = f.authorize();
+    const cancelledConfirmation = await f.confirm(false);
+    await cancelled.pending;
+    assert.equal(f.status(cancelled.id), 'cancelled');
+    assert.notEqual(cancelled.id, grant.id);
+    assert.notEqual(cancelledConfirmation.id, confirmation.id);
+    assert.notEqual(f.preparations[1]!.grant.grantId, f.preparations[0]!.grant.grantId);
+    assert.notEqual(f.preparations[1]!.challenge.digest, f.preparations[0]!.challenge.digest);
+    assert.throws(() => f.session.authorize(f.proofs[0]));
+    const fresh = f.authorize();
+    const freshConfirmation = await f.confirm();
+    await fresh.pending;
+    assert.equal(f.status(fresh.id), 'ok');
+    assert.notEqual(fresh.id, cancelled.id);
+    assert.notEqual(freshConfirmation.id, cancelledConfirmation.id);
+    assert.notEqual(f.preparations[2]!.grant.grantId, f.preparations[1]!.grant.grantId);
+    assert.notEqual(f.preparations[2]!.challenge.digest, f.preparations[1]!.challenge.digest);
+    assert.throws(() => f.session.authorize(f.proofs[0]));
+    const waitingAgain = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+    const resultAgain = f.clients[0]!.call(randomUUID(), {
+      name: 'delegate_task',
+      arguments: { task: 'SYNTHETIC second task' },
+    });
+    const second = (await waitingAgain) as { taskId: string };
+    assert.notEqual(second.taskId, delivered.taskId);
+    await assert.rejects(
+      f.clients[1]!.call(randomUUID(), {
+        name: 'submit_result',
+        arguments: { taskId: delivered.taskId, result: 'late old result' },
+      }),
+    );
+    await f.clients[1]!.call(randomUUID(), {
+      name: 'submit_result',
+      arguments: { taskId: second.taskId, result: 'SYNTHETIC second result' },
+    });
+    assert.equal(((await resultAgain) as { state: string }).state, 'completed');
+    await assert.rejects(f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} }));
     assert.equal(JSON.stringify(f.messages).includes('signature'), false);
     assert.deepEqual(f.writes, []);
     assert.deepEqual(f.signals, []);
@@ -388,6 +433,36 @@ test('Tauri MCP wrong confirmation IDs, duplicate requests and cancellation cann
     assert.equal(f.status(retry.id), 'ok');
   } finally {
     await f.close();
+  }
+});
+
+test('Tauri MCP never opens a new confirmation after disconnect, ownership loss, exit or invalidation', async () => {
+  for (const reason of ['disconnect', 'loss', 'exit', 'invalidate'] as const) {
+    const f = await fixture();
+    try {
+      await f.start(0);
+      await f.start(1);
+      const request = f.authorize();
+      await f.confirm();
+      await request.pending;
+      assert.equal(f.status(request.id), 'ok');
+      if (reason === 'disconnect') {
+        const waiting = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+        f.clients[0]!.close();
+        assert.equal(((await waiting) as { state: string }).state, 'unknown');
+      } else if (reason === 'loss') f.events[0]!.lost();
+      else if (reason === 'exit') f.events[0]!.exit(0);
+      else f.session.invalidate();
+      const confirmations = f.messages.filter((m) => m.kind === 'confirm').length;
+      const fresh = f.authorize();
+      await fresh.pending;
+      assert.equal(f.status(fresh.id), 'denied');
+      assert.equal(f.messages.filter((m) => m.kind === 'confirm').length, confirmations);
+      assert.deepEqual(f.writes, []);
+      assert.deepEqual(f.signals, []);
+    } finally {
+      await f.close();
+    }
   }
 });
 
