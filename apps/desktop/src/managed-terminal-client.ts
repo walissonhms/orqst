@@ -40,6 +40,8 @@ let cursor = 0;
 let sequence = 0;
 let attached = false;
 let input = false;
+// Local focus suspension only. The owned lease stays a native policy decision.
+let suspended = false;
 let busy = false;
 let polling = false;
 let pollInFlight: Promise<void> | undefined;
@@ -242,7 +244,17 @@ async function send(
 }
 
 async function flush(): Promise<void> {
-  if (busy || !pending || !instanceId || !input || !attached || gap || !document.hasFocus()) return;
+  if (
+    busy ||
+    !pending ||
+    !instanceId ||
+    !input ||
+    suspended ||
+    !attached ||
+    gap ||
+    !document.hasFocus()
+  )
+    return;
   const text = pending;
   pending = '';
   await send({ version: 1, action: 'write', instanceId, sequence, text });
@@ -251,7 +263,7 @@ async function flush(): Promise<void> {
 
 // onData also contains automatic emulator replies. Forward only a trusted keyboard event.
 terminal.onKey(({ key, domEvent }) => {
-  if (!domEvent.isTrusted || !input || !attached || gap) return;
+  if (!domEvent.isTrusted || !input || suspended || !attached || gap) return;
   if (byteLength(pending + key) > 4096) {
     revoke();
     return;
@@ -268,7 +280,17 @@ container.addEventListener(
     event.preventDefault();
     event.stopImmediatePropagation();
     const text = event.clipboardData?.getData('text/plain');
-    if (!event.isTrusted || !text || !input || !attached || gap || !instanceId || busy || pending)
+    if (
+      !event.isTrusted ||
+      !text ||
+      !input ||
+      suspended ||
+      !attached ||
+      gap ||
+      !instanceId ||
+      busy ||
+      pending
+    )
       return;
     // Native dialog displays the exact bounded text; no automatic clipboard read or hidden paste.
     void send({ version: 1, action: 'paste', instanceId, sequence, text });
@@ -331,7 +353,17 @@ for (const action of actions) {
     }
   });
 }
-window.addEventListener('blur', revoke);
+// Focus loss suspends local input without discarding the owned lease or the native
+// grant; a legitimate return resumes writes and the native policy decides the rest.
+window.addEventListener('blur', () => {
+  suspended = true;
+  pending = '';
+  updateGuidance();
+});
+window.addEventListener('focus', () => {
+  suspended = false;
+  updateGuidance();
+});
 // Only Tauri's selected-flow bootstrap produces this result. It contains no
 // proof/lease and all later operations still pass the native broker's authority.
 window.addEventListener('orqst-terminal-open', (event) => {
