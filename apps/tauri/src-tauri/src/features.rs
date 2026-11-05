@@ -858,36 +858,81 @@ pub(crate) fn permission_diff(
     lines.join("\n")
 }
 
+fn permission_scope_generation(
+    state: &State,
+    feature_id: &str,
+    epoch: &str,
+    presentation: u64,
+) -> Option<u64> {
+    let (scope, captured_epoch, captured_presentation) = state.preparation_scope.as_ref()?;
+    (scope["featureId"] == feature_id
+        && captured_epoch == epoch
+        && *captured_presentation == presentation)
+        .then_some(state.snapshot_generation)
+}
+
+async fn permission_metadata_request(
+    app: &tauri::AppHandle,
+    source: &str,
+    document: u64,
+    presentation: u64,
+    epoch: &str,
+    request: Value,
+) -> Value {
+    let id = {
+        let state = app.state::<Features>();
+        let mut guard = state.0.lock().unwrap();
+        if guard.sequence >= 0xffffffffffff {
+            return json!({"status":"unavailable"});
+        }
+        guard.sequence += 1;
+        format!("00000000-6990-4000-8000-{:012x}", guard.sequence)
+    };
+    let completion_id = id.clone();
+    with_metadata_completion(
+        crate::terminal::metadata_request(
+            app,
+            json!({"kind":"feature-permission-request", "id":id,
+            "document":document,"source":source,"request":request}),
+            presentation,
+            epoch,
+        ),
+        |cancelled| crate::terminal::metadata_finish(app, epoch, &completion_id, cancelled),
+    )
+    .await
+}
+
 #[tauri::command]
 pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
     let app = window.app_handle();
-    let source = window.url().map(|url| url.to_string()).unwrap_or_default();
+    let Some((source, document)) = identity(&window) else {
+        return denied();
+    };
     if !permission_source_allowed(window.label(), window.window().label(), &source)
         || !crate::terminal::sheet_owned(&window.window())
         || crate::terminal::presentation_blocked(app)
     {
         return denied();
     }
-    let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
-        return json!({"status":"unavailable"});
-    };
-    let presentation = crate::terminal::metadata_generation(app);
-    let Some(presentation) = presentation else {
+    let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
     };
     let feature_id = request["featureId"].as_str().unwrap_or_default().to_owned();
-    if feature_id.is_empty() {
-        return denied();
-    }
-    let read = json!({"action":"readPermissions","contractVersion":1,"generation":0,"featureId":feature_id});
-    let read_reply = crate::terminal::metadata_request(
-        app,
-        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000001","document":1,"source":source,"request":read}),
-        presentation,
-        &epoch,
-    )
-    .await;
+    let generation = {
+        let state = app.state::<Features>();
+        let guard = state.0.lock().unwrap();
+        let Some(generation) =
+            permission_scope_generation(&guard, &feature_id, &epoch, presentation)
+        else {
+            return denied();
+        };
+        generation
+    };
+    let read = json!({"action":"readPermissions","contractVersion":1,"generation":generation,"featureId":feature_id});
+    let read_reply =
+        permission_metadata_request(app, &source, document, presentation, &epoch, read.clone())
+            .await;
     if read_reply["status"] != "ok" {
         return read_reply;
     }
@@ -946,28 +991,17 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     {
         return denied();
     }
-    let current_now = crate::terminal::metadata_request(
-        app,
-        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000002","document":1,"source":source_now,"request":read}),
-        presentation,
-        &epoch,
-    )
-    .await;
+    let current_now =
+        permission_metadata_request(app, &source_now, document, presentation, &epoch, read).await;
     if current_now["permissions"]["revision"].as_u64() != Some(expected) {
         return json!({"status":"stale","permissions":current_now["permissions"].clone()});
     }
     let save = json!({
-        "action":"savePermissions","contractVersion":1,"generation":0,
+        "action":"savePermissions","contractVersion":1,"generation":generation,
         "featureId":feature_id,"expectedRevision":expected,
         "configuration":request["configuration"],
     });
-    crate::terminal::metadata_request(
-        app,
-        json!({"kind":"feature-request","id":"00000000-6991-4000-8000-000000000003","document":1,"source":source_now,"request":save}),
-        presentation,
-        &epoch,
-    )
-    .await
+    permission_metadata_request(app, &source_now, document, presentation, &epoch, save).await
 }
 
 #[tauri::command]
@@ -1440,6 +1474,31 @@ mod tests {
                 "{wrong}"
             );
         }
+    }
+
+    #[test]
+    fn permission_scope_uses_captured_feature_epoch_and_generation() {
+        let mut state = State {
+            snapshot_generation: 13,
+            ..State::default()
+        };
+        state.preparation_scope = Some((json!({"featureId":"feature-a"}), "epoch-a".into(), 9));
+        assert_eq!(
+            permission_scope_generation(&state, "feature-a", "epoch-a", 9),
+            Some(13)
+        );
+        assert_eq!(
+            permission_scope_generation(&state, "feature-b", "epoch-a", 9),
+            None
+        );
+        assert_eq!(
+            permission_scope_generation(&state, "feature-a", "epoch-b", 9),
+            None
+        );
+        assert_eq!(
+            permission_scope_generation(&state, "feature-a", "epoch-a", 10),
+            None
+        );
     }
 
     #[test]
