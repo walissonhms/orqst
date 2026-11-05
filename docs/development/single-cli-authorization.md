@@ -22,7 +22,9 @@ Integration checklist for the coordinated native/frontend increment:
 - [ ] Integrate frontend focus resume/suspended state and the single main-window mount.
 - [ ] Include locale keys `terminalNative.authorizeCli` and `terminalNative.cliScope`
       from frontend commit `95730cc67e070ba99d22cee71595fd9188ea6535`.
-- [ ] Coordinate native Quit/window-close shutdown using real Core exit receipts.
+- [x] Backend native Quit shutdown/receipt and preserved-pending ports implemented;
+      see [the exact private API](../api/owned-terminal-shutdown.md).
+- [ ] Coordinate and accept the native Quit/window-close integration.
 - [ ] Independent security review of the combined native/frontend/backend diff.
 - [ ] Separately authorized native focus/consent/provider acceptance and packaging.
 

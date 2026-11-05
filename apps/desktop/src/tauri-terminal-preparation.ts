@@ -1,3 +1,4 @@
+import { inspectPendingOwnedExits } from '../../../packages/core/src/terminal/exit-pending.js';
 import {
   terminalPreparationFailureSchema,
   type TerminalPreparationFailure,
@@ -128,7 +129,14 @@ export async function prepareTauriTerminals(
         trusted,
         context,
       );
-      if (request.action === 'catalog') return { status: 'catalog', catalog: discovered.catalog };
+      if (request.action === 'catalog')
+        return {
+          status: 'catalog',
+          catalog: {
+            ...discovered.catalog,
+            pendingOwnedExits: inspectPendingOwnedExits(trusted.preferencesDirectory),
+          },
+        };
       if (request.catalogId !== discovered.catalog.catalogId) fail('catalog_changed');
       stage = 'selection';
       const pair = request.action === 'create-mcp-pair';

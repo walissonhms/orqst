@@ -287,6 +287,24 @@ export class ManagedTerminalPair {
     return { epoch: this.authority.epoch, attempts };
   }
 
+  /** Native shutdown inventory only. Ownership is checked; this does not stop or release anything. */
+  ownedShutdownInventory() {
+    this.active();
+    if (this.reserved) this.admission.assertOwner();
+    for (const journal of this.journals) journal.assertOwner();
+    return {
+      epoch: this.authority.epoch,
+      attempts: this.attempts.flatMap((ids, slot) =>
+        [...ids].map((id) => ({ slot, ...this.slots[slot]!.snapshot(id) })),
+      ),
+    };
+  }
+
+  /** Current owned exits/nondispatch only; deliberately does not release capacity. */
+  ownedExitEvidence() {
+    return this.evidence();
+  }
+
   prepareRetire() {
     const evidence = this.evidence();
     return {

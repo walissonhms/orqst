@@ -30,6 +30,16 @@ export const terminalMcpPairRequestSchema = z.strictObject({
 });
 export const terminalPreparationCatalogSchema = z.strictObject({
   contractVersion: z.literal(1),
+  pendingOwnedExits: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        code: z.literal('owned_exit_pending'),
+        principalCount: z.number().int().positive().max(1024),
+      }),
+    )
+    .max(64)
+    .optional(),
   ...scope,
   catalogId: digest,
   providers: z

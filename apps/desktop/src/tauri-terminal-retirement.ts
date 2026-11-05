@@ -22,6 +22,7 @@ const ownedRetirementEvidenceSchema = z.strictObject({
           .optional(),
       }),
     )
+    .min(1)
     .max(1024),
 });
 export type OwnedTerminalRetirementEvidence = z.infer<typeof ownedRetirementEvidenceSchema>;
@@ -41,6 +42,9 @@ const reviewSchema = z.strictObject({
 });
 
 export interface TauriTerminalRetirementCore {
+  readonly epoch?: string;
+  beginOwnedShutdown?(): Promise<unknown>;
+  preserveOwnedShutdown?(): Promise<unknown>;
   prepareRetire(): Promise<unknown>;
   retire(proof: unknown): Promise<unknown>;
   closeAndWait(): Promise<void>;
@@ -59,7 +63,7 @@ export class TauriTerminalRetirement {
   async run(ports: {
     current(): boolean;
     /** Legacy hosts only. Never called or used as fallback when authorizeOwnedRetirement is installed. */
-    confirm(detail: string): Promise<boolean>;
+    confirm?(detail: string): Promise<boolean>;
     /** Core proves nondispatch/owned exit; this checks known attempt identity, never CLI-use trust. */
     authorizeOwnedRetirement?(evidence: OwnedTerminalRetirementEvidence): boolean;
     closeBrokers(): void;
@@ -71,6 +75,7 @@ export class TauriTerminalRetirement {
       // Core alone proves all dispatched exits, journal ownership and reservation identity.
       const review = reviewSchema.parse(await this.core.prepareRetire());
       if (
+        (this.core.epoch !== undefined && review.challenge.epoch !== this.core.epoch) ||
         review.challenge.target !== review.challenge.epoch ||
         review.challenge.digest !== terminalDigest(JSON.stringify(review.evidence))
       )
@@ -92,7 +97,7 @@ export class TauriTerminalRetirement {
           !ports.authorizeOwnedRetirement(evidence)
         )
           return 'denied';
-      } else if (!(await ports.confirm(detail))) return 'cancelled';
+      } else if (!(await ports.confirm?.(detail))) return 'cancelled';
       if (!ports.current()) return 'denied';
       const proof = {
         challengeId: review.challenge.challengeId,

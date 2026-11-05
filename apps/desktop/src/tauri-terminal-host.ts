@@ -383,6 +383,7 @@ async function start() {
   readySent = true;
   send({
     kind: 'ready',
+    pendingOwnedExits: core.pendingOwnedExits,
     id: startupId,
     epoch: core.epoch,
     admissionOwner: core.admissionOwner,

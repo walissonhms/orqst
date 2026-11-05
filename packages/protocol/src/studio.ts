@@ -88,6 +88,7 @@ export const terminalPreparationFailureSchema = z
       'review_too_large',
       'selection_blocked',
       'capacity_reserved',
+      'owned_exit_pending',
       'admission_invalid',
       'startup_failed',
       'startup_timeout',

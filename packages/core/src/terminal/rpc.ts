@@ -137,6 +137,8 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('layoutRead'), id }),
   z.strictObject({ kind: z.literal('layoutSave'), id, record: terminalLayoutRecordSchema }),
   z.strictObject({ kind: z.literal('layoutImport'), id, record: terminalLayoutRecordSchema }),
+  z.strictObject({ kind: z.literal('beginOwnedShutdown'), id }),
+  z.strictObject({ kind: z.literal('preserveOwnedShutdown'), id }),
   z.strictObject({ kind: z.literal('prepareRetire'), id }),
   z.strictObject({ kind: z.literal('retire'), id, proof }),
   z.strictObject({ kind: z.literal('prepareMcp'), id }),
@@ -145,6 +147,16 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
 
 export const terminalPairReadySchema = z.strictObject({
   type: z.literal('ready'),
+  pendingOwnedExits: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        code: z.literal('owned_exit_pending'),
+        principalCount: z.number().int().positive().max(1024),
+      }),
+    )
+    .max(64)
+    .optional(),
   id: terminalStartupIdSchema,
   epoch: id,
   admissionOwner: id,

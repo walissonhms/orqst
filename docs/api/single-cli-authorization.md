@@ -85,8 +85,9 @@ native focus and a fresh Core stop proof. No observed/external instance is accep
 
 `TauriTerminalRetirement.run` accepts a private
 `authorizeOwnedRetirement(evidence: OwnedTerminalRetirementEvidence): boolean` port.
-The production service installs it. It checks slot/instance identity in its broker;
-strict evidence requires the current Core epoch and `prepared`/`start_failed`, or
+The production service installs it. Identity comes from the exact private Core evidence,
+current Core epoch and known selection slots, independently of volatile broker views;
+strict nonempty evidence requires the current Core epoch and `prepared`/`start_failed`, or
 `exited` with a receipt. Core independently revalidates nondispatch/owned exit,
 journal/reservation ownership and its signed one-shot retirement challenge. Revoked
 CLI-use policy does not prevent release. Invalid/missing/uncertain evidence denies

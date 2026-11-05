@@ -1,3 +1,8 @@
+import {
+  preserveOwnedExitPending,
+  inspectPendingOwnedExits,
+  readOwnedExitPending,
+} from './exit-pending.js';
 import { stableId } from '@orqst/shared';
 import {
   terminalSlotLimit,
@@ -166,6 +171,8 @@ async function start() {
         });
     };
     let closed = false;
+    let draining = false;
+    let preservedOwnedExit: ReturnType<typeof preserveOwnedExitPending> | undefined;
     function shutdown() {
       if (closed) return;
       closed = true;
@@ -184,6 +191,19 @@ async function start() {
       const id = request.kind === 'terminal' ? request.request.id : request.id;
       try {
         let value: unknown;
+        if (
+          draining &&
+          !['beginOwnedShutdown', 'preserveOwnedShutdown', 'prepareRetire', 'retire'].includes(
+            request.kind,
+          ) &&
+          !(
+            request.kind === 'terminal' &&
+            ['snapshot', 'read', 'requestStop', 'stop', 'revokeInput', 'detach'].includes(
+              request.request.operation,
+            )
+          )
+        )
+          throw new Error('Owned Core shutdown in progress');
         switch (request.kind) {
           case 'enrollmentInspect': {
             const state = pair.enrollmentInspect(request.opId);
@@ -320,6 +340,39 @@ async function start() {
             mcp?.invalidate();
             pair.closeSlot(request.slot);
             break;
+          case 'beginOwnedShutdown':
+            draining = true;
+            mcp?.invalidate();
+            if (preservedOwnedExit) {
+              admission.preservePendingExit();
+              const record = readOwnedExitPending(
+                process.argv[4]!,
+                admission.owner,
+                authority.epoch,
+              );
+              if (JSON.stringify(record) !== JSON.stringify(preservedOwnedExit))
+                throw new Error('Pending exit evidence changed');
+              value = record!.evidence;
+            } else value = pair.ownedShutdownInventory();
+            break;
+          case 'preserveOwnedShutdown':
+            if (!draining || !selection.some(({ config }) => config.version === 3))
+              throw new Error('Preserved owned exit is unavailable');
+            value =
+              preservedOwnedExit ??
+              preserveOwnedExitPending(
+                process.argv[4]!,
+                {
+                  version: 1,
+                  status: 'leader_exited_retirement_pending',
+                  owner: admission.owner,
+                  evidence: pair.ownedExitEvidence(),
+                },
+                admission.assertOwner,
+              );
+            preservedOwnedExit = value as ReturnType<typeof preserveOwnedExitPending>;
+            admission.preservePendingExit();
+            break;
           case 'prepareRetire':
             if (selection.some(({ config }) => config.version === 3))
               throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
@@ -347,6 +400,7 @@ async function start() {
     });
     send({
       type: 'ready',
+      pendingOwnedExits: inspectPendingOwnedExits(process.argv[4]!),
       id: startupId,
       epoch: authority.epoch,
       admissionOwner: admission.owner,

@@ -399,3 +399,69 @@ test('startup timeout cannot be downgraded or revived by a late ready/refusal AC
   });
   assert.equal(probe.forks, 1);
 });
+
+test('owned shutdown RPC timeout and late ACK preserve the Core and closeAndWait refuses an unretired owner', async (t) => {
+  const f = await fixture();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const pending = f.core.beginOwnedShutdown();
+    const rejected = assert.rejects(pending, /unconfirmed/);
+    t.mock.timers.tick(12000);
+    await rejected;
+    assert.deepEqual(f.counts(), { forks: 1, disconnects: 0 });
+    await assert.rejects(f.core.closeAndWait(), /retirement unconfirmed/);
+    const request = f.requests.find((r) => r.kind === 'beginOwnedShutdown')!;
+    f.peer.emit('message', { id: request.id, ok: true, value: {} });
+    assert.equal((await f.core.supervisors[0]!.snapshot(randomUUID())).state, 'running');
+    assert.deepEqual(f.counts(), { forks: 1, disconnects: 0 });
+  } finally {
+    f.close();
+  }
+});
+
+test('durable preserved-exit ACK permits Core close only after matching owner/epoch and observed exit', async () => {
+  const f = await fixture();
+  try {
+    const begin = f.core.beginOwnedShutdown();
+    const request = f.requests.find((r) => r.kind === 'beginOwnedShutdown')!;
+    f.peer.emit('message', { id: request.id, ok: true, value: {} });
+    await begin;
+    await assert.rejects(f.core.closeAndWait(), /retirement unconfirmed/);
+    const preserve = f.core.preserveOwnedShutdown();
+    const p = f.requests.find((r) => r.kind === 'preserveOwnedShutdown')!;
+    f.peer.emit('message', {
+      id: p.id,
+      ok: true,
+      value: {
+        version: 1,
+        status: 'leader_exited_retirement_pending',
+        owner: f.core.admissionOwner,
+        evidence: {
+          epoch: f.core.epoch,
+          attempts: [
+            {
+              slot: 0,
+              instanceId: randomUUID(),
+              epoch: f.core.epoch,
+              state: 'exited',
+              exit: { exitCode: 0 },
+            },
+          ],
+        },
+      },
+    });
+    await preserve;
+    let finished = false;
+    const closing = f.core.closeAndWait().then(() => {
+      finished = true;
+    });
+    await Promise.resolve();
+    assert.equal(finished, false);
+    assert.equal(f.counts().disconnects, 1);
+    f.peer.emit('exit', 0);
+    await closing;
+    assert.equal(finished, true);
+  } finally {
+    f.close();
+  }
+});

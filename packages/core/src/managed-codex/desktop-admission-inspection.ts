@@ -1,3 +1,4 @@
+import { readOwnedExitPending } from '../terminal/exit-pending.js';
 import { lstatSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
@@ -24,7 +25,7 @@ export const desktopAdmissionContextSchema = z.strictObject({
 });
 export type DesktopAdmissionContext = z.infer<typeof desktopAdmissionContextSchema>;
 export class DesktopAdmissionRefused extends Error {
-  constructor(readonly code: 'capacity_reserved' | 'admission_invalid') {
+  constructor(readonly code: 'capacity_reserved' | 'admission_invalid' | 'owned_exit_pending') {
     super('Previous Desktop pair requires evidence-backed reconciliation');
   }
 }
@@ -91,8 +92,11 @@ export function inspectDesktopAdmission(directory: string, current?: DesktopAdmi
       marker.owner !== current.owner ||
       marker.epoch !== current.epoch ||
       JSON.stringify(marker.manifests) !== JSON.stringify(current.initialFiles)
-    )
+    ) {
+      if (!current && marker.epoch && readOwnedExitPending(directory, marker.owner, marker.epoch))
+        throw new DesktopAdmissionRefused('owned_exit_pending');
       throw new DesktopAdmissionRefused('capacity_reserved');
+    }
     return JSON.stringify([
       parent.dev.toString(),
       parent.ino.toString(),

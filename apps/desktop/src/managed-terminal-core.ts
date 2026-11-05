@@ -1,3 +1,4 @@
+import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit-pending.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
   inspectDesktopAdmission,
@@ -88,9 +89,15 @@ export async function connectManagedTerminalCore(
     }),
   );
   let closed = false;
+  let ownedShutdownMode = false;
+  let retirementConfirmed = false;
+  let preservedExitConfirmed = false;
+  const shutdownTimeouts = new Set<string>();
   let initialized = false;
   let epoch = '';
   let admissionOwner = '';
+  let pendingOwnedExits: Array<{ id: string; code: 'owned_exit_pending'; principalCount: number }> =
+    [];
   let identities: Array<{
     slot: number;
     terminalId: string;
@@ -130,7 +137,9 @@ export async function connectManagedTerminalCore(
       request.reject(error);
     }
     pending.clear();
-    if (child.connected) child.disconnect();
+    // An uncertain native shutdown keeps the owned Core/receipt writer alive.
+    if (child.connected && (!ownedShutdownMode || retirementConfirmed || preservedExitConfirmed))
+      child.disconnect();
   };
   const protocolError = () =>
     close(
@@ -177,6 +186,7 @@ export async function connectManagedTerminalCore(
         })
       )
         return protocolError();
+      pendingOwnedExits = started.data.pendingOwnedExits ?? [];
       identities = started.data.identities;
       epoch = started.data.epoch;
       admissionOwner = started.data.admissionOwner;
@@ -188,7 +198,11 @@ export async function connectManagedTerminalCore(
     const parsed = terminalRPCReplySchema.safeParse(raw);
     if (!initialized || !parsed.success) return protocolError();
     const request = pending.get(parsed.data.id);
-    if (!request && enrollmentTimeouts.delete(parsed.data.id)) return;
+    if (
+      !request &&
+      (enrollmentTimeouts.delete(parsed.data.id) || shutdownTimeouts.delete(parsed.data.id))
+    )
+      return;
     if (!request) return close();
     pending.delete(parsed.data.id);
     clearTimeout(request.timer);
@@ -205,9 +219,17 @@ export async function connectManagedTerminalCore(
         ...(body.kind === 'terminal' ? {} : { id }),
       });
       const enrollment = body.kind === 'enroll' || body.kind === 'enrollmentInspect';
+      if (ownedShutdownMode && shutdownTimeouts.size >= 128)
+        return reject(new Error('Owned shutdown transport budget exhausted'));
       if (enrollment && enrollmentTimeouts.size >= 128)
         return reject(new TerminalEnrollmentUncertain('Enrollment transport budget exhausted'));
       const timer = setTimeout(() => {
+        if (ownedShutdownMode) {
+          pending.delete(id);
+          shutdownTimeouts.add(id);
+          reject(new Error('Owned shutdown reply unconfirmed'));
+          return;
+        }
         if (!enrollment) return close();
         pending.delete(id);
         enrollmentTimeouts.add(id);
@@ -271,6 +293,7 @@ export async function connectManagedTerminalCore(
   return {
     identities,
     admissionOwner,
+    pendingOwnedExits,
     initialFiles: [...files],
     get epoch() {
       return epoch;
@@ -384,6 +407,8 @@ export async function connectManagedTerminalCore(
     supervisors,
     close,
     async closeAndWait(): Promise<void> {
+      if (ownedShutdownMode && !retirementConfirmed && !preservedExitConfirmed)
+        throw new Error('Owned shutdown retirement unconfirmed');
       close();
       if (exited) return;
       await new Promise<void>((resolve, reject) => {
@@ -395,8 +420,23 @@ export async function connectManagedTerminalCore(
       });
     },
     closeSlot: (slot: number) => call({ kind: 'closeSlot', slot }),
+    beginOwnedShutdown: () => {
+      ownedShutdownMode = true;
+      return call({ kind: 'beginOwnedShutdown' });
+    },
+    preserveOwnedShutdown: async () => {
+      const record = ownedExitPendingSchema.parse(await call({ kind: 'preserveOwnedShutdown' }));
+      if (!ownedShutdownMode || record.evidence.epoch !== epoch || record.owner !== admissionOwner)
+        throw new Error('Preserved owned exit scope changed');
+      preservedExitConfirmed = true;
+      return record;
+    },
     prepareRetire: () => call({ kind: 'prepareRetire' }),
-    retire: (proof: unknown) => call({ kind: 'retire', proof }),
+    retire: async (proof: unknown) => {
+      const result = await call({ kind: 'retire', proof });
+      retirementConfirmed = true;
+      return result;
+    },
     prepareMcp: () => call({ kind: 'prepareMcp' }),
     authorizeMcp: (proof: unknown) => call({ kind: 'authorizeMcp', proof }),
   };
