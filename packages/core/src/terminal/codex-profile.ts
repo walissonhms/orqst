@@ -230,6 +230,7 @@ export function managedCodexProfiles(
   if (config.interactive?.mcp && !mcp) throw new Error('Interactive MCP composition required');
   const mcpArguments = mcp ? codexMcpArguments(config, mcp) : [];
   const common = {
+    cliAuthorizationScope: `codex-read-only-on-request-v1:${config.authentication ? 'native' : 'managed'}:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}`,
     projectId: terminalDigest(config.project),
     executable: config.executable.path,
     executableSha256: config.executable.sha256,

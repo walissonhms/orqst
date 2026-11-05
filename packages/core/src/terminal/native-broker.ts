@@ -6,6 +6,7 @@ import {
   type TerminalAuthority,
   type TerminalChallenge,
 } from './authority.js';
+import type { TerminalCliAuthorization } from './cli-authorization.js';
 import { terminalPolicy, type TerminalProfile, type TerminalSupervisor } from './supervisor.js';
 
 export type TerminalConfirmation = TerminalNativeConfirmation;
@@ -14,9 +15,11 @@ export interface TerminalNativeHost<Document extends object> {
   current(document: Document, requireFocus: boolean): boolean;
   /** Must present a native confirmation, Cancel by default. No renderer answer is accepted. */
   confirm(document: Document, details: TerminalConfirmation): Promise<boolean>;
+  /** Native-owned policy only; never provided by a renderer or an observed session. */
+  cliAuthorization?: TerminalCliAuthorization<Document>;
 }
 export type TerminalNativeReply =
-  | { status: 'denied' | 'cancelled' | 'busy' }
+  | { status: 'denied' | 'cancelled' | 'busy'; authorization?: 'blocked' | 'revoked' }
   | {
       status: 'ok';
       instanceId: string;
@@ -52,6 +55,11 @@ interface View {
   profile: Readonly<TerminalProfile>;
   attachment?: string;
   lease?: string;
+  policyEpoch?: string;
+  leaseExpiresAt?: number;
+  inputSequence?: number;
+  leaseSequence?: number;
+  inputUncertain?: boolean;
 }
 
 /** One enrolled native document. Signatures, leases and attachment IDs never cross IPC. */
@@ -99,7 +107,7 @@ export class TerminalNativeBroker<Document extends object> {
           {},
           request.action === 'open' ? 'open' : undefined,
         );
-        if (result !== 'confirmed') return { status: result };
+        if (result !== 'confirmed') return this.refusal(result, view);
         if (request.action === 'open') {
           // One explicit native review covers these three operations on this exact
           // immutable profile. Each operation still consumes its own signed challenge.
@@ -119,6 +127,7 @@ export class TerminalNativeBroker<Document extends object> {
               view.attachment,
               this.proof(input, generation, prepared.challenge.expiresAt),
             );
+            this.inputEnabled(view);
             const result = await this.result(prepared.attemptId);
             // The final snapshot is asynchronous too. Neither it nor fresh later
             // challenges may renew the original combined review's deadline.
@@ -155,12 +164,18 @@ export class TerminalNativeBroker<Document extends object> {
       const id = request.instanceId;
       const view = this.views.get(id);
       if (!view) return { status: 'denied' }; // No adoption by session, PID or arbitrary instance ID.
+      if (
+        this.host.cliAuthorization &&
+        !['read', 'snapshot', 'detach', 'resize', 'stop'].includes(request.action) &&
+        !this.policyCurrent(view)
+      )
+        return this.refusal('denied', view);
       switch (request.action) {
         case 'attach': {
           if (view.attachment) return { status: 'denied' };
           const challenge = await this.supervisor.requestAttach(this.clientId, id);
           const result = await this.confirm(document, generation, challenge, view);
-          if (result !== 'confirmed') return { status: result };
+          if (result !== 'confirmed') return this.refusal(result, view);
           const attachment = await this.supervisor.attach(id, this.proof(challenge, generation));
           if (generation !== this.generation || !this.current(document, true)) {
             await this.supervisor.detach(id, attachment);
@@ -170,10 +185,11 @@ export class TerminalNativeBroker<Document extends object> {
           break;
         }
         case 'input': {
+          if (this.host.cliAuthorization && view.inputUncertain) return { status: 'denied' };
           if (!view.attachment) return { status: 'denied' };
           const challenge = await this.supervisor.requestInput(id, view.attachment);
           const result = await this.confirm(document, generation, challenge, view);
-          if (result !== 'confirmed') return { status: result };
+          if (result !== 'confirmed') return this.refusal(result, view);
           const lease = await this.supervisor.enableInput(
             id,
             view.attachment,
@@ -184,29 +200,33 @@ export class TerminalNativeBroker<Document extends object> {
             return { status: 'denied' };
           }
           view.lease = lease;
+          this.inputEnabled(view);
           break;
         }
         case 'paste': {
+          await this.resumeInput(id, view, generation);
           if (!view.attachment || !view.lease) return { status: 'denied' };
           const challenge = await this.supervisor.requestPaste(
             id,
             view.attachment,
             view.lease,
-            request.sequence,
+            this.sequence(view, request.sequence),
             request.text,
           );
           const result = await this.confirm(document, generation, challenge, view, {
             paste: request.text,
           });
-          if (result !== 'confirmed') return { status: result };
+          if (result !== 'confirmed') return this.refusal(result, view);
+          const sequence = this.consumeSequence(view, request.sequence);
           await this.supervisor.paste(
             id,
             view.attachment,
             view.lease,
-            request.sequence,
+            sequence,
             request.text,
             this.proof(challenge, generation),
           );
+          view.inputUncertain = false;
           break;
         }
         case 'stop': {
@@ -214,20 +234,27 @@ export class TerminalNativeBroker<Document extends object> {
           const result = await this.confirm(document, generation, challenge, view, {
             signal: request.signal,
           });
-          if (result !== 'confirmed') return { status: result };
+          if (result !== 'confirmed') return this.refusal(result, view);
           await this.supervisor.stop(id, request.signal, this.proof(challenge, generation));
           break;
         }
         case 'write':
-          if (!this.current(document, true) || !view.attachment || !view.lease)
+          await this.resumeInput(id, view, generation);
+          if (
+            generation !== this.generation ||
+            !this.current(document, true) ||
+            !view.attachment ||
+            !view.lease
+          )
             return { status: 'denied' };
           await this.supervisor.write(
             id,
             view.attachment,
             view.lease,
-            request.sequence,
+            this.consumeSequence(view, request.sequence),
             request.text,
           );
+          view.inputUncertain = false;
           break;
         case 'resize':
           if (!view.attachment) return { status: 'denied' };
@@ -323,6 +350,17 @@ export class TerminalNativeBroker<Document extends object> {
   ): Promise<'confirmed' | 'denied' | 'cancelled'> {
     if (generation !== this.generation || !this.current(document, true)) return 'denied';
     if (challenge.operation === 'retire' || challenge.operation === 'delegate') return 'denied';
+    if (this.host.cliAuthorization) {
+      const policy = this.host.cliAuthorization;
+      if (challenge.operation === 'start') {
+        const status = await policy.authorizeCli(document, view.profile);
+        if (status !== 'allowed') return 'denied';
+        view.policyEpoch = policy.epoch(view.profile);
+      }
+      if (challenge.operation !== 'stop' && !this.policyCurrent(view)) return 'denied';
+      this.assertCurrent(challenge, generation);
+      return 'confirmed';
+    }
     const accepted = await this.host.confirm(
       document,
       Object.freeze({
@@ -359,12 +397,98 @@ export class TerminalNativeBroker<Document extends object> {
 
   private proof(challenge: TerminalChallenge, generation: number, consentExpiresAt?: number) {
     this.assertCurrent(challenge, generation, consentExpiresAt);
+    const view = this.views.get(challenge.target);
+    if (
+      this.host.cliAuthorization &&
+      (!view || (challenge.operation !== 'stop' && !this.policyCurrent(view)))
+    )
+      throw new Error('CLI policy revoked');
     return {
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), this.privateKey).toString(
         'base64url',
       ),
     };
+  }
+
+  /** Release authority is tied to this owned attempt, independent of revoked CLI-use policy. */
+  ownsRetirementAttempt(instanceId: string): boolean {
+    return !this.closed && this.views.has(instanceId);
+  }
+
+  private policyCurrent(view: View): boolean {
+    const policy = this.host.cliAuthorization;
+    return (
+      !!policy &&
+      !!view.policyEpoch &&
+      policy.current(this.document, view.profile) === 'allowed' &&
+      policy.epoch(view.profile) === view.policyEpoch
+    );
+  }
+
+  private refusal(status: 'denied' | 'cancelled', view: View): TerminalNativeReply {
+    if (!this.host.cliAuthorization) return { status };
+    const current = this.host.cliAuthorization.current(this.document, view.profile);
+    if (
+      current === 'allowed' &&
+      view.policyEpoch === this.host.cliAuthorization.epoch(view.profile)
+    )
+      return { status };
+    return { status, authorization: current === 'blocked' ? 'blocked' : 'revoked' };
+  }
+
+  private inputEnabled(view: View, resetSequence = true): void {
+    if (!this.host.cliAuthorization) return;
+    view.leaseExpiresAt = this.authority.now() + terminalPolicy.inputLeaseMs - 1000;
+    view.leaseSequence = 0;
+    if (resetSequence) view.inputSequence = 0;
+  }
+
+  /** Focus only resumes an existing owned view under the same policy epoch. Never adopts. */
+  private async resumeInput(id: string, view: View, generation: number): Promise<void> {
+    if (!this.host.cliAuthorization) return;
+    if (
+      !this.current(this.document, true) ||
+      !this.policyCurrent(view) ||
+      !view.attachment ||
+      view.inputSequence === undefined ||
+      view.inputUncertain
+    )
+      throw new Error('Input is unavailable');
+    if (view.lease && (view.leaseExpiresAt ?? 0) > this.authority.now()) return;
+    const challenge = await this.supervisor.requestInput(id, view.attachment);
+    const lease = await this.supervisor.enableInput(
+      id,
+      view.attachment,
+      this.proof(challenge, generation),
+    );
+    try {
+      this.assertCurrent(challenge, generation);
+      if (!this.policyCurrent(view)) throw new Error('CLI policy revoked');
+      view.lease = lease;
+    } catch (error) {
+      view.lease = undefined;
+      await this.supervisor.revokeInput(id, view.attachment);
+      throw error;
+    }
+    this.inputEnabled(view, false);
+  }
+
+  private sequence(view: View, sequence: number): number {
+    if (!this.host.cliAuthorization) return sequence;
+    if (view.inputUncertain || sequence !== view.inputSequence || view.leaseSequence === undefined)
+      throw new Error('Input sequence mismatch');
+    return view.leaseSequence;
+  }
+
+  private consumeSequence(view: View, sequence: number): number {
+    const nativeSequence = this.sequence(view, sequence);
+    if (this.host.cliAuthorization) {
+      view.inputSequence!++;
+      view.leaseSequence!++;
+      view.inputUncertain = true;
+    }
+    return nativeSequence;
   }
 
   private async result(instanceId: string) {

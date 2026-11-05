@@ -163,6 +163,7 @@ export function interactiveTerminalProfiles(
         ...terminalModelArguments(config.model),
       ],
       environmentProfile: 'claude-native-identity-no-inherited-credentials-v1',
+      cliAuthorizationScope: `claude-native-v1:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}`,
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
         'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ' +

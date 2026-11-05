@@ -32,6 +32,8 @@ export interface TerminalProfile {
   cwd: string;
   environmentProfile: string;
   permissions: string;
+  /** Stable native-reviewed CLI-use scope; excludes model, paths and process/session identity. */
+  cliAuthorizationScope?: string;
 }
 /** Private Core admission binding. It conveys no launch, attachment or input authority. */
 export interface TerminalStartBinding {

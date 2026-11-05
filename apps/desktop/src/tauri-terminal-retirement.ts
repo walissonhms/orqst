@@ -5,6 +5,27 @@ import {
   terminalDigest,
 } from '../../../packages/core/src/terminal/authority.js';
 
+const ownedRetirementEvidenceSchema = z.strictObject({
+  epoch: z.uuid(),
+  attempts: z
+    .array(
+      z.strictObject({
+        slot: z.number().int().min(0).max(7),
+        instanceId: z.uuid(),
+        epoch: z.uuid(),
+        state: z.enum(['prepared', 'start_failed', 'exited']),
+        exit: z
+          .strictObject({
+            exitCode: z.number().int().safe(),
+            signal: z.number().int().safe().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .max(1024),
+});
+export type OwnedTerminalRetirementEvidence = z.infer<typeof ownedRetirementEvidenceSchema>;
+
 const reviewSchema = z.strictObject({
   evidence: z.unknown(),
   challenge: z.strictObject({
@@ -37,7 +58,10 @@ export class TauriTerminalRetirement {
 
   async run(ports: {
     current(): boolean;
+    /** Legacy hosts only. Never called or used as fallback when authorizeOwnedRetirement is installed. */
     confirm(detail: string): Promise<boolean>;
+    /** Core proves nondispatch/owned exit; this checks known attempt identity, never CLI-use trust. */
+    authorizeOwnedRetirement?(evidence: OwnedTerminalRetirementEvidence): boolean;
     closeBrokers(): void;
   }): Promise<'retired' | 'cancelled' | 'denied' | 'busy'> {
     if (this.fenced || !ports.current()) return 'denied';
@@ -55,8 +79,20 @@ export class TauriTerminalRetirement {
         /\p{Cf}/gu,
         (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
       );
-      if (detail.length > 4096 || !ports.current()) return 'denied';
-      if (!(await ports.confirm(detail))) return 'cancelled';
+      if ((!ports.authorizeOwnedRetirement && detail.length > 4096) || !ports.current())
+        return 'denied';
+      if (ports.authorizeOwnedRetirement) {
+        const evidence = ownedRetirementEvidenceSchema.parse(review.evidence);
+        if (
+          evidence.epoch !== review.challenge.epoch ||
+          evidence.attempts.some(
+            (attempt) =>
+              attempt.epoch !== evidence.epoch || (attempt.state === 'exited' && !attempt.exit),
+          ) ||
+          !ports.authorizeOwnedRetirement(evidence)
+        )
+          return 'denied';
+      } else if (!(await ports.confirm(detail))) return 'cancelled';
       if (!ports.current()) return 'denied';
       const proof = {
         challengeId: review.challenge.challengeId,
