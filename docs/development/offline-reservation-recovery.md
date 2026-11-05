@@ -210,3 +210,15 @@ Five synthetic regressions cover exact deadline at both commit boundaries, actua
 fsync followed by elapsed fixture time, changed helper lease and post-commit expiry
 with a future owner. Before correction, the three expiry cases and lease preservation
 failed; the post-commit outcome case passed. No real state or kernel boot was used.
+
+
+### Legacy CLI executable identity
+
+A v1 enrollment preimage includes the CLI executable's device and inode. An
+update that preserves that inode does not by itself prevent reconstruction. If
+an update replaces the file and the historical identity is unavailable, the
+original preimage cannot be verified from its digest alone. The reservation and
+its evidence remain uncertain and preserved; no process, journal or manifest is
+modified automatically. The native diagnostic reports that the historical
+binding could not be verified. Existing offline evidence may be reviewed under
+the separately authorized recovery process; it is not launch authorization.

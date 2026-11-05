@@ -92,6 +92,14 @@ safe integers; no pipelining, queued second action or respawn is accepted.
   unconfirmed effects; it grants no retry, adoption, release or source rebinding.
   Completion with a failure attached can never be accepted as success.
 
+  Legacy enrollment bindings include the historical CLI device and inode. If an
+  executable is replaced and its original identity is no longer available as
+  evidence, the binding cannot be reconstructed. The result is uncertain and
+  preserved; it is neither accepted nor declared invalid, and the old journal is
+  not rewritten. The diagnostic code is retained for compatibility and the
+  localized message describes the binding as unverifiable. Recovery never runs
+  the CLI or treats this outcome as launch authorization.
+
 Complete detail is at most **64 KiB UTF-8**, frame **128 KiB**, cumulative output
 **512 KiB**, queued output **128 KiB**. Input buffering is **16 KiB**, with a
 **512 KiB** lifetime input budget and no batched ACKs. Escaped-format controls are

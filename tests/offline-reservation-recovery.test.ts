@@ -53,7 +53,7 @@ import {
 } from '../packages/core/src/terminal/offline-recovery-files.js';
 import { administrativeBlockedOutcome } from '../apps/desktop/src/tauri-offline-recovery.js';
 
-function fixture(wal = false, journalNow?: () => number, twoSources = false) {
+function fixture(wal = false, journalNow?: () => number, twoSources = false, syntheticCli = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
   const directory = join(root, 'preferences');
   const recoveryRoot = join(root, 'captures');
@@ -69,7 +69,9 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false) {
   let boot = firstBoot;
   const workspaceId = stableId('workspace', project);
   const keys = generateKeyPairSync('ed25519');
-  const executable = realpathSync('/usr/bin/true'); // Metadata only; never launched.
+  const executable = syntheticCli ? join(root, 'synthetic-cli') : realpathSync('/usr/bin/true');
+  if (syntheticCli) writeFileSync(executable, 'synthetic-cli-original', { mode: 0o700 });
+  // Metadata only; no provider is launched.
   const configs = [0, 1].map((slot) => {
     const state = join(root, `state-${slot}`);
     mkdirSync(state, { mode: 0o700 });
@@ -632,6 +634,43 @@ test('enrolled source inode drift refuses before review after only derived-0, wi
     assert.ok(!existsSync(join(bundle, 'capture.json')));
     assert.ok(!existsSync(join(f.directory, RECOVERY_GATE)));
     for (const [file, original] of before) assert.deepEqual(readFileSync(file), original);
+  } finally {
+    f.close();
+  }
+});
+
+test('legacy CLI updated in place retains a reconstructible binding', async () => {
+  const f = fixture(true, undefined, false, true);
+  try {
+    writeFileSync(f.configs[1]!.executable.path, 'synthetic-cli-updated', { mode: 0o700 });
+    const capture = await f.capture();
+    assert.ok(existsSync(join(capture.bundle, 'capture.json')));
+    assert.ok(existsSync(f.marker));
+  } finally {
+    f.close();
+  }
+});
+
+test('legacy CLI inode replacement is uncertain and preserves the reservation', async () => {
+  const f = fixture(true, undefined, false, true);
+  try {
+    const executable = f.configs[1]!.executable.path;
+    const protectedFiles = [f.marker, f.intentFile, f.receiptFile, ...f.manifests];
+    const before = protectedFiles.map((file) => readFileSync(file));
+    const replacement = `${executable}.new`;
+    writeFileSync(replacement, 'synthetic-cli-updated', { mode: 0o700 });
+    renameSync(replacement, executable);
+    await assert.rejects(f.capture(), (error: unknown) => {
+      assert.ok(error instanceof OfflineEnrollmentBindingChanged);
+      assert.equal(error.message, 'Historical enrollment binding could not be verified');
+      assert.equal(administrativeBlockedOutcome(error).outcome, 'unconfirmed');
+      return true;
+    });
+    assert.equal(f.fullReviews.length, 0);
+    assert.equal(f.reviews.length, 0);
+    assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+    for (const [index, file] of protectedFiles.entries())
+      assert.deepEqual(readFileSync(file), before[index]);
   } finally {
     f.close();
   }

@@ -59,7 +59,7 @@ export class OfflineEnrollmentBindingChanged extends Error {
   readonly stage = 'inspection';
   readonly code = 'enrollment_binding_changed';
   constructor() {
-    super('Recovery manifest enrollment binding');
+    super('Historical enrollment binding could not be verified');
   }
 }
 
