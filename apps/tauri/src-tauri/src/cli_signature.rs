@@ -37,6 +37,13 @@ pub fn verify_provider(path: &str, provider: &str) -> bool {
 /// This verifies the code requirement, not notarization or behavior.
 #[cfg(target_os = "macos")]
 pub fn verify(path: &Path, provider: Provider) -> bool {
+    let (team, identifier) = provider.identity();
+    let requirement = format!("anchor apple generic and identifier \"{identifier}\" and certificate leaf[subject.OU] = \"{team}\"");
+    verify_requirement(path, &requirement)
+}
+
+#[cfg(target_os = "macos")]
+fn verify_requirement(path: &Path, requirement: &str) -> bool {
     use std::ffi::{c_char, c_void, CString};
     use std::os::unix::ffi::OsStrExt;
     use std::ptr;
@@ -66,10 +73,7 @@ pub fn verify(path: &Path, provider: Provider) -> bool {
     let Ok(length) = isize::try_from(bytes.len()) else {
         return false;
     };
-    let (team, identifier) = provider.identity();
-    let Ok(requirement_text) = CString::new(format!(
-        "anchor apple generic and identifier \"{identifier}\" and certificate leaf[subject.OU] = \"{team}\""
-    )) else {
+    let Ok(requirement_text) = CString::new(requirement) else {
         return false;
     };
     // All CoreFoundation objects returned by Create are released exactly once.
@@ -112,6 +116,40 @@ pub fn verify(_path: &Path, _provider: Provider) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn system_codesign_and_security_framework_agree_on_system_and_synthetic_code() {
+        use std::process::Command;
+        let path =
+            std::env::temp_dir().join(format!("orqst-unsigned-equivalence-{}", std::process::id()));
+        std::fs::write(&path, b"synthetic unsigned executable").unwrap();
+        let check = |file: &Path, requirement: &str| {
+            let status = Command::new("/usr/bin/codesign")
+                .args(["--verify", "--strict", "--all-architectures"])
+                .arg(format!("-R={requirement}"))
+                .arg(file)
+                .env_clear()
+                .env("PATH", "/usr/bin:/bin")
+                .env("LANG", "C")
+                .output()
+                .unwrap();
+            assert_eq!(
+                status.status.success(),
+                verify_requirement(file, requirement)
+            );
+            status.status.success()
+        };
+        assert!(check(Path::new("/usr/bin/codesign"), "anchor apple"));
+        assert!(!check(&path, "anchor apple"));
+        for provider in [Provider::Codex, Provider::Claude, Provider::OpenCode] {
+            let (team, identifier) = provider.identity();
+            let requirement = format!("anchor apple generic and identifier \"{identifier}\" and certificate leaf[subject.OU] = \"{team}\"");
+            assert!(!check(Path::new("/usr/bin/codesign"), &requirement));
+            assert!(!check(&path, &requirement));
+        }
+        std::fs::remove_file(path).unwrap();
+    }
 
     #[test]
     fn missing_and_unsigned_files_are_rejected() {
