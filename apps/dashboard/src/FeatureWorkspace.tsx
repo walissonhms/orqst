@@ -667,64 +667,52 @@ export function FeatureWorkspace({
       </header>
       {studio ? (
         <div className="feature-studio">
-          {available.length === 0 ? (
-            <div className="feature-empty">
-              <h1>{t('studio.setupTitle')}</h1>
-              <p>{t(selected ? 'features.empty' : 'features.noUnassigned')}</p>
-              {canPrepare && (
-                <button disabled={busy} onClick={() => void prepare()}>
-                  {t('studio.prepareTerminals')}
-                </button>
-              )}
-            </div>
-          ) : (
-            <TerminalStudio
-              storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
-              terminals={terminals}
-              messages={[]}
-              renderBody={(terminal) =>
-                nativeWorkspace ? (
-                  <div className="ts-hole" aria-hidden="true" />
-                ) : (
-                  <div className="ts-open">
-                    <button
-                      type="button"
-                      disabled={busy || quitFence}
-                      onClick={() => {
-                        const slot = snapshot?.slots.find(
-                          (entry) => entry.terminalId === terminal.id,
-                        );
-                        if (slot) paneCommand(slot.slot, 'focus');
-                      }}
-                    >
-                      {t('terminalStudio.openTerminal')}
-                    </button>
-                    <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
-                  </div>
-                )
-              }
-              onNewTerminal={canPrepare ? () => void prepare() : undefined}
-              {...(nativeWorkspace
-                ? {
-                    native: {
-                      onLayout: arrange,
-                      overlayOpen: !!editor || !!renamePane || quitFence,
-                    },
-                  }
-                : {})}
-              onOrchestratorChange={(terminalId) =>
-                selected &&
-                void request({
-                  action: 'update',
-                  featureId: selected.featureId,
-                  input: {
-                    expectedRevision: selected.revision,
-                    orchestratorTerminalId: terminalId,
+          <TerminalStudio
+            storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
+            terminals={terminals}
+            messages={[]}
+            renderBody={(terminal) =>
+              nativeWorkspace ? (
+                <div className="ts-hole" aria-hidden="true" />
+              ) : (
+                <div className="ts-open">
+                  <button
+                    type="button"
+                    disabled={busy || quitFence}
+                    onClick={() => {
+                      const slot = snapshot?.slots.find(
+                        (entry) => entry.terminalId === terminal.id,
+                      );
+                      if (slot) paneCommand(slot.slot, 'focus');
+                    }}
+                  >
+                    {t('terminalStudio.openTerminal')}
+                  </button>
+                  <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
+                </div>
+              )
+            }
+            onNewTerminal={canPrepare ? () => void prepare() : undefined}
+            {...(nativeWorkspace
+              ? {
+                  native: {
+                    onLayout: arrange,
+                    overlayOpen: !!editor || !!renamePane || quitFence,
                   },
-                })
-              }
-            />
-          )}
+                }
+              : {})}
+            onOrchestratorChange={(terminalId) =>
+              selected &&
+              void request({
+                action: 'update',
+                featureId: selected.featureId,
+                input: {
+                  expectedRevision: selected.revision,
+                  orchestratorTerminalId: terminalId,
+                },
+              })
+            }
+          />
         </div>
       ) : (
         <>
