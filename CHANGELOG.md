@@ -1069,3 +1069,40 @@ focus/input suspends while minimized. Not implemented in this round.
 
 - corrigido: dock minimized WIP preserved on `wip/dock-755` (`2942899`), not part of
   this integration; the chrome UI is still pending.
+
+## Quit wiring and mixed MCP — 2026-11-05 (source state)
+
+- [x] Owned shutdown wired into Quit: 8s native waiter over the 5s service
+      deadline, single latched flow, ready → retireOwned → exit,
+      exited_retirement_unavailable → closePreservedOwned → exit preserving the
+      pending, uncertain/busy/denied/malformed/missing → stay with inline EN/PT
+      slot+reason, fence notice without a modal (`e61a058`).
+- [x] Every exit point (main close, menu/Cmd-Q, tray, ExitRequested with
+      prevent_exit) goes through the single latched entry; the legacy terminal
+      gate routes there; static tests fail on a direct exit (`f359ebc`).
+- [x] `owned_exit_pending` allowlist + EN/PT startup copy (`e61a058`).
+- [ ] Native acceptance of the Quit path.
+- [ ] Managed-agents host has no shutdown with receipt; legacy gate kept and
+      documented as an open gap.
+- [ ] Open: user path to reduce pending exits; cross-launch retirement only via
+      the offline non-dispatch path.
+
+- [x] 2026-11-05 — source/synthetic: Negotiate the reviewed MCP 2025-06-18 and
+      2025-11-25 revisions with a supported fallback; malformed or missing
+      versions are denied. Real provider handshake remains open. (`b40d012`,
+      integrated `2c334b0`.)
+- [x] 2026-11-05 — source/synthetic: Support separately native-authorized
+      single-use grants on an owned pair; quiesce in-flight socket calls before
+      installing a new broker, reject old task IDs, enforce three calls per role
+      per grant and at most 16 grants per pair. Split replay vs new native grant
+      in Tauri test and synthetic acceptance script. (`b40d012`, integrated
+      `2c334b0`.)
+- [ ] 2026-11-05 — open: Human-authorized packaged Codex/OpenCode MCP connection
+      and correlated A → B → A evidence, including fresh consent for any
+      subsequent grant.
+- [ ] 2026-11-05 — open: Separately decide longer deadlines, nonblocking tools
+      and annotations; none were implemented.
+
+Validated on this machine after integration: `pnpm test` 1223/1223, `pnpm lint`,
+`pnpm typecheck`, `cargo test` 102 passed / 1 ignored. Native WebKit acceptance
+remains pending.
