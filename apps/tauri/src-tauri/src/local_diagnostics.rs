@@ -808,8 +808,8 @@ mod tests {
             "host_spawn",
             "startup_timeout",
             "host_stream",
-            "transport_failed",
-            "timeout",
+            "\"stage\":\"enrollment\",\"outcome\":\"transport_failed\"",
+            "\"stage\":\"enrollment\",\"outcome\":\"timeout\"",
         ] {
             assert!(native_lines.contains(value), "missing {value}");
         }
