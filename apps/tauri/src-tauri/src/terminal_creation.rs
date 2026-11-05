@@ -456,6 +456,30 @@ fn identity(view: &Webview) -> Option<(String, u64)> {
         |source, origin| document_matches(view.label(), parent.label(), source, origin),
     )
 }
+#[derive(Debug, PartialEq, Eq)]
+enum StudioAdmission {
+    Allowed,
+    FocusRequired,
+    ContextChanged,
+    RateLimited,
+}
+
+fn studio_admission(
+    focused: bool,
+    current: bool,
+    charge: impl FnOnce() -> bool,
+) -> StudioAdmission {
+    if !focused {
+        return StudioAdmission::FocusRequired;
+    }
+    if !current {
+        return StudioAdmission::ContextChanged;
+    }
+    if !charge() {
+        return StudioAdmission::RateLimited;
+    }
+    StudioAdmission::Allowed
+}
 /// Passive navigation cannot overlap the native preparation helper or its review.
 pub(crate) fn navigation_available(app: &tauri::AppHandle) -> bool {
     !app.state::<Preparation>().0.lock().unwrap().busy
@@ -764,33 +788,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return denied(Outcome::StudioIdentity);
     };
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
-    if request["action"] != "catalog" && !crate::features::focused(&window).await {
-        refusal(
-            RefusalSource::Studio,
-            Outcome::StudioFocus,
-            Effects::NotStarted,
-        );
-        return json!({"status":"focus_required"});
-    }
-    if identity(&window) != Some((source.clone(), generation))
-        || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
-    {
-        return denied(Outcome::StudioContextChanged);
-    }
-    if identity(&window) != Some((source.clone(), generation))
-        || crate::features::dashboard_identity(&window) != Some(document.clone())
-    {
-        return denied(Outcome::StudioContextChanged);
-    }
-    if !crate::renderer_admission::admit(
-        window.label(),
-        "",
-        document.1,
-        action,
-        RefusalSource::Studio,
-    ) {
-        return json!({"status":"rate_limited"});
-    }
+    let focused = request["action"] == "catalog" || crate::features::focused(&window).await;
     let Some(parent) = app.get_webview_window("main") else {
         return denied(Outcome::StudioMainMissing);
     };
@@ -816,6 +814,35 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     } else {
         json!({"action":"create", "provider":request["provider"], "count":request["count"]})
     };
+    let current = identity(&window) == Some((source.clone(), generation))
+        && crate::features::dashboard_identity(&window) == Some(document.clone())
+        && (request["action"] == "catalog" || request["generation"].as_u64() == Some(generation));
+    let admission = {
+        let state = app.state::<Preparation>();
+        let guard = state.0.lock().unwrap();
+        studio_admission(focused, current && guard.generation == generation, || {
+            crate::renderer_admission::admit(
+                window.label(),
+                "",
+                document.1,
+                action,
+                RefusalSource::Studio,
+            )
+        })
+    };
+    match admission {
+        StudioAdmission::Allowed => {}
+        StudioAdmission::FocusRequired => {
+            refusal(
+                RefusalSource::Studio,
+                Outcome::StudioFocus,
+                Effects::NotStarted,
+            );
+            return json!({"status":"focus_required"});
+        }
+        StudioAdmission::ContextChanged => return denied(Outcome::StudioContextChanged),
+        StudioAdmission::RateLimited => return json!({"status":"rate_limited"}),
+    }
     if request["action"] == "catalog" {
         let value = catalog_request(&app, parent, native_request, source.clone(), generation).await;
         if identity(&window) != Some((source, generation)) {
@@ -1606,6 +1633,55 @@ mod tests {
                 origin
             ));
         }
+    }
+
+    #[test]
+    fn studio_rejected_guards_do_not_charge_admission() {
+        use super::{studio_admission, StudioAdmission};
+        use crate::renderer_admission::{admit, Action};
+        let origin = "http://127.0.0.1:4319";
+        let generation = 7;
+        let charge = || {
+            admit(
+                "synthetic-studio-guard-test",
+                "",
+                generation,
+                Action::Create,
+                crate::local_diagnostics::RefusalSource::Studio,
+            )
+        };
+        for _ in 0..100 {
+            let wrong_document =
+                document_matches("main", "main", "http://127.0.0.1:4319/settings", origin);
+            assert_eq!(
+                studio_admission(true, wrong_document, charge),
+                StudioAdmission::ContextChanged
+            );
+            assert_eq!(
+                studio_admission(false, true, charge),
+                StudioAdmission::FocusRequired
+            );
+            assert_eq!(
+                studio_admission(true, Some(6) == Some(generation), charge),
+                StudioAdmission::ContextChanged
+            );
+        }
+        let correct_document =
+            document_matches("main", "main", "http://127.0.0.1:4319/studio", origin);
+        for _ in 0..12 {
+            assert_eq!(
+                studio_admission(
+                    true,
+                    correct_document && Some(7) == Some(generation),
+                    charge
+                ),
+                StudioAdmission::Allowed
+            );
+        }
+        assert_eq!(
+            studio_admission(true, true, charge),
+            StudioAdmission::RateLimited
+        );
     }
 
     #[test]
