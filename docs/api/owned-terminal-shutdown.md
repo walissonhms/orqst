@@ -129,3 +129,16 @@ possibly consumed proof state. The native coordinator preserves its fence after
 transport timeout and all replies other than explicit `refused_prefence`. Private
 pipe authority, Core ownership and the existing per-instance SIGTERM latch remain
 unchanged. No renderer or observer API is added.
+
+### Reply correlation and validation
+
+The native `PendingReplies` entry binds its exact ID to the expected reply kind
+and current child Core epoch before writing a request. Each kind has a strict
+field/status schema. Ready/preserved replies require inventory with that epoch;
+uncertain identities, slots, exit fields and reasons are validated. Retirement
+requires a boolean `fenced`, and `retired` requires it to be true. Close accepts
+only `closed` or `denied`. A crossed kind, invalid field/status, unknown ID,
+duplicate or late reply cannot create evidence. Invalid replies preserve the
+current waiter until a valid reply or its eight-second timeout; cancellation
+removes only its exact pending ID. The child handle already scopes the pipe to
+the host lifetime; IDs never authorize another child or renderer operation.

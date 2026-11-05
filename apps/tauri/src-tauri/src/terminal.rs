@@ -1020,7 +1020,9 @@ pub(crate) fn quit_send(
     let terminal = app.state::<Terminals>();
     let mut guard = terminal.0.lock().unwrap();
     let running = guard.as_mut()?;
-    let receiver = running.quit_pending.register(id.to_owned());
+    let receiver = running
+        .quit_pending
+        .register(id.to_owned(), kind, &running.epoch)?;
     let bytes = format!("{}\n", json!({"kind": kind, "id": id}));
     if running.child.write(bytes.as_bytes()).is_err() {
         running.quit_pending.cancel(id);
