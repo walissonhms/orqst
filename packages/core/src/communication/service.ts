@@ -18,6 +18,7 @@ import {
   type PaneRoutingUpdate,
 } from '@orqst/protocol';
 import { mentionedHandles } from './mentions.js';
+import { featurePermissionRevision, type FeaturePermissionReader } from './feature-permissions.js';
 
 const grantSchema = z.strictObject({
   actorId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -31,6 +32,7 @@ type GrantInput = z.infer<typeof grantSchema>;
 interface Grant extends GrantInput {
   id: string;
   revoked: boolean;
+  policyRevision: number | null;
 }
 export interface CommunicationClient {
   send(request: unknown): CommunicationMessage;
@@ -79,6 +81,7 @@ export class PaneCommunication {
     private journal: CommunicationJournal,
     private resolve: CommunicationResolver,
     private now: () => number = Date.now,
+    private readFeaturePermissions?: FeaturePermissionReader,
   ) {}
 
   /** Trusted composition only: enrollment must prove ownership; captured provider text cannot call this. */
@@ -259,7 +262,8 @@ export class PaneCommunication {
       parsed.expiresAt > this.now() + communicationLimits.lifetimeMs
     )
       throw new Error('Grant expiry outside policy');
-    this.journal.transaction((tx) => {
+    const grant: Grant = { ...parsed, id: randomUUID(), revoked: false, policyRevision: null };
+    this.operation(grant, (tx) => {
       for (const paneId of [parsed.sourcePaneId, ...parsed.targetPaneIds]) {
         const pane = this.pane(tx, paneId);
         if (
@@ -276,8 +280,13 @@ export class PaneCommunication {
         parsed.targetPaneIds.some((id) => !source.routing!.allowedTargetPaneIds.includes(id))
       )
         throw new Error('Routing permission denied');
+      for (const id of parsed.targetPaneIds) {
+        const revision = this.policy(source, this.pane(tx, id), ['delegate', 'execute']);
+        if (grant.policyRevision !== null && grant.policyRevision !== revision)
+          throw new Error('Feature permission revision changed');
+        grant.policyRevision = revision;
+      }
     });
-    const grant: Grant = { ...parsed, id: randomUUID(), revoked: false };
     this.grants.set(grant.id, grant);
     const client: CommunicationClient = {
       send: (request) =>
@@ -285,15 +294,25 @@ export class PaneCommunication {
       status: (id) => this.operation(grant, (tx) => this.visible(tx, grant, id)),
       inbox: () =>
         this.operation(grant, (tx) =>
-          tx.messages().filter((m) => this.canRead(grant, m) && terminalTask(m)),
+          tx.messages().filter((m) => this.canRead(tx, grant, m) && terminalTask(m)),
         ),
       events: (after) =>
         this.operation(grant, (tx) =>
-          tx.events(after, {
-            workspaceId: grant.workspaceId,
-            paneId: grant.sourcePaneId,
-            actorId: grant.actorId,
-          }),
+          tx
+            .events(after, {
+              workspaceId: grant.workspaceId,
+              paneId: grant.sourcePaneId,
+              actorId: grant.actorId,
+            })
+            .filter(
+              (event) =>
+                event.featureId === grant.featureId &&
+                (event.messageId
+                  ? tx
+                      .messages()
+                      .some((m) => m.messageId === event.messageId && this.canRead(tx, grant, m))
+                  : grant.targetPaneIds.every((id) => this.permitted(tx, grant, id, ['view']))),
+            ),
         ),
       cancelQueued: (id) => {
         const message = this.operation(grant, (tx) => {
@@ -383,7 +402,8 @@ export class PaneCommunication {
         (source.routing !== null && !source.routing.allowedTargetPaneIds.includes(targetPaneId)) ||
         !grant ||
         !this.valid(grant) ||
-        !this.canRead(grant, next) ||
+        !this.matches(grant, next) ||
+        !this.permitted(tx, grant, targetPaneId, ['delegate', 'execute']) ||
         pane.state !== 'ready' ||
         !adapter ||
         !pane.capabilities.canSend ||
@@ -407,6 +427,7 @@ export class PaneCommunication {
           }),
         };
       }
+      if (!this.permitted(tx, grant, targetPaneId, ['delegate', 'execute'])) return undefined;
       return {
         message: this.save(tx, next, {
           attemptId: randomUUID(),
@@ -557,6 +578,8 @@ export class PaneCommunication {
       !target.capabilities.canReportTaskCompletion
     )
       throw new Error('Pane ownership or structured capabilities unavailable');
+    if (!this.permitted(tx, grant, target.paneId, ['delegate', 'execute']))
+      throw new Error('Feature permission denied or revision changed');
     const messages = tx.messages();
     const duplicate = messages.find(
       (m) =>
@@ -575,7 +598,7 @@ export class PaneCommunication {
           ]),
         ),
       );
-      if (!this.canRead(grant, duplicate) || logical(original) !== logical(request))
+      if (!this.canRead(tx, grant, duplicate) || logical(original) !== logical(request))
         throw new Error('Idempotency conflict');
       return duplicate;
     }
@@ -662,7 +685,7 @@ export class PaneCommunication {
   private valid(grant: Grant): boolean {
     return !grant.revoked && grant.expiresAt > this.now();
   }
-  private canRead(grant: Grant, m: CommunicationMessage): boolean {
+  private matches(grant: Grant, m: CommunicationMessage): boolean {
     return (
       m.workspaceId === grant.workspaceId &&
       m.featureId === grant.featureId &&
@@ -671,9 +694,64 @@ export class PaneCommunication {
       grant.targetPaneIds.includes(m.targetPaneId)
     );
   }
+  /** Trusted root-plan gate; revision must also be bound to its native signed digest. */
+  delegationRevision(sourcePaneId: string, targetPaneId: string): number | null {
+    return this.journal.transaction((tx) => {
+      const source = this.pane(tx, sourcePaneId);
+      const target = this.pane(tx, targetPaneId);
+      if (
+        source.paneId === target.paneId ||
+        source.ownership !== 'managed' ||
+        target.ownership !== 'managed' ||
+        source.state !== 'ready' ||
+        target.state !== 'ready' ||
+        !source.binding ||
+        !target.binding ||
+        !source.capabilities.canSend ||
+        !target.capabilities.canSend ||
+        !target.capabilities.canQueueWhileBusy ||
+        !target.capabilities.canAcknowledge ||
+        !target.capabilities.canReportTaskCompletion ||
+        (source.routing && !source.routing.allowedTargetPaneIds.includes(target.paneId))
+      )
+        throw new Error('Routing or ownership permission denied');
+      return this.policy(source, target, ['delegate', 'execute']);
+    });
+  }
+  private policy(
+    source: CommunicationPane,
+    target: CommunicationPane,
+    operations: readonly import('@orqst/protocol').FeaturePermissionOperation[],
+  ) {
+    return featurePermissionRevision(source, target, operations, this.readFeaturePermissions);
+  }
+  private permitted(
+    tx: CommunicationTransaction,
+    grant: Grant,
+    targetPaneId: string,
+    operations: readonly import('@orqst/protocol').FeaturePermissionOperation[],
+  ): boolean {
+    try {
+      const source = this.pane(tx, grant.sourcePaneId);
+      const target = this.pane(tx, targetPaneId);
+      return (
+        source.workspaceId === grant.workspaceId &&
+        target.workspaceId === grant.workspaceId &&
+        source.featureId === grant.featureId &&
+        target.featureId === grant.featureId &&
+        grant.targetPaneIds.includes(targetPaneId) &&
+        this.policy(source, target, operations) === grant.policyRevision
+      );
+    } catch {
+      return false;
+    }
+  }
+  private canRead(tx: CommunicationTransaction, grant: Grant, m: CommunicationMessage): boolean {
+    return this.matches(grant, m) && this.permitted(tx, grant, m.targetPaneId, ['view']);
+  }
   private visible(tx: CommunicationTransaction, grant: Grant, id: string): CommunicationMessage {
     const message = tx.messages().find((m) => m.messageId === id);
-    if (!message || !this.canRead(grant, message)) throw new Error('Message unavailable');
+    if (!message || !this.canRead(tx, grant, message)) throw new Error('Message unavailable');
     return message;
   }
   private pane(tx: CommunicationTransaction, id: string): CommunicationPane {
@@ -738,16 +816,22 @@ export class PaneCommunication {
       taskState: message?.taskState ?? null,
     });
   }
+  private readable(grant: Grant, message: CommunicationMessage): boolean {
+    try {
+      return this.journal.transaction((tx) => this.canRead(tx, grant, message));
+    } catch {
+      return false;
+    }
+  }
   private notify(message: CommunicationMessage): void {
     // Post-commit only; a subscriber cannot roll back delivery evidence or receive after revocation.
     for (const [grant, listeners] of this.listeners)
-      if (this.valid(grant) && this.canRead(grant, message))
+      if (this.valid(grant) && this.readable(grant, message))
         for (const listener of listeners)
           queueMicrotask(() => {
             if (!this.valid(grant) || !listeners.has(listener)) return;
             try {
-              this.journal.transaction(() => undefined);
-              listener(structuredClone(message));
+              if (this.readable(grant, message)) listener(structuredClone(message));
             } catch {
               /* Client failure does not alter durable facts. */
             }

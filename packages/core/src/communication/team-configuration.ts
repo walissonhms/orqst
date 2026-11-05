@@ -12,7 +12,10 @@ export function teamRoutingProposal(
   workspaceId: string,
   panes: CommunicationPane[],
   featureId?: string,
+  permission?: (source: CommunicationPane, target: CommunicationPane) => unknown,
 ) {
+  if (featureId !== undefined && !permission)
+    throw new Error('Feature permission reader unavailable');
   const team = terminalTeamSchema.parse(raw);
   const member = team.members.find((m) => m.terminalId === terminalId);
   if (!member) throw new Error('Team member unavailable');
@@ -32,11 +35,19 @@ export function teamRoutingProposal(
       throw new Error('Live team identity unavailable');
     return pane;
   };
-  resolve(terminalId);
+  const source = resolve(terminalId);
   return paneRoutingUpdateSchema.parse({
     name: member.name,
     handle: member.handle,
     role: member.role,
-    allowedTargetPaneIds: member.allowedTargetTerminalIds.map((id) => resolve(id).paneId),
+    allowedTargetPaneIds: member.allowedTargetTerminalIds.flatMap((id) => {
+      const target = resolve(id);
+      try {
+        permission?.(source, target);
+        return [target.paneId];
+      } catch {
+        return [];
+      }
+    }),
   });
 }
