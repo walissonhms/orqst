@@ -1406,8 +1406,9 @@
         "queued": "Na fila",
         "accepted": "Entregue · ainda não concluído",
         "delivery_failed": "Falha na entrega",
-        "unsupported": "Ainda não suportado",
-        "unknown": "Entrega desconhecida"
+        "unsupported": "Registrado · a entrega aos terminais ainda não está disponível",
+        "unknown": "Entrega desconhecida",
+        "denied": "Não permitido: um destino está fora desta Feature"
       }
     },
     "menu": {

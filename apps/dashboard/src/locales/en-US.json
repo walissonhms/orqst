@@ -1406,8 +1406,9 @@
         "queued": "Queued",
         "accepted": "Delivered · not yet done",
         "delivery_failed": "Delivery failed",
-        "unsupported": "Not supported yet",
-        "unknown": "Delivery unknown"
+        "unsupported": "Recorded · delivery to terminals is not available yet",
+        "unknown": "Delivery unknown",
+        "denied": "Not allowed: a target is outside this Feature"
       }
     },
     "menu": {

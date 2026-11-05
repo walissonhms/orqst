@@ -65,6 +65,7 @@ export function FeatureWorkspace({
   // Provider-reported limits only; the panel stays hidden until the host reports some.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
   const [limitsOpen, setLimitsOpen] = useState(false);
+  const lastMention = useRef<{ id: string; outcomes: { delivery: string }[] } | null>(null);
   const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
@@ -231,6 +232,7 @@ export function FeatureWorkspace({
         if (!live.current) return;
         if (reply.canvas) setEvidence(reply.canvas);
         if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
+        if (reply.mention) lastMention.current = reply.mention;
         if (reply.snapshot) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
@@ -801,7 +803,25 @@ export function FeatureWorkspace({
             }
             // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
             onClose={() => 'minimize' as const}
-            onMention={async () => 'unsupported' as const}
+            onMention={async ({ from, to, text }) => {
+              // v1 records the attempt; no structured route exists yet, so nothing is delivered.
+              lastMention.current = null;
+              const status = await request({
+                action: 'mention',
+                from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
+                to,
+                text,
+              });
+              // Set by request() when the reply carries the recorded mention.
+              const recorded = lastMention.current as {
+                outcomes: { delivery: string }[];
+              } | null;
+              const outcomes = recorded?.outcomes;
+              if (status !== 'ok' || !outcomes) return 'unknown';
+              return outcomes.some((outcome) => outcome.delivery === 'denied')
+                ? 'denied'
+                : 'unsupported';
+            }}
             {...(nativeWorkspace
               ? {
                   native: {

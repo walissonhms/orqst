@@ -1,3 +1,4 @@
+import { recordComposerMention } from './composer-mentions.js';
 import {
   preserveOwnedExitPending,
   inspectPendingOwnedExits,
@@ -283,6 +284,15 @@ async function start() {
             break;
           case 'featureViewSave':
             value = features().saveView(request.input);
+            break;
+          case 'composerMention':
+            value = recordComposerMention(
+              process.argv[4]!,
+              stableId('workspace', selection[0]!.config.project),
+              request.featureId,
+              selection.map(({ config }) => terminalIdentity(config).terminalId),
+              request.input,
+            );
             break;
           case 'featureList':
             value = features().list();

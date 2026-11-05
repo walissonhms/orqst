@@ -1,3 +1,8 @@
+import {
+  composerMentionInputSchema,
+  composerMentionReplySchema,
+  communicationProjectionSchema,
+} from './composer-mentions.js';
 import { z } from 'zod';
 import {
   featureCreateSchema,
@@ -82,6 +87,7 @@ const arrangementPaneSchema = z
 export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('snapshot') }),
   z.strictObject({ ...base, action: z.literal('canvas') }),
+  z.strictObject({ ...base, action: z.literal('mention'), ...composerMentionInputSchema.shape }),
   z.strictObject({
     ...base,
     action: z.literal('accountLimits'),
@@ -327,6 +333,8 @@ export const featureNativeReplySchema = z
     permissions: featurePermissionStateSchema.optional(),
     canvas: featureCanvasEvidenceSchema.optional(),
     accountLimits: accountLimitsSchema.optional(),
+    mention: composerMentionReplySchema.optional(),
+    communication: communicationProjectionSchema.optional(),
   })
   .refine(
     (value) => value.status !== 'ok' || value.snapshot !== undefined,

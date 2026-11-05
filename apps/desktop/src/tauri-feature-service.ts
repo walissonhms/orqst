@@ -186,6 +186,20 @@ export class TauriFeatureService {
         }
       }
       switch (request.action) {
+        case 'mention': {
+          if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
+          try {
+            const mention = await this.core.features.mention(this.activeFeatureId, {
+              from: request.from,
+              to: request.to,
+              text: request.text,
+            });
+            return { status: 'ok', snapshot: this.snapshot(), mention };
+          } catch {
+            // The attempt may or may not have been recorded; never claim either.
+            return { status: 'unavailable' };
+          }
+        }
         case 'snapshot':
           break;
         case 'accountLimits': {

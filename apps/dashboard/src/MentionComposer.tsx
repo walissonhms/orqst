@@ -4,7 +4,8 @@ import { AtSign, Loader2, Send, TriangleAlert, X } from 'lucide-react';
 import type { StudioTerminal } from './TerminalStudio';
 
 /** Delivery is separate from task execution: accepted never means done. */
-export type DeliveryState = 'queued' | 'accepted' | 'delivery_failed' | 'unsupported' | 'unknown';
+export type DeliveryState =
+  'queued' | 'accepted' | 'delivery_failed' | 'denied' | 'unsupported' | 'unknown';
 
 export interface MentionSend {
   /** `null` = sent by the user, otherwise the sending terminal. */

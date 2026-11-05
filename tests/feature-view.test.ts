@@ -42,6 +42,9 @@ function fixture(
   const core = {
     identities,
     features: {
+      mention: async () => {
+        throw new Error('Mentions are not used by this view test');
+      },
       list: async () => db.list(),
       read: async (id: string) => db.read(id),
       create: async (input: Parameters<typeof db.create>[0]) => db.create(input),

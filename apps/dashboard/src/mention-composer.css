@@ -193,6 +193,7 @@
   color: var(--orqst-success);
 }
 .mc-state-delivery_failed,
+.mc-state-denied,
 .mc-state-unsupported,
 .mc-state-unknown {
   background: var(--orqst-danger-soft);

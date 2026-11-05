@@ -104,6 +104,22 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                 Some("refresh" | "lock" | "unlock")
             ) && account_limit_id(&value["accountId"])
         }
+        Some("mention") => {
+            exact(
+                value,
+                &[
+                    "contractVersion",
+                    "generation",
+                    "action",
+                    "from",
+                    "to",
+                    "text",
+                ],
+            ) && valid_mention_origin(&value["from"])
+                && value["to"].as_array().is_some_and(|ids| !ids.is_empty())
+                && id_list(&value["to"])
+                && text(&value["text"], 4000, true)
+        }
         Some("arrange") => valid_arrangement_request(value),
         Some("create") => {
             exact(value, &["contractVersion", "generation", "action", "input"])
@@ -703,10 +719,11 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
         o.keys().all(|key| {
             matches!(
                 key.as_str(),
-                "status" | "snapshot" | "canvas" | "accountLimits"
+                "status" | "snapshot" | "canvas" | "accountLimits" | "mention"
             )
         }) && o.contains_key("status")
             && value.get("accountLimits").is_none_or(valid_account_limits)
+            && value.get("mention").is_none_or(valid_mention_reply)
             && matches!(
                 value["status"].as_str(),
                 Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
@@ -754,6 +771,34 @@ fn account_limit_label(value: &Value, limit: usize) -> bool {
     })
 }
 
+/** A composer origin is the user or one exact terminal; it never carries a grant. */
+fn valid_mention_origin(value: &Value) -> bool {
+    match value["kind"].as_str() {
+        Some("user") => exact(value, &["kind"]),
+        Some("terminal") => exact(value, &["kind", "terminalId"]) && uuid(&value["terminalId"]),
+        _ => false,
+    }
+}
+/** Mention outcomes never claim delivery in v1: unsupported or denied, with a closed reason. */
+fn valid_mention_reply(value: &Value) -> bool {
+    exact(value, &["id", "outcomes"])
+        && uuid(&value["id"])
+        && value["outcomes"].as_array().is_some_and(|outcomes| {
+            (1..=8).contains(&outcomes.len())
+                && outcomes.iter().all(|outcome| {
+                    exact(outcome, &["terminalId", "delivery", "reason"])
+                        && uuid(&outcome["terminalId"])
+                        && match outcome["delivery"].as_str() {
+                            Some("unsupported") => outcome["reason"] == "no_structured_route",
+                            Some("denied") => matches!(
+                                outcome["reason"].as_str(),
+                                Some("not_member" | "cross_feature_denied" | "unknown_terminal")
+                            ),
+                            _ => false,
+                        }
+                })
+        })
+}
 fn valid_account_limits(value: &Value) -> bool {
     if !exact(value, &["readAt", "accounts"]) {
         return false;
@@ -2988,6 +3033,43 @@ pub(crate) fn valid_layout(
 #[cfg(test)]
 mod layout_tests {
     use super::*;
+    #[test]
+    fn mentions_validate_origin_targets_text_and_never_claim_delivery() {
+        let t = "00000000-0000-4000-8000-000000000011";
+        let mut request = json!({"contractVersion":1,"generation":3,"action":"mention","from":{"kind":"user"},"to":[t],"text":"review"});
+        assert!(valid_request(&request));
+        request["from"] = json!({"kind":"terminal","terminalId":t});
+        assert!(valid_request(&request));
+        request["from"] = json!({"kind":"terminal","terminalId":t,"grantId":"x"});
+        assert!(!valid_request(&request), "an origin never carries a grant");
+        request["from"] = json!({"kind":"user"});
+        request["to"] = json!([]);
+        assert!(!valid_request(&request));
+        request["to"] = json!([t, t]);
+        assert!(!valid_request(&request), "duplicate targets");
+        request["to"] = json!([t]);
+        request["text"] = json!("");
+        assert!(!valid_request(&request));
+        request["text"] = json!("x".repeat(4001));
+        assert!(!valid_request(&request));
+        let id = "00000000-0000-4000-8000-0000000000aa";
+        assert!(valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"unsupported","reason":"no_structured_route"}]})
+        ));
+        assert!(valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"denied","reason":"cross_feature_denied"}]})
+        ));
+        assert!(
+            !valid_mention_reply(
+                &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"accepted","reason":"no_structured_route"}]})
+            ),
+            "v1 never reports delivery"
+        );
+        assert!(!valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"unsupported","reason":"not_member"}]})
+        ));
+        assert!(!valid_mention_reply(&json!({"id":id,"outcomes":[]})));
+    }
     #[test]
     fn account_limits_validate_exact_actions_and_evidenced_bounds() {
         let mut request = json!({"contractVersion":1,"generation":3,"action":"accountLimits","command":"lock","accountId":"codex-default"});
