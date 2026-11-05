@@ -327,7 +327,7 @@
 }
 .ntd-row {
   display: grid;
-  grid-template-columns: 22px minmax(110px, 0.8fr) minmax(80px, 0.7fr) auto minmax(150px, 1fr);
+  grid-template-columns: 22px minmax(110px, 0.8fr) minmax(80px, 0.7fr) auto minmax(150px, 1fr) auto;
   align-items: center;
   gap: 8px;
   padding: 8px;
@@ -407,6 +407,45 @@
   .ntd-quick {
     margin-left: 0;
   }
+}
+
+/* Accounts */
+.ntd-accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 6px;
+}
+.ntd-accounts button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 8px;
+  text-align: left;
+}
+.ntd-accounts button.active {
+  border-color: var(--orqst-neon);
+  background: var(--orqst-accent-soft);
+}
+.ntd-accounts button:disabled {
+  opacity: 0.45;
+}
+.ntd-account-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntd-account-state {
+  grid-column: 2;
+  color: var(--orqst-muted);
+  font-size: 11px;
+}
+.ntd-select.ntd-account-select {
+  max-width: 160px;
+  font-family: inherit;
 }
 
 /* Orchestrator label */

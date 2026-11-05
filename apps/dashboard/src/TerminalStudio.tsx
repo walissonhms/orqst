@@ -34,6 +34,7 @@ import {
   resizeFromEdge,
   resizeTrack,
   setOrchestrator,
+  togglePin,
   type Edge,
   dropTarget,
   orderIndex,
@@ -55,9 +56,12 @@ import {
   type PlacedPane,
   type Rect,
 } from './terminal-arrangement';
+import { PaneMenu, type AccountOption, type PaneAction, type PaneActionType } from './PaneMenu';
+import { TerminalDetails } from './TerminalDetails';
 import { MentionComposer, type DeliveryState, type MentionSend } from './MentionComposer';
 import './terminal-studio.css';
 import './mention-composer.css';
+import './pane-menu.css';
 
 export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'shell';
 export type TerminalStatus =
@@ -80,6 +84,19 @@ export interface StudioTerminal {
   workspace: { id: string; name: string };
   /** Saved orchestrator label of the Feature (descriptive, grants nothing). */
   orchestrator?: boolean;
+  /** Cumulative token snapshot when evidenced; never invented. */
+  tokens?: { total?: number; input?: number; output?: number; cached?: number };
+  /** CLI account (ORQST profile) this terminal runs under, when known. */
+  account?: { id: string; label: string };
+  /** Stable internal identifier shown only in details. */
+  uuid?: string;
+}
+
+/** Evidenced suggestion to continue a terminal on another account (one click, never automatic). */
+export interface AccountSuggestion {
+  terminalId: string;
+  toAccountId: string;
+  reason: 'limit_reached';
 }
 
 /** A finished piece of work, derived from an evidenced status transition. */
@@ -107,6 +124,12 @@ interface Props {
   /** Local storage key for the arrangement of this Feature. */
   storageKey: string;
   now?: number;
+  /** CLI accounts available for switching. */
+  accounts?: AccountOption[];
+  /** Actions the host can perform today; others are shown disabled. */
+  supportedActions?: PaneActionType[];
+  onTerminalAction?: (id: string, action: PaneAction) => void;
+  accountSuggestions?: AccountSuggestion[];
   /** Send a structured message that mentions other terminals (never typed into a PTY). */
   onMention?: (message: MentionSend) => Promise<DeliveryState>;
   /** Persist the orchestrator label for this Feature (descriptive only). */
@@ -210,6 +233,8 @@ function reconcile(state: ArrangementState, terminals: StudioTerminal[]): Arrang
     if (!next.panes.some((pane) => pane.id === terminal.id)) next = addPane(next, terminal.id);
   if (next.maximized && !ids.has(next.maximized)) next = { ...next, maximized: null };
   // The host's saved orchestrator label wins over the local one.
+  if (next.pinned?.some((id) => !ids.has(id)))
+    next = { ...next, pinned: next.pinned.filter((id) => ids.has(id)) };
   const marked = terminals.find((terminal) => terminal.orchestrator);
   if (marked) next = { ...next, orchestrator: marked.id };
   else if (next.orchestrator && !ids.has(next.orchestrator)) next = { ...next, orchestrator: null };
@@ -239,6 +264,9 @@ function initialState(key: string, terminals: StudioTerminal[]): ArrangementStat
     weights: stored?.weights && typeof stored.weights === 'object' ? stored.weights : {},
     grid: validGrid(stored?.grid),
     orchestrator: typeof stored?.orchestrator === 'string' ? stored.orchestrator : null,
+    pinned: Array.isArray(stored?.pinned)
+      ? stored.pinned.filter((id): id is string => typeof id === 'string').slice(0, 16)
+      : [],
   };
   return reconcile(base, terminals);
 }
@@ -303,11 +331,22 @@ export function TerminalStudio({
   onStatusEvent,
   onOrchestratorChange,
   onMention,
+  accounts = [],
+  supportedActions = [],
+  onTerminalAction,
+  accountSuggestions = [],
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
   const [composer, setComposer] = useState<{ from: string | null } | null>(null);
+  const [details, setDetails] = useState<string | null>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const supported = useMemo(
+    () => new Set<PaneActionType>(onTerminalAction ? supportedActions : []),
+    [onTerminalAction, supportedActions],
+  );
   const [notices, setNotices] = useState<StudioStatusEvent[]>([]);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Rect>({ x: 0, y: 0, width: 1200, height: 700 });
@@ -429,7 +468,10 @@ export function TerminalStudio({
     if (scope !== 'all' && !workspaces.some((workspace) => workspace.id === scope)) setScope('all');
   }, [scope, workspaces]);
   const inScope = (terminal: StudioTerminal | undefined) =>
-    !!terminal && (scope === 'all' || terminal.workspace.id === scope);
+    !!terminal &&
+    (scope === 'all' ||
+      terminal.workspace.id === scope ||
+      (state.pinned ?? []).includes(terminal.id));
   const working = terminals.filter((terminal) => terminal.status === 'running').length;
   const needsYou = terminals.filter(
     (terminal) => terminal.status === 'waiting_for_user' || terminal.status === 'failed',
@@ -702,7 +744,16 @@ export function TerminalStudio({
   });
 
   return (
-    <section className="ts-root" aria-label={t('terminalStudio.title')}>
+    <section
+      className={`ts-root${fullScreen ? ' ts-fullscreen' : ''}`}
+      aria-label={t('terminalStudio.title')}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && fullScreen) {
+          setFullScreen(false);
+          setState((current) => ({ ...current, maximized: null }));
+        }
+      }}
+    >
       <header className="ts-toolbar">
         <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
           {arrangementModes.map((mode) => {
@@ -848,6 +899,7 @@ export function TerminalStudio({
             terminal.status === 'waiting_for_user' ? 'ts-attention' : '',
             terminal.status === 'running' ? 'ts-working' : '',
             state.orchestrator === pane.id ? 'ts-orchestrator' : '',
+            (state.pinned ?? []).includes(pane.id) ? 'ts-pinned' : '',
             flash.has(pane.id) ? `ts-done ts-done-${terminal.status}` : '',
           ]
             .filter(Boolean)
@@ -963,6 +1015,24 @@ export function TerminalStudio({
                       <SizeIcon size={14} />
                     </button>
                   )}
+                  <PaneMenu
+                    terminal={terminal}
+                    accounts={accounts}
+                    supported={supported}
+                    maximized={isMax}
+                    pinned={(state.pinned ?? []).includes(pane.id)}
+                    onAction={(action) =>
+                      action.type === 'details'
+                        ? setDetails(pane.id)
+                        : onTerminalAction?.(pane.id, action)
+                    }
+                    onToggleMaximize={() => setState((current) => toggleMaximize(current, pane.id))}
+                    onTogglePin={() => setState((current) => togglePin(current, pane.id))}
+                    onFullScreen={() => {
+                      setState((current) => ({ ...current, maximized: pane.id }));
+                      setFullScreen(true);
+                    }}
+                  />
                   <button
                     type="button"
                     title={t('terminalStudio.minimize')}
@@ -999,6 +1069,52 @@ export function TerminalStudio({
                   )}
                 </span>
               </div>
+              {(() => {
+                const suggestion = accountSuggestions.find(
+                  (entry) =>
+                    entry.terminalId === pane.id &&
+                    !dismissed.has(`${entry.terminalId}:${entry.toAccountId}`),
+                );
+                const target = suggestion
+                  ? accounts.find((account) => account.id === suggestion.toAccountId)
+                  : undefined;
+                if (!suggestion || !target || pane.compact) return null;
+                return (
+                  <div className="ts-suggest" role="status">
+                    <span>
+                      {t('terminalStudio.account.limitSuggest', {
+                        from: terminal.account?.label ?? '—',
+                        to: target.label,
+                      })}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!supported.has('migrate')}
+                      onClick={() =>
+                        onTerminalAction?.(pane.id, {
+                          type: 'migrate',
+                          accountId: target.id,
+                          mode: 'move',
+                        })
+                      }
+                    >
+                      {t('terminalStudio.account.continue')}
+                    </button>
+                    <button
+                      type="button"
+                      className="ts-suggest-later"
+                      onClick={() =>
+                        setDismissed(
+                          (current) =>
+                            new Set([...current, `${suggestion.terminalId}:${target.id}`]),
+                        )
+                      }
+                    >
+                      {t('terminalStudio.account.notNow')}
+                    </button>
+                  </div>
+                );
+              })()}
               {pane.compact ? null : <div className="ts-body">{renderBody(terminal)}</div>}
               {state.mode === 'free' &&
                 !isMax &&
@@ -1172,6 +1288,21 @@ export function TerminalStudio({
           ))}
         </div>
       </footer>
+      {details && byId.get(details) && (
+        <TerminalDetails terminal={byId.get(details)!} onClose={() => setDetails(null)} />
+      )}
+      {fullScreen && (
+        <button
+          type="button"
+          className="ts-exit-full"
+          onClick={() => {
+            setFullScreen(false);
+            setState((current) => ({ ...current, maximized: null }));
+          }}
+        >
+          {t('terminalStudio.menu.exitFullScreen')}
+        </button>
+      )}
     </section>
   );
 }

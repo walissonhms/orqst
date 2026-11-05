@@ -10,6 +10,7 @@ import '../i18n';
 import '../styles.css';
 import {
   TerminalStudio,
+  type AccountSuggestion,
   type StudioMessage,
   type StudioTerminal,
   type TerminalProvider,
@@ -19,6 +20,7 @@ import {
   type ProviderCatalog,
   type TerminalRequest,
 } from '../NewTerminalDialog';
+import type { AccountOption } from '../PaneMenu';
 import './terminal-preview.css';
 
 const start = Date.now();
@@ -28,6 +30,20 @@ const syntheticWorkspaces = [
   { id: 'ws-synthetic-b', name: 'Synthetic Web', detail: '/synthetic/web' },
   { id: 'ws-synthetic-c', name: 'Synthetic Docs', detail: '/synthetic/docs' },
 ];
+/** Synthetic account profiles; real ones are ORQST profile folders the user logs into via the CLI. */
+const syntheticAccounts: AccountOption[] = [
+  { id: 'acc-codex-1', provider: 'codex', label: 'Codex · Synthetic A', state: 'ready' },
+  { id: 'acc-codex-2', provider: 'codex', label: 'Codex · Synthetic B', state: 'ready' },
+  { id: 'acc-claude-1', provider: 'claude', label: 'Claude · Synthetic A', state: 'ready' },
+  { id: 'acc-claude-2', provider: 'claude', label: 'Claude · Synthetic B', state: 'ready' },
+  { id: 'acc-opencode-1', provider: 'opencode', label: 'OpenCode · Synthetic A', state: 'ready' },
+];
+const firstAccount = (provider: TerminalProvider) =>
+  syntheticAccounts.find((account) => account.provider === provider);
+const accountsFor = (provider: TerminalProvider) =>
+  syntheticAccounts
+    .filter((account) => account.provider === provider)
+    .map(({ id, label, state }) => ({ id, label, state }));
 const workspaceOf = (id: string) =>
   syntheticWorkspaces.find((workspace) => workspace.id === id) ?? syntheticWorkspaces[0]!;
 const providers: TerminalProvider[] = ['codex', 'claude', 'opencode', 'claude', 'codex', 'shell'];
@@ -60,16 +76,25 @@ function synthetic(index: number): StudioTerminal {
     startedAt: start - (index + 1) * 97_000,
     lastActivity: 'Synthetic activity line',
     workspace: syntheticWorkspaces[index % 2]!,
+    uuid: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+    tokens: { total: 1_310_000 + n * 9_000, input: 1_200_000, output: 70_000 + n, cached: 707_000 },
+    account: firstAccount(providers[index % providers.length]!),
   };
 }
 
 /** Synthetic catalog for the preview; the app uses the native catalog of confirmed models. */
 const syntheticCatalog: ProviderCatalog[] = [
-  { provider: 'codex', available: true, models: [{ id: 'gpt-5.5' }, { id: 'gpt-5.5-mini' }] },
+  {
+    provider: 'codex',
+    available: true,
+    models: [{ id: 'gpt-5.5' }, { id: 'gpt-5.5-mini' }],
+    accounts: accountsFor('codex'),
+  },
   {
     provider: 'claude',
     available: true,
     models: [{ id: 'claude-opus-5-5' }, { id: 'claude-sonnet-5-5' }, { id: 'claude-haiku-5-5' }],
+    accounts: accountsFor('claude'),
   },
   { provider: 'opencode', available: true, models: [{ id: 'opencode/default' }] },
   { provider: 'shell', available: true, models: [] },
@@ -87,6 +112,8 @@ function fromRequest(request: TerminalRequest, n: number): StudioTerminal {
     lastActivity: 'Synthetic activity line',
     workspace: workspaceOf(request.workspaceId),
     orchestrator: request.orchestrator,
+    uuid: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
+    account: syntheticAccounts.find((account) => account.id === request.accountId),
   };
 }
 
@@ -114,6 +141,7 @@ function Preview() {
   const [messages, setMessages] = useState<StudioMessage[]>([]);
   const [count, setCount] = useState(4);
   const [creating, setCreating] = useState(false);
+  const [suggestions, setSuggestions] = useState<AccountSuggestion[]>([]);
   const ids = useMemo(() => terminals.map((terminal) => terminal.id), [terminals]);
 
   const send = (kind: StudioMessage['kind']) => {
@@ -167,6 +195,29 @@ function Preview() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              const target = terminals.find((terminal) => {
+                const other = syntheticAccounts.find(
+                  (account) =>
+                    account.provider === terminal.provider && account.id !== terminal.account?.id,
+                );
+                return other && terminal.account;
+              });
+              if (!target) return;
+              const other = syntheticAccounts.find(
+                (account) =>
+                  account.provider === target.provider && account.id !== target.account?.id,
+              )!;
+              setSuggestions((current) => [
+                ...current.filter((entry) => entry.terminalId !== target.id),
+                { terminalId: target.id, toAccountId: other.id, reason: 'limit_reached' },
+              ]);
+            }}
+          >
+            {t('terminalStudio.preview.simulateLimit')}
+          </button>
+          <button
+            type="button"
             onClick={() => void i18n.changeLanguage(i18n.language === 'pt-BR' ? 'en-US' : 'pt-BR')}
           >
             {i18n.language === 'pt-BR' ? 'EN' : 'PT'}
@@ -179,6 +230,41 @@ function Preview() {
         messages={messages}
         renderBody={(terminal) => <SyntheticBody terminal={terminal} />}
         onNewTerminal={() => setCreating(true)}
+        accounts={syntheticAccounts}
+        supportedActions={['refresh', 'copy-conversation', 'migrate']}
+        accountSuggestions={suggestions}
+        onTerminalAction={(id, action) => {
+          if (action.type === 'copy-conversation')
+            void navigator.clipboard?.writeText(
+              action.withTools ? 'SYNTHETIC conversation with tools' : 'SYNTHETIC conversation',
+            );
+          if (action.type === 'migrate') {
+            const account = syntheticAccounts.find((entry) => entry.id === action.accountId);
+            setSuggestions((current) => current.filter((entry) => entry.terminalId !== id));
+            setTerminals((current) => {
+              const source = current.find((terminal) => terminal.id === id);
+              if (!source || !account) return current;
+              if (action.mode === 'move')
+                return current.map((terminal) =>
+                  terminal.id === id ? { ...terminal, account } : terminal,
+                );
+              const n = count + 1;
+              setCount(n);
+              return [
+                ...current,
+                {
+                  ...source,
+                  id: `synthetic-${n}`,
+                  label: `T-${String(n).padStart(3, '0')}`,
+                  name: `${source.name} (copy)`,
+                  account,
+                  orchestrator: false,
+                  startedAt: Date.now(),
+                },
+              ];
+            });
+          }
+        }}
         onOrchestratorChange={(id) =>
           setTerminals((current) =>
             current.map((terminal) => ({ ...terminal, orchestrator: terminal.id === id })),

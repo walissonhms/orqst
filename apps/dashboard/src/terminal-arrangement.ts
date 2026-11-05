@@ -42,6 +42,8 @@ export interface ArrangementState {
    * pane first and highlights it, and never grants delegation or any permission.
    */
   orchestrator?: string | null;
+  /** Pinned terminals stay first (after the orchestrator) and ignore the workspace filter. */
+  pinned?: string[];
 }
 
 export interface PlacedPane {
@@ -58,9 +60,11 @@ export const MIN_PANE = { width: 260, height: 160 };
 
 export function visiblePanes(state: ArrangementState): ArrangedPane[] {
   const lead = state.orchestrator;
+  const pinned = new Set(state.pinned ?? []);
+  const rank = (id: string) => (id === lead ? 0 : pinned.has(id) ? 1 : 2);
   return state.panes
     .filter((pane) => !pane.minimized)
-    .sort((a, b) => (a.id === lead ? -1 : b.id === lead ? 1 : a.order - b.order));
+    .sort((a, b) => rank(a.id) - rank(b.id) || a.order - b.order);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -99,13 +103,42 @@ function tracks(weights: number[] | undefined, count: number, extent: number, mi
   return { starts, sizes };
 }
 
+/** Preferred cell shape (width / height) for a terminal: a little wider than tall. */
+const TARGET_RATIO = 1.6;
+
+/**
+ * Choose a balanced column count: cells close to the target shape and few empty cells,
+ * within what the width allows. Four terminals become 2 × 2, not one row of four.
+ */
+export function mosaicColumns(panes: ArrangedPane[], view: Rect): number {
+  const maxColumns = clamp(Math.floor((view.width + GAP) / (MIN_PANE.width + GAP)), 1, 4);
+  const area = panes.reduce(
+    (sum, pane) => sum + (pane.size === 'large' ? 4 : pane.size === 'wide' ? 2 : 1),
+    0,
+  );
+  let best = 1;
+  let bestScore = Infinity;
+  for (let columns = 1; columns <= maxColumns; columns++) {
+    const rows = Math.max(1, Math.ceil(area / columns));
+    const cellW = (view.width - GAP * (columns - 1)) / columns;
+    const cellH = Math.max(MIN_PANE.height, (view.height - GAP * (rows - 1)) / rows);
+    const empty = rows * columns - area;
+    const score = Math.abs(Math.log(cellW / cellH / TARGET_RATIO)) + empty * 0.3;
+    if (score < bestScore - 1e-9) {
+      best = columns;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 /** Mosaic: dense grid with size spans (first-fit) and resizable column/row tracks. */
 export function mosaicGeometry(
   panes: ArrangedPane[],
   view: Rect,
   grid?: ArrangementState['grid'],
 ): MosaicGeometry {
-  const columns = clamp(Math.floor((view.width + GAP) / (MIN_PANE.width + GAP)), 1, 4);
+  const columns = mosaicColumns(panes, view);
   const spanOf = (size: PaneSize) =>
     columns === 1
       ? { w: 1, h: 1 }
@@ -136,6 +169,16 @@ export function mosaicGeometry(
         placed = true;
       }
     }
+  }
+  // Let the last terminal in a row fill the empty cells to its right (no holes).
+  for (const cell of cells) {
+    let end = cell.col + cell.w;
+    const rowsOf = Array.from({ length: cell.h }, (_, i) => cell.row + i);
+    while (end < columns && rowsOf.every((r) => !occupied[r]?.[end])) {
+      rowsOf.forEach((r) => (occupied[r]![end] = true));
+      end++;
+    }
+    cell.w = end - cell.col;
   }
   const rows = Math.max(1, occupied.length);
   const cx = tracks(grid?.cols, columns, view.width, MIN_PANE.width);
@@ -198,6 +241,13 @@ export function resizeTrack(
     [axis]: next,
   };
   return { ...state, grid };
+}
+
+export function togglePin(state: ArrangementState, id: string): ArrangementState {
+  const pinned = new Set(state.pinned ?? []);
+  if (pinned.has(id)) pinned.delete(id);
+  else pinned.add(id);
+  return { ...state, pinned: [...pinned] };
 }
 
 /** Make a terminal the orchestrator (or clear it). The pane is pinned first. */
@@ -421,6 +471,7 @@ export function removePane(state: ArrangementState, id: string): ArrangementStat
     weights,
     maximized: state.maximized === id ? null : state.maximized,
     orchestrator: state.orchestrator === id ? null : (state.orchestrator ?? null),
+    pinned: (state.pinned ?? []).filter((entry) => entry !== id),
     panes: state.panes.filter((pane) => pane.id !== id),
   };
 }

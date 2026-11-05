@@ -1284,7 +1284,8 @@
       "simulateResult": "Simular resultado",
       "simulateStart": "Iniciar trabalho",
       "simulateFinish": "Concluir trabalho",
-      "simulateAsk": "Pedir resposta"
+      "simulateAsk": "Pedir resposta",
+      "simulateLimit": "Simular limite de conta"
     },
     "flow": {
       "from": "de {{label}}",
@@ -1332,7 +1333,9 @@
       "makeOrchestratorN": "Tornar o terminal {{n}} o Orquestrador",
       "firstIsOrchestrator": "Tornar o primeiro terminal o Orquestrador",
       "orchestratorIs": "O terminal {{n}} é o Orquestrador",
-      "pickOrchestrator": "Escolha um Orquestrador: clique no número da linha"
+      "pickOrchestrator": "Escolha um Orquestrador: clique no número da linha",
+      "account": "Conta",
+      "accountFor": "Conta do terminal {{n}}"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "Todos",
@@ -1375,6 +1378,57 @@
         "unsupported": "Ainda não suportado",
         "unknown": "Entrega desconhecida"
       }
+    },
+    "menu": {
+      "open": "Mais ações",
+      "title": "Ações de {{label}}",
+      "refresh": "Atualizar sessão",
+      "tokens": "Tokens",
+      "tokensHint": "Total · entrada · saída · cache, do último registro comprovado. — significa desconhecido.",
+      "total": "Total",
+      "input": "Entrada",
+      "output": "Saída",
+      "cached": "Cache (parte da entrada)",
+      "copyConversation": "Copiar conversa",
+      "copyWithTools": "Copiar com ferramentas completas",
+      "details": "Detalhes do terminal",
+      "expand": "Expandir terminal",
+      "pin": "Fixar terminal",
+      "unpin": "Desafixar terminal",
+      "detach": "Destacar em nova janela",
+      "fullScreen": "Tela cheia",
+      "exitFullScreen": "Sair da tela cheia (Esc)",
+      "migrate": "Migrar sessão para conta…",
+      "noOtherAccount": "Não há outra conta para esta CLI. Adicione em Configurações.",
+      "move": "Mover",
+      "duplicate": "Duplicar",
+      "moveHint": "Continua aqui nessa conta. A nova sessão começa de um resumo do contexto; a memória interna do agente não é transferida.",
+      "duplicateHint": "Abre uma cópia nessa conta e mantém esta.",
+      "unavailable": "Ainda não disponível"
+    },
+    "details": {
+      "title": "Detalhes do terminal",
+      "subtitle": "Informações somente leitura. Valores desconhecidos aparecem como —.",
+      "label": "ID",
+      "name": "Nome",
+      "cli": "CLI",
+      "model": "Modelo",
+      "account": "Conta",
+      "workspace": "Workspace",
+      "status": "Status",
+      "started": "Iniciado",
+      "role": "Papel",
+      "uuid": "ID interno",
+      "copyUuid": "Copiar ID interno"
+    },
+    "account": {
+      "ready": "pronta",
+      "limited": "no limite",
+      "signed_out": "desconectada",
+      "unknown": "estado desconhecido",
+      "limitSuggest": "{{from}} chegou ao limite. Continuar em {{to}}?",
+      "continue": "Continuar",
+      "notNow": "Agora não"
     }
   }
 }

@@ -1284,7 +1284,8 @@
       "simulateResult": "Simulate result",
       "simulateStart": "Start work",
       "simulateFinish": "Finish work",
-      "simulateAsk": "Ask for input"
+      "simulateAsk": "Ask for input",
+      "simulateLimit": "Simulate account limit"
     },
     "flow": {
       "from": "from {{label}}",
@@ -1332,7 +1333,9 @@
       "makeOrchestratorN": "Make terminal {{n}} the orchestrator",
       "firstIsOrchestrator": "Make the first terminal the orchestrator",
       "orchestratorIs": "Terminal {{n}} is the orchestrator",
-      "pickOrchestrator": "Choose an orchestrator: click a row number"
+      "pickOrchestrator": "Choose an orchestrator: click a row number",
+      "account": "Account",
+      "accountFor": "Account for terminal {{n}}"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "All",
@@ -1375,6 +1378,57 @@
         "unsupported": "Not supported yet",
         "unknown": "Delivery unknown"
       }
+    },
+    "menu": {
+      "open": "More actions",
+      "title": "Actions for {{label}}",
+      "refresh": "Refresh session",
+      "tokens": "Tokens",
+      "tokensHint": "Total · input · output · cached, from the latest evidenced snapshot. — means unknown.",
+      "total": "Total",
+      "input": "Input",
+      "output": "Output",
+      "cached": "Cached (part of input)",
+      "copyConversation": "Copy conversation",
+      "copyWithTools": "Copy with full tool calls",
+      "details": "Terminal details",
+      "expand": "Expand terminal",
+      "pin": "Pin terminal",
+      "unpin": "Unpin terminal",
+      "detach": "Detach to a new window",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Exit full screen (Esc)",
+      "migrate": "Move session to account…",
+      "noOtherAccount": "No other account for this CLI. Add one in Settings.",
+      "move": "Move",
+      "duplicate": "Duplicate",
+      "moveHint": "Continue here on that account. The new session starts from a context summary; the agent's internal memory does not move.",
+      "duplicateHint": "Open a copy on that account and keep this one.",
+      "unavailable": "Not available yet"
+    },
+    "details": {
+      "title": "Terminal details",
+      "subtitle": "Read-only facts. Unknown values show —.",
+      "label": "ID",
+      "name": "Name",
+      "cli": "CLI",
+      "model": "Model",
+      "account": "Account",
+      "workspace": "Workspace",
+      "status": "Status",
+      "started": "Started",
+      "role": "Role",
+      "uuid": "Internal ID",
+      "copyUuid": "Copy internal ID"
+    },
+    "account": {
+      "ready": "ready",
+      "limited": "at limit",
+      "signed_out": "signed out",
+      "unknown": "status unknown",
+      "limitSuggest": "{{from}} reached its limit. Continue on {{to}}?",
+      "continue": "Continue",
+      "notNow": "Not now"
     }
   }
 }

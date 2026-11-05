@@ -18,6 +18,8 @@ export interface ProviderCatalog {
   /** Short reason shown when unavailable, already translated by the caller. */
   reason?: string;
   models: CatalogModel[];
+  /** ORQST account profiles for this CLI; login always happens in the CLI itself. */
+  accounts?: { id: string; label: string; state: 'ready' | 'limited' | 'signed_out' | 'unknown' }[];
 }
 
 export interface WorkspaceOption {
@@ -32,6 +34,8 @@ export interface TerminalRequest {
   provider: TerminalProvider;
   /** `null` = let the CLI use its own default model. */
   model: string | null;
+  /** `null` = the CLI's default profile. */
+  accountId: string | null;
   name: string;
   /** Label this terminal as the orchestrator (descriptive only). */
   orchestrator: boolean;
@@ -52,6 +56,7 @@ interface Choice {
   workspaceId: string;
   provider: TerminalProvider;
   model: string | null;
+  accountId: string | null;
   name: string;
 }
 
@@ -61,6 +66,14 @@ function firstAvailable(catalog: ProviderCatalog[]): ProviderCatalog | undefined
   return (
     providerOrder.map((p) => catalog.find((c) => c.provider === p)).find((c) => c?.available) ??
     undefined
+  );
+}
+
+function defaultAccount(entry: ProviderCatalog | undefined): string | null {
+  const list = entry?.accounts ?? [];
+  return (
+    (list.find((a) => a.state === 'ready') ?? list.find((a) => a.state !== 'signed_out'))?.id ??
+    null
   );
 }
 
@@ -84,6 +97,7 @@ export function NewTerminalDialog({
     workspaceId: firstWorkspace,
     provider: initial?.provider ?? 'codex',
     model: initial?.models[0]?.id ?? null,
+    accountId: defaultAccount(initial),
     name: '',
   };
   const [count, setCount] = useState(1);
@@ -164,6 +178,7 @@ export function NewTerminalDialog({
       workspaceId: targets[0] ?? firstWorkspace,
       provider,
       model: byProvider.get(provider)?.models[0]?.id ?? null,
+      accountId: defaultAccount(byProvider.get(provider)),
       name: '',
     };
   }
@@ -186,6 +201,7 @@ export function NewTerminalDialog({
         workspaceId: choice.workspaceId,
         provider: choice.provider,
         model: choice.model,
+        accountId: choice.accountId,
         name: choice.name.trim(),
         orchestrator: choices.indexOf(choice) === lead,
       })),
@@ -377,6 +393,7 @@ export function NewTerminalDialog({
                         ...shared,
                         provider,
                         model: entry.models[0]?.id ?? null,
+                        accountId: defaultAccount(entry),
                         name: '',
                       })
                     }
@@ -404,6 +421,16 @@ export function NewTerminalDialog({
                   models={byProvider.get(shared.provider)?.models ?? []}
                   value={shared.model}
                   onChange={(model) => setShared({ ...shared, model })}
+                />
+              </>
+            )}
+            {(byProvider.get(shared.provider)?.accounts?.length ?? 0) > 1 && (
+              <>
+                <h3>{t('terminalStudio.create.account')}</h3>
+                <AccountPicker
+                  accounts={byProvider.get(shared.provider)!.accounts!}
+                  value={shared.accountId}
+                  onChange={(accountId) => setShared({ ...shared, accountId })}
                 />
               </>
             )}
@@ -462,7 +489,11 @@ export function NewTerminalDialog({
                           title={option.available ? undefined : option.reason}
                           className={`ntd-provider-${provider}${row.provider === provider ? ' active' : ''}`}
                           onClick={() =>
-                            setRow(index, { provider, model: option.models[0]?.id ?? null })
+                            setRow(index, {
+                              provider,
+                              model: option.models[0]?.id ?? null,
+                              accountId: defaultAccount(option),
+                            })
                           }
                         >
                           <span className="ntd-mark" aria-hidden="true" />
@@ -578,6 +609,37 @@ function ModelPicker({
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function AccountPicker({
+  accounts,
+  value,
+  onChange,
+}: {
+  accounts: NonNullable<ProviderCatalog['accounts']>;
+  value: string | null;
+  onChange: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="ntd-accounts" role="radiogroup" aria-label={t('terminalStudio.create.account')}>
+      {accounts.map((account) => (
+        <button
+          key={account.id}
+          type="button"
+          role="radio"
+          aria-checked={value === account.id}
+          disabled={account.state === 'signed_out'}
+          className={value === account.id ? 'active' : ''}
+          onClick={() => onChange(account.id)}
+        >
+          <span className={`pm-account-state pm-state-${account.state}`} aria-hidden="true" />
+          <span className="ntd-account-name">{account.label}</span>
+          <span className="ntd-account-state">{t(`terminalStudio.account.${account.state}`)}</span>
+        </button>
+      ))}
     </div>
   );
 }

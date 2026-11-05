@@ -12,6 +12,7 @@ import {
   LANE,
   lanePath,
   linkStyle,
+  mosaicColumns,
   paneView,
   resizeFromEdge,
   resizeTrack,
@@ -215,7 +216,9 @@ test('dragging a mosaic border resizes the neighbouring tracks only', () => {
   const w = (list: typeof before, id: string) => list.find((pane) => pane.id === id)!.rect.width;
   assert.ok(Math.abs(w(after, 'p0') - w(before, 'p0') - 30) < 0.5);
   assert.ok(Math.abs(w(after, 'p1') - w(before, 'p1') + 30) < 0.5);
-  assert.ok(Math.abs(w(after, 'p2') - w(before, 'p2')) < 0.5);
+  // 4 terminals form 2 × 2, so p2 shares p0's column and p3 shares p1's.
+  assert.ok(Math.abs(w(after, 'p2') - w(before, 'p2') - 30) < 0.5);
+  assert.ok(Math.abs(w(after, 'p3') - w(before, 'p3') + 30) < 0.5);
   const clamped = arrange(resizeTrack(state, view, 'cols', 0, 9000), view);
   assert.ok(w(clamped, 'p1') >= MIN_PANE.width - 0.5);
   for (let i = 0; i < after.length; i++)
@@ -238,4 +241,26 @@ test('the orchestrator is pinned first and cleared when removed', () => {
   assert.equal(setOrchestrator(state, 'p2').orchestrator, null);
   state = removePane(state, 'p2');
   assert.equal(state.orchestrator, null);
+});
+
+test('mosaic balances the grid instead of one long row', () => {
+  const wide: Rect = { x: 0, y: 0, width: 1416, height: 720 };
+  const shape = (n: number) => {
+    const placed = arrange(stateWith(n), wide);
+    const rows = new Set(placed.map((pane) => Math.round(pane.rect.y))).size;
+    return { columns: mosaicColumns(stateWith(n).panes, wide), rows, placed };
+  };
+  assert.deepEqual([shape(1).columns, shape(1).rows], [1, 1]);
+  assert.deepEqual([shape(4).columns, shape(4).rows], [2, 2]);
+  assert.deepEqual([shape(6).columns, shape(6).rows], [3, 2]);
+  // Three terminals: two on top, the third fills the whole bottom row.
+  const three = shape(3).placed;
+  const last = three.find((pane) => pane.id === 'p2')!.rect;
+  assert.ok(Math.abs(last.width - wide.width) < 0.5);
+  for (const n of [2, 3, 4, 5, 6, 7, 8]) {
+    const placed = shape(n).placed;
+    assert.equal(placed.length, n);
+    const covered = placed.reduce((sum, pane) => sum + pane.rect.width * pane.rect.height, 0);
+    assert.ok(covered > wide.width * wide.height * 0.9, `${n} terminals leave no large holes`);
+  }
 });
