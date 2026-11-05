@@ -13,6 +13,7 @@ import type {
   TerminalLayoutState,
 } from '../apps/desktop/src/terminal-layout.js';
 import type { FeatureNativeRequest } from '@orqst/protocol';
+import { featureNativeRequestSchema } from '@orqst/protocol';
 
 function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
   const messages: Array<{
@@ -118,6 +119,63 @@ test('list mode hides webviews without marking panes minimized and leaves restor
   assert.deepEqual(f.layout.snapshot().visible, []);
   assert.deepEqual(f.layout.snapshot().shown, [0, 1]);
   assert.equal(f.messages.at(-1)!.focus, null);
+});
+
+test('v2 chrome derives and validates the full-window content area and revokes on chrome change', () => {
+  const f = fixture(1);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  const base: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    action: 'arrange',
+    generation: 0,
+    layoutVersion: 2,
+    chrome: { sidebar: 0, top: 36, bottom: 34 },
+    mode: 'columns',
+    viewport: { width: 1440, height: 830 },
+    panes: [
+      {
+        slot: 0,
+        terminalId: randomUUID(),
+        visible: true,
+        z: 0,
+        rect: { x: 0, y: 0, width: 1440, height: 830 },
+      },
+    ],
+  };
+  assert.equal(featureNativeRequestSchema.safeParse(base).success, true);
+  assert.equal(featureNativeRequestSchema.safeParse({ ...base, chrome: undefined }).success, false);
+  assert.equal(featureNativeRequestSchema.safeParse({ ...base, layoutVersion: 1 }).success, false);
+  assert.equal(
+    featureNativeRequestSchema.safeParse({ ...base, chrome: { sidebar: 1, top: 36, bottom: 34 } })
+      .success,
+    false,
+  );
+  assert.equal(f.layout.arrange(base), true);
+  assert.deepEqual(f.messages.at(-1)!.bounds[0]!.rect, { x: 0, y: 36, width: 1440, height: 830 });
+  const old = f.messages.length;
+  assert.equal(f.layout.arrange({ ...base, viewport: { width: 1285, height: 785 } }), false);
+  assert.equal(f.messages.length, old);
+  f.revoked.length = 0;
+  const restored = {
+    ...base,
+    chrome: { sidebar: 155 as const, top: 81 as const, bottom: 34 as const },
+    viewport: { width: 1285, height: 785 },
+    panes: [{ ...base.panes[0]!, rect: { x: 0, y: 0, width: 1285, height: 785 } }],
+  };
+  assert.equal(f.layout.arrange(restored), true);
+  assert.deepEqual(f.messages.at(-1)!.bounds[0]!.rect, { x: 155, y: 81, width: 1285, height: 785 });
+  assert.deepEqual(f.revoked, [0]);
+  assert.equal(
+    f.layout.arrange({
+      ...base,
+      chrome: { sidebar: 46, top: 36, bottom: 34 },
+      viewport: { width: 1394, height: 830 },
+      panes: [{ ...base.panes[0]!, rect: { x: 0, y: 0, width: 1394, height: 830 } }],
+    }),
+    true,
+  );
+  assert.deepEqual(f.messages.at(-1)!.bounds[0]!.rect, { x: 46, y: 36, width: 1394, height: 830 });
 });
 
 test('one to eight retained Tauri documents use shared grid geometry and compact paging', () => {

@@ -93,9 +93,12 @@ export class TauriTerminalLayout {
 
   private publish(focus: number | null = null): void {
     const state = this.snapshot();
-    const left = this.chrome ? (this.width <= 720 ? 46 : 155) : 0;
-    const top = this.chrome ? 81 : 0;
-    const bottom = this.chrome ? 34 : 0;
+    const custom =
+      this.arrangement && !state.suspended && !state.canvas ? this.arrangement : undefined;
+    const requestedChrome = custom?.layoutVersion === 2 ? custom.chrome : undefined;
+    const left = this.chrome ? (requestedChrome?.sidebar ?? (this.width <= 720 ? 46 : 155)) : 0;
+    const top = this.chrome ? (requestedChrome?.top ?? 81) : 0;
+    const bottom = this.chrome ? (requestedChrome?.bottom ?? 34) : 0;
     const width = Math.max(1, this.width - left);
     const height = Math.max(1, this.height - top - bottom);
     const columns = terminalGridPage(
@@ -106,11 +109,10 @@ export class TauriTerminalLayout {
       state.columns,
       state.axis,
     ).columns;
-    const custom =
-      this.arrangement && !state.suspended && !state.canvas ? this.arrangement : undefined;
     this.send({
       kind: custom ? 'layout-v2' : 'layout',
       ...(custom ? { mode: custom.mode } : {}),
+      ...(custom?.layoutVersion === 2 ? { arrangementVersion: 2 } : {}),
       generation: this.nativeGeneration,
       revision: ++this.layoutRevision,
       viewport: { width: this.width, height: this.height },
@@ -177,9 +179,10 @@ export class TauriTerminalLayout {
   arrange(input: Arrangement): boolean {
     if (this.suspended || !this.chrome || !featureNativeRequestSchema.safeParse(input).success)
       return false;
-    const left = this.width <= 720 ? 46 : 155;
+    const requestedChrome = input.layoutVersion === 2 ? input.chrome : undefined;
+    const left = requestedChrome?.sidebar ?? (this.width <= 720 ? 46 : 155);
     const width = this.width - left;
-    const height = this.height - 115;
+    const height = this.height - (requestedChrome?.top ?? 81) - (requestedChrome?.bottom ?? 34);
     if (
       width <= 0 ||
       height <= 0 ||
@@ -237,7 +240,11 @@ export class TauriTerminalLayout {
       const active = stack[index];
       return !!active && stack.slice(index + 1).some((pane) => overlaps(active.rect!, pane.rect!));
     };
-    if (!prior || topology(prior) !== topology(input)) {
+    if (
+      !prior ||
+      topology(prior) !== topology(input) ||
+      JSON.stringify(prior.chrome ?? null) !== JSON.stringify(input.chrome ?? null)
+    ) {
       for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
     } else if (!covered(prior) && covered(input)) this.revoke(this.state.active);
     this.state.shown = this.state.order.filter(

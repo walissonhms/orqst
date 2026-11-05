@@ -54,3 +54,12 @@ The corrected projection uses the validated `order`, `shown`, `visible` and `nam
 state, and workspace actions never need to reopen a hidden source as a prerequisite.
 
 See [behavior and acceptance limits](../development/studio-terminal-workspace.md).
+
+## Full-window chrome contract — 2026-11-05
+
+Re-inspected the pinned Anywh `TerminalPanel` and `useTerminalTabs` references
+above for this increment: their React/Relay/tmux composition does not provide a
+validated inset contract for ORQST's independently layered native child Webviews.
+Keep ORQST's broker, focus fences and retained surfaces; extend its existing
+arrangement contract with a closed inset allowlist. No source, asset or dependency
+is reused. The pinned Apache-2.0 and NOTICE findings above remain applicable.

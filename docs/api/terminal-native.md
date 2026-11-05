@@ -56,9 +56,22 @@ Only the authenticated `feature-workspace` document gets
 }
 ```
 
+Version 2 uses the same shape, with `layoutVersion: 2` and the required strict
+`chrome: { sidebar: 0 | 46 | 155, top: 36 | 81, bottom: 34 }`. Version 1
+must omit `chrome` and retains its existing automatic insets. For example,
+`chrome: { sidebar: 0, top: 36, bottom: 34 }` gives the Studio the full
+window width; returning to a sidebar sends a new version-2 frame with sidebar
+46 or 155 and the corresponding content viewport. No new process or view is
+created when switching chrome.
+
 Supply every current Feature member exactly once, using its current slot and UUID.
-The viewport is the native content area in integer logical pixels: whole window
-less left 155px (46px when window width ≤720px), top 81px and bottom 34px. Rects
+The viewport is the native content area in integer logical pixels: for version 2,
+window width minus `sidebar` and window height minus `top` and `bottom`; for
+version 1, whole window less left 155px (46px when window width ≤720px), top
+81px and bottom 34px. Node derives and validates these against its native window
+size, and Rust independently validates the allowed insets, native viewport and
+all final bounds before applying the frame. Changing chrome revokes current input
+leases; existing focus and generation checks continue to apply. Rects
 are logical pixels relative to that content area's top-left, and must be finite,
 positive in size and fully inside it. The rectangle is the native **terminal
 content** region; account for the Studio card header and toolbar in the renderer.

@@ -38,7 +38,14 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     .strictObject({
       ...base,
       action: z.literal('arrange'),
-      layoutVersion: z.literal(1),
+      layoutVersion: z.union([z.literal(1), z.literal(2)]),
+      chrome: z
+        .strictObject({
+          sidebar: z.union([z.literal(0), z.literal(46), z.literal(155)]),
+          top: z.union([z.literal(36), z.literal(81)]),
+          bottom: z.literal(34),
+        })
+        .optional(),
       mode: z.enum(['mosaic', 'columns', 'rows', 'focus', 'list', 'free']),
       viewport: z.strictObject({
         width: z.number().int().positive().max(32768),
@@ -48,6 +55,8 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     })
     .refine(
       (value) =>
+        ((value.layoutVersion === 1 && value.chrome === undefined) ||
+          (value.layoutVersion === 2 && value.chrome !== undefined)) &&
         new Set(value.panes.map((pane) => pane.slot)).size === value.panes.length &&
         new Set(value.panes.map((pane) => pane.terminalId)).size === value.panes.length &&
         (value.mode !== 'list' || value.panes.every((pane) => !pane.visible)) &&
