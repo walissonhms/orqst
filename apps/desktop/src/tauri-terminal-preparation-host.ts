@@ -68,7 +68,9 @@ async function main() {
   }
   let committed = false;
   async function commit(): Promise<boolean> {
-    if (committed) return live;
+    // The CLI grant latch never substitutes for the later manifest review's
+    // live native document, focus and deadline check.
+    if (committed) return live && (await ask({ kind: 'cli-current' })) === true && live;
     committed = (await ask({ kind: 'commit' })) === true;
     return committed && live;
   }

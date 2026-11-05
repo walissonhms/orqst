@@ -55,7 +55,7 @@ await build({
           namespace: 'synthetic-flow',
         }));
         builder.onLoad({ filter: /.*/, namespace: 'synthetic-flow' }, () => ({
-          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function prepareCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); return { existing: { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } } }; } export async function authorizePreparedGroup(candidates, review, current) { if (!(await current())) return candidates.map(() => ({status:'blocked'})); return candidates.map((entry) => entry.existing); }`,
+          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function prepareCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); const existing = { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } }; return process.env.ORQST_SYNTHETIC_PENDING ? {pending:{disclosure:{synthetic:true}}, existingResult:existing} : { existing }; } export async function authorizePreparedGroup(candidates, review, current) { if (!(await current())) return candidates.map(() => ({status:'blocked'})); if (candidates.some((entry) => entry.pending) && (!(await review()) || !(await current()))) return candidates.map(() => ({status:'blocked'})); return candidates.map((entry) => entry.existing || entry.existingResult); }`,
           loader: 'js',
         }));
       },
@@ -415,6 +415,68 @@ test(
       assert.ok(
         members.every(({ config }) => !readdirSync(config.state).includes('terminal.sqlite')),
       );
+      assert.deepEqual(readdirSync(f.project), []);
+    } finally {
+      clearTimeout(timer);
+      child.kill();
+      f.close();
+    }
+  },
+);
+
+test(
+  'CLI approval does not bypass native authority after the separate manifest review',
+  { skip: !nativePreparationSupported },
+  async () => {
+    const f = fixture();
+    mkdirSync(join(f.context.parent, 'managed-agents'), { mode: 0o700 });
+    const child = spawn(
+      process.execPath,
+      [
+        join(bundle, 'host.cjs'),
+        JSON.stringify({ action: 'create', provider: 'codex', count: 1 }),
+        f.context.parent,
+      ],
+      {
+        env: {
+          HOME: f.context.home,
+          PATH: '/usr/bin:/bin',
+          LANG: 'en_US.UTF-8',
+          ORQST_SYNTHETIC_PENDING: '1',
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
+    const exit = once(child, 'exit');
+    const timer = setTimeout(() => child.kill('SIGKILL'), 15_000);
+    const messages: Array<Record<string, unknown>> = [];
+    let checks = 0;
+    child.stderr.resume();
+    createInterface({ input: child.stdout }).on('line', (line) => {
+      const value = JSON.parse(line) as Record<string, unknown>;
+      messages.push(value);
+      if (value.kind === 'cli-current') checks++;
+      if (value.kind !== 'complete')
+        child.stdin.write(
+          JSON.stringify({
+            id: value.id,
+            value:
+              value.kind === 'pick'
+                ? value.directory
+                  ? f.project
+                  : f.executable
+                : value.kind === 'cli-current'
+                  ? checks < 3
+                  : true,
+          }) + '\n',
+        );
+    });
+    try {
+      assert.equal((await exit)[0], 0);
+      assert.equal(checks, 3);
+      assert.equal(messages.filter((message) => message.kind === 'confirm').length, 3);
+      assert.equal(messages.at(-1)?.status, 'cancelled');
+      assert.deepEqual(readdirSync(join(f.context.parent, 'managed-agents')), []);
       assert.deepEqual(readdirSync(f.project), []);
     } finally {
       clearTimeout(timer);
