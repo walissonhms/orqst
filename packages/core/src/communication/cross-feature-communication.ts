@@ -596,6 +596,7 @@ export class CrossFeatureCommunication {
         ['closed', 'unavailable'].includes(pane.state) ||
         event.messageId !== message.request.messageId ||
         event.taskId !== message.request.taskId ||
+        event.correlationId !== message.request.correlationId ||
         event.targetPaneId !== message.grant.target.paneId ||
         event.attemptId !== message.attemptId ||
         event.instanceId !== pane.binding.instanceId ||

@@ -164,6 +164,7 @@ export const crossFeatureProviderEvidenceSchema = z
   .strictObject({
     messageId: z.uuid(),
     taskId: z.uuid(),
+    correlationId: z.uuid().optional(),
     targetPaneId: z.uuid(),
     attemptId: z.uuid(),
     instanceId: z.uuid(),

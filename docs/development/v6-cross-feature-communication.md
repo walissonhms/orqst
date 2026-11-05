@@ -85,7 +85,7 @@ parsing cross message content. A failed ledger write rolls back cross admission.
 ## Structured dispatch and observation
 
 An injected trusted adapter may submit only after content digest verification and
-a fresh bilateral claim. Its correlated evidence must match message, task, pane,
+a fresh bilateral claim. Its correlated evidence must match message, task, correlation, pane,
 attempt, instance and terminal epoch. Acceptance, delivery, execution and outcome
 are persisted only when reported; missing or invalid receipt, timeout and transport
 failure leave `outcome_unknown` without automatic retry. Provider facts already

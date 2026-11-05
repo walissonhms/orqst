@@ -25,7 +25,11 @@ function configured() {
   inbound.rules.push(...f.policy('inbound', true).rules);
   f.save('source', 0, outbound);
   f.save('target', 0, inbound);
-  const request = { ...f.request, payload: ref('request', 'SYNTHETIC request') };
+  const request = {
+    ...f.request,
+    correlationId: randomUUID(),
+    payload: ref('request', 'SYNTHETIC request'),
+  };
   const grant = { ...f.grant, intentDigest: crossFeatureIntentDigest(request) };
   return { f, request, grant };
 }
@@ -43,6 +47,7 @@ test('synthetic structured dispatch persists only correlated provider receipts a
         const base = {
           messageId: message.request.messageId,
           taskId: message.request.taskId,
+          correlationId: message.request.correlationId,
           targetPaneId: grant.target.paneId,
           attemptId: message.attemptId!,
           instanceId: grant.target.binding.instanceId,
@@ -96,8 +101,9 @@ test('missing receipt is unknown and a mismatched receipt cannot create evidence
         evidence({
           messageId: message.request.messageId,
           taskId: message.request.taskId,
+          correlationId: randomUUID(),
           targetPaneId: grant.target.paneId,
-          attemptId: randomUUID(),
+          attemptId: message.attemptId!,
           instanceId: grant.target.binding.instanceId,
           terminalEpoch: grant.target.binding.terminalEpoch,
           evidenceId: randomUUID(),
@@ -293,6 +299,7 @@ test('provider evidence remains durable after view permission revocation', async
         const base = {
           messageId: message.request.messageId,
           taskId: message.request.taskId,
+          correlationId: message.request.correlationId,
           targetPaneId: grant.target.paneId,
           attemptId: message.attemptId!,
           instanceId: grant.target.binding.instanceId,
