@@ -1128,6 +1128,7 @@
       "cancelled": "Nenhuma mudança foi salva.",
       "denied": "O pedido foi recusado.",
       "busy": "Outra operação está em andamento.",
+      "unknown": "A gravação da política pode ter sido concluída. Leia a política atual antes de propor outra alteração.",
       "unavailable": "A edição de permissões exige o Desktop nativo atual.",
       "ok": "Policy salva."
     }

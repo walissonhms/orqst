@@ -42,6 +42,7 @@ import {
 
 class CoreOperationDenied extends Error {}
 export class FeatureRevisionConflict extends Error {}
+export class FeaturePermissionUnavailable extends Error {}
 export class TerminalEnrollmentUncertain extends Error {}
 
 /** Electron is a client: Node owns SQLite, lifecycle, grants and PTYs across view hide/detach. */
@@ -366,10 +367,30 @@ export async function connectManagedTerminalCore(
         featurePermissionStateSchema.parse(
           await call({ kind: 'featurePermissionsRead', featureId }),
         ),
-      savePermissions: async (featureId: string, actorId: string, input: FeaturePermissionSave) =>
-        featurePermissionStateSchema.parse(
-          await call({ kind: 'featurePermissionsSave', featureId, actorId, input }),
-        ),
+      savePermissions: async (featureId: string, actorId: string, input: FeaturePermissionSave) => {
+        let reply: unknown;
+        try {
+          reply = await call({ kind: 'featurePermissionsSave', featureId, actorId, input });
+        } catch (error) {
+          if (error instanceof CoreOperationDenied) throw new FeaturePermissionUnavailable();
+          throw error; // Transport loss after dispatch cannot prove whether the commit happened.
+        }
+        if (
+          reply &&
+          typeof reply === 'object' &&
+          Reflect.get(reply, 'status') === 'conflict' &&
+          Object.keys(reply).length === 1
+        )
+          throw new FeatureRevisionConflict('Feature permission revision changed');
+        if (
+          !reply ||
+          typeof reply !== 'object' ||
+          Reflect.get(reply, 'status') !== 'ok' ||
+          Object.keys(reply).length !== 2
+        )
+          throw new Error('Feature permission save reply unconfirmed');
+        return featurePermissionStateSchema.parse(Reflect.get(reply, 'permissions'));
+      },
       read: readFeature,
       create: async (input: Omit<FeatureCreate, 'workspaceId'>) =>
         workspaceFeatureSchema.parse(await call({ kind: 'featureCreate', input })),

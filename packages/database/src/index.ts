@@ -27,6 +27,7 @@ import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
 import { openFeatures } from './features.js';
 import { openFeaturePermissions } from './feature-permissions.js';
+export { FeaturePermissionRevisionConflict } from './feature-permissions.js';
 import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';

@@ -16,7 +16,7 @@ import { terminalIdentity } from './identity.js';
 // UI-independent owned Terminal component. The observer composition never imports this entry.
 import { createPublicKey, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { Store } from '@orqst/database';
+import { Store, FeaturePermissionRevisionConflict } from '@orqst/database';
 import { TerminalAuthority } from './authority.js';
 import { interactiveProvider } from './interactive-profile.js';
 import { interactiveCliAdapter } from './interactive-adapters.js';
@@ -310,7 +310,19 @@ async function start() {
             value = features().readPermissions(request.featureId);
             break;
           case 'featurePermissionsSave':
-            value = features().savePermissions(request.featureId, request.actorId, request.input);
+            try {
+              value = {
+                status: 'ok',
+                permissions: features().savePermissions(
+                  request.featureId,
+                  request.actorId,
+                  request.input,
+                ),
+              };
+            } catch (error) {
+              if (!(error instanceof FeaturePermissionRevisionConflict)) throw error;
+              value = { status: 'conflict' };
+            }
             break;
           case 'featureTeamRead':
             value = features().readTeam(request.featureId);

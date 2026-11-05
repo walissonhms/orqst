@@ -310,7 +310,9 @@ pub(crate) fn valid_permission_reply(value: &Value) -> bool {
         .all(|k| ["status", "snapshot", "permissions"].contains(&k.as_str()))
         || !matches!(
             value["status"].as_str(),
-            Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
+            Some(
+                "ok" | "denied" | "stale" | "busy" | "unavailable" | "unknown" | "archive_blocked"
+            )
         )
         || (value.get("snapshot").is_some() && !valid_snapshot(&value["snapshot"]))
         || (value.get("permissions").is_some() && !valid_permission_state(&value["permissions"]))

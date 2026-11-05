@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { Store } from '@orqst/database';
+import { Store, FeaturePermissionRevisionConflict } from '@orqst/database';
 import {
   featurePermissionConfigurationSchema,
   featurePermissionStateSchema,
@@ -132,7 +132,7 @@ test(
             expectedRevision: 0,
             configuration: f.policy([]),
           }),
-        /Stale/,
+        FeaturePermissionRevisionConflict,
       );
       assert.equal(competing.read(f.scope).revision, 1);
       assert.equal(competing.events(f.scope).length, 1);

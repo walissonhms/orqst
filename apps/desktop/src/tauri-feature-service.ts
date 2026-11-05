@@ -9,7 +9,7 @@ import {
   type WorkspaceFeature,
 } from '@orqst/protocol';
 import type { connectManagedTerminalCore } from './managed-terminal-core.js';
-import { FeatureRevisionConflict } from './managed-terminal-core.js';
+import { FeaturePermissionUnavailable, FeatureRevisionConflict } from './managed-terminal-core.js';
 import { featureLayout } from './feature-layout.js';
 import type { TauriTerminalLayout } from './tauri-terminal-layout.js';
 import type { terminalLayoutStore } from './terminal-layout-store.js';
@@ -211,8 +211,9 @@ export class TauriFeatureService {
           return { status: 'ok', permissions, snapshot: this.snapshot() };
         }
         case 'savePermissions': {
+          let permissions;
           try {
-            const permissions = await this.core.features.savePermissions(
+            permissions = await this.core.features.savePermissions(
               request.featureId,
               'desktop-native',
               {
@@ -220,15 +221,17 @@ export class TauriFeatureService {
                 configuration: request.configuration,
               },
             );
+          } catch (error) {
+            if (error instanceof FeatureRevisionConflict) return { status: 'stale' };
+            if (error instanceof FeaturePermissionUnavailable) return { status: 'unavailable' };
+            return { status: 'unknown' };
+          }
+          try {
             this.generation++;
             await this.refresh();
             return { status: 'ok', permissions, snapshot: this.snapshot() };
           } catch {
-            return {
-              status: 'stale',
-              permissions: await this.core.features.readPermissions(request.featureId),
-              snapshot: this.snapshot(),
-            };
+            return { status: 'unknown' };
           }
         }
         case 'organize': {

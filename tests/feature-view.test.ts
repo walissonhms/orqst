@@ -20,7 +20,11 @@ import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.j
 import { appendTerminalLayout } from '../apps/desktop/src/terminal-layout-enrollment.js';
 import { featureLayout } from '../apps/desktop/src/feature-layout.js';
 import { createFeatureClient } from '../apps/tauri/src/features-bridge.js';
-import { FeatureRevisionConflict } from '../apps/desktop/src/managed-terminal-core.js';
+import {
+  FeaturePermissionUnavailable,
+  FeatureRevisionConflict,
+} from '../apps/desktop/src/managed-terminal-core.js';
+import { FeaturePermissionRevisionConflict } from '@orqst/database';
 
 function fixture() {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-feature-view-'));
@@ -45,20 +49,20 @@ function fixture() {
       readLayout: async (id: string) => db.readLayout(id),
       saveLayout: async (id: string, record: Parameters<typeof db.saveLayout>[1]) =>
         db.saveLayout(id, record),
-      readPermissions: async (id: string) => ({
-        schemaVersion: 1 as const,
-        workspaceId: (await db.readView()).workspaceId,
-        featureId: id,
-        revision: 0,
-        configuration: null,
-      }),
-      savePermissions: async (id: string) => ({
-        schemaVersion: 1 as const,
-        workspaceId: (await db.readView()).workspaceId,
-        featureId: id,
-        revision: 0,
-        configuration: null,
-      }),
+      readPermissions: async (id: string) => db.readPermissions(id),
+      savePermissions: async (
+        id: string,
+        actor: string,
+        input: Parameters<typeof db.savePermissions>[2],
+      ) => {
+        try {
+          return db.savePermissions(id, actor, input);
+        } catch (error) {
+          if (error instanceof FeaturePermissionRevisionConflict)
+            throw new FeatureRevisionConflict();
+          throw error;
+        }
+      },
     },
   };
   const legacyDb = terminalLayoutDatabase(directory, ids);
@@ -600,4 +604,45 @@ test('permission packets are separate from the renderer metadata envelope', asyn
     }).success,
     false,
   );
+});
+
+test('permission saves distinguish real CAS conflict, confirmed refusal and post-commit uncertainty', async () => {
+  const f = fixture();
+  try {
+    const feature = f.db.create({ name: 'SYNTHETIC policy' });
+    await f.service.initialize();
+    const request = {
+      contractVersion: 1,
+      generation: 0,
+      action: 'savePermissions',
+      featureId: feature.featureId,
+      expectedRevision: 0,
+      configuration: { schemaVersion: 1, rules: [] },
+    } as const;
+    f.db.savePermissions(feature.featureId, 'synthetic-native', {
+      expectedRevision: 0,
+      configuration: { schemaVersion: 1, rules: [] },
+    });
+    assert.equal((await f.service.request(request)).status, 'stale');
+    const originalSave = f.core.features.savePermissions;
+    f.core.features.savePermissions = async () => {
+      throw new FeaturePermissionUnavailable();
+    };
+    assert.equal(
+      (await f.service.request({ ...request, expectedRevision: 1 })).status,
+      'unavailable',
+    );
+    f.core.features.savePermissions = async (...args) => {
+      const saved = await originalSave(...args);
+      f.core.features.list = async () => {
+        throw new Error('SYNTHETIC refresh failure after commit');
+      };
+      return saved;
+    };
+    assert.equal((await f.service.request({ ...request, expectedRevision: 1 })).status, 'unknown');
+    assert.equal(f.db.readPermissions(feature.featureId).revision, 2);
+    assert.equal(f.db.permissionEvents(feature.featureId).length, 2);
+  } finally {
+    f.close();
+  }
 });

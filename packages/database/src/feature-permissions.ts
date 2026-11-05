@@ -10,6 +10,8 @@ import {
 import { openFeatures } from './features.js';
 import { z } from 'zod';
 
+export class FeaturePermissionRevisionConflict extends Error {}
+
 const bytes = 16384;
 const policyLimit = 1024;
 const auditLimit = 32768;
@@ -124,8 +126,10 @@ export function openFeaturePermissions(
         const feature = scopeFeature(scope);
         members(feature.terminalIds, configuration);
         const before = read(scope);
-        if (before.revision !== expectedRevision || expectedRevision >= Number.MAX_SAFE_INTEGER)
-          throw new Error('Stale Feature permission revision');
+        if (before.revision !== expectedRevision)
+          throw new FeaturePermissionRevisionConflict('Stale Feature permission revision');
+        if (expectedRevision >= Number.MAX_SAFE_INTEGER)
+          throw new Error('Feature permission revision limit exceeded');
         const metadata = JSON.stringify(configuration);
         if (Buffer.byteLength(metadata) > bytes)
           throw new Error('Feature permission policy too large');

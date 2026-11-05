@@ -106,7 +106,7 @@ export const featureNativeSnapshotSchema = z
 export type FeatureNativeSnapshot = z.infer<typeof featureNativeSnapshotSchema>;
 export const featureNativeReplySchema = z
   .strictObject({
-    status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'archive_blocked']),
+    status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'unknown', 'archive_blocked']),
     snapshot: featureNativeSnapshotSchema.optional(),
     permissions: featurePermissionStateSchema.optional(),
   })

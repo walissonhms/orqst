@@ -1128,6 +1128,7 @@
       "cancelled": "No change was saved.",
       "denied": "The request was refused.",
       "busy": "Another operation is in progress.",
+      "unknown": "The policy save may have completed. Read the current policy before proposing another change.",
       "unavailable": "Permission editing requires the current native Desktop.",
       "ok": "Policy saved."
     }

@@ -72,6 +72,7 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
         setRevision(reply.permissions.revision);
         setRules(permissionRules(reply.permissions.configuration));
       }
+      if (reply.status === 'unknown') setRevision(null);
       if (reply.status !== 'ok') setNotice(reply.status);
     } catch {
       setNotice('unavailable');
