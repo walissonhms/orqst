@@ -5,8 +5,8 @@ use std::hash::BuildHasher;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{sync_channel, SyncSender};
-use std::sync::OnceLock;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const QUEUE_LIMIT: usize = 256;
 const RECORD_LIMIT: usize = 512;
@@ -67,6 +67,109 @@ vocabulary!(Outcome {
 vocabulary!(Effects {
     NotStarted => "not_started", Possible => "possible", Unconfirmed => "unconfirmed",
 });
+
+// Renderer refusals never enter the operational queue. One fixed, bounded window
+// is drained by the existing writer; labels are closed and contain no document ID.
+const REFUSAL_WINDOW: Duration = Duration::from_secs(60);
+const REFUSAL_LIMIT: usize = 8;
+static REFUSALS: OnceLock<Mutex<RefusalWindow>> = OnceLock::new();
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RefusalSource {
+    Studio,
+    Feature,
+}
+impl RefusalSource {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Studio => "studio",
+            Self::Feature => "feature",
+        }
+    }
+}
+type RefusalEntry = (RefusalSource, Outcome, Effects);
+type RefusalBatch = (Vec<RefusalEntry>, u64);
+struct RefusalWindow {
+    started: Instant,
+    entries: Vec<RefusalEntry>,
+    suppressed: u64,
+}
+impl RefusalWindow {
+    fn new(now: Instant) -> Self {
+        Self {
+            started: now,
+            entries: Vec::new(),
+            suppressed: 0,
+        }
+    }
+    fn add(&mut self, source: RefusalSource, outcome: Outcome, effects: Effects) {
+        if self
+            .entries
+            .iter()
+            .any(|(s, o, _)| *s == source && *o == outcome)
+            || self.entries.len() >= REFUSAL_LIMIT
+        {
+            self.suppressed = self.suppressed.saturating_add(1);
+        } else {
+            self.entries.push((source, outcome, effects));
+        }
+    }
+    fn drain(&mut self, now: Instant) -> Option<RefusalBatch> {
+        if now.saturating_duration_since(self.started) < REFUSAL_WINDOW {
+            return None;
+        }
+        self.started = now;
+        Some((
+            std::mem::take(&mut self.entries),
+            std::mem::take(&mut self.suppressed),
+        ))
+    }
+}
+/// The caller supplies only a fixed source and an enumerated reason, never renderer data.
+pub fn refusal(source: RefusalSource, outcome: Outcome, effects: Effects) {
+    if WRITER.get().is_none() {
+        return;
+    }
+    let state = REFUSALS.get_or_init(|| Mutex::new(RefusalWindow::new(Instant::now())));
+    if let Ok(mut window) = state.lock() {
+        window.add(source, outcome, effects);
+    }
+}
+fn refusal_lines(now: Instant) -> Vec<String> {
+    let Some(state) = REFUSALS.get() else {
+        return Vec::new();
+    };
+    let Ok(mut window) = state.lock() else {
+        return Vec::new();
+    };
+    let Some((entries, suppressed)) = window.drain(now) else {
+        return Vec::new();
+    };
+    drop(window);
+    format_refusals(entries, suppressed)
+}
+fn format_refusals(entries: Vec<RefusalEntry>, suppressed: u64) -> Vec<String> {
+    let unix_ms = millis(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default(),
+    );
+    let mut lines: Vec<_> = entries
+        .into_iter()
+        .map(|(source, outcome, effects)| {
+            format!(
+        "{{\"v\":1,\"unix_ms\":{},\"source\":\"{}\",\"outcome\":\"{}\",\"effects\":\"{}\"}}\n",
+        unix_ms, source.name(), outcome.name(), effects.name())
+        })
+        .collect();
+    if suppressed > 0 {
+        lines.push(format!(
+            "{{\"v\":1,\"unix_ms\":{},\"suppressed\":{}}}\n",
+            unix_ms, suppressed
+        ));
+    }
+    lines
+}
 
 /// Opaque UUID-shaped diagnostic correlation only. Never a capability or session identity.
 #[derive(Clone)]
@@ -175,7 +278,21 @@ pub fn install(parent: PathBuf) {
                 let Ok(mut sink) = disk::Sink::open(&parent, FILE_LIMIT) else {
                     return;
                 };
-                while let Ok(record) = receiver.recv() {
+                let mut refusal_sink_available = true;
+                loop {
+                    for line in refusal_lines(Instant::now()) {
+                        if refusal_sink_available
+                            && (line.len() > RECORD_LIMIT
+                                || sink.append_refusal(line.as_bytes()).is_err())
+                        {
+                            refusal_sink_available = false;
+                        }
+                    }
+                    let record = match receiver.recv_timeout(Duration::from_secs(1)) {
+                        Ok(record) => record,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+                    };
                     let dropped = DROPPED.swap(0, Ordering::Relaxed);
                     let line = record.line(dropped);
                     if line.len() > RECORD_LIMIT || sink.append(line.as_bytes()).is_err() {
@@ -304,15 +421,29 @@ mod disk {
             if bytes.len() as u64 > self.limit {
                 return Err(refused());
             }
-            let path = self.dir.join("native.jsonl");
+            self.append_to(bytes, ["native.jsonl", "native.1.jsonl", "native.2.jsonl"])
+        }
+
+        pub(super) fn append_refusal(&mut self, bytes: &[u8]) -> io::Result<()> {
+            self.append_to(
+                bytes,
+                ["refusals.jsonl", "refusals.1.jsonl", "refusals.2.jsonl"],
+            )
+        }
+
+        fn append_to(&mut self, bytes: &[u8], names: [&str; 3]) -> io::Result<()> {
+            if bytes.len() as u64 > self.limit {
+                return Err(refused());
+            }
+            let path = self.dir.join(names[0]);
             let file = private_file(&path)?;
+            if file.metadata()?.len() > self.limit {
+                return Err(refused());
+            }
             if file.metadata()?.len().saturating_add(bytes.len() as u64) > self.limit {
                 drop(file);
                 // Rename fixed names only. No scanning/deletion of unrelated app/user files.
-                for (from, to) in [
-                    ("native.1.jsonl", "native.2.jsonl"),
-                    ("native.jsonl", "native.1.jsonl"),
-                ] {
+                for (from, to) in [(names[1], names[2]), (names[0], names[1])] {
                     let from = self.dir.join(from);
                     if from.try_exists()? {
                         private_file(&from)?;
@@ -329,6 +460,105 @@ mod disk {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn refusal_flood_is_deduplicated_bounded_and_renews() {
+        let start = Instant::now();
+        let mut window = RefusalWindow::new(start);
+        for _ in 0..10_000 {
+            window.add(
+                RefusalSource::Studio,
+                Outcome::StudioInvalidRequest,
+                Effects::NotStarted,
+            );
+            window.add(
+                RefusalSource::Feature,
+                Outcome::FeatureInvalidRequest,
+                Effects::NotStarted,
+            );
+        }
+        assert!(window.drain(start + Duration::from_secs(59)).is_none());
+        let (entries, suppressed) = window.drain(start + REFUSAL_WINDOW).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(suppressed, 19_998);
+        let lines = format_refusals(entries, suppressed);
+        assert_eq!(lines.len(), 3);
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|line| line.contains("\"suppressed\""))
+                .count(),
+            1
+        );
+        assert!(lines[2].contains("\"suppressed\":19998"));
+        #[cfg(any(target_os = "macos", target_os = "linux"))]
+        {
+            let parent = temporary();
+            let mut sink = disk::Sink::open(&parent, 1024).unwrap();
+            sink.append(b"legitimate startup\n").unwrap();
+            for line in &lines {
+                sink.append_refusal(line.as_bytes()).unwrap();
+            }
+            sink.append(b"legitimate quit\n").unwrap();
+            let dir = parent.join("diagnostics");
+            assert_eq!(fs::read_dir(&dir).unwrap().count(), 3);
+            assert_eq!(
+                fs::read(dir.join("native.jsonl")).unwrap(),
+                b"legitimate startup\nlegitimate quit\n"
+            );
+            assert_eq!(
+                fs::read_to_string(dir.join("refusals.jsonl"))
+                    .unwrap()
+                    .lines()
+                    .count(),
+                3
+            );
+            drop(sink);
+            fs::remove_dir_all(parent).unwrap();
+        }
+        window.add(
+            RefusalSource::Studio,
+            Outcome::StudioInvalidRequest,
+            Effects::NotStarted,
+        );
+        assert_eq!(window.drain(start + REFUSAL_WINDOW * 2).unwrap().0.len(), 1);
+        for reason in [
+            Outcome::StudioIdentity,
+            Outcome::StudioFocus,
+            Outcome::StudioContextChanged,
+            Outcome::StudioMainMissing,
+            Outcome::StudioReviewEmpty,
+            Outcome::StudioLatchUnavailable,
+            Outcome::StudioPostIdentity,
+            Outcome::FeatureIdentity,
+            Outcome::FeatureFocus,
+        ] {
+            window.add(RefusalSource::Studio, reason, Effects::NotStarted);
+        }
+        let (entries, suppressed) = window.drain(start + REFUSAL_WINDOW * 3).unwrap();
+        assert_eq!(entries.len(), REFUSAL_LIMIT);
+        assert_eq!(suppressed, 1);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn refusal_rotation_never_evicts_native_records() {
+        let parent = temporary();
+        let mut sink = disk::Sink::open(&parent, 64).unwrap();
+        sink.append(b"legitimate startup\n").unwrap();
+        for _ in 0..1000 {
+            sink.append_refusal(b"refusal\n").unwrap();
+        }
+        sink.append(b"legitimate quit\n").unwrap();
+        let dir = parent.join("diagnostics");
+        assert_eq!(
+            fs::read(dir.join("native.jsonl")).unwrap(),
+            b"legitimate startup\nlegitimate quit\n"
+        );
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 5);
+        drop(sink);
+        fs::remove_dir_all(parent).unwrap();
+    }
 
     #[test]
     fn preparation_denial_reasons_are_closed_and_sanitized() {

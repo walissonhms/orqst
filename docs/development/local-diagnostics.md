@@ -14,10 +14,11 @@ Files live in `<app_data_dir>/diagnostics/`:
 
 - `native.jsonl`: active log, at most 1 MiB.
 - `native.1.jsonl` and `native.2.jsonl`: two previous segments, at most 1 MiB each.
+- `refusals.jsonl`, `refusals.1.jsonl`, `refusals.2.jsonl`: separate bounded refusal segments, at most 1 MiB each.
 - `native.lock`: empty `0600` advisory-lock file. Its presence does not prove a
   live writer; the OS releases the lock when its descriptor/process closes.
 
-Maximum generated log retention is 3 MiB, plus the empty lock. Rotation uses size,
+Maximum generated log retention is 6 MiB, plus the empty lock; refusal rotation never removes native segments. Rotation uses size,
 not age; low activity may retain old timestamps indefinitely. No unrelated file
 is scanned or removed. An oversized pre-existing segment is refused, not deleted
 or truncated. Do not remove a lock to bypass another writer.
@@ -37,7 +38,7 @@ Timestamps and activity cadence can still be private; review before sharing.
 
 ## Closed record/API contract
 
-Each JSONL record has exactly `v`, `unix_ms`, `elapsed_ms`, `attempt`, `stage`,
+Each operational JSONL record has exactly `v`, `unix_ms`, `elapsed_ms`, `attempt`, `stage`,
 `outcome`, `effects`, `dropped_before`. Version is `1`; timestamps are local Unix
 milliseconds and monotonic elapsed milliseconds from that attempt's beginning.
 Clock adjustments do not change elapsed time. Every record is limited to 512
@@ -66,6 +67,16 @@ unknown labels become `unconfirmed`. No arbitrary JSON, error string or text fie
 can enter a record. Prompts, CLI/session/terminal content, credentials, auth/config,
 raw stderr, proofs, owner/epoch/manifest fields and private paths are excluded.
 There is no generic logger/redaction fallback and no exception handler.
+
+Renderer-triggerable Studio and Feature guard refusals are aggregated in native memory
+for monotonic 60-second windows. At most one entry per fixed source/reason and at
+most eight entries total are written at window end, followed by one aggregate
+`suppressed` count when nonzero. Source is a closed label, never the document
+identifier; no request data, path or ID is recorded. These records use the same
+private writer and directory but separate rotating segments and do not enter the
+operational queue. They cannot evict startup, host, exit or Quit records. A refusal
+segment write failure disables only that stream. Abrupt exit can lose the current
+window; aggregation is best effort, not a security audit or proof of a request.
 
 ## Instrumented boundaries and correlation
 

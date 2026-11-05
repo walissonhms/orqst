@@ -726,8 +726,8 @@ fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
 #[tauri::command]
 pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     let denied = |reason| {
-        crate::local_diagnostics::Attempt::begin().record(
-            crate::local_diagnostics::Stage::Request,
+        crate::local_diagnostics::refusal(
+            crate::local_diagnostics::RefusalSource::Feature,
             reason,
             crate::local_diagnostics::Effects::NotStarted,
         );

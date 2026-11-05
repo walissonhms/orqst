@@ -1,6 +1,6 @@
 //! Native menu and Studio preparation reuse the same passive Node provisioning/selection flow.
 //! No arbitrary program, CLI invocation or observer API is exposed.
-use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
+use crate::local_diagnostics::{refusal, Attempt, Effects, Outcome, RefusalSource, Stage};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -624,7 +624,7 @@ fn execute(
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
     let denied = |reason| {
-        Attempt::begin().record(Stage::Request, reason, Effects::NotStarted);
+        refusal(RefusalSource::Studio, reason, Effects::NotStarted);
         json!({"status":"denied"})
     };
     if !valid_request(&request) {
@@ -639,7 +639,11 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
-        Attempt::begin().record(Stage::Request, Outcome::StudioFocus, Effects::NotStarted);
+        refusal(
+            RefusalSource::Studio,
+            Outcome::StudioFocus,
+            Effects::NotStarted,
+        );
         return json!({"status":"focus_required"});
     }
     if identity(&window) != Some((source.clone(), generation))
@@ -675,8 +679,8 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     if begin(&app, &native_request, Some(generation)).is_none() {
         let current = snapshot(&app);
         if current["busy"] != true {
-            Attempt::begin().record(
-                Stage::Request,
+            refusal(
+                RefusalSource::Studio,
                 Outcome::StudioLatchUnavailable,
                 Effects::NotStarted,
             );
@@ -698,8 +702,8 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     })
     .await;
     if identity(&window) != Some((source, generation)) {
-        Attempt::begin().record(
-            Stage::Request,
+        refusal(
+            RefusalSource::Studio,
             Outcome::StudioPostIdentity,
             Effects::Possible,
         );
