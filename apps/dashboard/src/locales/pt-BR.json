@@ -1465,7 +1465,31 @@
     "openTerminal": "Abrir terminal",
     "noTerminalsYet": "Nenhum terminal aberto ainda. Use Novo terminal para começar.",
     "showPanel": "Mostrar o painel de Features",
-    "hidePanel": "Ocultar o painel de Features"
+    "hidePanel": "Ocultar o painel de Features",
+    "batch": {
+      "summary": "{{accepted}} de {{total}} terminais abertos.",
+      "status": {
+        "accepted": "Aberto",
+        "refused": "Não aberto",
+        "unknown": "Desconhecido"
+      },
+      "reason": {
+        "core_enrolled": "Aberto",
+        "workspace_unsupported": "Por enquanto só o workspace atual é suportado",
+        "account_unsupported": "Escolher conta ainda não está disponível",
+        "capacity_exceeded": "Sem espaço: até 8 terminais",
+        "selection_unavailable": "Esta CLI ou modelo não está disponível",
+        "catalog_changed": "A lista de CLIs e modelos mudou; abra a janela de novo",
+        "review_cancelled": "A revisão foi cancelada",
+        "context_changed": "O workspace ou a Feature mudou nesse meio-tempo",
+        "preparation_failed": "A preparação falhou",
+        "opening_uncertain": "A abertura pode ou não ter acontecido",
+        "not_attempted": "Não tentado porque uma etapa anterior parou",
+        "focus_required": "Traga o ORQST para a frente e tente de novo",
+        "busy": "Outra operação está em andamento"
+      },
+      "possibleEffects": "Confira a área de terminais antes de tentar de novo."
+    }
   },
   "overviewPage": {
     "title": "Visão geral",

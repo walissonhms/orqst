@@ -557,3 +557,45 @@ button.ntd-row-index:hover {
 :root[data-motion='reduced'] .ntd[open] {
   animation: none;
 }
+
+/* Batch results: one row per requested terminal */
+.ntd-results {
+  display: grid;
+  gap: 6px;
+  margin: 4px 22px 0 !important;
+  padding: 0;
+  list-style: none;
+}
+.ntd-result {
+  --ntd-result: var(--orqst-success);
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--orqst-border);
+  border-left: 3px solid var(--ntd-result);
+  border-radius: 8px;
+  background: var(--orqst-background);
+}
+.ntd-result-refused {
+  --ntd-result: var(--orqst-danger);
+}
+.ntd-result-unknown {
+  --ntd-result: var(--orqst-warning);
+}
+.ntd-result-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ntd-result);
+}
+.ntd-result > span:last-of-type {
+  color: var(--ntd-result);
+  font-size: 12px;
+}
+.ntd-result small {
+  grid-column: 2 / -1;
+  color: var(--orqst-muted);
+  font-size: 12px;
+}

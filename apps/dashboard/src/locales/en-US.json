@@ -1465,7 +1465,31 @@
     "openTerminal": "Open terminal",
     "noTerminalsYet": "No terminals open yet. Use New terminal to start.",
     "showPanel": "Show the Feature panel",
-    "hidePanel": "Hide the Feature panel"
+    "hidePanel": "Hide the Feature panel",
+    "batch": {
+      "summary": "{{accepted}} of {{total}} terminals opened.",
+      "status": {
+        "accepted": "Opened",
+        "refused": "Not opened",
+        "unknown": "Unknown"
+      },
+      "reason": {
+        "core_enrolled": "Opened",
+        "workspace_unsupported": "Only the current workspace is supported for now",
+        "account_unsupported": "Choosing an account is not available yet",
+        "capacity_exceeded": "No room: up to 8 terminals",
+        "selection_unavailable": "This CLI or model is not available",
+        "catalog_changed": "The list of CLIs and models changed; reopen the dialog",
+        "review_cancelled": "The review was cancelled",
+        "context_changed": "The workspace or Feature changed meanwhile",
+        "preparation_failed": "Preparation failed",
+        "opening_uncertain": "Opening may or may not have happened",
+        "not_attempted": "Not attempted because an earlier step stopped",
+        "focus_required": "Bring ORQST to the front and try again",
+        "busy": "Another operation is running"
+      },
+      "possibleEffects": "Check the terminal area before trying again."
+    }
   },
   "overviewPage": {
     "title": "Overview",
