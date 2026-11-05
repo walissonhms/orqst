@@ -57,9 +57,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 ]);
 
 export interface TauriPreparationPorts {
-  authorizeCli(
-    candidate: PreparationCliCandidate,
-  ): Promise<{
+  authorizeCli(candidate: PreparationCliCandidate): Promise<{
     status: TerminalCliAuthorizationState;
     version?: string;
     sha256?: string;
@@ -237,9 +235,16 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
-        cliBindings: [...evidence.entries()].flatMap(([key, value]) =>
+        cliEvidence: [...evidence.entries()].flatMap(([key, value]) =>
           value.binding
-            ? [{ executable: JSON.parse(key)[1] as string, binding: value.binding }]
+            ? [
+                {
+                  executable: JSON.parse(key)[1] as string,
+                  version: value.version,
+                  sha256: value.sha256,
+                  binding: value.binding,
+                },
+              ]
             : [],
         ),
         ...source,
@@ -334,9 +339,16 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
-        cliBindings: [...evidence.entries()].flatMap(([key, value]) =>
+        cliEvidence: [...evidence.entries()].flatMap(([key, value]) =>
           value.binding
-            ? [{ executable: JSON.parse(key)[1] as string, binding: value.binding }]
+            ? [
+                {
+                  executable: JSON.parse(key)[1] as string,
+                  version: value.version,
+                  sha256: value.sha256,
+                  binding: value.binding,
+                },
+              ]
             : [],
         ),
         provider: request.provider,

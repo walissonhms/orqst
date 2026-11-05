@@ -48,7 +48,12 @@ export const reviewedDesktopCodexBinary = Object.freeze({
 });
 
 export interface TerminalCreationInput {
-  cliBindings?: readonly { executable: string; binding: V2CliBinding }[];
+  cliEvidence?: readonly {
+    executable: string;
+    version: string;
+    sha256: string;
+    binding: V2CliBinding;
+  }[];
   count?: number;
   limit?: number;
   provider: LocalCliProvider;
@@ -133,6 +138,14 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   const configs: InteractiveTerminalConfig[] = members.map(({ provider, model }, index) => {
     const slot = String.fromCharCode(65 + index);
     const executable = executables[index]!;
+    const authorized = input.cliEvidence?.find(
+      (entry) =>
+        entry.executable === executable.path &&
+        entry.binding.provider === provider &&
+        entry.binding.mode === (input.mcp ? 'mcp' : 'tui'),
+    );
+    if (input.cliEvidence && (!authorized || authorized.sha256 !== executable.sha256))
+      throw new Error('CLI authorization evidence changed');
     const common = {
       identity: { terminalId: randomUUID() },
       trust: 'native-same-user',
@@ -153,7 +166,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       return managedCodexConfigSchema.parse({
         ...common,
         version: 1,
-        executableVersion: reviewedDesktopCodexBinary.version,
+        executableVersion: authorized?.version ?? reviewedDesktopCodexBinary.version,
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -178,7 +191,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         ...common,
         version: 2,
         provider: 'claude',
-        executableVersion: pin.version,
+        executableVersion: authorized?.version ?? pin.version,
         sessionId: randomUUID(),
         authentication: {
           mode: 'reuse-existing',
@@ -213,7 +226,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       ...common,
       version: 3,
       provider: 'opencode',
-      executableVersion: reviewedProviderMcpBinaries.opencode.version,
+      executableVersion: authorized?.version ?? reviewedProviderMcpBinaries.opencode.version,
       authentication: { mode: 'reuse-existing', nativeIdentity, sharedNativeConfiguration: true },
       interactive: {
         sharedNativeSessions: true,
@@ -333,7 +346,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
           join(state, 'terminal.json'),
           serializeInteractiveTerminalConfig(
             config,
-            input.cliBindings?.find(
+            input.cliEvidence?.find(
               (item) =>
                 item.executable === config.executable.path &&
                 item.binding.mode === (input.mcp ? 'mcp' : 'tui'),
