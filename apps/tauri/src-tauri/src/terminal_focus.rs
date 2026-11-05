@@ -7,13 +7,24 @@ use tauri::Manager;
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 static OBSERVING: OnceLock<()> = OnceLock::new();
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Copy, Clone, Default)]
 pub(super) struct Focus {
     pub active: bool,
     pub has_sheet: bool,
     pub key_is_parent: bool,
     pub key_is_sheet: bool,
     pub sheet: usize,
+}
+
+impl std::fmt::Debug for Focus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Focus")
+            .field("active", &self.active)
+            .field("has_sheet", &self.has_sheet)
+            .field("key_is_parent", &self.key_is_parent)
+            .field("key_is_sheet", &self.key_is_sheet)
+            .finish()
+    }
 }
 
 impl Focus {
@@ -209,6 +220,7 @@ mod tests {
             key_is_sheet: true,
             sheet: 1,
         };
+        assert!(!format!("{sheet:?}").contains("sheet: 1"));
         assert!(sheet.owns_sheet(true));
         assert!(sheet.owns_permission_sheet(1));
         assert!(!sheet.owns_permission_sheet(2));
