@@ -101,3 +101,48 @@ preparation, native helper wire and arguments), plus full `pnpm lint`,
 real ingestion and native/provider/real recovery acceptance were not run. No push,
 tag, package mutation or real recovery action was performed. Remaining disk space
 was 46 GiB; the isolated review worktree remains pending integration.
+
+## Independently reviewed current-source delivery — 2026-11-04
+
+Implementation `0b26102bd16824d08ffdf78e7b4b442f1b65c4bf`, exact parent
+`50c1aebe1ac738525fbbe2dd61e59677dad1f603`, received independent GO before
+fast-forward integration. `verifyHistoricalBinding` and the complete historical
+serializer are unchanged. Current-device admission precedes projection; only
+the redundant capture equality and model-source portion of the inter-phase pin
+are removed. No launch, claim, provider or native authority is added.
+
+Reviewer-run verification on that exact source: 318 focused synthetic cases, eight
+additional adversarial combinations, full lint/types and diff checks passed. The
+additional combinations cover selected replacement before both phases, a second
+boot/device before finalize (denied before review/signature/rename), wrong device,
+another source, capsule/signature corruption, expired consent and before-marker
+drift. The initial expiry fixture advanced time before consent, correctly allowing
+fresh consent; moving its fault after consent made the intended negative pass. No
+product change was required. The audited read-only comparator preflight was rerun:
+10 captured files and two complete preimages passed; no real signature or recovery
+acceptance is inferred.
+
+Delivery freeze: `delivery/2026-11-04-offline-current-source-fix-source`. Publish
+main, this tag and original `fix/crossboot-current-source-758` atomically through
+`github-walisson` before building. Preserve the original branch and all older tags.
+The new package destination is `dist/native-preview-current-source-fix`; the
+active `dist/native-preview-cross-boot-release` and every earlier Preview must
+retain their recursive inventories. Build only the filtered dashboard, existing
+resource script and custom-protocol debug app, serially in the existing 691 Cargo
+target. Root build is excluded because it clears active `dist`.
+
+Rust product, Cargo.lock and dependencies are unchanged. The previous 757 package's
+default/custom checks, tests (97 passed and one explicit FIFO ignore each) and
+clippy are inherited evidence, not repeated reviewer runs. Current package build,
+helper syntax, 119-resource comparison, original Node Developer ID, outer ad-hoc
+deep/strict verification, old-app inventories and disk results belong in the new
+ignored build manifest. Full tests, root build, browser, ingestion and native UI
+acceptance remain unrun. A failed package check requires a minimal correction and
+a new published freeze before another build; no allow flags or overwritten tags.
+
+Operator boundary: Root 676 retains preflight and human acceptance. Use only
+`--offline-recovery`, the EXISTING anchor and exact existing bundle
+`offline-f228d4e3-1c2f-4baf-b999-6421a55b45e7`. Review release preparation, then
+separately approve a fresh final administrative commit in that same boot. No new
+capture, reboot, capsule or anchor. Preserve partials/quarantines on uncertainty;
+normal Open is separate. Integration and packaging perform none of those actions.
