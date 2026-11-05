@@ -1179,13 +1179,17 @@ acceptance pending.
 - [x] Version-2 arrangement accepts only the documented sidebar/top/bottom
       insets; version 1 keeps its existing automatic chrome. Node and Rust
       validate window geometry and retain existing presentation fences.
-- [ ] Renderer integration, real AppKit/WebKit acceptance and owner validation
-      of full-window Studio and sidebar return remain pending.
+- [x] Renderer integration supplies the version-2 full-window chrome and a
+      sidebar return control in the Studio source.
+- [ ] Real AppKit/WebKit acceptance and owner validation of full-window Studio
+      and sidebar return remain pending.
 
 ## Account limit evidence — 2026-11-05
 
 - [x] Default Codex profile projects bounded indexed rollout evidence only after
       source identity/hash revalidation; unknown and contradictory readings do not
       produce a fabricated percentage. Explicit locks persist as ORQST preferences.
+- [x] Renderer refresh/lock controls use the native facade for the default Codex
+      reading; this confirms source integration, not native acceptance.
 - [ ] Account profiles, locked-account exclusion in future suggestions, Claude and
-      OpenCode profile-bound sources, renderer action wiring and native acceptance.
+      OpenCode profile-bound sources and native acceptance.
