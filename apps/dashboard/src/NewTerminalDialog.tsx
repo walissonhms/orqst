@@ -48,6 +48,12 @@ interface Props {
   initialWorkspaceId?: string;
   /** Remaining capacity of the current Feature. */
   max: number;
+  /** Hide the orchestrator option when the host cannot label new terminals yet. */
+  allowOrchestrator?: boolean;
+  /** The host is opening terminals; disable the form. */
+  busy?: boolean;
+  /** Optional link to the detailed preparation form. */
+  onAdvanced?: () => void;
   onCancel: () => void;
   onConfirm: (requests: TerminalRequest[]) => void;
 }
@@ -82,6 +88,9 @@ export function NewTerminalDialog({
   workspaces,
   initialWorkspaceId,
   max,
+  allowOrchestrator = true,
+  busy = false,
+  onAdvanced,
   onCancel,
   onConfirm,
 }: Props) {
@@ -407,7 +416,9 @@ export function NewTerminalDialog({
                         ? (entry.reason ?? t('terminalStudio.create.unavailable'))
                         : provider === 'shell'
                           ? t('terminalStudio.create.noModel')
-                          : t('terminalStudio.create.modelCount', { count: entry.models.length })}
+                          : entry.models.length === 0
+                            ? t('terminalStudio.defaultModel')
+                            : t('terminalStudio.create.modelCount', { count: entry.models.length })}
                     </span>
                     {selected && <Check size={14} className="ntd-check" aria-hidden="true" />}
                   </button>
@@ -447,6 +458,7 @@ export function NewTerminalDialog({
                     aria-pressed={lead === index}
                     title={t('terminalStudio.create.makeOrchestrator')}
                     aria-label={t('terminalStudio.create.makeOrchestratorN', { n: index + 1 })}
+                    disabled={!allowOrchestrator}
                     onClick={() => setLead((current) => (current === index ? -1 : index))}
                   >
                     {lead === index ? <Crown size={12} /> : index + 1}
@@ -527,7 +539,7 @@ export function NewTerminalDialog({
           </section>
         )}
 
-        {total > 1 && (
+        {allowOrchestrator && total > 1 && (
           <label className="ntd-lead-toggle">
             <input
               type="checkbox"
@@ -557,12 +569,19 @@ export function NewTerminalDialog({
                   })
                 : `${summary} · ${nameOf(choices[0]?.workspaceId ?? '')}`}
           </span>
+          {onAdvanced && (
+            <button type="button" className="ntd-link" onClick={onAdvanced}>
+              {t('terminalStudio.create.advanced')}
+            </button>
+          )}
           <button type="button" className="ntd-secondary" onClick={onCancel}>
             {t('terminalStudio.create.cancel')}
           </button>
-          <button type="submit" className="ntd-primary" disabled={!valid}>
+          <button type="submit" className="ntd-primary" disabled={!valid || busy}>
             <Plus size={15} />
-            {t('terminalStudio.create.open', { count: total })}
+            {busy
+              ? t('terminalStudio.create.opening')
+              : t('terminalStudio.create.open', { count: total })}
           </button>
         </footer>
       </form>
@@ -600,7 +619,7 @@ function ModelPicker({
             <span className="ntd-model-name">
               {option.id === null ? t('terminalStudio.defaultModel') : (option.label ?? option.id)}
             </span>
-            {option.id !== null && option.label && (
+            {option.id !== null && option.label && !/^[a-f0-9]{64}$/.test(option.id) && (
               <span className="ntd-model-id">{option.id}</span>
             )}
             {option.id === null && (

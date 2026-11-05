@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, X } from 'lucide-react';
 import { FeatureWorkspace } from './FeatureWorkspace.js';
 import { TauriStudioPreparation } from './TauriStudioPreparation.js';
+import { NativeTerminalCreator } from './NativeTerminalCreator.js';
 
 /** One viewport shell; preparation never replaces or remounts the workspace. */
 export function StudioWorkspace({
@@ -30,7 +31,20 @@ export function StudioWorkspace({
   });
   const native =
     window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const [creating, setCreating] = useState<{
+    workspaceId: string;
+    featureId: string | null;
+  } | null>(null);
+  /** The guided dialog is the default; the previous form stays for advanced pairs. */
   function openPreparation(scope: { workspaceId: string; featureId: string | null }) {
+    setContext(scope);
+    if (native) {
+      setCreating(scope);
+      return;
+    }
+    openAdvanced(scope);
+  }
+  function openAdvanced(scope: { workspaceId: string; featureId: string | null }) {
     setContext(scope);
     setVisited(true);
     preparation.current?.showModal();
@@ -60,6 +74,24 @@ export function StudioWorkspace({
         }
         onPrepare={openPreparation}
       />
+      {native && creating && (
+        <NativeTerminalCreator
+          native={native}
+          workspace={{
+            id: creating.workspaceId,
+            name:
+              workspaces.find((workspace) => workspace.id === creating.workspaceId)?.name ??
+              creating.workspaceId,
+          }}
+          featureId={creating.featureId}
+          onAdvanced={() => {
+            const scope = creating;
+            setCreating(null);
+            openAdvanced(scope);
+          }}
+          onClose={() => setCreating(null)}
+        />
+      )}
       <dialog
         className="studio-preparation-dialog"
         ref={preparation}

@@ -1335,7 +1335,10 @@
       "orchestratorIs": "O terminal {{n}} é o Orquestrador",
       "pickOrchestrator": "Escolha um Orquestrador: clique no número da linha",
       "account": "Conta",
-      "accountFor": "Conta do terminal {{n}}"
+      "accountFor": "Conta do terminal {{n}}",
+      "opening": "Abrindo…",
+      "loading": "Carregando as CLIs e os modelos disponíveis neste Mac…",
+      "advanced": "Opções avançadas (par MCP, revisão de caminhos)"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "Todos",
@@ -1429,6 +1432,7 @@
       "limitSuggest": "{{from}} chegou ao limite. Continuar em {{to}}?",
       "continue": "Continuar",
       "notNow": "Agora não"
-    }
+    },
+    "openTerminal": "Abrir terminal"
   }
 }

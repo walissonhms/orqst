@@ -273,5 +273,51 @@ canvas fitted.
 
 - 2026-11-05: pane-768 owns the frontend and implements it directly.
 - 2026-11-05: Feature canvas reference adopted (see amendment).
+- 2026-11-05: Studio terminal layout reviewed by the owner in the synthetic preview
+  ("ficando perfeito"); terminals first, the rest of the frontend after approval.
+- 2026-11-05: account switching = suggest with one click, never automatic.
+- 2026-11-05: the new Studio is the default terminal view; the summary Canvas opens
+  only on request (supersedes D2).
 - D1 (pending): single visual palette for the whole app.
-- D2 (pending): Canvas as the default Studio mode.
+
+## 10. Delivery log and pending work
+
+Kept current with every frontend delivery. "Synthetic" means renderer checks with
+labelled fixtures; "native" means the packaged app. Nothing below is owner-accepted
+on the native app unless stated.
+
+### Done (branch `feat/frontend-768`)
+
+| Item                                                                                                                                                            | Where                                                     | Verified                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Consolidated frontend specification                                                                                                                             | this file                                                 | review                                                                          |
+| Arrangement model: mosaic (balanced grid, size spans, resizable tracks), columns, rows, focus, list, free (move/resize from every edge)                         | `terminal-arrangement.ts`                                 | `tests/terminal-arrangement.test.ts`                                            |
+| Studio component: minimize/dock, maximize, drag reorder, pin, full screen, workspace filter, working bar, completion notices, orchestrator label, header badges | `TerminalStudio.tsx`, `terminal-studio.css`               | synthetic captures EN/PT 1440/390                                               |
+| Communication effects per mode (arc, side lane, focus switcher), delivery shown separately from completion                                                      | `TerminalStudio.tsx`                                      | synthetic                                                                       |
+| New terminal dialog: count, presets, per-terminal CLI/model/name, workspaces, accounts, orchestrator                                                            | `NewTerminalDialog.tsx`                                   | synthetic                                                                       |
+| Mention composer with exact `@T-nnn` resolution and autocomplete                                                                                                | `MentionComposer.tsx`                                     | `tests/mention-composer.test.ts`                                                |
+| Pane ⋯ menu, terminal details, account limit suggestion                                                                                                         | `PaneMenu.tsx`, `TerminalDetails.tsx`                     | synthetic                                                                       |
+| Development preview page                                                                                                                                        | `preview/terminals.html`                                  | dev server only                                                                 |
+| Native feature workspace renders the Studio and sends PTY hole rectangles through `arrange`; views hide under overlays                                          | `FeatureWorkspace.tsx`, `studio-native.ts`                | `tests/studio-native.test.ts` (synthetic host)                                  |
+| Main-window Terminals / Studio shows the Studio; each card opens the real terminal                                                                              | `FeatureWorkspace.tsx`                                    | synthetic capture                                                               |
+| Guided creation uses the real native catalog and `create-selected` (one request per CLI+model group)                                                            | `NativeTerminalCreator.tsx`, `native-terminal-catalog.ts` | `tests/native-terminal-creator.test.ts`, `tests/feature-preparation-ui.test.ts` |
+| Evidenced Claude turn state (running/completed/failed) and last tool name                                                                                       | `studio-native.ts`                                        | synthetic                                                                       |
+| Orchestrator label saved in the Feature                                                                                                                         | `FeatureWorkspace.tsx`                                    | synthetic                                                                       |
+
+Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414/1414.
+
+### Pending
+
+| Item                                                                                                  | Owner    | Blocked by                                       |
+| ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
+| Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                          | owner    | new package                                      |
+| Native OS notifications on completed/failed                                                           | pane-817 | step 2                                           |
+| Claude "needs you" state via owned `--settings` hooks                                                 | pane-817 | step 1b                                          |
+| Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
+| Batch create across several workspaces                                                                | pane-817 | multi-workspace design review (owner + pane-769) |
+| Mentions and communication events from the Core journal                                               | pane-817 | step 4                                           |
+| Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot        | pane-817 | steps 7–8                                        |
+| Detach to a new window                                                                                | pane-817 | native support                                   |
+| Orchestrator choice inside the creation dialog (native)                                               | pane-768 | terminal IDs returned by creation                |
+| Links drawn over native terminals are visible only in gaps                                            | pane-768 | native views sit above the chrome                |
+| Rest of the frontend (Overview, Workspaces, Agents, Models, Artifacts, Settings) — audit items F1–F12 | pane-768 | owner release after terminal approval            |

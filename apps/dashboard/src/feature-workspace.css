@@ -573,3 +573,25 @@
   width: 100%;
   height: 100%;
 }
+
+/* Main window: terminals live in the native terminal view; each card opens it. */
+.ts-open {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  height: 100%;
+  color: var(--orqst-muted);
+  font-size: 12px;
+}
+.ts-open button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--orqst-primary);
+  color: var(--orqst-on-primary);
+  font-weight: 600;
+}
+.ts-open button:disabled {
+  opacity: 0.5;
+}

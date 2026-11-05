@@ -1,5 +1,14 @@
 # Changelog
 
+## Studio terminal workspace — 2026-11-05
+
+- New Studio terminal area with mosaic, columns, rows, focus, list and free layouts,
+  edge resizing, minimize/maximize, drag reorder, pin, full screen and a pane menu.
+- Guided new-terminal dialog backed by the native catalog; mention composer; workspace
+  filter; orchestrator label (descriptive only); evidenced Claude turn state.
+- The native terminal view follows the Studio through the versioned arrange command.
+  Native owner acceptance, notifications, mentions delivery and accounts are pending.
+
 ## Native Studio arrangement — 2026-11-05
 
 - Add a versioned current-Feature geometry contract for retained child Webviews,

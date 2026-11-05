@@ -526,6 +526,12 @@ button.ntd-row-index:hover {
 .ntd-primary:disabled {
   opacity: 0.45;
 }
+.ntd-link {
+  color: var(--orqst-lavender);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .ntd-secondary {
   border: 1px solid var(--orqst-border-strong);
 }

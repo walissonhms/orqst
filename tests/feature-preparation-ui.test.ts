@@ -78,9 +78,25 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
   });
   const browser = await chromium.launch({ headless: true });
   try {
-    for (const [language, title, cli, model, open] of [
-      ['en-US', 'Open terminal', 'CLI provider', 'Model', 'Open'],
-      ['pt-BR', 'Abrir terminal', 'Provedor CLI', 'Modelo', 'Abrir'],
+    for (const [language, title, cli, model, open, guided, advanced] of [
+      [
+        'en-US',
+        'Open terminal',
+        'CLI provider',
+        'Model',
+        'Open',
+        'New terminals',
+        'Advanced options (MCP pair, path review)',
+      ],
+      [
+        'pt-BR',
+        'Abrir terminal',
+        'Provedor CLI',
+        'Modelo',
+        'Abrir',
+        'Novos terminais',
+        'Opções avançadas (par MCP, revisão de caminhos)',
+      ],
     ] as const) {
       const page = await browser.newPage();
       await page.setContent('<div id="root"></div>');
@@ -97,6 +113,10 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
             ?.hasAttribute('disabled'),
       );
       await button.click();
+      // The guided dialog opens first; the previous detailed form stays one click away.
+      const dialog = page.getByRole('dialog', { name: guided, exact: true });
+      await dialog.waitFor({ state: 'visible' });
+      await dialog.getByRole('button', { name: advanced, exact: true }).click();
       const drawer = page.getByRole('dialog', { name: title, exact: true });
       await drawer.waitFor({ state: 'visible' });
       assert.equal(await drawer.getByLabel(cli, { exact: true }).count(), 1);

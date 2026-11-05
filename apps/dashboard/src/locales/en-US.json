@@ -1335,7 +1335,10 @@
       "orchestratorIs": "Terminal {{n}} is the orchestrator",
       "pickOrchestrator": "Choose an orchestrator: click a row number",
       "account": "Account",
-      "accountFor": "Account for terminal {{n}}"
+      "accountFor": "Account for terminal {{n}}",
+      "opening": "Opening…",
+      "loading": "Loading the CLIs and models available on this Mac…",
+      "advanced": "Advanced options (MCP pair, path review)"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "All",
@@ -1429,6 +1432,7 @@
       "limitSuggest": "{{from}} reached its limit. Continue on {{to}}?",
       "continue": "Continue",
       "notNow": "Not now"
-    }
+    },
+    "openTerminal": "Open terminal"
   }
 }

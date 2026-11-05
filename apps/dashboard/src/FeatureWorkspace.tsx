@@ -62,7 +62,10 @@ export function FeatureWorkspace({
   const [dock, setDock] = useState<DockPane[]>([]);
   const [dockEpoch, setDockEpoch] = useState(0);
   const [panes, setPanes] = useState<WorkspacePane[]>([]);
-  const [canvas, setCanvas] = useState(!nativeWorkspace);
+  // The new Studio is the default everywhere; the summary Canvas opens only on request.
+  const [nativeCanvas, setNativeCanvas] = useState(false);
+  const [wantsCanvas, setWantsCanvas] = useState(false);
+  const canvas = wantsCanvas && (!nativeWorkspace || nativeCanvas);
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
   const [renamePane, setRenamePane] = useState<{
@@ -104,8 +107,25 @@ export function FeatureWorkspace({
     [selected, t],
   );
 
-  const studio = nativeWorkspace && !canvas;
+  const studio = !canvas && (nativeWorkspace || !!native);
   const hasSnapshot = !!snapshot;
+  const leftCanvas = useRef(false);
+  useEffect(() => {
+    // Native may present the old summary canvas first; the Studio needs live terminal views.
+    if (!nativeWorkspace || !nativeCanvas || wantsCanvas) {
+      leftCanvas.current = false;
+      return;
+    }
+    const first = snapshot?.slots.find((slot) => members.includes(slot.terminalId));
+    if (!first || leftCanvas.current) return;
+    leftCanvas.current = true;
+    void request({
+      action: 'pane',
+      slot: first.slot,
+      terminalId: first.terminalId,
+      command: 'restore',
+    });
+  });
   const terminals = useMemo(
     () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
     [studio, snapshot, panes, evidence, now],
@@ -230,7 +250,11 @@ export function FeatureWorkspace({
       setDock(dockPanes(detail));
       setDockEpoch(dockGeneration(detail));
       setPanes(workspacePanes(detail));
-      if (nativeWorkspace) setCanvas((detail as { canvas?: boolean } | null)?.canvas === true);
+      if (nativeWorkspace) {
+        const shown = (detail as { canvas?: boolean } | null)?.canvas === true;
+        setNativeCanvas(shown);
+        if (!shown) setWantsCanvas(false);
+      }
     };
     window.addEventListener('orqst-terminal-dock', update);
     return () => window.removeEventListener('orqst-terminal-dock', update);
@@ -601,7 +625,15 @@ export function FeatureWorkspace({
           <button
             aria-pressed={canvas}
             disabled={busy || !native || !snapshot}
-            onClick={() => void request({ action: 'canvas' })}
+            onClick={() => {
+              if (canvas) {
+                setWantsCanvas(false);
+                if (nativeWorkspace && available[0]) paneCommand(available[0].slot, 'restore');
+                return;
+              }
+              setWantsCanvas(true);
+              if (nativeWorkspace) void request({ action: 'canvas' });
+            }}
           >
             {t('canvas.title')}
           </button>
@@ -650,9 +682,36 @@ export function FeatureWorkspace({
               storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
               terminals={terminals}
               messages={[]}
-              renderBody={() => <div className="ts-hole" aria-hidden="true" />}
+              renderBody={(terminal) =>
+                nativeWorkspace ? (
+                  <div className="ts-hole" aria-hidden="true" />
+                ) : (
+                  <div className="ts-open">
+                    <button
+                      type="button"
+                      disabled={busy || quitFence}
+                      onClick={() => {
+                        const slot = snapshot?.slots.find(
+                          (entry) => entry.terminalId === terminal.id,
+                        );
+                        if (slot) paneCommand(slot.slot, 'focus');
+                      }}
+                    >
+                      {t('terminalStudio.openTerminal')}
+                    </button>
+                    <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
+                  </div>
+                )
+              }
               onNewTerminal={canPrepare ? () => void prepare() : undefined}
-              native={{ onLayout: arrange, overlayOpen: !!editor || !!renamePane || quitFence }}
+              {...(nativeWorkspace
+                ? {
+                    native: {
+                      onLayout: arrange,
+                      overlayOpen: !!editor || !!renamePane || quitFence,
+                    },
+                  }
+                : {})}
               onOrchestratorChange={(terminalId) =>
                 selected &&
                 void request({
