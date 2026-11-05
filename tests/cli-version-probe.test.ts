@@ -45,3 +45,26 @@ int main(int argc, char **argv) { FILE *f = fopen(${JSON.stringify(marker)}, "w"
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('a synthetic descendant holding the version pipes cannot defeat the timeout', async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'orqst-probe-timeout-')));
+  const executable = join(dir, 'synthetic-cli');
+  const source = join(dir, 'fixture.c');
+  try {
+    await writeFile(
+      source,
+      '#include <unistd.h>\nint main(void) { if (fork() == 0) { sleep(10); return 0; } sleep(10); return 0; }\n',
+    );
+    execFileSync('cc', [source, '-o', executable]);
+    const verifier = {
+      async verify() {
+        return { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
+      },
+    };
+    const start = Date.now();
+    await assert.rejects(probeSignedCliVersion(verifier, 'codex', 'tui', executable), /timed out/);
+    assert.ok(Date.now() - start < 8000);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
