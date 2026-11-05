@@ -20,6 +20,7 @@ struct State {
     view_revision: u64,
     workspace_id: Option<String>,
     feature_revisions: HashMap<String, u64>,
+    preparation_scope: Option<(Value, String, u64)>,
 }
 fn exact(value: &Value, keys: &[&str]) -> bool {
     value
@@ -442,6 +443,138 @@ async fn with_metadata_completion<T>(
     completion.completed = true;
     value
 }
+fn valid_preparation_request(value: &Value) -> bool {
+    exact(
+        value,
+        &[
+            "contractVersion",
+            "generation",
+            "workspaceId",
+            "featureId",
+            "expectedRevision",
+        ],
+    ) && value["contractVersion"] == 1
+        && safe(&value["generation"]).is_some()
+        && safe(&value["expectedRevision"]).is_some()
+        && value["workspaceId"].as_str().is_some_and(|id| {
+            !id.is_empty()
+                && id.len() <= 128
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+        })
+        && (value["featureId"].is_null() || uuid(&value["featureId"]))
+}
+fn preparation_scope_current(
+    state: &State,
+    request: &Value,
+    epoch: &str,
+    presentation: u64,
+) -> bool {
+    state
+        .preparation_scope
+        .as_ref()
+        .is_some_and(|(scope, known_epoch, known_presentation)| {
+            scope == request && known_epoch == epoch && *known_presentation == presentation
+        })
+}
+fn dashboard_document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
+    label == "main"
+        && parent == "main"
+        && tauri::Url::parse(source).is_ok_and(|url| {
+            url.origin().ascii_serialization() == origin
+                && crate::allowed_dashboard_navigation(&url, Some(origin))
+                && url.query().is_none()
+                && url.fragment().is_none()
+        })
+}
+/// The existing owned dashboard may be on any approved SPA page. This grants no Studio capability.
+fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
+    identity_from(
+        &view.state::<Features>().0,
+        true,
+        || view.url().ok().map(|url| url.to_string()),
+        |source, origin| {
+            dashboard_document_matches(view.label(), view.window().label(), source, origin)
+        },
+    )
+}
+/// View-only chrome → owned main handoff. Never forwarded to the Core metadata pipe.
+#[tauri::command]
+pub async fn feature_prepare(window: Webview, request: Value) -> Value {
+    let denied = || json!({"status":"denied"});
+    if window.label() != "feature-workspace" || !valid_preparation_request(&request) {
+        return denied();
+    }
+    let Some(source) = identity(&window) else {
+        return denied();
+    };
+    let app = window.app_handle();
+    let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
+        return json!({"status":"unavailable"});
+    };
+    let Ok(admission) = crate::terminal::preparation_admission(app) else {
+        return json!({"status":"busy"});
+    };
+    if !crate::terminal_creation::navigation_available(app) {
+        return json!({"status":"busy"});
+    }
+    let Some(main) = app.get_webview("main") else {
+        return denied();
+    };
+    let Some(target) = dashboard_identity(&main) else {
+        return denied();
+    };
+    if !preparation_scope_current(
+        &app.state::<Features>().0.lock().unwrap(),
+        &request,
+        &epoch,
+        presentation,
+    ) {
+        return json!({"status":"stale"});
+    }
+    if !focus_then_current(focused(&window), || {
+        identity(&window) == Some(source)
+            && dashboard_identity(&main) == Some(target.clone())
+            && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
+            && crate::terminal::preparation_admission_current(app, &admission)
+            && crate::terminal_creation::navigation_available(app)
+            && preparation_scope_current(
+                &app.state::<Features>().0.lock().unwrap(),
+                &request,
+                &epoch,
+                presentation,
+            )
+    })
+    .await
+    {
+        return denied();
+    }
+    // Changing windows revokes existing input through the existing native focus observer.
+    // Only this authenticated target receives IDs; the drawer starts no execution on opening.
+    if main.window().unminimize().is_err()
+        || main.window().show().is_err()
+        || main.window().set_focus().is_err()
+    {
+        return json!({"status":"unavailable"});
+    }
+    if dashboard_identity(&main) != Some(target)
+        || crate::terminal::metadata_context(app) != Some((epoch.clone(), presentation))
+        || !crate::terminal::preparation_admission_current(app, &admission)
+        || !crate::terminal_creation::navigation_available(app)
+    {
+        return denied();
+    }
+    if main
+        .eval(format!(
+            "window.dispatchEvent(new CustomEvent('orqst-show-preparation',{{detail:{request}}}));"
+        ))
+        .is_err()
+    {
+        return json!({"status":"unavailable"});
+    }
+    json!({"status":"ok"})
+}
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
@@ -547,6 +680,14 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                 guard.snapshot_generation = generation;
                 guard.view_revision = revision;
                 guard.workspace_id = Some(workspace.into());
+                guard.preparation_scope = Some((
+                    json!({
+                        "contractVersion":1, "generation":generation, "workspaceId":workspace,
+                        "featureId":snapshot["activeFeatureId"], "expectedRevision":revision,
+                    }),
+                    epoch.clone(),
+                    presentation,
+                ));
                 drop(guard);
                 publish(app, snapshot, presentation, &epoch);
             }
@@ -589,6 +730,7 @@ pub fn invalidate(app: &tauri::AppHandle, label: &str) {
     } else {
         return;
     }
+    guard.preparation_scope = None;
     drop(guard);
     if previously_loaded {
         crate::terminal::metadata_invalidate(app);
@@ -629,7 +771,8 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
                     .local(true)
                     .remote(CHROME_URL.into())
                     .webview("feature-workspace")
-                    .permission("allow-feature-request"),
+                    .permission("allow-feature-request")
+                    .permission("allow-feature-prepare"),
             )?;
             app.state::<Features>().0.lock().unwrap().chrome_capability = true;
         }
@@ -715,6 +858,91 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn preparation_target_is_only_the_owned_exact_dashboard_document() {
+        let origin = "http://127.0.0.1:4319";
+        for path in ["/", "/studio", "/overview", "/settings"] {
+            assert!(super::dashboard_document_matches(
+                "main",
+                "main",
+                &format!("{origin}{path}"),
+                origin
+            ));
+        }
+        for (label, parent, source) in [
+            ("feature-workspace", "main", "http://127.0.0.1:4319/studio"),
+            ("main", "terminal-workspace", "http://127.0.0.1:4319/studio"),
+            ("main", "main", "http://127.0.0.1:4320/studio"),
+            ("main", "main", "http://user@127.0.0.1:4319/studio"),
+            ("main", "main", "http://127.0.0.1:4319/studio?x=1"),
+            ("main", "main", "http://127.0.0.1:4319/studio#x"),
+            ("main", "main", "http://127.0.0.1:4319/unknown"),
+            ("main", "main", "orqst-unavailable://local/index.html"),
+            ("main", "main", "orqst-features://local/index.html"),
+        ] {
+            assert!(!super::dashboard_document_matches(
+                label, parent, source, origin
+            ));
+        }
+    }
+    #[test]
+    fn passive_preparation_is_strict_and_bound_to_accepted_scope_and_native_epoch() {
+        let request = serde_json::json!({"contractVersion":1,"generation":7,
+            "workspaceId":"synthetic-workspace","featureId":null,"expectedRevision":3});
+        assert!(super::valid_preparation_request(&request));
+        assert!(!super::valid_request(&request));
+        for key in [
+            "path",
+            "executable",
+            "pid",
+            "proof",
+            "source",
+            "document",
+            "epoch",
+            "action",
+        ] {
+            let mut forged = request.clone();
+            forged[key] = serde_json::json!("SYNTHETIC");
+            assert!(!super::valid_preparation_request(&forged));
+        }
+        let mut state = super::State::default();
+        assert!(!super::preparation_scope_current(
+            &state,
+            &request,
+            "synthetic-epoch",
+            8
+        ));
+        state.preparation_scope = Some((request.clone(), "synthetic-epoch".into(), 8));
+        assert!(super::preparation_scope_current(
+            &state,
+            &request,
+            "synthetic-epoch",
+            8
+        ));
+        assert!(!super::preparation_scope_current(
+            &state,
+            &request,
+            "another-epoch",
+            8
+        ));
+        assert!(!super::preparation_scope_current(
+            &state,
+            &request,
+            "synthetic-epoch",
+            9
+        ));
+        for key in ["generation", "expectedRevision", "workspaceId", "featureId"] {
+            let mut stale = request.clone();
+            stale[key] = serde_json::json!("different");
+            assert!(!super::preparation_scope_current(
+                &state,
+                &stale,
+                "synthetic-epoch",
+                8
+            ));
+        }
+    }
+
     use super::*;
     #[test]
     fn metadata_document_identity_is_exact_and_parent_bound() {

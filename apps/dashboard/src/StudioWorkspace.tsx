@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { FeaturePreparationRequest } from '@orqst/protocol';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, X } from 'lucide-react';
 import { FeatureWorkspace } from './FeatureWorkspace.js';
@@ -7,11 +8,15 @@ import { TauriStudioPreparation } from './TauriStudioPreparation.js';
 /** One viewport shell; preparation never replaces or remounts the workspace. */
 export function StudioWorkspace({
   onOverview,
+  preparationRequest,
+  onPreparationHandled,
   workspaces = [],
   workspaceId = '',
   onWorkspace,
 }: {
   onOverview: () => void;
+  preparationRequest?: FeaturePreparationRequest;
+  onPreparationHandled?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
   onWorkspace?: (id: string) => void;
@@ -30,6 +35,13 @@ export function StudioWorkspace({
     setVisited(true);
     preparation.current?.showModal();
   }
+  useEffect(() => {
+    if (!preparationRequest) return;
+    // The native sender already checked exact source/document, current scope and focus.
+    // Catalog and Open still perform their independent current-scope/native review checks.
+    openPreparation(preparationRequest);
+    onPreparationHandled?.();
+  }, [preparationRequest, onPreparationHandled]);
   return (
     <div className="studio-workspace">
       <FeatureWorkspace

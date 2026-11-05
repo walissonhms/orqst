@@ -330,6 +330,10 @@ fn identity(view: &Webview) -> Option<(String, u64)> {
         |source, origin| document_matches(view.label(), parent.label(), source, origin),
     )
 }
+/// Passive navigation cannot overlap the native preparation helper or its review.
+pub(crate) fn navigation_available(app: &tauri::AppHandle) -> bool {
+    !app.state::<Preparation>().0.lock().unwrap().busy
+}
 fn snapshot(app: &tauri::AppHandle) -> Value {
     let running = crate::terminal::is_running(app);
     let blocked = crate::terminal::presentation_blocked(app);

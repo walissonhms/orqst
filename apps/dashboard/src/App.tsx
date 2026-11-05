@@ -39,6 +39,7 @@ import type {
   StoredEvent,
   Usage,
 } from '@orqst/protocol';
+import { featurePreparationRequestSchema, type FeaturePreparationRequest } from '@orqst/protocol';
 import { api } from './api';
 import { ArtifactLibrary } from './ArtifactLibrary';
 import { artifactSelection } from './artifact-library';
@@ -520,6 +521,13 @@ export function App() {
   const [view, setView] = useState<AppView>(
     viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
   );
+  const [preparationRequest, setPreparationRequest] = useState<FeaturePreparationRequest>();
+  const showPreparation = useRef<(detail: unknown) => void>(() => {});
+  useEffect(() => {
+    const show = (event: Event) => showPreparation.current((event as CustomEvent).detail);
+    window.addEventListener('orqst-show-preparation', show);
+    return () => window.removeEventListener('orqst-show-preparation', show);
+  }, []);
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -786,6 +794,15 @@ export function App() {
         requestAnimationFrame(() => document.getElementById('main-content')?.focus());
     });
   }
+  showPreparation.current = (detail) => {
+    if (window.orqstTauriStudio?.contractVersion !== 1) return;
+    const parsed = featurePreparationRequestSchema.safeParse(detail);
+    if (!parsed.success) return;
+    requestNavigation(() => {
+      setPreparationRequest(parsed.data);
+      applyView('studio');
+    });
+  };
   function openWorkspace(id: string, page: AppView = view) {
     if (id === workspaceId && page === view) return;
     requestNavigation(() => {
@@ -1174,6 +1191,8 @@ export function App() {
           {view === 'studio' ? (
             window.orqstFeatures?.contractVersion === 1 ? (
               <StudioWorkspace
+                preparationRequest={preparationRequest}
+                onPreparationHandled={() => setPreparationRequest(undefined)}
                 onOverview={() => navigate('overview')}
                 workspaces={snapshot?.workspaces ?? []}
                 workspaceId={workspaceId}
