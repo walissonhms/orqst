@@ -21,6 +21,7 @@ import {
   type TerminalRequest,
 } from '../NewTerminalDialog';
 import type { AccountOption } from '../PaneMenu';
+import { AccountLimits, type AccountLimit, type LimitCaps } from '../AccountLimits';
 import './terminal-preview.css';
 
 const start = Date.now();
@@ -117,6 +118,76 @@ function fromRequest(request: TerminalRequest, n: number): StudioTerminal {
   };
 }
 
+const hour = 3_600_000;
+/** Synthetic limits; the app shows only provider-reported usage windows. */
+function syntheticLimits(now: number): AccountLimit[] {
+  return [
+    {
+      id: 'acc-claude-1',
+      provider: 'claude',
+      index: 1,
+      plan: 'MAX 20X',
+      updatedAt: now,
+      locked: false,
+      windows: [
+        { id: 'model', label: 'Opus', usedPercent: 0, resetsAt: now + 106 * hour },
+        { id: 'week', label: 'Semana', usedPercent: 46, resetsAt: now + 106 * hour },
+      ],
+    },
+    {
+      id: 'acc-claude-2',
+      provider: 'claude',
+      index: 2,
+      plan: 'MAX 20X',
+      updatedAt: now,
+      locked: false,
+      windows: [
+        { id: 'model', label: 'Opus', usedPercent: 6, resetsAt: now + 21.25 * hour },
+        { id: 'week', label: 'Semana', usedPercent: 81, resetsAt: now + 21.25 * hour },
+      ],
+    },
+    {
+      id: 'acc-claude-3',
+      provider: 'claude',
+      index: 3,
+      plan: 'MAX 20X',
+      updatedAt: now,
+      locked: true,
+      windows: [
+        { id: 'model', label: 'Opus', usedPercent: 4, resetsAt: now + 39 * hour },
+        { id: 'week', label: 'Semana', usedPercent: 71, resetsAt: now + 39 * hour },
+        { id: '5h', label: '5h', usedPercent: 8, resetsAt: now + 2.75 * hour },
+      ],
+    },
+    {
+      id: 'acc-codex-1',
+      provider: 'codex',
+      index: 1,
+      plan: 'PRO LITE',
+      updatedAt: now,
+      locked: false,
+      windows: [{ id: 'week', label: 'Semana', usedPercent: 20, resetsAt: now + 133 * hour }],
+    },
+    {
+      id: 'acc-codex-2',
+      provider: 'codex',
+      index: 2,
+      plan: 'PLUS',
+      updatedAt: undefined,
+      locked: false,
+      windows: [],
+    },
+    {
+      id: 'acc-opencode-1',
+      provider: 'opencode',
+      index: 1,
+      updatedAt: now - 5 * 60_000,
+      locked: false,
+      windows: [{ id: 'day', label: 'Dia', usedPercent: 93, resetsAt: now + 3 * hour }],
+    },
+  ];
+}
+
 function SyntheticBody({ terminal }: { terminal: StudioTerminal }) {
   return (
     <pre className="tp-body">
@@ -142,6 +213,14 @@ function Preview() {
   const [count, setCount] = useState(4);
   const [creating, setCreating] = useState(false);
   const [suggestions, setSuggestions] = useState<AccountSuggestion[]>([]);
+  const [limits, setLimits] = useState(() => syntheticLimits(Date.now()));
+  const [shownLimits, setShownLimits] = useState([
+    'acc-claude-1',
+    'acc-claude-2',
+    'acc-claude-3',
+    'acc-codex-1',
+  ]);
+  const [caps, setCaps] = useState<LimitCaps>({ warn: 60, critical: 85 });
   const ids = useMemo(() => terminals.map((terminal) => terminal.id), [terminals]);
 
   const send = (kind: StudioMessage['kind']) => {
@@ -230,6 +309,31 @@ function Preview() {
         messages={messages}
         renderBody={(terminal) => <SyntheticBody terminal={terminal} />}
         onNewTerminal={() => setCreating(true)}
+        toolbarEnd={
+          <AccountLimits
+            accounts={limits}
+            shown={shownLimits}
+            caps={caps}
+            now={Date.now()}
+            source={t('accountLimits.sourcePreview')}
+            onShownChange={setShownLimits}
+            onCapsChange={setCaps}
+            onToggleLock={(id) =>
+              setLimits((current) =>
+                current.map((entry) =>
+                  entry.id === id ? { ...entry, locked: !entry.locked } : entry,
+                ),
+              )
+            }
+            onRefresh={(id) =>
+              setLimits((current) =>
+                current.map((entry) =>
+                  entry.id === id ? { ...entry, updatedAt: Date.now() } : entry,
+                ),
+              )
+            }
+          />
+        }
         accounts={syntheticAccounts}
         supportedActions={['refresh', 'copy-conversation', 'migrate']}
         accountSuggestions={suggestions}

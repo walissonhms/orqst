@@ -1470,5 +1470,27 @@
     "title": "Overview",
     "subtitle": "What is running, what needs you and what it costs, from observed sessions.",
     "recentActivity": "With activity in the last 15 min"
+  },
+  "accountLimits": {
+    "title": "Account limits",
+    "open": "Show account limits",
+    "sourcePreview": "synthetic preview",
+    "sourceApp": "reported by the CLI",
+    "now": "now",
+    "ago": "{{time}} ago",
+    "lock": "Lock: never suggest switching to this account",
+    "unlock": "Unlock this account for switch suggestions",
+    "refresh": "Read the limits again",
+    "unknown": "No limits reported yet",
+    "renews": "renews in {{time}}",
+    "renewUnknown": "renewal unknown",
+    "choose": "Choose accounts",
+    "chooseHelp": "Accounts shown in the toolbar",
+    "caps": "Adjust caps",
+    "capsHelp": "Bars change color at these usage levels",
+    "warn": "Attention from",
+    "critical": "Critical from",
+    "hidden_one": "{{count}} account hidden from the toolbar",
+    "hidden_other": "{{count}} accounts hidden from the toolbar"
   }
 }

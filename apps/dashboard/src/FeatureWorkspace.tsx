@@ -26,6 +26,8 @@ import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
 import { TerminalStudio } from './TerminalStudio.js';
+import { AccountLimits } from './AccountLimits.js';
+import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account-limits-model.js';
 import {
   arrangeRequest,
   nativeChrome,
@@ -60,6 +62,38 @@ export function FeatureWorkspace({
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
+  // Provider-reported limits only; the panel stays hidden until the host reports some.
+  const [limits, setLimits] = useState<AccountLimit[]>([]);
+  const [limitsOpen, setLimitsOpen] = useState(false);
+  const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
+        shown?: unknown;
+        caps?: { warn?: unknown; critical?: unknown };
+      } | null;
+      const warn = Number(raw?.caps?.warn);
+      const critical = Number(raw?.caps?.critical);
+      return {
+        ...(Array.isArray(raw?.shown)
+          ? { shown: raw.shown.filter((id): id is string => typeof id === 'string') }
+          : {}),
+        caps:
+          warn >= 1 && warn < critical && critical <= 100
+            ? { warn, critical }
+            : { warn: 60, critical: 85 },
+      };
+    } catch {
+      return { caps: { warn: 60, critical: 85 } };
+    }
+  });
+  const saveLimitPrefs = (next: { shown?: string[]; caps: LimitCaps }) => {
+    setLimitPrefs(next);
+    try {
+      localStorage.setItem('orqst.accountLimits', JSON.stringify(next));
+    } catch {
+      // The choice still applies to this window.
+    }
+  };
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<FeatureNativeRequest['action'] | null>(null);
@@ -196,6 +230,8 @@ export function FeatureWorkspace({
         } as FeatureNativeRequest);
         if (!live.current) return;
         if (reply.canvas) setEvidence(reply.canvas);
+        const reported = (reply as { accountLimits?: { accounts?: unknown } }).accountLimits;
+        if (reported) setLimits(parseAccountLimits(reported.accounts));
         if (reply.snapshot) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
@@ -738,6 +774,20 @@ export function FeatureWorkspace({
                   ),
                 }
               : {})}
+            toolbarEnd={
+              limits.length > 0 ? (
+                <AccountLimits
+                  accounts={limits}
+                  shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
+                  caps={limitPrefs.caps}
+                  now={now}
+                  source={t('accountLimits.sourceApp')}
+                  onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
+                  onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
+                  onOpenChange={setLimitsOpen}
+                />
+              ) : undefined
+            }
             // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
             onClose={() => 'minimize' as const}
             onMention={async () => 'unsupported' as const}
@@ -745,7 +795,7 @@ export function FeatureWorkspace({
               ? {
                   native: {
                     onLayout: arrange,
-                    overlayOpen: !!editor || !!renamePane || quitFence,
+                    overlayOpen: !!editor || !!renamePane || quitFence || limitsOpen,
                   },
                 }
               : {})}

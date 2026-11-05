@@ -1470,5 +1470,27 @@
     "title": "Visão geral",
     "subtitle": "O que está rodando, o que precisa de você e quanto custa, a partir das sessões observadas.",
     "recentActivity": "Com atividade nos últimos 15 min"
+  },
+  "accountLimits": {
+    "title": "Limites das contas",
+    "open": "Mostrar limites das contas",
+    "sourcePreview": "prévia sintética",
+    "sourceApp": "informado pela CLI",
+    "now": "agora",
+    "ago": "há {{time}}",
+    "lock": "Travar: nunca sugerir troca para esta conta",
+    "unlock": "Liberar esta conta para sugestões de troca",
+    "refresh": "Ler os limites de novo",
+    "unknown": "Nenhum limite informado ainda",
+    "renews": "renova em {{time}}",
+    "renewUnknown": "renovação desconhecida",
+    "choose": "Escolher contas",
+    "chooseHelp": "Contas exibidas na barra",
+    "caps": "Ajustar tetos",
+    "capsHelp": "As barras mudam de cor nestes níveis de uso",
+    "warn": "Atenção a partir de",
+    "critical": "Crítico a partir de",
+    "hidden_one": "{{count}} conta oculta da barra",
+    "hidden_other": "{{count}} contas ocultas da barra"
   }
 }

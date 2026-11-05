@@ -145,6 +145,8 @@ interface Props {
   };
   /** Host controls shown at the start of the toolbar (e.g. the Feature panel toggle). */
   toolbarStart?: ReactNode;
+  /** Host controls shown just before New terminal (e.g. account limits). */
+  toolbarEnd?: ReactNode;
   /** CLI accounts available for switching. */
   accounts?: AccountOption[];
   /** Actions the host can perform today; others are shown disabled. */
@@ -358,6 +360,7 @@ export function TerminalStudio({
   accountSuggestions = [],
   native,
   toolbarStart,
+  toolbarEnd,
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -880,6 +883,7 @@ export function TerminalStudio({
             {t('terminalStudio.restoreAll')}
           </button>
         )}
+        {toolbarEnd}
         {onNewTerminal && (
           <button type="button" className="ts-primary" onClick={onNewTerminal}>
             <Plus size={15} />

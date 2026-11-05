@@ -1,0 +1,299 @@
+/* Account limits: toolbar summary and panel. Tokens only. */
+
+.al-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--orqst-border);
+  border-radius: var(--orqst-radius-control);
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.al-trigger:hover,
+.al-trigger[aria-expanded='true'] {
+  border-color: var(--orqst-border-strong);
+  background: var(--orqst-elevated);
+}
+.al-trigger-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.al-trigger-group + .al-trigger-group {
+  padding-left: 12px;
+  border-left: 1px solid var(--orqst-border);
+}
+.al-trigger-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.al-trigger .al-bar {
+  width: 16px;
+  height: 3px;
+}
+.al-reset {
+  color: var(--orqst-muted);
+}
+
+.al-mark {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 3px;
+}
+.al-mark-claude {
+  background: var(--orqst-warning);
+}
+.al-mark-codex {
+  background: var(--orqst-info);
+}
+.al-mark-opencode {
+  background: var(--orqst-success);
+}
+.al-mark-shell {
+  background: var(--orqst-muted);
+}
+
+.al-bar {
+  --al-color: var(--orqst-success);
+  position: relative;
+  display: block;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--orqst-muted) 25%, transparent);
+}
+.al-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--al-color);
+}
+.al-warn {
+  --al-color: var(--orqst-warning);
+}
+.al-critical {
+  --al-color: var(--orqst-danger);
+}
+.al-unknown.al-bar > span {
+  width: 0 !important;
+}
+
+.al-panel {
+  position: fixed;
+  z-index: 2000;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  width: 380px;
+  max-height: min(640px, calc(100vh - 80px));
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 12px;
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+  box-shadow: 0 20px 60px var(--orqst-shadow);
+  font-family: var(--orqst-font-mono);
+  font-size: 12px;
+  animation: al-in 140ms ease-out;
+}
+@keyframes al-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.al-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid var(--orqst-border);
+}
+.al-head h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.al-head span {
+  color: var(--orqst-subtle);
+  font-size: 11px;
+}
+.al-body {
+  overflow-y: auto;
+  padding: 4px 16px 10px;
+}
+.al-provider h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+.al-account {
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--orqst-border);
+}
+.al-account:last-child {
+  border-bottom: 0;
+}
+.al-account-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.al-index {
+  font-weight: 700;
+}
+.al-plan {
+  padding: 1px 6px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 4px;
+  color: var(--orqst-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.al-updated {
+  margin-left: auto;
+  color: var(--orqst-subtle);
+}
+.al-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 7px;
+  color: var(--orqst-muted);
+}
+.al-icon:hover {
+  border-color: var(--orqst-border-strong);
+  color: var(--orqst-text);
+}
+.al-icon.active {
+  border-color: var(--orqst-warning);
+  color: var(--orqst-warning);
+}
+.al-window {
+  display: grid;
+  grid-template-columns: 64px 1fr 40px;
+  align-items: start;
+  gap: 10px;
+  padding: 4px 0;
+}
+.al-window-label {
+  color: var(--orqst-muted);
+  padding-top: 1px;
+}
+.al-window-bar {
+  display: grid;
+  gap: 3px;
+}
+.al-window-bar small {
+  color: var(--orqst-muted);
+  font-size: 11px;
+}
+.al-percent {
+  justify-self: end;
+  color: var(--al-color);
+  font-weight: 600;
+}
+.al-percent.al-ok {
+  --al-color: var(--orqst-success);
+}
+.al-percent.al-unknown {
+  color: var(--orqst-subtle);
+}
+p.al-unknown {
+  margin: 2px 0;
+  color: var(--orqst-subtle);
+}
+.al-editor {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 8px;
+  background: var(--orqst-background);
+}
+.al-editor h3 {
+  margin: 0 0 8px;
+  color: var(--orqst-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+.al-editor label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+.al-editor input[type='number'] {
+  width: 56px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0 6px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 6px;
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+  font: inherit;
+}
+.al-editor input[type='checkbox'] {
+  accent-color: var(--orqst-primary);
+}
+.al-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--al-color);
+}
+.al-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--orqst-border);
+}
+.al-foot span {
+  flex: 1;
+  color: var(--orqst-subtle);
+  font-size: 11px;
+}
+.al-foot button {
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 8px;
+  color: var(--orqst-text);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.al-foot button:hover,
+.al-foot button[aria-pressed='true'] {
+  background: var(--orqst-elevated);
+  border-color: var(--orqst-neon);
+}
+.al-panel button:focus-visible,
+.al-trigger:focus-visible,
+.al-panel input:focus-visible {
+  outline: 2px solid var(--orqst-neon);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .al-panel {
+    animation: none;
+  }
+}
+:root[data-motion='reduced'] .al-panel {
+  animation: none;
+}
