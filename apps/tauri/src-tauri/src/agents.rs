@@ -187,20 +187,22 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
             return denied();
         }
         let action = match request["action"].as_str() {
-            Some("start") => crate::renderer_admission::Action::Start,
-            Some("snapshot") => crate::renderer_admission::Action::Read,
-            Some("stop") => crate::renderer_admission::Action::Stop,
-            Some("retire" | "routing" | "delegate") => crate::renderer_admission::Action::Control,
+            Some("start") => Some(crate::renderer_admission::Action::Start),
+            Some("snapshot") => Some(crate::renderer_admission::Action::Read),
+            Some("stop" | "retire") => None,
+            Some("routing" | "delegate") => Some(crate::renderer_admission::Action::Control),
             _ => return denied(),
         };
-        if !crate::renderer_admission::admit(
-            window.label(),
-            &document.0.to_string(),
-            document.1,
-            action,
-            crate::local_diagnostics::RefusalSource::Agents,
-        ) {
-            return json!({"status":"rate_limited"});
+        if let Some(action) = action {
+            if !crate::renderer_admission::admit(
+                window.label(),
+                &document.0.to_string(),
+                document.1,
+                action,
+                crate::local_diagnostics::RefusalSource::Agents,
+            ) {
+                return json!({"status":"rate_limited"});
+            }
         }
         r.sequence += 1;
         let id = format!("00000000-0000-4000-8000-{:012x}", r.sequence);

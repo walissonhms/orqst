@@ -882,6 +882,21 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
     );
 }
 
+fn terminal_request_admission(
+    action: Option<&str>,
+) -> Result<Option<crate::renderer_admission::Action>, ()> {
+    match action {
+        Some("open") => Ok(Some(crate::renderer_admission::Action::Open)),
+        Some("start") => Ok(Some(crate::renderer_admission::Action::Start)),
+        Some("write" | "paste") => Ok(Some(crate::renderer_admission::Action::Input)),
+        Some("read" | "snapshot") => Ok(Some(crate::renderer_admission::Action::Read)),
+        Some("resize") => Ok(Some(crate::renderer_admission::Action::Resize)),
+        Some("stop" | "detach") => Ok(None),
+        Some("attach" | "input") => Ok(Some(crate::renderer_admission::Action::Control)),
+        _ => Err(()),
+    }
+}
+
 #[tauri::command]
 pub async fn terminal_request(window: Webview, request: Value) -> Value {
     dispatch_terminal_request(window, request, None).await
@@ -977,17 +992,8 @@ async fn dispatch_terminal_request_inner(
             return denied();
         }
         if expected.is_none() {
-            let action = match request["action"].as_str() {
-                Some("open") => Some(crate::renderer_admission::Action::Open),
-                Some("start") => Some(crate::renderer_admission::Action::Start),
-                Some("write" | "paste") => Some(crate::renderer_admission::Action::Input),
-                Some("read" | "snapshot") => Some(crate::renderer_admission::Action::Read),
-                Some("resize") => Some(crate::renderer_admission::Action::Resize),
-                Some("stop") => Some(crate::renderer_admission::Action::Stop),
-                Some("attach" | "input" | "detach") => {
-                    Some(crate::renderer_admission::Action::Control)
-                }
-                _ => return denied(),
+            let Ok(action) = terminal_request_admission(request["action"].as_str()) else {
+                return denied();
             };
             if let Some(action) = action {
                 if !crate::renderer_admission::admit(
@@ -1422,13 +1428,14 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         });
     if !current
         || self::slot(&window) != Some(slot)
-        || !crate::renderer_admission::admit(
-            window.label(),
-            &document.0,
-            document.1,
-            crate::renderer_admission::Action::View,
-            RefusalSource::Terminal,
-        )
+        || (action != "hide"
+            && !crate::renderer_admission::admit(
+                window.label(),
+                &document.0,
+                document.1,
+                crate::renderer_admission::Action::View,
+                RefusalSource::Terminal,
+            ))
     {
         return json!(false);
     }
@@ -3454,5 +3461,25 @@ mod enrollment_tests {
             &late, 2, 1440, 900, 2, generation
         ));
         assert!(!intent.current(0, generation, now));
+    }
+}
+
+#[cfg(test)]
+mod shutdown_admission_tests {
+    use super::terminal_request_admission;
+
+    #[test]
+    fn stop_burst_across_terminals_bypasses_admission_and_unknown_is_denied() {
+        for _terminal in 0..100 {
+            for _request in 0..100 {
+                assert!(matches!(terminal_request_admission(Some("stop")), Ok(None)));
+                assert!(matches!(
+                    terminal_request_admission(Some("detach")),
+                    Ok(None)
+                ));
+            }
+        }
+        assert!(terminal_request_admission(Some("invalid")).is_err());
+        assert!(terminal_request_admission(None).is_err());
     }
 }

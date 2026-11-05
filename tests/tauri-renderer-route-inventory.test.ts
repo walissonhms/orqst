@@ -18,7 +18,7 @@ test('every registered renderer command has a reviewed admission path', () => {
     'features::feature_request': ['features', 'Action::Metadata'],
     'files::file_request': ['files', 'Action::File'],
     'terminal::terminal_open_prepared': ['terminal', 'Action::Open'],
-    'terminal::terminal_request': ['terminal', 'Action::Input'],
+    'terminal::terminal_request': ['terminal', 'terminal_request_admission('],
     'terminal::terminal_restore': ['terminal', 'with_chrome_document(app, document'],
     'terminal::terminal_view': ['terminal', 'Action::View'],
     'terminal_creation::studio_request': ['terminal_creation', 'Action::Catalog'],
@@ -49,8 +49,8 @@ test('every registered renderer command has a reviewed admission path', () => {
   ]) {
     assert.ok(
       terminal
-        .slice(terminal.indexOf('let action = match request["action"]'))
-        .split('_ => return denied()')[0]
+        .slice(terminal.indexOf('fn terminal_request_admission('))
+        .split('_ => ')[0]
         ?.includes(`"${action}"`),
       action,
     );
@@ -60,9 +60,55 @@ test('every registered renderer command has a reviewed admission path', () => {
     assert.ok(
       agents
         .slice(agents.indexOf('let action = match request["action"]'))
-        .split('_ => return denied()')[0]
+        .split('_ => ')[0]
         ?.includes(`"${action}"`),
       action,
     );
   }
+});
+
+test('closing actions bypass admission without removing native guards', () => {
+  const terminal = rust('terminal');
+  const agents = rust('agents');
+  const terminalMap = terminal
+    .split('fn terminal_request_admission(')
+    .at(1)
+    ?.split('_ => Err(())')[0];
+  const agentsMap = agents
+    .split('let action = match request["action"]')
+    .at(1)
+    ?.split('_ => return denied()')[0];
+  assert.ok(terminalMap);
+  assert.ok(agentsMap);
+  assert.match(terminalMap, /Some\("stop" \| "detach"\) => Ok\(None\)/);
+  assert.match(agentsMap, /Some\("stop" \| "retire"\) => None/);
+  assert.match(terminal, /action != "hide"\s*&& !crate::renderer_admission::admit/);
+  for (const source of [terminal, agents]) {
+    assert.ok(source.includes('if let Some(action) = action'));
+    assert.ok(source.includes('focus_required'));
+    assert.ok(source.includes('revoked'));
+  }
+  assert.ok(terminal.includes('(document.0.as_str(), document.1)'));
+  assert.ok(agents.includes('!= document'));
+  assert.ok(!rust('renderer_admission').includes('Action::Stop'));
+});
+
+test('documented admission limits agree with native constants and action groups', () => {
+  const source = rust('renderer_admission');
+  const docs = readFileSync('docs/development/local-diagnostics.md', 'utf8');
+  const constant = (name: string) => {
+    const value = source.match(new RegExp(`const ${name}: u32 = (\\d+);`))?.[1];
+    assert.ok(value, name);
+    return value;
+  };
+  for (const [actions, limit] of [
+    ['Catalog, Create, Selection, Open, Start, Navigate, File', constant('LIMIT')],
+    ['Input, Read, Resize', constant('HIGH_FREQUENCY_LIMIT')],
+    ['Control, Metadata, Permissions, Context, View', constant('CONTROL_LIMIT')],
+  ]) {
+    assert.match(docs, new RegExp(`\\| ${actions} +\\| +${limit} +\\|`));
+  }
+  assert.match(source, /Action::Input \| Action::Read \| Action::Resize => HIGH_FREQUENCY_LIMIT/);
+  assert.match(source, /Action::Control[\s\S]*?Action::View => CONTROL_LIMIT/);
+  assert.match(source, /_ => LIMIT/);
 });

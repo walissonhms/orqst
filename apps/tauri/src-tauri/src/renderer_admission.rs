@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 // A fixed window is intentionally generous for human interaction and bounded at its edges.
 const WINDOW: Duration = Duration::from_secs(60);
 const LIMIT: u32 = 12;
+const HIGH_FREQUENCY_LIMIT: u32 = 6000;
+const CONTROL_LIMIT: u32 = 120;
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Action {
     Catalog,
@@ -19,7 +21,6 @@ pub enum Action {
     Read,
     Resize,
     Control,
-    Stop,
     Metadata,
     Permissions,
     File,
@@ -65,12 +66,12 @@ impl Limiter {
             window.accepted = 0;
         }
         let limit = match action {
-            Action::Input | Action::Read | Action::Resize => 6000,
+            Action::Input | Action::Read | Action::Resize => HIGH_FREQUENCY_LIMIT,
             Action::Control
             | Action::Metadata
             | Action::Permissions
             | Action::Context
-            | Action::View => 120,
+            | Action::View => CONTROL_LIMIT,
             _ => LIMIT,
         };
         if window.accepted >= limit {
@@ -133,7 +134,7 @@ mod tests {
         assert!(limiter.admit("main", "", 1, Action::Catalog, now + WINDOW));
     }
     #[test]
-    fn high_frequency_routes_are_bounded_and_stop_has_independent_quota() {
+    fn high_frequency_routes_are_bounded() {
         let now = Instant::now();
         let mut limiter = Limiter::default();
         for action in [Action::Input, Action::Read, Action::Resize] {
@@ -148,7 +149,6 @@ mod tests {
             assert!(limiter.admit("terminal-0", "host", 1, Action::Control, now));
         }
         assert!(!limiter.admit("terminal-0", "host", 1, Action::Control, now));
-        assert!(limiter.admit("terminal-0", "host", 1, Action::Stop, now));
     }
     #[test]
     fn spaced_human_requests_are_admitted() {
