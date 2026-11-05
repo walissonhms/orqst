@@ -325,6 +325,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
 | Batch create across several workspaces                                                                | pane-817 | multi-workspace design review (owner + pane-769) |
 | Mentions and communication events from the Core journal                                               | pane-817 | step 4                                           |
+| Account limits: Codex default-profile source ready; renderer actions and native acceptance            | pane-817 | pane-768 wiring and owner native test            |
 | Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot        | pane-817 | steps 7–8                                        |
 | Detach to a new window                                                                                | pane-817 | native support                                   |
 | Orchestrator choice inside the creation dialog (native)                                               | pane-768 | terminal IDs returned by creation                |
