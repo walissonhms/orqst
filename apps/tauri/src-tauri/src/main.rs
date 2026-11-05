@@ -16,6 +16,10 @@ mod terminal;
 mod terminal_creation;
 #[cfg(target_os = "macos")]
 mod terminal_kernel_identity;
+#[cfg(all(test, target_os = "macos"))]
+mod terminal_kernel_rename;
+#[cfg(all(test, target_os = "macos"))]
+mod terminal_kernel_scan;
 mod unavailable;
 mod webview_policy;
 
