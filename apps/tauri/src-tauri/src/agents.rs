@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
-use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
+use tauri::{Manager, Webview, WebviewBuilder, WebviewUrl, Window, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -41,12 +41,15 @@ fn menu_target(id: &str) -> Option<&'static str> {
 fn document_matches(label: &str, source: &str) -> bool {
     label == LABEL && source == URL
 }
-fn current(window: &WebviewWindow) -> bool {
-    window
+fn current(webview: &Webview) -> bool {
+    webview
         .url()
-        .is_ok_and(|url| document_matches(window.label(), url.as_str()))
+        .is_ok_and(|url| document_matches(webview.label(), url.as_str()))
 }
-fn focused(window: &WebviewWindow) -> bool {
+fn focused(webview: &Webview) -> bool {
+    // The dedicated document is the only child surface while shown; the single window
+    // owns visibility and key status, matching the previous native window contract.
+    let window = webview.window();
     window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false)
 }
 fn send(app: &tauri::AppHandle, message: Value) -> bool {
@@ -71,7 +74,7 @@ fn revoke(app: &tauri::AppHandle, close: bool) {
 }
 
 #[tauri::command]
-pub async fn agents_request(window: WebviewWindow, request: Value) -> Value {
+pub async fn agents_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status": "denied"});
     if !current(&window) {
         return denied();
@@ -152,7 +155,7 @@ fn confirm(app: &tauri::AppHandle, value: &Value) {
     let (Some(id), Some(request)) = (value["id"].as_str(), value["requestId"].as_str()) else {
         return;
     };
-    let Some(window) = app.get_webview_window(LABEL) else {
+    let Some(window) = app.get_webview(LABEL) else {
         return;
     };
     let fields: Option<Vec<&str>> = ["title", "message", "detail", "cancel", "approve"]
@@ -182,7 +185,7 @@ fn confirm(app: &tauri::AppHandle, value: &Value) {
     let expected = approve.clone();
     let app = app.clone();
     app.dialog().message(format!("{}\n\n{}", fields[1], fields[2]))
-        .title(fields[0]).parent(&window)
+        .title(fields[0]).parent(&window.window())
         .buttons(MessageDialogButtons::YesNoCancelCustom(fields[3].into(), approve, fields[3].into()))
         .show_with_result(move |result| {
             let active = {
@@ -263,41 +266,41 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         exit_authorized: false,
     });
     let handle = app.clone();
-    let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::External(URL.parse()?))
-        .title(ready["title"].as_str().unwrap_or("ORQST"))
-        .inner_size(1200.0, 900.0)
-        .min_inner_size(800.0, 600.0)
-        .visible(false)
-        .on_navigation(|url| url.as_str() == URL)
-        .on_new_window(|_, _| NewWindowResponse::Deny)
-        .on_download(|_, _| false)
-        .on_page_load(move |window, payload| {
-            if payload.event() == tauri::webview::PageLoadEvent::Started {
-                let state = window.state::<Agents>();
-                let mut guard = state.0.lock().unwrap();
-                let reload = guard.as_ref().is_some_and(|r| r.loaded);
-                if let Some(r) = guard.as_mut() {
-                    r.loaded = true;
+    let parent = app.get_window("main").ok_or("Missing main window")?;
+    let view = parent.add_child(
+        WebviewBuilder::new(LABEL, WebviewUrl::External(URL.parse()?))
+            .focused(false)
+            .disable_drag_drop_handler()
+            .on_navigation(|url| url.as_str() == URL)
+            .on_new_window(|_, _| NewWindowResponse::Deny)
+            .on_download(|_, _| false)
+            .on_page_load(move |webview, payload| {
+                if payload.event() == tauri::webview::PageLoadEvent::Started {
+                    let state = webview.state::<Agents>();
+                    let mut guard = state.0.lock().unwrap();
+                    let reload = guard.as_ref().is_some_and(|r| r.loaded);
+                    if let Some(r) = guard.as_mut() {
+                        r.loaded = true;
+                    }
+                    drop(guard);
+                    if reload {
+                        revoke(&handle, true);
+                    }
                 }
-                drop(guard);
-                if reload {
-                    revoke(&handle, true);
-                }
-            }
-        })
-        .build()?;
-    let handle = app.clone();
-    let target = window.clone();
-    window.on_window_event(move |event| match event {
-        WindowEvent::Focused(false) => revoke(&handle, false),
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
-            revoke(&handle, false);
-            let _ = target.hide();
-        }
-        WindowEvent::Destroyed => revoke(&handle, true),
-        _ => {}
-    });
+            }),
+        tauri::LogicalPosition::new(0.0, 0.0),
+        tauri::LogicalSize::new(
+            parent
+                .inner_size()
+                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).width)
+                .unwrap_or(1200.0),
+            parent
+                .inner_size()
+                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).height)
+                .unwrap_or(900.0),
+        ),
+    )?;
+    view.hide()?;
     // Preserve the prepared terminal menu when both independent surfaces are enabled.
     let menu = match app.menu() {
         Some(menu) => menu,
@@ -324,10 +327,10 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
             return;
         }
         if let Some(label) = menu_target(event.id().as_ref()) {
-            if let Some(window) = app.get_webview_window(label) {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
+            if let Some(view) = app.get_webview(label) {
+                let _ = view.window().unminimize();
+                let _ = view.show();
+                let _ = view.set_focus();
             }
         }
     });
@@ -430,6 +433,31 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
         {
             let _ = r.child.kill();
         }
+    }
+}
+pub fn on_window_event(window: &Window, event: &WindowEvent) {
+    if window.label() != "main" {
+        return;
+    }
+    match event {
+        WindowEvent::Focused(false) => revoke(window.app_handle(), false),
+        WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+            if let (Some(view), Ok(size), Ok(scale)) = (
+                window.app_handle().get_webview(LABEL),
+                window.inner_size(),
+                window.scale_factor(),
+            ) {
+                let logical = size.to_logical::<f64>(scale);
+                let _ = view.set_bounds(tauri::Rect {
+                    position: tauri::LogicalPosition::new(0.0, 0.0).into(),
+                    size: tauri::LogicalSize::new(logical.width, logical.height).into(),
+                });
+            }
+        }
+        WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
+            revoke(window.app_handle(), true)
+        }
+        _ => {}
     }
 }
 pub(crate) fn revoke_for_quit(app: &tauri::AppHandle) {

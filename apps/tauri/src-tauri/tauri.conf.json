@@ -17,7 +17,7 @@
           "identifier": "owned-structured-agents",
           "description": "Only the dedicated native agent document can review structured communication.",
           "local": true,
-          "windows": ["managed-agents"],
+          "webviews": ["managed-agents"],
           "permissions": ["allow-agents-request"]
         },
         {

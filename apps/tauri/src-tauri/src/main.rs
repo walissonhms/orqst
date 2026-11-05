@@ -49,7 +49,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, terminal_creation::studio_request])
         .manage(terminal_creation::Preparation::default())
         .manage(offline_recovery::Recovery::default())
-        .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); })
+        .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); agents::on_window_event(window,event); })
         .register_uri_scheme_protocol("orqst-recovery", |_, request| offline_recovery::response(&request))
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
