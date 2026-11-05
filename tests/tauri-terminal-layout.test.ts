@@ -259,3 +259,13 @@ test('confirmed append reserves one stable slot without changing old layout or p
   assert.throws(() => f.layout.append(4), /Invalid/);
   assert.equal(f.layout.open(2), false, 'Enrollment alone does not assign view membership');
 });
+
+test('dock reopen re-shows only an existing hidden slot without starting anything', () => {
+  const f = fixture(2);
+  f.layout.act(1, 'hide');
+  assert.equal(f.layout.snapshot().visible.includes(1), false);
+  assert.equal(f.layout.act(1, 'reopen'), true);
+  assert.equal(f.layout.snapshot().shown.includes(1), true);
+  assert.equal(f.layout.snapshot().active, 1);
+  assert.equal(f.layout.act(5, 'reopen'), false);
+});

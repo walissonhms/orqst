@@ -9,6 +9,7 @@ export const terminalViewActions = [
   'split-rows',
   'maximize',
   'restore',
+  'reopen',
   'focus-other',
   'show-all',
   'move-earlier',
