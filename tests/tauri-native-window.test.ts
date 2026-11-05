@@ -2,16 +2,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   CAPTURABLE_MIN_HEIGHT,
   CAPTURABLE_MIN_WIDTH,
+  assertNativeProcessIdentity,
   captureNativeWindow,
   compileNativeWindowProbe,
   parseNativeWindowSample,
   observeNativeFixtureExit,
+  readNativeProcessIdentity,
   runNativeWindowProbe,
   type NativeWindowSample,
 } from '../scripts/tauri/native-window.js';
@@ -185,3 +188,49 @@ test('invalid timing and process identifiers are rejected before probing', async
   await assert.rejects(() => captureNativeWindow('/synthetic/probe', 4242, { timeoutMs: -1 }));
   assert.throws(() => runNativeWindowProbe('/nonexistent/probe-695', 4242));
 });
+
+test('process identity rejects another executable and invalid identifiers', () => {
+  const fake = (args: string[]) => (args.some((arg) => arg === 'comm=') ? '/bin/sleep\n' : 'now\n');
+  assert.deepEqual(assertNativeProcessIdentity(4242, '/bin/sleep', fake), {
+    executable: '/bin/sleep',
+    startedAt: 'now',
+  });
+  for (const pid of [0, 1, -2, 1.5]) {
+    assert.throws(() => readNativeProcessIdentity(pid, fake), /Invalid/);
+  }
+  assert.throws(() => assertNativeProcessIdentity(4242, '/bin/echo', fake), /canonical artifact/);
+  assert.throws(
+    () =>
+      readNativeProcessIdentity(4242, (args) =>
+        args.some((arg) => arg === 'comm=') ? '' : 'now\n',
+      ),
+    /unavailable/,
+  );
+});
+
+test(
+  'an owned disposable child resolves to this exact executable',
+  { skip: process.platform !== 'darwin' },
+  async () => {
+    const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 5000)'], {
+      stdio: 'ignore',
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.once('spawn', resolve);
+        child.once('error', reject);
+      });
+      assert.ok(child.pid !== undefined && child.pid > 1);
+      const identity = assertNativeProcessIdentity(child.pid, process.execPath);
+      assert.ok(identity.startedAt.length > 0);
+      assert.throws(
+        () => assertNativeProcessIdentity(child.pid!, '/bin/sleep'),
+        /canonical artifact/,
+      );
+    } finally {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+      if (child.exitCode === null && child.signalCode === null)
+        await once(child, 'exit').catch(() => {});
+    }
+  },
+);

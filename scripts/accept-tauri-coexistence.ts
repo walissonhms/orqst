@@ -12,6 +12,7 @@ import {
   nativeBundleIdentifier,
 } from './tauri/coexistence-preflight.js';
 import {
+  assertNativeProcessIdentity,
   captureNativeWindow,
   compileNativeWindowProbe,
   observeNativeFixtureExit,
@@ -133,7 +134,23 @@ const child = spawn(executable, [], {
 const exited = observeNativeFixtureExit(child);
 const pid = child.pid;
 assert.ok(pid !== undefined && pid > 1, 'native fixture did not start');
-const launch = { fixture, pid, port, spawnedAt: new Date().toISOString(), artifact };
+// Bind the PID to this exact artifact. A reused, adopted or relabelled process
+// must never inherit the runner's launch or window evidence.
+let processIdentity: Awaited<ReturnType<typeof assertNativeProcessIdentity>>;
+try {
+  processIdentity = assertNativeProcessIdentity(pid, executable);
+} catch (error) {
+  child.kill('SIGTERM');
+  throw error;
+}
+const launch = {
+  fixture,
+  pid,
+  port,
+  spawnedAt: new Date().toISOString(),
+  artifact,
+  process: processIdentity,
+};
 await writeFile(join(fixture, 'launch.json'), JSON.stringify(launch), { mode: 0o600 });
 console.log(JSON.stringify(launch));
 // The app's own stderr is private evidence: bounded, never a substitute for a window.
@@ -148,7 +165,23 @@ child.stderr?.on('data', (chunk: Buffer) => {
 });
 let window: Awaited<ReturnType<typeof captureNativeWindow>>;
 let failure: string | undefined;
-if (probe === undefined) {
+// Recheck after probe compilation and immediately before inspection; an early
+// exit is diagnosed by the probe instead of a metadata error.
+if (probe !== undefined && child.exitCode === null && child.signalCode === null) {
+  try {
+    assertNativeProcessIdentity(pid, executable);
+  } catch (error) {
+    failure = (error as Error).message;
+    child.kill('SIGTERM');
+  }
+}
+if (failure !== undefined) {
+  window = { status: 'process-exited', waitedMs: 0, samples: 0, windows: [] };
+  await writeFile(join(fixture, 'window.json'), JSON.stringify({ pid, ...window }), {
+    mode: 0o600,
+  });
+  console.log(JSON.stringify({ window, failure }));
+} else if (probe === undefined) {
   window = { status: 'probe-unavailable', waitedMs: 0, samples: 0, windows: [] };
   await writeFile(join(fixture, 'window.json'), JSON.stringify({ pid, ...window }), {
     mode: 0o600,

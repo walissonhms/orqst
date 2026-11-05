@@ -2,7 +2,7 @@
 // Developer-only acceptance support: no production module imports this file.
 import { execFileSync, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 
@@ -17,6 +17,51 @@ export function observeNativeFixtureExit(child: ChildProcess): Promise<boolean> 
     () => false,
     () => true,
   );
+}
+
+export interface NativeProcessIdentity {
+  executable: string;
+  startedAt: string;
+}
+
+const PS_ENV = { PATH: '/usr/bin:/bin' };
+type PsRun = (args: string[]) => string;
+const runPs: PsRun = (args) => execFileSync('/bin/ps', args, { encoding: 'utf8', env: PS_ENV });
+
+/**
+ * Reads only the process command path and start time. This binds a PID to the
+ * artifact the runner spawned; it never reads arguments, environment or user data.
+ */
+export function readNativeProcessIdentity(pid: number, run: PsRun = runPs): NativeProcessIdentity {
+  if (!Number.isSafeInteger(pid) || pid < 2) throw new Error('Invalid native process identifier');
+  const executable = run(['-p', String(pid), '-o', 'comm=']).trim();
+  const startedAt = run(['-p', String(pid), '-o', 'lstart=']).trim();
+  if (executable === '' || startedAt === '')
+    throw new Error('Native process metadata is unavailable');
+  return { executable, startedAt };
+}
+
+/**
+ * Refuses a PID that is not the canonical artifact. A reused, adopted or
+ * relabelled application must never inherit this runner's evidence.
+ */
+export function assertNativeProcessIdentity(
+  pid: number,
+  expectedExecutable: string,
+  run: PsRun = runPs,
+): NativeProcessIdentity {
+  const identity = readNativeProcessIdentity(pid, run);
+  let actual: string;
+  let expected: string;
+  try {
+    actual = realpathSync(identity.executable);
+    expected = realpathSync(expectedExecutable);
+  } catch {
+    throw new Error('Native process executable could not be resolved');
+  }
+  if (actual !== expected)
+    throw new Error('Native process identity does not match the canonical artifact');
+  return identity;
 }
 
 const integer = z.number().int().safe();
