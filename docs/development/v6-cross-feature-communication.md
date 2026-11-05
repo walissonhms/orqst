@@ -60,10 +60,13 @@ preferences file. No communication journal is acquired by those writers. This
 claim concerns the inspected Core paths; it does not establish behavior of
 untrusted direct file modification.
 
-Existing local `authorize` loops over multiple target panes and reads its policy
-separately for each target; it compares revisions between those reads. The event
-filter likewise evaluates multiple recipients separately. These pre-existing local
-paths are unchanged and do not constitute one shared multi-recipient snapshot.
+Existing local `authorize` used to loop over multiple target panes and read its
+policy separately for each target, and the event filter likewise evaluated
+multiple recipients separately. Since the 2026-11-05 one-snapshot note in
+v6-feature-permissions.md, compositions that wire the shared
+`withPermissionSnapshot` lock run those decisions from one preferences snapshot;
+without that lock the per-target reads remain unchanged and do not constitute
+one shared multi-recipient snapshot.
 
 ## Limits
 

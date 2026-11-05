@@ -209,7 +209,38 @@ not ORQST's inherited receipt/config digest contract. The pinned root license is
 Apache-2.0 and no root NOTICE exists; no upstream code or dependency is copied.
 Replacing ORQST's lifecycle would not close this receipt-specific ordering gap.
 
-### Native matrix review correction
+#### 2026-11-05: one policy snapshot per local decision
+
+`PaneCommunication` previously read the Feature policy of each destination in its
+own preferences transaction: multi-destination authorization loops over the
+targets, the multi-recipient event filter evaluates `view` per target, and the
+dispatch claim rechecks `delegate`/`execute` twice. It already compared revisions
+between those reads, but no decision read one consistent preferences snapshot.
+The local path now reuses the shared snapshot reader that the cross-Feature
+ancestor gate already used (`featureConfigurationDatabase.withPermissionSnapshot`):
+the entire decision runs inside one preferences transaction opened under the
+journal transaction, so membership, policy and revision reads for all
+destinations linearize at one snapshot. The service applies its configured
+snapshot lock to every operation and to the dispatch claim whenever the
+composition supplies it, not only when the cross-Feature ancestor gate is
+present; the managed desktop composition now wires `withPermissionSnapshot`
+alongside its permission reader. Compositions without the lock keep the previous
+per-read behavior; the lock, not the service alone, provides the guarantee.
+
+Enforcement semantics are unchanged: absence stays neutral, a saved policy stays
+a strict AND, invalid/archived/foreign scopes and unavailable readers deny, and
+legacy panes without a Feature keep the exact-grant contract. Only read
+consistency changes; the revision comparison inside authorization is kept as
+defense in depth. `withPermissionSnapshot` remains synchronous under its
+`BEGIN IMMEDIATE` preferences transaction and `busy_timeout` failure denies
+fail-closed. Synthetic evidence: `tests/feature-permission-enforcement.test.ts`
+counts one snapshot per decision for a three-destination authorization and a
+reader that rewrites the policy between per-target reads (the snapshotted
+decision stays on revision 0 while the unsnapshotted fallback path rejects the
+mixed revision change). No provider, application, Cargo, build or packaging
+acceptance is established.
+
+## Native matrix review correction
 
 The native reviewed path captures the active Feature, exact document, host epoch,
 presentation generation, snapshot and policy. The plain-text sheet shows the
