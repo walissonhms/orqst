@@ -327,7 +327,9 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
             return;
         }
         if let Some(label) = menu_target(event.id().as_ref()) {
-            if let Some(view) = app.get_webview(label) {
+            if label == LABEL {
+                raise(app);
+            } else if let Some(view) = app.get_webview(label) {
                 let _ = view.window().unminimize();
                 let _ = view.show();
                 let _ = view.set_focus();
@@ -433,6 +435,22 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
         {
             let _ = r.child.kill();
         }
+    }
+}
+/// Hide the managed agent surface and revoke its pending work. Never signals.
+pub fn hide_surface(app: &tauri::AppHandle) {
+    revoke(app, false);
+    if let Some(view) = app.get_webview(LABEL) {
+        let _ = view.hide();
+    }
+}
+
+/// The agent document is the only visible child surface while it is shown.
+fn raise(app: &tauri::AppHandle) {
+    crate::terminal::suspend_surface(app);
+    if let Some(view) = app.get_webview(LABEL) {
+        let _ = view.show();
+        let _ = view.set_focus();
     }
 }
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
@@ -549,6 +567,12 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
 #[cfg(test)]
 mod tests {
     use super::document_matches;
+    #[test]
+    fn managed_agent_capability_is_bound_to_its_webview_only() {
+        let conf = include_str!("../tauri.conf.json");
+        assert!(conf.contains("\"webviews\": [\"managed-agents\"]"));
+        assert!(!conf.contains("\"windows\": [\"managed-agents\"]"));
+    }
     #[test]
     fn commands_bind_only_the_structured_native_document() {
         assert!(document_matches(

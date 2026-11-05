@@ -36,6 +36,28 @@ with the same immediate, no-extra-window semantics as before. `terminal.rs`
 backend increment and are not edited here. No `confirm` shortcut, no hardcoded
 allow/deny and no removed fence.
 
+## Focus and surface exclusion (security review)
+
+1. **One visible surface.** Showing the managed agent document first hides the
+   Feature chrome and every `terminal-N` view, revokes terminal input and sends a
+   layout suspension; only then is the agent child shown and focused. The child is
+   sized to the whole main window, so no terminal or dashboard area remains
+   clickable underneath. Showing a terminal surface does the reverse: it hides the
+   agent child and revokes its pending work.
+2. **Command binding.** The capability grants `allow-agents-request` only to the
+   `managed-agents` webview, and `agents_request` independently requires that
+   exact label and document URL before any state change. Dashboard and terminal
+   webviews cannot invoke it. Covered by
+   `commands_bind_only_the_structured_native_document` and
+   `managed_agent_capability_is_bound_to_its_webview_only`.
+3. **Residual gap, documented.** Tauri exposes no child-webview focus event, and
+   the window-level `Focused(false)` does not fire when another child takes focus
+   inside the same window. The guarantee therefore rests on surface exclusivity
+   plus full-surface coverage: while the agent document is shown, no other child
+   is visible or clickable. If a future increment shows another child above it,
+   exclusivity and this review must be revisited. The confirm focus test remains
+   window-level by design; no fence was relaxed.
+
 ## Acceptance blocker — quit with owned processes
 
 `desktop::main_window_event` still owns `CloseRequested` on `main`

@@ -973,6 +973,27 @@ fn suspend_input(app: &tauri::AppHandle) {
     }
 }
 
+/// Hide the owned terminal surface only. Processes, identities and scrollback stay.
+pub fn suspend_surface(app: &tauri::AppHandle) {
+    revoke_all(app);
+    if let Some(chrome) = app.get_webview("feature-workspace") {
+        let _ = chrome.hide();
+    }
+    let count = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map_or(0, |r| r.documents.len());
+    for slot in 0..count {
+        if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+            let _ = view.hide();
+        }
+    }
+    send(app, json!({"kind":"layout-suspend"}));
+}
+
 fn revoke_all(app: &tauri::AppHandle) {
     let count = app
         .state::<Terminals>()
@@ -1038,6 +1059,8 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     let show = crate::features::workspace_visible(state);
     if !show {
         revoke_all(app);
+    } else {
+        crate::agents::hide_surface(app);
     }
     if let Some(chrome) = app.get_webview("feature-workspace") {
         if show {
