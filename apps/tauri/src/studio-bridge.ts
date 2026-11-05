@@ -18,6 +18,17 @@ export function createTauriStudioClient(
         return { status: 'focus_required' as const };
       try {
         const reply = tauriStudioReplySchema.safeParse(await send(request.data), { jitless: true });
+        if (request.data.action === 'create-batch' && reply.success && reply.data.status === 'ok')
+          return { status: 'unavailable' as const };
+        if (reply.success && reply.data.status === 'batch') {
+          if (request.data.action !== 'create-batch') return { status: 'unavailable' as const };
+          const requests = request.data.requests;
+          if (
+            reply.data.items.length !== requests.length ||
+            reply.data.items.some((item, index) => item.id !== requests[index]?.id)
+          )
+            return { status: 'unavailable' as const };
+        }
         return reply.success ? reply.data : { status: 'unavailable' as const };
       } catch {
         return { status: 'unavailable' as const };

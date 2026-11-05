@@ -1398,3 +1398,223 @@ for (const phase of ['before', 'review', 'commit', 'same-owner-replaced', 'same-
     }
   });
 }
+
+async function batchFixture(f: ReturnType<typeof fixture>, count = 3) {
+  const features = featureConfigurationDatabase(f.trusted.preferencesDirectory, f.workspaceId);
+  const feature = features.create({ name: 'Synthetic batch Feature' });
+  features.saveView({ expectedRevision: 0, featureId: feature.featureId });
+  const catalog = await prepareTauriTerminals(
+    { action: 'catalog', workspaceId: f.workspaceId, featureId: feature.featureId },
+    f.context,
+    f.ports,
+    Date.now,
+    f.trusted,
+  );
+  assert.equal(catalog.status, 'catalog');
+  const providers = ['codex', 'claude', 'opencode'] as const;
+  const request: import('@orqst/protocol').TerminalBatchRequest = {
+    action: 'create-batch',
+    workspaceId: f.workspaceId,
+    featureId: feature.featureId,
+    catalogId: catalog.catalog.catalogId,
+    requests: Array.from({ length: count }, (_, index) => ({
+      id: randomUUID(),
+      workspaceId: f.workspaceId,
+      provider: providers[index % providers.length]!,
+      modelId: null,
+      name: `Synthetic batch ${index + 1}`,
+    })),
+  };
+  return { request, features, feature };
+}
+
+test('batch prepares eight independent owned manifests with one review per CLI and one commit', async () => {
+  const f = fixture();
+  try {
+    const { request, features, feature } = await batchFixture(f, 8);
+    const reviews: string[] = [];
+    const disclosed = new Set<string>();
+    let commits = 0;
+    const result = await prepareTauriTerminals(
+      request,
+      f.context,
+      {
+        ...f.ports,
+        confirm: async (key, detail, overview) => {
+          assert.equal(key, 'selected');
+          assert.ok(detail.length <= 65_536);
+          assert.ok(overview);
+          assert.equal(overview.project, f.project);
+          const providers = new Set(overview.terminals.map((terminal) => terminal.provider));
+          assert.equal(providers.size, 1);
+          reviews.push(overview.terminals[0]!.provider);
+          const plans = JSON.parse(detail) as Array<{
+            terminals: Array<{ identity: { terminalId: string } }>;
+          }>;
+          for (const plan of plans)
+            for (const terminal of plan.terminals) disclosed.add(terminal.identity.terminalId);
+          assert.deepEqual(readdirSync(f.context.parent), []);
+          return true;
+        },
+        commit: async () => {
+          commits++;
+          return true;
+        },
+      },
+      Date.now,
+      f.trusted,
+      undefined,
+      8,
+    );
+    assert.equal(result.status, 'batch');
+    assert.deepEqual(reviews, ['codex', 'claude', 'opencode']);
+    assert.equal(commits, 1);
+    assert.equal(result.items.length, 8);
+    assert.equal(new Set(result.items.map((item) => item.terminalId)).size, 8);
+    assert.deepEqual(
+      result.items.map((item) => item.id),
+      request.requests.map((item) => item.id),
+    );
+    assert.equal(
+      result.items.every((item) => item.status === 'prepared' && item.effects === 'possible'),
+      true,
+    );
+    assert.equal(new Set(result.items.map((item) => item.terminalId)).size, disclosed.size);
+    assert.deepEqual(new Set(features.read(feature.featureId).terminalIds), disclosed);
+    for (const item of result.items) {
+      const config = readInteractiveTerminalConfig(item.file!);
+      assert.ok(disclosed.has(config.identity!.terminalId));
+      assert.equal(config.project, f.project);
+      assert.equal(item.name, request.requests.find((input) => input.id === item.id)!.name);
+    }
+    assert.deepEqual(readdirSync(f.project), ['SYNTHETIC-EXISTING-SOURCE']);
+  } finally {
+    f.close();
+  }
+});
+
+test('batch refuses foreign workspaces, unsupported accounts, unknown models and overflow per item', async () => {
+  const f = fixture();
+  try {
+    const { request } = await batchFixture(f, 6);
+    request.requests[0]!.workspaceId = 'f'.repeat(64);
+    request.requests[1]!.accountId = 'SYNTHETIC-unsupported-profile';
+    request.requests[2]!.modelId = 'f'.repeat(64);
+    const result = await prepareTauriTerminals(
+      request,
+      f.context,
+      { ...f.ports, confirm: async () => true },
+      Date.now,
+      f.trusted,
+      undefined,
+      2,
+    );
+    assert.equal(result.status, 'batch');
+    assert.deepEqual(
+      result.items.map((item) => item.reason),
+      [
+        'workspace_unsupported',
+        'account_unsupported',
+        'selection_unavailable',
+        'not_attempted',
+        'not_attempted',
+        'capacity_exceeded',
+      ],
+    );
+    assert.deepEqual(
+      result.items.map((item) => item.status),
+      ['refused', 'refused', 'refused', 'prepared', 'prepared', 'refused'],
+    );
+    assert.equal(readdirSync(f.context.parent).length, 2);
+  } finally {
+    f.close();
+  }
+});
+
+for (const change of ['cancel', 'catalog', 'view', 'commit', 'symlink'] as const) {
+  test(`batch ${change} before writes refuses all pending items without starting or provisioning`, async () => {
+    const f = fixture();
+    try {
+      const { request, features } = await batchFixture(f);
+      let commits = 0;
+      const result = await prepareTauriTerminals(
+        request,
+        f.context,
+        {
+          ...f.ports,
+          confirm: async () => {
+            if (change === 'catalog')
+              writeFileSync(join(f.home, '.codex/config.toml'), 'model = "changed"\n');
+            if (change === 'view') features.saveView({ expectedRevision: 1, featureId: null });
+            if (change === 'symlink') {
+              renameSync(f.project, f.project + '-original');
+              symlinkSync(f.project + '-original', f.project);
+            }
+            return change !== 'cancel';
+          },
+          commit: async () => {
+            commits++;
+            return change !== 'commit';
+          },
+        },
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(result.status, 'batch');
+      assert.equal(
+        result.items.every((item) => item.status === 'refused' && item.effects === 'not_started'),
+        true,
+      );
+      assert.deepEqual(readdirSync(f.context.parent), []);
+      assert.equal(commits, change === 'commit' ? 1 : 0);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('batch preserves already provisioned evidence when a later plan loses its catalog binding', async () => {
+  const f = fixture();
+  try {
+    const { request, features, feature } = await batchFixture(f);
+    let changed = false;
+    const result = await prepareTauriTerminals(
+      request,
+      f.context,
+      {
+        ...f.ports,
+        confirm: async () => true,
+        current: () => {
+          if (
+            !changed &&
+            readdirSync(f.context.parent).some((name) => !name.endsWith('.pending'))
+          ) {
+            changed = true;
+            writeFileSync(join(f.home, '.codex/config.toml'), 'model = "changed"\n');
+          }
+          return true;
+        },
+      },
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'batch');
+    assert.equal(changed, true);
+    assert.deepEqual(
+      result.items.map((item) => item.status),
+      ['prepared', 'refused', 'refused'],
+    );
+    assert.equal(result.items[1]!.reason, 'context_changed');
+    assert.equal(result.items[2]!.reason, 'not_attempted');
+    assert.equal(readdirSync(f.context.parent).length, 1);
+    assert.throws(() => readInteractiveTerminalConfig(result.items[0]!.file!), /catalogue changed/);
+    const preserved = JSON.parse(readFileSync(result.items[0]!.file!, 'utf8')) as {
+      identity: { terminalId: string };
+    };
+    assert.deepEqual(features.read(feature.featureId).terminalIds, [
+      preserved.identity!.terminalId,
+    ]);
+  } finally {
+    f.close();
+  }
+});

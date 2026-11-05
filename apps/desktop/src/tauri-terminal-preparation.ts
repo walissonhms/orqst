@@ -5,6 +5,7 @@ import {
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
+  terminalBatchRequestSchema,
   type TerminalPreparationCatalog,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
@@ -21,6 +22,7 @@ import {
   type TerminalCreationOverview,
 } from './terminal-creation.js';
 import { TerminalSelection } from './terminal-selection.js';
+import { prepareTauriBatch } from './tauri-terminal-batch.js';
 import { join } from 'node:path';
 import {
   inspectDesktopAdmission,
@@ -32,6 +34,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
+  terminalBatchRequestSchema,
   z.strictObject({
     action: z.literal('create'),
     provider: z.enum(['codex', 'claude']),
@@ -78,6 +81,8 @@ export async function prepareTauriTerminals(
   now: () => number = Date.now,
   trusted?: TerminalPreparationContext,
   currentCore?: DesktopAdmissionContext,
+  availableSlots = 8,
+  unsupportedOpenCode = false,
 ): Promise<
   | {
       status: 'cancelled' | 'prepared' | 'open';
@@ -85,6 +90,7 @@ export async function prepareTauriTerminals(
       previousLayout?: TerminalLayoutRecord;
     }
   | { status: 'catalog'; catalog: TerminalPreparationCatalog }
+  | Awaited<ReturnType<typeof prepareTauriBatch>>
 > {
   let stage: TerminalPreparationFailure['stage'] = 'request';
   let effects: TerminalPreparationFailure['effects'] = 'not_started';
@@ -113,6 +119,21 @@ export async function prepareTauriTerminals(
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
     if (request.action !== 'catalog') preflight();
+    if (request.action === 'create-batch') {
+      if (!trusted || !Number.isInteger(availableSlots) || availableSlots < 0 || availableSlots > 8)
+        return fail('failed');
+      return prepareTauriBatch(
+        request,
+        context,
+        ports,
+        trusted,
+        availableSlots,
+        current,
+        preflight,
+        now,
+        unsupportedOpenCode,
+      );
+    }
     if (
       request.action === 'catalog' ||
       request.action === 'create-selected' ||

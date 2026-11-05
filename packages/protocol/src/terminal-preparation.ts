@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { featureScopeSchema } from './features.js';
+import { terminalDisplayNameSchema } from './terminal-workspace.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 export const terminalProviderSchema = z.enum(['codex', 'claude', 'opencode']);
@@ -19,6 +20,78 @@ export const terminalSelectedRequestSchema = z.strictObject({
   modelId: digest,
   count: z.number().int().min(1).max(8),
 });
+export const terminalBatchRequestSchema = z.strictObject({
+  action: z.literal('create-batch'),
+  ...scope,
+  catalogId: digest,
+  requests: z
+    .array(
+      z.strictObject({
+        id: z.uuid(),
+        workspaceId: featureScopeSchema.shape.workspaceId,
+        provider: terminalProviderSchema,
+        modelId: digest.nullable(),
+        name: terminalDisplayNameSchema,
+        accountId: z.string().min(1).max(80).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(8)
+    .refine((items) => new Set(items.map((item) => item.id)).size === items.length),
+});
+export const terminalBatchItemSchema = z.strictObject({
+  id: z.uuid(),
+  status: z.enum(['accepted', 'refused', 'unknown']),
+  reason: z.enum([
+    'core_enrolled',
+    'workspace_unsupported',
+    'account_unsupported',
+    'capacity_exceeded',
+    'selection_unavailable',
+    'catalog_changed',
+    'review_cancelled',
+    'context_changed',
+    'preparation_failed',
+    'opening_uncertain',
+    'not_attempted',
+    'focus_required',
+    'busy',
+  ]),
+  effects: z.enum(['not_started', 'possible']),
+  terminalId: z.uuid().optional(),
+  slot: z.number().int().min(0).max(7).optional(),
+});
+export const terminalBatchReplySchema = z
+  .strictObject({
+    status: z.literal('batch'),
+    items: z.array(terminalBatchItemSchema).min(1).max(8),
+  })
+  .refine(({ items }) => {
+    const terminalIds = items.flatMap((item) => (item.terminalId ? [item.terminalId] : []));
+    const slots = items.filter((item) => item.status === 'accepted').map((item) => item.slot);
+    return (
+      new Set(items.map((item) => item.id)).size === items.length &&
+      new Set(terminalIds).size === terminalIds.length &&
+      new Set(slots).size === slots.length &&
+      items.every((item) =>
+        item.status === 'accepted'
+          ? item.reason === 'core_enrolled' &&
+            item.terminalId !== undefined &&
+            item.slot !== undefined &&
+            item.effects === 'possible'
+          : item.status === 'unknown'
+            ? item.effects === 'possible' &&
+              item.reason !== 'core_enrolled' &&
+              item.slot === undefined
+            : item.effects === 'not_started' &&
+              item.reason !== 'core_enrolled' &&
+              item.terminalId === undefined &&
+              item.slot === undefined,
+      )
+    );
+  });
+export type TerminalBatchRequest = z.infer<typeof terminalBatchRequestSchema>;
+export type TerminalBatchItem = z.infer<typeof terminalBatchItemSchema>;
 // Fresh bilateral opt-in only. Neither member, model nor direction is inferred.
 export const terminalMcpPairRequestSchema = z.strictObject({
   action: z.literal('create-mcp-pair'),

@@ -4,6 +4,8 @@ import {
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
+  terminalBatchRequestSchema,
+  terminalBatchReplySchema,
   terminalPreparationCatalogSchema,
 } from './terminal-preparation.js';
 
@@ -31,6 +33,9 @@ export type StudioReply = z.infer<typeof studioReplySchema>;
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
   terminalCatalogRequestSchema,
+  terminalBatchRequestSchema.extend({
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
   terminalSelectedRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   }),
@@ -113,6 +118,10 @@ export const terminalPreparationFailureSchema = z
   );
 export type TerminalPreparationFailure = z.infer<typeof terminalPreparationFailureSchema>;
 export const tauriStudioReplySchema = z.union([
+  terminalBatchReplySchema.safeExtend({
+    snapshot: tauriStudioSnapshotSchema.optional(),
+    failure: z.undefined().optional(),
+  }),
   z.strictObject({ status: z.literal('catalog'), catalog: terminalPreparationCatalogSchema }),
   z
     .strictObject({

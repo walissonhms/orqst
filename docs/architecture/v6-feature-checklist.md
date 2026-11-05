@@ -1214,3 +1214,12 @@ acceptance pending.
 - [ ] Current-workspace batch creation (pool 8): incomplete WIP rebased onto
       `15b6ef5`; it is excluded from this candidate and is not ready to integrate.
       Multi-workspace design and Claude owned hooks remain separate pending work.
+
+## Current-workspace batch source — 2026-11-05
+
+- [x] Add bounded batch IDs and per-item admission/refusal/uncertainty outcomes;
+      reuse immutable per-CLI review, path/model revalidation, pool 8 and exact
+      post-ACK native admission fences. Preserve partial evidence and earlier ACKs.
+- [x] Preserve explicit names through initial and incremental native admission.
+- [ ] Renderer wiring and real native mixed-provider batch acceptance.
+- [ ] Multi-workspace design review and account-profile creation remain separate.

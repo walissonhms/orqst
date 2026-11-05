@@ -622,3 +622,61 @@ directory, 0600 files, `O_EXCL|O_NOFOLLOW`, single-link owner check) and replies
 The dashboard shows "Recorded · delivery to terminals is not available yet" or
 "Not allowed" accordingly. An authorized v2 route (for example a target-side MCP
 inbox read with the target's own grant) needs its own design and review.
+
+## Current-workspace batch preparation — 2026-11-05
+
+The owned main Studio facade accepts this additive request (facade contract v1):
+
+```ts
+{
+  action: 'create-batch', generation: number,
+  workspaceId: string, featureId: string | null, catalogId: string,
+  requests: Array<{
+    id: string, workspaceId: string,
+    provider: 'codex' | 'claude' | 'opencode',
+    modelId: string | null, name: string, accountId?: string | null
+  }>
+}
+```
+
+`id` is a unique request UUID. `modelId` is an exact opaque catalog choice, or null
+for that provider's single evidenced CLI-default choice. Names use the existing
+plain-text 1–48 UTF-16-unit rule. The array contains 1–8 requests; the total retained
+Core pool remains **8**, including terminals outside the selected Feature. Only the
+current Workspace is supported; foreign Workspace and non-null account requests
+are refused individually. The native parent supplies available capacity and trusted
+admission context; the renderer cannot increase the pool or supply paths/owners.
+
+A completed invocation returns one result per input ID, in input order:
+
+```ts
+{
+  status: 'batch',
+  items: Array<{
+    id: string, status: 'accepted' | 'refused' | 'unknown',
+    reason: 'core_enrolled' | 'workspace_unsupported' | 'account_unsupported' |
+      'capacity_exceeded' | 'selection_unavailable' | 'catalog_changed' |
+      'review_cancelled' | 'context_changed' | 'preparation_failed' |
+      'opening_uncertain' | 'not_attempted' | 'focus_required' | 'busy',
+    effects: 'not_started' | 'possible', terminalId?: string, slot?: number
+  }>
+}
+```
+
+Accepted means the existing Core start/enrollment and native presentation ACK
+succeeded. It includes the exact owned terminal UUID and slot (0–7); it does not
+claim a provider launch, effective model or completed agent turn. Refused has
+`effects: 'not_started'` and no terminal UUID/slot. Unknown preserves possible
+writes/admission, may include a proved terminal UUID, and never reports an accepted
+slot. An invalid/stale caller or lost transport can still receive the existing
+`denied`/`unavailable` response; it must not infer rollback or retry from that.
+
+One immutable native preparation review is used per distinct CLI, followed by one
+commit latch. Existing provider start/input authorization is unchanged. Earlier
+accepted members survive a later failure; no automatic deletion, retry, new host
+adoption or PTY task submission occurs. Prepared-but-uncertain manifests remain
+private evidence. Partial results are not an all-or-nothing transaction.
+
+See [source/reuse and security review](../research/current-workspace-terminal-batch.md).
+Renderer integration, actual native mixed-provider batch acceptance and the
+separately reviewed multi-workspace design remain pending.

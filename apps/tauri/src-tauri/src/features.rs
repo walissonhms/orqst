@@ -54,7 +54,7 @@ fn text(value: &Value, maximum: usize, nonempty: bool) -> bool {
         .as_str()
         .is_some_and(|s| s.encode_utf16().count() <= maximum && (!nonempty || !s.trim().is_empty()))
 }
-fn name(value: &Value) -> bool {
+pub(crate) fn name(value: &Value) -> bool {
     text(value, 48, true)
         && value.as_str().is_some_and(|s| {
             !s.chars().any(|c| {
