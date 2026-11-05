@@ -684,7 +684,7 @@ Real WebKit/AppKit and provider acceptance remain pending.
       integrated `ba32233`).
 - [ ] Native acceptance for the Feature terminal entry.
 - [x] Sidebar "Pedido recusado" resolves on newer authoritative state —
-      implemented in code + tests (this round).
+      implemented in code + tests (`d86da15`).
 - [ ] Native acceptance for the refusal notice.
 - [ ] Quit / owned exit — open; human decision: exit preserving pending when the
       exit receipt exists and retirement is unavailable; backend port in progress.
@@ -694,5 +694,28 @@ Real WebKit/AppKit and provider acceptance remain pending.
 
 ### Corrections in this round
 
-- corrigido: stale 2-minute/Start/Connect copy and the paste comment (this round).
-- corrigido: persistent refusal notice resolved by a newer snapshot (this round).
+- corrigido: stale 2-minute/Start/Connect copy and the paste comment (`2647dac`, `d86da15`).
+- corrigido: persistent refusal notice resolved by the same target changing (`2647dac`, re-fixed `d86da15`).
+
+## Review round 2 — 2026-11-05 (source state)
+
+- [x] Global left sidebar lists Workspace → Feature with terminal counts and
+      active state; selecting a Feature changes only the view. Implemented in
+      code + tests (`d86da15`).
+- [x] One top-bar breadcrumb Workspace / Feature / terminals. Implemented in
+      code + tests (`d86da15`).
+- [ ] Active terminal name in the breadcrumb — open; needs a native focus event
+      from the terminal surface.
+- [ ] Minimized dock and floating panes — next increment, not in this round.
+- [x] Refusal notice resolves only when the user acts again or the exact target
+      changes; unrelated generation bumps keep it. Implemented in code + tests
+      (`d86da15`).
+- [x] Boundary/Stop/MCP copy aligned with the single local authorization.
+      Implemented in code + tests (`d86da15`).
+
+- corrigido: global sidebar and breadcrumb replace the duplicated Feature list
+  in the Studio panel (`d86da15`).
+- corrigido: notice resolution is target-gated instead of generation-only
+  (`d86da15`).
+- corrigido: boundary/Stop/MCP copy no longer implies a separate Start review
+  or a stop dialog (`d86da15`).
