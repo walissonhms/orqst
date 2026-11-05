@@ -27,6 +27,7 @@ import {
   featureNativeEnvelopeSchema,
   featurePermissionNativeEnvelopeSchema,
   terminalLayoutRecordSchema,
+  terminalDisplayNameSchema,
 } from '@orqst/protocol';
 import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
@@ -131,6 +132,19 @@ async function start() {
   );
   await features.initialize();
   if (closed) return;
+  const initialNames = z
+    .array(z.strictObject({ terminalId: z.uuid(), name: terminalDisplayNameSchema }))
+    .max(8)
+    .parse(JSON.parse(process.argv[6] ?? '[]'));
+  if (new Set(initialNames.map((entry) => entry.terminalId)).size !== initialNames.length)
+    throw new Error('Duplicate owned names');
+  for (const entry of initialNames) {
+    const identity = core.identities.find((identity) => identity.terminalId === entry.terminalId);
+    if (!identity || !layout.nameOwned(identity.slot, entry.name))
+      throw new Error('Owned name unavailable');
+  }
+  if (initialNames.length) await layout.flush();
+  if (closed) return;
   turnWatch.poller = new OwnedTurnPoller(
     async () => (await service.canvasEvidence([...core.identities], core.epoch)).entries,
     ownedNotificationPreferences(directory),
@@ -206,7 +220,7 @@ async function start() {
   const enrollmentOperations = new Set<string>();
   const presentations = new Map<
     string,
-    { slot: number; generation: number; presentation: number }
+    { slot: number; generation: number; presentation: number; name?: string }
   >();
   const enrollmentMessage = z.strictObject({
     kind: z.literal('enroll'),
@@ -215,6 +229,7 @@ async function start() {
     generation: z.number().int().nonnegative().safe(),
     manifestFile: z.string().min(1).max(2048),
     previousLayout: terminalLayoutRecordSchema.nullable(),
+    name: terminalDisplayNameSchema.optional(),
   });
   const enrollmentPresent = z.strictObject({
     kind: z.literal('enrollment-present'),
@@ -312,7 +327,12 @@ async function start() {
           order: [...previous.order, slot],
           shown: [...previous.shown, slot],
         });
-      presentations.set(message.id, { slot, generation: message.generation, presentation });
+      presentations.set(message.id, {
+        slot,
+        generation: message.generation,
+        presentation,
+        ...(message.name ? { name: message.name } : {}),
+      });
       reply({ status: 'ready', receipt, pane: paneDocument(config, slot) });
     } catch {
       // The new operation alone is uncertain. Never shut down/recreate the original Core.
@@ -363,7 +383,14 @@ async function start() {
           )
             void features
               .enrolled(accepted.slot, accepted.presentation)
-              .then(finish, () => finish(false))
+              .then(async (ready) => {
+                if (ready && accepted.name) {
+                  ready = layout.nameOwned(accepted.slot, accepted.name);
+                  await layout.flush();
+                }
+                finish(ready);
+              })
+              .catch(() => finish(false))
               .finally(() => service.endMetadata());
           else finish(false);
           continue;
