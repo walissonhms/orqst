@@ -248,3 +248,21 @@ non-closed pane with that terminal UUID, including an unavailable pane. A new
 explicitly authorized instance after confirmed exit may keep the UUID with fresh
 pane/instance IDs; old bindings/routes do not transfer. See
 [identity evidence and remaining unification work](../development/terminal-identity-link.md).
+
+## Feature policy enforcement
+
+Trusted composition may pass a fourth `FeaturePermissionReader` argument to
+`PaneCommunication(journal, resolver, now, reader)`. Feature-scoped communication
+requires this reader and exact assigned stable terminal IDs. Legacy unscoped panes
+retain their existing contract and never match a scoped pane.
+
+A known Feature without a policy row is neutral; a saved policy strictly intersects
+reviewed routing, exact native task grants, ownership and capabilities. Both delegate
+and execute are checked at authorization/admission/dispatch. Grants pin the exact
+policy revision; any policy edit requires fresh authority, even when rules reallow.
+View restricts status, inbox, audit events and notifications, including immediately
+before microtask delivery. Admission receipts contain submitted metadata; an idempotent
+resend cannot retrieve a hidden completed result. Provider evidence after dispatch
+continues to be persisted after revocation, without inventing cancellation.
+`delegationRevision(sourcePaneId,targetPaneId)` is a trusted root-plan policy/route
+check, not an agent tool or a native grant. See [details and pending integration](../development/v6-feature-permissions.md).

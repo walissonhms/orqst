@@ -1,0 +1,121 @@
+# V6 Feature agent permissions
+
+This increment adds a restrictive Core/protocol/SQLite policy for managed delegated
+tasks. It reuses the existing Feature assignments, reviewed routing, native grants,
+communication journal and structured runtime. It adds no transport, process manager,
+CLI approval mechanism or dashboard/native editor.
+
+## Default and scope
+
+The preserved [V6 MASTER, line 286](../design/v6/source/ORQST_MASTER_SPEC_FEATURES_ATUALIZADO.md)
+places automatic communication inside the Feature by default, and explicitly says
+that the Orchestrator role grants no privileges. Accordingly, **a known, unarchived
+Feature without a policy row has revision 0 and null configuration: the policy
+layer is neutral**. Existing route, native grant, ownership, binding, capabilities,
+provider and queue checks still decide access. Worker and Orchestrator have exactly
+the same access under identical identities and grants.
+
+A saved policy is a strict AND restriction. An operation must appear in the exact
+stable source-terminal/target-terminal rule as well as satisfy every existing
+check. Empty `rules` revokes all operations. No wildcard, role, title, handle, PID,
+path, session, provider text or saved team can grant authority. Policy allow never
+configures a route, issues a grant or starts a process.
+
+Missing policy differs from missing evidence: an unavailable reader, corrupt policy,
+future schema, unknown/archived Feature, mismatched Workspace/Feature, foreign or
+missing terminal identity and exhausted storage limits deny. Legacy panes without
+`featureId` retain the exact-grant contract and can never reach Feature-scoped panes.
+Cross-Feature/Workspace authority is still unavailable.
+
+## Contract and operations
+
+`packages/protocol/src/feature-permissions.ts` defines strict version-1 schemas:
+
+- `FeaturePermissionConfiguration`: `{ schemaVersion: 1, rules: [{
+sourceTerminalId, targetTerminalId, operations }] }`.
+- `FeaturePermissionOperation`: `delegate`, `execute`, `view`.
+- `FeaturePermissionState`: `{ schemaVersion: 1, workspaceId, featureId,
+revision, configuration }`. Only revision 0 has null configuration.
+- `FeaturePermissionSave`: `{ expectedRevision, configuration }`.
+- `featurePermissionEventSchema`: scoped, ordered metadata audit with trusted
+  actor ID, actual timestamp, previous/current revision and configuration.
+
+`delegate` admits the existing `task.request`. `execute` additionally permits its
+adapter dispatch; both are required. Execute is not a command sandbox and cannot
+approve Bash, files, network, a CLI tool call, terminal input or manual launch.
+`view` allows only the existing actor/grant-scoped delegation metadata and result
+references. It grants no transcript or PTY access. A task can dispatch without view;
+its status, events, inbox and notifications are then unavailable to that client.
+Idempotent resend cannot reveal a completed result when view is denied.
+The local human owner's existing administrative access is unchanged.
+
+Rules reject self targets, duplicate pairs/operations, delegate cycles and more
+than 56 directed pairs. Store checks every referenced UUID against the current
+Feature's at most eight assignments in the same transaction as saving the policy.
+
+## Trusted composition only
+
+```ts
+const config = featureConfigurationDatabase(privateDirectory, trustedWorkspaceId);
+config.readPermissions(featureId);
+config.savePermissions(featureId, trustedActorId, { expectedRevision, configuration });
+config.permissionEvents(featureId, afterSequence);
+const service = new PaneCommunication(journal, resolver, Date.now, config.permissionReader);
+```
+
+The host fixes directory, Workspace and actor from authenticated native context.
+These methods are not exposed to agents or over HTTP, RPC, renderer, Tauri invoke
+or MCP. A Feature-scoped service must receive the trusted reader; omission denies,
+not an inference that the catalog has no policy. Unscoped compositions remain valid.
+Loading the configuration restores no grants, adapters, processes or ownership.
+
+`routingProposal` filters denied delegate/execute edges after validating exact live
+identities. Standalone Feature proposals require the policy callback. A proposal
+still needs native route review and an independent task grant before use.
+
+## Enforcement and revocation
+
+Authorization snapshots the exact policy revision into the in-memory grant.
+Admission checks delegate/execute and that revision before content resolution,
+idempotency or insertion. Dispatch checks again before content resolution and
+before claiming dispatch. Revoked work remains queued/pending without submit,
+retargeting or retry. A policy edit, including reallowing identical rules, never
+resurrects an old grant. A fresh native authorization and explicit `reauthorize`
+are required for existing undispatched work.
+
+Status, inbox, event filtering and notifications check view against the current
+scope and revision. Notifications check again inside their queued microtask,
+immediately before invoking the listener. Already-dispatched provider evidence
+continues to be validated and persisted after revocation; revocation does not erase
+facts or manufacture cancellation/exit.
+
+`CodexStructuredRuntime.prepareRootTask` checks the same delegate/execute decision
+and binds `policyRevision` into the native signed plan/digest. `runRootTask` checks
+it again before consuming proof or starting the root provider turn. Role does not
+participate in any of these decisions.
+
+## Persistence, bounds and verification
+
+`Store.featurePermissions()` lazily adds version-1 `feature_permission_schema`,
+`feature_permissions` and `feature_permission_events` to the existing preferences
+Store. It leaves observer `user_version` and historical migrations intact. Policy
+CAS, revision increment and audit insert commit atomically; failed audit rolls back
+the policy. Reads cross-check the latest audit/configuration/revision and retained audit
+count; a missing saved row or incomplete history never reverts to the neutral default.
+See [data model](../architecture/data-model.md#feature-agent-permission-policy--2026-11-05).
+There is no product downgrade or automatic data deletion.
+
+Synthetic tests use disposable SQLite and in-process adapters, including both roles,
+absent/restrictive policies, stale grants, microtask revocation and root turn gates.
+The focused command is:
+
+```sh
+pnpm exec tsx --test tests/feature-permissions.test.ts tests/feature-permission-enforcement.test.ts tests/feature-configuration.test.ts tests/pane-communication.test.ts tests/terminal-team.test.ts
+pnpm lint
+pnpm typecheck
+```
+
+Native policy editing, interactive MCP enforcement, real-provider/native acceptance
+and explicit cross-Feature authorization/audit are separate pending increments.
+No provider, application, Cargo, build or packaging acceptance is established here.
+See [pinned source decisions](../research/v6-feature-permissions-reuse.md).

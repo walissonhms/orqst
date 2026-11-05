@@ -1175,3 +1175,11 @@ fully bound to each phase's RAW/review and repeated approval checks; it is not
 frozen across phases. The unchanged full historical preimage proof restricts the
 exception to its single selected inode on the projected device. No provider
 configuration content is read and no runtime authority is restored.
+
+Feature delegated-task policies are restrictive metadata, never runtime grants.
+A known Feature without a row is neutral to existing route/native authorization;
+invalid or unavailable scope denies. Saved delegate/execute/view rules, revision-bound
+grants and microtask-time view checks prevent role escalation and stale authorization.
+Orchestrator has no privileges. The policy writer is trusted Core composition only;
+no administrative network/renderer/MCP endpoint or CLI approval bypass is added.
+See [Feature policy security and limitations](docs/development/v6-feature-permissions.md).

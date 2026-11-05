@@ -395,3 +395,16 @@ exited records; timestamps describe journal facts, never inferred provider event
 `TerminalJournal` is a private synchronous writer interface, not a network/IPC API.
 No existing wire field or observation capability changes. See
 [durable recovery](../development/terminal-recovery.md).
+
+## Feature agent permission metadata — v1
+
+`feature-permissions.ts` exports strict configuration/rule, operation, state, save
+and audit schemas. Operations are `delegate | execute | view`, scoped to an exact
+directed source/target stable terminal UUID pair within an existing Feature.
+No roles, wildcards or runtime authority are stored. Missing row is revision 0/null
+and neutral to current authorization; saved empty rules deny all operations.
+A non-null configuration requires positive revision. Unknown/corrupt/future scope
+never receives the missing-row default. Save is expectedRevision CAS with atomic
+versioned `feature.permissions.updated` metadata audit, not an observed event.
+See [fields, bounds and enforcement](../development/v6-feature-permissions.md).
+This adds no HTTP/RPC/MCP/native transport command or observer event type.
