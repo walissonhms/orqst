@@ -262,7 +262,7 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                         && exit["code"] == "owned_exit_pending"
                         && exit["principalCount"]
                             .as_u64()
-                            .is_some_and(|count| count <= 9_007_199_254_740_991)
+                            .is_some_and(|count| (1..=1024).contains(&count))
                 })
                 && exits
                     .windows(2)
@@ -1520,6 +1520,15 @@ mod catalog_tests {
         let item = json!({"id":"11111111-1111-4111-8111-111111111111","code":"owned_exit_pending","principalCount":1});
         catalog["pendingOwnedExits"] = json!([item.clone()]);
         assert!(valid_catalog(&catalog, &request));
+        for (count, expected) in [(0, false), (1, true), (1024, true), (1025, false)] {
+            let mut boundary = catalog.clone();
+            boundary["pendingOwnedExits"][0]["principalCount"] = json!(count);
+            assert_eq!(
+                valid_catalog(&boundary, &request),
+                expected,
+                "count {count}"
+            );
+        }
         let mut invalid = catalog.clone();
         invalid["extra"] = json!(true);
         assert!(!valid_catalog(&invalid, &request));
