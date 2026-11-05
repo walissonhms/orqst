@@ -1187,3 +1187,22 @@ Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
 
 Validated on this machine: `cargo test` 109 passed / 1 ignored; `pnpm lint` 0.
 Full `pnpm test` not run in this round.
+
+## Quit re-inspection round 2 — 2026-11-05 (source state)
+
+- [x] P0 `Starting` phase reserved before the host spawn, blocking direct exit and
+      new admission; post-spawn failure is lost-unknown (`c1c76c0`).
+- [x] P1a authenticated pre-fence `busy`/`denied` rolls the fence back; ambiguous
+      outcomes keep it (`dac8f09`).
+- [x] P2 phase/in-flight decided before the agents dialog and revalidated after
+      (`e23425d`).
+- [x] P1b managed-agents sheet accept bound to the current surface epoch, active
+      NSApp, expected key sheet and presented surface; deactivation invalidates the
+      token; pure decision cases tested (`e9e471d`).
+- [ ] Integrated deterministic orchestration test for request_quit → agents
+      callback → ExitRequested → receipt/one-shot with transport failure, replay and
+      start/loss interleavings. The current coverage is pure step/decision tests.
+- [ ] Native AppKit/WebKit acceptance of the Quit and sheet paths.
+
+Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
+`cargo test` 110 passed / 1 ignored.
