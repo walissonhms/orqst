@@ -11,7 +11,9 @@ mod kernel_recovery;
 #[cfg(not(target_os = "macos"))]
 mod kernel_recovery {
     #[derive(Default)]
-    pub struct KernelRecovery;
+    pub struct KernelRecovery {
+        _private: (),
+    }
 }
 mod local_diagnostics;
 mod offline_recovery;
