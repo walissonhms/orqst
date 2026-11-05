@@ -612,9 +612,24 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
         return false;
     }
     for (i, s) in slots.iter().enumerate() {
-        if !(exact(s, &["slot", "terminalId", "provider"])
-            || (exact(s, &["slot", "terminalId", "provider", "selectedModel"])
-                && (s["selectedModel"].is_null()
+        if !s.as_object().is_some_and(|o| {
+            o.keys().all(|key| {
+                matches!(
+                    key.as_str(),
+                    "slot"
+                        | "terminalId"
+                        | "provider"
+                        | "selectedModel"
+                        | "workspace"
+                        | "agentState"
+                )
+            }) && o.contains_key("slot")
+                && o.contains_key("terminalId")
+                && o.contains_key("provider")
+        }) || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
+            || (s.get("agentState").is_some() && s["agentState"] != "unknown")
+            || (s.get("selectedModel").is_some()
+                && !(s["selectedModel"].is_null()
                     || s["selectedModel"].as_str().is_some_and(|model| {
                         !model.is_empty()
                             && model.len() <= 160
@@ -622,7 +637,7 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
                             && model.bytes().all(|byte| {
                                 byte.is_ascii_alphanumeric() || b"._:/#@+-".contains(&byte)
                             })
-                    }))))
+                    })))
             || s["slot"].as_u64() != Some(i as u64)
             || !uuid(&s["terminalId"])
             || !slot_ids.insert(s["terminalId"].to_string())
@@ -2207,6 +2222,15 @@ mod tests {
         assert!(valid_snapshot(&displayed));
         displayed["slots"][0]["selectedModel"] = json!("bad model");
         assert!(!valid_snapshot(&displayed));
+        let mut owned = snapshot.clone();
+        owned["slots"][0]["workspace"] = snapshot["workspace"].clone();
+        owned["slots"][0]["agentState"] = json!("unknown");
+        assert!(valid_snapshot(&owned));
+        owned["slots"][0]["agentState"] = json!("completed");
+        assert!(!valid_snapshot(&owned));
+        owned["slots"][0]["agentState"] = json!("unknown");
+        owned["slots"][0]["workspace"]["id"] = json!("different");
+        assert!(!valid_snapshot(&owned));
         let mut canvas = json!({"observedAt": 200, "entries":[{"slot":0,"terminalId":t,"state":"exited","startedAt":100,"exitedAt":180}]});
         assert!(valid_canvas(&canvas, &snapshot));
         canvas["entries"][0]["terminalId"] = json!(f);

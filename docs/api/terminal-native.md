@@ -1,5 +1,18 @@
 # Native terminal client boundary
 
+## Slot scope and unknown agent state — 2026-11-05
+
+The version-1 Feature snapshot now emits `slots[].workspace: {id, name}` and
+`slots[].agentState: 'unknown'`. Both fields are optional in the schema for
+compatibility with older hosts. On this single-workspace host Rust and Node
+require the slot workspace to equal the enclosing workspace. `unknown` is not a
+process status: neither a live PTY nor an exited receipt proves an agent turn.
+This increment does not enable multi-workspace enrollment, batch creation or
+turn notifications. The native host's pool capacity is eight slots.
+
+Security review: these are bounded display metadata, not a request, path or
+execution capability. No HTTP/WS route, origin policy or native authority changes.
+
 ## Versioned Studio arrangement — 2026-11-05
 
 Only the authenticated `feature-workspace` document gets
