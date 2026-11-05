@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { randomUUID } from 'node:crypto';
 import {
   TerminalSelection,
   inspectTerminalSelection,
@@ -28,6 +29,57 @@ import {
 
 const node = realpathSync(process.execPath);
 const binary = { path: node, sha256: terminalExecutableSha256(node) };
+
+test('legacy Claude TUI remains inspectable but is refused before selection or Core', async () => {
+  const f = fixture();
+  try {
+    const file = f.files[0]!;
+    const state = join(f.root, 'a');
+    writeFileSync(
+      file,
+      JSON.stringify({
+        version: 2,
+        provider: 'claude',
+        trust: 'native-same-user',
+        executable: binary,
+        executableVersion: '2.1.178',
+        node: binary,
+        project: join(f.root, 'project'),
+        state,
+        sessionId: randomUUID(),
+        authentication: {
+          mode: 'reuse-existing',
+          home: join(f.root, 'b'),
+          sharedNativeConfiguration: true,
+        },
+        interactive: { sharedNativeSessions: true },
+      }),
+      { mode: 0o600 },
+    );
+    assert.equal(
+      JSON.parse(inspectTerminalSelection([file]).detail)[0].blocker,
+      'launch_unavailable',
+    );
+    let confirms = 0;
+    const selection = new TerminalSelection();
+    assert.equal(
+      await selection.review({
+        current: () => true,
+        choose: async () => [file],
+        confirm: async () => {
+          confirms++;
+          return true;
+        },
+      }),
+      'launch_unavailable',
+    );
+    assert.equal(confirms, 0);
+    assert.throws(() => selection.take(), /No available/);
+    assert.equal(selection.locked, false);
+  } finally {
+    f.close();
+  }
+});
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-selection-')));

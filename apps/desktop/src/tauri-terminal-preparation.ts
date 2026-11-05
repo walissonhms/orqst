@@ -413,6 +413,7 @@ export async function prepareTauriTerminals(
       choose: async () => files,
       confirm: (page) => ports.confirm('open', page),
     });
+    if (result === 'launch_unavailable') fail('selection_blocked');
     return result === 'reviewed'
       ? { status: 'open', files: selection.take() }
       : { status: 'prepared', files };

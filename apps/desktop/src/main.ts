@@ -616,10 +616,14 @@ async function start(): Promise<void> {
           return result.response === 1;
         },
       });
-      if (result === 'denied' && context.current())
+      if ((result === 'denied' || result === 'launch_unavailable') && context.current())
         await dialog.showMessageBox(context.target!, {
           type: 'warning',
-          message: i18n.t('managedTerminal.selectionDenied'),
+          message: i18n.t(
+            result === 'launch_unavailable'
+              ? 'terminalNative.launch_unavailable'
+              : 'managedTerminal.selectionDenied',
+          ),
           buttons: [i18n.t('terminalNative.cancel')],
           noLink: true,
         });

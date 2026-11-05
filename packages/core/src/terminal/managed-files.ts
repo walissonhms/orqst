@@ -3,6 +3,7 @@ import { terminalIdentity } from './identity.js';
 import { lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { readInteractiveTerminalConfig, interactiveProvider } from './interactive-profile.js';
+import { findCliContract } from './cli-contract.js';
 
 /** Inspect the complete selection before creating a Core, journal or admission marker. */
 export function inspectManagedTerminalFiles(files: readonly string[], limit?: number) {
@@ -33,8 +34,17 @@ export function inspectManagedTerminalFiles(files: readonly string[], limit?: nu
         if (path === '' || (path !== '..' && !path.startsWith('../')))
           throw new Error('Overlapping terminal state');
     states.push(config.state);
-    let blocker: 'reuse_unavailable' | 'existing_state' | 'opencode_startup_required' | undefined =
-      config.authentication && !config.interactive ? 'reuse_unavailable' : undefined;
+    let blocker:
+      | 'reuse_unavailable'
+      | 'existing_state'
+      | 'opencode_startup_required'
+      | 'launch_unavailable'
+      | undefined = config.authentication && !config.interactive ? 'reuse_unavailable' : undefined;
+    if (
+      config.version === 2 &&
+      !findCliContract('claude', config.interactive.mcp ? 'mcp' : 'tui', config.executableVersion)
+    )
+      blocker = 'launch_unavailable';
     if (config.version === 3 && !config.interactive.nativeStartupAuthorized)
       blocker = 'opencode_startup_required';
     for (const name of ['terminal.sqlite', 'desktop-communication.sqlite']) {

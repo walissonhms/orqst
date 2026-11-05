@@ -48,7 +48,12 @@ export function inspectTerminalSelection(files: readonly string[], limit?: numbe
         );
   if (pages.some((page) => page.length > 4096))
     throw new Error('Terminal selection too large for native review');
-  return { snapshot, detail, pages };
+  return {
+    snapshot,
+    detail,
+    pages,
+    launchUnavailable: slots.some((slot) => slot.blocker === 'launch_unavailable'),
+  };
 }
 
 /** In-memory review is separate from opening the existing, single Desktop pair. */
@@ -83,7 +88,7 @@ export class TerminalSelection {
     current(): boolean;
     choose(): Promise<string[] | undefined>;
     confirm(detail: string): Promise<boolean>;
-  }): Promise<'reviewed' | 'cancelled' | 'denied' | 'busy'> {
+  }): Promise<'reviewed' | 'cancelled' | 'denied' | 'busy' | 'launch_unavailable'> {
     if (this.busy) return 'busy';
     if (this.attempted || !ports.current()) return 'denied';
     this.busy = true;
@@ -95,6 +100,7 @@ export class TerminalSelection {
       if (!files) return 'cancelled';
       const inspected = inspectTerminalSelection(files, this.limit);
       if (!current()) return 'denied';
+      if (inspected.launchUnavailable) return 'launch_unavailable';
       for (const page of inspected.pages) {
         if (!current()) return 'denied';
         if (!(await ports.confirm(page))) return 'cancelled';
@@ -116,10 +122,8 @@ export class TerminalSelection {
   take(): string[] {
     if (this.busy || this.attempted || !this.selection)
       throw new Error('No available reviewed terminal selection');
-    if (
-      inspectTerminalSelection(this.selection.files, this.limit).snapshot !==
-      this.selection.snapshot
-    )
+    const inspected = inspectTerminalSelection(this.selection.files, this.limit);
+    if (inspected.launchUnavailable || inspected.snapshot !== this.selection.snapshot)
       throw new Error('Reviewed selection changed; review again before opening');
     this.attempted = true;
     return [...this.selection.files];
