@@ -1202,3 +1202,15 @@ acceptance pending.
       private epoch-bound click navigation selects exact membership and revokes input.
 - [ ] Actual macOS background delivery/click/focus and owned provider acceptance.
       Codex/OpenCode turn binding and Claude waiting-for-user hooks remain pending.
+
+## Studio native candidate 15b6ef5 — 2026-11-05
+
+- [x] Package the exact integrated frontend source `15b6ef5` in an isolated
+      `dist/native-preview-studio-15b6ef5` directory, including owned-turn
+      notification wiring. Lint, typecheck, the full Node suite (1433/1433),
+      Rust tests (172 passed, 2 ignored), Clippy and the isolated builds passed.
+      Signature and resource hashes are checked separately in the local package manifest.
+- [ ] Owner native acceptance; the package is not launched during this delivery.
+- [ ] Current-workspace batch creation (pool 8): incomplete WIP rebased onto
+      `15b6ef5`; it is excluded from this candidate and is not ready to integrate.
+      Multi-workspace design and Claude owned hooks remain separate pending work.
