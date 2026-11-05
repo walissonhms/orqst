@@ -172,3 +172,17 @@ No existing store data is deleted or copied; preference migration is open.
 loopback HTTP, so it is not an Electron `onBeforeRequest` replacement. macOS
 permission categories without a callback (geolocation, browser notifications,
 clipboard read) remain open and are not claimed as enforced.
+
+## Feature permission matrix — 2026-11-05 (source state)
+
+Writes go only through `feature_permissions`, allowlisted on the
+`feature-workspace-metadata` capability with the exact CHROME_URL. The handler
+validates label, parent, URL, document, native focus and generation, shows a
+native plain-text diff with escaped content, stable T-001 labels and Cancel as
+default, revalidates after the sheet, then saves through the existing private
+Node feature channel with CAS (`expectedRevision`) and audit. The actor is
+derived natively; the renderer has no write path. A stale revision returns an
+inline error with no automatic retry. CSP is unchanged. Reset to the Feature
+default is not implemented: the Core has no policy removal, and saving an empty
+list revokes, so the UI only informs the default state. Native acceptance is
+pending.

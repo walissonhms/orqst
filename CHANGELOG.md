@@ -1323,3 +1323,19 @@ No app/provider, native UI acceptance, resource build or package was run.
       validation and the same snapshot is used through spawn (`c5973d5`; 82 focused
       and 1302 full).
 - [ ] Electron removal itself is not performed; it remains gated on native parity.
+
+## Feature permission matrix — 2026-11-05 (source state)
+
+- [x] Feature permission matrix panel in the Feature chrome; the renderer only
+      proposes and has no write path (`31c6233`).
+- [x] Native review with the exact plain-text diff, escaped content, stable
+      T-001 labels, Cancel default, and focus/generation/revision revalidated
+      after the sheet (`31c6233`).
+- [x] Save through the existing private Node feature channel with CAS and audit;
+      the actor is native; stale revision shows an inline error without retry
+      (`31c6233`).
+- [x] Route/capability restricted to the exact chrome webview; CSP unchanged
+      (`31c6233`).
+- [ ] Reset to the Feature default is open: the Core has no policy removal and
+      an empty save revokes.
+- [ ] Native WebKit acceptance of the matrix and the review sheet.
