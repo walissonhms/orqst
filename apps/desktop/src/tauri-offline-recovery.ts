@@ -1,6 +1,7 @@
 import { sign } from 'node:crypto';
 import { dirname, basename } from 'node:path';
 import { z } from 'zod';
+import { reconcileKernelReleases } from '../../../packages/core/src/terminal/kernel-release-files.js';
 import { terminalDirectory } from '../../../packages/core/src/terminal/codex-profile.js';
 import { OfflineEnrollmentBindingChanged } from '../../../packages/core/src/terminal/offline-recovery-files.js';
 import {
@@ -79,6 +80,7 @@ export class TauriOfflineRecovery {
     this.action = request.action;
     try {
       const paths = recoveryLocations(this.parent);
+      reconcileKernelReleases(paths.admission);
       if (request.action === 'install') {
         if (request.bundle !== null || this.recovery)
           throw new Error('Invalid anchor installation');

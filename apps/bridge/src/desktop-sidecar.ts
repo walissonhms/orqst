@@ -1,6 +1,7 @@
 import { DesktopMonitor, desktopNotificationFrame } from '@orqst/core';
 import { lstat, realpath } from 'node:fs/promises';
-import { join, resolve, sep } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
+import { reconcileKernelReleases } from '../../../packages/core/src/terminal/kernel-release-files.js';
 import { createBridge } from './app.js';
 import { loadConfig } from './config.js';
 
@@ -46,6 +47,12 @@ process.on('SIGINT', () => shutdown());
 app.core.onFailure(() => shutdown(true));
 
 try {
+  // Evidence-only audit: incomplete old decisions never block a new owner's claim.
+  try {
+    reconcileKernelReleases(join(dirname(resolve(process.env.ORQST_DATA_DIR)), 'managed-agents'));
+  } catch {
+    console.error('ORQST reservation evidence audit unavailable.');
+  }
   // READY promises a usable packaged dashboard, not only an open socket.
   const root = await realpath(resolve(dashboardDir));
   const index = join(root, 'index.html');
