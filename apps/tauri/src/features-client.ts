@@ -16,6 +16,13 @@ if (
         : undefined,
     ),
   });
+  if (location.href === 'orqst-features://local/index.html') {
+    Object.defineProperty(window, 'orqstTerminalDock', {
+      value: Object.freeze({
+        restore: (slot: number) => invoke<boolean>('terminal_restore', { slot }),
+      }),
+    });
+  }
   window.addEventListener('orqst-native-feature-state', (event) => {
     const parsed = featureNativeSnapshotSchema.safeParse((event as CustomEvent).detail, {
       jitless: true,

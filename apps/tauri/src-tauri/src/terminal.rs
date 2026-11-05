@@ -44,6 +44,8 @@ struct Running {
     enrollment_request: Option<String>,
     enrollment_fenced: bool,
     documents: Vec<String>,
+    labels: Vec<String>,
+    providers: Vec<String>,
     layout: Value,
     generations: Vec<u64>,
     loaded: Vec<bool>,
@@ -573,6 +575,14 @@ mod tests {
     }
 
     #[test]
+    fn dock_restore_only_accepts_existing_hidden_slots() {
+        assert!(super::restore_allowed(1, 2, &[0]));
+        assert!(!super::restore_allowed(0, 2, &[0]));
+        assert!(!super::restore_allowed(2, 2, &[0]));
+        assert!(!super::restore_allowed(0, 0, &[]));
+    }
+
+    #[test]
     fn mcp_and_retirement_reviews_exclude_each_other_and_inflight_panes() {
         assert!(review_available(false, false, &[false, false], false));
         for (retiring, mcp) in [(true, false), (false, true), (true, true)] {
@@ -892,6 +902,38 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     json!({"attempted":true,"value":value})
 }
 
+/// A dock restore only re-shows an existing hidden slot; it grants no process authority.
+pub(crate) fn restore_allowed(slot: u64, count: usize, visible: &[u64]) -> bool {
+    (slot as usize) < count && !visible.contains(&slot)
+}
+
+#[tauri::command]
+pub async fn terminal_restore(window: Webview, slot: u64) -> Value {
+    let app = window.app_handle();
+    if !crate::features::chrome_current(app, &window) {
+        return json!(false);
+    }
+    let (count, visible) = {
+        let terminal = app.state::<Terminals>();
+        let guard = terminal.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else {
+            return json!(false);
+        };
+        let visible: Vec<u64> = r.layout["visible"]
+            .as_array()
+            .map(|items| items.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default();
+        (r.documents.len(), visible)
+    };
+    if !restore_allowed(slot, count, &visible) {
+        return json!(false);
+    }
+    json!(send(
+        app,
+        json!({"kind":"layout-action","slot":slot,"action":"reopen"})
+    ))
+}
+
 #[tauri::command]
 pub async fn terminal_view(window: Webview, action: Value) -> Value {
     let Some(slot) = slot(&window) else {
@@ -1055,6 +1097,15 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         r.layout_revision = value["revision"].as_u64().unwrap();
         r.layout = state.clone();
     }
+    // Minimal dock state only: hidden slot, label and provider. No ids, proofs or epochs.
+    let (dock_labels, dock_providers) = {
+        let terminal = app.state::<Terminals>();
+        let guard = terminal.0.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|r| (r.labels.clone(), r.providers.clone()))
+            .unwrap_or_default()
+    };
     // The whole envelope is validated before any state, geometry or visibility change.
     let show = crate::features::workspace_visible(state);
     if !show {
@@ -1068,6 +1119,28 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         } else {
             let _ = chrome.hide();
         }
+        let visible: Vec<u64> = if show {
+            state["visible"]
+                .as_array()
+                .map(|items| items.iter().filter_map(Value::as_u64).collect())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let hidden: Vec<Value> = (0..dock_labels.len())
+            .filter(|slot| !visible.contains(&(*slot as u64)))
+            .map(|slot| {
+                json!({
+                    "slot": slot,
+                    "label": dock_labels.get(slot).cloned().unwrap_or_default(),
+                    "provider": dock_providers.get(slot).cloned().unwrap_or_default(),
+                })
+            })
+            .collect();
+        let detail = json!({"hidden": hidden, "count": dock_labels.len()});
+        let _ = chrome.eval(format!(
+            "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
+        ));
     }
     for bound in value["bounds"].as_array().unwrap() {
         let slot = bound["slot"].as_u64().unwrap();
@@ -1984,6 +2057,14 @@ async fn start_selected_inner(
     let panes = ready["panes"]
         .as_array()
         .ok_or("Missing terminal documents")?;
+    let labels: Vec<String> = panes
+        .iter()
+        .map(|pane| pane["title"].as_str().unwrap_or("").to_string())
+        .collect();
+    let providers: Vec<String> = panes
+        .iter()
+        .map(|pane| pane["provider"].as_str().unwrap_or("").to_string())
+        .collect();
     let documents: Vec<String> = panes
         .iter()
         .map(|p| p["html"].as_str().unwrap_or("").to_owned())
@@ -2025,6 +2106,8 @@ async fn start_selected_inner(
         enrollment_request: None,
         enrollment_fenced: false,
         documents,
+        labels,
+        providers,
         layout: ready["layout"].clone(),
         generations: vec![0; count],
         loaded: vec![false; count],

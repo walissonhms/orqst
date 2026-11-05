@@ -4,6 +4,7 @@ fn main() {
             "terminal_request",
             "terminal_open_prepared",
             "terminal_view",
+            "terminal_restore",
             "agents_request",
             "file_request",
             "feature_request",
