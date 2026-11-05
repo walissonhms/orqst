@@ -1,5 +1,9 @@
 # V6 feature delivery checklist — 2026-11-04
 
+2026-11-05 test investigation: a closed-stderr reproduction yielded SIGPIPE in
+24/24 synthetic fixture runs; the original failing scenario was not recorded.
+See [diagnosis](../development/codex-initialize-synthetic-sigpipe.md).
+
 2026-11-05 pane-817 notification WIP: `b0a5ca5` contains a standalone,
 synthetically tested turn-transition and deduplication monitor. It is not wired
 to background monitoring, OS notifications, preferences or click-to-terminal;
