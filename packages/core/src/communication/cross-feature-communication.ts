@@ -58,12 +58,21 @@ export class CrossFeatureCommunication {
       !matches(target, grant.target) ||
       !source ||
       !target ||
+      !source.routing ||
+      !target.routing ||
       !source.capabilities.canSend ||
       !target.capabilities.canSend ||
       !target.capabilities.canQueueWhileBusy ||
       !target.capabilities.canAcknowledge ||
       !target.capabilities.canReportTaskCompletion ||
-      !source.routing?.allowedTargetPaneIds.includes(target.paneId)
+      !tx
+        .crossRoutes()
+        .some(
+          (route) =>
+            route.workspaceId === grant.workspaceId &&
+            JSON.stringify(route.source) === JSON.stringify(grant.source) &&
+            JSON.stringify(route.target) === JSON.stringify(grant.target),
+        )
     )
       throw new Error('Cross-Feature pane or route denied');
     // One synchronous snapshot, called while the journal transaction is held.
@@ -105,6 +114,54 @@ export class CrossFeatureCommunication {
     )
       throw new Error('Cross-Feature policy denied');
     return { source, target };
+  }
+  /** Trusted host review; this records an exact route and grants no send authority. */
+  configureRoute(rawGrant: unknown, rawRequest: unknown, proof: unknown): void {
+    const grant = crossFeatureGrantSchema.parse(rawGrant);
+    const request = crossFeatureRequestSchema.parse(rawRequest);
+    if (
+      grant.deadline <= this.now() ||
+      grant.intentDigest !== crossFeatureIntentDigest(request) ||
+      !this.authority.verify(grant, proof)
+    )
+      throw new Error('Cross-Feature route authority denied');
+    this.journal.transaction((tx) => {
+      const source = tx.panes().find((pane) => pane.paneId === grant.source.paneId);
+      const target = tx.panes().find((pane) => pane.paneId === grant.target.paneId);
+      const matches = (
+        pane: CommunicationPane | undefined,
+        endpoint: CrossFeatureGrant['source'],
+      ) =>
+        pane?.workspaceId === grant.workspaceId &&
+        pane.featureId === endpoint.featureId &&
+        pane.terminalId === endpoint.terminalId &&
+        pane.ownership === 'managed' &&
+        pane.routing &&
+        !['closed', 'unavailable'].includes(pane.state) &&
+        JSON.stringify(pane.binding) === JSON.stringify(endpoint.binding);
+      if (!matches(source, grant.source) || !matches(target, grant.target))
+        throw new Error('Cross-Feature route scope denied');
+      const snapshot = this.snapshot(grant.source.featureId, grant.target.featureId);
+      if (
+        snapshot.source.feature.workspaceId !== grant.workspaceId ||
+        snapshot.target.feature.workspaceId !== grant.workspaceId ||
+        snapshot.source.feature.featureId !== grant.source.featureId ||
+        snapshot.target.feature.featureId !== grant.target.featureId ||
+        snapshot.source.feature.status === 'archived' ||
+        snapshot.target.feature.status === 'archived' ||
+        !snapshot.source.feature.terminalIds.includes(grant.source.terminalId) ||
+        !snapshot.target.feature.terminalIds.includes(grant.target.terminalId) ||
+        grant.deadline <= this.now() ||
+        !this.authority.verify(grant, proof)
+      )
+        throw new Error('Cross-Feature route membership denied');
+      tx.saveCrossRoute({
+        schemaVersion: 1,
+        workspaceId: grant.workspaceId,
+        source: grant.source,
+        target: grant.target,
+      });
+    });
   }
   private audit(
     message: CrossFeatureMessage,

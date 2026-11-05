@@ -158,18 +158,32 @@ test(
   }),
 );
 test(
-  'routing identity and changed binding are not inferred from names',
+  'local routing remains isolated and cross routing requires explicit reviewed configuration',
   run((f) => {
     f.save('source', 0, f.policy('outbound'));
     f.save('target', 0, f.policy('inbound'));
-    f.journal.transaction((tx) => {
-      const source = tx.panes().find((p) => p.paneId === f.grant.source.paneId)!;
-      tx.savePane({ ...source, routing: { ...source.routing!, allowedTargetPaneIds: [] } });
-    });
+    const source = f.journal.transaction((tx) =>
+      tx.panes().find((p) => p.paneId === f.grant.source.paneId)!,
+    );
+    assert.throws(() =>
+      f.local.configureRouting(source.paneId, {
+        name: source.name,
+        ...source.routing!,
+        allowedTargetPaneIds: [f.grant.target.paneId],
+      }),
+    );
+    const db = new DatabaseSync(join(f.dir, 'journal.sqlite'));
+    try {
+      db.exec('DELETE FROM cross_feature_routes');
+    } finally {
+      db.close();
+    }
     assert.throws(() => f.service.admit(f.grant, f.request, 'SYNTHETIC-proof'));
+    assert.throws(() => f.service.configureRoute(f.grant, f.request, 'forged'));
+    f.service.configureRoute(f.grant, f.request, 'SYNTHETIC-proof');
+    assert.equal(f.service.admit(f.grant, f.request, 'SYNTHETIC-proof').state, 'queued');
   }),
 );
-
 test(
   'view requires bilateral view rules and trusted proof',
   run((f) => {
@@ -470,5 +484,30 @@ test(
       ),
     );
     assert.throws(() => f.service.admit(f.grant, f.request, 'SYNTHETIC-proof'), /cycle/);
+  }),
+);
+
+test(
+  'cross route refuses a foreign Workspace even with a SYNTHETIC approving port',
+  run((f) => {
+    const unsafeAuthority = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      { verify: () => true },
+    );
+    assert.throws(() =>
+      unsafeAuthority.configureRoute(
+        { ...f.grant, workspaceId: 'foreign' },
+        f.request,
+        'SYNTHETIC',
+      ),
+    );
+    assert.throws(() =>
+      unsafeAuthority.configureRoute(
+        { ...f.grant, target: { ...f.grant.target, featureId: f.grant.source.featureId } },
+        f.request,
+        'SYNTHETIC',
+      ),
+    );
   }),
 );

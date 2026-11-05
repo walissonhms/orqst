@@ -37,7 +37,7 @@ export const crossFeaturePolicyStateSchema = z
   .refine((state) => (state.revision === 0) === (state.policy === null));
 export type CrossFeaturePolicyState = z.infer<typeof crossFeaturePolicyStateSchema>;
 
-const endpoint = z.strictObject({
+export const crossFeatureEndpointSchema = z.strictObject({
   featureId: z.uuid(),
   terminalId: z.uuid(),
   paneId: z.uuid(),
@@ -52,8 +52,8 @@ export const crossFeatureGrantSchema = z
     intentDigest: z.string().regex(/^[a-f0-9]{64}$/),
     actorId: id,
     workspaceId: id,
-    source: endpoint,
-    target: endpoint,
+    source: crossFeatureEndpointSchema,
+    target: crossFeatureEndpointSchema,
     operation,
     nonce: z.uuid(),
     deadline: timestamp,
@@ -107,3 +107,17 @@ export const crossFeatureAuditSchema = z.strictObject({
   outcome: z.enum(['admitted', 'dispatch_claimed', 'outcome_unknown']),
 });
 export type CrossFeatureAudit = z.infer<typeof crossFeatureAuditSchema>;
+
+export const crossFeatureRouteSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    workspaceId: id,
+    source: crossFeatureEndpointSchema,
+    target: crossFeatureEndpointSchema,
+  })
+  .refine(
+    (route) =>
+      route.source.featureId !== route.target.featureId &&
+      route.source.paneId !== route.target.paneId,
+  );
+export type CrossFeatureRoute = z.infer<typeof crossFeatureRouteSchema>;

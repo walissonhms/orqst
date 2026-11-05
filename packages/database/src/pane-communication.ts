@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import {
+  crossFeatureRouteSchema,
   crossFeatureMessageSchema,
   crossFeatureAuditSchema,
   communicationAuditSchema,
@@ -50,6 +51,20 @@ export function openCommunicationJournal(
         .get(),
     );
   const tx: CommunicationTransaction = {
+    crossRoutes: () =>
+      crossExists()
+        ? db
+            .prepare('SELECT metadata FROM cross_feature_routes ORDER BY rowid')
+            .all()
+            .map((row) => crossFeatureRouteSchema.parse(JSON.parse(String(row.metadata))))
+        : [],
+    saveCrossRoute: (input) => {
+      const route = crossFeatureRouteSchema.parse(input);
+      db.prepare(
+        `INSERT INTO cross_feature_routes(workspace_id,source_id,target_id,metadata) VALUES(?,?,?,?)
+        ON CONFLICT(workspace_id,source_id,target_id) DO UPDATE SET metadata=excluded.metadata`,
+      ).run(route.workspaceId, route.source.paneId, route.target.paneId, JSON.stringify(route));
+    },
     crossMessages: () =>
       crossExists()
         ? db
@@ -280,7 +295,10 @@ export function openCommunicationJournal(
         intent_id TEXT NOT NULL UNIQUE, nonce TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL CHECK(json_valid(metadata)),
         UNIQUE(workspace_id,target_id,idempotency_key));
       CREATE TABLE IF NOT EXISTS cross_feature_audit (
-        sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));`);
+        sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));
+      CREATE TABLE IF NOT EXISTS cross_feature_routes (
+        workspace_id TEXT NOT NULL, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
+        metadata TEXT NOT NULL CHECK(json_valid(metadata)), PRIMARY KEY(workspace_id,source_id,target_id));`);
     if (
       db.prepare('SELECT version FROM cross_feature_journal_schema WHERE singleton=1').get()
         ?.version !== 1

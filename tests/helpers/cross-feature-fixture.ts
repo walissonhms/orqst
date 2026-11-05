@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { Store } from '@orqst/database';
 import {
   crossFeatureGrantSchema,
-  type CommunicationPane,
   type CrossFeaturePolicy,
   type CrossFeatureRequest,
 } from '@orqst/protocol';
 import { featureConfigurationDatabase } from '../../packages/core/src/terminal/feature-configuration.js';
+import { PaneCommunication } from '../../packages/core/src/communication/service.js';
 import {
   CrossFeatureCommunication,
   crossFeatureIntentDigest,
@@ -25,8 +25,6 @@ export function fixture() {
     targetTerminal = randomUUID();
   source = config.assignTerminal(source.featureId, sourceTerminal, source.revision);
   target = config.assignTerminal(target.featureId, targetTerminal, target.revision);
-  const sourcePane = randomUUID(),
-    targetPane = randomUUID();
   const binding = () => ({
     instanceId: randomUUID(),
     terminalEpoch: randomUUID(),
@@ -34,45 +32,38 @@ export function fixture() {
   });
   const a = binding(),
     b = binding();
-  const pane = (
-    paneId: string,
-    terminalId: string,
-    featureId: string,
-    n: string,
-    instance: typeof a,
-    routes: string[],
-  ): CommunicationPane => ({
-    schemaVersion: 1,
-    paneId,
-    terminalId,
-    workspaceId: 'synthetic',
-    featureId,
-    displayId: `T-00${n}`,
-    name: `SYNTHETIC ${n}`,
-    routing: { handle: `test${n}`, role: 'worker', allowedTargetPaneIds: routes },
-    provider: 'synthetic',
-    cliVersion: null,
-    model: null,
-    ownership: 'managed',
-    ownerId: 'synthetic',
-    creationReason: 'SYNTHETIC fixture',
-    binding: instance,
-    capabilities: {
-      canSend: true,
-      canQueueWhileBusy: true,
-      canAcknowledge: true,
-      canReportTaskCompletion: true,
-      canCancel: true,
-    },
-    state: 'ready',
-    createdAt: 1,
-  });
   const store = new Store(join(dir, 'journal.sqlite'));
   const journal = store.communicationJournal(randomUUID(), { recover: false });
-  journal.transaction((tx) => {
-    tx.savePane(pane(sourcePane, sourceTerminal, source.featureId, '1', a, [targetPane]));
-    tx.savePane(pane(targetPane, targetTerminal, target.featureId, '2', b, []));
-  });
+  const local = new PaneCommunication(journal, () => Buffer.from('SYNTHETIC'));
+  const register = (terminalId: string, featureId: string, n: string, instance: typeof a) =>
+    local.registerPane({
+      terminalId,
+      workspaceId: 'synthetic',
+      featureId,
+      name: `SYNTHETIC ${n}`,
+      routing: { handle: `test${n}`, role: 'worker', allowedTargetPaneIds: [] },
+      provider: 'synthetic',
+      cliVersion: null,
+      model: null,
+      ownership: 'managed',
+      ownerId: 'synthetic',
+      creationReason: 'SYNTHETIC fixture',
+      binding: instance,
+      capabilities: {
+        canSend: true,
+        canQueueWhileBusy: true,
+        canAcknowledge: true,
+        canReportTaskCompletion: true,
+        canCancel: true,
+      },
+      state: 'ready',
+    });
+  const sourceRecord = register(sourceTerminal, source.featureId, '1', a);
+  const targetRecord = register(targetTerminal, target.featureId, '2', b);
+  const sourcePane = sourceRecord.paneId,
+    targetPane = targetRecord.paneId;
+  local.configureRouting(sourcePane, { name: sourceRecord.name, ...sourceRecord.routing! });
+  local.configureRouting(targetPane, { name: targetRecord.name, ...targetRecord.routing! });
   const policy = (direction: 'outbound' | 'inbound', view = false): CrossFeaturePolicy => ({
     schemaVersion: 1,
     rules: [
@@ -130,8 +121,10 @@ export function fixture() {
       proof === 'SYNTHETIC-proof' && JSON.stringify(candidate) === signed,
   };
   const service = new CrossFeatureCommunication(journal, config.crossFeatureSnapshot, authority);
+  service.configureRoute(grant, request, 'SYNTHETIC-proof');
   return {
     dir,
+    local,
     authority,
     config,
     store,

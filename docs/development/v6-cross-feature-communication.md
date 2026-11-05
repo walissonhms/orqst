@@ -70,3 +70,8 @@ cross message metadata, so a future cross schema version or invalid metadata doe
 not by itself block local communication. A structurally damaged identity table
 cannot establish uniqueness and still fails closed. Cross recovery is deferred
 until opt-in and remains fenced by the communication owner epoch.
+
+A trusted host may configure a cross route only with a verified grant and its
+exact request digest, managed pane bindings, and current same-Workspace Feature
+membership. The route is stored separately from the local routing matrix. It
+is not a grant: admission still rechecks both policies and the one-use proof.
