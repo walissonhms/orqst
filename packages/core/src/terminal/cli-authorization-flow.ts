@@ -41,14 +41,14 @@ export async function authorizeCliCandidate(input: {
   const previousVersion = input.store.candidateVersion(candidate, input.provider, input.mode);
   if (previousVersion) {
     const profile = checkedProfile(previousVersion);
-    const epoch = await input.store.verifiedEpoch(
+    const binding = await input.store.verifiedBinding(
       profile,
       input.provider,
       input.mode,
       input.verifier,
     );
-    if (epoch && (!input.expectedEpoch || input.expectedEpoch === epoch))
-      return { status: 'allowed' as const, profile, epoch };
+    if (binding && (!input.expectedEpoch || input.expectedEpoch === binding.authorizationEpoch))
+      return { status: 'allowed' as const, profile, epoch: binding.authorizationEpoch, binding };
   }
   await verifiedCliSignature(input.verifier, input.provider, input.executable);
   if (terminalExecutableSha256(input.executable) !== sha256)
@@ -80,11 +80,13 @@ export async function authorizeCliCandidate(input: {
     input.expectedEpoch,
   );
   if (status !== 'allowed') return { status };
-  const epoch = await input.store.verifiedEpoch(
+  const binding = await input.store.verifiedBinding(
     profile,
     input.provider,
     input.mode,
     input.verifier,
   );
-  return epoch ? { status: 'allowed' as const, profile, epoch } : { status: 'revoked' as const };
+  return binding
+    ? { status: 'allowed' as const, profile, epoch: binding.authorizationEpoch, binding }
+    : { status: 'revoked' as const };
 }
