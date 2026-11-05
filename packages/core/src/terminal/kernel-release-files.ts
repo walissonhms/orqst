@@ -1,3 +1,4 @@
+import { readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
@@ -114,4 +115,20 @@ export function reconcileKernelRelease(directory: string, name: string) {
     writeRecoveryFile(path, JSON.stringify(observation) + '\n');
   }
   return { status, lock };
+}
+
+/** Bounded startup audit. Invalid or unreadable locks refuse the audit rather than being skipped. */
+export function reconcileKernelReleases(directory: string) {
+  let names: string[];
+  try {
+    names = readdirSync(directory);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  if (names.length > 1024) throw new Error('Release evidence directory budget');
+  return names
+    .filter((name) => name.startsWith('release-') && name.endsWith('.lock'))
+    .sort()
+    .map((name) => reconcileKernelRelease(directory, name));
 }

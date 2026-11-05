@@ -16,6 +16,7 @@ import test from 'node:test';
 import {
   beginKernelRelease,
   reconcileKernelRelease,
+  reconcileKernelReleases,
   verifyKernelReleaseSource,
 } from '../packages/core/src/terminal/kernel-release-files.js';
 
@@ -48,6 +49,7 @@ test('interrupted post-rename commit records uncertain durability and leaves a n
     assert.throws(() => verifyKernelReleaseSource(f.directory, name), /changed/);
     assert.equal(reconcileKernelRelease(f.directory, name).status, 'released_durability_uncertain');
     assert.equal(reconcileKernelRelease(f.directory, name).status, 'released_durability_uncertain');
+    assert.equal(reconcileKernelReleases(f.directory)[0]?.status, 'released_durability_uncertain');
     assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-NEW-OWNER\n');
     const observation = JSON.parse(
       readFileSync(join(f.directory, `release-observation-${lock.id}.json`), 'utf8'),
