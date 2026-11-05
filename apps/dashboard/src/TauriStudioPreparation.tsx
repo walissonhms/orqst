@@ -129,6 +129,11 @@ export function TauriStudioPreparation({
           </details>
         </div>
       )}
+      {!!catalog?.pendingOwnedExits?.length && (
+        <p className="notice" role="status">
+          {t('tauriPreparation.code_owned_exit_pending')}
+        </p>
+      )}
       {!workspaceId && (
         <p className="notice" role="status">
           {t('studio.tauri.chooseWorkspace')}

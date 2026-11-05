@@ -242,8 +242,22 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
             "featureId",
             "catalogId",
             "providers",
+            "pendingOwnedExits",
         ],
-    ) && value["contractVersion"] == 1
+    ) && value["pendingOwnedExits"].as_array().is_some_and(|exits| {
+        exits.len() <= 64
+            && exits.iter().all(|exit| {
+                exact(exit, &["id", "code", "principalCount"])
+                    && crate::features::uuid(&exit["id"])
+                    && exit["code"] == "owned_exit_pending"
+                    && exit["principalCount"]
+                        .as_u64()
+                        .is_some_and(|count| count <= 9_007_199_254_740_991)
+            })
+            && exits
+                .windows(2)
+                .all(|pair| pair[0]["id"].as_str() < pair[1]["id"].as_str())
+    }) && value["contractVersion"] == 1
         && scope(value)
         && value["workspaceId"] == request["workspaceId"]
         && value["featureId"] == request["featureId"]
@@ -1425,7 +1439,7 @@ mod catalog_tests {
         let request =
             json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
         let providers: Vec<_>=["codex","claude","opencode"].iter().map(|provider|json!({"provider":provider,"status":"available","reason":"ready","models":[{"id":"b".repeat(64),"label":"SYNTHETIC model","source":"official-alias","isDefault":false,"availability":"unverified"}]})).collect();
-        let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers});
+        let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
         assert!(valid_catalog(&catalog, &request));
         for source in [
             "cli-default",
