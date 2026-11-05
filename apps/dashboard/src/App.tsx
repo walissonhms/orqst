@@ -62,6 +62,7 @@ import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
 import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
+import { useFeatureShell } from './use-feature-shell.js';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
@@ -542,6 +543,7 @@ export function App() {
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const navigation = useRef<DashboardHistory | null>(null);
+  const featureShell = useFeatureShell();
   const pendingSessionLink = useRef(isSessionLocation(location));
   const routeActions = useRef({
     traverse: () => {},
@@ -1046,6 +1048,48 @@ export function App() {
               </button>
             ))}
         </nav>
+        {featureShell.snapshot && (
+          <>
+            <div className="nav-heading">
+              <span>{t('features.heading')}</span>
+            </div>
+            <nav aria-label={t('features.heading')}>
+              {featureShell.snapshot.features.map((feature) => (
+                <button
+                  key={feature.featureId}
+                  className={`workspace-link ${feature.featureId === featureShell.snapshot?.activeFeatureId ? 'active' : ''}`}
+                  aria-current={
+                    feature.featureId === featureShell.snapshot?.activeFeatureId
+                      ? 'page'
+                      : undefined
+                  }
+                  disabled={featureShell.busy}
+                  title={`${feature.description}\n${t(`features.status_${feature.status}`)}`}
+                  onClick={() => void featureShell.select(feature.featureId)}
+                >
+                  <Layers3 size={16} />
+                  <span>{feature.name}</span>
+                  <small>{feature.terminalIds.length}</small>
+                </button>
+              ))}
+              <button
+                className={`workspace-link ${featureShell.snapshot.activeFeatureId === null ? 'active' : ''}`}
+                disabled={featureShell.busy}
+                onClick={() => void featureShell.select(null)}
+              >
+                <Layers3 size={16} />
+                <span>{t('features.unassigned')}</span>
+                <small>
+                  {featureShell.snapshot.slots.length -
+                    featureShell.snapshot.features.reduce(
+                      (total, feature) => total + feature.terminalIds.length,
+                      0,
+                    )}
+                </small>
+              </button>
+            </nav>
+          </>
+        )}
         <div className="sidebar-bottom">
           <div className="integration-heading">{t('integration')}</div>
           {snapshot?.adapters.map((adapter) => (
@@ -1079,6 +1123,25 @@ export function App() {
             <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
             <ChevronRight size={14} />
             <strong>{t(`shell.views.${view}`)}</strong>
+            {featureShell.snapshot && (
+              <>
+                <ChevronRight size={14} />
+                <span>
+                  {featureShell.snapshot.features.find(
+                    (feature) => feature.featureId === featureShell.snapshot?.activeFeatureId,
+                  )?.name ?? t('features.unassigned')}
+                </span>
+                <ChevronRight size={14} />
+                <span>
+                  {t('features.terminalCount', {
+                    count:
+                      featureShell.snapshot.features.find(
+                        (feature) => feature.featureId === featureShell.snapshot?.activeFeatureId,
+                      )?.terminalIds.length ?? 0,
+                  })}
+                </span>
+              </>
+            )}
           </div>
           <div className="topbar-actions">
             {window.orqstManagedAgents?.contractVersion === 1 && (

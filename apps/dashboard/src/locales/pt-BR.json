@@ -732,7 +732,7 @@
     "attach": "Conectar saída",
     "input": "Habilitar teclado",
     "detach": "Desconectar saída",
-    "stop": "Parar processo…",
+    "stop": "Parar processo",
     "kill": "Forçar parada do processo…",
     "idle": "Nenhum processo próprio iniciado. Este perfil opcional usa login separado; reuso do login existente indisponível.",
     "denied": "Negado, entrada expirada ou configuração/autenticação alterada. Habilite a entrada novamente se necessário.",
@@ -789,7 +789,7 @@
     "hideHelp": "Ocultar um painel ou mostrar o dashboard mantém o processo e os rascunhos carregados. Desconectar saída apenas desanexa a visualização. Parar encerra este processo próprio; não comprova conclusão da tarefa. As preferências de layout são salvas localmente. Rascunhos permanecem em memória; restaurar o layout nunca reinicia um processo.",
     "forceStopHelp": "Forçar parada pode perder trabalho. Use apenas se Parar falhar e o processo ainda for próprio. O login separado do Codex se aplica somente ao perfil legado.",
     "createProvider_codexOpenCode": "Codex + OpenCode (A/B)",
-    "createMcp_codexOpenCode": "Preparar MCP opcional do ORQST nos dois terminais? Codex mantém as definições MCP nativas; OpenCode mescla as definições. Cada início e a autorização posterior de tarefa continuam separados. Delegação entre provedores não está validada.",
+    "createMcp_codexOpenCode": "Preparar ORQST MCP opcional para ambos os terminais? O Codex mantém definições MCP nativas; o OpenCode as mescla. A concessão de tarefa posterior ainda exige autorização separada. Delegação entre provedores não é validada.",
     "discoverTitle": "Revisar candidato local: {{provider}}",
     "discoverChoose": "Vários candidatos nativos foram encontrados passivamente. Escolha um caminho para a revisão completa do hash. Nenhum executável foi iniciado.",
     "discoverMissing": "Nenhum candidato nativo revisado foi encontrado nos locais confiáveis. Você pode escolher um executável instalado manualmente; caminho e hash ainda precisam passar pela revisão. Nada foi instalado ou executado.",
@@ -918,7 +918,7 @@
     "step_open_help": "Abra a seleção revisada. Use abas A/B, controles de divisão e a ação Painel sem descartar o documento carregado.",
     "step_start": "Iniciar, conectar, digitar",
     "step_start_help": "Em cada painel: abra o CLI revisado uma vez. Início, saída e teclado normais não exigem nova revisão.",
-    "boundary": "OpenCode pode modificar seu banco nativo compartilhado e realizar atividade de início somente após seu consentimento explícito e uma autorização separada para Iniciar. Modelo, login e delegação entre provedores continuam sem validação.",
+    "boundary": "OpenCode pode modificar seu banco nativo compartilhado e realizar atividade de início somente após seu consentimento explícito. Modelo, login e delegação entre provedores continuam sem validação.",
     "capabilities": "Recursos dos terminais",
     "layoutTitle": "Abas e divisões",
     "layoutHelp": "Uma janela com grade de terminais revisados, ou um painel selecionado em janelas estreitas. Trocar de visão preserva rascunhos carregados e revoga a entrada de teclado. A ordem dos painéis e as preferências de layout são salvas localmente.",
@@ -1100,7 +1100,8 @@
     "delegationUnavailable": "Delegação por Feature exige uma composição de runtime revisada.",
     "creationUnavailable": "Use a preparação nativa para criar/revisar terminais. Atribua apenas os slots revisados disponíveis.",
     "loading": "Carregando…",
-    "switching": "Alternando visão…"
+    "switching": "Alternando visão…",
+    "terminalCount": "{{count}} terminais"
   },
   "tauriCoreUnavailable": {
     "title": "Observador indisponível",

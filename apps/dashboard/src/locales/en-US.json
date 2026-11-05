@@ -732,7 +732,7 @@
     "attach": "Connect output",
     "input": "Enable keyboard input",
     "detach": "Disconnect output",
-    "stop": "Stop process…",
+    "stop": "Stop process",
     "kill": "Force stop process…",
     "idle": "No owned process started. This optional profile uses a separate login; existing login reuse is unavailable.",
     "denied": "Denied, input expired, or configuration/authentication changed. Enable input again if needed.",
@@ -789,7 +789,7 @@
     "hideHelp": "Hiding a pane or showing the dashboard keeps its process and loaded drafts. Disconnect output only detaches the view. Stop ends this owned process; it does not prove task completion. Layout preferences are saved locally. Drafts remain in memory; restoring layout never restarts a process.",
     "forceStopHelp": "Force stop can lose work. Use it only when normal Stop fails and the process is still owned. Separate Codex login applies only to the legacy profile.",
     "createProvider_codexOpenCode": "Codex + OpenCode (A/B)",
-    "createMcp_codexOpenCode": "Prepare optional ORQST MCP for both terminals? Codex retains native MCP definitions; OpenCode merges them. Each start and the later task grant still require separate authorization. Cross-provider delegation is unvalidated.",
+    "createMcp_codexOpenCode": "Prepare optional ORQST MCP for both terminals? Codex retains native MCP definitions; OpenCode merges them. The later task grant still requires separate authorization. Cross-provider delegation is unvalidated.",
     "discoverTitle": "Review local candidate: {{provider}}",
     "discoverChoose": "Multiple native candidates were found passively. Choose a path for the complete hash review. No executable was run.",
     "discoverMissing": "No reviewed native candidate was found in the trusted local locations. You can choose an installed executable manually; the exact path and hash must still pass review. Nothing was installed or run.",
@@ -918,7 +918,7 @@
     "step_open_help": "Open the reviewed selection. Use the A/B tabs, split controls and Dashboard action without discarding the loaded document.",
     "step_start": "Start, connect, type",
     "step_start_help": "In each panel: open the reviewed CLI once. Normal launch, output and keyboard use need no further review.",
-    "boundary": "OpenCode may modify its shared native database and perform startup activity only after your explicit consent and a separate Start grant. Model, login and cross-provider delegation remain unverified.",
+    "boundary": "OpenCode may modify its shared native database and perform startup activity only after your explicit consent. Model, login and cross-provider delegation remain unverified.",
     "capabilities": "Terminal capabilities",
     "layoutTitle": "Tabs and splits",
     "layoutHelp": "One window with a grid of reviewed terminals, or one selected pane on narrow windows. Switching views preserves loaded drafts and revokes keyboard input. Pane order and layout preferences are saved locally.",
@@ -1100,7 +1100,8 @@
     "delegationUnavailable": "Feature delegation needs a reviewed runtime composition.",
     "creationUnavailable": "Use native preparation to create/review terminals. Assign only the available reviewed slots.",
     "loading": "Loading…",
-    "switching": "Switching view…"
+    "switching": "Switching view…",
+    "terminalCount": "{{count}} terminals"
   },
   "tauriCoreUnavailable": {
     "title": "Observer unavailable",

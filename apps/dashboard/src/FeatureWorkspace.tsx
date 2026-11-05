@@ -6,7 +6,11 @@ import type {
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
-import { featureNoticeAfterSnapshot } from './feature-notice.js';
+import {
+  featureNoticeAfterSnapshot,
+  featureNoticeContext,
+  type FeatureNoticeContext,
+} from './feature-notice.js';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -48,7 +52,7 @@ export function FeatureWorkspace({
   const working = useRef(false);
   const editorVersion = useRef(0);
   const current = useRef<FeatureNativeSnapshot | undefined>(undefined);
-  const noticeGeneration = useRef(0);
+  const noticeContext = useRef<FeatureNoticeContext | null>(null);
   const selected = snapshot?.features.find(
     (feature) => feature.featureId === snapshot.activeFeatureId,
   );
@@ -76,7 +80,10 @@ export function FeatureWorkspace({
           setSnapshot(reply.snapshot);
         }
         if (reply.status !== 'ok') {
-          noticeGeneration.current = current.current?.generation ?? 0;
+          noticeContext.current = featureNoticeContext(
+            current.current,
+            current.current?.activeFeatureId ?? null,
+          );
           setNotice(reply.status);
         }
         return reply.status;
@@ -103,9 +110,8 @@ export function FeatureWorkspace({
       if (!current.current || incoming.generation >= current.current.generation) {
         current.current = incoming;
         setSnapshot(incoming);
-        setNotice((value) =>
-          featureNoticeAfterSnapshot(value, noticeGeneration.current, incoming.generation),
-        );
+        const context = noticeContext.current;
+        if (context) setNotice((value) => featureNoticeAfterSnapshot(value, context, incoming));
       }
     };
     window.addEventListener('orqst-feature-state', update);
@@ -215,49 +221,6 @@ export function FeatureWorkspace({
             </select>
           </label>
         ) : null}
-        <h2>{t('features.heading')}</h2>
-        <nav aria-label={t('features.heading')}>
-          {snapshot?.features.map((feature) => (
-            <button
-              key={feature.featureId}
-              className={feature.featureId === snapshot.activeFeatureId ? 'active' : ''}
-              aria-current={feature.featureId === snapshot.activeFeatureId ? 'page' : undefined}
-              disabled={busy}
-              title={`${feature.description}\n${t(`features.status_${feature.status}`)} · ${feature.featureId}`}
-              onClick={() => {
-                closeEditor();
-                void request({
-                  action: 'select',
-                  featureId: feature.featureId,
-                  expectedRevision: snapshot.view.revision,
-                });
-              }}
-            >
-              <span aria-hidden="true">◇</span>
-              <span>{feature.name}</span>
-              <small>{feature.terminalIds.length}</small>
-            </button>
-          ))}
-          {snapshot && (
-            <button
-              disabled={busy}
-              className={snapshot.activeFeatureId === null ? 'active' : ''}
-              aria-current={snapshot.activeFeatureId === null ? 'page' : undefined}
-              onClick={() => {
-                closeEditor();
-                void request({
-                  action: 'select',
-                  featureId: null,
-                  expectedRevision: snapshot.view.revision,
-                });
-              }}
-            >
-              <span aria-hidden="true">·</span>
-              <span>{t('features.unassigned')}</span>
-              <small>{unassigned.length}</small>
-            </button>
-          )}
-        </nav>
         <button
           ref={createTrigger}
           className="feature-create"
