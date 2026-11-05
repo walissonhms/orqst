@@ -92,7 +92,9 @@ failure leave `outcome_unknown` without automatic retry. Provider facts already
 received remain recordable after policy revocation. Notifications are post-commit
 and revalidate bilateral view and authority inside the microtask. Parent tasks use
 exact IDs and correlation, verify the active destination as the next source, and
-apply the existing maximum depth and cycle checks.
+apply the existing maximum depth and cycle checks. A local child of a cross task
+requires an explicitly injected trusted ancestor gate, which rechecks bilateral
+view and retained authority; the existing production composition does not install it.
 
 A separate versioned administrative audit records a verified grant presented for
 admission, a denial attributed to a verified grant, and an explicit revocation.

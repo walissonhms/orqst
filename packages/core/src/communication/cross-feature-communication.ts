@@ -16,6 +16,7 @@ import {
   type CrossFeatureProviderEvidence,
   type CommunicationContent,
 } from '@orqst/protocol';
+import type { CrossParentGate } from './service.js';
 import type { FeatureConfigurationDatabase } from '../terminal/feature-configuration.js';
 
 /** Trusted injected port. No production implementation or renderer endpoint is provided. */
@@ -299,17 +300,16 @@ export class CrossFeatureCommunication {
           const cross = all.find((m) => m.request.taskId === parentId);
           const legacy = local.find((m) => m.taskId === parentId);
           if (cross) {
-            if (
-              cross.grant.workspaceId !== grant.workspaceId ||
-              cross.grant.target.featureId !== expectedFeature ||
-              cross.grant.target.paneId !== expectedPane ||
-              cross.request.correlationId !== request.correlationId ||
-              ['completed', 'failed', 'outcome_unknown'].includes(cross.state)
-            )
-              throw new Error('Cross-Feature parent denied');
-            expectedPane = cross.grant.source.paneId;
-            expectedFeature = cross.grant.source.featureId;
-            parentId = cross.request.parentTaskId ?? null;
+            const allowed = this.crossParent(tx, parentId, {
+              workspaceId: grant.workspaceId,
+              featureId: expectedFeature,
+              targetPaneId: expectedPane,
+              correlationId: request.correlationId,
+            });
+            if (!allowed) throw new Error('Cross-Feature parent denied');
+            expectedPane = allowed.sourcePaneId;
+            expectedFeature = allowed.sourceFeatureId;
+            parentId = allowed.parentTaskId;
           } else if (legacy) {
             if (
               legacy.workspaceId !== grant.workspaceId ||
@@ -443,6 +443,33 @@ export class CrossFeatureCommunication {
       return message;
     });
   }
+  /** Trusted, opt-in ancestor gate: both policies and the retained authority must allow view. */
+  readonly crossParent: CrossParentGate = (tx, taskId, expected) => {
+    const message = tx.crossMessages().find((item) => item.request.taskId === taskId);
+    if (
+      !message ||
+      message.grant.workspaceId !== expected.workspaceId ||
+      message.grant.target.featureId !== expected.featureId ||
+      message.grant.target.paneId !== expected.targetPaneId ||
+      message.request.correlationId !== expected.correlationId ||
+      message.grant.deadline <= this.now() ||
+      !this.admittedGrants.has(message.grant.grantId) ||
+      ['completed', 'failed', 'outcome_unknown'].includes(message.state)
+    )
+      return undefined;
+    try {
+      this.check(tx, message.grant, 'task.view');
+      if (!this.authority.verify(message.grant, this.admittedGrants.get(message.grant.grantId)))
+        return undefined;
+    } catch {
+      return undefined;
+    }
+    return {
+      sourcePaneId: message.grant.source.paneId,
+      sourceFeatureId: message.grant.source.featureId,
+      parentTaskId: message.request.parentTaskId ?? null,
+    };
+  };
   /** Exact Feature ID is required; duplicate or missing handles are never guessed. */
   resolveTarget(workspaceId: string, featureId: string, handle: string): CommunicationPane {
     z.string()

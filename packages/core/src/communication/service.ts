@@ -79,6 +79,13 @@ const active = (message: CommunicationMessage) =>
   ['dispatching', 'accepted', 'delivered', 'delivery_unknown'].includes(message.deliveryState) &&
   !['completed', 'failed', 'cancelled'].includes(message.taskState);
 
+/** Optional trusted cross-Feature ancestor reader; never configured by production composition. */
+export type CrossParentGate = (
+  tx: CommunicationTransaction,
+  taskId: string,
+  expected: { workspaceId: string; featureId: string; targetPaneId: string; correlationId: string },
+) => { sourcePaneId: string; sourceFeatureId: string; parentTaskId: string | null } | undefined;
+
 /** Trusted opt-in Core service. Never constructed by observer startup. */
 export class PaneCommunication {
   private grants = new Map<string, Grant>();
@@ -91,6 +98,7 @@ export class PaneCommunication {
     private resolve: CommunicationResolver,
     private now: () => number = Date.now,
     private readFeaturePermissions?: FeaturePermissionReader,
+    private readonly crossParent?: CrossParentGate,
   ) {}
 
   /** Trusted composition only: enrollment must prove ownership; captured provider text cannot call this. */
@@ -644,21 +652,36 @@ export class PaneCommunication {
     const ancestry = [request.targetPaneId];
     let parent = request.parentTaskId;
     let expectedSource = request.sourcePaneId;
+    let expectedFeature = grant.featureId;
     let depth = 0;
     while (parent) {
       const previous = messages.find((m) => m.taskId === parent);
-      if (
-        !previous ||
-        previous.workspaceId !== grant.workspaceId ||
-        previous.featureId !== grant.featureId ||
-        previous.correlationId !== request.correlationId ||
-        previous.targetPaneId !== expectedSource ||
-        terminalTask(previous)
-      )
-        throw new Error('Delegation parent denied');
-      ancestry.push(expectedSource);
-      expectedSource = previous.sourcePaneId;
-      parent = previous.parentTaskId;
+      if (previous) {
+        if (
+          previous.workspaceId !== grant.workspaceId ||
+          previous.featureId !== expectedFeature ||
+          previous.correlationId !== request.correlationId ||
+          previous.targetPaneId !== expectedSource ||
+          terminalTask(previous)
+        )
+          throw new Error('Delegation parent denied');
+        ancestry.push(expectedSource);
+        expectedSource = previous.sourcePaneId;
+        parent = previous.parentTaskId;
+      } else {
+        if (!this.crossParent || !expectedFeature) throw new Error('Delegation parent denied');
+        const cross = this.crossParent(tx, parent, {
+          workspaceId: grant.workspaceId,
+          featureId: expectedFeature,
+          targetPaneId: expectedSource,
+          correlationId: request.correlationId,
+        });
+        if (!cross) throw new Error('Delegation parent denied');
+        ancestry.push(expectedSource);
+        expectedSource = cross.sourcePaneId;
+        expectedFeature = cross.sourceFeatureId;
+        parent = cross.parentTaskId;
+      }
       if (++depth > communicationLimits.maxDepth) throw new Error('Delegation depth exceeded');
     }
     ancestry.push(expectedSource);

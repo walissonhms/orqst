@@ -420,3 +420,91 @@ test('cross child rejects a parent chain exceeding the shared depth bound', () =
     f.close();
   }
 });
+
+test('an opt-in local child reads a cross parent only while bilateral view remains allowed', () => {
+  const { f, request, grant } = configured();
+  try {
+    const cross = new CrossFeatureCommunication(f.journal, f.config.crossFeatureSnapshot, {
+      verify: () => true,
+    });
+    cross.configureRoute(grant, request, 'SYNTHETIC');
+    cross.admit(grant, request, 'SYNTHETIC');
+    const terminalId = randomUUID();
+    f.config.assignTerminal(f.target.featureId, terminalId, f.target.revision);
+    const source = f.journal.transaction((tx) =>
+      tx.panes().find((p) => p.paneId === grant.target.paneId)!,
+    );
+    const local = new PaneCommunication(
+      f.journal,
+      () => Buffer.from('SYNTHETIC local'),
+      Date.now,
+      f.config.permissionReader,
+      cross.crossParent,
+    );
+    const target = local.registerPane({
+      workspaceId: 'synthetic',
+      featureId: f.target.featureId,
+      terminalId,
+      name: 'SYNTHETIC child',
+      routing: { handle: 'child', role: 'worker', allowedTargetPaneIds: [] },
+      provider: 'synthetic',
+      cliVersion: null,
+      model: null,
+      ownership: 'managed',
+      ownerId: 'synthetic',
+      creationReason: 'SYNTHETIC',
+      binding: { instanceId: randomUUID(), projectId: 'synthetic', terminalEpoch: randomUUID() },
+      capabilities: source.capabilities,
+      state: 'ready',
+    });
+    local.configureRouting(source.paneId, {
+      name: source.name,
+      ...source.routing!,
+      allowedTargetPaneIds: [target.paneId],
+    });
+    const client = local.authorize({
+      actorId: 'SYNTHETIC_child',
+      workspaceId: 'synthetic',
+      featureId: f.target.featureId,
+      sourcePaneId: source.paneId,
+      targetPaneIds: [target.paneId],
+      expiresAt: Date.now() + 300000,
+    });
+    const child = () => ({
+      schemaVersion: 1 as const,
+      messageId: randomUUID(),
+      taskId: randomUUID(),
+      correlationId: request.correlationId!,
+      workspaceId: 'synthetic',
+      featureId: f.target.featureId,
+      sourcePaneId: source.paneId,
+      targetPaneId: target.paneId,
+      parentTaskId: request.taskId,
+      kind: 'task.request' as const,
+      payload: ref('local', 'SYNTHETIC local'),
+      deliveryPolicy: 'queue-if-busy' as const,
+      idempotencyKey: randomUUID(),
+      deadline: Date.now() + 240000,
+    });
+    const withoutCrossGate = new PaneCommunication(
+      f.journal,
+      () => Buffer.from('SYNTHETIC local'),
+      Date.now,
+      f.config.permissionReader,
+    );
+    const unscopedClient = withoutCrossGate.authorize({
+      actorId: 'SYNTHETIC_child',
+      workspaceId: 'synthetic',
+      featureId: f.target.featureId,
+      sourcePaneId: source.paneId,
+      targetPaneIds: [target.paneId],
+      expiresAt: Date.now() + 300000,
+    });
+    assert.throws(() => unscopedClient.send(child()), /parent/);
+    assert.equal(client.send(child()).depth, 1);
+    f.save('source', 1, { schemaVersion: 1, rules: [] });
+    assert.throws(() => client.send(child()), /parent/);
+  } finally {
+    f.close();
+  }
+});
