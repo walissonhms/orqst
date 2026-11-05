@@ -1,5 +1,14 @@
 # Security model
 
+## Renderer unavailable presentation fence — 2026-11-05
+
+Renderer termination sets an app-lifetime unavailable latch and invalidates the
+existing metadata presentation before hiding children. Queued native layouts and
+later surface raises deny presentation while latched; there is no reset/reload
+path. Generation advancement, suspension and input revocation do not stop, adopt
+or alter ownership of Core processes. Synthetic scheduling tests cover admission;
+AppKit stacking and WebKit callback delivery require separate native acceptance.
+
 ## Offline administrative recovery — 2026-11-04
 
 Administrative recovery cannot inherit a runtime key or owner epoch. Trusted

@@ -1,5 +1,13 @@
 # Security policy
 
+## Renderer unavailable presentation fence — 2026-11-05
+
+The native renderer-termination callback latches child presentation unavailable
+until app restart and invalidates queued layout generations before hiding views.
+Later layouts and raises are denied. No recovery, reload, process signal, Core
+ownership change or Quit state transition is introduced. Scheduling tests prove
+the admission guard only; native stacking/callback acceptance remains pending.
+
 ## Claude TUI pin and executable budget review — 2026-11-05
 
 Normal Claude TUI uses an independently reviewed 2.1.318 version/hash; strict

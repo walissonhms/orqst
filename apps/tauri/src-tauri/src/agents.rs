@@ -583,6 +583,9 @@ pub fn hide_surface(app: &tauri::AppHandle) {
 
 /// The agent document is the only visible child surface while it is shown.
 fn raise(app: &tauri::AppHandle) {
+    if crate::terminal::presentation_blocked(app) {
+        return;
+    }
     // Menu callbacks run on the UI thread. The installer independently enforces it.
     #[cfg(target_os = "macos")]
     if !crate::terminal::install_quit_observer(app) {

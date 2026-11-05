@@ -204,6 +204,24 @@ Security review: no public API, WebSocket, cookie or static-file behavior change
 only the existing private native layout envelope gains a generation fence. No
 execution authority, ownership, process, Core or Quit behavior changes.
 
+### Durable renderer unavailable presentation — 2026-11-05
+
+The first renderer termination latches presentation unavailable for the app
+lifetime and calls the existing metadata invalidation before hiding any child.
+That advances native layout generation, suspends presentation and revokes input;
+it neither stops processes nor changes ownership or Core state. Queued layout
+callbacks check the latch on the main thread; the shared presentation gate also
+blocks later layout application and surface raises. No recovery/reset path or
+reload is added. A synthetic queued-callback test proves the admission latch
+rejects both the old layout and later raises. It does not prove AppKit stacking
+or WebKit callback delivery; terminate main/child with multiple visible siblings
+and attempt raises during separate native acceptance.
+
+Reuse decision: retain ORQST's existing metadata invalidation and native UI-thread
+dispatch. The pinned Anywh Agent Host process-exit/hibernation lifecycle cited
+above changes owned process state and does not implement child-webview visibility;
+copying it would exceed this presentation-only boundary. No external code added.
+
 ### Reply router correction
 
 `PendingReplies` now records ID, expected kind and host epoch and validates each

@@ -1090,6 +1090,7 @@ pub async fn terminal_restore(window: Webview, slot: u64, generation: u64) -> Va
             suspended: r.presentation_suspended,
             fenced: r.confirming_quit
                 || r.exit_authorized
+                || crate::renderer::unavailable()
                 || crate::agents::exit_pending(app)
                 || phase_blocks_presentation(crate::host_phase::phase()),
             document_current: crate::features::document_version_current(app, &source, document),
@@ -1312,7 +1313,9 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64)
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
     let handle = app.clone();
     let value = value.clone();
-    let _ = app.run_on_main_thread(move || apply_layout_current(&handle, &value));
+    let _ = app.run_on_main_thread(move || {
+        crate::renderer::present(|| apply_layout_current(&handle, &value));
+    });
 }
 fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
@@ -2737,8 +2740,11 @@ pub(crate) fn quit_window_focus(window: &tauri::Window) -> Option<(bool, bool)> 
     Some((focus.owns_key(true), focus.owns_sheet(true)))
 }
 
-/// Shared presentation fence for metadata-only Feature replies during either Quit gate.
+/// Shared presentation fence for renderer loss and metadata-only replies during either Quit gate.
 pub(crate) fn presentation_blocked(app: &tauri::AppHandle) -> bool {
+    if crate::renderer::unavailable() {
+        return true;
+    }
     let terminal = app
         .state::<Terminals>()
         .0

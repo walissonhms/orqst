@@ -1,9 +1,37 @@
 //! macOS web-content termination: fail closed, no reload and no process effect.
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::Manager;
 
 static TERMINATED: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static PRESENTATION: PresentationLatch = PresentationLatch(AtomicBool::new(false));
+
+/// No reset path: renderer termination blocks child presentation until app restart.
+#[derive(Default)]
+struct PresentationLatch(AtomicBool);
+impl PresentationLatch {
+    fn terminate(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    fn unavailable(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
+    fn present(&self, effect: impl FnOnce()) {
+        if !self.unavailable() {
+            effect();
+        }
+    }
+}
+
+pub(crate) fn unavailable() -> bool {
+    PRESENTATION.unavailable()
+}
+
+/// Called on the UI thread, where the termination callback and visibility effects serialize.
+pub(crate) fn present(effect: impl FnOnce()) {
+    PRESENTATION.present(effect);
+}
 
 /// One latch per label. A duplicate or obsolete callback never acts twice and never loops.
 pub(crate) fn first_termination(label: &str) -> bool {
@@ -21,6 +49,9 @@ pub(crate) fn on_terminate(webview: &tauri::Webview) {
     if app.get_webview(&label).is_none() || !first_termination(&label) {
         return;
     }
+    // Fence queued layouts and future raises before hiding even the terminated child.
+    PRESENTATION.terminate();
+    crate::terminal::metadata_invalidate(app);
     match label.as_str() {
         "main" => {}
         "managed-agents" => crate::agents::revoke_document(app),
@@ -47,6 +78,29 @@ pub(crate) fn on_terminate(webview: &tauri::Webview) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn queued_layout_and_later_raises_cannot_cover_unavailable_until_restart() {
+        let presentation = super::PresentationLatch::default();
+        let children_visible = std::cell::Cell::new(true);
+        let effects = std::cell::Cell::new(0);
+        let queued_layout = || {
+            presentation.present(|| {
+                children_visible.set(true);
+                effects.set(effects.get() + 1);
+            })
+        };
+        // The production main-thread admission wraps a layout queued before termination.
+        presentation.terminate();
+        children_visible.set(false);
+        queued_layout();
+        presentation.present(|| children_visible.set(true)); // A later raise is also denied.
+        presentation.terminate(); // Duplicate callbacks cannot clear the latch.
+        queued_layout();
+        assert!(presentation.unavailable());
+        assert!(!children_visible.get());
+        assert_eq!(effects.get(), 0);
+    }
+
     #[test]
     fn one_latch_per_label_never_repeats_or_loops() {
         assert!(super::first_termination("main"));
