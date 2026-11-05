@@ -122,7 +122,8 @@ export function openFeaturePermissions(
     read: (scope: FeatureScope) => transaction(() => read(scope)),
     save: (scope: FeatureScope, actorId: string, raw: unknown) =>
       transaction(() => {
-        const { expectedRevision, configuration } = featurePermissionSaveSchema.parse(raw);
+        const { expectedRevision, configuration, reviewDigest } =
+          featurePermissionSaveSchema.parse(raw);
         const feature = scopeFeature(scope);
         members(feature.terminalIds, configuration);
         const before = read(scope);
@@ -144,6 +145,7 @@ export function openFeaturePermissions(
           revision: before.revision + 1,
           previousConfiguration: before.configuration,
           configuration,
+          ...(reviewDigest ? { reviewDigest } : {}),
         };
         const audit = JSON.stringify(event);
         if (Buffer.byteLength(audit) > 32768) throw new Error('Feature permission audit too large');

@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import {
   featureNativeRequestSchema,
   featurePermissionNativeRequestSchema,
@@ -212,16 +213,33 @@ export class TauriFeatureService {
         }
         case 'savePermissions': {
           if (!actorId || !/^native-[a-fA-F0-9-]{36}$/.test(actorId)) return { status: 'denied' };
+          let plan: unknown;
+          try {
+            plan = JSON.parse(request.reviewPlan);
+          } catch {
+            return { status: 'denied' };
+          }
+          if (
+            !plan ||
+            typeof plan !== 'object' ||
+            createHash('sha256').update(request.reviewPlan).digest('hex') !==
+              request.reviewDigest ||
+            Reflect.get(plan, 'featureId') !== request.featureId ||
+            Reflect.get(plan, 'expectedRevision') !== request.expectedRevision ||
+            Reflect.get(plan, 'generation') !== request.generation ||
+            `native-${Reflect.get(plan, 'epoch')}` !== actorId ||
+            JSON.stringify(Reflect.get(plan, 'configuration')) !==
+              JSON.stringify(request.configuration) ||
+            this.activeFeatureId !== request.featureId
+          )
+            return { status: 'denied' };
           let permissions;
           try {
-            permissions = await this.core.features.savePermissions(
-              request.featureId,
-              actorId,
-              {
-                expectedRevision: request.expectedRevision,
-                configuration: request.configuration,
-              },
-            );
+            permissions = await this.core.features.savePermissions(request.featureId, actorId, {
+              expectedRevision: request.expectedRevision,
+              configuration: request.configuration,
+              reviewDigest: request.reviewDigest,
+            });
           } catch (error) {
             if (error instanceof FeatureRevisionConflict) return { status: 'stale' };
             if (error instanceof FeaturePermissionUnavailable) return { status: 'unavailable' };

@@ -1,6 +1,6 @@
 // SYNTHETIC metadata/view only; no agent, process, native window or input grant.
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -611,37 +611,45 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
   const f = fixture();
   try {
     const feature = f.db.create({ name: 'SYNTHETIC policy' });
+    f.db.saveView({ featureId: feature.featureId, expectedRevision: 0 });
     await f.service.initialize();
-    const request = {
-      contractVersion: 1,
-      generation: 0,
-      action: 'savePermissions',
-      featureId: feature.featureId,
-      expectedRevision: 0,
-      configuration: { schemaVersion: 1, rules: [] },
-    } as const;
+    const actor = 'native-e10636eb-3a12-4094-9123-49a4cdad27b8';
+    const makeRequest = (expectedRevision: number) => {
+      const configuration = { schemaVersion: 1 as const, rules: [] };
+      const reviewPlan = JSON.stringify({
+        featureId: feature.featureId,
+        expectedRevision,
+        generation: 0,
+        epoch: actor.slice(7),
+        configuration,
+      });
+      return {
+        contractVersion: 1,
+        generation: 0,
+        action: 'savePermissions',
+        featureId: feature.featureId,
+        expectedRevision,
+        configuration,
+        reviewPlan,
+        reviewDigest: createHash('sha256').update(reviewPlan).digest('hex'),
+      } as const;
+    };
+    const request = makeRequest(0);
     assert.equal((await f.service.request(request)).status, 'denied');
+    assert.equal(
+      (await f.service.request({ ...request, reviewDigest: '0'.repeat(64) }, actor)).status,
+      'denied',
+    );
     f.db.savePermissions(feature.featureId, 'synthetic-native', {
       expectedRevision: 0,
       configuration: { schemaVersion: 1, rules: [] },
     });
-    assert.equal(
-      (await f.service.request(request, 'native-e10636eb-3a12-4094-9123-49a4cdad27b8')).status,
-      'stale',
-    );
+    assert.equal((await f.service.request(request, actor)).status, 'stale');
     const originalSave = f.core.features.savePermissions;
     f.core.features.savePermissions = async () => {
       throw new FeaturePermissionUnavailable();
     };
-    assert.equal(
-      (
-        await f.service.request(
-          { ...request, expectedRevision: 1 },
-          'native-e10636eb-3a12-4094-9123-49a4cdad27b8',
-        )
-      ).status,
-      'unavailable',
-    );
+    assert.equal((await f.service.request(makeRequest(1), actor)).status, 'unavailable');
     f.core.features.savePermissions = async (...args) => {
       const saved = await originalSave(...args);
       f.core.features.list = async () => {
@@ -649,17 +657,13 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
       };
       return saved;
     };
-    assert.equal(
-      (
-        await f.service.request(
-          { ...request, expectedRevision: 1 },
-          'native-e10636eb-3a12-4094-9123-49a4cdad27b8',
-        )
-      ).status,
-      'unknown',
-    );
+    assert.equal((await f.service.request(makeRequest(1), actor)).status, 'unknown');
     assert.equal(f.db.readPermissions(feature.featureId).revision, 2);
     assert.equal(f.db.permissionEvents(feature.featureId).length, 2);
+    assert.equal(
+      f.db.permissionEvents(feature.featureId)[1]?.reviewDigest,
+      makeRequest(1).reviewDigest,
+    );
     assert.equal(
       f.db.permissionEvents(feature.featureId)[1]?.actorId,
       'native-e10636eb-3a12-4094-9123-49a4cdad27b8',

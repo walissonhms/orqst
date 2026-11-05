@@ -64,6 +64,10 @@ export type FeaturePermissionState = z.infer<typeof featurePermissionStateSchema
 export const featurePermissionSaveSchema = z.strictObject({
   expectedRevision: z.number().int().nonnegative().safe(),
   configuration: featurePermissionConfigurationSchema,
+  reviewDigest: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional(),
 });
 export type FeaturePermissionSave = z.infer<typeof featurePermissionSaveSchema>;
 export const featurePermissionEventSchema = featureScopeSchema
@@ -77,6 +81,10 @@ export const featurePermissionEventSchema = featureScopeSchema
     revision: z.number().int().positive().safe(),
     previousConfiguration: featurePermissionConfigurationSchema.nullable(),
     configuration: featurePermissionConfigurationSchema,
+    reviewDigest: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
   })
   .refine(
     (event) =>
