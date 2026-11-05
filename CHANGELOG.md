@@ -8,6 +8,8 @@
   preserve hidden state through Grid, rename, reorder, resize and saves.
 - Align native/Node tab insets and keep Feature permissions in a sidebar disclosure.
   This does not enable interactive N-member MCP, mentions or task orchestration.
+- Resolve the native parent Window for tray/second-launch focus, background hide
+  and Show dashboard when retained sibling Webviews are present.
 
 ## Incremental terminal minimization — 2026-11-05
 

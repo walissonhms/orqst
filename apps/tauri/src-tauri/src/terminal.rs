@@ -1331,7 +1331,7 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
     metadata_view_begin(app);
     if action == "dashboard" {
         metadata_invalidate(app);
-        if let Some(main) = app.get_webview_window("main") {
+        if let Some(main) = app.get_window("main") {
             let _ = main.show();
             let _ = main.set_focus();
         }

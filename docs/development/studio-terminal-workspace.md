@@ -28,6 +28,13 @@ Chrome reserves 45px for the header and 36px for tabs; Node and Rust agree on th
 panes in a 1440×900 two-column workspace. Content widths at or below 720px use
 one visible pane. Bounds continue to be validated natively before presentation.
 
+Native tray/second-launch focus, background hiding and explicit Show dashboard
+resolve the owning Window separately from its retained Webviews. Tauri's
+`get_webview_window("main")` is unavailable once that Window has sibling Webviews;
+these Window-only presentation operations use `get_window("main")`. They retain
+the existing stopped/keep-running and layout/input revocation checks. Notification,
+Files and unavailable-view lookups are separate existing routes and are unchanged.
+
 ## Communication remains a separate runtime capability
 
 Ordinary individually prepared terminals still have ORQST MCP disabled. Display

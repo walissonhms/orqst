@@ -313,7 +313,8 @@ pub fn focus(app: &tauri::AppHandle) {
     if app.state::<Desktop>().0.lock().unwrap().stopped {
         return;
     }
-    if let Some(window) = app.get_webview_window("main") {
+    // Retained sibling Webviews make main a multi-Webview Window.
+    if let Some(window) = app.get_window("main") {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -764,7 +765,7 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
         crate::terminal_creation::invalidate(app);
         let keep_running = app.state::<Desktop>().0.lock().unwrap().keep_running;
         if keep_running {
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_window("main") {
                 let _ = window.hide();
             }
         } else {
