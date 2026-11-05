@@ -51,8 +51,7 @@ test('native CLI review cancellation and lost native current cannot probe or pub
       },
     ],
   );
-  let service: TauriTerminalService;
-  service = new TauriTerminalService(
+  const service: TauriTerminalService = new TauriTerminalService(
     [supervisor],
     keys,
     (raw) => {
