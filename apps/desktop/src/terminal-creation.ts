@@ -21,6 +21,7 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   managedClaudeConfigSchema,
+  reviewedClaudeTuiBinary,
   readInteractiveTerminalConfig,
   validateManagedClaudeConfig,
   type InteractiveTerminalConfig,
@@ -160,8 +161,13 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       });
     }
     if (provider === 'claude') {
-      if (executable.sha256 !== reviewedProviderMcpBinaries.claude.sha256)
-        throw new Error('No reviewed Claude binary');
+      const pin = input.mcp ? reviewedProviderMcpBinaries.claude : reviewedClaudeTuiBinary;
+      if (executable.sha256 !== pin.sha256)
+        throw new Error(
+          input.mcp
+            ? 'No reviewed Claude MCP launch contract for this version/hash'
+            : 'No reviewed Claude binary version/hash',
+        );
       const claudeConfigDirectory = input.environment.CLAUDE_CONFIG_DIR;
       if (claudeConfigDirectory !== undefined) directories.add(claudeConfigDirectory);
       nativeRoots.push(claudeConfigDirectory ?? join(input.home, '.claude'));
@@ -169,7 +175,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         ...common,
         version: 2,
         provider: 'claude',
-        executableVersion: reviewedProviderMcpBinaries.claude.version,
+        executableVersion: pin.version,
         sessionId: randomUUID(),
         authentication: {
           mode: 'reuse-existing',

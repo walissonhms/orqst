@@ -1,5 +1,26 @@
 # Explicit native Claude interactive terminal
 
+## Tauri normal TUI contract — 2026-11-05
+
+Normal selected preparation now uses the passively reviewed Claude 2.1.318 TUI
+pin, with a fresh session UUID and optional default/sonnet/opus/haiku choice. The
+existing Tauri catalogue/preparation/Core/PTY and single CLI authorization path
+are reused. Keyboard authority still follows native focus. This increment adds
+no modal, grant, login, process adoption or provider acceptance.
+
+The older 2.1.178 strict MCP pin remains independent; existing manifests stay
+readable. Claude 2.1.318 with ORQST MCP is refused pending its own review. Normal
+Open preserves `mcp:false` (native user MCP definitions may still start). The
+native same-user identity/configuration/session writes and lack of descendant
+containment remain disclosed. Stop/Quit wiring belongs to the separate owned
+shutdown integration and is not validated here.
+
+Native installs can self-update outside ORQST. Each new version/hash needs a new
+review/pin; unsupported bytes are refused without fallback. The executable hash
+budget is finite at 512 MiB and streaming. See the [passive evidence, source reuse
+decision and limits](../research/claude-code-tauri.md). Historical instructions
+below describe their original version and authorization flow.
+
 Current increment: [OpenCode Desktop opt-in](opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
 
 The Desktop opt-in now accepts a version-2 Claude manifest alongside the existing

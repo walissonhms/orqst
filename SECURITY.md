@@ -1,5 +1,16 @@
 # Security policy
 
+## Claude TUI pin and executable budget review — 2026-11-05
+
+Normal Claude TUI uses an independently reviewed 2.1.318 version/hash; strict
+ORQST MCP retains its 2.1.178 pin and refuses the new binary. Native executable
+hashing streams with a finite 512 MiB bound, preserving canonical/no-follow,
+ownership, permissions, executable and macOS Mach-O admission. Existing volatile
+CLI authorization identity caching is preserved. Native self-updates outside
+ORQST require a fresh review/pin, with honest version/hash refusal and no fallback.
+No observer HTTP/WS, cookie, static-serving or execution authority change is made.
+See [passive review and unvalidated native/provider boundaries](docs/research/claude-code-tauri.md).
+
 ## Offline recovery authority review — 2026-11-04
 
 Offline non-dispatch recovery has a separate administrative signing domain and

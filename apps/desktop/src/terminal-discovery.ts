@@ -11,6 +11,7 @@ import {
   terminalFile,
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
+import { reviewedClaudeTuiBinary } from '../../../packages/core/src/terminal/interactive-profile.js';
 import { reviewedDesktopCodexBinary } from './terminal-creation.js';
 
 export function discoverTerminalExecutable(
@@ -19,7 +20,11 @@ export function discoverTerminalExecutable(
   home: string,
 ): string[] {
   const pin =
-    provider === 'codex' ? reviewedDesktopCodexBinary : reviewedProviderMcpBinaries[provider];
+    provider === 'codex'
+      ? reviewedDesktopCodexBinary
+      : provider === 'claude'
+        ? reviewedClaudeTuiBinary
+        : reviewedProviderMcpBinaries.opencode;
   const candidates = (
     discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)?.candidates ??
     []

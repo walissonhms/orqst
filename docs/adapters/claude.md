@@ -1,5 +1,16 @@
 # Claude Code adapter contract
 
+## Managed Tauri TUI update — 2026-11-05
+
+The separate managed terminal path now selects the reviewed 2.1.318 native TUI
+pin and reuses catalogue/model/preparation/Core/PTY with existing single CLI
+authorization. Default and three reviewed aliases remain availability-unverified.
+Historical 2.1.178 manifests and the independent strict MCP contract are retained;
+the new TUI binary cannot opt into ORQST MCP without another review. The 512 MiB
+streaming hash bound remains finite, and upgrades require new exact pins.
+See [passive sources, reuse decisions and acceptance limits](../research/claude-code-tauri.md).
+This does not implement external observation or change any capability below.
+
 ## Status
 
 **Contract only. Not implemented.**

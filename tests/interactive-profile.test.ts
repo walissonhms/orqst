@@ -1,11 +1,16 @@
 // Synthetic profile claims only. No provider, native login, credentials or external sessions.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
+import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 import {
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
   managedClaudeConfigSchema,
+  reviewedClaudeTuiBinary,
   validateManagedClaudeConfig,
 } from '../packages/core/src/terminal/interactive-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
@@ -31,6 +36,90 @@ function fixture() {
     interactive: { sharedNativeSessions: true },
   });
 }
+
+test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched MCP pins', () => {
+  const legacy = fixture();
+  assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.178');
+  const config = managedClaudeConfigSchema.parse({
+    ...legacy,
+    executableVersion: reviewedClaudeTuiBinary.version,
+    executable: { ...legacy.executable, sha256: reviewedClaudeTuiBinary.sha256 },
+  });
+  for (const model of [null, 'sonnet', 'opus', 'haiku']) {
+    config.model = {
+      value: model,
+      source: model ? 'official-alias' : 'cli-default',
+      files: [{ path: '/synthetic/nonexistent-model-settings.json', sha256: null }],
+    };
+    const profile = interactiveTerminalProfiles(config)[0]!;
+    assert.deepEqual(profile.argv, [
+      '--session-id',
+      config.sessionId,
+      ...(model ? ['--model', model] : []),
+    ]);
+    assert.equal(profile.environmentProfile, 'claude-native-identity-no-inherited-credentials-v1');
+    assert.equal(profile.cliAuthorizationScope, 'claude-native-v1:native-mcp');
+    assert.equal(profile.executableVersion, '2.1.318');
+    assert.equal(interactiveTerminalEnvironment(config).DISABLE_AUTOUPDATER, '1');
+    assert.equal(
+      interactiveTerminalEnvironment(config).CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC,
+      '1',
+    );
+  }
+  for (const mismatched of [
+    { ...config, executable: legacy.executable },
+    { ...legacy, executable: config.executable },
+  ])
+    assert.throws(() => interactiveTerminalProfiles(mismatched), /version\/hash/);
+  config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
+  assert.throws(
+    () => validateManagedClaudeConfig(config),
+    /No reviewed Claude MCP launch contract/,
+  );
+  assert.throws(
+    () => interactiveTerminalProfiles(config),
+    /No reviewed Claude MCP launch contract/,
+  );
+  assert.equal(reviewedProviderMcpBinaries.claude.version, '2.1.178');
+  assert.equal(
+    reviewedProviderMcpBinaries.claude.sha256,
+    '473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309',
+  );
+});
+
+test('legacy Claude pin still composes the unchanged reviewed strict MCP launch', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-claude-mcp-')));
+  try {
+    const config = fixture();
+    config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
+    const bytes = Buffer.from('// SYNTHETIC relay, never executed\n');
+    const path = join(root, 'synthetic-relay.cjs');
+    writeFileSync(path, bytes, { mode: 0o600 });
+    const launch = {
+      serverName: `orqst_${'a'.repeat(32)}`,
+      socketPath: join(root, 'synthetic.sock'),
+      capabilityFile: join(root, 'synthetic.cap'),
+      relay: { path, sha256: terminalDigest(bytes) },
+    };
+    const profile = interactiveTerminalProfiles(config, launch)[0]!;
+    assert.equal(profile.executableVersion, '2.1.178');
+    assert.ok(profile.argv.includes('--strict-mcp-config'));
+    assert.ok(profile.argv.includes('--mcp-config'));
+    assert.equal(profile.cliAuthorizationScope, 'claude-native-v1:orqst-mcp-configured');
+    assert.equal(interactiveTerminalEnvironment(config).MCP_TIMEOUT, '10000');
+    const current = {
+      ...config,
+      executableVersion: reviewedClaudeTuiBinary.version,
+      executable: { ...config.executable, sha256: reviewedClaudeTuiBinary.sha256 },
+    };
+    assert.throws(
+      () => interactiveTerminalProfiles(current, launch),
+      /No reviewed Claude MCP launch contract/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('Claude profile preserves explicit native identity and rejects inherited secrets/unsupported launch inputs', () => {
   const config = fixture();

@@ -1,5 +1,16 @@
 # Native terminal catalogue and selected preparation
 
+## Claude TUI pin update — 2026-11-05
+
+Normal Claude discovery/provisioning uses the separately reviewed 2.1.318 TUI
+version/hash. CLI default omits `--model`; sonnet/opus/haiku choices pass their
+alias unchanged. Availability remains unverified. Historical 2.1.178 manifests
+remain valid under their original exact pin. The strict MCP contract remains
+2.1.178: the newer TUI pin is refused for MCP composition without fallback.
+Provider upgrades require a fresh review/pin even when the launcher still exists.
+Executable hashing streams up to a finite 512 MiB limit. No request/reply or
+observer API change is introduced. See [evidence and limits](../research/claude-code-tauri.md).
+
 ## Optional local diagnostic projection — 2026-11-04
 
 The native shell projects validated preparation stage/code/effects into closed diagnostic enums and correlates helper, host and first open with an independent UUID. Native startup-N and all helper/host/public IPC shapes remain unchanged; the UUID grants no authority and is not added to requests or replies. No paths, auth, prompts, terminal content, owner/epoch/files or proofs are persisted. Log failure never changes an operational result. See [local contract and consultation](../development/local-diagnostics.md) and [integrated checks/limits](../development/tauri-opening-diagnostics-integration.md).

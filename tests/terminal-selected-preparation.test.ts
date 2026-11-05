@@ -30,6 +30,7 @@ import { Store } from '../packages/database/src/index.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 
@@ -56,13 +57,17 @@ await build({
     {
       name: 'synthetic-binary-pins-only',
       setup(builder) {
-        builder.onLoad({ filter: /(?:terminal-creation|provider-mcp-config)\.ts$/ }, (args) => ({
-          contents: readFileSync(args.path, 'utf8')
-            .replaceAll(reviewedDesktopCodexBinary.sha256, hash)
-            .replaceAll(reviewedProviderMcpBinaries.claude.sha256, hash)
-            .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash),
-          loader: 'ts',
-        }));
+        builder.onLoad(
+          { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
+          (args) => ({
+            contents: readFileSync(args.path, 'utf8')
+              .replaceAll(reviewedDesktopCodexBinary.sha256, hash)
+              .replaceAll(reviewedProviderMcpBinaries.claude.sha256, hash)
+              .replaceAll(reviewedClaudeTuiBinary.sha256, hash)
+              .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash),
+            loader: 'ts',
+          }),
+        );
       },
     },
   ],
@@ -264,6 +269,71 @@ for (const [provider, useDefault] of [
       });
       assert.equal(supervisor.snapshot(attempt.attemptId).state, 'start_failed');
       assert.equal(starts, 0);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
+  test(`Claude TUI selected ${choice ?? 'default'} reaches the reviewed profile without spawn`, async () => {
+    const f = fixture();
+    try {
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      const cli = catalog.catalog.providers.find((entry) => entry.provider === 'claude')!;
+      const selected = cli.models.find((entry) =>
+        choice === null ? entry.isDefault : entry.label === choice,
+      )!;
+      assert.equal(selected.availability, 'unverified');
+      const prepared = await prepareTauriTerminals(
+        {
+          action: 'create-selected',
+          workspaceId: f.workspaceId,
+          featureId: null,
+          catalogId: catalog.catalog.catalogId,
+          provider: 'claude',
+          modelId: selected.id,
+          count: 1,
+        },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(prepared.status, 'open');
+      const config = readInteractiveTerminalConfig(prepared.files[0]!);
+      assert.equal(config.version, 2);
+      if (config.version !== 2) throw new Error('Expected Claude manifest');
+      assert.equal(config.executableVersion, reviewedClaudeTuiBinary.version);
+      assert.equal(config.interactive.mcp, undefined);
+      assert.ok(config.sessionId);
+      assert.equal(config.model!.value, choice);
+      const profile = interactiveTerminalProfiles(config)[0]!;
+      assert.deepEqual(profile.argv, [
+        '--session-id',
+        config.sessionId,
+        ...(choice ? ['--model', choice] : []),
+      ]);
+      assert.equal(profile.cliAuthorizationScope, 'claude-native-v1:native-mcp');
+      const backend = managedTerminalBackend(prepared.files[0]!, 'SYNTHETIC-NEVER-EXECUTED');
+      assert.equal(backend.validate(profile), true);
+      // The same selected path with different native bytes is never substituted or admitted.
+      writeFileSync(
+        config.executable.path,
+        Buffer.concat([readFileSync(binary), Buffer.from('SYNTHETIC-DRIFT')]),
+      );
+      assert.deepEqual(
+        discoverTerminalExecutable('claude', f.context.environment.PATH, f.home),
+        [],
+      );
+      assert.throws(() => backend.validate(profile), /executable changed/);
     } finally {
       f.close();
     }

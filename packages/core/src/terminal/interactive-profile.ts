@@ -46,12 +46,21 @@ const path = z
   .startsWith('/')
   .refine((value) => !value.includes('\0'));
 const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
+// Passive TUI review only; this does not revise the independent MCP contract.
+// See docs/research/claude-code-tauri.md for source evidence and acceptance limits.
+export const reviewedClaudeTuiBinary = Object.freeze({
+  version: '2.1.318',
+  sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
+});
 export const managedClaudeConfigSchema = z.strictObject({
   version: z.literal(2),
   provider: z.literal('claude'),
   trust: z.literal('native-same-user'),
   executable: binary,
-  executableVersion: z.literal(reviewedProviderMcpBinaries.claude.version),
+  executableVersion: z.enum([
+    reviewedProviderMcpBinaries.claude.version,
+    reviewedClaudeTuiBinary.version,
+  ]),
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
   identity: terminalIdentitySchema.optional(),
@@ -82,13 +91,26 @@ export function interactiveProvider(
   return config.version !== 1 ? config.provider : 'codex';
 }
 
+function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
+  const pin = config.interactive.mcp
+    ? reviewedProviderMcpBinaries.claude
+    : config.executableVersion === reviewedClaudeTuiBinary.version
+      ? reviewedClaudeTuiBinary
+      : reviewedProviderMcpBinaries.claude;
+  if (config.executableVersion !== pin.version || config.executable.sha256 !== pin.sha256)
+    throw new Error(
+      config.interactive.mcp
+        ? 'No reviewed Claude MCP launch contract for this version/hash'
+        : 'No reviewed launch contract for this exact Claude binary version/hash',
+    );
+}
+
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
   managedClaudeConfigSchema.parse(config);
   validateTerminalModelSelection(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
-  if (config.executable.sha256 !== reviewedProviderMcpBinaries.claude.sha256)
-    throw new Error('No reviewed launch contract for this exact Claude binary');
+  validateClaudeLaunchContract(config);
   if (!!config.interactive.mcp !== !!config.interactive.strictMcpAcknowledged)
     throw new Error('Claude MCP requires explicit strict-MCP exclusion acknowledgment');
   terminalDirectory(config.project);
@@ -134,6 +156,7 @@ export function interactiveTerminalProfiles(
   validateTerminalPreparationBinding(config.preparation, config.project);
   if (config.version === 1) return managedCodexProfiles(config, mcp);
   if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
+  validateClaudeLaunchContract(config);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
     throw new Error('Claude MCP composition/acknowledgment mismatch');
   if (
