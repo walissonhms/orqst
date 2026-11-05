@@ -339,6 +339,11 @@ fn identity_from(
         && matches(&source, &guard.origin))
     .then_some((source, expected.1))
 }
+/// Exact chrome document identity for the dock route; no process or metadata authority.
+pub(crate) fn chrome_current(app: &tauri::AppHandle, view: &Webview) -> bool {
+    identity(view).is_some() && !crate::terminal::presentation_blocked(app)
+}
+
 fn identity(view: &Webview) -> Option<(String, u64)> {
     let parent = view.window();
     identity_from(

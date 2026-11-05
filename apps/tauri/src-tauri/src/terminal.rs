@@ -44,6 +44,8 @@ struct Running {
     enrollment_request: Option<String>,
     enrollment_fenced: bool,
     documents: Vec<String>,
+    labels: Vec<String>,
+    providers: Vec<String>,
     layout: Value,
     generations: Vec<u64>,
     loaded: Vec<bool>,
@@ -532,7 +534,20 @@ mod presentation_phase_tests {
         assert!(!super::phase_blocks_presentation(Phase::Active));
         assert!(super::phase_blocks_presentation(Phase::ShutdownInFlight));
         assert!(super::phase_blocks_presentation(Phase::LostUnknown));
-        assert!(!super::phase_blocks_presentation(Phase::ExitEvidenceConfirmed));
+        assert!(!super::phase_blocks_presentation(
+            Phase::ExitEvidenceConfirmed
+        ));
+    }
+}
+
+#[cfg(test)]
+mod dock_restore_tests {
+    #[test]
+    fn dock_restore_only_accepts_existing_hidden_slots() {
+        assert!(super::restore_allowed(1, 2, &[0]));
+        assert!(!super::restore_allowed(0, 2, &[0]));
+        assert!(!super::restore_allowed(2, 2, &[0]));
+        assert!(!super::restore_allowed(0, 0, &[]));
     }
 }
 
@@ -542,9 +557,9 @@ mod quit_exit_tests {
     fn only_the_reviewed_quit_flow_exits_the_app() {
         let source = include_str!("terminal.rs");
         let start = source.find("pub async fn quit_owned").unwrap();
-        assert!(!source[..start].contains(&concat!("app.", "exit(0)")));
+        assert!(!source[..start].contains(concat!("app.", "exit(0)")));
         assert_eq!(
-            source[start..].matches(&concat!("app.", "exit(0)")).count(),
+            source[start..].matches(concat!("app.", "exit(0)")).count(),
             2
         );
     }
@@ -932,6 +947,38 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     json!({"attempted":true,"value":value})
 }
 
+/// A dock restore only re-shows an existing hidden slot; it grants no process authority.
+pub(crate) fn restore_allowed(slot: u64, count: usize, visible: &[u64]) -> bool {
+    (slot as usize) < count && !visible.contains(&slot)
+}
+
+#[tauri::command]
+pub async fn terminal_restore(window: Webview, slot: u64) -> Value {
+    let app = window.app_handle();
+    if !crate::features::chrome_current(app, &window) {
+        return json!(false);
+    }
+    let (count, visible) = {
+        let terminal = app.state::<Terminals>();
+        let guard = terminal.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else {
+            return json!(false);
+        };
+        let visible: Vec<u64> = r.layout["visible"]
+            .as_array()
+            .map(|items| items.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default();
+        (r.documents.len(), visible)
+    };
+    if !restore_allowed(slot, count, &visible) {
+        return json!(false);
+    }
+    json!(send(
+        app,
+        json!({"kind":"layout-action","slot":slot,"action":"reopen"})
+    ))
+}
+
 #[tauri::command]
 pub async fn terminal_view(window: Webview, action: Value) -> Value {
     let Some(slot) = slot(&window) else {
@@ -1049,7 +1096,14 @@ fn quit_request_id() -> String {
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!("{}-{}-{}-{}-{}", &hex[0..8], &hex[8..12], &hex[12..16], &hex[16..20], &hex[20..32])
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[0..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..32]
+    )
 }
 
 async fn quit_pipe(app: &tauri::AppHandle, kind: &str) -> Option<Value> {
@@ -1185,6 +1239,43 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
     }
 }
 
+/// Minimal dock state only: hidden slot, label and provider. No ids, proofs or epochs.
+fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool) {
+    let Some(chrome) = app.get_webview("feature-workspace") else {
+        return;
+    };
+    let (labels, providers) = {
+        let terminal = app.state::<Terminals>();
+        let guard = terminal.0.lock().unwrap();
+        guard
+            .as_ref()
+            .map(|r| (r.labels.clone(), r.providers.clone()))
+            .unwrap_or_default()
+    };
+    let visible: Vec<u64> = if show {
+        state["visible"]
+            .as_array()
+            .map(|items| items.iter().filter_map(Value::as_u64).collect())
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let hidden: Vec<Value> = (0..labels.len())
+        .filter(|slot| !visible.contains(&(*slot as u64)))
+        .map(|slot| {
+            json!({
+                "slot": slot,
+                "label": labels.get(slot).cloned().unwrap_or_default(),
+                "provider": providers.get(slot).cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+    let detail = json!({"hidden": hidden, "count": labels.len()});
+    let _ = chrome.eval(format!(
+        "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
+    ));
+}
+
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
     let handle = app.clone();
     let value = value.clone();
@@ -1229,6 +1320,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     } else {
         crate::agents::hide_surface(app);
     }
+    emit_dock(app, state, show);
     if let Some(chrome) = app.get_webview("feature-workspace") {
         if show {
             let _ = chrome.show();
@@ -2111,9 +2203,8 @@ async fn start_selected_inner(
             )
         }))
         .spawn()
-        .map_err(|error| {
+        .inspect_err(|_| {
             crate::host_phase::release_start();
-            error
         })?;
     diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
@@ -2200,6 +2291,14 @@ async fn start_selected_inner(
         enrollment_request: None,
         enrollment_fenced: false,
         documents,
+        labels: panes
+            .iter()
+            .map(|pane| pane["title"].as_str().unwrap_or("").to_owned())
+            .collect(),
+        providers: panes
+            .iter()
+            .map(|pane| pane["provider"].as_str().unwrap_or("").to_owned())
+            .collect(),
         layout: ready["layout"].clone(),
         generations: vec![0; count],
         loaded: vec![false; count],

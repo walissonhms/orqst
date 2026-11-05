@@ -337,10 +337,8 @@ pub(crate) fn quit_parent(app: &tauri::AppHandle) -> Option<tauri::Window> {
 }
 
 fn quit_parent_valid(window: &tauri::Window) -> bool {
-    if !matches!(
-        window.label(),
-        "main" | "managed-agents"
-    ) || !window.is_visible().unwrap_or(false)
+    if !matches!(window.label(), "main" | "managed-agents")
+        || !window.is_visible().unwrap_or(false)
         || window.is_minimized().unwrap_or(true)
     {
         return false;
@@ -848,9 +846,9 @@ mod quit_entry_tests {
     #[test]
     fn only_the_single_quit_entry_exits_without_an_owned_host() {
         let source = include_str!("desktop.rs");
-        assert_eq!(source.matches(&concat!("app.", "exit(0)")).count(), 1);
+        assert_eq!(source.matches(concat!("app.", "exit(0)")).count(), 1);
         let index = source.find("pub fn request_quit").unwrap();
-        assert!(source[index..].contains(&concat!("app.", "exit(0)")));
+        assert!(source[index..].contains(concat!("app.", "exit(0)")));
     }
 }
 

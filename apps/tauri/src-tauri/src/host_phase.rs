@@ -44,7 +44,10 @@ pub fn started() {
 /// A host that disappears after starting without exit evidence is unknown, never absent.
 pub fn lost() {
     let mut phase = PHASE.lock().unwrap();
-    if matches!(*phase, Phase::Starting | Phase::Active | Phase::ShutdownInFlight) {
+    if matches!(
+        *phase,
+        Phase::Starting | Phase::Active | Phase::ShutdownInFlight
+    ) {
         *phase = Phase::LostUnknown;
     }
 }
@@ -83,6 +86,7 @@ pub fn consume_exit_evidence() -> bool {
     false
 }
 
+#[cfg(test)]
 pub fn lost_unknown() -> bool {
     phase() == Phase::LostUnknown
 }
@@ -201,7 +205,10 @@ mod tests {
     fn the_agents_gate_runs_before_the_terminal_flow_and_lost_blocks_all() {
         use QuitDecision::*;
         assert_eq!(quit_decision(Phase::Active, true, true, false), AgentsGate);
-        assert_eq!(quit_decision(Phase::Active, true, false, false), TerminalFlow);
+        assert_eq!(
+            quit_decision(Phase::Active, true, false, false),
+            TerminalFlow
+        );
         assert_eq!(
             quit_decision(Phase::LostUnknown, true, true, false),
             BlockedLost

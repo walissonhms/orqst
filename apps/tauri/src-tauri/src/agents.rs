@@ -374,11 +374,17 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         tauri::LogicalSize::new(
             parent
                 .inner_size()
-                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).width)
+                .map(|size| {
+                    size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0))
+                        .width
+                })
                 .unwrap_or(1200.0),
             parent
                 .inner_size()
-                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).height)
+                .map(|size| {
+                    size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0))
+                        .height
+                })
                 .unwrap_or(900.0),
         ),
     )?;
