@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Minus, Plus, Sparkles, X } from 'lucide-react';
+import { Check, Crown, Minus, Plus, Sparkles, X } from 'lucide-react';
 import { Modal } from './Modal';
 import { workspaceHue, type TerminalProvider } from './TerminalStudio';
 import './new-terminal-dialog.css';
@@ -33,6 +33,8 @@ export interface TerminalRequest {
   /** `null` = let the CLI use its own default model. */
   model: string | null;
   name: string;
+  /** Label this terminal as the orchestrator (descriptive only). */
+  orchestrator: boolean;
 }
 
 interface Props {
@@ -86,6 +88,8 @@ export function NewTerminalDialog({
   };
   const [count, setCount] = useState(1);
   const [same, setSame] = useState(true);
+  /** Index of the new terminal labelled orchestrator, or -1. */
+  const [lead, setLead] = useState(-1);
   const [shared, setShared] = useState<Choice>(base);
   const [rows, setRows] = useState<Choice[]>(() => Array.from({ length: 8 }, () => ({ ...base })));
 
@@ -183,6 +187,7 @@ export function NewTerminalDialog({
         provider: choice.provider,
         model: choice.model,
         name: choice.name.trim(),
+        orchestrator: choices.indexOf(choice) === lead,
       })),
     );
   };
@@ -408,8 +413,17 @@ export function NewTerminalDialog({
             {rows.slice(0, count).map((row, index) => {
               const entry = byProvider.get(row.provider);
               return (
-                <div key={index} className="ntd-row">
-                  <span className="ntd-row-index">{index + 1}</span>
+                <div key={index} className={`ntd-row${lead === index ? ' ntd-lead' : ''}`}>
+                  <button
+                    type="button"
+                    className={`ntd-row-index${lead === index ? ' active' : ''}`}
+                    aria-pressed={lead === index}
+                    title={t('terminalStudio.create.makeOrchestrator')}
+                    aria-label={t('terminalStudio.create.makeOrchestratorN', { n: index + 1 })}
+                    onClick={() => setLead((current) => (current === index ? -1 : index))}
+                  >
+                    {lead === index ? <Crown size={12} /> : index + 1}
+                  </button>
                   <select
                     className="ntd-select ntd-ws-select"
                     value={row.workspaceId}
@@ -480,6 +494,25 @@ export function NewTerminalDialog({
               );
             })}
           </section>
+        )}
+
+        {total > 1 && (
+          <label className="ntd-lead-toggle">
+            <input
+              type="checkbox"
+              checked={lead >= 0}
+              onChange={(event) => setLead(event.target.checked ? 0 : -1)}
+            />
+            <Crown size={14} aria-hidden="true" />
+            <span>
+              {same
+                ? t('terminalStudio.create.firstIsOrchestrator')
+                : lead >= 0
+                  ? t('terminalStudio.create.orchestratorIs', { n: lead + 1 })
+                  : t('terminalStudio.create.pickOrchestrator')}
+              <small>{t('terminalStudio.orchestratorHint')}</small>
+            </span>
+          </label>
         )}
 
         <footer className="ntd-foot">

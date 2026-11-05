@@ -284,24 +284,77 @@
   margin-left: auto;
 }
 
-.ts-resize {
+/* Free mode: resize from any edge or corner. */
+.ts-edge {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 16px;
-  height: 16px;
+  z-index: 5;
+}
+.ts-edge-n,
+.ts-edge-s {
+  left: 10px;
+  right: 10px;
+  height: 7px;
+  cursor: ns-resize;
+}
+.ts-edge-n {
+  top: -3px;
+}
+.ts-edge-s {
+  bottom: -3px;
+}
+.ts-edge-e,
+.ts-edge-w {
+  top: 10px;
+  bottom: 10px;
+  width: 7px;
+  cursor: ew-resize;
+}
+.ts-edge-e {
+  right: -3px;
+}
+.ts-edge-w {
+  left: -3px;
+}
+.ts-edge-ne,
+.ts-edge-nw,
+.ts-edge-se,
+.ts-edge-sw {
+  width: 14px;
+  height: 14px;
+}
+.ts-edge-ne {
+  top: -3px;
+  right: -3px;
+  cursor: nesw-resize;
+}
+.ts-edge-sw {
+  bottom: -3px;
+  left: -3px;
+  cursor: nesw-resize;
+}
+.ts-edge-nw {
+  top: -3px;
+  left: -3px;
   cursor: nwse-resize;
-  background: linear-gradient(
-    135deg,
-    transparent 50%,
-    var(--orqst-border-strong) 50%,
-    var(--orqst-border-strong) 60%,
-    transparent 60%,
-    transparent 72%,
-    var(--orqst-border-strong) 72%,
-    var(--orqst-border-strong) 82%,
-    transparent 82%
-  );
+}
+.ts-edge-se {
+  right: -3px;
+  bottom: -3px;
+  cursor: nwse-resize;
+}
+.ts-edge-se::after {
+  content: '';
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--orqst-border-strong);
+  border-bottom: 2px solid var(--orqst-border-strong);
+  border-radius: 0 0 3px 0;
+}
+.ts-pane:hover .ts-edge-se::after {
+  border-color: var(--orqst-neon);
 }
 
 /* Status */
@@ -390,8 +443,12 @@
 .ts-split-rows::after {
   height: 2px;
 }
+.ts-dragging .ts-track {
+  pointer-events: none;
+}
 .ts-split:hover::after,
-.ts-split:focus-visible::after {
+.ts-split:focus-visible::after,
+.ts-split:active::after {
   background: var(--orqst-neon);
 }
 
@@ -902,4 +959,59 @@
 :root[data-motion='reduced'] .ts-done,
 :root[data-motion='reduced'] .ts-notice {
   animation: none;
+}
+
+/* Orchestrator label (descriptive only) */
+.ts-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--orqst-warning) 28%, transparent),
+    color-mix(in srgb, var(--orqst-neon) 22%, transparent)
+  );
+  color: var(--orqst-warning);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.ts-orchestrator {
+  border-color: color-mix(in srgb, var(--orqst-warning) 45%, var(--orqst-border));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--orqst-warning) 18%, transparent),
+    0 10px 30px color-mix(in srgb, var(--orqst-warning) 8%, transparent);
+}
+.ts-orchestrator .ts-head {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--orqst-warning) 10%, var(--orqst-surface)),
+    var(--orqst-surface) 60%
+  );
+}
+/* Less used actions appear on hover or keyboard focus, keeping narrow headers readable. */
+.ts-actions .ts-secondary,
+.ts-actions .ts-crown:not(.active) {
+  display: none;
+}
+.ts-pane:hover .ts-actions .ts-secondary,
+.ts-pane:hover .ts-actions .ts-crown,
+.ts-pane:focus-within .ts-actions .ts-secondary,
+.ts-pane:focus-within .ts-actions .ts-crown {
+  display: grid;
+}
+.ts-actions .ts-crown.active {
+  color: var(--orqst-warning);
+}
+@container (max-width: 380px) {
+  .ts-pane .ts-role {
+    font-size: 0;
+    gap: 0;
+    padding: 0 4px;
+  }
 }

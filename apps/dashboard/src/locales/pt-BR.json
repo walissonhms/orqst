@@ -1327,7 +1327,12 @@
       "howManyEach": "Quantos em cada",
       "workspaceFor": "Workspace do terminal {{n}}",
       "overCapacity": "Demais: há espaço para mais {{count}}.",
-      "summaryAcross": "{{summary}} · em {{count}} Workspaces"
+      "summaryAcross": "{{summary}} · em {{count}} Workspaces",
+      "makeOrchestrator": "Tornar este o Orquestrador",
+      "makeOrchestratorN": "Tornar o terminal {{n}} o Orquestrador",
+      "firstIsOrchestrator": "Tornar o primeiro terminal o Orquestrador",
+      "orchestratorIs": "O terminal {{n}} é o Orquestrador",
+      "pickOrchestrator": "Escolha um Orquestrador: clique no número da linha"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "Todos",
@@ -1344,6 +1349,32 @@
       "waiting_for_user": "Precisa da sua resposta",
       "open": "Abrir",
       "dismiss": "Dispensar"
+    },
+    "resizeColumns": "Redimensionar colunas",
+    "resizeRows": "Redimensionar linhas",
+    "orchestrator": "Orquestrador",
+    "orchestratorHint": "Só um rótulo: não concede permissões. A delegação segue as permissões da Feature.",
+    "setOrchestrator": "Marcar como Orquestrador",
+    "unsetOrchestrator": "Remover rótulo de Orquestrador",
+    "mention": {
+      "open": "Mencionar um terminal",
+      "fromThis": "Mencionar outro terminal a partir deste",
+      "from": "De",
+      "you": "Você",
+      "placeholder": "Digite @ para mencionar um terminal e depois a mensagem",
+      "label": "Mensagem",
+      "send": "Enviar",
+      "close": "Fechar",
+      "to": "Para",
+      "hint": "Mencione pelo menos um terminal com @, por exemplo @T-002.",
+      "crossWorkspace": "Outro Workspace: precisa de permissão explícita.",
+      "state": {
+        "queued": "Na fila",
+        "accepted": "Entregue · ainda não concluído",
+        "delivery_failed": "Falha na entrega",
+        "unsupported": "Ainda não suportado",
+        "unknown": "Entrega desconhecida"
+      }
     }
   }
 }

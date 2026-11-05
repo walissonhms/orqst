@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  AtSign,
   Check,
   CircleHelp,
   Columns3,
   CornerDownLeft,
+  Crown,
   LayoutGrid,
   List,
   Maximize2,
@@ -26,6 +28,13 @@ import {
   arrange,
   arrangementModes,
   containRect,
+  GAP,
+  mosaicGeometry,
+  paneView,
+  resizeFromEdge,
+  resizeTrack,
+  setOrchestrator,
+  type Edge,
   dropTarget,
   orderIndex,
   arcPath,
@@ -46,7 +55,9 @@ import {
   type PlacedPane,
   type Rect,
 } from './terminal-arrangement';
+import { MentionComposer, type DeliveryState, type MentionSend } from './MentionComposer';
 import './terminal-studio.css';
+import './mention-composer.css';
 
 export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'shell';
 export type TerminalStatus =
@@ -67,6 +78,8 @@ export interface StudioTerminal {
   lastActivity?: string;
   /** Workspace that owns this terminal. */
   workspace: { id: string; name: string };
+  /** Saved orchestrator label of the Feature (descriptive, grants nothing). */
+  orchestrator?: boolean;
 }
 
 /** A finished piece of work, derived from an evidenced status transition. */
@@ -94,6 +107,10 @@ interface Props {
   /** Local storage key for the arrangement of this Feature. */
   storageKey: string;
   now?: number;
+  /** Send a structured message that mentions other terminals (never typed into a PTY). */
+  onMention?: (message: MentionSend) => Promise<DeliveryState>;
+  /** Persist the orchestrator label for this Feature (descriptive only). */
+  onOrchestratorChange?: (id: string | null) => void;
   /** Called once per evidenced end of work, for native/OS notifications. */
   onStatusEvent?: (event: StudioStatusEvent, terminal: StudioTerminal) => void;
 }
@@ -159,6 +176,7 @@ function FlowBadge({
   );
 }
 
+const edges: Edge[] = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const LINK_MS = 2400;
 const MAX_ACTIVE = 3;
 
@@ -191,7 +209,23 @@ function reconcile(state: ArrangementState, terminals: StudioTerminal[]): Arrang
   for (const terminal of terminals)
     if (!next.panes.some((pane) => pane.id === terminal.id)) next = addPane(next, terminal.id);
   if (next.maximized && !ids.has(next.maximized)) next = { ...next, maximized: null };
+  // The host's saved orchestrator label wins over the local one.
+  const marked = terminals.find((terminal) => terminal.orchestrator);
+  if (marked) next = { ...next, orchestrator: marked.id };
+  else if (next.orchestrator && !ids.has(next.orchestrator)) next = { ...next, orchestrator: null };
   return next;
+}
+
+function validGrid(value: unknown): ArrangementState['grid'] {
+  if (!value || typeof value !== 'object') return undefined;
+  const numbers = (list: unknown) =>
+    Array.isArray(list)
+      ? list
+          .filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n > 0)
+          .slice(0, 16)
+      : [];
+  const record = value as Record<string, unknown>;
+  return { cols: numbers(record.cols), rows: numbers(record.rows) };
 }
 
 function initialState(key: string, terminals: StudioTerminal[]): ArrangementState {
@@ -203,6 +237,8 @@ function initialState(key: string, terminals: StudioTerminal[]): ArrangementStat
     panes: Array.isArray(stored?.panes) ? stored.panes : [],
     maximized: typeof stored?.maximized === 'string' ? stored.maximized : null,
     weights: stored?.weights && typeof stored.weights === 'object' ? stored.weights : {},
+    grid: validGrid(stored?.grid),
+    orchestrator: typeof stored?.orchestrator === 'string' ? stored.orchestrator : null,
   };
   return reconcile(base, terminals);
 }
@@ -251,6 +287,7 @@ interface Drag {
   startY: number;
   origin: Rect;
   kind: 'move' | 'resize';
+  edge?: Edge;
   dx: number;
   dy: number;
 }
@@ -264,10 +301,13 @@ export function TerminalStudio({
   storageKey,
   now: fixedNow,
   onStatusEvent,
+  onOrchestratorChange,
+  onMention,
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
+  const [composer, setComposer] = useState<{ from: string | null } | null>(null);
   const [notices, setNotices] = useState<StudioStatusEvent[]>([]);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Rect>({ x: 0, y: 0, width: 1200, height: 700 });
@@ -275,6 +315,19 @@ export function TerminalStudio({
   const [stack, setStack] = useState<string[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [split, setSplit] = useState<{ index: number; last: number; pointer: number } | null>(null);
+  const [track, setTrack] = useState<{
+    axis: 'cols' | 'rows';
+    index: number;
+    pointer: number;
+    last: number;
+  } | null>(null);
+  const moveTrack = (event: React.PointerEvent) => {
+    if (!track || track.pointer !== event.pointerId) return;
+    const position = track.axis === 'cols' ? event.clientX : event.clientY;
+    const delta = position - track.last;
+    setTrack({ ...track, last: position });
+    setState((current) => resizeTrack(current, view, track.axis, track.index, delta));
+  };
   const [active, setActive] = useState<StudioMessage[]>([]);
   const [now, setNow] = useState(() => fixedNow ?? Date.now());
 
@@ -435,7 +488,12 @@ export function TerminalStudio({
   const setMode = (mode: ArrangementMode) =>
     setState((current) => ({ ...current, mode, maximized: null }));
 
-  const startDrag = (event: React.PointerEvent, pane: PlacedPane, kind: Drag['kind']) => {
+  const startDrag = (
+    event: React.PointerEvent,
+    pane: PlacedPane,
+    kind: Drag['kind'],
+    edge?: Edge,
+  ) => {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest('button')) return;
     event.preventDefault();
@@ -448,6 +506,7 @@ export function TerminalStudio({
       startY: event.clientY,
       origin: pane.rect,
       kind,
+      edge,
       dx: 0,
       dy: 0,
     });
@@ -460,14 +519,14 @@ export function TerminalStudio({
 
   const endDrag = (event: React.PointerEvent) => {
     if (!drag || event.pointerId !== drag.pointer) return;
-    const { id, origin, dx, dy, kind } = drag;
+    const { id, origin, dx, dy, kind, edge } = drag;
     setDrag(null);
     if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
     if (state.mode === 'free') {
       const rect =
         kind === 'move'
           ? { ...origin, x: origin.x + dx, y: origin.y + dy }
-          : { ...origin, width: origin.width + dx, height: origin.height + dy };
+          : resizeFromEdge(origin, edge ?? 'se', dx, dy);
       setState((current) => updatePane(current, id, { free: containRect(rect, view) }));
       return;
     }
@@ -489,14 +548,7 @@ export function TerminalStudio({
             { ...drag.origin, x: drag.origin.x + drag.dx, y: drag.origin.y + drag.dy },
             view,
           )
-        : containRect(
-            {
-              ...drag.origin,
-              width: drag.origin.width + drag.dx,
-              height: drag.origin.height + drag.dy,
-            },
-            view,
-          );
+        : containRect(resizeFromEdge(drag.origin, drag.edge ?? 'se', drag.dx, drag.dy), view);
     }
     return { ...pane.rect, x: pane.rect.x + drag.dx, y: pane.rect.y + drag.dy };
   };
@@ -548,6 +600,80 @@ export function TerminalStudio({
           );
         })
       : null;
+
+  // Mosaic: drag the borders between terminals to resize columns and rows.
+  const trackHandles = (() => {
+    if (scoped.mode !== 'mosaic' || scoped.maximized || placed.length < 2) return null;
+    const g = mosaicGeometry(visiblePanes(scoped), paneView(scoped, view), state.grid);
+    const spans = (axis: 'cols' | 'rows', border: number, at: number) =>
+      g.cells.some((cell) =>
+        axis === 'cols'
+          ? cell.col <= border &&
+            cell.col + cell.w - 1 >= border + 1 &&
+            cell.row <= at &&
+            cell.row + cell.h - 1 >= at
+          : cell.row <= border &&
+            cell.row + cell.h - 1 >= border + 1 &&
+            cell.col <= at &&
+            cell.col + cell.w - 1 >= at,
+      );
+    const handles: ReactNode[] = [];
+    const start = (axis: 'cols' | 'rows', index: number) => (event: React.PointerEvent) => {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setTrack({
+        axis,
+        index,
+        pointer: event.pointerId,
+        last: axis === 'cols' ? event.clientX : event.clientY,
+      });
+    };
+    const keys = (axis: 'cols' | 'rows', index: number) => (event: React.KeyboardEvent) => {
+      const step = event.shiftKey ? 64 : 16;
+      const back = axis === 'cols' ? 'ArrowLeft' : 'ArrowUp';
+      const forward = axis === 'cols' ? 'ArrowRight' : 'ArrowDown';
+      const delta = event.key === back ? -step : event.key === forward ? step : 0;
+      if (delta) setState((current) => resizeTrack(current, view, axis, index, delta));
+    };
+    for (let c = 0; c < g.colW.length - 1; c++)
+      for (let r = 0; r < g.rowH.length; r++) {
+        if (spans('cols', c, r)) continue;
+        handles.push(
+          <div
+            key={`col-${c}-${r}`}
+            className="ts-split ts-split-columns ts-track"
+            style={{ left: g.colX[c]! + g.colW[c]!, top: g.rowY[r], width: GAP, height: g.rowH[r] }}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={t('terminalStudio.resizeColumns')}
+            tabIndex={r === 0 ? 0 : -1}
+            onKeyDown={keys('cols', c)}
+            onPointerDown={start('cols', c)}
+            onPointerMove={moveTrack}
+            onPointerUp={() => setTrack(null)}
+          />,
+        );
+      }
+    for (let r = 0; r < g.rowH.length - 1; r++)
+      for (let c = 0; c < g.colW.length; c++) {
+        if (spans('rows', r, c)) continue;
+        handles.push(
+          <div
+            key={`row-${r}-${c}`}
+            className="ts-split ts-split-rows ts-track"
+            style={{ left: g.colX[c], top: g.rowY[r]! + g.rowH[r]!, width: g.colW[c], height: GAP }}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={t('terminalStudio.resizeRows')}
+            tabIndex={c === 0 ? 0 : -1}
+            onKeyDown={keys('rows', r)}
+            onPointerDown={start('rows', r)}
+            onPointerMove={moveTrack}
+            onPointerUp={() => setTrack(null)}
+          />,
+        );
+      }
+    return handles;
+  })();
 
   const style = linkStyle(scoped);
   const links =
@@ -721,6 +847,7 @@ export function TerminalStudio({
             sending.has(pane.id) ? 'ts-sending' : '',
             terminal.status === 'waiting_for_user' ? 'ts-attention' : '',
             terminal.status === 'running' ? 'ts-working' : '',
+            state.orchestrator === pane.id ? 'ts-orchestrator' : '',
             flash.has(pane.id) ? `ts-done ts-done-${terminal.status}` : '',
           ]
             .filter(Boolean)
@@ -748,6 +875,12 @@ export function TerminalStudio({
                 <StatusIcon status={terminal.status} />
                 <span className="ts-label">{terminal.label}</span>
                 <span className="ts-name">{terminal.name}</span>
+                {state.orchestrator === pane.id && (
+                  <span className="ts-role" title={t('terminalStudio.orchestratorHint')}>
+                    <Crown size={11} strokeWidth={2.25} aria-hidden="true" />
+                    {t('terminalStudio.orchestrator')}
+                  </span>
+                )}
                 {workspaces.length > 1 && (
                   <span className="ts-ws" title={terminal.workspace.name}>
                     <span className="ts-ws-dot" aria-hidden="true" />
@@ -774,8 +907,42 @@ export function TerminalStudio({
                   </span>
                 )}
                 <span className="ts-actions">
+                  {onMention && terminals.length > 1 && (
+                    <button
+                      type="button"
+                      className="ts-secondary"
+                      title={t('terminalStudio.mention.fromThis')}
+                      aria-label={t('terminalStudio.mention.fromThis')}
+                      onClick={() => setComposer({ from: pane.id })}
+                    >
+                      <AtSign size={14} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className={`ts-crown${state.orchestrator === pane.id ? ' active' : ''}`}
+                    aria-pressed={state.orchestrator === pane.id}
+                    title={
+                      state.orchestrator === pane.id
+                        ? t('terminalStudio.unsetOrchestrator')
+                        : t('terminalStudio.setOrchestrator')
+                    }
+                    aria-label={
+                      state.orchestrator === pane.id
+                        ? t('terminalStudio.unsetOrchestrator')
+                        : t('terminalStudio.setOrchestrator')
+                    }
+                    onClick={() => {
+                      const next = state.orchestrator === pane.id ? null : pane.id;
+                      setState((current) => setOrchestrator(current, pane.id));
+                      onOrchestratorChange?.(next);
+                    }}
+                  >
+                    <Crown size={14} />
+                  </button>
                   {state.mode === 'mosaic' && !isMax && (
                     <button
+                      className="ts-secondary"
                       type="button"
                       title={t('terminalStudio.size', {
                         size: t(`terminalStudio.sizes.${arranged.size}`),
@@ -833,18 +1000,22 @@ export function TerminalStudio({
                 </span>
               </div>
               {pane.compact ? null : <div className="ts-body">{renderBody(terminal)}</div>}
-              {state.mode === 'free' && !isMax && (
-                <div
-                  className="ts-resize"
-                  aria-hidden="true"
-                  onPointerDown={(event) => startDrag(event, pane, 'resize')}
-                />
-              )}
+              {state.mode === 'free' &&
+                !isMax &&
+                edges.map((edge) => (
+                  <div
+                    key={edge}
+                    className={`ts-edge ts-edge-${edge}`}
+                    aria-hidden="true"
+                    onPointerDown={(event) => startDrag(event, pane, 'resize', edge)}
+                  />
+                ))}
             </article>
           );
         })}
 
         {splitHandles}
+        {trackHandles}
 
         <svg className="ts-links" width={view.width} height={view.height} aria-hidden="true">
           <defs>
@@ -902,7 +1073,28 @@ export function TerminalStudio({
         )}
       </div>
 
+      {onMention && composer && (
+        <MentionComposer
+          terminals={terminals}
+          from={composer.from}
+          onFromChange={(from) => setComposer({ from })}
+          onSend={onMention}
+          onClose={() => setComposer(null)}
+          autoFocus
+        />
+      )}
+
       <footer className="ts-dock" aria-label={t('terminalStudio.dock')}>
+        {onMention && !composer && terminals.length > 1 && (
+          <button
+            type="button"
+            className="ts-mention-open"
+            onClick={() => setComposer({ from: null })}
+          >
+            <AtSign size={13} />
+            {t('terminalStudio.mention.open')}
+          </button>
+        )}
         <span className="ts-dock-title">{t('terminalStudio.minimized')}</span>
         {minimized.length === 0 && <span className="ts-dock-empty">—</span>}
         {minimized.map((pane) => {

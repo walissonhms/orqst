@@ -1,0 +1,243 @@
+/* Mention composer. Colors come only from tokens.css. */
+
+.mc-root {
+  display: grid;
+  gap: 6px;
+  margin: 0 var(--orqst-space-3) var(--orqst-space-2);
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--orqst-neon) 45%, var(--orqst-border));
+  border-radius: 12px;
+  background: var(--orqst-elevated);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--orqst-neon) 10%, transparent),
+    0 14px 40px var(--orqst-shadow);
+  animation: mc-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes mc-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.mc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.mc-from {
+  display: grid;
+  gap: 2px;
+  flex: none;
+  color: var(--orqst-muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.mc-from select {
+  height: 32px;
+  max-width: 190px;
+  padding: 0 8px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 8px;
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.mc-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin-top: 14px;
+}
+.mc-at {
+  position: absolute;
+  top: 9px;
+  left: 10px;
+  color: var(--orqst-neon);
+}
+.mc-field textarea {
+  width: 100%;
+  min-height: 32px;
+  max-height: 120px;
+  padding: 7px 10px 7px 30px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 8px;
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  font: inherit;
+  resize: vertical;
+}
+.mc-field textarea::placeholder {
+  color: var(--orqst-subtle);
+}
+.mc-suggest {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 1100;
+  width: min(520px, 100%);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 10px;
+  background: var(--orqst-surface);
+  box-shadow: 0 16px 40px var(--orqst-shadow);
+}
+.mc-suggest li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.mc-suggest li.active {
+  background: var(--orqst-accent-soft);
+}
+.mc-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mc-model,
+.mc-ws {
+  color: var(--orqst-muted);
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.mc-ws {
+  margin-left: auto;
+}
+.mc-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  margin-top: 14px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--orqst-primary);
+  color: var(--orqst-on-primary);
+  font-weight: 600;
+}
+.mc-send:disabled {
+  opacity: 0.45;
+}
+.mc-send:hover:not(:disabled) {
+  background: var(--orqst-primary-hover);
+}
+.mc-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 16px;
+  border-radius: 7px;
+  color: var(--orqst-muted);
+}
+.mc-close:hover {
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+}
+.mc-spin {
+  animation: ts-spin 0.9s linear infinite;
+}
+.mc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 20px;
+  font-size: 12px;
+}
+.mc-hint {
+  color: var(--orqst-subtle);
+}
+.mc-to {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--orqst-muted);
+}
+.mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-text);
+}
+.mc-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--orqst-warning);
+}
+.mc-state {
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+.mc-state-accepted,
+.mc-state-queued {
+  background: var(--orqst-success-soft);
+  color: var(--orqst-success);
+}
+.mc-state-delivery_failed,
+.mc-state-unsupported,
+.mc-state-unknown {
+  background: var(--orqst-danger-soft);
+  color: var(--orqst-danger);
+}
+.mc-root button:focus-visible,
+.mc-root select:focus-visible,
+.mc-root textarea:focus-visible {
+  outline: 2px solid var(--orqst-neon);
+  outline-offset: 1px;
+}
+
+.ts-mention-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  height: 26px;
+  margin-right: var(--orqst-space-2);
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--orqst-neon) 50%, var(--orqst-border));
+  border-radius: 13px;
+  color: var(--orqst-lavender);
+}
+.ts-mention-open:hover {
+  background: var(--orqst-accent-soft);
+}
+
+@media (max-width: 620px) {
+  .mc-row {
+    flex-wrap: wrap;
+  }
+  .mc-field {
+    flex-basis: 100%;
+    order: 3;
+    margin-top: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-root,
+  .mc-spin {
+    animation: none;
+  }
+}
+:root[data-motion='reduced'] .mc-root,
+:root[data-motion='reduced'] .mc-spin {
+  animation: none;
+}

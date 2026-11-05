@@ -86,6 +86,7 @@ function fromRequest(request: TerminalRequest, n: number): StudioTerminal {
     startedAt: Date.now(),
     lastActivity: 'Synthetic activity line',
     workspace: workspaceOf(request.workspaceId),
+    orchestrator: request.orchestrator,
   };
 }
 
@@ -178,6 +179,48 @@ function Preview() {
         messages={messages}
         renderBody={(terminal) => <SyntheticBody terminal={terminal} />}
         onNewTerminal={() => setCreating(true)}
+        onOrchestratorChange={(id) =>
+          setTerminals((current) =>
+            current.map((terminal) => ({ ...terminal, orchestrator: terminal.id === id })),
+          )
+        }
+        onMention={async ({ from, to }) => {
+          // Synthetic delivery: accepted, then each recipient works and returns a result.
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          const sender = from ?? null;
+          setMessages((current) => [
+            ...current.slice(-20),
+            ...to.map((target) => ({
+              id: `${Date.now()}-${target}-m`,
+              from: sender ?? target,
+              to: target,
+              kind: 'delegation' as const,
+            })),
+          ]);
+          setTerminals((current) =>
+            current.map((terminal) =>
+              to.includes(terminal.id) ? { ...terminal, status: 'running' } : terminal,
+            ),
+          );
+          window.setTimeout(() => {
+            setTerminals((current) =>
+              current.map((terminal) =>
+                to.includes(terminal.id) ? { ...terminal, status: 'completed' } : terminal,
+              ),
+            );
+            if (sender)
+              setMessages((current) => [
+                ...current.slice(-20),
+                ...to.map((target) => ({
+                  id: `${Date.now()}-${target}-r`,
+                  from: target,
+                  to: sender,
+                  kind: 'result' as const,
+                })),
+              ]);
+          }, 3200);
+          return 'accepted';
+        }}
         onStatusEvent={(event, terminal) => {
           // The app sends a native OS notification; the preview uses the browser one.
           if (typeof Notification === 'undefined') return;

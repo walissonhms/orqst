@@ -1327,7 +1327,12 @@
       "howManyEach": "How many in each",
       "workspaceFor": "Workspace for terminal {{n}}",
       "overCapacity": "Too many: room for {{count}} more.",
-      "summaryAcross": "{{summary}} · across {{count}} workspaces"
+      "summaryAcross": "{{summary}} · across {{count}} workspaces",
+      "makeOrchestrator": "Make this the orchestrator",
+      "makeOrchestratorN": "Make terminal {{n}} the orchestrator",
+      "firstIsOrchestrator": "Make the first terminal the orchestrator",
+      "orchestratorIs": "Terminal {{n}} is the orchestrator",
+      "pickOrchestrator": "Choose an orchestrator: click a row number"
     },
     "workspaces": "Workspaces",
     "allWorkspaces": "All",
@@ -1344,6 +1349,32 @@
       "waiting_for_user": "Needs your input",
       "open": "Open",
       "dismiss": "Dismiss"
+    },
+    "resizeColumns": "Resize columns",
+    "resizeRows": "Resize rows",
+    "orchestrator": "Orchestrator",
+    "orchestratorHint": "A label only: it grants no permissions. Delegation follows the Feature permissions.",
+    "setOrchestrator": "Mark as orchestrator",
+    "unsetOrchestrator": "Remove orchestrator label",
+    "mention": {
+      "open": "Mention a terminal",
+      "fromThis": "Mention another terminal from this one",
+      "from": "From",
+      "you": "You",
+      "placeholder": "Type @ to mention a terminal, then your message",
+      "label": "Message",
+      "send": "Send",
+      "close": "Close",
+      "to": "To",
+      "hint": "Mention at least one terminal with @, for example @T-002.",
+      "crossWorkspace": "Another workspace: needs explicit permission.",
+      "state": {
+        "queued": "Queued",
+        "accepted": "Delivered · not yet done",
+        "delivery_failed": "Delivery failed",
+        "unsupported": "Not supported yet",
+        "unknown": "Delivery unknown"
+      }
     }
   }
 }

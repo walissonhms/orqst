@@ -35,6 +35,13 @@ export interface ArrangementState {
   maximized: string | null;
   /** Split ratios for columns/rows mode, one weight per visible pane. */
   weights: Record<string, number>;
+  /** Mosaic track weights, changed by dragging the borders between terminals. */
+  grid?: { cols: number[]; rows: number[] };
+  /**
+   * Terminal labelled as this Feature's orchestrator. Descriptive only: it pins the
+   * pane first and highlights it, and never grants delegation or any permission.
+   */
+  orchestrator?: string | null;
 }
 
 export interface PlacedPane {
@@ -50,16 +57,54 @@ export const LIST_ROW = 44;
 export const MIN_PANE = { width: 260, height: 160 };
 
 export function visiblePanes(state: ArrangementState): ArrangedPane[] {
-  return state.panes.filter((pane) => !pane.minimized).sort((a, b) => a.order - b.order);
+  const lead = state.orchestrator;
+  return state.panes
+    .filter((pane) => !pane.minimized)
+    .sort((a, b) => (a.id === lead ? -1 : b.id === lead ? 1 : a.order - b.order));
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Mosaic: dense grid with size spans, filled row by row (first-fit). */
-function mosaic(panes: ArrangedPane[], view: Rect): PlacedPane[] {
-  if (panes.length === 0) return [];
+export interface MosaicGeometry {
+  cells: { id: string; row: number; col: number; w: number; h: number }[];
+  /** Left edge and width of each column track. */
+  colX: number[];
+  colW: number[];
+  /** Top edge and height of each row track. */
+  rowY: number[];
+  rowH: number[];
+}
+
+function tracks(weights: number[] | undefined, count: number, extent: number, min: number) {
+  const w = Array.from({ length: count }, (_, i) => Math.max(0.05, weights?.[i] ?? 1));
+  const total = w.reduce((sum, value) => sum + value, 0);
+  const available = Math.max(extent - GAP * (count - 1), min * count);
+  let sizes = w.map((value) => (available * value) / total);
+  // Respect the minimum: take space from tracks above it, proportionally.
+  const short = sizes.reduce((sum, size) => sum + Math.max(0, min - size), 0);
+  if (short > 0) {
+    const spare = sizes.reduce((sum, size) => sum + Math.max(0, size - min), 0);
+    sizes = sizes.map((size) =>
+      size < min ? min : size - ((size - min) / Math.max(spare, 1e-9)) * short,
+    );
+  }
+  const starts: number[] = [];
+  let cursor = 0;
+  for (const size of sizes) {
+    starts.push(cursor);
+    cursor += size + GAP;
+  }
+  return { starts, sizes };
+}
+
+/** Mosaic: dense grid with size spans (first-fit) and resizable column/row tracks. */
+export function mosaicGeometry(
+  panes: ArrangedPane[],
+  view: Rect,
+  grid?: ArrangementState['grid'],
+): MosaicGeometry {
   const columns = clamp(Math.floor((view.width + GAP) / (MIN_PANE.width + GAP)), 1, 4);
   const spanOf = (size: PaneSize) =>
     columns === 1
@@ -76,7 +121,7 @@ function mosaic(panes: ArrangedPane[], view: Rect): PlacedPane[] {
       for (let c = col; c < col + w; c++) if (occupied[r]?.[c]) return false;
     return true;
   };
-  const cells: { id: string; row: number; col: number; w: number; h: number }[] = [];
+  const cells: MosaicGeometry['cells'] = [];
   for (const pane of panes) {
     const span = spanOf(pane.size);
     let placed = false;
@@ -92,20 +137,91 @@ function mosaic(panes: ArrangedPane[], view: Rect): PlacedPane[] {
       }
     }
   }
-  const rows = occupied.length;
-  const cellW = (view.width - GAP * (columns - 1)) / columns;
-  const cellH = Math.max(MIN_PANE.height, (view.height - GAP * (rows - 1)) / rows);
-  return cells.map((cell, index) => ({
-    id: cell.id,
-    compact: false,
-    z: index,
-    rect: {
-      x: view.x + cell.col * (cellW + GAP),
-      y: view.y + cell.row * (cellH + GAP),
-      width: cell.w * cellW + (cell.w - 1) * GAP,
-      height: cell.h * cellH + (cell.h - 1) * GAP,
-    },
-  }));
+  const rows = Math.max(1, occupied.length);
+  const cx = tracks(grid?.cols, columns, view.width, MIN_PANE.width);
+  const ry = tracks(grid?.rows, rows, view.height, MIN_PANE.height);
+  return {
+    cells,
+    colX: cx.starts.map((x) => view.x + x),
+    colW: cx.sizes,
+    rowY: ry.starts.map((y) => view.y + y),
+    rowH: ry.sizes,
+  };
+}
+
+function mosaic(panes: ArrangedPane[], view: Rect, grid?: ArrangementState['grid']): PlacedPane[] {
+  if (panes.length === 0) return [];
+  const g = mosaicGeometry(panes, view, grid);
+  return g.cells.map((cell, index) => {
+    const x = g.colX[cell.col]!;
+    const y = g.rowY[cell.row]!;
+    const lastCol = cell.col + cell.w - 1;
+    const lastRow = cell.row + cell.h - 1;
+    return {
+      id: cell.id,
+      compact: false,
+      z: index,
+      rect: {
+        x,
+        y,
+        width: g.colX[lastCol]! + g.colW[lastCol]! - x,
+        height: g.rowY[lastRow]! + g.rowH[lastRow]! - y,
+      },
+    };
+  });
+}
+
+/**
+ * Drag the border after mosaic track `index` by `delta` pixels. Moves space between
+ * that track and the next one; both keep at least the minimum pane size.
+ */
+export function resizeTrack(
+  state: ArrangementState,
+  view: Rect,
+  axis: 'cols' | 'rows',
+  index: number,
+  delta: number,
+): ArrangementState {
+  const g = mosaicGeometry(visiblePanes(state), paneView(state, view), state.grid);
+  const sizes = axis === 'cols' ? g.colW : g.rowH;
+  const a = sizes[index];
+  const b = sizes[index + 1];
+  if (a === undefined || b === undefined) return state;
+  const min = axis === 'cols' ? MIN_PANE.width : MIN_PANE.height;
+  const shift = clamp(delta, min - a, b - min);
+  const next = sizes.map((size, i) =>
+    i === index ? a + shift : i === index + 1 ? b - shift : size,
+  );
+  const grid = {
+    cols: state.grid?.cols ?? [],
+    rows: state.grid?.rows ?? [],
+    [axis]: next,
+  };
+  return { ...state, grid };
+}
+
+/** Make a terminal the orchestrator (or clear it). The pane is pinned first. */
+export function setOrchestrator(state: ArrangementState, id: string | null): ArrangementState {
+  return { ...state, orchestrator: state.orchestrator === id ? null : id };
+}
+
+/** Resize a free-mode rectangle from one of its edges or corners. */
+export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+export function resizeFromEdge(rect: Rect, edge: Edge, dx: number, dy: number): Rect {
+  let { x, y, width, height } = rect;
+  if (edge.includes('e')) width = Math.max(MIN_PANE.width, width + dx);
+  if (edge.includes('s')) height = Math.max(MIN_PANE.height, height + dy);
+  if (edge.includes('w')) {
+    const w = Math.max(MIN_PANE.width, width - dx);
+    x += width - w;
+    width = w;
+  }
+  if (edge.includes('n')) {
+    const h = Math.max(MIN_PANE.height, height - dy);
+    y += height - h;
+    height = h;
+  }
+  return { x, y, width, height };
 }
 
 /** Columns/rows: one strip per pane, sized by its weight. */
@@ -189,7 +305,7 @@ export function arrange(state: ArrangementState, view: Rect, stack: string[] = [
   switch (state.mode) {
     case 'mosaic':
     case 'focus':
-      return mosaic(panes, view);
+      return mosaic(panes, view, state.grid);
     case 'columns':
       return strips(panes, view, 'columns', state.weights);
     case 'rows':
@@ -304,6 +420,7 @@ export function removePane(state: ArrangementState, id: string): ArrangementStat
     ...state,
     weights,
     maximized: state.maximized === id ? null : state.maximized,
+    orchestrator: state.orchestrator === id ? null : (state.orchestrator ?? null),
     panes: state.panes.filter((pane) => pane.id !== id),
   };
 }

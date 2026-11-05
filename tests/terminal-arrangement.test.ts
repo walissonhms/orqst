@@ -13,6 +13,10 @@ import {
   lanePath,
   linkStyle,
   paneView,
+  resizeFromEdge,
+  resizeTrack,
+  setOrchestrator,
+  visiblePanes,
   MIN_PANE,
   minimize,
   removePane,
@@ -201,4 +205,37 @@ test('drag targets map to the full order even with minimized panes', () => {
     [...state.panes].sort((a, b) => a.order - b.order).map((pane) => pane.id),
     ['p0', 'p2', 'p3', 'p1'],
   );
+});
+
+test('dragging a mosaic border resizes the neighbouring tracks only', () => {
+  const state = stateWith(4);
+  const before = arrange(state, view);
+  const wider = resizeTrack(state, view, 'cols', 0, 30);
+  const after = arrange(wider, view);
+  const w = (list: typeof before, id: string) => list.find((pane) => pane.id === id)!.rect.width;
+  assert.ok(Math.abs(w(after, 'p0') - w(before, 'p0') - 30) < 0.5);
+  assert.ok(Math.abs(w(after, 'p1') - w(before, 'p1') + 30) < 0.5);
+  assert.ok(Math.abs(w(after, 'p2') - w(before, 'p2')) < 0.5);
+  const clamped = arrange(resizeTrack(state, view, 'cols', 0, 9000), view);
+  assert.ok(w(clamped, 'p1') >= MIN_PANE.width - 0.5);
+  for (let i = 0; i < after.length; i++)
+    for (let j = i + 1; j < after.length; j++) assert.ok(!overlaps(after[i]!.rect, after[j]!.rect));
+});
+
+test('free resize from any edge keeps the opposite edge fixed', () => {
+  const rect: Rect = { x: 100, y: 100, width: 400, height: 300 };
+  assert.deepEqual(resizeFromEdge(rect, 'w', -50, 0), { x: 50, y: 100, width: 450, height: 300 });
+  assert.deepEqual(resizeFromEdge(rect, 'n', 0, 40), { x: 100, y: 140, width: 400, height: 260 });
+  assert.deepEqual(resizeFromEdge(rect, 'se', 10, 20), { x: 100, y: 100, width: 410, height: 320 });
+  const tiny = resizeFromEdge(rect, 'nw', 5000, 5000);
+  assert.equal(tiny.width, MIN_PANE.width);
+  assert.equal(tiny.x + tiny.width, 500);
+});
+
+test('the orchestrator is pinned first and cleared when removed', () => {
+  let state = setOrchestrator(stateWith(3), 'p2');
+  assert.equal(visiblePanes(state)[0]!.id, 'p2');
+  assert.equal(setOrchestrator(state, 'p2').orchestrator, null);
+  state = removePane(state, 'p2');
+  assert.equal(state.orchestrator, null);
 });
