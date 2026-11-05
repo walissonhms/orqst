@@ -14,6 +14,7 @@ import { stableId } from '@orqst/shared';
 import {
   committedTerminalImage,
   inspectOfflineTerminalImage,
+  inspectKernelTerminalImage,
   OFFLINE_JOURNAL_BYTES,
 } from '@orqst/database';
 import {
@@ -270,7 +271,10 @@ export function snapshotOfflineReservation(
     record: ReturnType<typeof readRecoveryFile>;
   },
   signedHistorical?: OfflineReservationSnapshot,
+  inspectionMode?: 'kernel',
 ) {
+  if (inspectionMode && (historical || signedHistorical))
+    throw new Error('Kernel inspection cannot use historical fallback');
   terminalDirectory(directory, true);
   terminalDirectory(scratch, true);
   if (directory === scratch) throw new Error('Recovery scratch overlaps source');
@@ -385,7 +389,11 @@ export function snapshotOfflineReservation(
     }
     const stateNames = directoryNames(config.state);
     if (
-      stateNames.some((name) => name.startsWith('lifecycle-') || name === 'terminal.sqlite-journal')
+      stateNames.some(
+        (name) =>
+          name === 'terminal.sqlite-journal' ||
+          (inspectionMode !== 'kernel' && name.startsWith('lifecycle-')),
+      )
     )
       throw new Error('Recovery lifecycle/rollback uncertainty');
     const binding = terminalEnrollmentFile(path, config);
@@ -502,7 +510,10 @@ export function snapshotOfflineReservation(
     );
     const derived = join(scratch, `derived-${slot}.sqlite`);
     writeRecoveryFile(derived, image);
-    const logical = inspectOfflineTerminalImage(derived);
+    const logical =
+      inspectionMode === 'kernel'
+        ? inspectKernelTerminalImage(derived)
+        : inspectOfflineTerminalImage(derived);
     if (
       (marker.epoch && marker.epoch !== logical.epoch) ||
       intents.some((entry) => entry.input.epoch !== logical.epoch) ||

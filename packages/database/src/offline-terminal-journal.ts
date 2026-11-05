@@ -81,7 +81,7 @@ export function committedTerminalImage(base: Buffer, wal: Buffer | null): Buffer
 }
 
 /** Caller supplies its private, bounded, immutable derived copy, never a live journal. */
-export function inspectOfflineTerminalImage(file: string) {
+function inspectTerminalImage(file: string, allowDispatched: boolean) {
   if (/[%?#\n]/.test(file)) throw new Error('Unsupported offline image path');
   const db = new DatabaseSync(`file:${file}?immutable=1`, {
     readOnly: true,
@@ -132,8 +132,7 @@ export function inspectOfflineTerminalImage(file: string) {
         attempt.state !== row.state ||
         attempt.updatedAt !== row.updated_at ||
         attempt.epoch !== owners[0]!.epoch ||
-        attempt.state !== 'prepared' ||
-        attempt.exit !== undefined
+        (!allowDispatched && (attempt.state !== 'prepared' || attempt.exit !== undefined))
       )
         throw new Error('Offline non-dispatch proof denied');
       return attempt;
@@ -142,4 +141,14 @@ export function inspectOfflineTerminalImage(file: string) {
   } finally {
     db.close();
   }
+}
+
+/** Original offline policy: only a prepared, never-dispatched image is admissible. */
+export function inspectOfflineTerminalImage(file: string) {
+  return inspectTerminalImage(file, false);
+}
+
+/** Kernel recovery reads all valid lifecycle states without rewriting them or inferring exit. */
+export function inspectKernelTerminalImage(file: string) {
+  return inspectTerminalImage(file, true);
 }

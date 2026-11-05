@@ -38,6 +38,7 @@ export { TERMINAL_JOURNAL_LIMITS } from './terminal-journal.js';
 export {
   committedTerminalImage,
   inspectOfflineTerminalImage,
+  inspectKernelTerminalImage,
   OFFLINE_JOURNAL_BYTES,
 } from './offline-terminal-journal.js';
 export { SESSION_METRICS_LIMITS } from './live-metrics.js';

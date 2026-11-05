@@ -1,3 +1,10 @@
+import { snapshotKernelReservation } from '../packages/core/src/terminal/kernel-reservation-snapshot.js';
+import {
+  createLifecycleReceipt,
+  armLifecycleReceipt,
+} from '../packages/core/src/managed-codex/lifecycle-receipt.js';
+import { createKernelLifecycleReceipt } from '../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
+import { closeSync } from 'node:fs';
 // SYNTHETIC: disposable files/SQLite only. No runtime, Core, PTY, auth DB or reboot.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -659,6 +666,60 @@ test('pure WAL validation rejects truncated/corrupt/uncommitted frames and prese
       () => committedTerminalImage(base, wal.subarray(0, 32 + frameSize)),
       /Uncommitted/,
     );
+  } finally {
+    f.close();
+  }
+});
+
+test('kernel snapshot binds every recorded dispatch and preserves unknown journal state', async () => {
+  const f = fixture();
+  try {
+    writeFileSync(
+      f.marker,
+      JSON.stringify({ version: 1, owner: f.owner, epoch: f.epoch, manifests: [f.manifests[0]] }),
+      { mode: 0o600 },
+    );
+    f.databases[0]!.journal.transition(f.attemptId, 'starting');
+    const binding = {
+      instanceId: f.attemptId,
+      epoch: f.epoch,
+      manifestDigest: 'a'.repeat(64),
+      configDigest: terminalDigest(readFileSync(f.manifests[0]!)),
+    };
+    const fd = createLifecycleReceipt(f.configs[0]!.state, binding);
+    const lifecycle = armLifecycleReceipt(fd, binding.configDigest);
+    await lifecycle.record({ type: 'started' });
+    closeSync(fd);
+    const core = {
+      boot: randomUUID(),
+      pid: 100,
+      ppid: 1,
+      uid: 501,
+      startSec: 1,
+      startUsec: 1,
+      sid: 100,
+      pgid: 100,
+    };
+    const host = { ...core, pid: 101, ppid: 100, startUsec: 2 };
+    const leader = { ...host, pid: 102, ppid: 101, startUsec: 3, sid: 102, pgid: 102 };
+    const writer = createKernelLifecycleReceipt(f.configs[0]!.state, {
+      ...binding,
+      owner: f.owner,
+    });
+    writer.core(core);
+    writer.host(host);
+    writer.leader(leader);
+    writer.close();
+    const scratch = join(f.root, 'kernel-scratch');
+    mkdirSync(scratch, { mode: 0o700 });
+    const result = snapshotKernelReservation(f.directory, scratch);
+    assert.equal(result.receipts.length, 1);
+    assert.deepEqual(result.receipts[0]!.core, core);
+    assert.equal(result.snapshot.journals[0]!.logical.attempts[0]!.state, 'starting');
+    assert.equal(result.snapshot.journals[0]!.logical.attempts[0]!.exit, undefined);
+    const other = join(f.root, 'offline-scratch');
+    mkdirSync(other, { mode: 0o700 });
+    assert.throws(() => snapshotOfflineReservation(f.directory, other), /lifecycle/);
   } finally {
     f.close();
   }
