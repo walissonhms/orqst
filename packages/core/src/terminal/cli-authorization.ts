@@ -89,6 +89,11 @@ export interface TerminalCliCandidateSnapshot {
   readonly permissionScope: string;
 }
 
+export interface TerminalCliCommitGuard {
+  readonly snapshot: TerminalCliCandidateSnapshot;
+  current(): Promise<boolean>;
+}
+
 const permissionScope = (profile: Readonly<TerminalProfile>) =>
   terminalDigest(JSON.stringify([profile.environmentProfile, profile.cliAuthorizationScope]));
 
@@ -345,6 +350,7 @@ export class TerminalCliPolicyStore {
     probe: () => Promise<TerminalCliEvidence>,
     review: (details: TerminalCliReview) => Promise<boolean>,
     expectedEpoch?: string,
+    guard?: TerminalCliCommitGuard,
   ): Promise<TerminalCliAuthorizationState> {
     let key: string;
     try {
@@ -368,6 +374,7 @@ export class TerminalCliPolicyStore {
         probe,
         review,
         expectedEpoch,
+        guard,
       );
     } finally {
       release();
@@ -384,9 +391,12 @@ export class TerminalCliPolicyStore {
     probe: () => Promise<TerminalCliEvidence>,
     review: (details: TerminalCliReview) => Promise<boolean>,
     expectedEpoch?: string,
+    guard?: TerminalCliCommitGuard,
   ): Promise<TerminalCliAuthorizationState> {
     try {
       if (!profile.cliAuthorizationScope) return 'blocked';
+      if (guard && !this.candidateSnapshotCurrent(profile, provider, guard.snapshot))
+        return 'stale';
       const snapshot = this.loadSnapshot(profile);
       const previous = snapshot.record;
       const signature = await verifiedCliSignature(verifier, provider, profile.executable);
@@ -443,6 +453,10 @@ export class TerminalCliPolicyStore {
         JSON.stringify(verified) !== JSON.stringify(signature)
       )
         return 'revoked';
+      if (guard && !this.candidateSnapshotCurrent(profile, provider, guard.snapshot))
+        return 'stale';
+      if (guard && !(await guard.current())) return 'blocked';
+      if (guard && this.identity(profile) !== guard.snapshot.identity) return 'revoked';
       try {
         const current = this.loadSnapshot(profile);
         if (

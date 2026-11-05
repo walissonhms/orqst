@@ -59,6 +59,56 @@ test('candidate snapshot is immutable and invalidated by byte or scope changes w
   }
 });
 
+test('conditional policy commit refuses expired native authority and stale snapshots', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-cli-guard-')));
+  const path = join(root, 'synthetic');
+  const bytes = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]);
+  writeFileSync(path, bytes, { mode: 0o700 });
+  const store = new TerminalCliPolicyStore(root);
+  const profile: TerminalProfile = {
+    id: 'test',
+    projectId: 'test',
+    executable: path,
+    executableSha256: terminalDigest(bytes),
+    executableVersion: '0.162.1',
+    argv: [],
+    cwd: root,
+    environmentProfile: 'synthetic',
+    permissions: 'synthetic',
+    cliAuthorizationScope: 'scope',
+  };
+  const signature = { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
+  const verifier = { verify: async () => signature };
+  const evidence: TerminalCliEvidence = {
+    provider: 'codex',
+    mode: 'tui',
+    version: '0.162.1',
+    contractRevision: 'codex-tui-0.162.1',
+    sha256: profile.executableSha256,
+    signature,
+  };
+  try {
+    const snapshot = store.candidateSnapshot(profile, 'codex');
+    const authorize = (current: () => Promise<boolean>) =>
+      store.authorizeVerifiedCli(
+        profile,
+        'codex',
+        'tui',
+        verifier,
+        async () => evidence,
+        async () => true,
+        undefined,
+        { snapshot, current },
+      );
+    assert.equal(await authorize(async () => false), 'blocked');
+    assert.equal(existsSync(join(root, 'cli-authorizations')), false);
+    assert.equal(await authorize(async () => true), 'allowed');
+    assert.equal(await authorize(async () => true), 'stale');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('verified policy stores evidence and asks again for changed bytes, scope and epoch', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-verified-policy-')));
   const path = join(root, 'synthetic');
