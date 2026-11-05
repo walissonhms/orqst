@@ -1,9 +1,16 @@
 //! Pure sizing and content policy for native terminal authorization.
 /// Preserve native chrome and bound only the scrolling accessory.
 pub fn fit(available: (f64, f64), frame: (f64, f64), accessory: (f64, f64)) -> Option<(f64, f64)> {
-    if [available.0, available.1, frame.0, frame.1, accessory.0, accessory.1]
-        .iter()
-        .any(|v| !v.is_finite() || *v <= 0.0)
+    if [
+        available.0,
+        available.1,
+        frame.0,
+        frame.1,
+        accessory.0,
+        accessory.1,
+    ]
+    .iter()
+    .any(|v| !v.is_finite() || *v <= 0.0)
     {
         return None;
     }

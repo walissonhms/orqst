@@ -11,9 +11,9 @@ use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
 use tauri::webview::WebviewBuilder;
 use tauri::{Manager, Webview, WebviewUrl, Window, WindowEvent};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 #[cfg(not(target_os = "macos"))]
 use tauri_plugin_dialog::MessageDialogResult;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
@@ -1156,9 +1156,12 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
                 document == Some(slot)
                     && focus.is_some_and(|focus| focus.owns_key(false))
                     && guard.as_ref().is_some_and(|r| {
-                        r.native_dialog.as_ref().is_some_and(|(id, owner, version)| {
-                            id == &dialog_id && *owner == slot && Some(*version) == generation
-                        }) && r.generations.get(slot).copied() == generation
+                        r.native_dialog
+                            .as_ref()
+                            .is_some_and(|(id, owner, version)| {
+                                id == &dialog_id && *owner == slot && Some(*version) == generation
+                            })
+                            && r.generations.get(slot).copied() == generation
                             && r.revoked.get(slot) == Some(&false)
                             && r.loaded.get(slot) == Some(&true)
                             && request.as_ref().is_none_or(|id| {
@@ -1182,21 +1185,47 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
             receiver.await.unwrap_or(false)
         };
         let focused = focused(&window).await;
-        let current = app.state::<Terminals>().0.lock().unwrap().as_mut().and_then(|r| {
-            if r.native_dialog.as_ref().is_some_and(|(dialog_id, _, _)| dialog_id == &id) { r.native_dialog = None; }
-            if r.revoked.get(slot).copied().unwrap_or(true)
-                || request.as_ref().is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot))) {
-                None
-            } else { r.generations.get(slot).copied() }
-        });
+        let current = app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_mut()
+            .and_then(|r| {
+                if r.native_dialog
+                    .as_ref()
+                    .is_some_and(|(dialog_id, _, _)| dialog_id == &id)
+                {
+                    r.native_dialog = None;
+                }
+                if r.revoked.get(slot).copied().unwrap_or(true)
+                    || request
+                        .as_ref()
+                        .is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot)))
+                {
+                    None
+                } else {
+                    r.generations.get(slot).copied()
+                }
+            });
         if focus_diagnostics() {
-            eprintln!("ORQST_TERMINAL_CONSENT {}", json!({"approved": approved, "focused": focused, "generation": generation, "current": current}));
+            eprintln!(
+                "ORQST_TERMINAL_CONSENT {}",
+                json!({"approved": approved, "focused": focused, "generation": generation, "current": current})
+            );
             #[cfg(target_os = "macos")]
             tauri::async_runtime::spawn(trace_dialog_focus(window.clone()));
         }
-        let accepted = approved && generation.is_some()
-            && generation == current && self::slot(&window) == Some(slot) && focused && !presentation_blocked(&app);
-        send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
+        let accepted = approved
+            && generation.is_some()
+            && generation == current
+            && self::slot(&window) == Some(slot)
+            && focused
+            && !presentation_blocked(&app);
+        send(
+            &app,
+            json!({"kind": "confirm", "id": id, "accepted": accepted}),
+        );
     });
 }
 

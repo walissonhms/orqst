@@ -129,7 +129,8 @@ unsafe fn show(
     if container.is_null() {
         return None;
     }
-    let _: () = msg_send![container, setContainerSize: Size { width: size.width, height: f64::MAX }];
+    let _: () =
+        msg_send![container, setContainerSize: Size { width: size.width, height: f64::MAX }];
     let _: () = msg_send![container, setWidthTracksTextView: true];
     let _: () = msg_send![&*view, setRichText: false];
     let _: () = msg_send![&*view, setImportsGraphics: false];
@@ -144,7 +145,11 @@ unsafe fn show(
 
     // All original title/message/detail remain in the scroll view. Only a compact title
     // is repeated in NSAlert's non-scrolling chrome; pathological titles cannot grow it.
-    let heading = string(if title.chars().count() <= 80 { title } else { "" })?;
+    let heading = string(if title.chars().count() <= 80 {
+        title
+    } else {
+        ""
+    })?;
     let _: () = msg_send![&*alert, setMessageText: &*heading];
     let cancel = string(cancel)?;
     let approve = string(approve)?;
@@ -182,7 +187,8 @@ unsafe fn show(
         let clip: Size = msg_send![&*scroll, contentSize];
         let _: () = msg_send![&*view, setMinSize: clip];
         let _: () = msg_send![&*view, setFrameSize: clip];
-        let _: () = msg_send![container, setContainerSize: Size { width: clip.width, height: f64::MAX }];
+        let _: () =
+            msg_send![container, setContainerSize: Size { width: clip.width, height: f64::MAX }];
         let _: () = msg_send![&*view, sizeToFit];
     }
     if !fitted || !current() {
