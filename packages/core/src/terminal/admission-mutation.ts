@@ -27,7 +27,7 @@ function readLock(directory: string, name: string) {
     const bytes = Buffer.from(record.bytes, 'base64').toString('utf8');
     const lock = lockSchema.parse(JSON.parse(bytes));
     if (bytes !== JSON.stringify(lock) + '\n') throw new Error('Noncanonical mutation lock');
-    return { lock, digest: record.sha256, bytes };
+    return { lock, digest: record.sha256, bytes, identity: record.identity.slice(0, 2) };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
@@ -51,7 +51,7 @@ export async function acquireAdmissionMutation(
     throw new Error('Mutation lock owner identity mismatch');
   let name = ROOT;
   let predecessor: string | null = null;
-  const chain: { name: string; bytes: string }[] = [];
+  const chain: { name: string; bytes: string; identity: string[] }[] = [];
   for (let depth = 0; depth < LIMIT; depth++) {
     const existing = readLock(directory, name);
     if (!existing) {
@@ -62,8 +62,12 @@ export async function acquireAdmissionMutation(
       const held = readLock(directory, name);
       if (!held || held.bytes !== bytes) throw new Error('Mutation lock changed');
       const validate = () => {
-        for (const item of [...chain, { name, bytes }]) {
-          if (readLock(directory, item.name)?.bytes !== item.bytes)
+        for (const item of [...chain, { name, bytes, identity: held.identity }]) {
+          const current = readLock(directory, item.name);
+          if (
+            current?.bytes !== item.bytes ||
+            JSON.stringify(current.identity) !== JSON.stringify(item.identity)
+          )
             throw new Error('Mutation lock chain changed');
         }
       };
@@ -72,7 +76,7 @@ export async function acquireAdmissionMutation(
     }
     if (existing.lock.predecessor !== predecessor)
       throw new Error('Invalid mutation lock predecessor');
-    chain.push({ name, bytes: existing.bytes });
+    chain.push({ name, bytes: existing.bytes, identity: existing.identity });
     if (await exists(existing.lock.owner)) throw new Error('Admission mutation in progress');
     predecessor = existing.digest;
     name = `admission-mutation.${existing.digest}.lock`;

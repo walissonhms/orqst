@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { fork, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -69,6 +77,20 @@ test('unreadable or partial mutation lock fails closed', async () => {
     await assert.rejects(
       acquireAdmissionMutation(directory, syntheticIdentity(), async () => false),
     );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('replacing a mutation lock inode with identical bytes invalidates the guard', async () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mutation-')));
+  try {
+    const guard = await acquireAdmissionMutation(directory, syntheticIdentity(), async () => true);
+    const path = join(directory, guard.name);
+    const bytes = readFileSync(path);
+    renameSync(path, join(directory, 'preserved-original.lock'));
+    writeFileSync(path, bytes, { flag: 'wx', mode: 0o600 });
+    assert.throws(guard.validate, /chain changed/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
