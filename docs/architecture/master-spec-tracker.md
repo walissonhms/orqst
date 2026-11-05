@@ -1098,3 +1098,24 @@ check, test (148 passed / 2 ignored), all-target Clippy with `-D warnings`, and
 rustfmt passed. The explicitly ignored Node-to-Rust replay passed 1/1 using two
 fresh real-service transcripts from that full Node run (synthetic Core handles).
 No app/provider, native UI acceptance, resource build or package was run.
+
+## Feature permission wiring and Electron retirement prep — 2026-11-05 (source state)
+
+- [x] Feature permission wiring: native Feature context validated, the real
+      permission reader is wired, and legacy IDs are preserved — implemented in
+      code (`3bd65d2`, docs `5375b59`); 107 Node and 149 Rust tests (2 ignored),
+      lint/types/check/Clippy/rustfmt passed.
+- [ ] Native/provider acceptance of the Feature permission wiring.
+- [x] Electron retirement preparation: 48 neutralized cases, 22 Electron cases
+      preserved, four consumers use neutral builds — implemented in code
+      (`c6d8a6a`); 70/70 plus one Chromium case; no code, test, component,
+      provider, app, Rust or dist removed.
+- [x] Electron consumer inventory and prerequisites — documentation (`1014833`);
+      lint and typecheck passed.
+- [x] Feature validation order fixed (`85752c8`; 71 focused and 1298 full).
+- [x] Null-Feature manifest compatibility preserved (`f2995df`; 74 focused and
+      1301 full). Validation is synthetic; native/provider acceptance remains open.
+- [x] Native host manifest snapshot window closed: the digest precedes any manifest
+      validation and the same snapshot is used through spawn (`c5973d5`; 82 focused
+      and 1302 full).
+- [ ] Electron removal itself is not performed; it remains gated on native parity.
