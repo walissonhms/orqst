@@ -478,6 +478,11 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         _ => {}
     }
 }
+/// Whether the structured-agent host is running in this app lifetime.
+pub fn owned_active(app: &tauri::AppHandle) -> bool {
+    app.state::<Agents>().0.lock().unwrap().is_some()
+}
+
 pub(crate) fn revoke_for_quit(app: &tauri::AppHandle) {
     revoke(app, false);
 }

@@ -64,6 +64,37 @@ pub fn lost_unknown() -> bool {
     phase() == Phase::LostUnknown
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum QuitDecision {
+    ExitDirect,
+    AgentsGate,
+    TerminalFlow,
+    BlockedLost,
+    AlreadyInFlight,
+}
+
+/// One ordered decision for every exit entry: agents gate first, then owned terminals.
+pub fn quit_decision(
+    phase: Phase,
+    agents_active: bool,
+    agents_gate_presented: bool,
+    in_flight: bool,
+) -> QuitDecision {
+    if phase == Phase::LostUnknown {
+        return QuitDecision::BlockedLost;
+    }
+    if agents_active && agents_gate_presented {
+        return QuitDecision::AgentsGate;
+    }
+    if phase == Phase::NotStarted {
+        return QuitDecision::ExitDirect;
+    }
+    if in_flight {
+        return QuitDecision::AlreadyInFlight;
+    }
+    QuitDecision::TerminalFlow
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,6 +125,29 @@ mod tests {
         exit_evidence();
         assert!(consume_exit_evidence());
         assert!(!consume_exit_evidence());
+    }
+
+    #[test]
+    fn the_agents_gate_runs_before_the_terminal_flow_and_lost_blocks_all() {
+        use QuitDecision::*;
+        assert_eq!(quit_decision(Phase::Active, true, true, false), AgentsGate);
+        assert_eq!(quit_decision(Phase::Active, true, false, false), TerminalFlow);
+        assert_eq!(
+            quit_decision(Phase::LostUnknown, true, true, false),
+            BlockedLost
+        );
+        assert_eq!(
+            quit_decision(Phase::NotStarted, true, false, false),
+            ExitDirect
+        );
+        assert_eq!(
+            quit_decision(Phase::ShutdownInFlight, false, false, true),
+            AlreadyInFlight
+        );
+        assert_eq!(
+            quit_decision(Phase::NotStarted, false, false, false),
+            ExitDirect
+        );
     }
 
     #[test]

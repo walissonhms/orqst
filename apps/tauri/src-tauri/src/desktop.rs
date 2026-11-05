@@ -780,21 +780,30 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
 
 /// Every exit point uses this single latched entry. No direct exit with an owned host.
 pub fn request_quit(app: &tauri::AppHandle) {
-    if crate::host_phase::lost_unknown() {
-        crate::terminal::quit_blocked_public(app, "host_lost");
-        return;
+    let phase = crate::host_phase::phase();
+    let agents = crate::agents::owned_active(app);
+    let gate = agents && crate::agents::confirm_exit(app);
+    let in_flight = QUIT_IN_FLIGHT.load(Ordering::SeqCst);
+    match crate::host_phase::quit_decision(phase, agents, gate, in_flight) {
+        crate::host_phase::QuitDecision::BlockedLost => {
+            crate::terminal::quit_blocked_public(app, "host_lost");
+        }
+        crate::host_phase::QuitDecision::AgentsGate => {
+            // The gate owns the next step; nothing is signaled and no latch is held.
+            quit_finished();
+        }
+        crate::host_phase::QuitDecision::ExitDirect => app.exit(0),
+        crate::host_phase::QuitDecision::AlreadyInFlight => {}
+        crate::host_phase::QuitDecision::TerminalFlow => {
+            if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::terminal::quit_owned(app).await;
+            });
+        }
     }
-    if !crate::terminal::owned_host_started(app) {
-        app.exit(0);
-        return;
-    }
-    if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
-        return;
-    }
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        crate::terminal::quit_owned(app).await;
-    });
 }
 
 pub fn quit_finished() {
