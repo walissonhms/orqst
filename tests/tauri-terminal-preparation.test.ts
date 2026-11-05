@@ -113,10 +113,21 @@ function fixture() {
       assert.ok(detail.length <= 4096);
       return true;
     },
-    authorizeCli: async (candidate: { expectedVersion: string; expectedSha256: string }) => ({
+    authorizeCli: async (candidate: {
+      provider: 'codex' | 'claude' | 'opencode';
+      mode: 'tui' | 'mcp';
+      executable: string;
+    }) => ({
       status: 'allowed' as const,
-      version: candidate.expectedVersion,
-      sha256: candidate.expectedSha256,
+      version:
+        candidate.provider === 'codex'
+          ? '0.162.1'
+          : candidate.provider === 'opencode'
+            ? '2.2.5'
+            : candidate.mode === 'mcp'
+              ? '2.1.178'
+              : '2.1.318',
+      sha256: terminalExecutableSha256(candidate.executable),
     }),
     commit: async () => true,
   };

@@ -149,10 +149,21 @@ function fixture(openCodeCopies = false) {
       assert.ok(detail.length <= 4096);
       return true;
     },
-    authorizeCli: async (candidate: { expectedVersion: string; expectedSha256: string }) => ({
+    authorizeCli: async (candidate: {
+      provider: 'codex' | 'claude' | 'opencode';
+      mode: 'tui' | 'mcp';
+      executable: string;
+    }) => ({
       status: 'allowed' as const,
-      version: candidate.expectedVersion,
-      sha256: candidate.expectedSha256,
+      version:
+        candidate.provider === 'codex'
+          ? '0.162.1'
+          : candidate.provider === 'opencode'
+            ? '2.2.5'
+            : candidate.mode === 'mcp'
+              ? '2.1.178'
+              : '2.1.318',
+      sha256: terminalExecutableSha256(candidate.executable),
     }),
     commit: async () => true,
   };
@@ -334,10 +345,9 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
         config.executable.path,
         Buffer.concat([readFileSync(binary), Buffer.from('SYNTHETIC-DRIFT')]),
       );
-      assert.deepEqual(
-        discoverTerminalExecutable('claude', f.context.environment.PATH, f.home),
-        [config.executable.path],
-      );
+      assert.deepEqual(discoverTerminalExecutable('claude', f.context.environment.PATH, f.home), [
+        config.executable.path,
+      ]);
       assert.throws(() => backend.validate(profile), /executable changed/);
     } finally {
       f.close();
@@ -364,14 +374,19 @@ test('OpenCode discovery keeps distinct candidates without asserting vendor iden
     assert.equal(raw.candidates.length, 4);
     assert.equal(raw.execution, 'not_authorized');
     assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [
-      join(unreviewed, 'opencode'), first, join(hardlink, 'opencode'), installer,
+      join(unreviewed, 'opencode'),
+      first,
+      join(hardlink, 'opencode'),
+      installer,
     ]);
     // A GUI-minimal PATH falls back to the installed reviewed binary, without a shell/Finder.
     assert.deepEqual(discoverTerminalExecutable('opencode', '/usr/bin:/bin', f.home), [installer]);
     // Native discovery rejects unsafe files and shims but does not verify vendor identity.
     chmodSync(first, 0o777);
     writeFileSync(installer, '#!/bin/sh\nexit 99\n', { mode: 0o700 });
-    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [join(unreviewed, 'opencode')]);
+    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [
+      join(unreviewed, 'opencode'),
+    ]);
   } finally {
     f.close();
   }

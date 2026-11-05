@@ -16,6 +16,17 @@ import {
 import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import { z } from 'zod';
 import type { TerminalCliAuthorizationState } from '../../../packages/core/src/terminal/cli-authorization.js';
+import type {
+  CliContractMode,
+  CliContractProvider,
+} from '../../../packages/core/src/terminal/cli-contract.js';
+
+export interface PreparationCliCandidate {
+  provider: CliContractProvider;
+  executable: string;
+  mode: CliContractMode;
+  project: string;
+}
 import {
   prepareTerminalCreation,
   type TerminalCreationInput,
@@ -46,7 +57,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 
 export interface TauriPreparationPorts {
   authorizeCli(
-    candidate: ReturnType<typeof prepareTerminalCreation>['cliCandidates'][number],
+    candidate: PreparationCliCandidate,
   ): Promise<{ status: TerminalCliAuthorizationState; version?: string; sha256?: string }>;
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
@@ -114,24 +125,33 @@ export async function prepareTauriTerminals(
         throw error;
       }
     };
-    const authorizeCandidates = async (plan: ReturnType<typeof prepareTerminalCreation>) => {
-      const seen = new Set<string>();
+    const authorizeCandidates = async (candidates: PreparationCliCandidate[]) => {
+      const evidence = new Map<string, { version: string; sha256: string }>();
+      for (const candidate of candidates) {
+        const key = JSON.stringify([candidate.provider, candidate.executable, candidate.mode]);
+        if (evidence.has(key)) continue;
+        const authorized = await ports.authorizeCli(candidate);
+        if (!current() || authorized.status === 'blocked') return;
+        if (authorized.status === 'stale') fail('cli_authorization_stale');
+        if (authorized.status !== 'allowed' || !authorized.version || !authorized.sha256)
+          return fail('selection_blocked');
+        evidence.set(key, { version: authorized.version, sha256: authorized.sha256 });
+      }
+      return evidence;
+    };
+    const matchesPlan = (
+      plan: ReturnType<typeof prepareTerminalCreation>,
+      evidence: Map<string, { version: string; sha256: string }>,
+    ) => {
       for (const candidate of plan.cliCandidates) {
         const key = JSON.stringify([candidate.provider, candidate.executable, candidate.mode]);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const authorized = await ports.authorizeCli(candidate);
-        if (!current()) return false;
-        if (authorized.status === 'stale') fail('cli_authorization_stale');
-        if (authorized.status === 'blocked') return false;
-        if (authorized.status !== 'allowed') fail('selection_blocked');
+        const authorized = evidence.get(key);
         if (
-          authorized.version !== candidate.expectedVersion ||
+          authorized?.version !== candidate.expectedVersion ||
           authorized.sha256 !== candidate.expectedSha256
         )
           fail('catalog_changed');
       }
-      return true;
     };
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
@@ -192,6 +212,16 @@ export async function prepareTauriTerminals(
         featureId: request.featureId,
         fence: discovered.workspace.fence,
       });
+      const mode = pair ? ('mcp' as const) : ('tui' as const);
+      const evidence = await authorizeCandidates(
+        [source, ...(companion ? [companion] : [])].map(({ provider, executable }) => ({
+          provider,
+          executable,
+          mode,
+          project: discovered.workspace.project,
+        })),
+      );
+      if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
         ...source,
@@ -245,8 +275,8 @@ export async function prepareTauriTerminals(
       };
       revalidate();
       preflight();
-      if (!(await authorizeCandidates(plan)) || !reviewed())
-        return { status: 'cancelled', files: [] };
+      matchesPlan(plan, evidence);
+      if (!reviewed()) return { status: 'cancelled', files: [] };
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
       stage = 'revalidation';
@@ -280,6 +310,10 @@ export async function prepareTauriTerminals(
       if (!current() || !executable) return { status: 'cancelled', files: [] };
       const project = await ports.choose(true);
       if (!current() || !project) return { status: 'cancelled', files: [] };
+      const evidence = await authorizeCandidates([
+        { provider: request.provider, executable, mode: 'tui', project },
+      ]);
+      if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
         provider: request.provider,
@@ -299,8 +333,8 @@ export async function prepareTauriTerminals(
       if (!(await ports.confirm('acknowledge', '')) || !reviewed())
         return { status: 'cancelled', files: [] };
       preflight();
-      if (!(await authorizeCandidates(plan)) || !reviewed())
-        return { status: 'cancelled', files: [] };
+      matchesPlan(plan, evidence);
+      if (!reviewed()) return { status: 'cancelled', files: [] };
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
       preflight();
