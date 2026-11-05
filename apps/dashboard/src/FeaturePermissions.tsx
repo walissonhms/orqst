@@ -14,13 +14,16 @@ import {
 const OPERATIONS: PermissionOperation[] = ['delegate', 'execute', 'view'];
 
 /** Feature-level policy panel. The renderer only proposes; the native review is the write gate. */
-export function FeaturePermissions({
-  snapshot,
-  feature,
-}: {
+type FeaturePermissionsProps = {
   snapshot?: FeatureNativeSnapshot;
   feature?: WorkspaceFeature;
-}) {
+};
+
+export function FeaturePermissions(props: FeaturePermissionsProps) {
+  return <FeaturePermissionsPanel key={props.feature?.featureId ?? 'none'} {...props} />;
+}
+
+function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps) {
   const { t } = useTranslation();
   const native = typeof window === 'undefined' ? undefined : window.orqstFeaturePermissions;
   const [rules, setRules] = useState<PermissionRule[]>([]);
