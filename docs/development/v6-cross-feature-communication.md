@@ -23,7 +23,8 @@ memberships in one preferences transaction before its decision. **The decision
 linearizes at that single preferences snapshot**, conditional on successful journal
 commit. A policy write committed before the snapshot is seen; one committed after
 it is ordered after that decision. Before any subsequent claim the snapshot and
-both revisions are checked again. A revocation leaves the message queued and does
+both revisions are checked again for the current grant; claim does not traverse or
+revalidate its ancestors. A revocation leaves the message queued and does
 not retarget or retry it. This is not a distributed SQLite transaction.
 
 On admission, SQLite uniqueness constraints consume the grant, intent, nonce and
@@ -107,7 +108,7 @@ exact IDs and correlation, verify the active destination as the next source, and
 apply the existing maximum depth and cycle checks. A local child of a cross task
 requires an explicitly injected trusted ancestor gate, which rechecks bilateral
 view and retained authority; the existing production composition does not install it.
-For an admission with parent tasks, all relevant local and cross policies are read
+At admission, for a chain with parent tasks, all relevant local and cross policies are read
 inside one synchronous preferences transaction under the journal transaction.
 Without that snapshot gate, parent-linked admission fails closed. A multiprocess
 SQLite probe confirms a competing writer cannot acquire the preferences write
@@ -118,5 +119,7 @@ admission, a denial attributed to a verified grant, and an explicit revocation.
 Malformed or unverified proofs cannot establish an actor and do not create a
 purported actor audit. Administrative and message events contain IDs and states,
 not prompts, responses, paths, tokens or arbitrary errors. These ports remain
-unwired in production; synthetic adapters and two direct concurrent SQLite writers
-exercise the local contracts and uniqueness, not a real provider or native signer.
+unwired in production; synthetic adapters and two concurrent processes using direct SQL exercise the local
+contracts and uniqueness. The SQL probe does not prove concurrency between two Core
+services; the owner fence excludes a second Core owner. These tests do not exercise a
+real provider or native signer.
