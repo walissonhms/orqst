@@ -169,6 +169,172 @@ pub(crate) fn valid_envelope(value: &Value) -> bool {
         && text(&value["source"], 4096, true)
         && valid_request(&value["request"])
 }
+// Private policy transport is separate from the renderer-facing metadata allowlist.
+fn valid_policy(value: &Value) -> bool {
+    if !exact(value, &["schemaVersion", "rules"]) || value["schemaVersion"] != 1 {
+        return false;
+    }
+    let Some(rules) = value["rules"].as_array() else {
+        return false;
+    };
+    if rules.len() > 56 {
+        return false;
+    }
+    let mut pairs = HashSet::new();
+    let mut edges: HashMap<String, Vec<String>> = HashMap::new();
+    for rule in rules {
+        if !exact(
+            rule,
+            &["sourceTerminalId", "targetTerminalId", "operations"],
+        ) || !uuid(&rule["sourceTerminalId"])
+            || !uuid(&rule["targetTerminalId"])
+            || rule["sourceTerminalId"] == rule["targetTerminalId"]
+        {
+            return false;
+        }
+        let source = rule["sourceTerminalId"].as_str().unwrap();
+        let target = rule["targetTerminalId"].as_str().unwrap();
+        if !pairs.insert((source, target)) {
+            return false;
+        }
+        let Some(operations) = rule["operations"].as_array() else {
+            return false;
+        };
+        let mut seen = HashSet::new();
+        if operations.len() > 3
+            || operations.iter().any(|v| {
+                !matches!(v.as_str(), Some("delegate" | "execute" | "view"))
+                    || !seen.insert(v.to_string())
+            })
+        {
+            return false;
+        }
+        if operations.iter().any(|v| v == "delegate") {
+            edges.entry(source.into()).or_default().push(target.into());
+        }
+    }
+    fn cycle<'a>(
+        id: &'a str,
+        edges: &'a HashMap<String, Vec<String>>,
+        visiting: &mut HashSet<&'a str>,
+        done: &mut HashSet<&'a str>,
+    ) -> bool {
+        if visiting.contains(id) {
+            return true;
+        }
+        if done.contains(id) {
+            return false;
+        }
+        visiting.insert(id);
+        if edges
+            .get(id)
+            .is_some_and(|next| next.iter().any(|n| cycle(n, edges, visiting, done)))
+        {
+            return true;
+        }
+        visiting.remove(id);
+        done.insert(id);
+        false
+    }
+    let mut visiting = HashSet::new();
+    let mut done = HashSet::new();
+    !edges
+        .keys()
+        .any(|id| cycle(id, &edges, &mut visiting, &mut done))
+}
+pub(crate) fn valid_permission_envelope(value: &Value) -> bool {
+    if !exact(value, &["kind", "id", "document", "source", "request"])
+        || value["kind"] != "feature-permission-request"
+        || !uuid(&value["id"])
+        || !safe(&value["document"]).is_some_and(|n| n > 0)
+        || value["source"] != CHROME_URL
+    {
+        return false;
+    }
+    let request = &value["request"];
+    if request["contractVersion"] != 1
+        || safe(&request["generation"]).is_none()
+        || !uuid(&request["featureId"])
+    {
+        return false;
+    }
+    match request["action"].as_str() {
+        Some("readPermissions") => exact(
+            request,
+            &["action", "contractVersion", "generation", "featureId"],
+        ),
+        Some("savePermissions") => {
+            exact(
+                request,
+                &[
+                    "action",
+                    "contractVersion",
+                    "generation",
+                    "featureId",
+                    "expectedRevision",
+                    "configuration",
+                ],
+            ) && safe(&request["expectedRevision"]).is_some()
+                && valid_policy(&request["configuration"])
+        }
+        _ => false,
+    }
+}
+fn valid_permission_state(value: &Value) -> bool {
+    exact(
+        value,
+        &[
+            "schemaVersion",
+            "workspaceId",
+            "featureId",
+            "revision",
+            "configuration",
+        ],
+    ) && value["schemaVersion"] == 1
+        && workspace_id(&value["workspaceId"])
+        && uuid(&value["featureId"])
+        && safe(&value["revision"]).is_some_and(|revision| {
+            if revision == 0 {
+                value["configuration"].is_null()
+            } else {
+                valid_policy(&value["configuration"])
+            }
+        })
+}
+pub(crate) fn valid_permission_reply(value: &Value) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    if !object
+        .keys()
+        .all(|k| ["status", "snapshot", "permissions"].contains(&k.as_str()))
+        || !matches!(
+            value["status"].as_str(),
+            Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
+        )
+        || (value.get("snapshot").is_some() && !valid_snapshot(&value["snapshot"]))
+        || (value.get("permissions").is_some() && !valid_permission_state(&value["permissions"]))
+    {
+        return false;
+    }
+    if value["status"] == "ok"
+        && (value.get("snapshot").is_none() || value.get("permissions").is_none())
+    {
+        return false;
+    }
+    if let (Some(snapshot), Some(permissions)) = (value.get("snapshot"), value.get("permissions")) {
+        if permissions["workspaceId"] != snapshot["workspace"]["id"]
+            || !snapshot["features"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|f| f["featureId"] == permissions["featureId"])
+        {
+            return false;
+        }
+    }
+    true
+}
 pub(crate) fn workspace_id(value: &Value) -> bool {
     value.as_str().is_some_and(|s| {
         !s.is_empty()
@@ -1274,6 +1440,30 @@ mod tests {
                 "{wrong}"
             );
         }
+    }
+
+    #[test]
+    fn permission_transport_is_separate_and_strict() {
+        let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let request = json!({"kind":"feature-permission-request","id":id,"document":2,
+            "source":CHROME_URL,"request":{"action":"readPermissions","contractVersion":1,"generation":7,"featureId":id}});
+        assert!(super::valid_permission_envelope(&request));
+        let mut forged = request.clone();
+        forged["kind"] = json!("feature-request");
+        assert!(!super::valid_envelope(&forged));
+        forged = request.clone();
+        forged["request"]["actorId"] = json!("fake");
+        assert!(!super::valid_permission_envelope(&forged));
+        forged = request.clone();
+        forged["source"] = json!("https://example.invalid");
+        assert!(!super::valid_permission_envelope(&forged));
+        assert!(!super::valid_permission_reply(
+            &json!({"status":"ok","permissions":{"revision":0}})
+        ));
+        assert!(super::valid_permission_reply(&json!({"status":"denied"})));
+        assert!(!super::valid_permission_reply(
+            &json!({"status":"denied","unexpected":true})
+        ));
     }
 
     #[test]

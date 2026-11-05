@@ -39,6 +39,10 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     action: z.literal('organize'),
     command: z.enum(['restore', 'show-all', 'columns-1', 'columns-2', 'columns-3']),
   }),
+]);
+export type FeatureNativeRequest = z.input<typeof featureNativeRequestSchema>;
+/** Accepted only on the inherited native-to-host pipe, never by feature_request. */
+export const featurePermissionNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({
     ...base,
     action: z.literal('readPermissions'),
@@ -52,7 +56,14 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     configuration: featurePermissionConfigurationSchema,
   }),
 ]);
-export type FeatureNativeRequest = z.input<typeof featureNativeRequestSchema>;
+export const featurePermissionNativeEnvelopeSchema = z.strictObject({
+  kind: z.literal('feature-permission-request'),
+  id: z.uuid(),
+  document: z.number().int().positive().safe(),
+  source: z.literal('orqst-features://local/index.html'),
+  request: featurePermissionNativeRequestSchema,
+});
+
 export const featureNativeSnapshotSchema = z
   .strictObject({
     contractVersion: z.literal(1),

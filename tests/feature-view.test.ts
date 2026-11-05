@@ -570,3 +570,34 @@ test('an old enrollment presentation ACK cannot reopen a suspended retained view
     f.close();
   }
 });
+
+test('permission packets are separate from the renderer metadata envelope', async () => {
+  const { featurePermissionNativeEnvelopeSchema } = await import('@orqst/protocol');
+  const id = 'e10636eb-3a12-4094-9123-49a4cdad27b8';
+  const packet = {
+    kind: 'feature-permission-request',
+    id,
+    document: 2,
+    source: 'orqst-features://local/index.html',
+    request: { action: 'readPermissions', contractVersion: 1, generation: 7, featureId: id },
+  };
+  assert.equal(featurePermissionNativeEnvelopeSchema.safeParse(packet).success, true);
+  assert.equal(
+    featureNativeEnvelopeSchema.safeParse({ ...packet, kind: 'feature-request' }).success,
+    false,
+  );
+  assert.equal(
+    featurePermissionNativeEnvelopeSchema.safeParse({
+      ...packet,
+      source: 'https://example.invalid',
+    }).success,
+    false,
+  );
+  assert.equal(
+    featurePermissionNativeEnvelopeSchema.safeParse({
+      ...packet,
+      request: { ...packet.request, actorId: 'fake' },
+    }).success,
+    false,
+  );
+});

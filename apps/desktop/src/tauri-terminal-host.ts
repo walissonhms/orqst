@@ -24,6 +24,7 @@ import { visualAllowedDuringFence } from './terminal-fence.js';
 import {
   featureNativeReplySchema,
   featureNativeEnvelopeSchema,
+  featurePermissionNativeEnvelopeSchema,
   terminalLayoutRecordSchema,
 } from '@orqst/protocol';
 import { TauriFeatureService } from './tauri-feature-service.js';
@@ -320,12 +321,14 @@ async function start() {
           else finish(false);
           continue;
         }
-        const feature = featureNativeEnvelopeSchema.safeParse(raw);
+        const feature = featureNativeEnvelopeSchema
+          .or(featurePermissionNativeEnvelopeSchema)
+          .safeParse(raw);
         if (
           !feature.success &&
           raw &&
           typeof raw === 'object' &&
-          Reflect.get(raw, 'kind') === 'feature-request'
+          ['feature-request', 'feature-permission-request'].includes(Reflect.get(raw, 'kind'))
         ) {
           const identity = correlation.safeParse(raw);
           if (identity.success)

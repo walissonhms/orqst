@@ -1,6 +1,7 @@
 import { basename } from 'node:path';
 import {
   featureNativeRequestSchema,
+  featurePermissionNativeRequestSchema,
   featureNativeSnapshotSchema,
   type FeatureNativeReply,
   type FeatureNativeSnapshot,
@@ -136,7 +137,9 @@ export class TauriFeatureService {
   }
 
   async request(raw: unknown): Promise<FeatureNativeReply> {
-    const parsed = featureNativeRequestSchema.safeParse(raw);
+    const parsed = featureNativeRequestSchema
+      .or(featurePermissionNativeRequestSchema)
+      .safeParse(raw);
     if (!parsed.success) return { status: 'denied' };
     if (!this.initialized) return { status: 'unavailable' };
     if (this.busy) return { status: 'busy' };

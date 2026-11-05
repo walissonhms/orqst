@@ -116,6 +116,7 @@ struct MetadataPending {
     document: u64,
     generation: u64,
     source: String,
+    permission: bool,
     sender: oneshot::Sender<Value>,
     owner: Arc<()>,
 }
@@ -162,7 +163,11 @@ fn metadata_reply_matches(
         && value["id"] == id
         && value["document"].as_u64() == Some(pending.document)
         && pending.generation == generation
-        && crate::features::valid_reply(&value["value"])
+        && if pending.permission {
+            crate::features::valid_permission_reply(&value["value"])
+        } else {
+            crate::features::valid_reply(&value["value"])
+        }
 }
 
 // The document check can synchronously wait for UI. Only immutable ownership crosses that wait.
@@ -279,7 +284,8 @@ pub(crate) async fn metadata_request(
     epoch: &str,
 ) -> Value {
     let unavailable = || json!({"status":"unavailable"});
-    if !crate::features::valid_envelope(&envelope) || presentation_blocked(app) {
+    let permission = crate::features::valid_permission_envelope(&envelope);
+    if !(permission || crate::features::valid_envelope(&envelope)) || presentation_blocked(app) {
         return json!({"status":"denied"});
     }
     let id = envelope["id"].as_str().unwrap().to_owned();
@@ -330,6 +336,7 @@ pub(crate) async fn metadata_request(
                 document,
                 generation,
                 source: envelope["source"].as_str().unwrap().into(),
+                permission,
                 sender,
                 owner: owner.clone(),
             },
@@ -353,7 +360,14 @@ pub(crate) async fn metadata_request(
         receiver
     };
     let result = tokio::time::timeout(Duration::from_secs(15), receiver).await;
-    let received = matches!(&result, Ok(Ok(value)) if crate::features::valid_reply(value));
+    let valid_reply = |value: &Value| {
+        if permission {
+            crate::features::valid_permission_reply(value)
+        } else {
+            crate::features::valid_reply(value)
+        }
+    };
+    let received = matches!(&result, Ok(Ok(value)) if valid_reply(value));
     let valid = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
@@ -385,7 +399,7 @@ pub(crate) async fn metadata_request(
         return unavailable();
     }
     match result {
-        Ok(Ok(value)) if crate::features::valid_reply(&value) => value,
+        Ok(Ok(value)) if valid_reply(&value) => value,
         _ => unavailable(),
     }
 }
@@ -555,6 +569,7 @@ mod tests {
                 document: 1,
                 generation: 2,
                 source: "main".into(),
+                permission: false,
                 sender,
                 owner: std::sync::Arc::new(()),
             }
@@ -609,6 +624,7 @@ mod tests {
             document: 3,
             generation: 4,
             source: "orqst-features://local/index.html".into(),
+            permission: false,
             sender,
             owner: std::sync::Arc::new(()),
         };
