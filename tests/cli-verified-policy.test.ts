@@ -197,3 +197,60 @@ test('legacy policy is readable but requires a fresh verified review', async () 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('concurrent authorizations in one host share the first review', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-verified-concurrent-')));
+  const executable = join(root, 'synthetic');
+  const bytes = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 3, 3, 7]);
+  writeFileSync(executable, bytes, { mode: 0o700 });
+  const first = new TerminalCliPolicyStore(root);
+  const second = new TerminalCliPolicyStore(root);
+  const profile: TerminalProfile = {
+    id: 'test',
+    projectId: 'test',
+    executable,
+    executableSha256: terminalDigest(bytes),
+    executableVersion: '0.162.1',
+    argv: [],
+    cwd: root,
+    environmentProfile: 'synthetic',
+    permissions: 'synthetic',
+    cliAuthorizationScope: 'scope',
+  };
+  const signature = { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
+  const verifier = {
+    async verify() {
+      return signature;
+    },
+  };
+  let reviews = 0;
+  const probe = async (): Promise<TerminalCliEvidence> => ({
+    provider: 'codex',
+    mode: 'tui',
+    version: '0.162.1',
+    contractRevision: 'codex-tui-0.162.1',
+    sha256: profile.executableSha256,
+    signature,
+  });
+  let release!: () => void;
+  const pause = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const review = async () => {
+    reviews++;
+    await pause;
+    return true;
+  };
+  try {
+    const a = first.authorizeVerifiedCli(profile, 'codex', 'tui', verifier, probe, review);
+    const b = second.authorizeVerifiedCli(profile, 'codex', 'tui', verifier, probe, review);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(reviews, 1);
+    release();
+    assert.deepEqual(await Promise.all([a, b]), ['allowed', 'allowed']);
+    assert.equal(reviews, 1);
+  } finally {
+    release();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

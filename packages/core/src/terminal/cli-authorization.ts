@@ -83,6 +83,7 @@ const permissionScope = (profile: Readonly<TerminalProfile>) =>
 
 /** Native host only. Durable CLI policy is not a restored process/session capability. */
 export class TerminalCliPolicyStore {
+  private static readonly pendingVerified = new Map<string, Promise<void>>();
   private readonly directory: string;
   // Volatile file identity avoids hashing a large native binary on every keystroke.
   // It is never persisted, never substitutes for the initial hash, and changes fail closed.
@@ -211,6 +212,45 @@ export class TerminalCliPolicyStore {
 
   /** Versioned authorization path. The verifier and probe must be supplied by the native host. */
   async authorizeVerifiedCli(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+    verifier: CliSignatureVerifier,
+    probe: () => Promise<TerminalCliEvidence>,
+    review: (details: TerminalCliReview) => Promise<boolean>,
+    expectedEpoch?: string,
+  ): Promise<TerminalCliAuthorizationState> {
+    let key: string;
+    try {
+      key = this.file(profile);
+    } catch {
+      return 'revoked';
+    }
+    const previous = TerminalCliPolicyStore.pendingVerified.get(key);
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    TerminalCliPolicyStore.pendingVerified.set(key, current);
+    try {
+      await previous;
+      return await this.authorizeVerifiedCliLocked(
+        profile,
+        provider,
+        mode,
+        verifier,
+        probe,
+        review,
+        expectedEpoch,
+      );
+    } finally {
+      release();
+      if (TerminalCliPolicyStore.pendingVerified.get(key) === current)
+        TerminalCliPolicyStore.pendingVerified.delete(key);
+    }
+  }
+
+  private async authorizeVerifiedCliLocked(
     profile: Readonly<TerminalProfile>,
     provider: CliContractProvider,
     mode: CliContractMode,
