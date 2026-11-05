@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
   chmodSync,
+  closeSync,
   copyFileSync,
   lstatSync,
   mkdirSync,
@@ -32,6 +33,9 @@ import { agentsHostRequestSchema } from '../apps/desktop/src/managed-agents-wire
 import { managedAgentsRequestSchema } from '@orqst/protocol';
 import { DesktopManagedAgents } from '../packages/core/src/managed-codex/desktop.js';
 import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
+import { readManagedAgentsPair } from '../packages/core/src/managed-codex/feature-context.js';
+import { createLifecycleReceipt } from '../packages/core/src/managed-codex/lifecycle-receipt.js';
+import { prepareNativeHost } from '../packages/core/src/managed-codex/native-host-preparation.js';
 import type { CodexTransport } from '../packages/core/src/managed-codex/channel.js';
 import {
   managedCodexSettings,
@@ -1037,6 +1041,67 @@ for (const scope of [true, 'null'] as const) {
     }
   });
 }
+
+test('native host authenticates the exact manifest snapshot before touching alternative roots', () => {
+  const f = fixture(undefined, true);
+  let fd: number | undefined;
+  try {
+    const file = f.files[0];
+    const original = readFileSync(file);
+    readManagedAgentsPair(f.files, f.native); // Parent validation before dispatch.
+    const config = JSON.parse(original.toString('utf8')) as ManagedCodexConfig;
+    const binding = {
+      instanceId: randomUUID(),
+      epoch: randomUUID(),
+      manifestDigest: 'a'.repeat(64),
+      configDigest: terminalDigest(original),
+    };
+    fd = createLifecycleReceipt(config.state, binding);
+    const receiptPath = join(config.state, `lifecycle-${binding.instanceId}.jsonl`);
+    const receiptBefore = readFileSync(receiptPath);
+    const alternate = join(f.native.preferencesDirectory, '..', 'alternate-host');
+    mkdirSync(alternate, { mode: 0o700 });
+    const observer = join(alternate, 'observer.sqlite');
+    copyFileSync(f.native.observerDatabase, observer);
+    const preferences = join(alternate, 'preferences');
+    mkdirSync(preferences, { mode: 0o700 });
+    writeFileSync(join(preferences, 'marker'), 'SYNTHETIC', { mode: 0o600 });
+    const snapshot = (path: string): unknown => {
+      const info = lstatSync(path, { bigint: true });
+      return [
+        info.mtimeNs,
+        info.size,
+        info.isDirectory()
+          ? readdirSync(path)
+              .sort()
+              .map((name) => [name, snapshot(join(path, name))])
+          : readFileSync(path),
+      ];
+    };
+    config.preparation!.observerDatabase = observer;
+    config.preparation!.preferencesDirectory = preferences;
+    writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
+    const before = snapshot(alternate);
+    let spawns = 0;
+    const dispatch = () => {
+      const prepared = prepareNativeHost(file, fd!);
+      spawns++; // Stand-in for the native-host spawn, never starts a process.
+      return prepared;
+    };
+    assert.throws(dispatch, /Lifecycle config mismatch/);
+    assert.deepEqual(snapshot(alternate), before);
+    assert.deepEqual(readFileSync(receiptPath), receiptBefore);
+    assert.equal(spawns, 0);
+    writeFileSync(file, original);
+    const prepared = dispatch();
+    assert.deepEqual(prepared.config, JSON.parse(original.toString('utf8')));
+    assert.equal(spawns, 1);
+    assert.match(readFileSync(receiptPath, 'utf8'), /"type":"armed"/);
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    f.close();
+  }
+});
 
 test('null Feature binding survives private bootstrap and launch in the legacy domain', async () => {
   const f = fixture(undefined, 'null');

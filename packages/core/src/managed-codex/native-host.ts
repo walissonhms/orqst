@@ -2,14 +2,8 @@
 import { spawn } from 'node:child_process';
 import { StartupCounters, hostCounterNames, reportHostStartup } from './startup-diagnostics.js';
 import { z } from 'zod';
-import { terminalDigest } from '../terminal/authority.js';
-import { armLifecycleReceipt } from './lifecycle-receipt.js';
-import {
-  managedCodexEnvironment,
-  readManagedCodexConfig,
-  structuredCodexArguments,
-  terminalFile,
-} from '../terminal/codex-profile.js';
+import { prepareNativeHost } from './native-host-preparation.js';
+import { managedCodexEnvironment, structuredCodexArguments } from '../terminal/codex-profile.js';
 
 process.umask(0o077);
 if (
@@ -21,8 +15,7 @@ if (
   process.getuid?.() === 0
 )
   throw new Error('Private managed Codex host only');
-const config = readManagedCodexConfig(process.argv[2]!);
-const receipt = armLifecycleReceipt(4, terminalDigest(terminalFile(process.argv[2]!, true)));
+const { config, receipt } = prepareNativeHost(process.argv[2]!, 4);
 const child = spawn(config.executable.path, structuredCodexArguments(config), {
   cwd: config.project,
   env: managedCodexEnvironment(config),

@@ -100,13 +100,19 @@ export function createLifecycleReceipt(state: string, binding: LifecycleBinding)
   }
 }
 
-/** Host-only writer; persistence must precede spawn and lifecycle IPC. */
-export function armLifecycleReceipt(fd: number, configDigest: string) {
+/** Check the inherited receipt without changing it or accessing manifest paths. */
+export function assertLifecycleConfig(fd: number, configDigest: string) {
   const bytes = inspect(fd).toString('utf8');
   if (!bytes.endsWith('\n') || bytes.split('\n').length !== 2)
     throw new Error('Lifecycle receipt already used');
   const header = headerSchema.parse(JSON.parse(bytes));
   if (header.binding.configDigest !== configDigest) throw new Error('Lifecycle config mismatch');
+  return { bytes, header };
+}
+
+/** Host-only writer; persistence must precede spawn and lifecycle IPC. */
+export function armLifecycleReceipt(fd: number, configDigest: string) {
+  const { bytes, header } = assertLifecycleConfig(fd, configDigest);
   const armed = { type: 'armed', at: Math.max(header.at, Date.now()) };
   append(fd, armed); // Still before spawn: failure prevents any child dispatch.
   let previous = armed.at;

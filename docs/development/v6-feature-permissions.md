@@ -188,3 +188,23 @@ at preparation and launch. These remain unscoped, use the legacy workspace diges
 and have no Feature policy reader. Manifests without preparation bindings remain
 legacy. Synthetic tests cover both bound modes and alternate roots without side
 effects; they do not establish native UI or provider acceptance.
+
+### 2026-11-05: native host manifest snapshot
+
+The native host reads the private manifest once with the existing bounded,
+canonical, no-follow file reader. It compares that snapshot's digest to the
+inherited lifecycle receipt before parsing or validating the manifest, including
+before any catalogue or preferences access. The same bytes are parsed and all
+existing validation is applied; the receipt is checked again and armed before
+spawn. A digest mismatch leaves the receipt and alternate roots untouched.
+Synthetic tests replace a parent-validated manifest before host preparation and
+compare recursive names, contents and mtimes, with a spawn stand-in. They also
+exercise the unchanged valid snapshot; this is not real provider or native UI
+acceptance.
+
+Reuse decision: retain ORQST's private receipt and manifest validation. The
+pinned [Anywh AgentHost](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts)
+`restore` and `spawnAgent` use its host registry and runtime process machinery,
+not ORQST's inherited receipt/config digest contract. The pinned root license is
+Apache-2.0 and no root NOTICE exists; no upstream code or dependency is copied.
+Replacing ORQST's lifecycle would not close this receipt-specific ordering gap.
