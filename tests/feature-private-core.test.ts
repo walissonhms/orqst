@@ -80,6 +80,7 @@ test('owned Core private Feature RPC persists metadata for six terminals without
       keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
       admission,
       '6',
+      'startup-1',
     ],
     {
       execPath: process.execPath,
