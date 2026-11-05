@@ -172,13 +172,11 @@ unsafe fn show(
         let _: () = msg_send![&*alert, layout];
         let frame: Rect = msg_send![native_window, frame];
         let accessory: Rect = msg_send![&*scroll, frame];
-        let Some((width, height)) = layout::fit(
+        let (width, height) = layout::fit(
             available,
             (frame.size.width, frame.size.height),
             (accessory.size.width, accessory.size.height),
-        ) else {
-            return None;
-        };
+        )?;
         if width == accessory.size.width && height == accessory.size.height {
             fitted = true;
             break;
