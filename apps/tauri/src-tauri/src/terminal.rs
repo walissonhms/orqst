@@ -1,6 +1,6 @@
 //! Native-only client of ORQST's existing TerminalNativeBroker/Node host.
 //! The observer webview has no capability for these commands or this private pipe.
-use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
+use crate::local_diagnostics::{Attempt, Effects, Outcome, RefusalSource, Stage};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -912,7 +912,10 @@ async fn dispatch_terminal_request(
                 .and_then(|r| r.opening_diagnostics.get_mut(slot))
                 .and_then(Option::take)
         });
-        Some(diagnostic.unwrap_or_default())
+        Some(match diagnostic {
+            Some(attempt) => attempt.into_renderer(RefusalSource::Terminal),
+            None => Attempt::renderer(RefusalSource::Terminal),
+        })
     } else {
         None
     };
@@ -2911,7 +2914,7 @@ async fn start_selected_inner(
                 }
             }
         }
-        diagnostic.record(Stage::HostStream, stream_outcome, Effects::Possible);
+        diagnostic.record_native(Stage::HostStream, stream_outcome, Effects::Possible);
         let running = {
             let state = app.state::<Terminals>();
             let mut guard = state.0.lock().unwrap();

@@ -68,7 +68,7 @@ vocabulary!(Effects {
     NotStarted => "not_started", Possible => "possible", Unconfirmed => "unconfirmed",
 });
 
-// Renderer refusals never enter the operational queue. One fixed, bounded window
+// Renderer-originated records never enter the operational queue. One fixed, bounded window
 // is drained by the existing writer; labels are closed and contain no document ID.
 const REFUSAL_WINDOW: Duration = Duration::from_secs(60);
 const REFUSAL_LIMIT: usize = 8;
@@ -78,16 +78,18 @@ static REFUSALS: OnceLock<Mutex<RefusalWindow>> = OnceLock::new();
 pub enum RefusalSource {
     Studio,
     Feature,
+    Terminal,
 }
 impl RefusalSource {
     fn name(self) -> &'static str {
         match self {
             Self::Studio => "studio",
             Self::Feature => "feature",
+            Self::Terminal => "terminal",
         }
     }
 }
-type RefusalEntry = (RefusalSource, Outcome, Effects);
+type RefusalEntry = (RefusalSource, Stage, Outcome, Effects);
 type RefusalBatch = (Vec<RefusalEntry>, u64);
 struct RefusalWindow {
     started: Instant,
@@ -102,16 +104,16 @@ impl RefusalWindow {
             suppressed: 0,
         }
     }
-    fn add(&mut self, source: RefusalSource, outcome: Outcome, effects: Effects) {
+    fn add(&mut self, source: RefusalSource, stage: Stage, outcome: Outcome, effects: Effects) {
         if self
             .entries
             .iter()
-            .any(|(s, o, _)| *s == source && *o == outcome)
+            .any(|(s, st, o, _)| *s == source && *st == stage && *o == outcome)
             || self.entries.len() >= REFUSAL_LIMIT
         {
             self.suppressed = self.suppressed.saturating_add(1);
         } else {
-            self.entries.push((source, outcome, effects));
+            self.entries.push((source, stage, outcome, effects));
         }
     }
     fn drain(&mut self, now: Instant) -> Option<RefusalBatch> {
@@ -127,12 +129,16 @@ impl RefusalWindow {
 }
 /// The caller supplies only a fixed source and an enumerated reason, never renderer data.
 pub fn refusal(source: RefusalSource, outcome: Outcome, effects: Effects) {
+    renderer_record(source, Stage::Request, outcome, effects);
+}
+
+fn renderer_record(source: RefusalSource, stage: Stage, outcome: Outcome, effects: Effects) {
     if WRITER.get().is_none() {
         return;
     }
     let state = REFUSALS.get_or_init(|| Mutex::new(RefusalWindow::new(Instant::now())));
     if let Ok(mut window) = state.lock() {
-        window.add(source, outcome, effects);
+        window.add(source, stage, outcome, effects);
     }
 }
 fn refusal_lines(now: Instant) -> Vec<String> {
@@ -156,10 +162,10 @@ fn format_refusals(entries: Vec<RefusalEntry>, suppressed: u64) -> Vec<String> {
     );
     let mut lines: Vec<_> = entries
         .into_iter()
-        .map(|(source, outcome, effects)| {
+        .map(|(source, stage, outcome, effects)| {
             format!(
-        "{{\"v\":1,\"unix_ms\":{},\"source\":\"{}\",\"outcome\":\"{}\",\"effects\":\"{}\"}}\n",
-        unix_ms, source.name(), outcome.name(), effects.name())
+        "{{\"v\":1,\"unix_ms\":{},\"source\":\"{}\",\"stage\":\"{}\",\"outcome\":\"{}\",\"effects\":\"{}\"}}\n",
+        unix_ms, source.name(), stage.name(), outcome.name(), effects.name())
         })
         .collect();
     if suppressed > 0 {
@@ -176,6 +182,7 @@ fn format_refusals(entries: Vec<RefusalEntry>, suppressed: u64) -> Vec<String> {
 pub struct Attempt {
     id: String,
     started: Instant,
+    renderer: Option<RefusalSource>,
 }
 
 impl Default for Attempt {
@@ -186,6 +193,19 @@ impl Default for Attempt {
 
 impl Attempt {
     pub fn begin() -> Self {
+        Self::new(None)
+    }
+
+    pub fn renderer(source: RefusalSource) -> Self {
+        Self::new(Some(source))
+    }
+
+    pub fn into_renderer(mut self, source: RefusalSource) -> Self {
+        self.renderer = Some(source);
+        self
+    }
+
+    fn new(renderer: Option<RefusalSource>) -> Self {
         // RandomState seeds independent hash keys from the standard library's random source.
         // No application identity, path, credential or terminal data contributes to the ID.
         let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
@@ -207,6 +227,7 @@ impl Attempt {
                 &hex[20..]
             ),
             started: Instant::now(),
+            renderer,
         };
         attempt.record(Stage::Attempt, Outcome::Started, Effects::Unconfirmed);
         attempt
@@ -218,6 +239,14 @@ impl Attempt {
 
     /// Does not await, lock an application mutex, touch disk or report errors to the caller.
     pub fn record(&self, stage: Stage, outcome: Outcome, effects: Effects) {
+        if let Some(source) = self.renderer {
+            renderer_record(source, stage, outcome, effects);
+            return;
+        }
+        self.record_native(stage, outcome, effects);
+    }
+
+    pub fn record_native(&self, stage: Stage, outcome: Outcome, effects: Effects) {
         let Some(writer) = WRITER.get() else { return };
         let record = Record {
             attempt: self.id().to_owned(),
@@ -468,11 +497,13 @@ mod tests {
         for _ in 0..10_000 {
             window.add(
                 RefusalSource::Studio,
+                Stage::Request,
                 Outcome::StudioInvalidRequest,
                 Effects::NotStarted,
             );
             window.add(
                 RefusalSource::Feature,
+                Stage::Request,
                 Outcome::FeatureInvalidRequest,
                 Effects::NotStarted,
             );
@@ -518,6 +549,7 @@ mod tests {
         }
         window.add(
             RefusalSource::Studio,
+            Stage::Request,
             Outcome::StudioInvalidRequest,
             Effects::NotStarted,
         );
@@ -533,11 +565,79 @@ mod tests {
             Outcome::FeatureIdentity,
             Outcome::FeatureFocus,
         ] {
-            window.add(RefusalSource::Studio, reason, Effects::NotStarted);
+            window.add(
+                RefusalSource::Studio,
+                Stage::Request,
+                reason,
+                Effects::NotStarted,
+            );
         }
         let (entries, suppressed) = window.drain(start + REFUSAL_WINDOW * 3).unwrap();
         assert_eq!(entries.len(), REFUSAL_LIMIT);
         assert_eq!(suppressed, 1);
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn catalog_and_mixed_renderer_flood_share_quota_and_preserve_native() {
+        let start = Instant::now();
+        let mut window = RefusalWindow::new(start);
+        let parent = temporary();
+        let mut sink = disk::Sink::open(&parent, 1024).unwrap();
+        sink.append(b"legitimate startup\n").unwrap();
+        for mixed in [false, true] {
+            for _ in 0..10_000 {
+                for (stage, outcome) in [
+                    (Stage::Attempt, Outcome::Started),
+                    (Stage::HelperSpawn, Outcome::Requested),
+                    (Stage::HelperSpawn, Outcome::Started),
+                    (Stage::Catalog, Outcome::Failed),
+                ] {
+                    window.add(RefusalSource::Studio, stage, outcome, Effects::Unconfirmed);
+                }
+                if mixed {
+                    window.add(
+                        RefusalSource::Studio,
+                        Stage::Request,
+                        Outcome::StudioIdentity,
+                        Effects::NotStarted,
+                    );
+                    window.add(
+                        RefusalSource::Feature,
+                        Stage::Request,
+                        Outcome::FeatureFocus,
+                        Effects::NotStarted,
+                    );
+                }
+            }
+            let (entries, suppressed) = window
+                .drain(start + REFUSAL_WINDOW * if mixed { 2 } else { 1 })
+                .unwrap();
+            assert_eq!(entries.len(), if mixed { 6 } else { 4 });
+            assert_eq!(suppressed, if mixed { 59_994 } else { 39_996 });
+            let lines = format_refusals(entries, suppressed);
+            assert!(lines
+                .last()
+                .unwrap()
+                .contains(&format!("\"suppressed\":{suppressed}")));
+            for line in lines {
+                sink.append_refusal(line.as_bytes()).unwrap();
+            }
+        }
+        window.add(
+            RefusalSource::Studio,
+            Stage::HelperSpawn,
+            Outcome::Requested,
+            Effects::Unconfirmed,
+        );
+        assert_eq!(window.drain(start + REFUSAL_WINDOW * 3).unwrap().0.len(), 1);
+        sink.append(b"legitimate quit\n").unwrap();
+        assert_eq!(
+            fs::read(parent.join("diagnostics/native.jsonl")).unwrap(),
+            b"legitimate startup\nlegitimate quit\n"
+        );
+        drop(sink);
+        fs::remove_dir_all(parent).unwrap();
     }
 
     #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -604,6 +704,11 @@ mod tests {
         let two = Attempt::begin();
         assert_ne!(one.id(), two.id());
         assert_eq!(one.id(), one.clone().id());
+        let routed = one.clone().into_renderer(RefusalSource::Terminal);
+        assert_eq!(one.id(), routed.id());
+        assert!(one.renderer.is_none());
+        assert!(routed.renderer == Some(RefusalSource::Terminal));
+        assert!(Attempt::renderer(RefusalSource::Studio).renderer == Some(RefusalSource::Studio));
         assert_eq!(one.id().len(), 36);
         assert_eq!(&one.id()[14..15], "4");
         assert!(matches!(&one.id()[19..20], "8" | "9" | "a" | "b"));

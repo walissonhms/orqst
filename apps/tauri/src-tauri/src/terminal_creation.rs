@@ -558,7 +558,11 @@ fn execute(
     generation: u64,
     native_notice: bool,
 ) -> Value {
-    let diagnostic = Attempt::begin();
+    let diagnostic = if native_notice {
+        Attempt::begin()
+    } else {
+        Attempt::renderer(RefusalSource::Studio)
+    };
     let mut stage = "bootstrap";
     let result = run(
         app,
