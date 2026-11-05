@@ -1876,6 +1876,30 @@ mod tests {
     }
 
     #[test]
+    fn permission_reply_requires_valid_scoped_permission_state() {
+        let f = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let t = "a10636eb-3a12-4094-9123-49a4cdad27b8";
+        let snapshot = json!({"contractVersion":1,"storage":"core","generation":2,
+            "workspace":{"id":"workspace","name":"Workspace"},
+            "features":[{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"name":"Feature", "description":"", "status":"active", "revision":1,"terminalIds":[t],"createdAt":1,"updatedAt":1}],
+            "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
+            "activeFeatureId":f,"slots":[{"slot":0,"terminalId":t,"provider":"codex"}],"layoutSaved":true});
+        let mut reply = json!({"status":"ok","snapshot":snapshot,"permissions":{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"revision":0,"configuration":null}});
+        assert!(valid_permission_reply(&reply));
+        reply["permissions"]["revision"] = json!(1);
+        assert!(!valid_permission_reply(&reply));
+        reply["permissions"]["revision"] = json!(0);
+        reply["permissions"]["untrusted"] = json!(true);
+        assert!(!valid_permission_reply(&reply));
+        reply["permissions"]
+            .as_object_mut()
+            .unwrap()
+            .remove("untrusted");
+        reply["permissions"]["workspaceId"] = json!("other");
+        assert!(!valid_permission_reply(&reply));
+    }
+
+    #[test]
     fn permission_transport_is_separate_and_strict() {
         let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
         let request = json!({"kind":"feature-permission-request","id":id,"document":2,
