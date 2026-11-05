@@ -1326,6 +1326,9 @@ No app/provider, native UI acceptance, resource build or package was run.
 
 ## Feature permission matrix — 2026-11-05 (source state)
 
+- [x] Explicit refresh rereads through the native focus gate; uncertain proposal
+      outcomes invalidate the revision until a fresh read, without automatic retry.
+
 - [x] Feature permission matrix panel in the Feature chrome; the renderer only
       proposes and has no write path (`31c6233`).
 - [x] Native review with the exact plain-text diff, escaped content, stable

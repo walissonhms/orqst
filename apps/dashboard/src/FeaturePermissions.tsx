@@ -30,11 +30,13 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
   const [revision, setRevision] = useState<number | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [readVersion, setReadVersion] = useState(0);
   const terminals = permissionTerminals(snapshot, feature?.featureId ?? null);
   const problems = permissionProblems(rules);
   useEffect(() => {
     if (!native || !feature) return;
     let live = true;
+    setBusy(true);
     void native
       .read(feature.featureId)
       .then((reply) => {
@@ -49,11 +51,14 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
       })
       .catch(() => {
         if (live) setNotice('unavailable');
+      })
+      .finally(() => {
+        if (live) setBusy(false);
       });
     return () => {
       live = false;
     };
-  }, [native, feature?.featureId]);
+  }, [native, feature?.featureId, readVersion]);
   const operation = (source: string, target: string, op: PermissionOperation) =>
     rules
       .find((rule) => rule.sourceTerminalId === source && rule.targetTerminalId === target)
@@ -158,6 +163,18 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
         onClick={() => void propose()}
       >
         {t('features.permissions.propose')}
+      </button>
+      <button
+        type="button"
+        className="button"
+        disabled={!native || !feature || busy}
+        onClick={() => {
+          setRevision(null);
+          setNotice('');
+          setReadVersion((version) => version + 1);
+        }}
+      >
+        {t('features.permissions.refresh')}
       </button>
     </section>
   );

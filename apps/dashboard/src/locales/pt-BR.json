@@ -1123,6 +1123,7 @@
       "execute": "Executar",
       "view": "Ver",
       "invalid": "Autoenvio, pares duplicados e ciclos de delegação não são permitidos.",
+      "refresh": "Atualizar",
       "propose": "Revisar e salvar policy",
       "stale": "A policy mudou; revise a revisão atual e tente de novo.",
       "cancelled": "Nenhuma mudança foi salva.",

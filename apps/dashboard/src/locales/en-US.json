@@ -1123,6 +1123,7 @@
       "execute": "Execute",
       "view": "View",
       "invalid": "Self-send, duplicate pairs and delegate cycles are not allowed.",
+      "refresh": "Refresh",
       "propose": "Review and save policy",
       "stale": "The policy changed; review the current revision and try again.",
       "cancelled": "No change was saved.",

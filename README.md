@@ -1477,3 +1477,7 @@ accepts archiving only the reviewed reservation; it does not certify volume
 continuity or grant process/runtime authority. No new capture/anchor/phase is
 required. See [the exact contract and limits](docs/research/offline-cross-boot-admission.md).
 Real-state use, native acceptance and CLI/provider operation remain unvalidated.
+
+Feature permission policy reads can be retried explicitly with Refresh through the native
+focus gate. If a proposal outcome is uncertain, the revision is invalidated until a
+fresh read; no proposal is retried automatically. Native UI acceptance remains pending.

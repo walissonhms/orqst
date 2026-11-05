@@ -1688,6 +1688,8 @@ review digest with the audit event. The actor is supplied from the native host
 epoch through the inherited private channel. The renderer proposes a policy and
 cannot choose the actor or invoke the private transport. Confirmed revision
 conflicts return `stale`; an unconfirmed save returns `unknown` without retry.
+Renderer IPC rejection also yields `unknown` and invalidates the revision; an explicit
+refresh performs a new native read with the same focus gate, without automatic retry.
 CSP is unchanged. Reset is not implemented; an empty allowlist denies all
 operations. Synthetic tests and source review do not establish native AppKit,
 real provider, package or platform acceptance.

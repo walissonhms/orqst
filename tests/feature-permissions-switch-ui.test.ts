@@ -57,17 +57,22 @@ test('switching Features discards old permission reads and proposals', async () 
     await page.evaluate(() => Reflect.get(window, 'switchFeature')('b'));
     await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 2);
     assert.equal(await propose.isDisabled(), true);
-    await page.evaluate(() => Reflect.get(window, 'switchFeature')('a'));
+    await page.evaluate(() => Reflect.get(window, 'pending')[1].resolve({ status: 'denied' }));
+    await page.getByText('The request was refused.').waitFor();
+    await page.getByRole('button', { name: 'Refresh' }).click();
     await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 3);
     await page.evaluate(() =>
-      Reflect.get(window, 'pending')[1].resolve({
+      Reflect.get(window, 'pending')[2].resolve({
         status: 'ok',
-        permissions: { revision: 7, configuration: null },
+        permissions: { revision: 8, configuration: null },
       }),
     );
+    await page.waitForFunction(() => !document.querySelector('button')?.disabled);
+    await page.evaluate(() => Reflect.get(window, 'switchFeature')('a'));
+    await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 4);
     assert.equal(await propose.isDisabled(), true);
     await page.evaluate(() =>
-      Reflect.get(window, 'pending')[2].resolve({
+      Reflect.get(window, 'pending')[3].resolve({
         status: 'ok',
         permissions: { revision: 9, configuration: null },
       }),
@@ -85,6 +90,42 @@ test('switching Features discards old permission reads and proposals', async () 
     assert.equal(calls.length, 1);
     assert.equal(calls[0].featureId, 'a');
     assert.equal(calls[0].expectedRevision, 9);
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 5);
+    await page.evaluate(() =>
+      Reflect.get(window, 'pending')[4].resolve({
+        status: 'ok',
+        permissions: { revision: 10, configuration: null },
+      }),
+    );
+    await page.waitForFunction(() => !document.querySelector('button')?.disabled);
+    await page.evaluate(() => Reflect.set(window, 'rejectProposal', false));
+    await propose.click();
+    const afterRefresh = await page.evaluate(() => Reflect.get(window, 'calls'));
+    assert.equal(afterRefresh.length, 2);
+    assert.equal(afterRefresh[1].expectedRevision, 10);
+    await page.evaluate(() => Reflect.get(window, 'switchFeature')('b'));
+    await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 6);
+    await page.evaluate(() => Reflect.get(window, 'switchFeature')('a'));
+    await page.waitForFunction(() => Reflect.get(window, 'pending')?.length === 7);
+    await page.evaluate(() =>
+      Reflect.get(window, 'pending')[5].resolve({
+        status: 'ok',
+        permissions: { revision: 88, configuration: null },
+      }),
+    );
+    assert.equal(await propose.isDisabled(), true);
+    await page.evaluate(() =>
+      Reflect.get(window, 'pending')[6].resolve({
+        status: 'ok',
+        permissions: { revision: 11, configuration: null },
+      }),
+    );
+    await page.waitForFunction(() => !document.querySelector('button')?.disabled);
+    await propose.click();
+    const finalCalls = await page.evaluate(() => Reflect.get(window, 'calls'));
+    assert.equal(finalCalls[2].featureId, 'a');
+    assert.equal(finalCalls[2].expectedRevision, 11);
   } finally {
     await browser.close();
   }
