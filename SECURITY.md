@@ -1195,3 +1195,11 @@ No existing store data is deleted or copied; preference migration is open.
 loopback HTTP, so it is not an Electron `onBeforeRequest` replacement. macOS
 permission categories without a callback (geolocation, browser notifications,
 clipboard read) remain open and are not claimed as enforced.
+
+Feature delegated-task policies are restrictive metadata, never runtime grants.
+A known Feature without a row is neutral to existing route/native authorization;
+invalid or unavailable scope denies. Saved delegate/execute/view rules, revision-bound
+grants and microtask-time view checks prevent role escalation and stale authorization.
+Orchestrator has no privileges. The policy writer is trusted Core composition only;
+no administrative network/renderer/MCP endpoint or CLI approval bypass is added.
+See [Feature policy security and limitations](docs/development/v6-feature-permissions.md).

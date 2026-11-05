@@ -102,3 +102,15 @@ against the actual native logical size before any state/geometry/show/hide chang
 an empty Feature keeps its sidebar, suspension hides chrome as well, and no empty
 pane receives input focus. A separate native suspension fence prevents an obsolete
 ACK from reopening the workspace after dashboard/close/navigation/Quit.
+
+## Trusted Feature permission composition — v1
+
+The Core facade additionally exposes `readPermissions(featureId)`,
+`savePermissions(featureId, trustedActorId, {expectedRevision,configuration})`,
+`permissionEvents(featureId, afterSequence)` and `permissionReader(scope)`.
+The host fixes Workspace, actor and private directory; these methods are not added
+to inherited RPC or native/renderer/MCP transports. `permissionReader` returns one
+transactional Feature/membership/policy snapshot for `PaneCommunication` composition.
+A valid absent row is neutral; a saved policy only restricts existing route/grant
+checks. `routingProposal` filters denied delegate/execute edges and never installs a
+route or grant. See [the complete contract](../development/v6-feature-permissions.md).

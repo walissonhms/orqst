@@ -1625,3 +1625,25 @@ No existing store data is deleted or copied; preference migration is open.
 loopback HTTP, so it is not an Electron `onBeforeRequest` replacement. macOS
 permission categories without a callback (geolocation, browser notifications,
 clipboard read) remain open and are not claimed as enforced.
+
+## Feature delegated-task restrictions — 2026-11-05
+
+The trusted Core composition can supply a current Feature permission reader to
+`PaneCommunication`; Feature-scoped calls without it deny. A known unarchived Feature
+without a policy row is neutral per V6 MASTER:286, with all existing routing,
+exact native grants, ownership and capabilities still required. A saved directed
+terminal policy only restricts delegate/execute/view. Orchestrator never contributes
+authority. Invalid/future/corrupt/unknown/archived/foreign or saturated scope denies.
+
+Authorization pins policy revision; admission and dispatch revalidate delegate and
+execute before content/submission. View filters scoped reads/events and checks again
+inside notification microtasks. Revocation/reallow does not restore old grants.
+Already-dispatched provider facts remain durable and independently validated.
+Root plans bind policy revision into their native digest and recheck before turn
+start. Legacy panes remain isolated from Feature panes.
+
+Security review: no HTTP, WebSocket, cookie, static-serving, renderer, native or MCP
+transport change is made. Only the trusted Core composition facade can save policies;
+its host fixes Workspace and actor. Execute is no sandbox/CLI tool approval or human
+PTY authorization. UI editing, interactive MCP policy wiring and explicit cross-Feature
+approval/audit remain pending. See [the full boundary](../development/v6-feature-permissions.md).

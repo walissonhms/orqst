@@ -216,3 +216,14 @@ stale revisions, newer schema versions and exhausted capacity fail closed.
 This record is a preferred view, not a global runtime activation. Reopening it
 restores no terminal ownership, process, grant, input lease or task. The native UI
 facade and presentation guards are documented in [Feature UI](v6-feature-ui.md).
+
+## Restrictive Feature policy increment — 2026-11-05
+
+The [Feature permission contract](v6-feature-permissions.md) extends this facade
+with read/save/audit and a trusted communication policy reader. It reuses assignments,
+SQLite transactions, exact native grants and the current communication service.
+An absent policy in a valid Feature is neutral per V6 MASTER:286. Saved rules can
+only restrict; empty rules revoke all. Worker and Orchestrator remain equivalent.
+Routing proposals filter denied edges; policy never installs routing or authority.
+There is no new native/renderer/RPC/MCP writer. Native editing, interactive MCP
+integration and cross-Feature authorization/audit remain separate pending work.

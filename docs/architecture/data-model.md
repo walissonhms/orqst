@@ -586,3 +586,38 @@ Independent administrative key material lives at the fixed private AppData
 it is not an event, runtime epoch or legacy authority. Bundles remain separate,
 with phase-specific signed source snapshots and old-operation outcomes. No Store
 or observer database is opened by the dedicated entry. See [native recovery](../api/offline-native-recovery.md).
+
+## Feature agent permission policy — 2026-11-05
+
+The private preferences Store's opt-in `Store.featurePermissions()` adds
+`feature_permission_schema(singleton,version=1)`,
+`feature_permissions(feature_id,workspace_id,revision,metadata)` and
+`feature_permission_events(sequence,workspace_id,feature_id,metadata)` transactionally.
+`feature_id` references the existing Feature; read/save validate its actual Workspace,
+unarchived status and every source/target terminal assignment. Policy revision is
+independent of Feature editorial revision. No observer migration, event, source
+history, process, grant, ownership or legacy team/layout row is rewritten.
+
+Per [V6 MASTER line 286](../design/v6/source/ORQST_MASTER_SPEC_FEATURES_ATUALIZADO.md),
+a valid Feature **without a policy row is neutral**: revision 0, null configuration,
+existing routing/native grants/capabilities still required. A saved version-1 list
+strictly restricts delegate/execute/view by directed stable terminal UUID pair;
+empty rules revoke all. Missing/unavailable/corrupt/future scope evidence is a denial,
+never the neutral missing-row case. Orchestrator is descriptive and grants nothing.
+
+Save uses expected revision CAS and atomically increments revision plus a validated
+`feature.permissions.updated` metadata audit (actor, time, previous/current revision
+and configurations). Failed audit insert rolls back the policy. Reads cross-check the latest audit identity/configuration/revision and
+retained event count. Missing saved policy or incomplete history denies instead of
+reverting to neutral. No observed-source file/offset/hash is fabricated. Reads bound JSON before parsing; policies are 16 KiB,
+audit rows 32 KiB, with 56 directed pairs and at most eight assigned terminals.
+The storage hard ceilings are 1024 policies/32768 audit rows; reads/writes deny at
+saturation. Saves that would reach saturation roll back rather than return an
+unusable state. Nothing is evicted or deleted. Event reads return at most 256 ordered
+rows after a safe sequence cursor; corrupt audit identity/version/revisions deny.
+
+In-memory grants and root signed plans pin the exact policy revision. Later edits,
+including reallow, require fresh native authority; persistence never restores a
+grant or adapter. Test-only transactional DDL rollback and removal of precisely the
+new tables in disposable fixtures preserve old data and observer `user_version`.
+There is no installed-database downgrade path. See [contract and limits](../development/v6-feature-permissions.md).
