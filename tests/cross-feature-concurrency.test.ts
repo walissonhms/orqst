@@ -64,10 +64,12 @@ async function scenario(mode: string, writePolicy: boolean) {
   const db = new DatabaseSync(join(ready.dir!, 'journal.sqlite'), { readOnly: true });
   const count = Number(db.prepare('SELECT count(*) AS n FROM cross_feature_messages').get()?.n);
   const audit = Number(db.prepare('SELECT count(*) AS n FROM cross_feature_audit').get()?.n);
+  const state = db.prepare('SELECT metadata FROM cross_feature_messages').get()?.metadata;
+  const status = state ? JSON.parse(String(state)).state : undefined;
   db.close();
   rmSync(ready.dir!, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
-  return { result, code, count, audit };
+  return { result, code, count, audit, status };
 }
 test('revocation committed before snapshot denies admission', { timeout: 15000 }, async () => {
   const r = await scenario('before', true);
@@ -89,10 +91,13 @@ test(
   },
 );
 test('concurrent writer completes while claim holds journal', { timeout: 15000 }, async () => {
-  const r = await scenario('before', true);
+  const r = await scenario('claim', true);
   assert.equal(r.code, 0);
-  assert.equal(r.result?.admitted, false);
-  assert.equal(r.count, 0);
+  assert.equal(r.result?.admitted, true);
+  assert.equal(r.result?.claimed, false);
+  assert.equal(r.count, 1);
+  assert.equal(r.audit, 1);
+  assert.equal(r.status, 'queued');
 });
 test(
   'crash before journal commit admits nothing; crash after persists exactly once',
