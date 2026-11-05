@@ -217,9 +217,10 @@ after a refusal until the user explicitly refreshes. A prepared open intent is n
 consumed by a refusal. Native menu actions and lifecycle records do not use this
 renderer admission path.
 
-Equal in-flight catalog requests for the same native generation and exact scope
-share the same helper and result, up to the admission limit. A different scope or
-generation does not join it. The detached native task completes even if its caller
+Equal in-flight catalog requests for the same native generation, source URL,
+webview label, parent and exact request share the same helper and result, up to
+the admission limit. A different identity or request does not join it; the existing
+single preparation latch returns busy while another request is in flight. The detached native task completes even if its caller
 disappears, and each caller revalidates its own document before receiving a result.
 Rate refusals are counted without document IDs or payloads in the renderer stream:
 one aggregate per source per 60-second diagnostic window, subject to the existing

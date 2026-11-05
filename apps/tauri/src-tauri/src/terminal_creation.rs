@@ -39,6 +39,9 @@ pub struct CatalogFlight(Arc<Mutex<Option<Flight>>>);
 struct Flight {
     request: Value,
     generation: u64,
+    source: String,
+    label: String,
+    parent: String,
     result: tokio::sync::watch::Receiver<Option<Value>>,
 }
 impl CatalogFlight {
@@ -46,12 +49,24 @@ impl CatalogFlight {
         &self,
         request: Value,
         generation: u64,
+        identity: (String, String, String),
         start: impl FnOnce() -> bool,
         work: impl FnOnce() -> Value + Send + 'static,
     ) -> Option<tokio::sync::watch::Receiver<Option<Value>>> {
         let mut flight = self.0.lock().unwrap();
         if let Some(current) = flight.as_ref() {
-            if current.request != request || current.generation != generation {
+            if current.request != request
+                || current.generation != generation
+                || (
+                    current.source.as_str(),
+                    current.label.as_str(),
+                    current.parent.as_str(),
+                ) != (
+                    identity.0.as_str(),
+                    identity.1.as_str(),
+                    identity.2.as_str(),
+                )
+            {
                 return None;
             }
             Some(current.result.clone())
@@ -63,6 +78,9 @@ impl CatalogFlight {
             *flight = Some(Flight {
                 request,
                 generation,
+                source: identity.0,
+                label: identity.1,
+                parent: identity.2,
                 result: receiver.clone(),
             });
             let state = self.clone();
@@ -80,10 +98,11 @@ impl CatalogFlight {
         &self,
         request: Value,
         generation: u64,
+        identity: (String, String, String),
         start: impl FnOnce() -> bool,
         work: impl FnOnce() -> Value + Send + 'static,
     ) -> Value {
-        let Some(mut receiver) = self.subscribe(request, generation, start, work) else {
+        let Some(mut receiver) = self.subscribe(request, generation, identity, start, work) else {
             return json!({"status":"busy"});
         };
         loop {
@@ -109,6 +128,7 @@ async fn catalog_request(
         .run(
             request.clone(),
             generation,
+            (source.clone(), "main".into(), parent.label().into()),
             || begin(app, &request, Some(generation)).is_some(),
             move || execute(&worker, &parent, work_request, &source, generation, false),
         )
@@ -1388,6 +1408,7 @@ mod tests {
             .subscribe(
                 request.clone(),
                 7,
+                ("orqst://local/".into(), "main".into(), "main".into()),
                 || true,
                 move || {
                     seen.fetch_add(1, Ordering::SeqCst);
@@ -1400,12 +1421,45 @@ mod tests {
             .subscribe(
                 request.clone(),
                 7,
+                ("orqst://local/".into(), "main".into(), "main".into()),
                 || panic!("second admission"),
                 || panic!("second worker"),
             )
             .unwrap();
         assert!(flight
-            .subscribe(request.clone(), 8, || true, || json!({}))
+            .subscribe(
+                request.clone(),
+                8,
+                ("orqst://local/".into(), "main".into(), "main".into()),
+                || true,
+                || json!({})
+            )
+            .is_none());
+        for identity in [
+            ("orqst://local/studio", "main", "main"),
+            ("orqst://local/", "other", "main"),
+            ("orqst://local/", "main", "other"),
+        ] {
+            assert!(flight
+                .subscribe(
+                    request.clone(),
+                    7,
+                    (identity.0.into(), identity.1.into(), identity.2.into()),
+                    || true,
+                    || json!({})
+                )
+                .is_none());
+        }
+        let mut other_scope = request.clone();
+        other_scope["featureId"] = json!("other");
+        assert!(flight
+            .subscribe(
+                other_scope,
+                7,
+                ("orqst://local/".into(), "main".into(), "main".into()),
+                || true,
+                || json!({})
+            )
             .is_none());
         release.send(()).unwrap();
         tauri::async_runtime::block_on(async {
