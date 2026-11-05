@@ -650,7 +650,7 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
                 if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
                     eprintln!("ORQST_QUIT_MENU request-exit");
                 }
-                app.exit(0);
+                request_quit(app);
             }
         });
     }
@@ -722,7 +722,7 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         .show_menu_on_left_click(true)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "native-open" => focus(app),
-            "native-quit" => app.exit(0), // The existing signed-host consent gates still run.
+            "native-quit" => request_quit(app),
             "native-background" => {
                 let desktop = app.state::<Desktop>();
                 let mut state = desktop.0.lock().unwrap();
@@ -772,19 +772,25 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
             }
-        } else if crate::terminal::owned_host_started(app) {
-            // One reviewed flow at a time; a repeated Quit during it opens no second flow.
-            if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
-                return;
-            }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                crate::terminal::quit_owned(app).await;
-            });
         } else {
-            app.exit(0);
+            request_quit(app);
         }
     }
+}
+
+/// Every exit point uses this single latched entry. No direct exit with an owned host.
+pub fn request_quit(app: &tauri::AppHandle) {
+    if !crate::terminal::owned_host_started(app) {
+        app.exit(0);
+        return;
+    }
+    if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        crate::terminal::quit_owned(app).await;
+    });
 }
 
 pub fn quit_finished() {
@@ -807,6 +813,17 @@ pub fn stop(app: &tauri::AppHandle) {
     }
     // macOS/Windows cannot withdraw delivered notifications. Future callbacks are inert.
     let _ = app.notification().remove_all_active();
+}
+
+#[cfg(test)]
+mod quit_entry_tests {
+    #[test]
+    fn only_the_single_quit_entry_exits_without_an_owned_host() {
+        let source = include_str!("desktop.rs");
+        assert_eq!(source.matches(&concat!("app.", "exit(0)")).count(), 1);
+        let index = source.find("pub fn request_quit").unwrap();
+        assert!(source[index..].contains(&concat!("app.", "exit(0)")));
+    }
 }
 
 #[cfg(test)]

@@ -179,7 +179,12 @@ fn main() {
             if let tauri::RunEvent::Reopen { .. } = event { desktop::focus(app); }
             if let tauri::RunEvent::ExitRequested { ref api, .. } = event {
                 terminal_creation::invalidate(app);
-                if terminal::confirm_exit(app) || agents::confirm_exit(app) { api.prevent_exit(); }
+                if terminal::owned_host_started(app) {
+                    api.prevent_exit();
+                    desktop::request_quit(app);
+                } else if terminal::confirm_exit(app) || agents::confirm_exit(app) {
+                    api.prevent_exit();
+                }
             }
             if let tauri::RunEvent::Exit = event {
                 local_diagnostics::Attempt::begin().record(local_diagnostics::Stage::NativeExit, local_diagnostics::Outcome::Requested, local_diagnostics::Effects::Unconfirmed);

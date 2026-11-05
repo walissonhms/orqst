@@ -523,6 +523,20 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
 }
 
 #[cfg(test)]
+mod quit_exit_tests {
+    #[test]
+    fn only_the_reviewed_quit_flow_exits_the_app() {
+        let source = include_str!("terminal.rs");
+        let start = source.find("pub async fn quit_owned").unwrap();
+        assert!(!source[..start].contains(&concat!("app.", "exit(0)")));
+        assert_eq!(
+            source[start..].matches(&concat!("app.", "exit(0)")).count(),
+            2
+        );
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
         document_slot, metadata_reply_matches, release_metadata, review_available, MetadataPending,
@@ -1064,10 +1078,6 @@ fn quit_blocked(app: &tauri::AppHandle, reason: &str, uncertain: Value) {
 
 /// One reviewed Quit flow. Never signals twice and never fakes a clean exit.
 pub async fn quit_owned(app: tauri::AppHandle) {
-    if !owned_host_started(&app) {
-        app.exit(0);
-        return;
-    }
     let Some(shutdown) = quit_pipe(&app, "shutdownOwned").await else {
         quit_blocked(&app, "transport", json!([]));
         return;
@@ -2625,7 +2635,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
                 if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
                     r.exit_authorized = true;
                 }
-                app.exit(0);
+                crate::desktop::request_quit(&app);
             } else {
                 reset_exit(&app);
                 crate::agents::reset_exit(&app);
