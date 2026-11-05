@@ -266,10 +266,18 @@ export class OfflineReservationRecovery {
     );
     return { evidence, sha256: record.sha256, bytes: record.bytes, record };
   }
-  private snapshot(directory: string, bundle: string) {
+  private snapshot(directory: string, bundle: string, admitPhysicalDifference = false) {
     const historical = this.historicalEvidence(bundle);
     const scratch = mkdtempSync(join(bundle, 'inspection-'));
-    return snapshotOfflineReservation(directory, scratch, historical);
+    const signed =
+      admitPhysicalDifference && this.present(join(bundle, 'capture.json'))
+        ? this.captureRecord(bundle, true)
+        : undefined;
+    const saved =
+      signed && this.boot() !== signed.before.beforeBoot
+        ? offlineSnapshotSchema.parse(sourceJSON(join(bundle, 'snapshot.json'), RECOVERY_LIMIT))
+        : undefined;
+    return snapshotOfflineReservation(directory, scratch, historical, saved);
   }
   private async approve<P extends AdministrativeRecoveryIntent['phase']>(
     proposal: AdministrativeRecoveryIntent & { phase: P },
@@ -321,6 +329,13 @@ export class OfflineReservationRecovery {
               },
               historicalBindingScope:
                 'Historical enrollment preimage verified; current model source CONTENT was NOT inspected or validated; current critical metadata (canonical path/dev/ino/regular/mode/uid/nlink) is fresh for this review only; critical metadata changes during this phase deny stale approval; current model source size/mtime/ctime and content are not evidence; no automatic retry, a new explicit operation/review is required; NO launch, claim, config reuse or provider authority',
+            }
+          : {}),
+        ...(snapshot.physicalDifference
+          ? {
+              physicalDifference: snapshot.physicalDifference,
+              physicalDifferenceAuthority:
+                'Explicit CURRENT administrative approval to archive ONLY this exact reviewed reservation after the external kernel boot fence. Historical signature authenticates captured evidence; it does NOT prove filesystem or volume continuity. Device mapping is declared, not certified equivalence. All preserved bytes/hashes and other physical fields match exactly. Current enrollment/model source metadata is phase-local and revalidated; model source CONTENT was NOT inspected. NO process adoption, owned exit, restored grant, launch, claim or provider authority. Original marker remains until separate final commit approval.',
             }
           : {}),
         membership: snapshot.membership,
@@ -505,7 +520,19 @@ export class OfflineReservationRecovery {
           snapshot.files.find(
             (file) => file.path === join(bundle, 'historical-binding-evidence.json'),
           ),
-        ) !== JSON.stringify(historical.record)) ||
+        ) !==
+          JSON.stringify({
+            ...historical.record,
+            identity:
+              this.boot() !== before.beforeBoot
+                ? [
+                    snapshot.files.find(
+                      (file) => file.path === join(bundle, 'historical-binding-evidence.json'),
+                    )?.identity[0],
+                    ...historical.record.identity.slice(1),
+                  ]
+                : historical.record.identity,
+          })) ||
       snapshot.historicalBinding?.evidenceSha256 !== historical?.sha256 ||
       (snapshot.historicalBinding &&
         JSON.stringify(snapshot.historicalBinding.evidence) !==
@@ -791,7 +818,7 @@ export class OfflineReservationRecovery {
           this.present(join(bundle, 'receipt.json'))
         )
           throw new OfflineRecoveryBlocked('release_phase_without_archive', bundle);
-        const current = this.snapshot(directory, bundle);
+        const current = this.snapshot(directory, bundle, true);
         if (current.logicalDigest !== before.currentDigest)
           throw new Error('Recovery logical snapshot changed');
         const proposal: AdministrativeRecoveryIntent = {
@@ -807,7 +834,7 @@ export class OfflineReservationRecovery {
         exact(lock, lockValue);
         if (
           this.boot() !== currentBoot ||
-          this.snapshot(directory, bundle).rawDigest !== current.rawDigest
+          this.snapshot(directory, bundle, true).rawDigest !== current.rawDigest
         )
           throw new Error('Recovery changed after fence/review');
         const record = {
@@ -828,7 +855,9 @@ export class OfflineReservationRecovery {
         this.dependencies.boundary?.('archive');
         archive = this.archiveRecord(bundle, capture);
       }
-      const phaseCurrent = continuingArchive ? this.snapshot(directory, bundle) : archive.current;
+      const phaseCurrent = continuingArchive
+        ? this.snapshot(directory, bundle, true)
+        : archive.current;
       if (phaseCurrent.logicalDigest !== before.currentDigest)
         throw new Error('Recovery logical snapshot changed');
       const assertCurrent = () => {
@@ -837,7 +866,7 @@ export class OfflineReservationRecovery {
         if (
           this.boot() !== currentBoot ||
           this.present(held) ||
-          this.snapshot(directory, bundle).rawDigest !== phaseCurrent.rawDigest
+          this.snapshot(directory, bundle, true).rawDigest !== phaseCurrent.rawDigest
         )
           throw new Error('Recovery changed before final namespace commit');
       };
@@ -971,6 +1000,9 @@ export class OfflineReservationRecovery {
           membership: record.current.membership,
           ...(record.current.historicalBinding
             ? { historicalBinding: record.current.historicalBinding }
+            : {}),
+          ...(record.current.physicalDifference
+            ? { physicalDifference: record.current.physicalDifference }
             : {}),
         }),
       ) !== record.current.rawDigest
@@ -1140,14 +1172,14 @@ export class OfflineReservationRecovery {
           throw new OfflineRecoveryBlocked('completion_record_uncertain_commit_preserved', bundle);
         throw new OfflineRecoveryBlocked('already_finalized_original_commit_preserved', bundle);
       }
-      const fresh = heldBefore ? archive.current : this.snapshot(directory, bundle);
+      const fresh = heldBefore ? archive.current : this.snapshot(directory, bundle, true);
       if (fresh.logicalDigest !== archive.current.logicalDigest)
         throw new OfflineRecoveryBlocked('pre_commit_logical_source_changed', bundle);
       const assertPrepared = () => {
         if (
           this.boot() !== currentBoot ||
           this.present(heldPath) ||
-          this.snapshot(directory, bundle).rawDigest !== fresh.rawDigest
+          this.snapshot(directory, bundle, true).rawDigest !== fresh.rawDigest
         )
           throw new OfflineRecoveryBlocked('pre_commit_source_changed', bundle);
         exact(gateFile, this.gate(capture));
@@ -1182,9 +1214,10 @@ export class OfflineReservationRecovery {
         ...administrativeRecoveryIntent(before),
         phase: 'finalize',
         currentBoot,
-        currentDigest: fresh.historicalBinding
-          ? terminalDigest(JSON.stringify({ plan, rawDigest: fresh.rawDigest }))
-          : terminalDigest(JSON.stringify(plan)),
+        currentDigest:
+          fresh.historicalBinding || fresh.physicalDifference
+            ? terminalDigest(JSON.stringify({ plan, rawDigest: fresh.rawDigest }))
+            : terminalDigest(JSON.stringify(plan)),
       };
       const approval = await this.approve(proposal, fresh, {
         phase: heldBefore
@@ -1204,7 +1237,9 @@ export class OfflineReservationRecovery {
         plan,
         challenge,
         signature,
-        ...(fresh.historicalBinding ? { currentRawDigest: fresh.rawDigest } : {}),
+        ...(fresh.historicalBinding || fresh.physicalDifference
+          ? { currentRawDigest: fresh.rawDigest }
+          : {}),
       };
       this.write(
         join(bundle, `finalization-approval-${challenge.nonce}.json`),

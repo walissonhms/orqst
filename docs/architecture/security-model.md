@@ -1580,3 +1580,15 @@ model-source contents. The exact preimage, receipt/context, durable private evid
 and separately reviewed current critical metadata are required; source size/times
 are excluded only for those unread model sources. All recovery records preserve
 full freshness checks. [Detailed boundary](../development/offline-historical-binding.md).
+
+## Cross-boot administrative device difference — source contract
+
+The offline-only snapshot may contain `physicalDifference` in its current RAW:
+a single declared historical/current device pair and current enrollment critical
+metadata. Historical signed bytes, all other preserved file metadata and complete
+enrollment digests must still agree. Existing fresh native review explicitly
+authorizes archiving the exact reservation without asserting filesystem/volume
+continuity; existing release and final-commit signatures remain separate.
+Launch/claim rules and future-owner cleanup boundaries stay unchanged.
+See [the executable contract, research and pending acceptance](../research/offline-cross-boot-admission.md).
+No real-state use, native UI, build or provider acceptance is claimed here.

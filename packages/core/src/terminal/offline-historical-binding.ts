@@ -92,6 +92,7 @@ export function verifyHistoricalBinding(
   evidence: HistoricalBindingEvidence,
   binding: TerminalEnrollmentFile,
   currentSources: ReturnType<typeof offlineModelSourceMetadata>,
+  historicalIdentities = binding.identities,
 ) {
   evidence = historicalBindingEvidenceSchema.parse(evidence);
   const selected = evidence.historicalModelSource;
@@ -127,7 +128,7 @@ export function verifyHistoricalBinding(
     terminalDigest(
       terminalEnrollmentPreimage(
         binding.config,
-        binding.identities,
+        historicalIdentities,
         terminalFile(binding.file, true),
         modelSources,
       ),

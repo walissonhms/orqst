@@ -1423,3 +1423,13 @@ The offline capture source also supports an optional native-only exact historica
 enrollment preimage candidate, with a durable private copy and fresh critical
 metadata review per phase. It does not inspect current provider configuration
 content or grant launch authority. See [operator syntax and limits](docs/development/offline-historical-binding.md).
+
+## Cross-boot physical difference review — 2026-11-04
+
+The existing offline service can propose one strictly checked device difference
+against an authenticated old capture, retaining historical logical facts and
+fresh physical RAW for each phase. Current administrative consent explicitly
+accepts archiving only the reviewed reservation; it does not certify volume
+continuity or grant process/runtime authority. No new capture/anchor/phase is
+required. See [the exact contract and limits](docs/research/offline-cross-boot-admission.md).
+Real-state use, native acceptance and CLI/provider operation remain unvalidated.

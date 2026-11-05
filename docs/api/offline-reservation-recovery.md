@@ -98,3 +98,15 @@ it remain supported. Finalization of a historical capture binds the new phase's
 RAW digest alongside its plan; persisted intent may include `currentRawDigest`.
 The complete version 2 review fingerprint still binds every displayed field.
 See [historical binding scope](../development/offline-historical-binding.md).
+
+## Cross-boot administrative device difference — source contract
+
+The offline-only snapshot may contain `physicalDifference` in its current RAW:
+a single declared historical/current device pair and current enrollment critical
+metadata. Historical signed bytes, all other preserved file metadata and complete
+enrollment digests must still agree. Existing fresh native review explicitly
+authorizes archiving the exact reservation without asserting filesystem/volume
+continuity; existing release and final-commit signatures remain separate.
+Launch/claim rules and future-owner cleanup boundaries stay unchanged.
+See [the executable contract, research and pending acceptance](../research/offline-cross-boot-admission.md).
+No real-state use, native UI, build or provider acceptance is claimed here.

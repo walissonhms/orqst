@@ -43,6 +43,15 @@ import {
   type HistoricalBindingSnapshot,
 } from './offline-historical-binding.js';
 
+import {
+  comparePhysicalFiles,
+  historicalIdentity,
+  offlineBindingMetadata,
+  physicalBindingDigest,
+  physicalDifferenceSchema,
+  type PhysicalDifference,
+} from './offline-physical-binding.js';
+
 export const RECOVERY_LIMIT = 64 * 1024 * 1024;
 
 /** A frozen enrollment cannot be rebound to today's source identities. No private detail. */
@@ -102,6 +111,7 @@ export const offlineSnapshotSchema = z.strictObject({
     .max(8),
   membership: z.array(z.string()).max(256),
   historicalBinding: historicalBindingSnapshotSchema.optional(),
+  physicalDifference: physicalDifferenceSchema.optional(),
   logicalDigest: digest,
   rawDigest: digest,
 });
@@ -116,6 +126,7 @@ export function assertHeldRecoverySnapshot(directory: string, value: unknown) {
         journals: snapshot.journals,
         membership: snapshot.membership,
         ...(snapshot.historicalBinding ? { historicalBinding: snapshot.historicalBinding } : {}),
+        ...(snapshot.physicalDifference ? { physicalDifference: snapshot.physicalDifference } : {}),
       }),
     ) !== snapshot.rawDigest
   )
@@ -258,6 +269,7 @@ export function snapshotOfflineReservation(
     sha256: string;
     record: ReturnType<typeof readRecoveryFile>;
   },
+  signedHistorical?: OfflineReservationSnapshot,
 ) {
   terminalDirectory(directory, true);
   terminalDirectory(scratch, true);
@@ -269,6 +281,14 @@ export function snapshotOfflineReservation(
     if (entries.length > 256) throw new Error('Recovery enrollment budget');
     return entries;
   };
+  const difference = signedHistorical
+    ? comparePhysicalFiles(signedHistorical, (path) =>
+        readRecoveryFile(path, OFFLINE_JOURNAL_BYTES),
+      )
+    : undefined;
+  const physicalDifference: PhysicalDifference | undefined = difference
+    ? { kind: 'administrative_device_difference', ...difference, bindings: [] }
+    : undefined;
   let capturedBytes = 0;
   const take = (file: string, limit = 16 * 1024) => {
     const record = readRecoveryFile(file, Math.min(limit, RECOVERY_LIMIT - capturedBytes));
@@ -332,6 +352,7 @@ export function snapshotOfflineReservation(
   const seenTerminals = new Set<string>();
   let selectedProject: string | undefined;
   let historicalBinding: HistoricalBindingSnapshot | undefined;
+  const bindings: ReturnType<typeof terminalEnrollmentFile>[] = [];
   const journals = paths.map((path, slot) => {
     const manifest = take(path);
     files.push(manifest);
@@ -368,8 +389,13 @@ export function snapshotOfflineReservation(
     )
       throw new Error('Recovery lifecycle/rollback uncertainty');
     const binding = terminalEnrollmentFile(path, config);
+    bindings[slot] = binding;
     const intent = intents.find((entry) => entry.member.slot === slot);
-    let bindingDigest = binding.bindingDigest;
+    if (physicalDifference)
+      physicalDifference.bindings.push({ slot, identities: offlineBindingMetadata(binding) });
+    let bindingDigest = difference
+      ? physicalBindingDigest(binding, Buffer.from(manifest.bytes, 'base64'), difference)
+      : binding.bindingDigest;
     if (historical && historical.evidence.member.slot === slot) {
       const evidence = historical.evidence;
       const intentSource = files.find(
@@ -392,17 +418,42 @@ export function snapshotOfflineReservation(
         evidence.enrollment.receiptSha256 !== receiptSource?.sha256 ||
         evidence.member.terminalId !== config.identity.terminalId ||
         evidence.member.manifestSha256 !== manifest.sha256 ||
-        evidence.member.manifestIdentity !== `${manifest.identity[0]}:${manifest.identity[1]}` ||
+        evidence.member.manifestIdentity !==
+          historicalIdentity(`${manifest.identity[0]}:${manifest.identity[1]}`, difference) ||
         evidence.member.frozenBindingDigest !== intent.member.bindingDigest
       )
         throw new OfflineEnrollmentBindingChanged();
       const currentSources = offlineModelSourceMetadata(
         config.model?.files.map((file) => file.path) ?? [],
       );
-      verifyHistoricalBinding(evidence, binding, currentSources);
+      const projectedSources = currentSources.map((source) => ({
+        ...source,
+        identity: source.identity
+          ? [
+              historicalIdentity(`${source.identity[0]}:${source.identity[1]}`, difference)!.split(
+                ':',
+              )[0]!,
+              ...source.identity.slice(1),
+            ]
+          : null,
+      }));
+      verifyHistoricalBinding(
+        evidence,
+        binding,
+        projectedSources,
+        binding.identities.map((identity) => historicalIdentity(identity, difference)),
+      );
+      if (
+        difference &&
+        JSON.stringify(projectedSources) !==
+          JSON.stringify(signedHistorical?.historicalBinding?.currentSources)
+      )
+        throw new Error('Recovery physical comparison model metadata changed');
       historicalBinding = { evidenceSha256: historical.sha256, evidence, currentSources };
       bindingDigest = evidence.member.frozenBindingDigest;
     }
+    if (difference && signedHistorical?.journals[slot]?.bindingDigest !== bindingDigest)
+      throw new OfflineEnrollmentBindingChanged();
     if (intent && intent.member.bindingDigest !== bindingDigest)
       throw new OfflineEnrollmentBindingChanged();
     if (
@@ -487,33 +538,53 @@ export function snapshotOfflineReservation(
   )
     throw new Error('Recovery model source metadata changed');
   // Raw journal/WAL bytes and file metadata are captured separately from checkpoint-stable facts.
+  const historicalFile = (file: ReturnType<typeof readRecoveryFile>) =>
+    difference
+      ? { ...file, identity: [difference.historicalDevice, ...file.identity.slice(1)] }
+      : file;
   const logical = {
     ...(historicalBinding
       ? { historicalBinding: historicalBindingLogical(historicalBinding) }
       : {}),
     marker,
     membership,
-    immutable: files.filter(
-      (file) =>
-        !journals.some(
-          (journal) => file.path === journal.path || file.path === `${journal.path}-wal`,
-        ),
-    ),
+    immutable: files
+      .filter(
+        (file) =>
+          !journals.some(
+            (journal) => file.path === journal.path || file.path === `${journal.path}-wal`,
+          ),
+      )
+      .map(historicalFile),
     journals: journals.map((journal) => ({
       path: journal.path,
       slot: journal.slot,
       terminalId: journal.terminalId,
       bindingDigest: journal.bindingDigest,
-      databaseIdentity: journal.databaseIdentity,
+      databaseIdentity: difference
+        ? [difference.historicalDevice, ...journal.databaseIdentity.slice(1)]
+        : journal.databaseIdentity,
       logical: journal.logical,
     })),
   };
-  return {
+  if (physicalDifference) {
+    for (const entry of physicalDifference.bindings) {
+      if (
+        JSON.stringify(offlineBindingMetadata(bindings[entry.slot]!)) !==
+        JSON.stringify(entry.identities)
+      )
+        throw new Error('Recovery enrollment metadata changed during inspection');
+    }
+    if (terminalDigest(JSON.stringify(logical)) !== signedHistorical!.logicalDigest)
+      throw new Error('Recovery historical logical projection changed');
+  }
+  return offlineSnapshotSchema.parse({
     version: 1 as const,
     files,
     journals,
     membership,
     ...(historicalBinding ? { historicalBinding } : {}),
+    ...(physicalDifference ? { physicalDifference } : {}),
     logicalDigest: terminalDigest(JSON.stringify(logical)),
     rawDigest: terminalDigest(
       JSON.stringify({
@@ -521,8 +592,9 @@ export function snapshotOfflineReservation(
         journals,
         membership,
         ...(historicalBinding ? { historicalBinding } : {}),
+        ...(physicalDifference ? { physicalDifference } : {}),
       }),
     ),
-  };
+  });
 }
-export type OfflineReservationSnapshot = ReturnType<typeof snapshotOfflineReservation>;
+export type OfflineReservationSnapshot = z.infer<typeof offlineSnapshotSchema>;

@@ -1,5 +1,7 @@
 // SYNTHETIC: disposable files/SQLite only. No runtime, Core, PTY, auth DB or reboot.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
   chmodSync,
@@ -22,7 +24,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import test from 'node:test';
+import test, { mock } from 'node:test';
+import { comparePhysicalFiles } from '../packages/core/src/terminal/offline-physical-binding.js';
 import { stableId } from '@orqst/shared';
 import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
 import { inspectDesktopAdmission } from '../packages/core/src/managed-codex/desktop-admission-inspection.js';
@@ -2297,3 +2300,203 @@ test('persisted historical evidence metadata remains strict even for unchanged b
     f.close();
   }
 });
+
+// SYNTHETIC kernel stat namespace, not a mount/volume continuity certificate.
+// Builtin mocks exercise the production readers, serializer, service and signatures together.
+function deviceNamespace() {
+  const originalLstat = fs.lstatSync;
+  const originalFstat = fs.fstatSync;
+  let enabled = false;
+  const device = originalLstat(tmpdir()).dev;
+  const map = <T extends { dev: number | bigint }>(info: T): T => {
+    if (!enabled || BigInt(info.dev) !== BigInt(device)) return info;
+    const result = Object.assign(Object.create(Object.getPrototypeOf(info)), info) as T;
+    result.dev = typeof info.dev === 'bigint' ? info.dev + 100n : info.dev + 100;
+    return result;
+  };
+  const lstat = mock.method(fs, 'lstatSync', (...args: Parameters<typeof originalLstat>) =>
+    map(originalLstat(...args)!),
+  );
+  const fstat = mock.method(fs, 'fstatSync', (...args: Parameters<typeof originalFstat>) =>
+    map(originalFstat(...args)),
+  );
+  syncBuiltinESMExports();
+  return {
+    enable: () => {
+      enabled = true;
+    },
+    restore: () => {
+      lstat.mock.restore();
+      fstat.mock.restore();
+      syncBuiltinESMExports();
+    },
+  };
+}
+
+for (const historical of [false, true]) {
+  test(`cross-boot device difference completes existing transaction with historical capsule=${historical}`, async () => {
+    const f = historicalFixture();
+    // Without a capsule, restore the original source via a fresh fixture instead.
+    const plain = historical ? undefined : fixture();
+    const selected = plain ?? f;
+    const namespace = deviceNamespace();
+    try {
+      const captured = historical ? await f.captureHistorical() : await selected.capture();
+      const signedBytes = readFileSync(join(captured.bundle, 'snapshot.json'));
+      const saved = JSON.parse(signedBytes.toString());
+      selected.changeBoot();
+      namespace.enable();
+      const recovery = new OfflineReservationRecovery(selected.authority, selected.dependencies);
+      await recovery.release(captured.bundle);
+      assert.equal(readFileSync(selected.marker, 'utf8'), selected.markerBytes);
+      const archive = JSON.parse(readFileSync(join(captured.bundle, 'archive.json'), 'utf8'));
+      assert.equal(archive.current.logicalDigest, saved.logicalDigest);
+      assert.notEqual(archive.current.rawDigest, saved.rawDigest);
+      assert.equal(archive.current.physicalDifference.bindings.length, 2);
+      assert.equal(archive.current.physicalDifference.historicalDevice, saved.files[0].identity[0]);
+      assert.notEqual(archive.current.physicalDifference.currentDevice, saved.files[0].identity[0]);
+      assert.deepEqual(readFileSync(join(captured.bundle, 'snapshot.json')), signedBytes);
+      assert.match(selected.fullReviews.at(-1)!, /does NOT prove filesystem or volume continuity/);
+      // Actual legacy admission primitive remains continuously excluded until final commit.
+      assert.throws(
+        () => writeFileSync(selected.marker, 'SYNTHETIC old claimant', { flag: 'wx', mode: 0o600 }),
+        /EEXIST/,
+      );
+      const future = JSON.stringify({ version: 1, owner: randomUUID(), manifests: [] });
+      selected.boundary((stage) => {
+        if (stage === 'after_marker')
+          writeFileSync(selected.marker, future, { flag: 'wx', mode: 0o600 });
+      });
+      await recovery.finalize(captured.bundle);
+      assert.equal(readFileSync(selected.marker, 'utf8'), future);
+      await assert.rejects(recovery.finalize(captured.bundle), /already_finalized/);
+      assert.equal(readFileSync(selected.marker, 'utf8'), future);
+      assert.equal(selected.reviews.length, 3);
+    } finally {
+      namespace.restore();
+      plain?.close();
+      f.close();
+    }
+  });
+}
+
+for (const mutation of [
+  'cancel',
+  'signature',
+  'snapshot',
+  'manifest',
+  'evidence',
+  'model',
+  'within_release',
+  'within_finalize',
+] as const) {
+  test(`cross-boot device admission denies ${mutation} and retains old reservation`, async () => {
+    const f = historicalFixture();
+    const namespace = deviceNamespace();
+    try {
+      const captured = await f.captureHistorical();
+      f.changeBoot();
+      namespace.enable();
+      const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+      if (mutation === 'cancel') f.cancel();
+      if (mutation === 'signature') {
+        const file = join(captured.bundle, 'capture.json');
+        const capture = JSON.parse(readFileSync(file, 'utf8'));
+        capture.signature = 'a'.repeat(86);
+        writeFileSync(file, JSON.stringify(capture));
+      }
+      if (mutation === 'snapshot') writeFileSync(join(captured.bundle, 'snapshot.json'), '{}');
+      if (mutation === 'manifest')
+        writeFileSync(f.manifests[0]!, `${readFileSync(f.manifests[0]!, 'utf8')} `);
+      if (mutation === 'evidence')
+        writeFileSync(
+          join(captured.bundle, 'historical-binding-evidence.json'),
+          `${readFileSync(f.evidenceFile, 'utf8')} `,
+        );
+      if (mutation === 'model') f.replace();
+      if (mutation === 'within_release')
+        f.review((challenge) => {
+          if (challenge.phase === 'release') f.replace();
+        });
+      if (mutation === 'within_finalize') {
+        await recovery.release(captured.bundle);
+        f.review((challenge) => {
+          if (challenge.phase === 'finalize') f.replace();
+        });
+        await assert.rejects(recovery.finalize(captured.bundle));
+      } else await assert.rejects(recovery.release(captured.bundle));
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.equal(existsSync(join(captured.bundle, 'finalized.json')), false);
+      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      if (mutation !== 'within_finalize')
+        assert.equal(existsSync(join(captured.bundle, 'archive.json')), false);
+    } finally {
+      namespace.restore();
+      f.close();
+    }
+  });
+}
+
+test('cross-boot physical comparison denies mixed mapping, other bytes, metadata and duplicate records', () => {
+  const f = fixture();
+  try {
+    const scratch = join(f.root, 'SYNTHETIC-inspect');
+    mkdirSync(scratch, { mode: 0o700 });
+    const saved = snapshotOfflineReservation(f.directory, scratch);
+    for (const mutation of ['mixed', 'bytes', 'mode', 'inode', 'duplicate'] as const) {
+      const snapshot = structuredClone(saved);
+      if (mutation === 'duplicate') snapshot.files.push(snapshot.files[0]!);
+      assert.throws(() =>
+        comparePhysicalFiles(snapshot, (path) => {
+          const original = saved.files.find((file) => file.path === path)!;
+          const current = structuredClone(original);
+          current.identity[0] = String(BigInt(original.identity[0]!) + 100n);
+          if (path === saved.files[1]!.path) {
+            if (mutation === 'mixed') current.identity[0] = original.identity[0]!;
+            if (mutation === 'bytes') current.bytes += 'AAAA';
+            if (mutation === 'mode') current.identity[3] = '0';
+            if (mutation === 'inode') current.identity[1] = '1';
+          }
+          return current;
+        }),
+      );
+    }
+  } finally {
+    f.close();
+  }
+});
+
+test('same-boot device mismatch cannot acquire administrative cross-boot authority', async () => {
+  const f = historicalFixture();
+  const namespace = deviceNamespace();
+  try {
+    const captured = await f.captureHistorical();
+    namespace.enable();
+    await assert.rejects(f.recovery.release(captured.bundle));
+    assert.equal(f.reviews.length, 1);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+  } finally {
+    namespace.restore();
+    f.close();
+  }
+});
+
+for (const action of ['abort', 'continueCapture'] as const) {
+  test(`cross-boot physical archive admission cannot authorize ${action}`, async () => {
+    const f = historicalFixture();
+    const namespace = deviceNamespace();
+    try {
+      const captured = await f.captureHistorical();
+      f.changeBoot();
+      namespace.enable();
+      const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+      await assert.rejects(recovery[action](captured.bundle));
+      assert.equal(f.reviews.length, 1);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+    } finally {
+      namespace.restore();
+      f.close();
+    }
+  });
+}

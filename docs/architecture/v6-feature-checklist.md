@@ -554,3 +554,20 @@ future owner preservation afterward. No native/provider/kernel acceptance added.
       complete native detail transport implemented over final 744 service freeze.
 - [ ] Serial joint review, commit-point TTL correction, package and actual native
       external-fence/focus/scrolling/operator acceptance; no real acceptance implied.
+
+## Cross-boot administrative device difference — source contract
+
+The offline-only snapshot may contain `physicalDifference` in its current RAW:
+a single declared historical/current device pair and current enrollment critical
+metadata. Historical signed bytes, all other preserved file metadata and complete
+enrollment digests must still agree. Existing fresh native review explicitly
+authorizes archiving the exact reservation without asserting filesystem/volume
+continuity; existing release and final-commit signatures remain separate.
+Launch/claim rules and future-owner cleanup boundaries stay unchanged.
+See [the executable contract, research and pending acceptance](../research/offline-cross-boot-admission.md).
+No real-state use, native UI, build or provider acceptance is claimed here.
+
+- [x] Executable cross-boot device-difference path, exact signed historical
+      projection and current physical RAW; 291 focused synthetic cases, lint/types.
+- [ ] Owner acceptance of the changed administrative meaning and native review.
+- [ ] Real-state recovery and CLI → model → Open acceptance; not performed here.
