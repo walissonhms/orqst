@@ -48,8 +48,12 @@ test('compact chrome keeps stop visible and advanced controls in the pane disclo
   const details = html.indexOf('<details class="session-details">');
   const process = html.indexOf('<section class="process-controls"');
   assert.ok(menu < details && details < process);
-  assert.ok(html.indexOf('id="stop"') > process);
-  for (const id of ['kill', 'instance', 'terminal-identity', 'login']) {
+  const view = html.indexOf('pane-view-actions');
+  const proc = html.indexOf('pane-process-actions');
+  assert.ok(view > 0 && proc > view);
+  assert.ok(html.indexOf('id="stop"') > proc);
+  assert.ok(html.indexOf('id="kill"') > proc);
+  for (const id of ['instance', 'terminal-identity', 'login']) {
     assert.ok(html.indexOf(`id="${id}"`) > details);
     assert.ok(html.indexOf(`id="${id}"`) < process);
   }

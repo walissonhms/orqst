@@ -56,6 +56,16 @@ export function terminalDocument(options: {
         <p class="muted">${text('layoutHelp')}</p>
         <p class="muted">${text('floatingUnavailable')}</p>
       </details>
+      <div class="pane-actions" aria-label="${text('paneActions')}">
+        <div class="pane-view-actions" role="group" aria-label="${text('viewGroup')}">
+          <p class="muted">${text('viewGroupHelp')}</p>
+          <button id="hide-pane">${text('hideView')}</button>${button('detach')}
+        </div>
+        <div class="pane-process-actions" role="group" aria-label="${text('processGroup')}">
+          <p class="muted">${text('processGroupHelp')}</p>
+          ${button('stop')}${button('kill')}
+        </div>
+      </div>
       <details class="session-details"><summary>${text('details')}</summary>
         <p class="project"><span>${text('projectLabel')}</span> <bdi>${escapeHTML(options.project)}</bdi></p>
         <p>${text(options.scope)}</p><p>${text('cliVersion')}: ${escapeHTML(options.version)}</p>
@@ -63,13 +73,13 @@ export function terminalDocument(options: {
         <p>${text('terminalIdentity')}: <code id="terminal-identity">${escapeHTML(options.terminalId ?? '—')}</code></p>
         <p>${text('identity')}: <code id="instance">—</code></p>
         <p>${text('permissionHelp')}</p><p>${text('hideHelp')}</p>
-        <p>${text('forceStopHelp')}</p>${button('kill')}${button('login')}
+        <p>${text('forceStopHelp')}</p>${button('login')}
       </details>
     </div>
   </details>
 </header>
 <section class="process-controls" aria-label="${text('processControls')}">
-  <div class="action-row">${['start', 'attach', 'input', 'detach', 'stop'].map(button).join('')}</div>
+  <div class="action-row">${['start', 'attach', 'input'].map(button).join('')}</div>
   <p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>
 </section>
 <p id="status" data-blocked="${options.blocker ? 'true' : 'false'}" role="status" aria-live="polite" data-authorization="${text('authorization')}" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required', 'unavailable', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(key)}"`).join(' ')}>${text(options.blocker ?? (options.nativeAuthentication ? 'reuseIdle' : 'idle'))}</p>

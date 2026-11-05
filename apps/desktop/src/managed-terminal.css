@@ -346,3 +346,26 @@ main[data-next='typing'] #status[data-feedback='info'] {
   overflow: hidden;
   clip-path: inset(50%);
 }
+
+.pane-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+.pane-view-actions,
+.pane-process-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--orqst-border, #262334);
+  border-radius: 6px;
+}
+.pane-view-actions .muted,
+.pane-process-actions .muted {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11px;
+}

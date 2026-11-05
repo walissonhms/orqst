@@ -731,9 +731,9 @@
     "start": "Start CLI",
     "attach": "Connect output",
     "input": "Enable keyboard input",
-    "detach": "Disconnect output",
-    "stop": "Stop process",
-    "kill": "Force stop process…",
+    "detach": "Disconnect output (process continues)",
+    "stop": "Stop (SIGTERM; exit not guaranteed)",
+    "kill": "Terminate (force; destructive)",
     "idle": "No owned process started. This optional profile uses a separate login; existing login reuse is unavailable.",
     "denied": "Denied, input expired, or configuration/authentication changed. Enable input again if needed.",
     "cancelled": "Native confirmation cancelled.",
@@ -817,7 +817,13 @@
     "unavailable": "Native transport unavailable. Keyboard input is disabled; process state is unconfirmed.",
     "openingIncomplete": "Opening is incomplete. The process attempt is retained. Inspect its state and connect output or keyboard for this same instance; no new Start was attempted.",
     "guide_openingIncomplete": "The attempt identity was retained but its current state is unavailable. Refresh this instance; do not start another process or remove its reservation.",
-    "authorization": "Authorize local CLI to continue."
+    "authorization": "Authorize local CLI to continue.",
+    "hideView": "Hide view (process continues)",
+    "paneActions": "Pane actions",
+    "viewGroup": "View only",
+    "viewGroupHelp": "These actions never signal or stop the owned process.",
+    "processGroup": "Process",
+    "processGroupHelp": "These actions signal the owned process. Stop sends SIGTERM and exit is not guaranteed; Terminate forces SIGKILL and can lose work."
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",

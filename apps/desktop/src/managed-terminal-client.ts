@@ -7,6 +7,7 @@ import type {
   TerminalNativeWireReply,
 } from '@orqst/protocol';
 import { terminalNativeReplySchema } from '@orqst/protocol';
+import { paneActionRequest } from './pane-actions.js';
 
 const client = (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal;
 const status = document.querySelector<HTMLElement>('#status')!;
@@ -341,14 +342,10 @@ for (const action of actions) {
       }
       if (!instanceId) return;
       if (action === 'input' && gap) return;
-      if (action === 'stop' || action === 'kill')
-        await send({
-          version: 1,
-          action: 'stop',
-          instanceId,
-          signal: action === 'kill' ? 'SIGKILL' : 'SIGTERM',
-        });
-      else await send({ version: 1, action, instanceId });
+      const mapped = paneActionRequest(action);
+      if (mapped?.action === 'stop')
+        await send({ version: 1, action: 'stop', instanceId, signal: mapped.signal });
+      else if (mapped) await send({ version: 1, action: mapped.action, instanceId });
     } finally {
       actionPending = false;
       updateButtons();
