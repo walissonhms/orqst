@@ -129,9 +129,12 @@ export function terminalFile(
   }
 }
 
+/** Finite native-file budget: reviewed standalone CLIs can exceed 256 MiB. */
+export const terminalExecutableMaximumBytes = 512 * 1024 * 1024;
+
 /** Bounded native executable hash; never execute a version/authentication command. */
 export function terminalExecutableSha256(path: string): string {
-  const fd = openTerminalFile(path, false, 256 * 1024 * 1024);
+  const fd = openTerminalFile(path, false, terminalExecutableMaximumBytes);
   try {
     if (!(fstatSync(fd).mode & 0o111)) throw new Error('Terminal file is not executable');
     const chunk = Buffer.alloc(64 * 1024);
@@ -150,7 +153,8 @@ export function terminalExecutableSha256(path: string): string {
         throw new Error('Select a native Mach-O executable, not a shell or JavaScript shim');
       hash.update(chunk.subarray(0, bytes));
       position += bytes;
-      if (position > 256 * 1024 * 1024) throw new Error('Terminal executable too large');
+      if (position > terminalExecutableMaximumBytes)
+        throw new Error('Terminal executable too large');
     }
     if (!position) throw new Error('Empty terminal executable');
     return hash.digest('hex');
