@@ -43,6 +43,8 @@ interface Props {
   onToggleMaximize: () => void;
   onTogglePin: () => void;
   onFullScreen: () => void;
+  /** Lets a native host hide terminal views while the menu covers them. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 const format = (value: number | undefined) => {
@@ -62,12 +64,16 @@ export function PaneMenu({
   onToggleMaximize,
   onTogglePin,
   onFullScreen,
+  onOpenChange,
 }: Props) {
   const { t } = useTranslation();
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const openChange = useRef(onOpenChange);
+  openChange.current = onOpenChange;
+  useEffect(() => openChange.current?.(open), [open]);
 
   useLayoutEffect(() => {
     if (!open || !button.current) return;

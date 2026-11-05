@@ -25,6 +25,9 @@ import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
+import { TerminalStudio } from './TerminalStudio.js';
+import { arrangeRequest, studioTerminals, type NativePaneLayout } from './studio-native.js';
+import type { ArrangementMode } from './terminal-arrangement.js';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -101,6 +104,38 @@ export function FeatureWorkspace({
     [selected, t],
   );
 
+  const studio = nativeWorkspace && !canvas;
+  const hasSnapshot = !!snapshot;
+  const terminals = useMemo(
+    () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
+    [studio, snapshot, panes, evidence, now],
+  );
+  const arranging = useRef<{ layout: NativePaneLayout[]; mode: ArrangementMode } | null>(null);
+  /** Send the Studio geometry to native views; the bridge keeps only the latest frame. */
+  const arrange = useCallback(
+    (layout: NativePaneLayout[], mode: ArrangementMode) => {
+      arranging.current = { layout, mode };
+      const live = current.current;
+      if (!native?.arrange || !live) return;
+      const wide = window.innerWidth > 720;
+      const viewport = {
+        width: window.innerWidth - (wide ? 155 : 46),
+        height: window.innerHeight - 81 - 34,
+      };
+      const memberIds = live.slots
+        .filter((slot) => terminals.some((terminal) => terminal.id === slot.terminalId))
+        .map((slot) => slot.terminalId);
+      void native
+        .arrange({
+          ...arrangeRequest(live, memberIds, layout, mode, viewport),
+          contractVersion: 1,
+          generation: live.generation,
+        })
+        .catch(() => setNotice('unavailable'));
+    },
+    [native, terminals],
+  );
+
   const request = useCallback(
     async (action: Action) => {
       if (!native || working.current) return;
@@ -162,7 +197,7 @@ export function FeatureWorkspace({
     };
   }, [request]);
   useEffect(() => {
-    if (!canvas || !native) return;
+    if (!(canvas || (nativeWorkspace && hasSnapshot)) || !native) return;
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
     const refresh = window.setInterval(() => {
       void request({ action: 'snapshot' });
@@ -172,7 +207,7 @@ export function FeatureWorkspace({
       window.clearInterval(clock);
       window.clearInterval(refresh);
     };
-  }, [canvas, native, request]);
+  }, [canvas, native, request, nativeWorkspace, hasSnapshot]);
   useEffect(() => {
     const blocked = (event: Event) =>
       setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));
@@ -570,18 +605,22 @@ export function FeatureWorkspace({
           >
             {t('canvas.title')}
           </button>
-          <button
-            disabled={busy || !available.length}
-            onClick={() => void request({ action: 'organize', command: 'columns-2' })}
-          >
-            ▦ {t('features.grid')}
-          </button>
-          <button
-            disabled={busy || !available.length}
-            onClick={() => void request({ action: 'organize', command: 'show-all' })}
-          >
-            ↺ {t('features.restore')}
-          </button>
+          {!studio && (
+            <>
+              <button
+                disabled={busy || !available.length}
+                onClick={() => void request({ action: 'organize', command: 'columns-2' })}
+              >
+                ▦ {t('features.grid')}
+              </button>
+              <button
+                disabled={busy || !available.length}
+                onClick={() => void request({ action: 'organize', command: 'show-all' })}
+              >
+                ↺ {t('features.restore')}
+              </button>
+            </>
+          )}
           <button disabled title={t('features.delegationUnavailable')}>
             ↗ {t('features.delegate')}
           </button>
@@ -594,135 +633,178 @@ export function FeatureWorkspace({
           </button>
         </div>
       </header>
-      {canvas ? (
-        <nav className="feature-terminalbar canvas-feature-tabs" aria-label={t('features.heading')}>
-          {snapshot?.features.map((feature) => (
-            <button
-              key={feature.featureId}
-              className={snapshot.activeFeatureId === feature.featureId ? 'active' : ''}
-              aria-pressed={snapshot.activeFeatureId === feature.featureId}
-              disabled={busy}
-              onClick={() =>
+      {studio ? (
+        <div className="feature-studio">
+          {available.length === 0 ? (
+            <div className="feature-empty">
+              <h1>{t('studio.setupTitle')}</h1>
+              <p>{t(selected ? 'features.empty' : 'features.noUnassigned')}</p>
+              {canPrepare && (
+                <button disabled={busy} onClick={() => void prepare()}>
+                  {t('studio.prepareTerminals')}
+                </button>
+              )}
+            </div>
+          ) : (
+            <TerminalStudio
+              storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
+              terminals={terminals}
+              messages={[]}
+              renderBody={() => <div className="ts-hole" aria-hidden="true" />}
+              onNewTerminal={canPrepare ? () => void prepare() : undefined}
+              native={{ onLayout: arrange, overlayOpen: !!editor || !!renamePane || quitFence }}
+              onOrchestratorChange={(terminalId) =>
+                selected &&
                 void request({
-                  action: 'select',
-                  featureId: feature.featureId,
-                  expectedRevision: snapshot.view.revision,
+                  action: 'update',
+                  featureId: selected.featureId,
+                  input: {
+                    expectedRevision: selected.revision,
+                    orchestratorTerminalId: terminalId,
+                  },
                 })
               }
-            >
-              {feature.name}
-              {canvasAgents.some(
-                (agent) =>
-                  agent.featureId === feature.featureId &&
-                  agent.session?.status === 'waiting_for_user',
-              ) && (
-                <span
-                  className="canvas-attention-dot"
-                  aria-label={t('canvas.needs', { count: 1 })}
-                />
-              )}
-            </button>
-          ))}
-          <button
-            className={!selected ? 'active' : ''}
-            disabled={busy || !snapshot}
-            aria-pressed={!selected}
-            onClick={() =>
-              snapshot &&
-              void request({
-                action: 'select',
-                featureId: null,
-                expectedRevision: snapshot.view.revision,
-              })
-            }
-          >
-            {t('features.unassigned')}
-          </button>
-        </nav>
-      ) : nativeWorkspace ? (
-        <TerminalWorkspaceBar
-          panes={panes.filter((pane) => available.some((entry) => entry.slot === pane.slot))}
-          busy={busy || quitFence}
-          onCommand={paneCommand}
-          onRename={editPane}
-          onMove={movePane}
-          onPrepare={canPrepare ? () => void prepare() : undefined}
-        />
+            />
+          )}
+        </div>
       ) : (
-        <div className="feature-terminalbar" />
-      )}
-      <div className="feature-surface">
-        {canvas ? (
-          <FeatureCanvas
-            key={selected?.featureId ?? 'unassigned'}
-            agents={canvasAgents.filter((agent) =>
-              agent.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-            )}
-            groups={canvasGroups}
-            busy={busy || quitFence}
-            onOpen={(agent) => paneCommand(agent.slot, 'focus')}
-            onPrepare={canPrepare ? () => void prepare() : undefined}
-          />
-        ) : canPrepare && !available.length ? (
-          <div className="feature-empty">
-            <h1>{t('studio.setupTitle')}</h1>
-            <p>{t('features.noUnassigned')}</p>
-            <button disabled={busy} onClick={() => void prepare()}>
-              {t('studio.prepareTerminals')}
-            </button>
-          </div>
-        ) : !available.length ? (
-          <p>
-            {t(
-              selected
-                ? selected.terminalIds.length
-                  ? 'features.noAvailableMembers'
-                  : 'features.empty'
-                : 'features.noUnassigned',
-            )}
-          </p>
-        ) : null}
-        {!canvas && !nativeWorkspace && available.length > 0 && (
-          <div>
-            <p>{t('features.nativeView')}</p>
-            <ul>
-              {available.map((slot) => (
-                <li key={slot.terminalId}>
-                  <strong>
-                    {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
-                  </strong>{' '}
-                  <code>{slot.terminalId}</code>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-      <footer className="feature-bottom">
-        {canvas ? (
-          <CanvasStatusBar agents={canvasAgents} connected={!!snapshot && !notice && !busy} />
-        ) : nativeWorkspace && dock.length > 0 ? (
-          <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
-            <span className="feature-dock-label">{t('features.dockLabel')}</span>
-            {dock
-              .filter((pane) => available.some((entry) => entry.slot === pane.slot))
-              .map((pane) => (
+        <>
+          {canvas ? (
+            <nav
+              className="feature-terminalbar canvas-feature-tabs"
+              aria-label={t('features.heading')}
+            >
+              {snapshot?.features.map((feature) => (
                 <button
-                  key={pane.slot}
-                  type="button"
-                  disabled={busy || quitFence}
-                  onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
-                  title={t('features.dockRestore', { name: pane.label })}
+                  key={feature.featureId}
+                  className={snapshot.activeFeatureId === feature.featureId ? 'active' : ''}
+                  aria-pressed={snapshot.activeFeatureId === feature.featureId}
+                  disabled={busy}
+                  onClick={() =>
+                    void request({
+                      action: 'select',
+                      featureId: feature.featureId,
+                      expectedRevision: snapshot.view.revision,
+                    })
+                  }
                 >
-                  ▣ {pane.label}
+                  {feature.name}
+                  {canvasAgents.some(
+                    (agent) =>
+                      agent.featureId === feature.featureId &&
+                      agent.session?.status === 'waiting_for_user',
+                  ) && (
+                    <span
+                      className="canvas-attention-dot"
+                      aria-label={t('canvas.needs', { count: 1 })}
+                    />
+                  )}
                 </button>
               ))}
+              <button
+                className={!selected ? 'active' : ''}
+                disabled={busy || !snapshot}
+                aria-pressed={!selected}
+                onClick={() =>
+                  snapshot &&
+                  void request({
+                    action: 'select',
+                    featureId: null,
+                    expectedRevision: snapshot.view.revision,
+                  })
+                }
+              >
+                {t('features.unassigned')}
+              </button>
+            </nav>
+          ) : nativeWorkspace ? (
+            <TerminalWorkspaceBar
+              panes={panes.filter((pane) => available.some((entry) => entry.slot === pane.slot))}
+              busy={busy || quitFence}
+              onCommand={paneCommand}
+              onRename={editPane}
+              onMove={movePane}
+              onPrepare={canPrepare ? () => void prepare() : undefined}
+            />
+          ) : (
+            <div className="feature-terminalbar" />
+          )}
+          <div className="feature-surface">
+            {canvas ? (
+              <FeatureCanvas
+                key={selected?.featureId ?? 'unassigned'}
+                agents={canvasAgents.filter((agent) =>
+                  agent.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+                )}
+                groups={canvasGroups}
+                busy={busy || quitFence}
+                onOpen={(agent) => paneCommand(agent.slot, 'focus')}
+                onPrepare={canPrepare ? () => void prepare() : undefined}
+              />
+            ) : canPrepare && !available.length ? (
+              <div className="feature-empty">
+                <h1>{t('studio.setupTitle')}</h1>
+                <p>{t('features.noUnassigned')}</p>
+                <button disabled={busy} onClick={() => void prepare()}>
+                  {t('studio.prepareTerminals')}
+                </button>
+              </div>
+            ) : !available.length ? (
+              <p>
+                {t(
+                  selected
+                    ? selected.terminalIds.length
+                      ? 'features.noAvailableMembers'
+                      : 'features.empty'
+                    : 'features.noUnassigned',
+                )}
+              </p>
+            ) : null}
+            {!canvas && !nativeWorkspace && available.length > 0 && (
+              <div>
+                <p>{t('features.nativeView')}</p>
+                <ul>
+                  {available.map((slot) => (
+                    <li key={slot.terminalId}>
+                      <strong>
+                        {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
+                      </strong>{' '}
+                      <code>{slot.terminalId}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        ) : (
-          <span>{t('features.members', { count: members.length })}</span>
-        )}
-        <span>{t(snapshot?.layoutSaved ? 'features.layoutSaved' : 'features.layoutUnsaved')}</span>
-      </footer>
+          <footer className="feature-bottom">
+            {canvas ? (
+              <CanvasStatusBar agents={canvasAgents} connected={!!snapshot && !notice && !busy} />
+            ) : nativeWorkspace && dock.length > 0 ? (
+              <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
+                <span className="feature-dock-label">{t('features.dockLabel')}</span>
+                {dock
+                  .filter((pane) => available.some((entry) => entry.slot === pane.slot))
+                  .map((pane) => (
+                    <button
+                      key={pane.slot}
+                      type="button"
+                      disabled={busy || quitFence}
+                      onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
+                      title={t('features.dockRestore', { name: pane.label })}
+                    >
+                      ▣ {pane.label}
+                    </button>
+                  ))}
+              </div>
+            ) : (
+              <span>{t('features.members', { count: members.length })}</span>
+            )}
+            <span>
+              {t(snapshot?.layoutSaved ? 'features.layoutSaved' : 'features.layoutUnsaved')}
+            </span>
+          </footer>
+        </>
+      )}
       {(quitWait || quitFence) && (
         <div className="quit-blocked" role="alert">
           <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>

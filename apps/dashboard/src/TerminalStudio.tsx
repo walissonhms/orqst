@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AtSign,
@@ -56,6 +64,7 @@ import {
   type PlacedPane,
   type Rect,
 } from './terminal-arrangement';
+import type { NativePaneLayout } from './studio-native';
 import { PaneMenu, type AccountOption, type PaneAction, type PaneActionType } from './PaneMenu';
 import { TerminalDetails } from './TerminalDetails';
 import { MentionComposer, type DeliveryState, type MentionSend } from './MentionComposer';
@@ -124,6 +133,15 @@ interface Props {
   /** Local storage key for the arrangement of this Feature. */
   storageKey: string;
   now?: number;
+  /**
+   * Native host: terminals are native views placed over `.ts-body` holes. The Studio
+   * reports each hole's rectangle (relative to the stage) and hides all of them while
+   * any overlay would be covered by native views.
+   */
+  native?: {
+    onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) => void;
+    overlayOpen?: boolean;
+  };
   /** CLI accounts available for switching. */
   accounts?: AccountOption[];
   /** Actions the host can perform today; others are shown disabled. */
@@ -335,12 +353,14 @@ export function TerminalStudio({
   supportedActions = [],
   onTerminalAction,
   accountSuggestions = [],
+  native,
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
   const [composer, setComposer] = useState<{ from: string | null } | null>(null);
   const [details, setDetails] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const supported = useMemo(
@@ -717,6 +737,41 @@ export function TerminalStudio({
     return handles;
   })();
 
+  // Native host: report each PTY hole after layout; hide all while an overlay is open.
+  const covered = !!native && (menuOpen > 0 || !!details || !!native.overlayOpen);
+  const lastLayout = useRef('');
+  const nativeLayout = useRef(native?.onLayout);
+  nativeLayout.current = native?.onLayout;
+  useLayoutEffect(() => {
+    if (!nativeLayout.current) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const origin = stage.getBoundingClientRect();
+    const layout: NativePaneLayout[] = placed.map((pane) => {
+      const hole = stage.querySelector<HTMLElement>(
+        `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
+      );
+      const box = hole?.getBoundingClientRect();
+      return {
+        id: pane.id,
+        z: drag?.id === pane.id ? 255 : pane.z,
+        rect:
+          covered || !box || box.width < 1 || box.height < 1
+            ? null
+            : {
+                x: box.left - origin.left,
+                y: box.top - origin.top,
+                width: box.width,
+                height: box.height,
+              },
+      };
+    });
+    const key = JSON.stringify([scoped.mode, layout]);
+    if (key === lastLayout.current) return;
+    lastLayout.current = key;
+    nativeLayout.current(layout, scoped.mode);
+  });
+
   const style = linkStyle(scoped);
   const links =
     style === 'focus'
@@ -745,7 +800,7 @@ export function TerminalStudio({
 
   return (
     <section
-      className={`ts-root${fullScreen ? ' ts-fullscreen' : ''}`}
+      className={`ts-root${fullScreen ? ' ts-fullscreen' : ''}${native ? ' ts-native' : ''}`}
       aria-label={t('terminalStudio.title')}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && fullScreen) {
@@ -1028,6 +1083,9 @@ export function TerminalStudio({
                     }
                     onToggleMaximize={() => setState((current) => toggleMaximize(current, pane.id))}
                     onTogglePin={() => setState((current) => togglePin(current, pane.id))}
+                    onOpenChange={(open) =>
+                      setMenuOpen((count) => Math.max(0, count + (open ? 1 : -1)))
+                    }
                     onFullScreen={() => {
                       setState((current) => ({ ...current, maximized: pane.id }));
                       setFullScreen(true);
@@ -1115,7 +1173,11 @@ export function TerminalStudio({
                   </div>
                 );
               })()}
-              {pane.compact ? null : <div className="ts-body">{renderBody(terminal)}</div>}
+              {pane.compact ? null : (
+                <div className="ts-body" data-terminal-id={pane.id}>
+                  {renderBody(terminal)}
+                </div>
+              )}
               {state.mode === 'free' &&
                 !isMax &&
                 edges.map((edge) => (

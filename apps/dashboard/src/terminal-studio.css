@@ -1015,3 +1015,53 @@
     padding: 0 4px;
   }
 }
+
+/* Native host: terminals are native views over the .ts-body holes. */
+.ts-native .ts-pane {
+  transition: none;
+}
+.ts-native .ts-body {
+  background: transparent;
+}
+.ts-native .ts-stage {
+  margin: 0;
+}
+.ts-native .ts-toolbar {
+  height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.ts-native .ts-modes button {
+  height: 24px;
+}
+.ts-native .ts-dock {
+  height: 34px;
+}
+/* Overlays would sit under native views: keep them in the chrome rows. */
+.ts-native .ts-toasts {
+  position: static;
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  max-width: none;
+}
+.ts-native .ts-notice {
+  min-width: 0;
+  padding: 2px 6px 2px 8px;
+  box-shadow: none;
+}
+.ts-native .ts-notice-text {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.ts-native .ts-toast {
+  padding: 2px 8px;
+  box-shadow: none;
+}
+.ts-native .mc-suggest {
+  position: static;
+  width: 100%;
+  margin-top: 6px;
+  box-shadow: none;
+}
