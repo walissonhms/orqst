@@ -183,7 +183,8 @@ pub fn shutdown_step(status: Option<&str>) -> QuitStep {
         Some("ready") => QuitStep::Retire,
         Some("exited_retirement_unavailable") => QuitStep::ClosePreserved,
         Some("uncertain") => QuitStep::Blocked("uncertain"),
-        Some("busy") => QuitStep::Blocked("busy"),
+        Some("refused_prefence") => QuitStep::Blocked("refused_prefence"),
+        Some("fenced") => QuitStep::Blocked("fenced"),
         Some("denied") => QuitStep::Blocked("denied"),
         _ => QuitStep::Blocked("transport"),
     }
@@ -293,7 +294,11 @@ mod tests {
             Q::ClosePreserved
         );
         assert_eq!(shutdown_step(Some("uncertain")), Q::Blocked("uncertain"));
-        assert_eq!(shutdown_step(Some("busy")), Q::Blocked("busy"));
+        assert_eq!(
+            shutdown_step(Some("refused_prefence")),
+            Q::Blocked("refused_prefence")
+        );
+        assert_eq!(shutdown_step(Some("fenced")), Q::Blocked("fenced"));
         assert_eq!(shutdown_step(Some("denied")), Q::Blocked("denied"));
         assert_eq!(shutdown_step(Some("made-up")), Q::Blocked("transport"));
         assert_eq!(shutdown_step(None), Q::Blocked("transport"));
@@ -306,7 +311,7 @@ mod tests {
     }
 
     #[test]
-    fn only_a_busy_or_denied_pre_fence_reply_rolls_back() {
+    fn only_an_explicit_pre_fence_reply_rolls_back() {
         let host = active();
         host.shutdown_started();
         assert!(host.rollback_busy());

@@ -208,7 +208,7 @@ impl Coordinator {
             }
             QuitStep::Blocked(reason) => {
                 // Only an authenticated pre-fence refusal reopens presentation.
-                if reason == "busy" || reason == "denied" {
+                if reason == "refused_prefence" {
                     self.host.rollback_busy();
                 }
                 self.blocked(exit, reason, uncertain);

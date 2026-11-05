@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
   renameSync,
+  writeFileSync,
   openSync,
   fsyncSync,
   constants,
@@ -826,4 +827,112 @@ test('pending warning descriptors round-trip through the public catalog without 
   });
   assert.deepEqual(parsed.pendingOwnedExits, pendingOwnedExits);
   assert.equal(JSON.stringify(parsed.pendingOwnedExits).includes('epoch'), false);
+});
+
+test('real service retries stay fenced during retirement and after a possibly consumed proof', async () => {
+  const transcripts: unknown[] = [];
+  for (const hold of ['prepare', 'retire'] as const) {
+    const f = coreFixture();
+    try {
+      await f.start();
+      let release!: () => void;
+      let entered!: () => void;
+      const waiting = new Promise<void>((resolve) => (release = resolve));
+      const started = new Promise<void>((resolve) => (entered = resolve));
+      let preparations = 0;
+      const messages: Array<Record<string, unknown>> = [];
+      const service = new TauriTerminalService(
+        [
+          Object.fromEntries(
+            terminalRPCSchema.options.map((schema) => {
+              const operation = schema.shape.operation.value;
+              return [operation, (...args: unknown[]) => f.dispatch(operation, args)];
+            }),
+          ) as TerminalNativeSupervisor,
+        ],
+        f.keys,
+        (m) => messages.push(m as Record<string, unknown>),
+        (key) => key,
+        undefined,
+        {
+          epoch: f.authority.epoch,
+          beginOwnedShutdown: async () => f.pair.ownedShutdownInventory(),
+          prepareRetire: async () => {
+            preparations++;
+            if (hold === 'prepare' && preparations > 1) {
+              entered();
+              await waiting;
+              throw new Error('Synthetic retirement preparation failure');
+            }
+            return f.pair.prepareRetire();
+          },
+          retire: async () => {
+            entered();
+            await waiting;
+            throw new Error('Synthetic proof ACK loss');
+          },
+          closeAndWait: async () => {},
+        },
+      );
+      const request = async (kind: string) => {
+        const id = randomUUID();
+        await service.receive({ kind, id });
+        return messages.find((m) => m.id === id)!;
+      };
+      const ready = await request('shutdownOwned');
+      assert.equal(ready.status, 'ready');
+      assert.equal(f.signals(), 1);
+      const retirementId = randomUUID();
+      const retiring = service.receive({ kind: 'retireOwned', id: retirementId });
+      await started;
+      // Models the parent's 8s timeout while the real service operation is unresolved.
+      const busyRetry = await request('shutdownOwned');
+      assert.equal(busyRetry.status, 'fenced');
+      assert.equal(service.fenced(), true);
+      assert.equal(f.signals(), 1);
+      release();
+      await retiring;
+      const denied = messages.find((m) => m.id === retirementId)!;
+      assert.equal(denied.status, 'denied');
+      assert.equal(denied.fenced, hold === 'retire');
+      const retry = await request('shutdownOwned');
+      assert.equal(retry.status, hold === 'retire' ? 'fenced' : 'uncertain');
+      assert.equal(service.fenced(), true);
+      assert.equal(f.signals(), 1);
+      transcripts.push({
+        hold,
+        ready,
+        busyRetry,
+        denied,
+        retry,
+        nodeFenced: service.fenced(),
+        signals: f.signals(),
+      });
+      service.close();
+    } finally {
+      f.cleanup();
+    }
+  }
+  // Optional cross-language test artifact, outside the repository and never production activity.
+  if (process.env.ORQST_QUIT_NODE_TRANSCRIPT)
+    writeFileSync(process.env.ORQST_QUIT_NODE_TRANSCRIPT, JSON.stringify(transcripts), {
+      mode: 0o600,
+    });
+});
+
+test('only a lifetime pre-fence refusal permits rollback', async () => {
+  const service = new TauriTerminalService(
+    [],
+    generateKeyPairSync('ed25519'),
+    (m) => messages.push(m),
+    (k) => k,
+  );
+  const messages: object[] = [];
+  const id = randomUUID();
+  await service.receive({ kind: 'shutdownOwned', id });
+  assert.deepEqual(messages, [
+    { kind: 'owned-shutdown', id, status: 'refused_prefence', uncertain: [] },
+  ]);
+  assert.equal(service.fenced(), false);
+  service.close();
 });

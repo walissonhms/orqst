@@ -153,3 +153,23 @@ Node filesystem/crypto, provider process drivers and the socket server; none are
 introduced here. The existing Tucano permission/routing review remains applicable
 without a new communication layer. No external source/assets or dependencies are
 incorporated, and no attribution or license metadata changes are needed.
+
+## 2026-11-05 — Quit review corrections: refusal boundary
+
+`TauriTerminalService` emits `refused_prefence` only before its lifetime shutdown
+fence and before retirement is busy/fenced. The production Coordinator rolls back
+only for this explicit correlated status. The real Node service tests hold both
+retirement preparation and a possibly consumed proof, retry shutdown, then deny
+the held operation. They assert that the Node fence and one-signal latch survive.
+With `ORQST_QUIT_NODE_TRANSCRIPT` set to a disposable absolute file, the focused
+Node test records these real-service replies; the Rust circuit test replays them
+through the production Coordinator, advances its manual 8s deadline during retire
+and asserts `ShutdownInFlight` throughout. This is cross-language transcript
+integration with synthetic Core handles, not a live pipe/AppKit/provider test.
+
+The previous pinned Anywh review was revalidated against the same checkout SHA
+`546f189c04415c3c5af5f40e3931a0a90b9aba31`: architecture, Agent Host/runtime docs,
+`AgentHost.endProcess/onExit` and `waitForTurns/close`, Apache-2.0 LICENSE (no root
+NOTICE). Decision remains **keep the existing ORQST implementation**: Anywh's
+Node process/hibernation/tree-sweep lifecycle cannot supply native Rust proof or
+focus fences. No external code, assets or dependencies were incorporated.
