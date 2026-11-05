@@ -271,6 +271,18 @@ mod tests {
         assert!(mutation_owner_exists(&identity).is_err());
     }
     #[test]
+    fn mutation_owner_tracks_a_real_child_until_reaped() {
+        let mut child = std::process::Command::new("/bin/sleep")
+            .arg("60")
+            .spawn()
+            .unwrap();
+        let identity = crate::terminal_kernel_identity::read_process(child.id()).unwrap();
+        assert!(mutation_owner_exists(&identity).unwrap());
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(!mutation_owner_exists(&identity).unwrap());
+    }
+    #[test]
     fn comparison_refuses_count_changes_and_original_session_members() {
         let entry = Process {
             pid: 7,
