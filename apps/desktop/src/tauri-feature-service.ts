@@ -149,7 +149,8 @@ export class TauriFeatureService {
     const request = parsed.data;
     const presentation = this.layout.presentationRevision();
     try {
-      if (request.action === 'select' || request.action === 'organize') await this.revoke();
+      if (['select', 'organize', 'pane', 'renamePane', 'movePane'].includes(request.action))
+        await this.revoke();
       await this.refresh();
       if (request.action !== 'snapshot' && request.generation !== this.generation)
         return { status: 'stale', snapshot: this.snapshot() };
@@ -259,16 +260,43 @@ export class TauriFeatureService {
             return { status: 'unknown' };
           }
         }
+        case 'pane':
+        case 'renamePane':
+        case 'movePane': {
+          if (presentation !== this.layout.presentationRevision())
+            throw new Error('Stale presentation');
+          const state = this.layout.snapshot();
+          if (
+            this.core.identities[request.slot]?.terminalId !== request.terminalId ||
+            !state.order.includes(request.slot)
+          )
+            return { status: 'denied' };
+          if (
+            request.action === 'movePane' &&
+            (this.core.identities[request.beforeSlot]?.terminalId !== request.beforeTerminalId ||
+              !state.order.includes(request.beforeSlot))
+          )
+            return { status: 'denied' };
+          const action =
+            request.action === 'renamePane'
+              ? { name: request.name }
+              : request.action === 'movePane'
+                ? { moveTo: request.beforeSlot }
+                : request.command;
+          if (!this.layout.workspaceAct(request.slot, action)) return { status: 'denied' };
+          await this.layout.flush();
+          this.generation++;
+          break;
+        }
         case 'organize': {
           if (presentation !== this.layout.presentationRevision())
             throw new Error('Stale presentation');
           const state = this.layout.snapshot();
           if (state.active < 0) return { status: 'denied' };
-          if (!state.visible.includes(state.active)) this.layout.open(state.active);
           const action = request.command.startsWith('columns-')
             ? { columns: Number(request.command.slice(-1)) }
             : request.command;
-          if (!this.layout.act(state.active, action)) return { status: 'denied' };
+          if (!this.layout.workspaceAct(state.active, action)) return { status: 'denied' };
           await this.layout.flush();
           this.generation++;
           break;

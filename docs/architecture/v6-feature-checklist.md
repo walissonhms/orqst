@@ -1,5 +1,18 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Terminal workspace controls — 2026-11-05 (source)
+
+- [x] Persistent native tab strip with direct focus, rename, move, minimize and maximize/restore.
+- [x] Tab drag and keyboard reorder without remounting terminal documents.
+- [x] Dock inside the reserved footer; only explicit minimized current-Feature members.
+- [x] Grid/rename/reorder/resize keep minimized panes hidden; Restore all is explicit.
+- [x] View commands bind current Feature membership and exact terminal UUID.
+- [ ] Native AppKit/WebKit acceptance of this matching executable/resource package.
+- [ ] Floating geometry, header dragging across native documents and nested split dividers.
+- [ ] Interactive N-member MCP, handle/role configuration, delegation and verified result graph.
+
+See [workflow and executable verification](../development/studio-terminal-workspace.md).
+
 ## Current human-verified milestones — 2026-11-05
 
 These narrow milestones supersede earlier pending wording only for the exact

@@ -1575,32 +1575,41 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64)
             .map(|r| (r.labels.clone(), r.providers.clone()))
             .unwrap_or_default()
     };
-    let visible: Vec<u64> = if show {
-        state["visible"]
-            .as_array()
-            .map(|items| items.iter().filter_map(Value::as_u64).collect())
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
-    let detail = dock_detail(&visible, &labels, &providers, generation);
+    let detail = workspace_detail(state, show, &labels, &providers, generation);
     let _ = chrome.eval(format!(
         "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
     ));
 }
 
-fn dock_detail(visible: &[u64], labels: &[String], providers: &[String], generation: u64) -> Value {
-    let hidden: Vec<Value> = (0..labels.len())
-        .filter(|slot| !visible.contains(&(*slot as u64)))
-        .map(|slot| {
-            json!({
-                "slot": slot,
-                "label": labels.get(slot).cloned().unwrap_or_default(),
-                "provider": providers.get(slot).cloned().unwrap_or_default(),
-            })
-        })
+/// Closed presentation projection of current Feature members only; no runtime authority.
+fn workspace_detail(
+    state: &Value,
+    show: bool,
+    labels: &[String],
+    providers: &[String],
+    generation: u64,
+) -> Value {
+    let members = if show {
+        state["order"].as_array().cloned().unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let shown = state["shown"].as_array().cloned().unwrap_or_default();
+    let visible = state["visible"].as_array().cloned().unwrap_or_default();
+    let panes: Vec<Value> = members.iter().filter_map(|entry| {
+        let slot = entry.as_u64()? as usize;
+        let fallback = labels.get(slot)?;
+        let label = state["names"][slot].as_str().filter(|s| !s.is_empty()).unwrap_or(fallback);
+        Some(json!({"slot":slot,"label":label,"provider":providers.get(slot).cloned().unwrap_or_default(),
+            "minimized":!shown.contains(entry),"visible":visible.contains(entry),"active":state["active"] == *entry,
+            "maximized":state["maximized"] == *entry}))
+    }).collect();
+    let hidden: Vec<Value> = panes
+        .iter()
+        .filter(|pane| pane["minimized"] == true)
+        .map(|pane| json!({"slot":pane["slot"],"label":pane["label"],"provider":pane["provider"]}))
         .collect();
-    json!({"hidden": hidden, "count": labels.len(), "generation": generation})
+    json!({"panes":panes,"hidden":hidden,"count":members.len(),"generation":generation})
 }
 
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
@@ -3251,8 +3260,8 @@ mod opening_tests {
 #[cfg(test)]
 mod enrollment_tests {
     use super::{
-        append_pane, dock_detail, enrollment_creation_allowed, invalidate_presentation_state,
-        valid_enrollment, OpeningIntent,
+        append_pane, enrollment_creation_allowed, invalidate_presentation_state, valid_enrollment,
+        workspace_detail, OpeningIntent,
     };
     use serde_json::json;
     use std::time::{Duration, Instant};
@@ -3301,12 +3310,44 @@ mod enrollment_tests {
             assert_eq!(documents.len(), providers.len());
         }
         assert_eq!(
-            dock_detail(&[0, 1], &labels, &providers, 7),
-            json!({"hidden":[{"slot":2,"label":"3 · OpenCode","provider":"OpenCode"}],
-                "count":3,"generation":7})
+            workspace_detail(
+                &json!({"order":[0,1,2],"shown":[0,1],"visible":[0,1],"names":["","","Backend"],"active":0,"maximized":null}),
+                true,
+                &labels,
+                &providers,
+                7
+            )["hidden"],
+            json!([{"slot":2,"label":"Backend","provider":"OpenCode"}])
         );
         assert_eq!(
-            dock_detail(&[0, 1, 2], &labels, &providers, 8)["hidden"],
+            workspace_detail(
+                &json!({"order":[0,1,2],"shown":[0,1,2],"visible":[0],"names":["","",""],"active":0,"maximized":0}),
+                true,
+                &labels,
+                &providers,
+                8
+            )["hidden"],
+            json!([])
+        );
+        let scoped = workspace_detail(
+            &json!({"order":[2,0],"shown":[0],"visible":[0],"names":["","","Backend"],"active":0,"maximized":null}),
+            true,
+            &labels,
+            &providers,
+            9,
+        );
+        assert_eq!(scoped["panes"].as_array().unwrap().len(), 2);
+        assert_eq!(scoped["panes"][0]["slot"], 2);
+        assert_eq!(scoped["panes"][0]["label"], "Backend");
+        assert_eq!(scoped["panes"][0]["minimized"], true);
+        assert_eq!(scoped["panes"][1]["slot"], 0);
+        assert!(scoped["panes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|pane| pane.get("terminalId").is_none()));
+        assert_eq!(
+            workspace_detail(&json!({"order":[0,1,2]}), false, &labels, &providers, 10)["panes"],
             json!([])
         );
     }
@@ -3366,9 +3407,9 @@ mod enrollment_tests {
         };
         let late = json!({
             "kind":"layout","generation":2,"revision":3,
-            "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":45,"bottom":34},
+            "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":81,"bottom":34},
             "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true},
-            "focus":1,"bounds":[{"slot":0,"rect":{"x":155,"y":45,"width":642,"height":821}},{"slot":1,"rect":{"x":797,"y":45,"width":643,"height":821}}]
+            "focus":1,"bounds":[{"slot":0,"rect":{"x":155,"y":81,"width":642,"height":785}},{"slot":1,"rect":{"x":797,"y":81,"width":643,"height":785}}]
         });
         let mut generation = 2;
         let mut suspended = false;

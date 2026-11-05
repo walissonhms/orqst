@@ -80,7 +80,7 @@ test('Feature resize restores the visible page without changing its three member
     () => {},
   );
   layout.resize(1440, 900);
-  // Chrome leaves 821px high: the existing 400px pane budget admits two rows.
+  // Chrome leaves 785px high: the 320px pane budget admits two rows.
   assert.deepEqual(layout.snapshot().visible, [0, 1]);
   layout.resize(720, 700);
   assert.deepEqual(layout.snapshot().visible, [0]);
@@ -89,6 +89,51 @@ test('Feature resize restores the visible page without changing its three member
   assert.deepEqual(layout.snapshot().order, [0, 1, 2]);
   assert.deepEqual(layout.snapshot().shown, [0, 1, 2]);
   assert.equal(layout.snapshot().columns, 1);
+});
+
+test('workspace tabs keep minimized panes hidden across grid, rename, resize, reorder and save ACKs', async () => {
+  const f = fixture(4);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  assert.deepEqual(f.layout.snapshot().visible, [0, 1, 2, 3]);
+  assert.equal(f.layout.workspaceAct(2, 'hide'), true);
+  assert.equal(f.layout.workspaceAct(0, 'focus'), true);
+  assert.deepEqual(f.layout.snapshot().visible, [0]);
+  assert.equal(f.layout.workspaceAct(0, { columns: 2 }), true);
+  assert.equal(f.layout.workspaceAct(2, { name: 'SYNTHETIC minimized' }), true);
+  assert.equal(f.layout.workspaceAct(2, { moveTo: 0 }), true);
+  f.layout.resize(600, 700);
+  f.layout.resize(1440, 900);
+  await f.layout.flush();
+  assert.deepEqual(f.layout.snapshot().order, [2, 0, 1, 3]);
+  assert.deepEqual(f.layout.snapshot().shown, [0, 1, 3]);
+  assert.ok(!f.layout.snapshot().visible.includes(2));
+  assert.equal(f.layout.snapshot().names[2], 'SYNTHETIC minimized');
+  assert.ok(f.messages.every((message) => message.focus === null));
+  assert.equal(f.layout.workspaceAct(2, 'focus'), true);
+  assert.deepEqual(f.layout.snapshot().visible, [2]);
+  assert.equal(f.layout.workspaceAct(2, 'restore'), true);
+  assert.deepEqual(f.layout.snapshot().visible, [2, 0, 1, 3]);
+});
+
+test('all-minimized workspace stays empty until explicit restore, and suspended/foreign/process actions are denied', () => {
+  const f = fixture(2);
+  f.layout.open(0);
+  f.layout.workspaceAct(0, 'hide');
+  f.layout.workspaceAct(1, 'hide');
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  f.layout.workspaceAct(1, { columns: 2 });
+  assert.deepEqual(f.layout.snapshot().shown, []);
+  assert.equal(f.layout.workspaceAct(1, 'show-all'), true);
+  assert.deepEqual(f.layout.snapshot().shown, [0, 1]);
+  for (const action of ['stop', 'start', { tab: 0 }, { moveTo: 7 }, { name: '\u202e' }]) {
+    const before = f.layout.snapshot();
+    assert.equal(f.layout.workspaceAct(0, action), false);
+    assert.deepEqual(f.layout.snapshot(), before);
+  }
+  assert.equal(f.layout.workspaceAct(7, 'focus'), false);
+  f.layout.suspend();
+  assert.equal(f.layout.workspaceAct(0, 'focus'), false);
 });
 
 test('passive layout updates never request native focus from the communication window', () => {

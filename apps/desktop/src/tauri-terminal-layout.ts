@@ -4,6 +4,7 @@ import {
   terminalGridPage,
   type TerminalLayoutPreferences,
   type TerminalLayoutState,
+  type TerminalViewAction,
 } from './terminal-layout.js';
 
 /** Native layout adapter only. No CLI, process, input or session recovery authority. */
@@ -53,7 +54,7 @@ export class TauriTerminalLayout {
   snapshot(): TerminalLayoutState {
     const left = this.chrome ? (this.width <= 720 ? 46 : 155) : 0;
     const width = Math.max(1, this.width - left);
-    const height = Math.max(1, this.height - (this.chrome ? 79 : 0));
+    const height = Math.max(1, this.height - (this.chrome ? 115 : 0));
     const shown = this.state.order.filter((slot) => this.state.shown.includes(slot));
     const page = terminalGridPage(
       width,
@@ -79,7 +80,7 @@ export class TauriTerminalLayout {
   private publish(focus: number | null = null): void {
     const state = this.snapshot();
     const left = this.chrome ? (this.width <= 720 ? 46 : 155) : 0;
-    const top = this.chrome ? 45 : 0;
+    const top = this.chrome ? 81 : 0;
     const bottom = this.chrome ? 34 : 0;
     const width = Math.max(1, this.width - left);
     const height = Math.max(1, this.height - top - bottom);
@@ -251,6 +252,40 @@ export class TauriTerminalLayout {
       return true;
     }
     if (!this.snapshot().visible.includes(slot)) return false;
+    return this.apply(slot, action);
+  }
+
+  /** Explicit native workspace controls may address off-page/minimized members, never processes. */
+  workspaceAct(slot: number, raw: unknown): boolean {
+    if (this.suspended || !this.state.order.includes(slot)) return false;
+    if (raw === 'focus') {
+      this.state.active = slot;
+      this.state.maximized = slot;
+      if (!this.state.shown.includes(slot)) this.state.shown.push(slot);
+      this.changed();
+      return true;
+    }
+    const action = parseTerminalViewAction(raw);
+    if (
+      !action ||
+      !(
+        ['hide', 'maximize', 'restore', 'move-earlier', 'move-later', 'show-all'].includes(
+          action as string,
+        ) ||
+        (typeof action === 'object' &&
+          ('name' in action || 'moveTo' in action || 'columns' in action))
+      ) ||
+      (typeof action === 'object' &&
+        'moveTo' in action &&
+        !this.state.order.includes(action.moveTo))
+    )
+      return false;
+    // Maximizing an explicitly selected tab restores only that pane, not other minimized panes.
+    if (action === 'maximize' && !this.state.shown.includes(slot)) this.state.shown.push(slot);
+    return this.apply(slot, action, false);
+  }
+
+  private apply(slot: number, action: TerminalViewAction, nativeFocus = true): boolean {
     const state = this.state;
     if (action === 'dashboard') {
       this.presentation++;
@@ -285,6 +320,7 @@ export class TauriTerminalLayout {
       else if (typeof action === 'object' && 'columns' in action) {
         state.columns = action.columns;
         state.axis = 'columns';
+        state.maximized = null;
       } else if (typeof action === 'object' && 'name' in action) state.names[slot] = action.name;
       else {
         const position = state.order.indexOf(slot);
@@ -298,7 +334,7 @@ export class TauriTerminalLayout {
       }
       state.active = slot;
     }
-    this.changed(action === 'hide' ? state.active : null);
+    this.changed(action === 'hide' && nativeFocus ? state.active : null);
     return true;
   }
 }

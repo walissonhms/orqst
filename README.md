@@ -1,5 +1,13 @@
 # ORQST
 
+## Retained terminal tabs — 2026-11-05
+
+Studio source now exposes persistent-view terminal tabs, direct rename/reorder/
+minimize/maximize controls and a dock inside the reserved footer. Grid preserves
+explicitly minimized panes; the dock excludes off-page and other-Feature panes.
+See [behavior, checks and remaining communication limits](docs/development/studio-terminal-workspace.md).
+Native/provider acceptance remains separate.
+
 ## Incremental terminal dock correction — 2026-11-05
 
 Source now keeps appended terminal documents, display labels and provider labels

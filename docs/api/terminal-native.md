@@ -1,5 +1,26 @@
 # Native terminal client boundary
 
+## Workspace view commands — 2026-11-05
+
+The existing `feature_request` metadata channel adds strict version-1 requests:
+`pane` with `slot`, `terminalId` and a closed `command` allowlist (focus, hide,
+maximize, restore, move-earlier/later); `renamePane` with slot/UUID/name; and
+`movePane` with both source and target slot/UUID pairs. All include the existing
+contractVersion/generation. The Core facade validates current Feature membership,
+identity, presentation, scope and persistence before acknowledging success.
+
+Security review: exact document/origin, native focus, generation, bilateral
+metadata/review exclusion and Quit fences are retained. New commands contain no
+process operation, path, executable, input text, proof or authority. The existing
+capability is unchanged; no HTTP/WS route is added. Layout controls revoke input;
+view changes never silently restore it. The 81px top inset is checked by Rust.
+
+The native dock event now also carries `panes`: ordered current-Feature entries
+with bounded display slot/label/provider and minimized/visible/active/maximized
+booleans. `hidden` means not in the validated layout shown set, not merely absent
+from the visible page. It contains no terminal UUIDs, grants or runtime proofs.
+Display names are not handles. See [workflow](../development/studio-terminal-workspace.md).
+
 ## Tauri incremental dock metadata — 2026-11-05
 
 The private Node host's initial and enrollment `pane` values include a `title`

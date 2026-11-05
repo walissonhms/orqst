@@ -105,7 +105,7 @@ export function terminalGridPage(
 ) {
   const maximumColumns = Math.max(1, Math.floor(width / 440));
   const effectiveColumns = axis === 'rows' ? 1 : Math.min(columns || 3, maximumColumns);
-  const capacity = effectiveColumns * Math.max(1, Math.floor(height / 400));
+  const capacity = effectiveColumns * (width <= 720 ? 1 : Math.max(1, Math.floor(height / 320)));
   const start = Math.floor(Math.max(0, shown.indexOf(active)) / capacity) * capacity;
   return { visible: shown.slice(start, start + capacity), columns: effectiveColumns };
 }

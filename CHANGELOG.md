@@ -1,5 +1,14 @@
 # Changelog
 
+## Studio workspace tabs and minimized-state correction — 2026-11-05
+
+- Expose retained terminal tabs with focus, rename, drag/keyboard reorder and direct
+  minimize/maximize/restore controls, bound to current Feature membership and UUID.
+- Keep the dock within the footer, distinguish minimized from off-page panes and
+  preserve hidden state through Grid, rename, reorder, resize and saves.
+- Align native/Node tab insets and keep Feature permissions in a sidebar disclosure.
+  This does not enable interactive N-member MCP, mentions or task orchestration.
+
 ## Incremental terminal minimization — 2026-11-05
 
 - Keep dock labels/providers aligned when native enrollment appends a terminal,

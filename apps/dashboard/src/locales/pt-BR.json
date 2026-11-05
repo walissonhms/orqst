@@ -1103,7 +1103,7 @@
     "stale": "Esta visão mudou. Feche a edição, atualize e revise antes de editar novamente.",
     "busy": "Uma revisão nativa ou outra edição está em andamento.",
     "archive_blocked": "Arquivamento recusado: terminais atribuídos exigem revisão de ciclo de vida. As sessões foram preservadas.",
-    "layoutUnsaved": "Salvamento do layout pendente ou não confirmado. Atualize antes de alternar.",
+    "layoutUnsaved": "Layout não salvo",
     "delegationUnavailable": "Delegação por Feature exige uma composição de runtime revisada.",
     "creationUnavailable": "Use a preparação nativa para criar/revisar terminais. Atribua apenas os slots revisados disponíveis.",
     "loading": "Carregando…",
@@ -1132,7 +1132,11 @@
       "unknown": "A gravação da política pode ter sido concluída. Leia a política atual antes de propor outra alteração.",
       "unavailable": "A edição de permissões exige o Desktop nativo atual.",
       "ok": "Policy salva."
-    }
+    },
+    "terminalTabs": "Terminais",
+    "paneControls": "Controles do terminal selecionado",
+    "tabHelp": "Selecione para focar · clique duplo ou F2 para renomear · arraste ou Alt+Seta para reordenar",
+    "layoutSaved": "Layout salvo"
   },
   "tauriCoreUnavailable": {
     "title": "Observador indisponível",

@@ -6,7 +6,14 @@ import type {
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
-import { dockGeneration, dockPanes, type DockPane } from './feature-workspace-dock.js';
+import {
+  dockGeneration,
+  dockPanes,
+  workspacePanes,
+  type DockPane,
+  type WorkspacePane,
+} from './feature-workspace-dock.js';
+import { TerminalWorkspaceBar, type PaneCommand } from './TerminalWorkspaceBar.js';
 import {
   featureNoticeAfterSnapshot,
   featureNoticeContext,
@@ -45,6 +52,13 @@ export function FeatureWorkspace({
   const [notice, setNotice] = useState('');
   const [dock, setDock] = useState<DockPane[]>([]);
   const [dockEpoch, setDockEpoch] = useState(0);
+  const [panes, setPanes] = useState<WorkspacePane[]>([]);
+  const [renamePane, setRenamePane] = useState<{
+    slot: number;
+    terminalId: string;
+    name: string;
+  } | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   const [quitFence, setQuitFence] = useState(false);
   const [editor, setEditor] = useState<WorkspaceFeature | 'new' | null>(null);
@@ -149,10 +163,40 @@ export function FeatureWorkspace({
       const detail = (event as CustomEvent<unknown>).detail;
       setDock(dockPanes(detail));
       setDockEpoch(dockGeneration(detail));
+      setPanes(workspacePanes(detail));
     };
     window.addEventListener('orqst-terminal-dock', update);
     return () => window.removeEventListener('orqst-terminal-dock', update);
   }, [nativeWorkspace]);
+  useEffect(() => {
+    if (renamePane) renameInput.current?.focus();
+  }, [renamePane?.slot]);
+
+  function paneCommand(slot: number, command: PaneCommand) {
+    const member = available.find((entry) => entry.slot === slot);
+    if (member) void request({ action: 'pane', slot, terminalId: member.terminalId, command });
+  }
+  function editPane(slot: number) {
+    const member = available.find((entry) => entry.slot === slot);
+    if (member)
+      setRenamePane({
+        slot,
+        terminalId: member.terminalId,
+        name: panes.find((pane) => pane.slot === slot)?.label ?? '',
+      });
+  }
+  function movePane(slot: number, beforeSlot: number) {
+    const member = available.find((entry) => entry.slot === slot);
+    const target = available.find((entry) => entry.slot === beforeSlot);
+    if (member && target)
+      void request({
+        action: 'movePane',
+        slot,
+        terminalId: member.terminalId,
+        beforeSlot,
+        beforeTerminalId: target.terminalId,
+      });
+  }
 
   function openEditor(feature: WorkspaceFeature | 'new') {
     editorVersion.current++;
@@ -389,6 +433,46 @@ export function FeatureWorkspace({
         >
           {t('features.refresh')}
         </button>
+        {nativeWorkspace &&
+          renamePane &&
+          available.some((entry) => entry.terminalId === renamePane.terminalId) && (
+            <form
+              className="feature-pane-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const editing = renamePane;
+                void request({ action: 'renamePane', ...editing }).then((result) => {
+                  if (result === 'ok') setRenamePane((value) => (value === editing ? null : value));
+                });
+              }}
+            >
+              <label>
+                {t('managedTerminal.displayName')}
+                <input
+                  ref={renameInput}
+                  value={renamePane.name}
+                  maxLength={48}
+                  required
+                  onChange={(event) => setRenamePane({ ...renamePane, name: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setRenamePane(null);
+                  }}
+                />
+              </label>
+              <button disabled={busy} type="submit">
+                {t('managedTerminal.rename')}
+              </button>{' '}
+              <button type="button" onClick={() => setRenamePane(null)}>
+                {t('features.cancel')}
+              </button>
+            </form>
+          )}
+        {nativeWorkspace && (
+          <details className="feature-permissions-disclosure">
+            <summary>{t('features.permissions.title')}</summary>
+            <FeaturePermissions snapshot={snapshot} feature={selected} />
+          </details>
+        )}
       </aside>
       <header className="feature-topbar">
         {navigation}
@@ -432,6 +516,18 @@ export function FeatureWorkspace({
           </button>
         </div>
       </header>
+      {nativeWorkspace ? (
+        <TerminalWorkspaceBar
+          panes={panes.filter((pane) => available.some((entry) => entry.slot === pane.slot))}
+          busy={busy || quitFence}
+          onCommand={paneCommand}
+          onRename={editPane}
+          onMove={movePane}
+          onPrepare={canPrepare ? () => void prepare() : undefined}
+        />
+      ) : (
+        <div className="feature-terminalbar" />
+      )}
       <div className="feature-surface">
         {canPrepare && !available.length ? (
           <div className="feature-empty">
@@ -469,8 +565,27 @@ export function FeatureWorkspace({
         )}
       </div>
       <footer className="feature-bottom">
-        <span>{t('features.members', { count: members.length })}</span>
-        <span>{t('features.metadataOnly')}</span>
+        {nativeWorkspace && dock.length > 0 ? (
+          <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
+            <span className="feature-dock-label">{t('features.dockLabel')}</span>
+            {dock
+              .filter((pane) => available.some((entry) => entry.slot === pane.slot))
+              .map((pane) => (
+                <button
+                  key={pane.slot}
+                  type="button"
+                  disabled={busy || quitFence}
+                  onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
+                  title={t('features.dockRestore', { name: pane.label })}
+                >
+                  ▣ {pane.label}
+                </button>
+              ))}
+          </div>
+        ) : (
+          <span>{t('features.members', { count: members.length })}</span>
+        )}
+        <span>{t(snapshot?.layoutSaved ? 'features.layoutSaved' : 'features.layoutUnsaved')}</span>
       </footer>
       {(quitWait || quitFence) && (
         <div className="quit-blocked" role="alert">
@@ -488,22 +603,6 @@ export function FeatureWorkspace({
               <span>{t('quitBlocked.retry')}</span>
             </>
           )}
-        </div>
-      )}
-      {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
-      {nativeWorkspace && dock.length > 0 && (
-        <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
-          <span className="feature-dock-label">{t('features.dockLabel')}</span>
-          {dock.map((pane) => (
-            <button
-              key={pane.slot}
-              type="button"
-              onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
-              title={t('features.dockRestore', { name: pane.label || `T-${pane.slot + 1}` })}
-            >
-              <span aria-hidden="true">▣</span> {pane.label || `T-${pane.slot + 1}`}
-            </button>
-          ))}
         </div>
       )}
     </section>

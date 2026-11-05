@@ -1,5 +1,13 @@
 # ORQST interface: implemented experience and delivery boundaries
 
+## Retained workspace tabs — 2026-11-05
+
+The native Studio adds a 36px terminal strip under its 45px header, with retained
+views and direct pane actions. The minimized dock uses the existing 34px footer.
+Feature permissions are a sidebar disclosure. The new owner references guide
+terminal navigation and future delegation/graph work while ORQST keeps its identity.
+See [interaction and truthful limits](../development/studio-terminal-workspace.md).
+
 ORQST's shared React dashboard follows **Minimal Dark + Developer Studio**, with
 dark as the default and optional light/system themes for reading comfort.
 Start with the [design system](design-system.md) for colors, spacing, typography,

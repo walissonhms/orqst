@@ -114,6 +114,83 @@ function fixture() {
   };
 }
 
+test('workspace controls bind each off-page command to the current Feature and exact terminal UUID', async () => {
+  const f = fixture();
+  try {
+    let feature = f.db.create({ name: 'SYNTHETIC workspace controls' });
+    for (const id of f.ids.slice(0, 3))
+      feature = f.db.assignTerminal(feature.featureId, id, feature.revision);
+    f.db.saveView({ featureId: feature.featureId, expectedRevision: 0 });
+    await f.service.initialize();
+    f.layout.resize(1440, 900);
+    f.layout.open(0);
+    await f.request({ action: 'snapshot' });
+    const send = async (input: object) => {
+      const result = await f.service.request({
+        ...input,
+        contractVersion: 1,
+        generation: f.snapshot().generation,
+      });
+      await f.request({ action: 'snapshot' });
+      return result.status;
+    };
+    assert.equal(
+      await send({ action: 'pane', slot: 2, terminalId: f.ids[2], command: 'hide' }),
+      'ok',
+    );
+    assert.equal(
+      await send({ action: 'pane', slot: 0, terminalId: f.ids[0], command: 'focus' }),
+      'ok',
+    );
+    assert.equal(
+      await send({ action: 'renamePane', slot: 2, terminalId: f.ids[2], name: 'Backend' }),
+      'ok',
+    );
+    assert.equal(
+      await send({
+        action: 'movePane',
+        slot: 2,
+        terminalId: f.ids[2],
+        beforeSlot: 0,
+        beforeTerminalId: f.ids[0],
+      }),
+      'ok',
+    );
+    assert.equal(await send({ action: 'organize', command: 'columns-2' }), 'ok');
+    assert.deepEqual(f.layout.snapshot().order, [2, 0, 1]);
+    assert.deepEqual(f.layout.snapshot().shown, [0, 1]);
+    assert.equal(f.db.readLayout(feature.featureId)?.names[0]?.name, 'Backend');
+    const before = f.layout.snapshot();
+    for (const request of [
+      { action: 'pane', slot: 2, terminalId: f.ids[1], command: 'focus' },
+      { action: 'pane', slot: 4, terminalId: f.ids[4], command: 'focus' },
+      { action: 'renamePane', slot: 4, terminalId: f.ids[4], name: 'Foreign' },
+      {
+        action: 'movePane',
+        slot: 0,
+        terminalId: f.ids[0],
+        beforeSlot: 4,
+        beforeTerminalId: f.ids[4],
+      },
+      { action: 'pane', slot: 0, terminalId: f.ids[0], command: 'stop' },
+    ]) {
+      assert.equal(await send(request), 'denied');
+      assert.deepEqual(f.layout.snapshot(), before);
+    }
+    for (const slot of [0, 1])
+      assert.equal(
+        await send({ action: 'pane', slot, terminalId: f.ids[slot], command: 'hide' }),
+        'ok',
+      );
+    assert.equal(await send({ action: 'organize', command: 'columns-2' }), 'ok');
+    assert.deepEqual(f.layout.snapshot().shown, []);
+    assert.equal(await send({ action: 'organize', command: 'show-all' }), 'ok');
+    assert.deepEqual(f.layout.snapshot().shown, [2, 0, 1]);
+  } finally {
+    f.close();
+  }
+});
+
 test('Feature view context uses Core CAS, rejects foreign scopes and survives reopen without authority', () => {
   const f = fixture();
   try {

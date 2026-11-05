@@ -5,6 +5,7 @@ import {
   featureViewStateSchema,
   workspaceFeatureSchema,
 } from './features.js';
+import { terminalDisplayNameSchema } from './terminal-workspace.js';
 import {
   featurePermissionConfigurationSchema,
   featurePermissionStateSchema,
@@ -38,6 +39,28 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     ...base,
     action: z.literal('organize'),
     command: z.enum(['restore', 'show-all', 'columns-1', 'columns-2', 'columns-3']),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal('pane'),
+    slot: z.number().int().min(0).max(7),
+    terminalId: z.uuid(),
+    command: z.enum(['focus', 'hide', 'maximize', 'restore', 'move-earlier', 'move-later']),
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal('renamePane'),
+    slot: z.number().int().min(0).max(7),
+    terminalId: z.uuid(),
+    name: terminalDisplayNameSchema,
+  }),
+  z.strictObject({
+    ...base,
+    action: z.literal('movePane'),
+    slot: z.number().int().min(0).max(7),
+    terminalId: z.uuid(),
+    beforeSlot: z.number().int().min(0).max(7),
+    beforeTerminalId: z.uuid(),
   }),
 ]);
 export type FeatureNativeRequest = z.input<typeof featureNativeRequestSchema>;

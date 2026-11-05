@@ -4,6 +4,50 @@ export interface DockPane {
   label: string;
   provider: string;
 }
+export interface WorkspacePane extends DockPane {
+  minimized: boolean;
+  visible: boolean;
+  active: boolean;
+  maximized: boolean;
+}
+
+/** Display projection only. Every command is separately bound to the Core's current UUID. */
+export function workspacePanes(detail: unknown): WorkspacePane[] {
+  const panes = (detail as { panes?: unknown } | null)?.panes;
+  if (!Array.isArray(panes) || panes.length > 8) return [];
+  const seen = new Set<number>();
+  return panes.flatMap((pane: unknown) => {
+    if (!pane || typeof pane !== 'object') return [];
+    const record = pane as Record<string, unknown>;
+    if (
+      Object.keys(record).length !== 7 ||
+      Object.keys(record).some(
+        (key) =>
+          !['slot', 'label', 'provider', 'minimized', 'visible', 'active', 'maximized'].includes(
+            key,
+          ),
+      ) ||
+      !['minimized', 'visible', 'active', 'maximized'].every(
+        (key) => typeof record[key] === 'boolean',
+      )
+    )
+      return [];
+    const valid = dockPanes({
+      hidden: [{ slot: record.slot, label: record.label, provider: record.provider }],
+    })[0];
+    if (!valid || seen.has(valid.slot)) return [];
+    seen.add(valid.slot);
+    return [
+      {
+        ...valid,
+        minimized: record.minimized as boolean,
+        visible: record.visible as boolean,
+        active: record.active as boolean,
+        maximized: record.maximized as boolean,
+      },
+    ];
+  });
+}
 
 export function dockGeneration(detail: unknown): number {
   const value = (detail as { generation?: unknown } | null)?.generation;

@@ -1103,7 +1103,7 @@
     "stale": "This view changed. Close the editor, refresh and review before editing again.",
     "busy": "A native review or another edit is in progress.",
     "archive_blocked": "Archive refused: assigned terminals require a lifecycle review. Sessions were preserved.",
-    "layoutUnsaved": "Layout saving is pending or unconfirmed. Refresh before switching.",
+    "layoutUnsaved": "Layout not saved",
     "delegationUnavailable": "Feature delegation needs a reviewed runtime composition.",
     "creationUnavailable": "Use native preparation to create/review terminals. Assign only the available reviewed slots.",
     "loading": "Loading…",
@@ -1132,7 +1132,11 @@
       "unknown": "The policy save may have completed. Read the current policy before proposing another change.",
       "unavailable": "Permission editing requires the current native Desktop.",
       "ok": "Policy saved."
-    }
+    },
+    "terminalTabs": "Terminals",
+    "paneControls": "Selected terminal controls",
+    "tabHelp": "Select to focus · double-click or F2 to rename · drag or Alt+Arrow to reorder",
+    "layoutSaved": "Layout saved"
   },
   "tauriCoreUnavailable": {
     "title": "Observer unavailable",

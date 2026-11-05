@@ -159,6 +159,56 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                 Some("restore" | "show-all" | "columns-1" | "columns-2" | "columns-3")
             )
         }
+        Some("pane" | "renamePane" | "movePane") => {
+            let keys = match value["action"].as_str() {
+                Some("pane") => vec![
+                    "contractVersion",
+                    "generation",
+                    "action",
+                    "slot",
+                    "terminalId",
+                    "command",
+                ],
+                Some("renamePane") => vec![
+                    "contractVersion",
+                    "generation",
+                    "action",
+                    "slot",
+                    "terminalId",
+                    "name",
+                ],
+                _ => vec![
+                    "contractVersion",
+                    "generation",
+                    "action",
+                    "slot",
+                    "terminalId",
+                    "beforeSlot",
+                    "beforeTerminalId",
+                ],
+            };
+            exact(value, &keys)
+                && safe(&value["slot"]).is_some_and(|n| n < 8)
+                && uuid(&value["terminalId"])
+                && match value["action"].as_str() {
+                    Some("pane") => matches!(
+                        value["command"].as_str(),
+                        Some(
+                            "focus"
+                                | "hide"
+                                | "maximize"
+                                | "restore"
+                                | "move-earlier"
+                                | "move-later"
+                        )
+                    ),
+                    Some("renamePane") => name(&value["name"]),
+                    _ => {
+                        safe(&value["beforeSlot"]).is_some_and(|n| n < 8)
+                            && uuid(&value["beforeTerminalId"])
+                    }
+                }
+        }
         _ => false,
     }
 }
@@ -1269,7 +1319,10 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
     };
-    let presentation = if matches!(request["action"].as_str(), Some("select" | "organize")) {
+    let presentation = if matches!(
+        request["action"].as_str(),
+        Some("select" | "organize" | "pane" | "renamePane" | "movePane")
+    ) {
         crate::terminal::metadata_view_begin(app)
     } else {
         crate::terminal::metadata_generation(app)
@@ -1541,6 +1594,36 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pane_view_requests_are_closed_uuid_bound_data_without_process_operations() {
+        use serde_json::json;
+        let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let base = json!({"contractVersion":1,"generation":7,"action":"pane","slot":2,"terminalId":id,"command":"focus"});
+        assert!(super::valid_request(&base));
+        for command in ["hide", "maximize", "restore", "move-earlier", "move-later"] {
+            let mut value = base.clone();
+            value["command"] = json!(command);
+            assert!(super::valid_request(&value));
+        }
+        for command in ["start", "stop", "kill", "delegate", "write"] {
+            let mut value = base.clone();
+            value["command"] = json!(command);
+            assert!(!super::valid_request(&value));
+        }
+        for key in ["pid", "profileId", "proof", "path", "input", "focused"] {
+            let mut value = base.clone();
+            value[key] = json!(true);
+            assert!(!super::valid_request(&value));
+        }
+        let mut rename = json!({"contractVersion":1,"generation":7,"action":"renamePane","slot":2,"terminalId":id,"name":"Backend"});
+        assert!(super::valid_request(&rename));
+        rename["name"] = json!("\u{202e}");
+        assert!(!super::valid_request(&rename));
+        let mut moved = json!({"contractVersion":1,"generation":7,"action":"movePane","slot":2,"terminalId":id,"beforeSlot":0,"beforeTerminalId":id});
+        assert!(super::valid_request(&moved));
+        moved["beforeSlot"] = json!(8);
+        assert!(!super::valid_request(&moved));
+    }
     #[test]
     fn preparation_target_is_only_the_owned_exact_dashboard_document() {
         let origin = "http://127.0.0.1:4319";
@@ -2300,7 +2383,7 @@ pub(crate) fn valid_layout(
     } else {
         0
     };
-    let top = if chrome { 45 } else { 0 };
+    let top = if chrome { 81 } else { 0 };
     let bottom = if chrome { 34 } else { 0 };
     if width <= left
         || height <= top + bottom
@@ -2362,9 +2445,9 @@ mod layout_tests {
     fn layout() -> Value {
         json!({
             "kind":"layout","generation":2,"revision":3,
-            "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":45,"bottom":34},
+            "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":81,"bottom":34},
             "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true},
-            "focus":null,"bounds":[{"slot":0,"rect":{"x":155,"y":45,"width":642,"height":821}},{"slot":1,"rect":{"x":797,"y":45,"width":643,"height":821}}]
+            "focus":null,"bounds":[{"slot":0,"rect":{"x":155,"y":81,"width":642,"height":785}},{"slot":1,"rect":{"x":797,"y":81,"width":643,"height":785}}]
         })
     }
     #[test]

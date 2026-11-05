@@ -1,5 +1,14 @@
 # ORQST roadmap
 
+## Studio workspace correction — 2026-11-05
+
+Retained terminal tabs, explicit view controls, Feature-scoped minimized projection
+and footer placement are implemented in source. Native/provider acceptance remains
+open. N-member interactive MCP, alias/role configuration in the normal terminal
+composition, verified task/result delivery, orchestration graph and Floating remain
+separate unfinished capabilities; opening CLIs does not establish communication.
+See [current behavior and verification](docs/development/studio-terminal-workspace.md).
+
 ## Current native progress and next gates — 2026-11-05
 
 Completed: human-authorized administrative recovery finalization; separate native
