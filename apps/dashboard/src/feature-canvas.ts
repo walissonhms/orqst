@@ -9,6 +9,7 @@ import {
   type SessionView,
   type StoredEvent,
   type FeatureNativeSnapshot,
+  type FeatureCanvasEvidence,
 } from '@orqst/protocol';
 import type { WorkspacePane } from './feature-workspace-dock.js';
 
@@ -19,6 +20,8 @@ export interface CanvasAgent {
   featureId: string | null;
   title: string;
   provider: string;
+  selectedModel?: string | null;
+  process?: FeatureCanvasEvidence['entries'][number];
   minimized: boolean;
   orchestrator: boolean;
   /** Only an explicit Core/CLI binding may supply a session; a live PTY is not a running turn. */
@@ -53,6 +56,8 @@ export interface CanvasCamera {
 export function canvasMembers(
   snapshot: FeatureNativeSnapshot | undefined,
   panes: WorkspacePane[],
+  evidence?: FeatureCanvasEvidence,
+  now = Date.now(),
 ): CanvasAgent[] {
   if (!snapshot) return [];
   const assigned = snapshot.features.flatMap((feature) => feature.terminalIds);
@@ -68,6 +73,12 @@ export function canvasMembers(
     .filter((slot) => members.includes(slot.terminalId))
     .map((slot) => {
       const pane = panes.find((entry) => entry.slot === slot.slot);
+      const process =
+        evidence && now >= evidence.observedAt && now - evidence.observedAt <= 10000
+          ? evidence.entries.find(
+              (entry) => entry.slot === slot.slot && entry.terminalId === slot.terminalId,
+            )
+          : undefined;
       return {
         id: slot.terminalId,
         slot: slot.slot,
@@ -75,6 +86,8 @@ export function canvasMembers(
         featureId: selected?.featureId ?? null,
         title: pane?.label || `T-${String(slot.slot + 1).padStart(3, '0')}`,
         provider: slot.provider,
+        ...(slot.selectedModel === undefined ? {} : { selectedModel: slot.selectedModel }),
+        ...(process ? { process } : {}),
         minimized: pane?.minimized ?? false,
         orchestrator: false,
         events: [],

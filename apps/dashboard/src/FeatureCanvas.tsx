@@ -47,7 +47,13 @@ export function CanvasAgentCard({
   const activities = canvasActivities(agent);
   const status = session?.status ?? 'unknown';
   const start = session ? Date.parse(session.startedAt) : NaN;
-  const interval = canvasDuration(agent);
+  const process = agent.process;
+  const processInterval =
+    process?.startedAt !== undefined
+      ? (process.state === 'running' ? Date.now() : (process.exitedAt ?? process.startedAt)) -
+        process.startedAt
+      : null;
+  const interval = canvasDuration(agent) ?? processInterval;
   const duration = interval === null ? null : canvasClock(interval);
   return (
     <article className="canvas-agent" data-status={status} data-agent-id={agent.id}>
@@ -76,21 +82,29 @@ export function CanvasAgentCard({
         )}
         <span className="canvas-agent-state">
           {t(session ? `statusLabels.${status}` : 'canvas.statusUnavailable')}
+          {process && process.state !== 'unknown' && ` · ${t(`canvas.terminal_${process.state}`)}`}
         </span>
       </div>
       <footer>
         <span className={`canvas-provider canvas-provider-${agent.provider}`} aria-hidden="true">
           {agent.provider === 'claude' ? '✳' : agent.provider === 'codex' ? '◉' : '◇'}
         </span>
-        <span title={session?.model ?? undefined}>
-          {session?.model ?? t('canvas.modelUnavailable')}
+        <span title={agent.selectedModel ?? session?.model ?? undefined}>
+          {session?.model ??
+            (agent.selectedModel === null
+              ? t('canvas.modelDefault')
+              : agent.selectedModel
+                ? t('canvas.modelSelected', { model: agent.selectedModel })
+                : t('canvas.modelUnavailable'))}
         </span>
         <small>
           {duration
             ? t(
-                status === 'completed'
+                status === 'completed' || process?.state === 'exited'
                   ? 'canvas.took'
-                  : status === 'running' || status === 'waiting_for_user'
+                  : status === 'running' ||
+                      status === 'waiting_for_user' ||
+                      process?.state === 'running'
                     ? 'canvas.for'
                     : 'canvas.observed',
                 { duration },

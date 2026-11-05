@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type {
   FeatureNativeRequest,
   FeatureNativeSnapshot,
+  FeatureCanvasEvidence,
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
@@ -50,6 +51,8 @@ export function FeatureWorkspace({
   const { t } = useTranslation();
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
+  const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
+  const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<FeatureNativeRequest['action'] | null>(null);
   const [notice, setNotice] = useState('');
@@ -87,7 +90,10 @@ export function FeatureWorkspace({
   const unassigned = snapshot?.slots.filter((slot) => !assigned.includes(slot.terminalId)) ?? [];
   const members = selected ? selected.terminalIds : unassigned.map((slot) => slot.terminalId);
   const available = snapshot?.slots.filter((slot) => members.includes(slot.terminalId)) ?? [];
-  const canvasAgents = useMemo(() => canvasMembers(snapshot, panes), [snapshot, panes]);
+  const canvasAgents = useMemo(
+    () => canvasMembers(snapshot, panes, evidence, now),
+    [snapshot, panes, evidence, now],
+  );
   const canvasGroups = useMemo(
     () => [
       { id: selected?.featureId ?? 'unassigned', name: selected?.name ?? t('features.unassigned') },
@@ -109,6 +115,7 @@ export function FeatureWorkspace({
           generation: current.current?.generation ?? 0,
         } as FeatureNativeRequest);
         if (!live.current) return;
+        if (reply.canvas) setEvidence(reply.canvas);
         if (reply.snapshot) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
@@ -154,6 +161,18 @@ export function FeatureWorkspace({
       window.removeEventListener('orqst-feature-state', update);
     };
   }, [request]);
+  useEffect(() => {
+    if (!canvas || !native) return;
+    const clock = window.setInterval(() => setNow(Date.now()), 1000);
+    const refresh = window.setInterval(() => {
+      void request({ action: 'snapshot' });
+    }, 4000);
+    void request({ action: 'snapshot' });
+    return () => {
+      window.clearInterval(clock);
+      window.clearInterval(refresh);
+    };
+  }, [canvas, native, request]);
   useEffect(() => {
     const blocked = (event: Event) =>
       setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));

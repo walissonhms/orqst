@@ -1191,6 +1191,10 @@
     "activityUnavailable": "Atividade indisponível",
     "statusUnavailable": "Estado do agente indisponível",
     "modelUnavailable": "Modelo indisponível",
+    "modelDefault": "Padrão da CLI",
+    "modelSelected": "Selecionado: {{model}}",
+    "terminal_running": "Terminal em execução",
+    "terminal_exited": "Terminal encerrado",
     "durationUnavailable": "Tempo indisponível",
     "took": "levou {{duration}}",
     "observed": "observado {{duration}}",
@@ -1220,7 +1224,7 @@
     "sessions": "Sessões",
     "metadataConnected": "Metadados do Core carregados",
     "metadataUnavailable": "Metadados do Core indisponíveis",
-    "evidenceLimit": "Atividade CLI, modelo e parentesco estão indisponíveis neste contrato de metadados do terminal.",
+    "evidenceLimit": "Atividade da CLI e parentesco exigem evidências adicionais da sessão. O modelo selecionado pode diferir do modelo usado pela CLI.",
     "relayUnknown": "Estado do relay indisponível",
     "for": "há {{duration}}"
   }

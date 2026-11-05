@@ -1191,6 +1191,10 @@
     "activityUnavailable": "Activity unavailable",
     "statusUnavailable": "Agent status unavailable",
     "modelUnavailable": "Model unavailable",
+    "modelDefault": "CLI default",
+    "modelSelected": "Selected: {{model}}",
+    "terminal_running": "Terminal running",
+    "terminal_exited": "Terminal exited",
     "durationUnavailable": "Time unavailable",
     "took": "took {{duration}}",
     "observed": "observed {{duration}}",
@@ -1220,7 +1224,7 @@
     "sessions": "Sessions",
     "metadataConnected": "Core metadata loaded",
     "metadataUnavailable": "Core metadata unavailable",
-    "evidenceLimit": "CLI activity, model and parentage are unavailable in this terminal metadata contract.",
+    "evidenceLimit": "CLI activity and parentage require additional session evidence. A selected model may differ from the model used by the CLI.",
     "relayUnknown": "Relay status unavailable",
     "for": "for {{duration}}"
   }
