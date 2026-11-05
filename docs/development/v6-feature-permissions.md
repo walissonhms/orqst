@@ -182,6 +182,9 @@ bindings with the native-owned roots and scope. Only matching bindings may reach
 catalogue, preferences, executable and fence validation. The parent before fork,
 child composition and runtime revalidations use the same pair check; errors deny
 preparation rather than becoming neutral policy. A bound manifest without native
-context is refused, including a binding with no selected Feature. Legacy manifests
-without preparation bindings remain unscoped. Synthetic tests check alternate roots
-and do not establish native UI or provider acceptance.
+context is refused. For bindings with no selected Feature, the private bootstrap
+separately carries the native roots to the child and revalidates the pair and fence
+at preparation and launch. These remain unscoped, use the legacy workspace digest
+and have no Feature policy reader. Manifests without preparation bindings remain
+legacy. Synthetic tests cover both bound modes and alternate roots without side
+effects; they do not establish native UI or provider acceptance.

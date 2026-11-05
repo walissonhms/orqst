@@ -55,6 +55,8 @@ export class DesktopManagedAgents {
   private featureContext?: Readonly<ManagedAgentsFeatureContext>;
   private workspaceId: string;
   private preparationFence?: string;
+  private nativePreparationContext?: import('../terminal/preparation-context.js').TerminalPreparationContext;
+  private boundPreparation: boolean;
 
   constructor(
     private files: [string, string],
@@ -67,17 +69,17 @@ export class DesktopManagedAgents {
     },
     private configurationDirectory?: string,
     trustedFeatureContext?: ManagedAgentsFeatureContext,
+    nativePreparationContext?: import('../terminal/preparation-context.js').TerminalPreparationContext,
+    boundPreparation = trustedFeatureContext !== undefined,
   ) {
     const trusted = trustedFeatureContext
       ? managedAgentsFeatureContextSchema.parse(trustedFeatureContext)
       : undefined;
     const { configs, context: resolved } = readManagedAgentsPair(
       files,
-      trusted && {
-        observerDatabase: trusted.observerDatabase,
-        preferencesDirectory: trusted.preferencesDirectory,
-      },
+      nativePreparationContext ?? trusted,
       trusted,
+      boundPreparation,
     );
     const [a, b] = configs;
     if (
@@ -92,10 +94,15 @@ export class DesktopManagedAgents {
     )
       throw new Error('Two distinct existing-login slots for the same project are required');
     this.project = a.project;
-    if (JSON.stringify(resolved) !== JSON.stringify(trusted))
+    if (
+      (boundPreparation && !a.preparation) ||
+      JSON.stringify(resolved) !== JSON.stringify(trusted)
+    )
       throw new Error('Native Feature scope mismatch');
     this.featureContext = resolved && Object.freeze(resolved);
-    this.preparationFence = resolved ? a.preparation?.fence : undefined;
+    this.nativePreparationContext = nativePreparationContext ?? trusted;
+    this.boundPreparation = boundPreparation;
+    this.preparationFence = boundPreparation ? a.preparation?.fence : undefined;
     const domains = managedAgentsWorkspaceIds(this.project);
     this.workspaceId = resolved ? domains.canonicalWorkspaceId : domains.legacyProjectDigest;
     // Never open/migrate an existing journal or erase uncertainty to recover capacity.
@@ -157,18 +164,16 @@ export class DesktopManagedAgents {
   private assertPreparationContext() {
     const { configs, context: resolved } = readManagedAgentsPair(
       this.files,
-      this.featureContext && {
-        observerDatabase: this.featureContext.observerDatabase,
-        preferencesDirectory: this.featureContext.preferencesDirectory,
-      },
+      this.nativePreparationContext,
       this.featureContext,
+      this.boundPreparation,
     );
     if (
       configs.some(
         (config, slot) =>
           config.project !== this.project ||
           terminalIdentity(config).terminalId !== this.terminalIds[slot] ||
-          (this.featureContext && config.preparation?.fence !== this.preparationFence),
+          (this.boundPreparation && config.preparation?.fence !== this.preparationFence),
       )
     )
       throw new Error('Native pair identity changed');

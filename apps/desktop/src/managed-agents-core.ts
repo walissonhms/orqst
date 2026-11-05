@@ -3,9 +3,9 @@ import { randomUUID, type KeyObject } from 'node:crypto';
 import { join } from 'node:path';
 import { managedCodexEnvironment } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
-  managedAgentsFeatureContextSchema,
+  managedAgentsBootstrapSchema,
   readManagedAgentsPair,
-  type ManagedAgentsFeatureContext,
+  type ManagedAgentsBootstrap,
 } from '../../../packages/core/src/managed-codex/feature-context.js';
 import { agentsHostReplySchema, agentsHostRequestSchema } from './managed-agents-wire.js';
 
@@ -14,25 +14,28 @@ export async function connectManagedAgents(
   files: [string, string],
   publicKey: KeyObject,
   admissionDirectory: string,
-  featureContext?: ManagedAgentsFeatureContext,
+  bootstrap?: ManagedAgentsBootstrap,
 ) {
-  const config = readManagedAgentsPair(
+  const pair = readManagedAgentsPair(
     files,
-    featureContext && {
-      observerDatabase: featureContext.observerDatabase,
-      preferencesDirectory: featureContext.preferencesDirectory,
-    },
-    featureContext,
-  ).configs[0]!;
+    bootstrap?.native,
+    bootstrap?.feature,
+    bootstrap !== undefined,
+  );
+  if (
+    bootstrap &&
+    (!pair.configs[0]?.preparation ||
+      JSON.stringify(pair.context) !== JSON.stringify(bootstrap.feature))
+  )
+    throw new Error('Native Feature scope mismatch');
+  const config = pair.configs[0]!;
   const child = fork(
     join(__dirname, 'managed-agents-host.cjs'),
     [
       ...files,
       publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
       admissionDirectory,
-      ...(featureContext
-        ? [JSON.stringify(managedAgentsFeatureContextSchema.parse(featureContext))]
-        : []),
+      ...(bootstrap ? [JSON.stringify(managedAgentsBootstrapSchema.parse(bootstrap))] : []),
     ],
     {
       execPath: config.node.path,

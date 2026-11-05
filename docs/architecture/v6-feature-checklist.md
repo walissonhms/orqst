@@ -964,14 +964,17 @@ Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 
 - [x] Pane-778 review fixes (9c5ab12, c945d08, 5afe9b8, ca98a56) are part of the
       same chain and preserved.
 - [x] Feature permission policies as a Core library (`000ab1b`, `cc7f5af`,
-      `6f60869`): implemented in the Core, **not yet wired into the production
-      composition**. Defaults and security boundaries documented.
+      `6f60869`): implemented in the Core and wired into the structured
+      production composition. Defaults and security boundaries documented.
 - [x] Clippy preexisting `features.rs:370` fixed (`b566426`); pane actions
       (`eba47a5`..`6302336`); renderer termination and child incognito
       (`48567c1`, `3f04f07`); minimized dock TS + allowlisted Rust route
       (`ecac3dd`, `a824def`).
 - [ ] Native AppKit/WebKit acceptance of Quit, sheet, renderer termination and dock.
-- [ ] Wire the Feature permission library into the production composition.
+- [x] Wire the Feature permission library into the structured production composition;
+      native roots and bindings are revalidated before data access, including unscoped
+      null-Feature bindings that retain the legacy workspace digest. Synthetic
+      composition tests do not constitute native or provider acceptance.
 - [ ] Human acceptance of Claude and the packaged single-window app.
 
 Validated on this machine: `pnpm test` 1284/1284, `pnpm lint`, `pnpm typecheck`,
@@ -999,7 +1002,10 @@ rustfmt clean.
 - [x] The ignored cross-language test has the exact documented commands and was
       run explicitly: artifact generated, Rust replay `1 passed; 0 failed`.
 - [ ] Native AppKit/WebKit acceptance of the dock restore and unavailable cover.
-- [ ] Wire the Feature permission library into the production composition.
+- [x] Wire the Feature permission library into the structured production composition;
+      native roots and bindings are revalidated before data access, including unscoped
+      null-Feature bindings that retain the legacy workspace digest. Synthetic
+      composition tests do not constitute native or provider acceptance.
 
 Current fence correction checks (isolated tree, 2026-11-05): full `pnpm test`
 1285/1285, `pnpm lint` and `pnpm typecheck` passed. Pinned offline/locked Cargo

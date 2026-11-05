@@ -129,7 +129,7 @@ class SyntheticDesktopTransport implements CodexTransport {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function fixture(
   wrapAdmission = (admission: ReturnType<typeof desktopAgentsAdmission>) => admission,
-  scoped = false,
+  scoped: boolean | 'null' = false,
 ) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-desktop-agents-')));
   const project = join(root, 'project');
@@ -171,21 +171,24 @@ function fixture(
     const observer = new Store(native.observerDatabase);
     assert.equal(observer.workspace(project, 'SYNTHETIC project'), workspaceId);
     observer.close();
-    let feature = features.create({ name: 'SYNTHETIC Feature' });
-    for (const file of files) {
-      const config = JSON.parse(readFileSync(file, 'utf8')) as ManagedCodexConfig;
-      feature = features.assignTerminal(
-        feature.featureId,
-        terminalIdentity(config).terminalId,
-        feature.revision,
-      );
+    if (scoped === true) {
+      let feature = features.create({ name: 'SYNTHETIC Feature' });
+      for (const file of files) {
+        const config = JSON.parse(readFileSync(file, 'utf8')) as ManagedCodexConfig;
+        feature = features.assignTerminal(
+          feature.featureId,
+          terminalIdentity(config).terminalId,
+          feature.revision,
+        );
+      }
+      featureId = feature.featureId;
+      features.saveView({ expectedRevision: 0, featureId });
     }
-    featureId = feature.featureId;
-    features.saveView({ expectedRevision: 0, featureId });
-    const { fence } = resolveTerminalPreparationContext(native, workspaceId, featureId);
+    const selectedFeature = featureId ?? null;
+    const { fence } = resolveTerminalPreparationContext(native, workspaceId, selectedFeature);
     for (const file of files) {
       const config = JSON.parse(readFileSync(file, 'utf8')) as ManagedCodexConfig;
-      config.preparation = { ...native, workspaceId, featureId, fence };
+      config.preparation = { ...native, workspaceId, featureId: selectedFeature, fence };
       writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
     }
   }
@@ -949,7 +952,7 @@ test('production bootstrap refuses missing reader context, divergent IDs, foreig
       /Native Feature context unavailable/,
     );
     const divergent = JSON.parse(f.hostArgs[4]!) as Record<string, unknown>;
-    divergent.workspaceId = terminalDigest(f.service.project);
+    (divergent.feature as Record<string, unknown>).workspaceId = terminalDigest(f.service.project);
     assert.throws(
       () =>
         managedAgentsHostComposition(
@@ -982,52 +985,83 @@ test('production bootstrap refuses missing reader context, divergent IDs, foreig
   }
 });
 
-test('untrusted manifest roots are untouched at bootstrap, prepare and launch for both slots', () => {
-  const f = fixture(undefined, true);
-  try {
-    const alternate = join(f.native.preferencesDirectory, '..', 'alternate');
-    mkdirSync(alternate, { mode: 0o700 });
-    const alternateObserver = join(alternate, 'observer.sqlite');
-    copyFileSync(f.native.observerDatabase, alternateObserver);
-    const alternatePreferences = join(alternate, 'preferences');
-    mkdirSync(alternatePreferences, { mode: 0o700 });
-    writeFileSync(join(alternatePreferences, 'marker'), 'SYNTHETIC', { mode: 0o600 });
-    const snapshot = (directory: string): unknown =>
-      readdirSync(directory)
-        .sort()
-        .map((name) => {
-          const path = join(directory, name);
-          const info = lstatSync(path, { bigint: true });
-          return [
-            name,
-            info.mtimeNs,
-            info.size,
-            info.isDirectory() ? snapshot(path) : readFileSync(path),
-          ];
-        });
-    const admission = { claim() {}, assertOwner() {}, prepareRelease: () => () => {} };
-    for (const slot of [0, 1]) {
-      for (const field of ['observerDatabase', 'preferencesDirectory'] as const) {
-        const start = f.service.prepareStart(0, 'synthetic-model');
-        const original = readFileSync(f.files[slot]!, 'utf8');
-        const config = JSON.parse(original) as ManagedCodexConfig;
-        config.preparation![field] =
-          field === 'observerDatabase' ? alternateObserver : alternatePreferences;
-        writeFileSync(f.files[slot]!, JSON.stringify(config), { mode: 0o600 });
-        const before = [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)];
-        assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native));
-        assert.throws(() => nativeManagedAgentsFeatureContext(f.files, undefined));
-        assert.throws(() => managedAgentsHostComposition(f.hostArgs, f.backend, admission));
-        assert.throws(() => f.service.prepareStart(0, 'synthetic-model'));
-        assert.throws(() => f.service.launch(0, f.proof(start.challenge)));
-        assert.deepEqual(
-          [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)],
-          before,
-        );
-        assert.equal(f.transports.length, 0);
-        writeFileSync(f.files[slot]!, original, { mode: 0o600 });
+for (const scope of [true, 'null'] as const) {
+  test(`untrusted ${scope} manifest roots are untouched at bootstrap, prepare and launch for both slots`, () => {
+    const f = fixture(undefined, scope);
+    try {
+      const alternate = join(f.native.preferencesDirectory, '..', 'alternate');
+      mkdirSync(alternate, { mode: 0o700 });
+      const alternateObserver = join(alternate, 'observer.sqlite');
+      copyFileSync(f.native.observerDatabase, alternateObserver);
+      const alternatePreferences = join(alternate, 'preferences');
+      mkdirSync(alternatePreferences, { mode: 0o700 });
+      writeFileSync(join(alternatePreferences, 'marker'), 'SYNTHETIC', { mode: 0o600 });
+      const snapshot = (directory: string): unknown =>
+        readdirSync(directory)
+          .sort()
+          .map((name) => {
+            const path = join(directory, name);
+            const info = lstatSync(path, { bigint: true });
+            return [
+              name,
+              info.mtimeNs,
+              info.size,
+              info.isDirectory() ? snapshot(path) : readFileSync(path),
+            ];
+          });
+      const admission = { claim() {}, assertOwner() {}, prepareRelease: () => () => {} };
+      for (const slot of [0, 1]) {
+        for (const field of ['observerDatabase', 'preferencesDirectory'] as const) {
+          const start = f.service.prepareStart(0, 'synthetic-model');
+          const original = readFileSync(f.files[slot]!, 'utf8');
+          const config = JSON.parse(original) as ManagedCodexConfig;
+          config.preparation![field] =
+            field === 'observerDatabase' ? alternateObserver : alternatePreferences;
+          writeFileSync(f.files[slot]!, JSON.stringify(config), { mode: 0o600 });
+          const before = [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)];
+          assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native));
+          assert.throws(() => nativeManagedAgentsFeatureContext(f.files, undefined));
+          assert.throws(() => managedAgentsHostComposition(f.hostArgs, f.backend, admission));
+          assert.throws(() => f.service.prepareStart(0, 'synthetic-model'));
+          assert.throws(() => f.service.launch(0, f.proof(start.challenge)));
+          assert.deepEqual(
+            [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)],
+            before,
+          );
+          assert.equal(f.transports.length, 0);
+          writeFileSync(f.files[slot]!, original, { mode: 0o600 });
+        }
       }
+    } finally {
+      f.close();
     }
+  });
+}
+
+test('null Feature binding survives private bootstrap and launch in the legacy domain', async () => {
+  const f = fixture(undefined, 'null');
+  try {
+    for (const slot of [0, 1]) {
+      const start = f.service.prepareStart(slot, 'synthetic-model');
+      assert.equal(start.manifest.featureId, undefined);
+      assert.equal(start.manifest.workspaceId, terminalDigest(f.service.project));
+      await f.service.launch(slot, f.proof(start.challenge));
+    }
+    assert.equal(f.transports.length, 2);
+  } finally {
+    f.close();
+  }
+});
+
+test('mixed null and Feature bindings are refused', () => {
+  const f = fixture(undefined, 'null');
+  try {
+    const config = JSON.parse(readFileSync(f.files[1], 'utf8')) as ManagedCodexConfig;
+    config.preparation!.featureId = randomUUID();
+    writeFileSync(f.files[1], JSON.stringify(config), { mode: 0o600 });
+    assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native), /binding mismatch/);
+    assert.throws(() => f.service.prepareStart(0, 'synthetic-model'), /binding mismatch/);
+    assert.equal(f.transports.length, 0);
   } finally {
     f.close();
   }

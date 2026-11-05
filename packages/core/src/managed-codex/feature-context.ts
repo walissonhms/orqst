@@ -20,6 +20,12 @@ export const managedAgentsFeatureContextSchema = terminalPreparationContextSchem
 });
 export type ManagedAgentsFeatureContext = z.infer<typeof managedAgentsFeatureContextSchema>;
 
+export const managedAgentsBootstrapSchema = z.strictObject({
+  native: terminalPreparationContextSchema,
+  feature: managedAgentsFeatureContextSchema.optional(),
+});
+export type ManagedAgentsBootstrap = z.infer<typeof managedAgentsBootstrapSchema>;
+
 /** Resolve IDs from native-prepared manifests against the native-owned catalogue and preferences. */
 export function resolveManagedAgentsFeatureContext(
   configs: ManagedCodexConfig[],
@@ -81,10 +87,13 @@ export function readManagedAgentsPair(
   files: [string, string],
   native?: TerminalPreparationContext,
   expected?: ManagedAgentsFeatureContext,
+  expectedBound = false,
 ) {
   const configs = files.map(parseManagedCodexConfigFile);
   // Compare every binding, including the expected native scope, before opening databases.
   const first = configs[0];
+  if (expectedBound && !expected && (!first?.preparation || first.preparation.featureId !== null))
+    throw new Error('Native Feature scope mismatch');
   if (
     expected &&
     (!first?.preparation ||
