@@ -57,6 +57,7 @@ struct Running {
     quit_pending: crate::quit_orchestration::PendingReplies,
     metadata_pending: HashMap<String, MetadataPending>,
     metadata_mutating: Option<String>,
+    permission_review: Option<(String, usize)>,
     layout_generation: u64,
     layout_revision: u64,
     presentation_suspended: bool,
@@ -243,6 +244,7 @@ fn invalidate_presentation_state(generation: &mut u64, suspended: &mut bool) {
 fn invalidate_layout(r: &mut Running) {
     r.metadata_pending.clear();
     r.metadata_mutating = None;
+    r.permission_review = None;
     invalidate_presentation_state(&mut r.layout_generation, &mut r.presentation_suspended);
     publish_layout_generation(r);
     let _ = r.child.write(b"{\"kind\":\"layout-suspend\"}\n");
@@ -283,9 +285,94 @@ pub(crate) async fn metadata_request(
     generation: u64,
     epoch: &str,
 ) -> Value {
+    metadata_request_inner(app, envelope, generation, epoch, None).await
+}
+#[cfg(target_os = "macos")]
+pub(crate) async fn permission_review_request(
+    app: &tauri::AppHandle,
+    view: Webview,
+    envelope: Value,
+    generation: u64,
+    epoch: &str,
+    owner: &str,
+) -> Value {
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
+    let (sender, receiver) = oneshot::channel();
+    let app = app.clone();
+    let epoch = epoch.to_owned();
+    let owner = owner.to_owned();
+    let runtime = tokio::runtime::Handle::current();
+    if view
+        .with_webview(move |native| {
+            if sender.is_closed() {
+                return;
+            }
+            // SAFETY: Tauri guarantees a live WKWebView on this AppKit thread.
+            let focused = unsafe { native_focus::chrome_first_responder(native.inner().cast()) };
+            if !focused
+                || !permission_review_current(&app, &epoch, generation, &owner)
+                || !envelope["request"]["featureId"]
+                    .as_str()
+                    .zip(envelope["request"]["generation"].as_u64())
+                    .is_some_and(|(feature, logical)| {
+                        crate::features::permission_capture_current(
+                            &app, feature, &epoch, generation, logical,
+                        )
+                    })
+            {
+                let _ = sender.send(None);
+                return;
+            }
+            let _entered = runtime.enter();
+            let mut future = Box::pin(async move {
+                metadata_request_inner(&app, envelope, generation, &epoch, Some(&owner)).await
+            });
+            // Dispatch occurs synchronously before the first await, while AppKit cannot process
+            // a focus change. Retain the future until its correlated reply or cancellation.
+            let mut cx = Context::from_waker(Waker::noop());
+            match future.as_mut().poll(&mut cx) {
+                Poll::Ready(value) => {
+                    let _ = sender.send(Some((Some(value), future)));
+                }
+                Poll::Pending => {
+                    let _ = sender.send(Some((None, future)));
+                }
+            }
+        })
+        .is_err()
+    {
+        return json!({"status":"unavailable"});
+    }
+    match receiver.await {
+        Ok(Some((Some(value), _))) => value,
+        Ok(Some((None, future))) => future.await,
+        _ => json!({"status":"denied"}),
+    }
+}
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn permission_review_request(
+    _app: &tauri::AppHandle,
+    _view: Webview,
+    _envelope: Value,
+    _generation: u64,
+    _epoch: &str,
+    _owner: &str,
+) -> Value {
+    json!({"status":"denied"})
+}
+
+async fn metadata_request_inner(
+    app: &tauri::AppHandle,
+    envelope: Value,
+    generation: u64,
+    epoch: &str,
+    review_owner: Option<&str>,
+) -> Value {
     let unavailable = || json!({"status":"unavailable"});
     let permission = crate::features::valid_permission_envelope(&envelope);
     if !(permission || crate::features::valid_envelope(&envelope))
+        || (review_owner.is_some() && !permission)
         || (permission && envelope["actorId"] != format!("native-{epoch}"))
         || presentation_blocked(app)
     {
@@ -293,7 +380,16 @@ pub(crate) async fn metadata_request(
     }
     let id = envelope["id"].as_str().unwrap().to_owned();
     let document = envelope["document"].as_u64().unwrap();
-    if !crate::features::document_current(app, envelope["source"].as_str().unwrap(), document) {
+    let document_is_current = if review_owner.is_some() {
+        crate::features::document_version_current(
+            app,
+            envelope["source"].as_str().unwrap(),
+            document,
+        )
+    } else {
+        crate::features::document_current(app, envelope["source"].as_str().unwrap(), document)
+    };
+    if !document_is_current {
         return json!({"status":"denied"});
     }
     let mutable = envelope["request"]["action"] != "snapshot";
@@ -316,9 +412,17 @@ pub(crate) async fn metadata_request(
         {
             return unavailable();
         }
-        if r.metadata_pending.len() >= 8
+        let owns_review = review_owner.is_some_and(|owner| {
+            r.metadata_mutating.as_deref() == Some(owner)
+                && r.permission_review
+                    .as_ref()
+                    .is_some_and(|(id, _)| id == owner)
+        });
+        if (review_owner.is_some() && !owns_review)
+            || r.metadata_pending.len() >= 8
             || r.metadata_pending.contains_key(&id)
             || (mutable
+                && !owns_review
                 && (!review_available(
                     r.retiring,
                     r.mcp_request.is_some(),
@@ -344,12 +448,12 @@ pub(crate) async fn metadata_request(
                 owner: owner.clone(),
             },
         );
-        if mutable {
+        if mutable && !owns_review {
             r.metadata_mutating = Some(id.clone());
         }
         if r.child.write(bytes.as_bytes()).is_err() {
             r.metadata_pending.remove(&id);
-            if r.metadata_mutating.as_deref() == Some(&id) {
+            if r.metadata_mutating.as_deref() == Some(&id) || owns_review {
                 advance_layout(r);
             }
             return unavailable();
@@ -392,7 +496,8 @@ pub(crate) async fn metadata_request(
                 envelope["source"].as_str().unwrap(),
                 document,
             );
-        let owner = r.metadata_mutating.as_ref() == Some(&id);
+        let owner = r.metadata_mutating.as_ref() == Some(&id)
+            || review_owner.is_some_and(|owner| r.metadata_mutating.as_deref() == Some(owner));
         if valid && !received && owner {
             advance_layout(r);
         }
@@ -404,6 +509,80 @@ pub(crate) async fn metadata_request(
     match result {
         Ok(Ok(value)) if valid_reply(&value) => value,
         _ => unavailable(),
+    }
+}
+
+pub(crate) fn permission_review_begin(
+    app: &tauri::AppHandle,
+    epoch: &str,
+    generation: u64,
+    id: &str,
+) -> bool {
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    let Some(r) = guard.as_mut() else {
+        return false;
+    };
+    if r.epoch != epoch
+        || r.layout_generation != generation
+        || r.confirming_quit
+        || r.exit_authorized
+        || r.native_dialog.is_some()
+        || !review_available(
+            r.retiring,
+            r.mcp_request.is_some(),
+            &r.reviewing,
+            r.metadata_mutating.is_some() || r.enrollment_pending,
+        )
+    {
+        return false;
+    }
+    r.metadata_mutating = Some(id.into());
+    r.permission_review = Some((id.into(), 0));
+    true
+}
+pub(crate) fn permission_review_current(
+    app: &tauri::AppHandle,
+    epoch: &str,
+    generation: u64,
+    id: &str,
+) -> bool {
+    let state = app.state::<Terminals>();
+    let guard = state.0.lock().unwrap();
+    guard.as_ref().is_some_and(|r| {
+        r.epoch == epoch
+            && r.layout_generation == generation
+            && !r.confirming_quit
+            && !r.exit_authorized
+            && r.metadata_mutating.as_deref() == Some(id)
+            && r.permission_review
+                .as_ref()
+                .is_some_and(|(owner, _)| owner == id)
+    })
+}
+pub(crate) fn permission_review_finish(
+    app: &tauri::AppHandle,
+    epoch: &str,
+    id: &str,
+    cancelled: bool,
+) {
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(r) = guard.as_mut().filter(|r| r.epoch == epoch) {
+        if r.permission_review
+            .as_ref()
+            .is_some_and(|(owner, _)| owner == id)
+        {
+            r.permission_review = None;
+        }
+        if release_metadata(
+            &mut r.metadata_mutating,
+            &mut r.metadata_pending,
+            id,
+            cancelled,
+        ) {
+            advance_layout(r);
+        }
     }
 }
 
@@ -1164,20 +1343,23 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
 }
 
 #[cfg(target_os = "macos")]
-fn current_review(app: &tauri::AppHandle) -> bool {
+fn current_review(app: &tauri::AppHandle, focus: native_focus::Focus) -> bool {
     app.state::<Terminals>()
         .0
         .lock()
         .unwrap()
         .as_ref()
         .is_some_and(|r| {
-            r.native_dialog
+            r.permission_review
                 .as_ref()
-                .is_some_and(|(_, slot, generation)| {
-                    r.generations.get(*slot) == Some(generation)
-                        && r.loaded.get(*slot) == Some(&true)
-                        && r.revoked.get(*slot) == Some(&false)
-                })
+                .is_some_and(|(_, sheet)| focus.owns_permission_sheet(*sheet))
+                || r.native_dialog
+                    .as_ref()
+                    .is_some_and(|(_, slot, generation)| {
+                        r.generations.get(*slot) == Some(generation)
+                            && r.loaded.get(*slot) == Some(&true)
+                            && r.revoked.get(*slot) == Some(&false)
+                    })
         })
 }
 
@@ -1186,6 +1368,12 @@ fn native_focus_lost(app: &tauri::AppHandle, reason: &str) {
     if focus_diagnostics() {
         eprintln!("ORQST_TERMINAL_REVOKE {reason}");
     }
+    let state = app.state::<Terminals>();
+    let mut guard = state.0.lock().unwrap();
+    if let Some(r) = guard.as_mut().filter(|r| r.permission_review.is_some()) {
+        invalidate_layout(r);
+    }
+    drop(guard);
     revoke_all(app);
 }
 
@@ -1268,14 +1456,86 @@ pub(crate) fn sheet_owned(window: &tauri::Window) -> bool {
     native_focus::sheet_owned(window)
 }
 
-/// Generic native sheet for another reviewed surface; same AppKit consent path.
-pub(crate) async fn confirm_sheet(
+pub(crate) struct PermissionReviewContext {
+    pub epoch: String,
+    pub presentation: u64,
+    pub document: u64,
+    pub id: String,
+    pub feature_id: String,
+    pub generation: u64,
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) async fn confirm_permission_sheet(
     app: &tauri::AppHandle,
-    window: tauri::Window,
+    view: Webview,
     labels: [String; 5],
-    current: impl FnOnce() -> bool + Send + 'static,
+    context: PermissionReviewContext,
 ) -> bool {
-    native_consent::confirm(app, window, labels, current).await
+    let PermissionReviewContext {
+        epoch,
+        presentation: generation,
+        document,
+        id,
+        feature_id,
+        generation: logical_generation,
+    } = context;
+    let current_app = app.clone();
+    let sheet_app = app.clone();
+    let current_epoch = epoch.clone();
+    let current_id = id.clone();
+    native_consent::confirm_webview(
+        view,
+        labels,
+        move || {
+            native_focus::install(&current_app)
+                && crate::features::document_version_current(
+                    &current_app,
+                    "orqst-features://local/index.html",
+                    document,
+                )
+                && permission_review_current(&current_app, &current_epoch, generation, &current_id)
+                && crate::features::permission_capture_current(
+                    &current_app,
+                    &feature_id,
+                    &current_epoch,
+                    generation,
+                    logical_generation,
+                )
+                && !presentation_blocked(&current_app)
+        },
+        move |sheet| {
+            let state = sheet_app.state::<Terminals>();
+            let mut guard = state.0.lock().unwrap();
+            let Some(r) = guard.as_mut() else {
+                return false;
+            };
+            if r.epoch != epoch
+                || r.layout_generation != generation
+                || r.metadata_mutating.as_deref() != Some(&id)
+            {
+                return false;
+            }
+            let Some((owner, slot)) = r.permission_review.as_mut() else {
+                return false;
+            };
+            if *owner != id || *slot != 0 {
+                return false;
+            }
+            *slot = sheet;
+            true
+        },
+    )
+    .await
+}
+#[cfg(not(target_os = "macos"))]
+pub(crate) async fn confirm_permission_sheet(
+    _app: &tauri::AppHandle,
+    _view: Webview,
+    _labels: [String; 5],
+    _context: PermissionReviewContext,
+) -> bool {
+    false
 }
 
 fn revoke_all(app: &tauri::AppHandle) {
@@ -2375,6 +2635,7 @@ async fn start_selected_inner(
         quit_pending: crate::quit_orchestration::PendingReplies::default(),
         metadata_pending: HashMap::new(),
         metadata_mutating: None,
+        permission_review: None,
         layout_generation: 0,
         layout_revision: 0,
         presentation_suspended: true,
@@ -2436,7 +2697,7 @@ async fn start_selected_inner(
                 }
                 if !focus {
                     if native_focus::ready()
-                        && native.is_some_and(|n| n.owns_sheet(current_review(&handle)))
+                        && native.is_some_and(|n| n.owns_sheet(current_review(&handle, n)))
                     {
                         suspend_input(&handle);
                     } else {

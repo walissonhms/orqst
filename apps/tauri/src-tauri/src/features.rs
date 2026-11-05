@@ -1,5 +1,6 @@
 //! Metadata-only facade over the existing selected Terminal Core. No execution transport is exposed.
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::webview::{NewWindowResponse, WebviewBuilder};
@@ -279,9 +280,19 @@ pub(crate) fn valid_permission_envelope(value: &Value) -> bool {
                     "featureId",
                     "expectedRevision",
                     "configuration",
+                    "reviewPlan",
+                    "reviewDigest",
                 ],
             ) && safe(&request["expectedRevision"]).is_some()
                 && valid_policy(&request["configuration"])
+                && request["reviewPlan"]
+                    .as_str()
+                    .is_some_and(|s| !s.is_empty() && s.len() <= 131072)
+                && request["reviewDigest"].as_str().is_some_and(|s| {
+                    s.len() == 64
+                        && s.bytes()
+                            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+                })
         }
         _ => false,
     }
@@ -330,13 +341,21 @@ pub(crate) fn valid_permission_reply(value: &Value) -> bool {
     {
         return false;
     }
-    if let (Some(snapshot), Some(permissions)) = (value.get("snapshot"), value.get("permissions")) {
+    if let Some(permissions) = value.get("permissions") {
+        let Some(snapshot) = value.get("snapshot") else {
+            return false;
+        };
+        let Some(feature) = snapshot["features"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["featureId"] == permissions["featureId"])
+        else {
+            return false;
+        };
         if permissions["workspaceId"] != snapshot["workspace"]["id"]
-            || !snapshot["features"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|f| f["featureId"] == permissions["featureId"])
+            || (!permissions["configuration"].is_null()
+                && !policy_members(&permissions["configuration"], feature))
         {
             return false;
         }
@@ -892,6 +911,110 @@ fn permission_scope_generation(
         .then_some(state.snapshot_generation)
 }
 
+pub(crate) fn permission_capture_current(
+    app: &tauri::AppHandle,
+    feature_id: &str,
+    epoch: &str,
+    presentation: u64,
+    generation: u64,
+) -> bool {
+    permission_scope_generation(
+        &app.state::<Features>().0.lock().unwrap(),
+        feature_id,
+        epoch,
+        presentation,
+    ) == Some(generation)
+}
+
+fn permission_plan_current(
+    plan: &Value,
+    snapshot: &Value,
+    permissions: &Value,
+    document: u64,
+    epoch: &str,
+    generation: u64,
+) -> bool {
+    plan["snapshot"] == *snapshot
+        && plan["permissions"] == *permissions
+        && plan["document"].as_u64() == Some(document)
+        && plan["epoch"] == epoch
+        && plan["generation"].as_u64() == Some(generation)
+        && plan["featureId"] == snapshot["activeFeatureId"]
+        && plan["featureId"] == permissions["featureId"]
+        && plan["expectedRevision"] == permissions["revision"]
+}
+
+fn accept_permission_snapshot(
+    app: &tauri::AppHandle,
+    value: &Value,
+    plan: &Value,
+    presentation: u64,
+) -> bool {
+    let Some(previous_generation) = plan["generation"].as_u64() else {
+        return false;
+    };
+    let Some(feature_id) = plan["featureId"].as_str() else {
+        return false;
+    };
+    let Some(expected_revision) = plan["expectedRevision"].as_u64() else {
+        return false;
+    };
+    let Some(epoch) = plan["epoch"].as_str() else {
+        return false;
+    };
+    let configuration = &plan["configuration"];
+    let snapshot = &value["snapshot"];
+    let permissions = &value["permissions"];
+    if !valid_permission_reply(value)
+        || value["status"] != "ok"
+        || snapshot["generation"].as_u64() != previous_generation.checked_add(1)
+        || snapshot["activeFeatureId"] != feature_id
+        || permissions["featureId"] != feature_id
+        || permissions["revision"].as_u64() != expected_revision.checked_add(1)
+        || permissions["configuration"] != *configuration
+    {
+        return false;
+    }
+    let state = app.state::<Features>();
+    let mut guard = state.0.lock().unwrap();
+    if permission_scope_generation(&guard, feature_id, epoch, presentation)
+        != Some(previous_generation)
+        || guard.workspace_id.as_deref() != snapshot["workspace"]["id"].as_str()
+        || snapshot["view"]["revision"]
+            .as_u64()
+            .is_none_or(|r| r < guard.view_revision)
+    {
+        return false;
+    }
+    for feature in snapshot["features"].as_array().unwrap() {
+        let id = feature["featureId"].as_str().unwrap();
+        let revision = feature["revision"].as_u64().unwrap();
+        if guard
+            .feature_revisions
+            .get(id)
+            .is_some_and(|known| revision < *known)
+        {
+            return false;
+        }
+    }
+    for feature in snapshot["features"].as_array().unwrap() {
+        guard.feature_revisions.insert(
+            feature["featureId"].as_str().unwrap().into(),
+            feature["revision"].as_u64().unwrap(),
+        );
+    }
+    guard.snapshot_generation = previous_generation + 1;
+    guard.view_revision = snapshot["view"]["revision"].as_u64().unwrap();
+    guard.preparation_scope = Some((
+        json!({"contractVersion":1, "generation":previous_generation + 1,
+        "workspaceId":snapshot["workspace"]["id"], "featureId":feature_id,
+        "expectedRevision":snapshot["view"]["revision"]}),
+        epoch.into(),
+        presentation,
+    ));
+    true
+}
+
 async fn permission_metadata_request(
     app: &tauri::AppHandle,
     source: &str,
@@ -899,6 +1022,7 @@ async fn permission_metadata_request(
     presentation: u64,
     epoch: &str,
     request: Value,
+    review: Option<(&Webview, &str)>,
 ) -> Value {
     let id = {
         let state = app.state::<Features>();
@@ -911,13 +1035,15 @@ async fn permission_metadata_request(
     };
     let completion_id = id.clone();
     with_metadata_completion(
-        crate::terminal::metadata_request(
-            app,
-            json!({"kind":"feature-permission-request", "id":id,
-            "document":document,"source":source,"actorId":format!("native-{epoch}"),"request":request}),
-            presentation,
-            epoch,
-        ),
+        async {
+            let envelope = json!({"kind":"feature-permission-request", "id":id,
+                "document":document,"source":source,"actorId":format!("native-{epoch}"),"request":request});
+            if let Some((view, owner)) = review {
+                crate::terminal::permission_review_request(app, view.clone(), envelope, presentation, epoch, owner).await
+            } else {
+                crate::terminal::metadata_request(app, envelope, presentation, epoch).await
+            }
+        },
         |cancelled| crate::terminal::metadata_finish(app, epoch, &completion_id, cancelled),
     )
     .await
@@ -931,7 +1057,6 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
         return denied();
     };
     if !permission_source_allowed(window.label(), window.window().label(), &source)
-        || !crate::terminal::sheet_owned(&window.window())
         || crate::terminal::presentation_blocked(app)
     {
         return denied();
@@ -939,28 +1064,79 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
     };
-    let feature_id = request["featureId"].as_str().unwrap_or_default().to_owned();
-    let generation = {
+    if !focus_then_current(focused(&window), || {
+        identity(&window) == Some((source.clone(), document))
+            && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
+            && !crate::terminal::presentation_blocked(app)
+    })
+    .await
+    {
+        return denied();
+    }
+    if !match request["action"].as_str() {
+        Some("read") => exact(&request, &["action", "featureId"]),
+        Some("propose") => exact(
+            &request,
+            &["action", "featureId", "expectedRevision", "configuration"],
+        ),
+        _ => false,
+    } || !uuid(&request["featureId"])
+    {
+        return denied();
+    }
+    let (feature_id, generation) = {
         let state = app.state::<Features>();
         let guard = state.0.lock().unwrap();
+        let Some((scope, _, _)) = &guard.preparation_scope else {
+            return denied();
+        };
+        let Some(feature_id) = scope["featureId"].as_str() else {
+            return denied();
+        };
         let Some(generation) =
-            permission_scope_generation(&guard, &feature_id, &epoch, presentation)
+            permission_scope_generation(&guard, feature_id, &epoch, presentation)
         else {
             return denied();
         };
-        generation
+        if request["featureId"] != feature_id {
+            return denied();
+        }
+        (feature_id.to_owned(), generation)
     };
     let read = json!({"action":"readPermissions","contractVersion":1,"generation":generation,"featureId":feature_id});
-    let read_reply =
-        permission_metadata_request(app, &source, document, presentation, &epoch, read.clone())
-            .await;
+    let read_reply = permission_metadata_request(
+        app,
+        &source,
+        document,
+        presentation,
+        &epoch,
+        read.clone(),
+        None,
+    )
+    .await;
     if read_reply["status"] != "ok" {
         return read_reply;
     }
+    if read_reply["permissions"]["featureId"] != feature_id
+        || read_reply["snapshot"]["activeFeatureId"] != feature_id
+        || read_reply["snapshot"]["generation"].as_u64() != Some(generation)
+    {
+        return denied();
+    }
     if request["action"] == "read" {
+        if !focus_then_current(focused(&window), || {
+            identity(&window) == Some((source.clone(), document))
+                && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
+                && !crate::terminal::presentation_blocked(app)
+        })
+        .await
+        {
+            return denied();
+        }
         return read_reply;
     }
-    let Some(expected) = request["expectedRevision"].as_u64() else {
+    let Some(expected) = safe(&request["expectedRevision"]).filter(|n| *n < 9_007_199_254_740_991)
+    else {
         return denied();
     };
     let current = read_reply["permissions"].clone();
@@ -1003,48 +1179,65 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
         );
     }
     let feature_name = format!("{} ({})", feature["name"].as_str().unwrap(), feature_id);
-    let detail = permission_diff(
-        &feature_name,
-        expected,
-        &current["configuration"],
-        &request["configuration"],
-        &labels,
+    let plan = json!({"featureId":feature_id,"expectedRevision":expected,"generation":generation,
+        "document":document,"epoch":epoch,"snapshot":snapshot,"permissions":current,"configuration":request["configuration"]});
+    let plan_text = plan.to_string();
+    let digest = format!("{:x}", Sha256::digest(plan_text.as_bytes()));
+    let detail = format!(
+        "{}\n\nReviewed plan SHA-256: {}",
+        permission_diff(
+            &feature_name,
+            expected,
+            &current["configuration"],
+            &plan["configuration"],
+            &labels
+        ),
+        digest
     );
-    let approved = crate::terminal::confirm_sheet(
-        app,
-        window.window(),
-        [
+    let review_id = {
+        let state = app.state::<Features>();
+        let mut guard = state.0.lock().unwrap();
+        if guard.sequence >= 0xffffffffffff {
+            return denied();
+        }
+        guard.sequence += 1;
+        format!("00000000-6990-4000-8000-{:012x}", guard.sequence)
+    };
+    if !crate::terminal::permission_review_begin(app, &epoch, presentation, &review_id) {
+        return json!({"status":"busy"});
+    }
+    with_metadata_completion(async {
+        let approved = crate::terminal::confirm_permission_sheet(app, window.clone(), [
             "Feature permissions".into(),
-            "Approve this exact policy change? From now on only the checked operations are allowed."
-                .into(),
-            detail,
-            "Cancel".into(),
-            "Approve".into(),
-        ],
-        || true,
-    )
-    .await;
-    if !approved {
-        return json!({"status":"cancelled"});
-    }
-    // Revalidate identity, focus and the current revision after the sheet.
-    let source_now = window.url().map(|url| url.to_string()).unwrap_or_default();
-    if !permission_source_allowed(window.label(), window.window().label(), &source_now)
-        || crate::terminal::presentation_blocked(app)
-    {
-        return denied();
-    }
-    let current_now =
-        permission_metadata_request(app, &source_now, document, presentation, &epoch, read).await;
-    if current_now["permissions"]["revision"].as_u64() != Some(expected) {
-        return json!({"status":"stale","permissions":current_now["permissions"].clone()});
-    }
-    let save = json!({
-        "action":"savePermissions","contractVersion":1,"generation":generation,
-        "featureId":feature_id,"expectedRevision":expected,
-        "configuration":request["configuration"],
-    });
-    permission_metadata_request(app, &source_now, document, presentation, &epoch, save).await
+            "Approve this exact policy change? From now on only the checked operations are allowed.".into(),
+            detail, "Cancel".into(), "Approve".into(),
+        ], crate::terminal::PermissionReviewContext { epoch:epoch.clone(), presentation, document,
+            id:review_id.clone(), feature_id:feature_id.clone(), generation }).await;
+        if !approved { return json!({"status":"cancelled"}); }
+        if !focus_then_current(focused(&window), || identity(&window) == Some((source.clone(), document))
+            && crate::terminal::permission_review_current(app, &epoch, presentation, &review_id)
+            && !crate::terminal::presentation_blocked(app)).await { return denied(); }
+        let current_now = permission_metadata_request(app, &source, document, presentation, &epoch, read, Some((&window, &review_id))).await;
+        if current_now["status"] != "ok" { return current_now; }
+        if !permission_plan_current(&plan, &current_now["snapshot"], &current_now["permissions"], document, &epoch, generation) {
+            return json!({"status":"stale"});
+        }
+        if !focus_then_current(focused(&window), || identity(&window) == Some((source.clone(), document))
+            && crate::terminal::permission_review_current(app, &epoch, presentation, &review_id)
+            && !crate::terminal::presentation_blocked(app)).await { return denied(); }
+        let save = json!({"action":"savePermissions","contractVersion":1,"generation":generation,
+            "featureId":feature_id,"expectedRevision":expected,"configuration":plan["configuration"],
+            "reviewPlan":plan_text,"reviewDigest":digest});
+        let result = permission_metadata_request(app, &source, document, presentation, &epoch, save, Some((&window, &review_id))).await;
+        if result["status"] == "unavailable" || result["status"] == "denied" { return json!({"status":"unknown"}); }
+        if result["status"] == "ok" {
+            if !accept_permission_snapshot(app, &result, &plan, presentation) {
+                return json!({"status":"unknown"});
+            }
+            publish(app, &result["snapshot"], presentation, &epoch);
+        }
+        result
+    }, |cancelled| crate::terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
 }
 
 #[tauri::command]
@@ -1520,6 +1713,70 @@ mod tests {
     }
 
     #[test]
+    fn reviewed_plan_rejects_document_epoch_feature_snapshot_and_revision_changes() {
+        let snapshot = json!({"activeFeatureId":"a", "generation":7, "members":["x"]});
+        let permissions = json!({"featureId":"a", "revision":3});
+        let plan = json!({"snapshot":snapshot,"permissions":permissions,"document":2,"epoch":"epoch", "generation":7,"featureId":"a","expectedRevision":3});
+        assert!(permission_plan_current(
+            &plan,
+            &snapshot,
+            &permissions,
+            2,
+            "epoch",
+            7
+        ));
+        assert!(!permission_plan_current(
+            &plan,
+            &snapshot,
+            &permissions,
+            3,
+            "epoch",
+            7
+        ));
+        assert!(!permission_plan_current(
+            &plan,
+            &snapshot,
+            &permissions,
+            2,
+            "other",
+            7
+        ));
+        assert!(!permission_plan_current(
+            &plan,
+            &snapshot,
+            &permissions,
+            2,
+            "epoch",
+            8
+        ));
+        let mut changed = snapshot.clone();
+        changed["activeFeatureId"] = json!("b");
+        assert!(!permission_plan_current(
+            &plan,
+            &changed,
+            &permissions,
+            2,
+            "epoch",
+            7
+        ));
+        let mut changed = snapshot.clone();
+        changed["members"] = json!([]);
+        assert!(!permission_plan_current(
+            &plan,
+            &changed,
+            &permissions,
+            2,
+            "epoch",
+            7
+        ));
+        let mut changed = permissions.clone();
+        changed["revision"] = json!(4);
+        assert!(!permission_plan_current(
+            &plan, &snapshot, &changed, 2, "epoch", 7
+        ));
+    }
+
+    #[test]
     fn permission_scope_uses_captured_feature_epoch_and_generation() {
         let mut state = State {
             snapshot_generation: 13,
@@ -1723,6 +1980,46 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn permission_completion_releases_on_real_timeout_and_early_drop() {
+        use std::cell::Cell;
+        use std::future::Future;
+        use std::task::{Context, Poll, Waker};
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let held = Cell::new(true);
+        runtime.block_on(async {
+            let result = with_metadata_completion(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(1),
+                    std::future::pending::<()>(),
+                ),
+                |_| held.set(false),
+            )
+            .await;
+            assert!(result.is_err());
+        });
+        assert!(!held.get());
+        held.set(true);
+        let mut pending = Box::pin(with_metadata_completion(
+            std::future::pending::<()>(),
+            |cancelled| {
+                assert!(cancelled);
+                held.set(false);
+            },
+        ));
+        assert_eq!(
+            pending
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Pending
+        );
+        drop(pending);
+        assert!(!held.get());
+    }
+
     #[test]
     fn command_drop_releases_once_during_metadata_or_final_focus_without_continuation() {
         use std::cell::{Cell, RefCell};

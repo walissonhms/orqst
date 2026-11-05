@@ -13,6 +13,7 @@ pub(super) struct Focus {
     pub has_sheet: bool,
     pub key_is_parent: bool,
     pub key_is_sheet: bool,
+    pub sheet: usize,
 }
 
 impl Focus {
@@ -20,9 +21,53 @@ impl Focus {
         current_review && self.active && self.has_sheet && self.key_is_sheet
     }
 
+    pub(super) fn owns_permission_sheet(self, expected: usize) -> bool {
+        expected != 0 && self.sheet == expected && self.owns_sheet(true)
+    }
+
     pub(super) fn owns_key(self, current_review: bool) -> bool {
         self.active && (self.key_is_parent || self.owns_sheet(current_review))
     }
+}
+
+/// Called only on the AppKit thread while Tauri holds the WKWebView alive.
+pub(super) unsafe fn chrome_first_responder(webview: *mut AnyObject) -> bool {
+    if webview.is_null() {
+        return false;
+    }
+    let url: *mut AnyObject = msg_send![webview, URL];
+    if url.is_null() {
+        return false;
+    }
+    let string: *mut AnyObject = msg_send![url, absoluteString];
+    if string.is_null() {
+        return false;
+    }
+    let bytes: *const std::ffi::c_char = msg_send![string, UTF8String];
+    if bytes.is_null()
+        || std::ffi::CStr::from_ptr(bytes).to_bytes() != b"orqst-features://local/index.html"
+    {
+        return false;
+    }
+    let Some(class) = AnyClass::get(c"NSApplication") else {
+        return false;
+    };
+    let application: *mut AnyObject = msg_send![class, sharedApplication];
+    let parent: *mut AnyObject = msg_send![webview, window];
+    if application.is_null() || parent.is_null() {
+        return false;
+    }
+    let active: bool = msg_send![application, isActive];
+    let key: *mut AnyObject = msg_send![application, keyWindow];
+    if !active || key != parent {
+        return false;
+    }
+    let responder: *mut AnyObject = msg_send![parent, firstResponder];
+    if responder.is_null() {
+        return false;
+    }
+    let is_view: bool = msg_send![responder, respondsToSelector:sel!(isDescendantOf:)];
+    is_view && msg_send![responder, isDescendantOf:webview]
 }
 
 /// NSApp is active for this exact window; a sheet does not change that.
@@ -59,6 +104,7 @@ pub(super) fn sample(window: &tauri::Window) -> Option<Focus> {
             has_sheet: !sheet.is_null() && sheet_parent == parent,
             key_is_parent: key == parent,
             key_is_sheet: !sheet.is_null() && key == sheet && sheet_parent == parent,
+            sheet: sheet as usize,
         })
     }
 }
@@ -82,7 +128,7 @@ extern "C-unwind" fn key_changed(_: &AnyObject, _: Sel, _: *mut AnyObject) {
     let Some(window) = app.get_window("main") else {
         return;
     };
-    if !sample(&window).is_some_and(|focus| focus.owns_key(super::current_review(app))) {
+    if !sample(&window).is_some_and(|focus| focus.owns_key(super::current_review(app, focus))) {
         super::native_focus_lost(app, "another-key-window");
     }
 }
@@ -161,8 +207,17 @@ mod tests {
             has_sheet: true,
             key_is_parent: false,
             key_is_sheet: true,
+            sheet: 1,
         };
         assert!(sheet.owns_sheet(true));
+        assert!(sheet.owns_permission_sheet(1));
+        assert!(!sheet.owns_permission_sheet(2));
+        assert!(!sheet.owns_permission_sheet(0));
+        assert!(!Focus {
+            active: false,
+            ..sheet
+        }
+        .owns_permission_sheet(1));
         assert!(!sheet.owns_sheet(false)); // Revoked generation cannot return to its old sheet.
         assert!(!Focus {
             active: false,

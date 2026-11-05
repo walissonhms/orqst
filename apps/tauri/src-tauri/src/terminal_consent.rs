@@ -93,6 +93,7 @@ unsafe fn show(
     labels: &[String; 5],
     sender: oneshot::Sender<bool>,
     current: impl FnOnce() -> bool,
+    sheet_ready: impl FnOnce(usize) -> bool,
 ) -> Option<()> {
     let [title, message, detail, cancel, approve] = labels;
     let parent = window.ns_window().ok()?.cast::<AnyObject>();
@@ -189,7 +190,7 @@ unsafe fn show(
             msg_send![container, setContainerSize: Size { width: clip.width, height: f64::MAX }];
         let _: () = msg_send![&*view, sizeToFit];
     }
-    if !fitted || !current() {
+    if !fitted || !current() || !sheet_ready(native_window as usize) {
         return None;
     }
     let delegate: *mut AnyObject = msg_send![delegate_class()?, new];
@@ -215,7 +216,37 @@ pub async fn confirm(
         .run_on_main_thread(move || {
             // SAFETY: every AppKit object/getter and callback target lives on this thread.
             // On failure the sender drops, yielding false; no automatic approval or retry.
-            let _ = unsafe { show(&window, &labels, sender, current) };
+            let _ = unsafe { show(&window, &labels, sender, current, |_| true) };
+        })
+        .is_err()
+    {
+        return false;
+    }
+    receiver.await.unwrap_or(false)
+}
+
+/// Run both the first-responder check and the final fence on the AppKit thread.
+pub async fn confirm_webview(
+    view: tauri::Webview,
+    labels: [String; 5],
+    current: impl FnOnce() -> bool + Send + 'static,
+    sheet_ready: impl FnOnce(usize) -> bool + Send + 'static,
+) -> bool {
+    let (sender, receiver) = oneshot::channel();
+    let window = view.window();
+    if view
+        .with_webview(move |native| {
+            // SAFETY: Tauri executes this closure on the native UI thread while the WKWebView is live.
+            let _ = unsafe {
+                let webview = native.inner().cast::<AnyObject>();
+                show(
+                    &window,
+                    &labels,
+                    sender,
+                    || super::native_focus::chrome_first_responder(webview) && current(),
+                    sheet_ready,
+                )
+            };
         })
         .is_err()
     {
