@@ -1,5 +1,10 @@
 # ORQST roadmap
 
+## Native authorization viewport gate — 2026-11-04
+
+Review the bounded AppKit authorization source, check the frozen native crate, then package separately and accept real button visibility on small screens/windows. No runtime consent or provider retry belongs to this source delivery.
+See [source, reuse and verification limits](docs/research/native-consent-scroll.md).
+
 ## Offline combined-path review gate — 2026-11-04
 
 The narrow capsule/device/current-inode source correction awaits independent review and separate packaging/native acceptance. The open Preview and real reservation are preserved.

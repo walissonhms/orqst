@@ -11,7 +11,9 @@ use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
 use tauri::webview::WebviewBuilder;
 use tauri::{Manager, Webview, WebviewUrl, Window, WindowEvent};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+#[cfg(not(target_os = "macos"))]
+use tauri_plugin_dialog::MessageDialogResult;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 use tokio::sync::oneshot;
@@ -19,6 +21,10 @@ use tokio::sync::Notify;
 #[cfg(target_os = "macos")]
 #[path = "terminal_focus.rs"]
 mod native_focus;
+
+#[cfg(target_os = "macos")]
+#[path = "terminal_consent.rs"]
+mod native_consent;
 
 #[path = "terminal_admission.rs"]
 mod terminal_admission;
@@ -1131,33 +1137,67 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         }
         generation
     };
-    let approve = fields[4].to_owned();
-    let expected = approve.clone();
+    let labels: [String; 5] = std::array::from_fn(|i| fields[i].to_owned());
     let app = app.clone();
-    // macOS: first/default and third/Escape both cancel; only the middle button approves.
-    app.dialog().message(format!("{}\n\n{}", fields[1], fields[2]))
-        .title(fields[0]).parent(&window.window())
-        .buttons(MessageDialogButtons::YesNoCancelCustom(fields[3].into(), approve, fields[3].into()))
-        .show_with_result(move |result| {
-            tauri::async_runtime::spawn(async move {
-                let focused = focused(&window).await;
-                let current = app.state::<Terminals>().0.lock().unwrap().as_mut().and_then(|r| {
-                    if r.native_dialog.as_ref().is_some_and(|(dialog_id, _, _)| dialog_id == &id) { r.native_dialog = None; }
-                    if r.revoked.get(slot).copied().unwrap_or(true)
-                        || request.as_ref().is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot))) {
-                        None
-                    } else { r.generations.get(slot).copied() }
+    // Keep the host reader free to process revocation, EOF and concurrent refusal.
+    tauri::async_runtime::spawn(async move {
+        #[cfg(target_os = "macos")]
+        let approved = {
+            let native = app.clone();
+            let view = window.clone();
+            let dialog_id = id.clone();
+            let request = request.clone();
+            native_consent::confirm(&app, window.window(), labels, move || {
+                // Main-thread native getters precede and remain outside the application mutex.
+                let document = self::slot(&view);
+                let focus = native_focus::sample(&view.window());
+                let state = native.state::<Terminals>();
+                let guard = state.0.lock().unwrap();
+                document == Some(slot)
+                    && focus.is_some_and(|focus| focus.owns_key(false))
+                    && guard.as_ref().is_some_and(|r| {
+                        r.native_dialog.as_ref().is_some_and(|(id, owner, version)| {
+                            id == &dialog_id && *owner == slot && Some(*version) == generation
+                        }) && r.generations.get(slot).copied() == generation
+                            && r.revoked.get(slot) == Some(&false)
+                            && r.loaded.get(slot) == Some(&true)
+                            && request.as_ref().is_none_or(|id| {
+                                r.mcp_request.as_ref() == Some(&(id.clone(), slot))
+                            })
+                    })
+            })
+            .await
+        };
+        #[cfg(not(target_os = "macos"))]
+        let approved = {
+            let [title, message, detail, cancel, approve] = labels;
+            let expected = approve.clone();
+            let (sender, receiver) = oneshot::channel();
+            app.dialog().message(format!("{message}\n\n{detail}"))
+                .title(title).parent(&window.window())
+                .buttons(MessageDialogButtons::YesNoCancelCustom(cancel.clone(), approve, cancel))
+                .show_with_result(move |result| {
+                    let _ = sender.send(matches!(result, MessageDialogResult::Custom(ref text) if text == &expected));
                 });
-                if focus_diagnostics() {
-                    eprintln!("ORQST_TERMINAL_CONSENT {}", json!({"result": format!("{result:?}"), "approved": matches!(result, MessageDialogResult::Custom(ref text) if text == &expected), "focused": focused, "generation": generation, "current": current}));
-                    #[cfg(target_os = "macos")]
-                    tauri::async_runtime::spawn(trace_dialog_focus(window.clone()));
-                }
-                let accepted = matches!(result, MessageDialogResult::Custom(ref text) if text == &expected)
-                    && generation == current && self::slot(&window) == Some(slot) && focused && !presentation_blocked(&app);
-                send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
-            });
+            receiver.await.unwrap_or(false)
+        };
+        let focused = focused(&window).await;
+        let current = app.state::<Terminals>().0.lock().unwrap().as_mut().and_then(|r| {
+            if r.native_dialog.as_ref().is_some_and(|(dialog_id, _, _)| dialog_id == &id) { r.native_dialog = None; }
+            if r.revoked.get(slot).copied().unwrap_or(true)
+                || request.as_ref().is_some_and(|id| r.mcp_request.as_ref() != Some(&(id.clone(), slot))) {
+                None
+            } else { r.generations.get(slot).copied() }
         });
+        if focus_diagnostics() {
+            eprintln!("ORQST_TERMINAL_CONSENT {}", json!({"approved": approved, "focused": focused, "generation": generation, "current": current}));
+            #[cfg(target_os = "macos")]
+            tauri::async_runtime::spawn(trace_dialog_focus(window.clone()));
+        }
+        let accepted = approved && generation.is_some()
+            && generation == current && self::slot(&window) == Some(slot) && focused && !presentation_blocked(&app);
+        send(&app, json!({"kind": "confirm", "id": id, "accepted": accepted}));
+    });
 }
 
 /// Native menu only: no renderer command can select a grant, supply a proof or call MCP tools.

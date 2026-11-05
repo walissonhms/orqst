@@ -586,3 +586,10 @@ No real-state use, native UI, build or provider acceptance is claimed here.
 - [ ] Native acceptance and actual administrative effects: Root 676 and human only.
 
 See [delivery boundaries and actual evidence locations](../development/offline-cross-boot-delivery.md).
+
+## Native authorization viewport — 2026-11-04
+
+- [x] Implement bounded native plain-text detail scrolling while retaining native consent guards.
+- [ ] Review/check the frozen native crate and package separately; accept actual button visibility on small screens/windows.
+
+See [source and acceptance limits](../research/native-consent-scroll.md).

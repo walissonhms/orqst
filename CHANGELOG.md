@@ -1,5 +1,10 @@
 # Changelog
 
+## Native authorization viewport correction — 2026-11-04
+
+Move complete terminal authorization detail into a bounded native plain-text scroll view. Preserve default/Escape cancellation, explicit authorization and existing native authority checks; no package or native visual acceptance is included.
+See [source, reuse and verification limits](docs/research/native-consent-scroll.md).
+
 ## Offline selected current inode correction — 2026-11-04
 
 Remove the redundant captured-current-inode equality and exclude model sources from the inter-phase reservation pin. Keep complete historical proof, strict metadata and intra-phase RAW checks.

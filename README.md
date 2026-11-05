@@ -1,5 +1,10 @@
 # ORQST
 
+## Native authorization viewport correction — source only — 2026-11-04
+
+Native authorization detail now uses a bounded plain-text scroll area with native Cancel/Authorize controls. The open package is preserved; replacement packaging and small-screen visual acceptance remain pending.
+See [source, reuse and verification limits](docs/research/native-consent-scroll.md).
+
 ## Offline selected current inode correction — 2026-11-04
 
 Source corrects the combined historical capsule/device-difference path while preserving full preimage and fresh per-phase approval. No new package or real recovery attempt is included.

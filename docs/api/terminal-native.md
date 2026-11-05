@@ -388,3 +388,7 @@ operations. Async acknowledgments report the current save revision and cannot re
 hidden documents, change focus or activate a restored route. A rejected metadata
 operation leaves the view usable with the existing memory-only indicator.
 See [migration and limits](../development/terminal-layout-sqlite.md).
+
+## Native consent detail presentation — 2026-11-04
+
+The macOS private `confirm` review now keeps complete title/message/detail in a bounded native plain-text scroll view. Cancel remains default/Escape; only the distinct Authorize button response can approve, followed by existing focus/document/generation/revocation checks. The private payload, authority and deadlines are unchanged. See [source and acceptance limits](../research/native-consent-scroll.md).

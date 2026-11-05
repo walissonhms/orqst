@@ -30,3 +30,7 @@ prior visual metadata; an uncertain addition remains explicitly unavailable. No
 redesign or simulated terminal content is introduced. Pure/EN/PT facade checks
 passed; actual native/provider acceptance is pending. See
 [workflow and limitations](../../development/terminal-native-enrollment.md).
+
+## Native consent viewport correction — 2026-11-04
+
+The authorization sheet uses bounded native plain-text scrolling and visible-control sizing without changing the approved Feature layout or renderer authority. A new package and actual small-screen visual acceptance remain pending. See [source and reuse](../../research/native-consent-scroll.md).
