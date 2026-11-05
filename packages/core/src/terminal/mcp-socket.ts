@@ -73,7 +73,10 @@ export function readMcpLines(
 
 /** Opt-in local Unix transport only. No TCP/HTTP endpoint, observed session or PTY access. */
 export async function openMcpInstanceSockets(
-  broker: Pick<McpTaskBroker, 'call' | 'close'> & { snapshot(): { state: string } },
+  broker: Pick<McpTaskBroker, 'call' | 'close'> & {
+    snapshot(): { state: string };
+    grantGeneration?(): number;
+  },
   parent = '/tmp',
 ) {
   if (process.platform === 'win32' || !['ungranted', 'ready'].includes(broker.snapshot().state))
@@ -83,6 +86,7 @@ export async function openMcpInstanceSockets(
   terminalDirectory(directory, true);
   const servers: ReturnType<typeof createServer>[] = [];
   const sockets = new Set<Socket>();
+  const busySockets = new Set<Socket>();
   const files: string[] = [];
   let closed = false;
   const close = async () => {
@@ -116,7 +120,8 @@ export async function openMcpInstanceSockets(
         sockets.add(socket);
         let authenticated = false,
           busy = false,
-          calls = 0;
+          calls = 0,
+          generation = broker.grantGeneration?.() ?? 0;
         const timer = setTimeout(() => socket.destroy(), 2000);
         const unbind = readMcpLines(
           socket,
@@ -135,8 +140,14 @@ export async function openMcpInstanceSockets(
               return;
             }
             const parsed = request.safeParse(raw);
+            const currentGeneration = broker.grantGeneration?.() ?? 0;
+            if (currentGeneration !== generation) {
+              generation = currentGeneration;
+              calls = 0;
+            }
             if (!parsed.success || busy || ++calls > 3) return socket.destroy();
             busy = true;
+            busySockets.add(socket);
             void broker
               .call(role, parsed.data.call)
               .then((value) => {
@@ -149,6 +160,7 @@ export async function openMcpInstanceSockets(
               })
               .finally(() => {
                 busy = false;
+                busySockets.delete(socket);
               });
           },
           () => socket.destroy(),
@@ -158,6 +170,7 @@ export async function openMcpInstanceSockets(
           clearTimeout(timer);
           unbind();
           sockets.delete(socket);
+          busySockets.delete(socket);
           if (authenticated) broker.close(); // Lost MCP != CLI exit; no reconnect/retry.
         });
       });
@@ -177,7 +190,7 @@ export async function openMcpInstanceSockets(
       files.push(socketPath);
       endpoints.push({ role, socketPath, capabilityFile });
     }
-    return { directory, endpoints, close };
+    return { directory, endpoints, close, idle: () => busySockets.size === 0 };
   } catch (error) {
     await close();
     throw error;

@@ -111,7 +111,12 @@ try {
     else if (value.kind === 'confirm') {
       if (value.requestId) grants.push(value);
       else starts.push(JSON.parse(String(value.detail)) as Record<string, unknown>);
-      native.send({ kind: 'confirm', id: value.id, accepted: true });
+      // Split replay vs new native grant: cancel the second MCP review.
+      native.send({
+        kind: 'confirm',
+        id: value.id,
+        accepted: !value.requestId || grants.length === 1,
+      });
     } else if (value.kind === 'retirement') native.pending.get(String(value.id))?.(value);
     else if (value.kind === 'reply')
       native.pending.get(String(value.id))?.(value.value as Record<string, unknown>);
@@ -225,10 +230,23 @@ try {
       taskId: delivered.value.taskId,
       result: 'SYNTHETIC packaged result',
     });
-    assert.equal(
-      (await native.request({ kind: 'authorizeMcp', slot: 0, focused: true })).status,
-      'denied',
-    );
+    native.send({ kind: 'confirm', id: grants[0]!.id, accepted: true });
+    const replay = await relays[1]!.request({
+      jsonrpc: '2.0',
+      method: 'tools/call',
+      params: {
+        name: 'submit_result',
+        arguments: { taskId: delivered.value.taskId, result: 'late' },
+      },
+    });
+    assert.equal((replay.result as { isError: boolean }).isError, true);
+    const cancelled = await native.request({ kind: 'authorizeMcp', slot: 0, focused: true });
+    assert.equal(cancelled.status, 'cancelled');
+    assert.equal(grants.length, 2);
+    assert.notEqual(grants[0]!.id, grants[1]!.id);
+    assert.notEqual(grants[0]!.requestId, grants[1]!.requestId);
+    const secondGrant = JSON.parse(String(grants[1]!.detail)) as Record<string, unknown>;
+    assert.notEqual(grant.grantId, secondGrant.grantId);
     assert.equal(
       (await native.request({ kind: 'retire', slot: 1, focused: true })).status,
       'denied',

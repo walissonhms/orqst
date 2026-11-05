@@ -277,3 +277,19 @@ short private socket roots and timeout/environment builders are unchanged; socke
 are not placed under the long user-data pair path. The wizard dispatches no message
 and grants no task authority. Native protocol negotiation, idle/busy delivery and
 real A-to-B-to-A processing/return remain unvalidated.
+
+## Mixed MCP grant and security review — 2026-11-05
+
+The [mixed communication increment](../development/mixed-mcp-communication.md)
+supersedes earlier single-exchange-per-pair statements: each exchange still requires
+a new native review and signed single-use broker. The relay negotiates only the two
+reviewed revisions, with a supported fallback for unknown well-formed versions.
+The Unix socket budget changes from three calls per connection to three per confirmed
+grant and role, capped at 16 grants per pair. Preparation does not reset the budget.
+A new broker is installed only when sockets are idle; calls already received remain
+bound to the old broker, and old task IDs cannot complete a new task. After installation
+the runtime cannot infer when the model conceived a newly received call. Disconnect,
+loss, exit and invalidation remain terminal. No new network listener, credential
+exposure, renderer authority or PTY injection is introduced. The Tauri test and
+synthetic acceptance script split replay from a new native grant; the script and real
+provider acceptance were not run for this increment.

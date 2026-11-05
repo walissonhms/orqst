@@ -18,10 +18,13 @@ import { ManagedTerminalPair } from '../packages/core/src/terminal/managed-pair.
 import { connectMcpInstance } from '../packages/core/src/terminal/mcp-socket.js';
 import type { TerminalEvents } from '../packages/core/src/terminal/supervisor.js';
 
-async function fixture(profileIds = ['codex-terminal-v1', 'codex-terminal-v1']) {
+async function fixture(
+  profileIds = ['codex-terminal-v1', 'codex-terminal-v1'],
+  now?: () => number,
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-mcp-pair-')));
   const keys = generateKeyPairSync('ed25519');
-  const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]));
+  const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), now);
   const stores: Store[] = [];
   const events: TerminalEvents[] = [];
   const writes: string[] = [];
@@ -112,6 +115,122 @@ async function fixture(profileIds = ['codex-terminal-v1', 'codex-terminal-v1']) 
     },
   };
 }
+
+test('abandoned preparation expires without blocking a fresh grant or accepting its old proof', async () => {
+  let clock = 1_000_000;
+  const f = await fixture(undefined, () => clock);
+  try {
+    f.launch(0);
+    f.launch(1);
+    const old = f.session.prepare();
+    const oldProof = f.proof(old.challenge);
+    clock += 120_001;
+    const fresh = f.session.prepare();
+    assert.notEqual(fresh.grant.grantId, old.grant.grantId);
+    assert.notEqual(fresh.challenge.digest, old.challenge.digest);
+    assert.throws(() => f.session.authorize(oldProof));
+    f.session.authorize(f.proof(fresh.challenge));
+    assert.equal(f.session.snapshot().state, 'ready');
+    assert.deepEqual(f.writes, []);
+  } finally {
+    await f.close();
+  }
+});
+
+test('a fourth call on the same grant closes the socket; an unconfirmed preparation cannot reset it', async () => {
+  const f = await fixture();
+  try {
+    f.launch(0);
+    f.launch(1);
+    const prepared = f.session.prepare();
+    f.session.authorize(f.proof(prepared.challenge));
+    const waiting = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+    const outcome = f.clients[0]!.call(randomUUID(), {
+      name: 'delegate_task',
+      arguments: { task: 'SYNTHETIC budget' },
+    });
+    const task = (await waiting) as { taskId: string };
+    const bad = { name: 'submit_result', arguments: { taskId: task.taskId, result: 'result' } };
+    await f.clients[1]!.call(randomUUID(), bad);
+    await outcome;
+    await assert.rejects(f.clients[1]!.call(randomUUID(), bad));
+    f.session.prepare(); // A cancelled native review has not installed a new grant.
+    await assert.rejects(f.clients[1]!.call(randomUUID(), bad), /transport/);
+    assert.throws(() => f.session.prepare());
+  } finally {
+    await f.close();
+  }
+});
+
+test('at most 16 separately authorized grants are available on one pair', async () => {
+  const f = await fixture();
+  try {
+    f.launch(0);
+    f.launch(1);
+    for (let count = 0; count < 16; count++) {
+      const prepared = f.session.prepare();
+      f.session.authorize(f.proof(prepared.challenge));
+      const waiting = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+      const outcome = f.clients[0]!.call(randomUUID(), {
+        name: 'delegate_task',
+        arguments: { task: 'SYNTHETIC bounded grant' },
+      });
+      const task = (await waiting) as { taskId: string };
+      await f.clients[1]!.call(randomUUID(), {
+        name: 'submit_result',
+        arguments: { taskId: task.taskId, result: 'SYNTHETIC result' },
+      });
+      assert.equal(((await outcome) as { state: string }).state, 'completed');
+    }
+    assert.throws(() => f.session.prepare(), /grant limit/);
+    assert.equal(f.session.snapshot().state, 'completed');
+    assert.deepEqual(f.writes, []);
+  } finally {
+    await f.close();
+  }
+});
+
+test('an in-flight old call prevents a new grant and stays on its original broker', async () => {
+  const f = await fixture();
+  try {
+    f.launch(0);
+    f.launch(1);
+    const first = f.session.prepare();
+    f.session.authorize(f.proof(first.challenge));
+    const waiting = f.clients[1]!.call(randomUUID(), { name: 'wait_task', arguments: {} });
+    // A source call proves the worker request has reached the old broker before preparation.
+    const outcome = f.clients[0]!.call(randomUUID(), {
+      name: 'delegate_task',
+      arguments: { task: 'SYNTHETIC old grant' },
+    });
+    const old = (await waiting) as { taskId: string };
+    assert.throws(() => f.session.prepare());
+    await f.clients[1]!.call(randomUUID(), {
+      name: 'submit_result',
+      arguments: { taskId: old.taskId, result: 'old result' },
+    });
+    await outcome;
+    // A pending review does not install its candidate: this still reaches the old broker.
+    const fresh = f.session.prepare();
+    await assert.rejects(
+      f.clients[0]!.call(randomUUID(), {
+        name: 'delegate_task',
+        arguments: { task: 'late old request' },
+      }),
+    );
+    f.session.authorize(f.proof(fresh.challenge));
+    await assert.rejects(
+      f.clients[1]!.call(randomUUID(), {
+        name: 'submit_result',
+        arguments: { taskId: old.taskId, result: 'stale result' },
+      }),
+    );
+    assert.equal(f.session.snapshot().state, 'ready');
+    assert.deepEqual(f.writes, []);
+  } finally {
+    await f.close();
+  }
+});
 
 test('Desktop MCP composition binds actual owned starts and signed grant, with synthetic A -> B -> A and no PTY writes', async () => {
   const f = await fixture();

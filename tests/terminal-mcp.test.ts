@@ -282,19 +282,44 @@ for (const providers of [
             });
           return { call, child, output: () => output, stderr: () => stderr };
         });
-        for (const client of clients) {
-          const initialized = await client.call('initialize', {
-            protocolVersion: '2025-11-25',
-            capabilities: {},
-            clientInfo: { name: 'synthetic-client', version: '1' },
-          });
-          assert.ok(initialized.result);
+        for (const [index, client] of clients.entries()) {
+          for (const protocolVersion of [undefined, 'not-a-version']) {
+            const invalid = await client.call('initialize', {
+              ...(protocolVersion ? { protocolVersion } : {}),
+              capabilities: {},
+              clientInfo: { name: 'synthetic-client', version: '1' },
+            });
+            assert.equal((invalid.error as { code: number }).code, -32602);
+          }
+          const version = index === 0 ? '2025-06-18' : '2025-11-25';
+          if (providers[0] === 'opencode' && index === 0) {
+            const unknown = await client.call('initialize', {
+              protocolVersion: '2026-07-28',
+              capabilities: {},
+              clientInfo: { name: 'synthetic-client', version: '1' },
+            });
+            assert.equal(
+              (unknown.result as { protocolVersion: string }).protocolVersion,
+              '2025-11-25',
+            );
+          } else {
+            const initialized = await client.call('initialize', {
+              protocolVersion: version,
+              capabilities: { elicitation: {} },
+              clientInfo: { name: 'synthetic-client', version: '1', title: 'Synthetic Codex' },
+            });
+            assert.equal(
+              (initialized.result as { protocolVersion: string }).protocolVersion,
+              version,
+            );
+          }
           client.child.stdin!.write(
             JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n',
           );
         }
         const a = clients[0]!,
           b = clients[1]!;
+        assert.equal(((await a.call('resources/list')).error as { code: number }).code, -32601);
         const aTools = await a.call('tools/list'),
           bTools = await b.call('tools/list');
         assert.match(JSON.stringify(aTools), /delegate_task/);

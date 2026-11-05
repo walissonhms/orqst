@@ -11,7 +11,7 @@ const message = z.strictObject({
   params: z.unknown().optional(),
 });
 const initialize = z.object({
-  protocolVersion: z.literal('2025-11-25'),
+  protocolVersion: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   clientInfo: z.object({ name: z.string().max(128), version: z.string().max(128) }),
   capabilities: z.record(z.string(), z.unknown()),
 });
@@ -99,10 +99,13 @@ async function start() {
       const error = (code: number) =>
         send({ jsonrpc: '2.0', id: request.id, error: { code, message: 'Operation unavailable' } });
       if (request.method === 'initialize') {
-        if (initialized || !initialize.safeParse(request.params).success) return error(-32602);
+        const params = initialize.safeParse(request.params);
+        if (initialized || !params.success) return error(-32602);
         initialized = true;
         result({
-          protocolVersion: '2025-11-25',
+          protocolVersion: ['2025-06-18', '2025-11-25'].includes(params.data.protocolVersion)
+            ? params.data.protocolVersion
+            : '2025-11-25',
           serverInfo: { name: 'orqst', version: '0.1.0' },
           capabilities: { tools: {} },
         });

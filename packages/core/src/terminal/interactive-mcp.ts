@@ -4,12 +4,17 @@ import { McpTaskBroker, type McpRole } from './mcp-task.js';
 import { openMcpInstanceSockets } from './mcp-socket.js';
 import type { TerminalBackend } from './supervisor.js';
 
+// A pair is disposable; every grant still requires a separate native confirmation.
+const MAX_GRANTS_PER_SESSION = 16;
+
 /** One disposable pair, bound at actual dispatch. Socket authentication alone grants no task. */
 export class InteractiveMcpSession {
   private instances = new Map<number, string>();
   private broker?: McpTaskBroker;
+  private candidate?: McpTaskBroker;
   private closed = false;
   private opened = false;
+  private grantGeneration = 0;
   private transport?: Awaited<ReturnType<typeof openMcpInstanceSockets>>;
 
   constructor(
@@ -24,12 +29,14 @@ export class InteractiveMcpSession {
     this.transport = await openMcpInstanceSockets(
       {
         snapshot: () =>
-          this.broker?.snapshot() ?? {
+          (this.broker ?? this.candidate)?.snapshot() ?? {
             state: this.closed ? 'unknown' : 'ungranted',
           },
+        grantGeneration: () => this.grantGeneration,
         call: (role: McpRole, raw: unknown) => {
           if (this.closed || !this.broker) return Promise.reject(new Error('MCP ungranted'));
-          return this.broker.call(role, raw);
+          const broker = this.broker;
+          return broker.call(role, raw);
         },
         close: () => this.invalidate(),
       },
@@ -90,27 +97,42 @@ export class InteractiveMcpSession {
   }
 
   prepare() {
-    if (this.closed || !this.transport || !this.allOwned())
+    if (this.closed || !this.transport || !this.ownedForGrant())
       throw new Error('Two owned running MCP instances required');
-    this.broker ??= new McpTaskBroker(
+    if (this.grantGeneration >= MAX_GRANTS_PER_SESSION) throw new Error('MCP grant limit reached');
+    if (!this.transport.idle()) throw new Error('MCP call in flight');
+    const state = this.broker?.snapshot().state;
+    if (state && !['ungranted', 'completed', 'unknown'].includes(state))
+      throw new Error('Delegation unavailable');
+    this.candidate?.close();
+    this.candidate = new McpTaskBroker(
       this.authority,
       {
         sourceInstanceId: this.instances.get(0)!,
         targetInstanceId: this.instances.get(1)!,
         workspaceId: this.workspaceId,
       },
-      () => !this.closed && this.allOwned(),
+      () => !this.closed && this.ownedForGrant(),
     );
-    return this.broker.prepare();
+    return this.candidate.prepare();
   }
 
   authorize(proof: unknown) {
-    if (this.closed || !this.allOwned() || !this.broker) throw new Error('MCP unavailable');
-    this.broker.authorize(proof);
+    if (this.closed || !this.ownedForGrant() || !this.candidate || !this.transport?.idle())
+      throw new Error('MCP unavailable');
+    this.candidate.authorize(proof);
+    this.broker?.close();
+    this.broker = this.candidate;
+    this.candidate = undefined;
+    this.grantGeneration++;
   }
 
   snapshot() {
-    return this.broker?.snapshot() ?? { state: this.closed ? 'unknown' : 'ungranted' };
+    return (
+      (this.broker ?? this.candidate)?.snapshot() ?? {
+        state: this.closed ? 'unknown' : 'ungranted',
+      }
+    );
   }
 
   private allOwned() {
@@ -119,9 +141,16 @@ export class InteractiveMcpSession {
     );
   }
 
+  private ownedForGrant() {
+    const owned = this.allOwned();
+    if (!owned && this.instances.size === 2) this.invalidate();
+    return owned;
+  }
+
   invalidate() {
     this.closed = true;
     this.broker?.close();
+    this.candidate?.close();
   }
 
   async close() {
