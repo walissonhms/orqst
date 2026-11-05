@@ -18,6 +18,7 @@ export interface TerminalChallenge extends TerminalBinding {
 export interface TerminalProof {
   challengeId: string;
   signature: string;
+  cliAuthorizationEpoch?: string;
 }
 
 export function terminalDigest(value: string | Uint8Array): string {
@@ -25,19 +26,27 @@ export function terminalDigest(value: string | Uint8Array): string {
 }
 
 /** The native signer must sign these exact bytes after confirming the bound action. */
-export function terminalChallengeBytes(value: TerminalChallenge): Buffer {
+export function terminalChallengeBytes(
+  value: TerminalChallenge,
+  cliAuthorizationEpoch?: string,
+): Buffer {
+  const fields = [
+    'orqst.terminal',
+    value.version,
+    value.epoch,
+    value.clientId,
+    value.challengeId,
+    value.expiresAt,
+    value.operation,
+    value.target,
+    value.digest,
+  ];
   return Buffer.from(
-    JSON.stringify([
-      'orqst.terminal',
-      value.version,
-      value.epoch,
-      value.clientId,
-      value.challengeId,
-      value.expiresAt,
-      value.operation,
-      value.target,
-      value.digest,
-    ]),
+    JSON.stringify(
+      cliAuthorizationEpoch === undefined
+        ? fields
+        : [...fields, 'orqst.cli-policy', cliAuthorizationEpoch],
+    ),
   );
 }
 
@@ -105,7 +114,14 @@ export class TerminalAuthority {
     if (!proof || typeof proof !== 'object') throw new Error('Invalid terminal proof');
     const value = proof as Partial<TerminalProof>;
     if (
-      Object.keys(proof).length !== 2 ||
+      !Object.keys(proof).every((key) =>
+        ['challengeId', 'signature', 'cliAuthorizationEpoch'].includes(key),
+      ) ||
+      (value.cliAuthorizationEpoch !== undefined &&
+        (binding.operation !== 'start' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+            value.cliAuthorizationEpoch,
+          ))) ||
       typeof value.challengeId !== 'string' ||
       typeof value.signature !== 'string' ||
       !/^[A-Za-z0-9_-]{86}$/.test(value.signature)
@@ -121,7 +137,7 @@ export class TerminalAuthority {
       challenge.digest !== binding.digest ||
       !verify(
         null,
-        terminalChallengeBytes(challenge),
+        terminalChallengeBytes(challenge, value.cliAuthorizationEpoch),
         this.clients.get(challenge.clientId)!,
         Buffer.from(value.signature, 'base64url'),
       )

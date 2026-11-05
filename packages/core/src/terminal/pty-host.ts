@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { constants } from 'node:os';
 import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
-import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
-import { verifySystemCliSignature } from './cli-system-signature.js';
+import { terminalFile } from './codex-profile.js';
+import { systemCliSignatureVerifier } from './cli-system-signature.js';
+import { TerminalCliPolicyStore } from './cli-authorization.js';
+import { z } from 'zod';
 import {
   interactiveProvider,
   interactiveTerminalEnvironment,
@@ -17,13 +19,15 @@ import { managedTerminalCommandSchema } from './pty-channel.js';
 import { terminalMcpLaunchSchema } from './mcp-launch.js';
 
 process.umask(0o077);
-if (!process.send || ![4, 5].includes(process.argv.length) || !/^v24\./.test(process.version))
+if (!process.send || process.argv.length !== 6 || !/^v24\./.test(process.version))
   throw new Error('Private Node host only');
 async function start(): Promise<void> {
   const config = readInteractiveTerminalConfig(process.argv[2]!);
-  const mcp = process.argv[4]
-    ? terminalMcpLaunchSchema.parse(JSON.parse(process.argv[4]))
-    : undefined;
+  const rawMcp: unknown = JSON.parse(process.argv[4]!);
+  const mcp = rawMcp === null ? undefined : terminalMcpLaunchSchema.parse(rawMcp);
+  const policy = z
+    .strictObject({ directory: z.string().min(1).max(2048).startsWith('/'), epoch: z.uuid() })
+    .parse(JSON.parse(process.argv[5]!));
   if (!!config.interactive?.mcp !== !!mcp) throw new Error('MCP launch composition required');
   const profile = interactiveTerminalProfiles(config, mcp).find(
     (value) => value.id === process.argv[3],
@@ -35,10 +39,14 @@ async function start(): Promise<void> {
   };
   let child: IPty;
   try {
-    if (!verifySystemCliSignature(interactiveProvider(config), profile.executable))
-      throw new Error('CLI signature unavailable or invalid');
-    if (terminalExecutableSha256(profile.executable) !== profile.executableSha256)
-      throw new Error('CLI changed before PTY spawn');
+    const currentEpoch = await new TerminalCliPolicyStore(policy.directory).verifiedEpoch(
+      profile,
+      interactiveProvider(config),
+      config.interactive?.mcp ? 'mcp' : 'tui',
+      systemCliSignatureVerifier,
+    );
+    if (currentEpoch !== policy.epoch)
+      throw new Error('CLI authorization changed before PTY spawn');
     child = spawn(profile.executable, [...profile.argv], {
       cwd: profile.cwd,
       env: interactiveTerminalEnvironment(config, mcp),

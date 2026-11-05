@@ -1,4 +1,11 @@
 import { OwnedTerminalShutdown } from '../../../packages/core/src/terminal/owned-shutdown.js';
+import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import type {
+  CliContractProvider,
+  CliContractMode,
+} from '../../../packages/core/src/terminal/cli-contract.js';
+import type { CliSignatureVerifier } from '../../../packages/core/src/terminal/cli-signature.js';
+import type { TerminalCliEvidence } from '../../../packages/core/src/terminal/cli-authorization.js';
 import type { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
@@ -39,6 +46,17 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('authorizeMcp'), id: z.uuid(), slot, focused: z.boolean() }),
 ]);
 
+export interface TauriVerifiedCliPolicy {
+  members: readonly { provider: CliContractProvider; mode: CliContractMode }[];
+  verifier: CliSignatureVerifier;
+  probe?: (
+    verifier: CliSignatureVerifier,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+    executable: string,
+  ) => Promise<TerminalCliEvidence>;
+}
+
 export interface TauriTerminalMcp {
   prepareMcp(): Promise<unknown>;
   authorizeMcp(proof: unknown): Promise<unknown>;
@@ -75,9 +93,12 @@ export class TauriTerminalService {
     private readonly mcp?: TauriTerminalMcp,
     private readonly core?: TauriTerminalRetirementCore,
     private readonly cliPolicy?: TerminalCliPolicyStore,
+    private readonly verifiedCli?: TauriVerifiedCliPolicy,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
-    this.panes = supervisors.map((supervisor, slot) => this.pane(supervisor, slot));
+    this.panes = supervisors.map((supervisor, slot) =>
+      this.pane(supervisor, slot, verifiedCli?.members[slot]),
+    );
     if (core?.beginOwnedShutdown)
       this.ownedShutdown = new OwnedTerminalShutdown({
         current: () => !this.closed && this.shutdownFence,
@@ -114,7 +135,11 @@ export class TauriTerminalService {
       });
   }
 
-  private pane(supervisor: TerminalNativeSupervisor, slot: number) {
+  private pane(
+    supervisor: TerminalNativeSupervisor,
+    slot: number,
+    cli: TauriVerifiedCliPolicy['members'][number] | undefined,
+  ) {
     const document = Object.freeze({ slot });
     const state = { focused: false, busy: false, reviewing: false, closed: false };
     const authority = new TerminalAuthority(
@@ -138,6 +163,46 @@ export class TauriTerminalService {
                   profile: Parameters<TerminalCliPolicyStore['current']>[0],
                 ) => {
                   if (!state.focused || state.closed || this.closed) return 'blocked' as const;
+                  if (this.verifiedCli) {
+                    if (!cli) return 'blocked' as const;
+                    const result = await authorizeCliCandidate({
+                      store: this.cliPolicy!,
+                      provider: cli.provider,
+                      mode: cli.mode,
+                      executable: profile.executable,
+                      verifier: this.verifiedCli.verifier,
+                      ...(this.verifiedCli.probe ? { probe: this.verifiedCli.probe } : {}),
+                      profile: (version, sha256) => ({
+                        ...profile,
+                        executableVersion: version,
+                        executableSha256: sha256,
+                      }),
+                      review: (details) =>
+                        this.confirm(
+                          slot,
+                          `${this.translate('terminalNative.cliScope')}\n\n${this.translate('terminalNative.cliProbeDisclosure')}`,
+                          JSON.stringify(
+                            {
+                              ...details,
+                              versionEvidence: 'signed-cli-version-probe',
+                              signatureEvidence: 'macOS /usr/bin/codesign',
+                            },
+                            null,
+                            2,
+                          ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
+                          'terminalNative.authorizeCli',
+                        ),
+                    });
+                    if (result.status !== 'allowed') return result.status;
+                    if (
+                      result.profile.executableSha256 !== profile.executableSha256 ||
+                      result.profile.executableVersion !== profile.executableVersion
+                    )
+                      return 'revoked' as const;
+                    return state.focused && !state.closed && !this.closed
+                      ? ('allowed' as const)
+                      : ('blocked' as const);
+                  }
                   return this.cliPolicy!.authorizeCli(profile, () =>
                     this.confirm(
                       slot,
@@ -159,9 +224,18 @@ export class TauriTerminalService {
                 current: (
                   _document: object,
                   profile: Parameters<TerminalCliPolicyStore['current']>[0],
-                ) => this.cliPolicy!.current(profile),
+                ) =>
+                  this.verifiedCli
+                    ? cli
+                      ? this.cliPolicy!.currentVerified(profile, cli.provider, cli.mode)
+                      : ('blocked' as const)
+                    : this.cliPolicy!.current(profile),
                 epoch: (profile: Parameters<TerminalCliPolicyStore['current']>[0]) =>
-                  this.cliPolicy!.epoch(profile),
+                  this.verifiedCli
+                    ? cli
+                      ? this.cliPolicy!.cachedVerifiedEpoch(profile, cli.provider, cli.mode)
+                      : undefined
+                    : this.cliPolicy!.epoch(profile),
               },
             }
           : {}),
@@ -184,10 +258,15 @@ export class TauriTerminalService {
   }
 
   /** Confirmed native enrollment only; previous document/broker/grants remain the same objects. */
-  append(slot: number, supervisor: TerminalNativeSupervisor): void {
+  append(
+    slot: number,
+    supervisor: TerminalNativeSupervisor,
+    cli?: TauriVerifiedCliPolicy['members'][number],
+  ): void {
     if (this.closed || !this.metadataBusy || slot !== this.panes.length || slot >= 8)
       throw new Error('Invalid native terminal append');
-    this.panes.push(this.pane(supervisor, slot));
+    if (this.verifiedCli && !cli) throw new Error('Missing CLI policy context');
+    this.panes.push(this.pane(supervisor, slot, cli));
   }
 
   /** Bilateral exclusion with the existing reviews; no new execution permission. */

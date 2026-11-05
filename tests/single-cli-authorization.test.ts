@@ -667,3 +667,109 @@ test('trusted CLI Stop still requires the current native document and focus, and
     s.broker.close();
   }
 });
+
+test('verified service reviews one CLI grant and reuses it across two owned slots', async () => {
+  const s = policyFixture();
+  const selected = { ...s.selected, executableVersion: '0.162.1' };
+  const keys = generateKeyPairSync('ed25519');
+  const messages: Array<Record<string, unknown>> = [];
+  let starts = 0;
+  let probes = 0;
+  const epochs: Array<string | undefined> = [];
+  const signature = { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
+  const supervisors = [0, 1].map(
+    () =>
+      new TerminalSupervisor(
+        new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
+        {
+          validate: () => true,
+          start: (_profile, events, identity) => {
+            epochs.push(identity?.cliAuthorizationEpoch);
+            starts++;
+            events.started();
+            return { write() {}, resize() {}, signal() {}, dispose() {} };
+          },
+        },
+        [selected],
+      ),
+  );
+  const service = new TauriTerminalService(
+    supervisors,
+    keys,
+    (message) => messages.push(message as Record<string, unknown>),
+    (key) => key,
+    undefined,
+    undefined,
+    s.store,
+    {
+      members: [
+        { provider: 'codex', mode: 'tui' },
+        { provider: 'codex', mode: 'tui' },
+      ],
+      verifier: {
+        async verify() {
+          return signature;
+        },
+      },
+      async probe() {
+        probes++;
+        return {
+          provider: 'codex',
+          mode: 'tui',
+          version: '0.162.1',
+          contractRevision: 'codex-tui-0.162.1',
+          sha256: selected.executableSha256,
+          signature,
+        };
+      },
+    },
+  );
+  try {
+    const first = randomUUID();
+    const opening = service.receive({
+      kind: 'request',
+      id: first,
+      slot: 0,
+      focused: true,
+      request: { version: 1, action: 'open', profileId: selected.id },
+    });
+    await setImmediate();
+    const confirmation = messages.find((message) => message.kind === 'confirm');
+    assert.ok(confirmation);
+    assert.match(String(confirmation.detail), /signed-cli-version-probe/);
+    await service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+    await opening;
+    assert.equal(
+      Reflect.get(messages.find((message) => message.id === first)?.value as object, 'opening'),
+      'ready',
+    );
+    const second = randomUUID();
+    await service.receive({
+      kind: 'request',
+      id: second,
+      slot: 1,
+      focused: true,
+      request: { version: 1, action: 'open', profileId: selected.id },
+    });
+    assert.equal(
+      Reflect.get(messages.find((message) => message.id === second)?.value as object, 'opening'),
+      'ready',
+    );
+    assert.equal(messages.filter((message) => message.kind === 'confirm').length, 1);
+    assert.equal(probes, 1);
+    assert.equal(starts, 2);
+    assert.ok(epochs[0]);
+    assert.equal(epochs[0], epochs[1]);
+    assert.equal(
+      epochs[0],
+      await s.store.verifiedEpoch(selected, 'codex', 'tui', {
+        async verify() {
+          return signature;
+        },
+      }),
+    );
+  } finally {
+    service.close();
+    s.cleanup();
+  }
+});

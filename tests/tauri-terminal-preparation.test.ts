@@ -51,6 +51,14 @@ await build({
     {
       name: 'synthetic-provisioning-pins-only',
       setup(builder) {
+        builder.onResolve({ filter: /cli-authorization-flow\.js$/ }, () => ({
+          path: 'synthetic-flow',
+          namespace: 'synthetic-flow',
+        }));
+        builder.onLoad({ filter: /.*/, namespace: 'synthetic-flow' }, () => ({
+          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function authorizeCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); return { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic' }; }`,
+          loader: 'js',
+        }));
         builder.onLoad(
           { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
           (args) => ({
@@ -105,6 +113,11 @@ function fixture() {
       assert.ok(detail.length <= 4096);
       return true;
     },
+    authorizeCli: async (candidate: { expectedVersion: string; expectedSha256: string }) => ({
+      status: 'allowed' as const,
+      version: candidate.expectedVersion,
+      sha256: candidate.expectedSha256,
+    }),
     commit: async () => true,
   };
   const close = () => rmSync(root, { recursive: true, force: true });
@@ -339,6 +352,7 @@ test(
   { skip: !nativePreparationSupported },
   async () => {
     const f = fixture();
+    mkdirSync(join(f.context.parent, 'managed-agents'), { mode: 0o700 });
     const child = spawn(
       process.execPath,
       [
@@ -460,4 +474,23 @@ test('unknown preparation errors never become no-effect claims or leak raw data'
   });
   assert.deepEqual(tauriPreparationFailure(error), error.failure);
   assert.ok(!JSON.stringify(tauriPreparationFailure(new Error(secret))).includes(secret));
+});
+
+test('a stale CLI authorization refuses creation and asks for a fresh review', async () => {
+  const f = fixture();
+  try {
+    f.ports.authorizeCli = async () => ({ status: 'stale' });
+    await assert.rejects(
+      prepareTauriTerminals({ action: 'create', provider: 'codex', count: 1 }, f.context, f.ports),
+      (error: unknown) => {
+        assert.ok(error instanceof Error && 'failure' in error);
+        assert.equal(Reflect.get(error.failure as object, 'code'), 'cli_authorization_stale');
+        return true;
+      },
+    );
+    assert.deepEqual(readdirSync(f.context.parent), ['unknown-reservation']);
+    assert.deepEqual(readdirSync(f.project), []);
+  } finally {
+    f.close();
+  }
 });

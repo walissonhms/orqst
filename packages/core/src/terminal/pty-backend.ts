@@ -17,6 +17,7 @@ export function managedTerminalBackend(
   file: string,
   host: string,
   mcp?: TerminalMcpLaunch,
+  policyDirectory?: string,
 ): TerminalBackend {
   const config = readInteractiveTerminalConfig(file);
   const expected = interactiveTerminalProfiles(config, mcp);
@@ -46,22 +47,33 @@ export function managedTerminalBackend(
     start(profile: Readonly<TerminalProfile>, events, identity) {
       // Repeat at the last synchronous dispatch boundary. Same-user races remain disclosed.
       if (!this.validate(profile)) throw new Error('Managed profile changed');
-      if (!identity) throw new Error('PTY lifecycle identity required');
+      if (!identity || !policyDirectory || !identity.cliAuthorizationEpoch)
+        throw new Error('PTY lifecycle and CLI authorization required');
+      const { cliAuthorizationEpoch, ...receiptIdentity } = identity;
       // Native Claude/OpenCode manifests are single-dispatch, including failed starts.
       dispatched = true;
       const receipt = createLifecycleReceipt(config.state, {
-        ...identity,
+        ...receiptIdentity,
         configDigest: terminalDigest(source),
       });
       let child;
       try {
-        child = fork(host, [file, profile.id, ...(mcp ? [JSON.stringify(mcp)] : [])], {
-          execPath: config.node.path,
-          execArgv: [],
-          cwd: config.state,
-          env: interactiveTerminalEnvironment(config, mcp),
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
-        });
+        child = fork(
+          host,
+          [
+            file,
+            profile.id,
+            JSON.stringify(mcp ?? null),
+            JSON.stringify({ directory: policyDirectory, epoch: cliAuthorizationEpoch }),
+          ],
+          {
+            execPath: config.node.path,
+            execArgv: [],
+            cwd: config.state,
+            env: interactiveTerminalEnvironment(config, mcp),
+            stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
+          },
+        );
       } finally {
         closeSync(receipt);
       }

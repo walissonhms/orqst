@@ -429,6 +429,7 @@ fn preparation_failure(value: &Value, committed: bool) -> Option<PreparationFail
             Some(
                 "failed"
                     | "catalog_changed"
+                    | "cli_authorization_stale"
                     | "selection_unavailable"
                     | "capacity_exceeded"
                     | "review_too_large"
@@ -827,8 +828,22 @@ fn run(
                     if !exact(&value, &["kind", "failure"]) {
                         return Err("Invalid preparation failure".into());
                     }
+                    let validated = preparation_failure(&value["failure"], false)
+                        .ok_or("Invalid preparation failure")?;
                     let state = app.state::<Preparation>();
-                    let guard = state.0.lock().unwrap();
+                    let mut guard = state.0.lock().unwrap();
+                    // A validated lost policy CAS occurs before manifest/Core effects.
+                    if validated.0["code"] == "cli_authorization_stale"
+                        && validated.0["effects"] == "not_started"
+                        && matches!(
+                            validated.0["stage"].as_str(),
+                            Some("review" | "revalidation")
+                        )
+                        && !guard.opened
+                    {
+                        guard.committed = false;
+                        return Err(validated.into());
+                    }
                     return Err(preparation_failure(
                         &value["failure"],
                         guard.committed || guard.opened,
@@ -862,14 +877,6 @@ fn run(
                             .and_then(|path| path.into_os_string().into_string().ok())
                             .map(Value::String)
                             .unwrap_or(Value::Null)
-                    }
-                    Some("cli-signature") => {
-                        if !exact(&value, &["kind", "id", "provider", "path"]) {
-                            return Err("Invalid CLI signature request".into());
-                        }
-                        let provider = field(&value, "provider", 16)?;
-                        let path = field(&value, "path", 2048)?;
-                        json!(current() && crate::cli_signature::verify_provider(path, provider))
                     }
                     Some("confirm") => {
                         diagnostic.record(Stage::Review, Outcome::Requested, Effects::Unconfirmed);
@@ -1045,6 +1052,8 @@ fn run(
         .as_array()
         .ok_or("Invalid preparation result")?;
     if result["status"] == "cancelled" && files.is_empty() {
+        // A completed CLI-policy authorization is not an uncertain manifest or Core write.
+        app.state::<Preparation>().0.lock().unwrap().committed = false;
         diagnostic.record(
             Stage::HelperComplete,
             Outcome::Cancelled,
@@ -1219,6 +1228,8 @@ mod tests {
             super::preparation_failure(&before, true).unwrap().0["effects"],
             "possible"
         );
+        let stale = json!({"stage":"revalidation","code":"cli_authorization_stale","effects":"not_started"});
+        assert_eq!(super::preparation_failure(&stale, false).unwrap().0, stale);
         for stage in [
             "bootstrap",
             "provision",

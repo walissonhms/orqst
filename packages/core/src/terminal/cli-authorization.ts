@@ -404,6 +404,47 @@ export class TerminalCliPolicyStore {
     }
   }
 
+  /** Synchronous continuity check for input leases after native signature verification. */
+  currentVerified(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+  ): TerminalCliAuthorizationState {
+    try {
+      const record = this.load(profile);
+      if (!record || record.version !== 2) return 'blocked';
+      if (record.state !== 'allowed') return 'revoked';
+      if (
+        record.provider !== provider ||
+        record.mode !== mode ||
+        record.executableSha256 !== profile.executableSha256 ||
+        record.executableVersion !== profile.executableVersion ||
+        record.permissionScope !== permissionScope(profile) ||
+        record.contractRevision !==
+          findCliContract(provider, mode, profile.executableVersion)?.revision
+      )
+        return 'blocked';
+      const key = `${profile.executable}:${profile.executableSha256}`;
+      return this.inspected.get(key) === this.identity(profile) ? 'allowed' : 'revoked';
+    } catch {
+      return 'revoked';
+    }
+  }
+
+  cachedVerifiedEpoch(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+  ): string | undefined {
+    try {
+      return this.currentVerified(profile, provider, mode) === 'allowed'
+        ? this.load(profile)?.authorizationEpoch
+        : undefined;
+    } catch {
+      return;
+    }
+  }
+
   async verifiedEpoch(
     profile: Readonly<TerminalProfile>,
     provider: CliContractProvider,

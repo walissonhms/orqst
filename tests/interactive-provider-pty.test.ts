@@ -100,6 +100,8 @@ for (const provider of ['claude', 'opencode'] as const)
         const file = join(state, 'terminal.json');
         writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
         // Compile isolated fixture bundles; never change the checked-in contract or Desktop output.
+        const cliEpoch = randomUUID();
+        let verifierEpoch = cliEpoch;
         const options = {
           bundle: true,
           platform: 'node' as const,
@@ -110,12 +112,20 @@ for (const provider of ['claude', 'opencode'] as const)
               name: 'synthetic-reviewed-hash-only',
               setup(builder: PluginBuild) {
                 // Only this isolated synthetic bundle injects a signature verifier; production never does.
+                builder.onResolve({ filter: /cli-authorization\.js$/ }, () => ({
+                  path: 'synthetic-policy',
+                  namespace: 'synthetic-policy',
+                }));
+                builder.onLoad({ filter: /.*/, namespace: 'synthetic-policy' }, () => ({
+                  contents: `export class TerminalCliPolicyStore { async verifiedEpoch() { return ${JSON.stringify(verifierEpoch)}; } }`,
+                  loader: 'js',
+                }));
                 builder.onResolve({ filter: /cli-system-signature\.js$/ }, () => ({
                   path: 'synthetic-signature',
                   namespace: 'synthetic-signature',
                 }));
                 builder.onLoad({ filter: /.*/, namespace: 'synthetic-signature' }, () => ({
-                  contents: 'export const verifySystemCliSignature = () => true;',
+                  contents: 'export const systemCliSignatureVerifier = {};',
                   loader: 'js',
                 }));
                 builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
@@ -132,6 +142,13 @@ for (const provider of ['claude', 'opencode'] as const)
           ...options,
           entryPoints: ['packages/core/src/terminal/pty-host.ts'],
           outfile: join(root, 'host.cjs'),
+          external: ['node-pty'],
+        });
+        verifierEpoch = randomUUID();
+        await build({
+          ...options,
+          entryPoints: ['packages/core/src/terminal/pty-host.ts'],
+          outfile: join(root, 'rejected-host.cjs'),
           external: ['node-pty'],
         });
         await build({
@@ -233,7 +250,46 @@ for (const provider of ['claude', 'opencode'] as const)
         }
         writeFileSync(otherFile, sameProvider);
 
-        const backend = fixture.managedTerminalBackend(file, join(root, 'host.cjs'));
+        let denied = false;
+        let unexpectedlyStarted = false;
+        const rejected = fixture.managedTerminalBackend(
+          file,
+          join(root, 'rejected-host.cjs'),
+          undefined,
+          root,
+        );
+        const rejectedHandle = rejected.start(
+          profile,
+          {
+            started: () => {
+              unexpectedlyStarted = true;
+            },
+            data() {},
+            exit() {},
+            lost: () => {
+              denied = true;
+            },
+          },
+          {
+            instanceId: randomUUID(),
+            epoch: randomUUID(),
+            manifestDigest: 'c'.repeat(64),
+            cliAuthorizationEpoch: cliEpoch,
+          },
+        );
+        const denialDeadline = Date.now() + 7000;
+        while (!denied && Date.now() < denialDeadline)
+          await new Promise((done) => setTimeout(done, 10));
+        rejectedHandle.dispose();
+        assert.equal(denied, true);
+        assert.equal(unexpectedlyStarted, false);
+
+        const backend = fixture.managedTerminalBackend(
+          file,
+          join(root, 'host.cjs'),
+          undefined,
+          root,
+        );
         assert.equal(backend.validate(profile), true);
         assert.equal(backend.validate({ ...profile, argv: ['--resume'] }), false);
         let started = false;
@@ -255,6 +311,7 @@ for (const provider of ['claude', 'opencode'] as const)
           instanceId: randomUUID(),
           epoch: randomUUID(),
           manifestDigest: 'a'.repeat(64),
+          cliAuthorizationEpoch: cliEpoch,
         });
         const until = async (predicate: () => boolean) => {
           const deadline = Date.now() + 7000;

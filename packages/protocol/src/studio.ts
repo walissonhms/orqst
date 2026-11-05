@@ -83,6 +83,7 @@ export const terminalPreparationFailureSchema = z
     code: z.enum([
       'failed',
       'catalog_changed',
+      'cli_authorization_stale',
       'selection_unavailable',
       'capacity_exceeded',
       'review_too_large',

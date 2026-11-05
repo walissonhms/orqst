@@ -64,7 +64,12 @@ export interface TerminalBackend {
   start(
     profile: Readonly<TerminalProfile>,
     events: TerminalEvents,
-    identity?: { instanceId: string; epoch: string; manifestDigest: string },
+    identity?: {
+      instanceId: string;
+      epoch: string;
+      manifestDigest: string;
+      cliAuthorizationEpoch?: string;
+    },
   ): OwnedTerminalHandle;
 }
 interface Lease {
@@ -218,6 +223,8 @@ export class TerminalSupervisor {
     this.journal?.preflightStart(id);
     const valid = this.validProfile(attempt.profile);
     this.authority.consume(proof, { operation: 'start', target: id, digest: attempt.digest });
+    const cliAuthorizationEpoch = Reflect.get(proof as object, 'cliAuthorizationEpoch') as
+      string | undefined;
     if (!valid) {
       this.journal?.transition(id, 'start_failed');
       attempt.state = 'start_failed';
@@ -274,7 +281,12 @@ export class TerminalSupervisor {
               this.releaseHandle(attempt);
             },
           },
-          { instanceId: id, epoch: this.authority.epoch, manifestDigest: attempt.digest },
+          {
+            instanceId: id,
+            epoch: this.authority.epoch,
+            manifestDigest: attempt.digest,
+            ...(cliAuthorizationEpoch ? { cliAuthorizationEpoch } : {}),
+          },
         );
       };
       const handle = this.journal ? this.journal.withOwner(start) : start();

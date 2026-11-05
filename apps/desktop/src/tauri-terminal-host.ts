@@ -1,3 +1,4 @@
+import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import {
@@ -89,6 +90,13 @@ async function start() {
     mcpEnabled ? core : undefined,
     core,
     new TerminalCliPolicyStore(directory),
+    {
+      verifier: systemCliSignatureVerifier,
+      members: selection.map(({ config }) => ({
+        provider: interactiveProvider(config),
+        mode: config.interactive?.mcp ? ('mcp' as const) : ('tui' as const),
+      })),
+    },
   );
   let store = terminalLayoutStore(
     directory,
@@ -248,7 +256,10 @@ async function start() {
       )
         throw new Error('Enrollment document source changed');
       const slot = receipt.member.slot;
-      service.append(slot, core.supervisors[slot]!);
+      service.append(slot, core.supervisors[slot]!, {
+        provider: interactiveProvider(config),
+        mode: config.interactive?.mcp ? 'mcp' : 'tui',
+      });
       layout.append(slot);
       selection.push({ config, blocker: undefined });
       if (receipt.featureId !== null && message.previousLayout) {

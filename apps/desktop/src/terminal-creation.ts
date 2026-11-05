@@ -277,6 +277,14 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   return {
     detail,
     pages,
+    cliCandidates: configs.map((config, index) => ({
+      provider: members[index]!.provider,
+      executable: config.executable.path,
+      expectedSha256: config.executable.sha256,
+      expectedVersion: config.executableVersion,
+      mode: input.mcp ? ('mcp' as const) : ('tui' as const),
+      project: input.project,
+    })),
     overview: {
       project: input.project,
       terminals: configs.map((config, index) => ({

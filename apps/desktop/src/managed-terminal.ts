@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, WebContentsView, dialog, ipcMain, session, type BrowserWindow } from 'electron';
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
+import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
+import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
 import { TerminalNativeBroker } from '../../../packages/core/src/terminal/native-broker.js';
 import {
   readInteractiveTerminalConfig,
@@ -47,6 +50,7 @@ export async function createManagedTerminals(
   const terminalSessions: Electron.Session[] = [];
   const router = createTerminalRuntimeRouter(ipcMain, files.length);
   let core: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
+  let cliPolicy: TerminalCliPolicyStore | undefined;
   let blocker: string | undefined = selection.find((slot) => slot.blocker)?.blocker;
   let quitting = false;
   let retiring = false;
@@ -74,6 +78,7 @@ export async function createManagedTerminals(
       } catch {
         blocker = 'capacity_reserved';
       }
+      if (!blocker) cliPolicy = new TerminalCliPolicyStore(directory);
       if (!blocker)
         core = await connectManagedTerminalCore(
           files,
@@ -430,6 +435,69 @@ export async function createManagedTerminals(
             document,
             {
               current: (_document, focus) => initialized && current(focus),
+              cliAuthorization: {
+                authorizeCli: async (_document, profile) => {
+                  if (!cliPolicy || !initialized || !current(true)) return 'blocked';
+                  const mode = config.interactive?.mcp ? 'mcp' : 'tui';
+                  const result = await authorizeCliCandidate({
+                    store: cliPolicy,
+                    provider,
+                    mode,
+                    executable: profile.executable,
+                    verifier: systemCliSignatureVerifier,
+                    profile: (version, sha256) => ({
+                      ...profile,
+                      executableVersion: version,
+                      executableSha256: sha256,
+                    }),
+                    review: async (details) => {
+                      const detail = JSON.stringify(
+                        {
+                          ...details,
+                          versionEvidence: 'signed-cli-version-probe',
+                          signatureEvidence: 'macOS /usr/bin/codesign',
+                        },
+                        null,
+                        2,
+                      ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+                      if (detail.length > 16384 || !current(true)) return false;
+                      const answer = await dialog.showMessageBox(window, {
+                        type: 'warning',
+                        title: translate('terminalNative.title'),
+                        message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
+                        detail,
+                        buttons: [
+                          translate('terminalNative.cancel'),
+                          translate('terminalNative.authorizeCli'),
+                        ],
+                        defaultId: 0,
+                        cancelId: 0,
+                        noLink: true,
+                      });
+                      return answer.response === 1 && initialized && current(true);
+                    },
+                  });
+                  if (result.status !== 'allowed') return result.status;
+                  if (
+                    result.profile.executableVersion !== profile.executableVersion ||
+                    result.profile.executableSha256 !== profile.executableSha256
+                  )
+                    return 'revoked';
+                  return initialized && current(true) ? 'allowed' : 'blocked';
+                },
+                current: (_document, profile) =>
+                  cliPolicy?.currentVerified(
+                    profile,
+                    provider,
+                    config.interactive?.mcp ? 'mcp' : 'tui',
+                  ) ?? 'blocked',
+                epoch: (profile) =>
+                  cliPolicy?.cachedVerifiedEpoch(
+                    profile,
+                    provider,
+                    config.interactive?.mcp ? 'mcp' : 'tui',
+                  ),
+              },
               confirm: (_document, details) =>
                 confirmTerminalAction(dialog, window, translate, details),
             },

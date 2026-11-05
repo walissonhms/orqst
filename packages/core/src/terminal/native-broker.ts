@@ -403,11 +403,15 @@ export class TerminalNativeBroker<Document extends object> {
       (!view || (challenge.operation !== 'stop' && !this.policyCurrent(view)))
     )
       throw new Error('CLI policy revoked');
+    const cliAuthorizationEpoch = challenge.operation === 'start' ? view?.policyEpoch : undefined;
     return {
       challengeId: challenge.challengeId,
-      signature: sign(null, terminalChallengeBytes(challenge), this.privateKey).toString(
-        'base64url',
-      ),
+      signature: sign(
+        null,
+        terminalChallengeBytes(challenge, cliAuthorizationEpoch),
+        this.privateKey,
+      ).toString('base64url'),
+      ...(cliAuthorizationEpoch ? { cliAuthorizationEpoch } : {}),
     };
   }
 

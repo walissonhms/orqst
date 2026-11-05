@@ -138,6 +138,7 @@ async function start() {
               files[slot]!,
               join(__dirname, 'managed-terminal-host.cjs'),
               launches[slot],
+              process.argv[4]!,
             );
             return mcp ? mcp.wrap(slot, backend) : backend;
           })(),
@@ -234,6 +235,8 @@ async function start() {
               const backend = adapter.backend(
                 request.manifestFile,
                 join(__dirname, 'managed-terminal-host.cjs'),
+                undefined,
+                process.argv[4]!,
               );
               reviewed.validate();
               return {

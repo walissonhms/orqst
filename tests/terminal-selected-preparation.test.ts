@@ -149,6 +149,11 @@ function fixture(openCodeCopies = false) {
       assert.ok(detail.length <= 4096);
       return true;
     },
+    authorizeCli: async (candidate: { expectedVersion: string; expectedSha256: string }) => ({
+      status: 'allowed' as const,
+      version: candidate.expectedVersion,
+      sha256: candidate.expectedSha256,
+    }),
     commit: async () => true,
   };
   return {

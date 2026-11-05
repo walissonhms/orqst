@@ -2,7 +2,12 @@ import { terminalPreparationContextSchema } from '../../../packages/core/src/ter
 import { desktopAdmissionContextSchema } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
-import { tauriCliSignatureVerifier } from './tauri-cli-signature.js';
+import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
+import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
+import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
+import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
+import { join } from 'node:path';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
 import { prepareTauriTerminals, tauriPreparationFailure } from './tauri-terminal-preparation.js';
@@ -54,6 +59,13 @@ async function main() {
       send({ ...value, id });
     });
   }
+  let committed = false;
+  async function commit(): Promise<boolean> {
+    if (committed) return live;
+    committed = (await ask({ kind: 'commit' })) === true;
+    return committed && live;
+  }
+  let cliPolicy: TerminalCliPolicyStore | undefined;
   const response = z.strictObject({
     id: z.number().int().positive(),
     value: z.union([z.string().min(1).max(2048), z.boolean(), z.null()]),
@@ -87,7 +99,56 @@ async function main() {
       { parent, home, node: process.execPath, environment: process.env },
       {
         current: () => live,
-        signatureVerifier: tauriCliSignatureVerifier(ask),
+        authorizeCli: async (candidate) => {
+          const scope = cliAuthorizationScope(candidate.provider, candidate.mode);
+          const result = await authorizeCliCandidate({
+            store: (cliPolicy ??= new TerminalCliPolicyStore(join(parent, 'managed-agents'))),
+            provider: candidate.provider,
+            mode: candidate.mode,
+            executable: candidate.executable,
+            verifier: systemCliSignatureVerifier,
+            profile: (version, sha256) => ({
+              id: `${candidate.provider}-terminal-v1`,
+              projectId: terminalDigest(candidate.project),
+              executable: candidate.executable,
+              executableSha256: sha256,
+              executableVersion: version,
+              argv: [],
+              cwd: candidate.project,
+              permissions: 'Native owned terminal CLI authorization',
+              ...scope,
+            }),
+            review: async (details) => {
+              const detail = JSON.stringify(
+                {
+                  ...details,
+                  versionEvidence: 'signed-cli-version-probe',
+                  signatureEvidence: 'macOS /usr/bin/codesign',
+                },
+                null,
+                2,
+              ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+              if (detail.length > 16384 || !live) return false;
+              const accepted =
+                (await ask({
+                  kind: 'confirm',
+                  title: translate('terminalNative.authorizeCli'),
+                  message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
+                  detail,
+                  cancel: translate('terminalNative.cancel'),
+                  approve: translate('terminalNative.authorizeCli'),
+                })) === true;
+              return accepted && live && (await commit());
+            },
+          });
+          return result.status === 'allowed'
+            ? {
+                status: result.status,
+                version: result.profile.executableVersion,
+                sha256: result.profile.executableSha256,
+              }
+            : { status: result.status };
+        },
         choose: async (directory) => {
           const value = await ask({
             kind: 'pick',
@@ -128,7 +189,7 @@ async function main() {
             cancel: translate('terminalNative.cancel'),
             approve: translate(`tauriPreparation.${key}Approve`),
           })) === true,
-        commit: async () => (await ask({ kind: 'commit' })) === true,
+        commit,
       },
       Date.now,
       process.argv[4]

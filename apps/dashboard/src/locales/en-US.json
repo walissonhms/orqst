@@ -595,7 +595,8 @@
     "confirm": "Authorize once",
     "open": "Open this exact CLI and model in this workspace and allow normal terminal use?",
     "authorizeCli": "Authorize local CLI",
-    "cliScope": "Allow normal use of terminals you open with this reviewed executable. Native provider approvals remain unchanged."
+    "cliScope": "Allow normal use of terminals you open with this reviewed executable. Native provider approvals remain unchanged.",
+    "cliProbeDisclosure": "The version check executes the signed vendor CLI in a temporary home. It is not a network sandbox."
   },
   "overviewLayout": {
     "title": "Customize overview",
@@ -1050,7 +1051,8 @@
     "reviewBack": "Back to summary",
     "reviewSource": "Source: {{provider}} · {{model}} · {{id}}",
     "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}",
-    "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them."
+    "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them.",
+    "code_cli_authorization_stale": "CLI authorization changed during review; review it again"
   },
   "tauriDesktop": {
     "connected": "Core connected",

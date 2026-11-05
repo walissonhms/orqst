@@ -12,7 +12,11 @@ import { z } from 'zod';
 import { terminalStartupIdSchema } from './startup-failure.js';
 
 const id = z.string().uuid();
-const proof = z.strictObject({ challengeId: id, signature: z.string().min(1).max(128) });
+const proof = z.strictObject({
+  challengeId: id,
+  signature: z.string().min(1).max(128),
+  cliAuthorizationEpoch: id.optional(),
+});
 const number = z.number().int().nonnegative().safe();
 const signal = z.enum(['SIGTERM', 'SIGKILL']);
 export const terminalRPCOutputSchema = z.strictObject({
