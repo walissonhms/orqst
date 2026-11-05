@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -135,6 +143,7 @@ test('cancel and binary change during review cannot create authorization', async
       'blocked',
     );
     assert.equal(await store.verifiedEpoch(profile, 'codex', 'tui', verifier), undefined);
+    assert.equal(existsSync(join(root, 'cli-authorizations')), false);
     assert.equal(
       await store.authorizeVerifiedCli(profile, 'codex', 'tui', verifier, probe, async () => {
         writeFileSync(path, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0]));
@@ -181,6 +190,7 @@ test('legacy policy is readable but requires a fresh verified review', async () 
     signature,
   });
   try {
+    mkdirSync(join(root, 'cli-authorizations'), { mode: 0o700 });
     const legacyPath = join(root, 'cli-authorizations', `${terminalDigest(executable)}.json`);
     const legacy =
       JSON.stringify({

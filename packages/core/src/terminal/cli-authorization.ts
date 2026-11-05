@@ -86,23 +86,31 @@ const permissionScope = (profile: Readonly<TerminalProfile>) =>
 export class TerminalCliPolicyStore {
   private static readonly pendingVerified = new Map<string, Promise<void>>();
   private readonly directory: string;
+  private readonly parent: string;
   // Volatile file identity avoids hashing a large native binary on every keystroke.
   // It is never persisted, never substitutes for the initial hash, and changes fail closed.
   private readonly inspected = new Map<string, string>();
 
   constructor(directory: string) {
     terminalDirectory(directory, true);
+    this.parent = directory;
     this.directory = join(directory, 'cli-authorizations');
+    this.directoryPresent();
+  }
+
+  private directoryPresent(): boolean {
+    terminalDirectory(this.parent, true);
     try {
-      mkdirSync(this.directory, { mode: 0o700 });
+      terminalDirectory(this.directory, true);
+      return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
     }
-    terminalDirectory(this.directory, true);
   }
 
   private file(profile: Readonly<TerminalProfile>): string {
-    terminalDirectory(this.directory, true);
+    this.directoryPresent();
     return join(this.directory, `${terminalDigest(profile.executable)}.json`);
   }
 
@@ -111,6 +119,7 @@ export class TerminalCliPolicyStore {
     revision: number;
   } {
     const base = this.file(profile);
+    if (!this.directoryPresent()) return { record: undefined, revision: 0 };
     const prefix = `${terminalDigest(profile.executable)}.rev-`;
     const names = readdirSync(this.directory).filter((name) => name.startsWith(prefix));
     if (names.length > 4096) throw new Error('Too many CLI policy revisions');
@@ -446,6 +455,14 @@ export class TerminalCliPolicyStore {
     if (revision >= 4096 || !Number.isSafeInteger(revision + 1))
       throw new Error('CLI policy revision exhausted');
     const base = this.file(profile);
+    if (!this.directoryPresent()) {
+      try {
+        mkdirSync(this.directory, { mode: 0o700 });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      }
+    }
+    terminalDirectory(this.directory, true);
     const temporary = `${base}.${randomUUID()}.tmp`;
     const target = join(
       this.directory,
