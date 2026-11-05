@@ -1071,17 +1071,30 @@ rustfmt clean.
 
 ## Final review fixes — 2026-11-05 (source state)
 
-- [x] Dock restore capability granted only to the dynamic
-      `feature-workspace-metadata` capability; source test asserts the chrome
-      webview, the exact CHROME_URL and denial for main/terminals/wrong URL
-      (`allow-terminal-restore`).
-- [x] `terminal_restore` now enforces label `feature-workspace`, parent `main`,
-      exact CHROME_URL, the chrome identity, and binds the layout generation,
-      revalidating it before the only effect; an obsolete gesture is denied.
-- [x] Renderer presentation hides and suspends the remaining children (with input
-      revocation) before the unavailable document, without ownership, Core or
-      process effects.
+- [x] The real Tauri 2.12.5 manifest/capability resolver permits restore only
+      for the chrome webview among the tested labels. Registered custom protocols
+      resolve as Local without a URL: exact CHROME_URL denial is supplied by the
+      handler's source gate, tested together with the resolved ACL. The source
+      assertion alone proves no runtime ACL behavior.
+- [x] `terminal_restore` captures the exact chrome document before the pipe mutex;
+      under that mutex it checks current generation, hidden slot, suspension and
+      presentation fences. The document mutex stays held through the write.
+      The reopen packet carries generation; Node rejects missing/stale values
+      before layout mutation or save. Deterministic barriers cover invalidation
+      before the Rust write and rejection before Node persistence.
+- [x] Renderer termination latches presentation unavailable until app restart and
+      invalidates layout generation before hiding children. The queued-callback
+      admission test rejects a previously queued layout and later raises. No
+      reload, recovery, ownership, Core or process effect is added. AppKit stacking
+      and actual WebKit callback delivery remain native acceptance.
 - [x] The ignored cross-language test has the exact documented commands and was
       run explicitly: artifact generated, Rust replay `1 passed; 0 failed`.
 - [ ] Native AppKit/WebKit acceptance of the dock restore and unavailable cover.
 - [ ] Wire the Feature permission library into the production composition.
+
+Current fence correction checks (isolated tree, 2026-11-05): full `pnpm test`
+1285/1285, `pnpm lint` and `pnpm typecheck` passed. Pinned offline/locked Cargo
+check, test (148 passed / 2 ignored), all-target Clippy with `-D warnings`, and
+rustfmt passed. The explicitly ignored Node-to-Rust replay passed 1/1 using two
+fresh real-service transcripts from that full Node run (synthetic Core handles).
+No app/provider, native UI acceptance, resource build or package was run.
