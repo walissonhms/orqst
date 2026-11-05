@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import type {
+  CrossFeatureMessage,
+  CrossFeatureAudit,
+  CrossFeatureRoute,
+  CrossFeatureUsage,
+} from './cross-feature-communication.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
 const time = z.number().int().nonnegative().safe();
@@ -177,6 +183,15 @@ export type PaneProviderEvidence = z.infer<typeof paneProviderEvidenceSchema>;
 
 /** Private single-writer persistence boundary. No HTTP/MCP caller receives this interface. */
 export interface CommunicationTransaction {
+  crossUsage(): CrossFeatureUsage[];
+  crossRoutes(): CrossFeatureRoute[];
+  saveCrossRoute(route: CrossFeatureRoute): void;
+  crossMessages(): CrossFeatureMessage[];
+  auditCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
+  insertCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
+  updateCross(message: CrossFeatureMessage, audit: Omit<CrossFeatureAudit, 'sequence'>): void;
+  crossEvents(): CrossFeatureAudit[];
+  crossAuthorityEvents(): CrossFeatureAudit[];
   panes(): CommunicationPane[];
   messages(): CommunicationMessage[];
   savePane(pane: CommunicationPane): void;
@@ -189,5 +204,6 @@ export interface CommunicationTransaction {
 }
 export interface CommunicationJournal {
   readonly epoch: string;
+  enableCross(): void;
   transaction<T>(action: (tx: CommunicationTransaction) => T): T;
 }

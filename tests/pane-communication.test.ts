@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { Store } from '@orqst/database';
 import {
   communicationContentSchema,
@@ -841,5 +842,100 @@ test('stable terminal metadata cannot enroll twice, recover an unavailable bindi
     );
   } finally {
     f.store.close();
+  }
+});
+
+test('local journal stays available with unknown or corrupt cross metadata while preserving identities', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-local-isolation-'));
+  const file = join(directory, 'journal.sqlite');
+  const seed = new Store(file);
+  seed.close();
+  const db = new DatabaseSync(file);
+  db.exec(`CREATE TABLE cross_feature_journal_schema (singleton INTEGER PRIMARY KEY, version INTEGER);
+    INSERT INTO cross_feature_journal_schema VALUES(1,2);
+    CREATE TABLE cross_feature_messages (message_id TEXT, task_id TEXT, workspace_id TEXT, target_id TEXT, idempotency_key TEXT, metadata TEXT);
+    INSERT INTO cross_feature_messages VALUES('other','other','other','other','other','{}');`);
+  const f = setup(file);
+  try {
+    const client = f.authorize();
+    const first = f.request();
+    assert.equal(client.send(first).messageId, first.messageId);
+    const collision = f.request();
+    db.prepare('INSERT INTO cross_feature_messages VALUES(?,?,?,?,?,?)').run(
+      collision.messageId,
+      randomUUID(),
+      collision.workspaceId,
+      collision.targetPaneId,
+      randomUUID(),
+      '{}',
+    );
+    assert.throws(() => client.send(collision));
+    assert.throws(() => f.journal.enableCross(), /Unsupported cross-Feature/);
+  } finally {
+    db.close();
+    f.store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('a legacy journal does not create cross tables before opt-in', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-legacy-'));
+  const file = join(directory, 'journal.sqlite');
+  const f = setup(file);
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    assert.equal(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE name='cross_feature_messages'").get(),
+      undefined,
+    );
+    assert.equal(
+      f.journal.transaction((tx) => tx.crossMessages().length),
+      0,
+    );
+    const message = f.request();
+    assert.equal(f.authorize().send(message).messageId, message.messageId);
+    assert.equal(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE name='cross_feature_messages'").get(),
+      undefined,
+    );
+  } finally {
+    db.close();
+    f.store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('local send fails closed without repairing a structurally damaged cross identity table', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-damaged-identity-'));
+  const file = join(directory, 'journal.sqlite');
+  const f = setup(file);
+  const db = new DatabaseSync(file);
+  try {
+    db.exec(
+      "CREATE TABLE cross_feature_messages (damaged TEXT); INSERT INTO cross_feature_messages VALUES ('preserve');",
+    );
+    const original = db
+      .prepare("SELECT sql FROM sqlite_master WHERE name='cross_feature_messages'")
+      .get();
+    assert.throws(() => f.authorize().send(f.request()), /no such column/);
+    assert.equal(
+      f.journal.transaction((tx) => tx.messages().length),
+      0,
+    );
+    assert.deepEqual(
+      db.prepare("SELECT sql FROM sqlite_master WHERE name='cross_feature_messages'").get(),
+      original,
+    );
+    assert.deepEqual(
+      db
+        .prepare('SELECT damaged FROM cross_feature_messages')
+        .all()
+        .map((row) => row.damaged),
+      ['preserve'],
+    );
+  } finally {
+    db.close();
+    f.store.close();
+    rmSync(directory, { recursive: true, force: true });
   }
 });

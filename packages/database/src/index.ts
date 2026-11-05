@@ -28,6 +28,7 @@ import { readSessionModelHistory } from './model-history.js';
 import { openFeatures } from './features.js';
 import { openFeaturePermissions } from './feature-permissions.js';
 export { FeaturePermissionRevisionConflict } from './feature-permissions.js';
+import { openCrossFeaturePermissions } from './cross-feature-permissions.js';
 import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
@@ -221,6 +222,9 @@ export class Store {
     return openFeatures(this.db, (action) => this.transaction(action));
   }
 
+  crossFeaturePermissions() {
+    return openCrossFeaturePermissions(this.db, (action) => this.transaction(action));
+  }
   featurePermissions() {
     return openFeaturePermissions(this.db, (action) => this.transaction(action));
   }

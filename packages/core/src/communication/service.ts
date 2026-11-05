@@ -19,6 +19,7 @@ import {
 } from '@orqst/protocol';
 import { mentionedHandles } from './mentions.js';
 import { featurePermissionRevision, type FeaturePermissionReader } from './feature-permissions.js';
+import type { FeatureConfigurationDatabase } from '../terminal/feature-configuration.js';
 
 const grantSchema = z.strictObject({
   actorId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -64,11 +65,28 @@ export type CommunicationResolver = (
   scope: Readonly<CommunicationContentScope>,
   contentId: string,
 ) => Uint8Array;
+const crossActive = (state: string) =>
+  [
+    'dispatching',
+    'accepted',
+    'delivered',
+    'running',
+    'waiting_approval',
+    'outcome_unknown',
+  ].includes(state);
 const terminalTask = (message: CommunicationMessage) =>
   ['completed', 'failed', 'cancelled', 'outcome_unknown'].includes(message.taskState);
 const active = (message: CommunicationMessage) =>
   ['dispatching', 'accepted', 'delivered', 'delivery_unknown'].includes(message.deliveryState) &&
   !['completed', 'failed', 'cancelled'].includes(message.taskState);
+
+/** Optional trusted cross-Feature ancestor reader; never configured by production composition. */
+export type CrossParentGate = (
+  tx: CommunicationTransaction,
+  taskId: string,
+  expected: { workspaceId: string; featureId: string; targetPaneId: string; correlationId: string },
+  snapshot: FeatureConfigurationDatabase['crossFeatureSnapshot'],
+) => { sourcePaneId: string; sourceFeatureId: string; parentTaskId: string | null } | undefined;
 
 /** Trusted opt-in Core service. Never constructed by observer startup. */
 export class PaneCommunication {
@@ -76,12 +94,16 @@ export class PaneCommunication {
   private clients = new WeakMap<CommunicationClient, Grant>();
   private adapters = new Map<string, CommunicationAdapter>();
   private listeners = new Map<Grant, Set<(message: CommunicationMessage) => void>>();
+  private activeParentReader?: FeaturePermissionReader;
+  private activeParentSnapshot?: FeatureConfigurationDatabase['crossFeatureSnapshot'];
 
   constructor(
     private journal: CommunicationJournal,
     private resolve: CommunicationResolver,
     private now: () => number = Date.now,
     private readFeaturePermissions?: FeaturePermissionReader,
+    private readonly crossParent?: CrossParentGate,
+    private readonly parentSnapshotLock?: FeatureConfigurationDatabase['withPermissionSnapshot'],
   ) {}
 
   /** Trusted composition only: enrollment must prove ownership; captured provider text cannot call this. */
@@ -412,7 +434,10 @@ export class PaneCommunication {
         !pane.capabilities.canReportTaskCompletion ||
         !adapter.ready(pane) ||
         messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
-        messages.filter(active).length >= communicationLimits.activeTasks
+        tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && crossActive(m.state)) ||
+        messages.filter(active).length +
+          tx.crossUsage().filter((m) => crossActive(m.state)).length >=
+          communicationLimits.activeTasks
       )
         return undefined;
       let content: Uint8Array;
@@ -581,6 +606,7 @@ export class PaneCommunication {
     if (!this.permitted(tx, grant, target.paneId, ['delegate', 'execute']))
       throw new Error('Feature permission denied or revision changed');
     const messages = tx.messages();
+    const crossUsage = tx.crossUsage();
     const duplicate = messages.find(
       (m) =>
         m.workspaceId === request.workspaceId &&
@@ -602,6 +628,8 @@ export class PaneCommunication {
         throw new Error('Idempotency conflict');
       return duplicate;
     }
+    if (messages.length + crossUsage.length >= communicationLimits.messages)
+      throw new Error('Message history capacity');
     if (messages.some((m) => m.messageId === request.messageId || m.taskId === request.taskId))
       throw new Error('Message or task identity already used');
     if (
@@ -615,29 +643,70 @@ export class PaneCommunication {
           m.targetPaneId === request.targetPaneId &&
           m.deliveryState === 'queued' &&
           m.taskState === 'pending',
-      ).length >= communicationLimits.queuedPerPane ||
+      ).length +
+        crossUsage.filter((m) => m.targetPaneId === request.targetPaneId && m.state === 'queued')
+          .length >=
+        communicationLimits.queuedPerPane ||
       messages.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-        .length >= communicationLimits.admissionsPerMinute
+        .length +
+        crossUsage.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+          .length >=
+        communicationLimits.admissionsPerMinute
     )
       throw new Error('Queue or rate limit');
     const ancestry = [request.targetPaneId];
     let parent = request.parentTaskId;
     let expectedSource = request.sourcePaneId;
+    let expectedFeature = grant.featureId;
     let depth = 0;
     while (parent) {
       const previous = messages.find((m) => m.taskId === parent);
-      if (
-        !previous ||
-        previous.workspaceId !== grant.workspaceId ||
-        previous.featureId !== grant.featureId ||
-        previous.correlationId !== request.correlationId ||
-        previous.targetPaneId !== expectedSource ||
-        terminalTask(previous)
-      )
-        throw new Error('Delegation parent denied');
-      ancestry.push(expectedSource);
-      expectedSource = previous.sourcePaneId;
-      parent = previous.parentTaskId;
+      if (previous) {
+        if (
+          previous.workspaceId !== grant.workspaceId ||
+          previous.featureId !== expectedFeature ||
+          previous.correlationId !== request.correlationId ||
+          previous.targetPaneId !== expectedSource ||
+          terminalTask(previous)
+        )
+          throw new Error('Delegation parent denied');
+        if (this.crossParent) {
+          if (!this.activeParentReader || !this.activeParentSnapshot || !expectedFeature)
+            throw new Error('Delegation parent unavailable');
+          const source = this.pane(tx, previous.sourcePaneId);
+          const target = this.pane(tx, previous.targetPaneId);
+          if (
+            source.workspaceId !== grant.workspaceId ||
+            target.workspaceId !== grant.workspaceId ||
+            source.featureId !== expectedFeature ||
+            target.featureId !== expectedFeature
+          )
+            throw new Error('Delegation parent denied');
+          featurePermissionRevision(source, target, ['view'], this.activeParentReader);
+        }
+        ancestry.push(expectedSource);
+        expectedSource = previous.sourcePaneId;
+        parent = previous.parentTaskId;
+      } else {
+        if (!this.crossParent || !this.activeParentSnapshot || !expectedFeature)
+          throw new Error('Delegation parent denied');
+        const cross = this.crossParent(
+          tx,
+          parent,
+          {
+            workspaceId: grant.workspaceId,
+            featureId: expectedFeature,
+            targetPaneId: expectedSource,
+            correlationId: request.correlationId,
+          },
+          this.activeParentSnapshot,
+        );
+        if (!cross) throw new Error('Delegation parent denied');
+        ancestry.push(expectedSource);
+        expectedSource = cross.sourcePaneId;
+        expectedFeature = cross.sourceFeatureId;
+        parent = cross.parentTaskId;
+      }
       if (++depth > communicationLimits.maxDepth) throw new Error('Delegation depth exceeded');
     }
     ancestry.push(expectedSource);
@@ -723,7 +792,12 @@ export class PaneCommunication {
     target: CommunicationPane,
     operations: readonly import('@orqst/protocol').FeaturePermissionOperation[],
   ) {
-    return featurePermissionRevision(source, target, operations, this.readFeaturePermissions);
+    return featurePermissionRevision(
+      source,
+      target,
+      operations,
+      this.activeParentReader ?? this.readFeaturePermissions,
+    );
   }
   private permitted(
     tx: CommunicationTransaction,
@@ -763,7 +837,21 @@ export class PaneCommunication {
     const result = this.journal.transaction((tx) => {
       try {
         if (!this.valid(grant)) throw new Error('Grant expired or revoked');
-        return { ok: true as const, value: action(tx) };
+        const invoke = () => action(tx);
+        const value =
+          this.crossParent && this.parentSnapshotLock
+            ? this.parentSnapshotLock((local, cross) => {
+                this.activeParentReader = local;
+                this.activeParentSnapshot = cross;
+                try {
+                  return invoke();
+                } finally {
+                  this.activeParentReader = undefined;
+                  this.activeParentSnapshot = undefined;
+                }
+              })
+            : invoke();
+        return { ok: true as const, value };
       } catch (error) {
         this.audit(
           tx,
