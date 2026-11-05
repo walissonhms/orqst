@@ -408,3 +408,13 @@ never receives the missing-row default. Save is expectedRevision CAS with atomic
 versioned `feature.permissions.updated` metadata audit, not an observed event.
 See [fields, bounds and enforcement](../development/v6-feature-permissions.md).
 This adds no HTTP/RPC/MCP/native transport command or observer event type.
+
+### Native Feature permission review metadata
+
+The trusted private policy save supports optional `expectedFeatureRevision`,
+`expectedViewRevision` and `reviewDigest` fields. The native reviewed path
+requires them and binds the digest to its immutable plan; audit events may carry
+`reviewDigest`. Existing non-native Core callers and historical audit events do
+not have to supply these optional fields. These fields do not expose a renderer
+or network policy writer. A lost or unconfirmed save reply is `unknown`, not a
+confirmed CAS conflict.

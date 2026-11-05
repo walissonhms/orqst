@@ -1676,13 +1676,18 @@ remain separate pending work; this wiring establishes no provider/native accepta
 
 ## Feature permission matrix — 2026-11-05 (source state)
 
-The matrix editor and native command are present but are not functional or
-security-validated. The dynamic chrome capability does not grant the command,
-the current focus and private-channel checks reject its requests, and the native
-review does not yet bind the exact active Feature, document and policy to the
-save. The Node service currently fixes the actor and reports all save failures as
-stale, including possible post-commit failures. Do not enable the command until
-these gaps are corrected and tested. The existing Core policy store uses CAS and
-audit, but that does not prove the editor's end-to-end authorization. CSP is
-unchanged. Reset is not implemented; an empty allowlist denies all operations.
-Native acceptance remains pending.
+The `feature_permissions` command is granted by the dynamic Feature chrome
+capability. The handler checks the exact chrome document and native first
+responder, captures its document and Core epoch, and binds a review to the active
+Feature, snapshot and revisions. A native plain-text sheet displays stable IDs,
+labels, the policy transition and its SHA-256 plan digest; Cancel is the default.
+The sheet exception applies to the recorded native sheet. Focus, document and
+captured context are rechecked before the private host request. The Core
+transaction checks the policy, Feature and active-view revisions and stores the
+review digest with the audit event. The actor is supplied from the native host
+epoch through the inherited private channel. The renderer proposes a policy and
+cannot choose the actor or invoke the private transport. Confirmed revision
+conflicts return `stale`; an unconfirmed save returns `unknown` without retry.
+CSP is unchanged. Reset is not implemented; an empty allowlist denies all
+operations. Synthetic tests and source review do not establish native AppKit,
+real provider, package or platform acceptance.

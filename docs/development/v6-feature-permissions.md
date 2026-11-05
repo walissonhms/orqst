@@ -208,3 +208,16 @@ pinned [Anywh AgentHost](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c
 not ORQST's inherited receipt/config digest contract. The pinned root license is
 Apache-2.0 and no root NOTICE exists; no upstream code or dependency is copied.
 Replacing ORQST's lifecycle would not close this receipt-specific ordering gap.
+
+### Native matrix review correction
+
+The native reviewed path captures the active Feature, exact document, host epoch,
+presentation generation, snapshot and policy. The plain-text sheet shows the
+complete proposed configuration, stable IDs, effective allow/deny matrix and
+SHA-256 plan digest. The inherited private channel conveys the native actor and
+plan; the Core checks Feature, view and policy revisions in one transaction and
+records the digest in the audit event. A confirmed conflict is `stale`; a
+possibly committed operation with an unconfirmed outcome is `unknown` and is
+not retried. Feature switching clears the panel's previous state. The route and
+its focus/consent behavior have synthetic coverage only; no native app or
+provider acceptance is claimed by this increment.

@@ -631,3 +631,12 @@ execution journals and unscoped team/communication rows. Native preparation
 bindings and catalogue membership must prove the mapping before use. No stored
 identifier or row is rewritten, merged, copied or looked up by fallback. Legacy
 manifests remain unscoped; view selection does not assign them to a Feature.
+
+### Native Feature permission review audit
+
+A native reviewed policy save may carry `reviewDigest`, a lowercase SHA-256
+hex digest recorded in the existing JSON audit event. Older events without this
+optional field remain valid. The private save also supplies expected Feature and
+active-view revisions; the same SQLite transaction checks both and the policy
+revision before writing. No table or column is added. A digest alone grants no
+permission and is not proof of native or provider acceptance.

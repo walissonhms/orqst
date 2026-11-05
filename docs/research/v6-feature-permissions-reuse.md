@@ -103,3 +103,21 @@ through existing facades. Rust `agents.rs` supplies the same native app-data roo
 as `terminal_creation.rs`; IDs are resolved inside the owned Node bootstrap from
 validated preparation bindings/catalogue, never taken from a renderer request.
 No external runtime, catalogue, database schema or administrative transport is added.
+
+## Native review correction — 2026-11-05
+
+The existing ORQST native consent and private Node/Core channel remain the reuse
+basis; the pinned Anywh and Tucano decisions above do not change. The review
+binds the Feature and view revisions in the existing SQLite transaction rather
+than importing a separate upstream permission or session manager. No third-party
+source was copied.
+
+The Rust review now directly declares `sha2` 0.10.9, already present transitively
+in the locked Cargo graph. The installed crate metadata declares `MIT OR
+Apache-2.0`; the package contains `LICENSE-MIT` and `LICENSE-APACHE`, with no
+NOTICE found. The locked checksum is
+`a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283`.
+See the exact [crate release](https://crates.io/crates/sha2/0.10.9) and its
+[RustCrypto repository](https://github.com/RustCrypto/hashes). The dependency is
+used to bind a review plan digest to the audited save, not as evidence of native
+consent or platform acceptance.
