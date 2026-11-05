@@ -62,6 +62,11 @@ export class TauriTerminalService {
   private shutdownReady = false;
   private shutdownPreserved = false;
 
+  /** Read-only shutdown fence for the visual adapter; never grants authority. */
+  fenced(): boolean {
+    return this.shutdownFence;
+  }
+
   constructor(
     supervisors: TerminalNativeSupervisor[],
     private readonly keys: { publicKey: KeyObject; privateKey: KeyObject },

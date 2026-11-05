@@ -20,6 +20,7 @@ import { terminalLayoutStore } from './terminal-layout-store.js';
 import { terminalEnrollmentFile } from '../../../packages/core/src/terminal/enrollment-files.js';
 import { appendTerminalLayout } from './terminal-layout-enrollment.js';
 import { TauriTerminalLayout } from './tauri-terminal-layout.js';
+import { visualAllowedDuringFence } from './terminal-fence.js';
 import {
   featureNativeReplySchema,
   featureNativeEnvelopeSchema,
@@ -357,6 +358,8 @@ async function start() {
         const visual = visualMessageSchema.safeParse(raw);
         if (visual.success) {
           const message = visual.data;
+          // A delayed visual message must not reopen presentation during the fence.
+          if (service.fenced() && !visualAllowedDuringFence(message.kind)) continue;
           if (message.kind === 'layout-generation') {
             nativeGeneration = Math.max(nativeGeneration, message.generation);
             layout.setNativeGeneration(message.generation);
