@@ -1145,6 +1145,8 @@
     "denied": "The owned shutdown was denied. The app stays open.",
     "retirement": "The owned retirement was not confirmed. The app stays open.",
     "fence": "Shutting down: terminals are read-only. Try Quit again to finish.",
-    "retry": "Use Quit again; the same shutdown is retried without a second signal."
+    "retry": "Use Quit again; the same shutdown is retried without a second signal.",
+    "host_lost": "The terminal host was lost without an exit receipt. The state is preserved; Quit cannot finish.",
+    "starting": "The terminal host is starting. Try Quit again when it is ready."
   }
 }

@@ -1145,6 +1145,8 @@
     "denied": "O encerramento próprio foi negado. O app continua aberto.",
     "retirement": "A aposentadoria própria não foi confirmada. O app continua aberto.",
     "fence": "Encerrando: terminais somente leitura. Tente Quit de novo para concluir.",
-    "retry": "Use Quit de novo; o mesmo encerramento é repetido sem segundo sinal."
+    "retry": "Use Quit de novo; o mesmo encerramento é repetido sem segundo sinal.",
+    "host_lost": "O host de terminal foi perdido sem recibo de saída. O estado foi preservado; o Quit não pode concluir.",
+    "starting": "O host de terminal está iniciando. Tente Quit de novo quando estiver pronto."
   }
 }

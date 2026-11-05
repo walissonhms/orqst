@@ -2056,6 +2056,8 @@ async fn start_selected_inner(
     // Includes startup-environment selections: uncertain Core setup must never unlock
     // native preparation or reuse a terminal window in this application lifetime.
     crate::terminal_creation::fence_selection(app);
+    // Quit must see effects-possible before the child exists.
+    crate::host_phase::reserve_start();
     let files = serde_json::to_string(&paths)?;
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");
@@ -2082,7 +2084,11 @@ async fn start_selected_inner(
                 Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
             )
         }))
-        .spawn()?;
+        .spawn()
+        .map_err(|error| {
+            crate::host_phase::release_start();
+            error
+        })?;
     diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
         while let Some(event) = rx.recv().await {
@@ -2119,6 +2125,7 @@ async fn start_selected_inner(
                     .unwrap_or_else(|| crate::terminal_creation::startup_error("startup_protocol")),
             };
             let _ = child.kill();
+            crate::host_phase::lost();
             return Err(error);
         }
     };

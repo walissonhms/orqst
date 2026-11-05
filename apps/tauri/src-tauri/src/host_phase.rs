@@ -4,6 +4,7 @@ use std::sync::Mutex;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
     NotStarted,
+    Starting,
     Active,
     ShutdownInFlight,
     ExitEvidenceConfirmed,
@@ -16,10 +17,26 @@ pub fn phase() -> Phase {
     *PHASE.lock().unwrap()
 }
 
+/// Reserve effects before spawning the host. Quit consults the same boundary.
+pub fn reserve_start() {
+    let mut phase = PHASE.lock().unwrap();
+    if *phase == Phase::NotStarted {
+        *phase = Phase::Starting;
+    }
+}
+
+/// A spawn that produced no child may be released; a child that failed is unknown.
+pub fn release_start() {
+    let mut phase = PHASE.lock().unwrap();
+    if *phase == Phase::Starting {
+        *phase = Phase::NotStarted;
+    }
+}
+
 /// Only the first successful start becomes active; a lost host stays lost.
 pub fn started() {
     let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::NotStarted {
+    if matches!(*phase, Phase::NotStarted | Phase::Starting) {
         *phase = Phase::Active;
     }
 }
@@ -27,7 +44,7 @@ pub fn started() {
 /// A host that disappears after starting without exit evidence is unknown, never absent.
 pub fn lost() {
     let mut phase = PHASE.lock().unwrap();
-    if matches!(*phase, Phase::Active | Phase::ShutdownInFlight) {
+    if matches!(*phase, Phase::Starting | Phase::Active | Phase::ShutdownInFlight) {
         *phase = Phase::LostUnknown;
     }
 }
@@ -70,6 +87,7 @@ pub enum QuitDecision {
     AgentsGate,
     TerminalFlow,
     BlockedLost,
+    BlockedStarting,
     AlreadyInFlight,
 }
 
@@ -82,6 +100,9 @@ pub fn quit_decision(
 ) -> QuitDecision {
     if phase == Phase::LostUnknown {
         return QuitDecision::BlockedLost;
+    }
+    if phase == Phase::Starting {
+        return QuitDecision::BlockedStarting;
     }
     if agents_active && agents_gate_presented {
         return QuitDecision::AgentsGate;
@@ -186,6 +207,10 @@ mod tests {
         assert_eq!(
             quit_decision(Phase::NotStarted, false, false, false),
             ExitDirect
+        );
+        assert_eq!(
+            quit_decision(Phase::Starting, false, false, false),
+            BlockedStarting
         );
     }
 

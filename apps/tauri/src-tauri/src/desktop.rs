@@ -788,6 +788,9 @@ pub fn request_quit(app: &tauri::AppHandle) {
         crate::host_phase::QuitDecision::BlockedLost => {
             crate::terminal::quit_blocked_public(app, "host_lost");
         }
+        crate::host_phase::QuitDecision::BlockedStarting => {
+            crate::terminal::quit_blocked_public(app, "starting");
+        }
         crate::host_phase::QuitDecision::AgentsGate => {
             // The gate owns the next step; nothing is signaled and no latch is held.
             quit_finished();
