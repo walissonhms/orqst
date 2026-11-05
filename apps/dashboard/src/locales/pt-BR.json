@@ -1220,6 +1220,8 @@
     "sessions": "Sessões",
     "metadataConnected": "Metadados do Core carregados",
     "metadataUnavailable": "Metadados do Core indisponíveis",
-    "evidenceLimit": "Atividade CLI, modelo e parentesco estão indisponíveis neste contrato de metadados do terminal."
+    "evidenceLimit": "Atividade CLI, modelo e parentesco estão indisponíveis neste contrato de metadados do terminal.",
+    "relayUnknown": "Estado do relay indisponível",
+    "for": "há {{duration}}"
   }
 }

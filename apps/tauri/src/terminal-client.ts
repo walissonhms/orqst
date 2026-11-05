@@ -1,12 +1,23 @@
 import { invoke } from '@tauri-apps/api/core';
 import { terminalNativeReplySchema } from '@orqst/protocol';
 import { createTerminalClient } from '../../desktop/src/terminal-client.js';
+import { installCanvasEscape } from './terminal-escape.js';
 import {
   parseTerminalViewAction,
   type TerminalLayoutState,
 } from '../../desktop/src/terminal-layout.js';
 
 const listeners = new Set<(value: TerminalLayoutState) => void>();
+// Escape is not a browser transient-activation key. This listener accepts only a trusted
+// physical key event; Rust still checks the actual owned Webview and native focus.
+const removeCanvasEscape = installCanvasEscape(() => {
+  void invoke<boolean>('terminal_view', { action: 'canvas' })
+    .then((accepted) => {
+      if (!accepted) window.dispatchEvent(new Event('orqst-canvas-escape-denied'));
+    })
+    .catch(() => window.dispatchEvent(new Event('orqst-canvas-escape-denied')));
+});
+window.addEventListener('pagehide', removeCanvasEscape, { once: true });
 let state: TerminalLayoutState | undefined;
 window.addEventListener('orqst-terminal-layout', (event) => {
   state = (event as CustomEvent<TerminalLayoutState>).detail;

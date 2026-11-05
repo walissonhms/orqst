@@ -20,13 +20,15 @@ const bundle = await build({
     import {FeatureCanvas} from './apps/dashboard/src/FeatureCanvas.tsx';
     import {CanvasSessionList,CanvasStatusBar} from './apps/dashboard/src/FeatureCanvasSummary.tsx';
     import {FeatureWorkspace} from './apps/dashboard/src/FeatureWorkspace.tsx';
+    import {installCanvasEscape} from './apps/tauri/src/terminal-escape.ts';
     import {syntheticCanvas} from './tests/fixtures/feature-canvas.ts';
     import './apps/dashboard/src/feature-workspace.css';
     import i18n from './apps/dashboard/src/i18n.ts';
     window.orqstFeatures = {contractVersion:1,request:window.syntheticRequest};
+    installCanvasEscape(()=>window.syntheticEscape());
     await i18n.changeLanguage(navigator.language);
     function SyntheticReference(){
-      const {agents,groups}=syntheticCanvas();
+      const {agents,groups,journal}=syntheticCanvas();
       const [query,setQuery]=useState('');
       return <section className="feature-workspace feature-native feature-canvas-mode" aria-label="SYNTHETIC RENDERER ONLY">
         <aside className="feature-sidebar"><div className="feature-brand"><img src="/brand.svg" alt="ORQST" /></div>
@@ -36,11 +38,11 @@ const bundle = await build({
         </aside>
         <header className="feature-topbar"><strong>SYNTHETIC UI ONLY / Feature canvas</strong></header>
         <nav className="feature-terminalbar canvas-feature-tabs"><button className="active">SYNTHETIC Feature <span className="canvas-attention-dot" /></button></nav>
-        <div className="feature-surface"><FeatureCanvas agents={agents.filter(a=>a.title.toLowerCase().includes(query.toLowerCase()))} groups={groups} onOpen={a=>window.syntheticOpen(a.slot)} onPrepare={()=>window.syntheticPrepare()}/></div>
+        <div className="feature-surface"><FeatureCanvas agents={agents.filter(a=>a.title.toLowerCase().includes(query.toLowerCase()))} groups={groups} journal={journal} onOpen={a=>window.syntheticOpen(a.slot)} onPrepare={()=>window.syntheticPrepare()}/></div>
         <footer className="feature-bottom"><CanvasStatusBar agents={agents} connected={false}/></footer>
       </section>;
     }
-    createRoot(document.getElementById('root')).render(location.pathname==='/reference' ? <SyntheticReference/> : <FeatureWorkspace />);`,
+    createRoot(document.getElementById('root')).render(location.pathname==='/reference' ? <SyntheticReference/> : <FeatureWorkspace onPrepare={()=>window.syntheticPrepare()} />);`,
     sourcefile: 'synthetic-canvas.tsx',
     resolveDir: resolve('.'),
     loader: 'tsx',
@@ -64,7 +66,20 @@ const snapshot: FeatureNativeSnapshot = {
   storage: 'core',
   generation: 0,
   workspace: { id: 'synthetic-workspace', name: 'SYNTHETIC UI ONLY' },
-  features: [],
+  features: [
+    {
+      schemaVersion: 1,
+      featureId: 'e10636eb-3a12-4094-9123-49a4cdad27b8',
+      workspaceId: 'synthetic-workspace',
+      name: 'SYNTHETIC feature',
+      description: '',
+      status: 'planned',
+      revision: 1,
+      terminalIds: [],
+      createdAt: 0,
+      updatedAt: 0,
+    },
+  ],
   activeFeatureId: null,
   view: {
     contractVersion: 1,
@@ -92,7 +107,9 @@ try {
       const errors: string[] = [];
       const opened: number[] = [];
       const commands: unknown[] = [];
+      let liveSnapshot = structuredClone(snapshot);
       let prepares = 0;
+      let escapes = 0;
       page.on('pageerror', (error) => errors.push(error.message));
       await page.exposeFunction('syntheticOpen', (slot: number) => {
         opened.push(slot);
@@ -100,9 +117,25 @@ try {
       await page.exposeFunction('syntheticPrepare', () => {
         prepares++;
       });
+      await page.exposeFunction('syntheticEscape', () => {
+        escapes++;
+      });
       await page.exposeFunction('syntheticRequest', (request: unknown) => {
         commands.push(request);
-        return { status: 'ok', snapshot };
+        const input = request as { action: string; featureId?: string | null };
+        if (input.action === 'select') {
+          liveSnapshot = {
+            ...liveSnapshot,
+            generation: liveSnapshot.generation + 1,
+            activeFeatureId: input.featureId ?? null,
+            view: {
+              ...liveSnapshot.view,
+              featureId: input.featureId ?? null,
+              revision: liveSnapshot.view.revision + 1,
+            },
+          };
+        }
+        return { status: 'ok', snapshot: liveSnapshot };
       });
       await page.route('**/*', async (route) => {
         const url = new URL(route.request().url());
@@ -156,6 +189,23 @@ try {
         await page.locator('.canvas-agent-heading').click();
         assert.equal(opened.at(-1), 6);
       }
+      await page.evaluate(() => {
+        const button = document.createElement('button');
+        button.id = 'canvas';
+        document.body.append(button);
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      assert.equal(escapes, 0); // Synthetic DOM events never invoke the native action.
+      await page.keyboard.press('Escape');
+      await expect.poll(() => escapes).toBe(1);
+      await page.evaluate(() => {
+        const menu = document.createElement('details');
+        menu.id = 'pane-menu';
+        menu.open = true;
+        document.body.append(menu);
+      });
+      await page.keyboard.press('Escape');
+      assert.equal(escapes, 1);
       await page.goto('http://127.0.0.1:14917/native-metadata');
       await expect(page.locator('.canvas-agent')).toHaveCount(3);
       await expect(page.locator('.canvas-edges path')).toHaveCount(0);
@@ -174,6 +224,16 @@ try {
             (request as { terminalId: string }).terminalId === ids[0],
         ),
       );
+      if (width === 1440) {
+        await page.keyboard.press('Meta+k');
+        await expect(page.getByRole('textbox', { name: locale.canvas.search })).toBeFocused();
+        await page.keyboard.press('Meta+n');
+        assert.equal(prepares, 2);
+      }
+      await page.getByRole('button', { name: 'SYNTHETIC feature', exact: true }).click();
+      await expect(page.locator('.canvas-agent')).toHaveCount(0);
+      await page.getByRole('button', { name: locale.features.unassigned, exact: true }).click();
+      await expect(page.locator('.canvas-agent')).toHaveCount(3);
       assert.equal(
         await page.locator('body').evaluate((body) => body.scrollWidth <= window.innerWidth),
         true,

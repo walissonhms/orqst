@@ -7,7 +7,7 @@
 - Keep unavailable agent evidence explicit; a running PTY is not an observed turn.
   Current metadata-only production cards show no invented activities/models/links.
 - Add generation-bound Canvas navigation and preserve retained PTYs, hidden pane
-  preferences and input revocation. Escape preserves CLI use while input is enabled.
+  preferences and input revocation. Physical Escape returns to the canvas.
 - Present chrome above the retained dashboard, with visible terminal siblings above
   chrome, and uncover the main preparation dialog only after native source checks.
 - Add opt-in labelled renderer captures at 1440×900 and 390×900. Native/provider

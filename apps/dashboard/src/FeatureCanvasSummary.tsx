@@ -85,6 +85,7 @@ export function CanvasStatusBar({
         {unknown > 0 && <span> · {t('canvas.unknown', { count: unknown })}</span>}
       </span>
       <span className={connected ? 'canvas-core-connected' : ''}>
+        {t('canvas.relayUnknown')} ·{' '}
         {t(connected ? 'canvas.metadataConnected' : 'canvas.metadataUnavailable')}{' '}
         <span> · v0.1.0 · {i18n.resolvedLanguage === 'pt-BR' ? 'pt' : 'en'}</span>
       </span>

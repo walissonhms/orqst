@@ -13,15 +13,15 @@ running/recent state. Search and New session expose Command-K/Command-N.
 
 Cards contain only explicitly bound sessions/events. Missing activity, agent state,
 effective model and observed interval are unavailable. Process running does not
-establish an agent turn. Explicit validated parentage events in the same Feature
-and Workspace are required for links; prose never supplies parentage. An orchestrator
+establish an agent turn. Links require Core journal message admission, scoped pane bindings and a matching audit
+record in the same Feature and Workspace; prose never supplies parentage. An orchestrator
 label is descriptive metadata and grants nothing.
 
 Selecting a card opens its retained real native terminal view. Native PTY Webviews
 remain outside the transformed DOM. Canvas navigation revokes input, does not stop
 or terminate a process and does not rewrite minimized preferences. The visible
-Canvas button always returns; Escape returns when terminal keyboard authority is
-disabled, preserving CLI Escape while input is enabled.
+Canvas button and a physical Escape key return to the canvas. Escape is reserved
+for this navigation while the managed terminal is focused.
 
 The current terminal metadata facade does not expose an explicit owned CLI-session
 binding or event stream. Therefore production cards currently display unavailable

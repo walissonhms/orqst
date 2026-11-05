@@ -10,8 +10,8 @@ show unavailable activity/status/model/duration and no delegation edges.
 The evidence-aware renderer accepts existing `SessionView`/validated source events.
 It shows at most three activities, source-relative timestamps and the observed
 session interval; it does not claim live execution duration or provider acceptance.
-`canvasEdges` requires the child's canonical parent session ID plus an explicit
-validated parentage event in the same Workspace/Feature. No prose parsing occurs.
+`canvasEdges` requires an admitted Core journal message, matching audit and managed
+terminal bindings in the same Workspace/Feature. No prose parsing occurs.
 Groups come from saved Feature metadata; no role is guessed from a prompt.
 
 ## View transitions
@@ -26,7 +26,8 @@ Groups come from saved Feature metadata; no role is guessed from a prompt.
   Rust validates the complete envelope before visibility/geometry changes.
 - Real terminal documents remain retained. Canvas zoom/pan transforms no PTY.
   Grid/restore changes the presentation; hidden siblings stay hidden unless explicitly
-  restored. The terminal Canvas button returns; Escape does so with input disabled.
+  restored. The terminal Canvas button and physical Escape return to the canvas.
+  Escape is reserved by this view while the managed terminal is focused.
 - Preparation from chrome hides sibling terminal/chrome views before focusing the
   retained main dashboard dialog. Input and old presentation generations are revoked.
   Opening the drawer does not launch a CLI or grant execution.
@@ -47,7 +48,7 @@ pnpm exec tsx scripts/accept-feature-canvas-ui.ts --authorize-synthetic-canvas-u
 
 This opt-in script starts Chromium only; no native app, terminal Core, PTY, CLI or
 provider is started. It checks seven synthetic evidence cards/three saved groups,
-six explicit parent edges, Reply, zoom/fit/keyboard pan/search and card navigation.
+six explicitly admitted synthetic journal edges, Reply, zoom/fit/keyboard pan/search and card navigation.
 It separately mounts the actual `FeatureWorkspace` with metadata-only slots and
 verifies unavailable fields, zero edges and UUID-bound card navigation.
 

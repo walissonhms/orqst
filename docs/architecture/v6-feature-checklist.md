@@ -5,7 +5,7 @@
 - [x] Dated design amendment; preserved original V6 sources remain unchanged.
 - [x] Dotted summary canvas, zoom/pan/fit toolbar, minimap and compact status bar.
 - [x] Evidence-aware cards, last three validated activities, observed intervals and
-      conditional explicit-parent links; no prose-derived relationships.
+      conditional Core-journal links; no prose-derived relationships.
 - [x] Saved-Feature groups, collapsible session sections, Search and New session shortcuts.
 - [x] Metadata-only canvas/card navigation preserving native PTYs, minimized preferences
       and generation/document/focus/input/permission/Quit fences.

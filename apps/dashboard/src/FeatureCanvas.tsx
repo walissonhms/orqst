@@ -14,12 +14,14 @@ import {
 import {
   canvasActivities,
   canvasClock,
+  canvasDuration,
   canvasEdges,
   canvasGeometry,
   fitCanvas,
   type CanvasAgent,
   type CanvasCamera,
   type CanvasGroup,
+  type CanvasJournalEdge,
 } from './feature-canvas.js';
 import './feature-canvas.css';
 
@@ -45,12 +47,8 @@ export function CanvasAgentCard({
   const activities = canvasActivities(agent);
   const status = session?.status ?? 'unknown';
   const start = session ? Date.parse(session.startedAt) : NaN;
-  const end = session ? Date.parse(session.lastActivity) : NaN;
-  // A terminal lifetime is not a turn duration. Show only the interval supported by observed events.
-  const duration =
-    Number.isFinite(start) && Number.isFinite(end) && end >= start
-      ? canvasClock(end - start)
-      : null;
+  const interval = canvasDuration(agent);
+  const duration = interval === null ? null : canvasClock(interval);
   return (
     <article className="canvas-agent" data-status={status} data-agent-id={agent.id}>
       <button
@@ -89,7 +87,14 @@ export function CanvasAgentCard({
         </span>
         <small>
           {duration
-            ? t(status === 'completed' ? 'canvas.took' : 'canvas.observed', { duration })
+            ? t(
+                status === 'completed'
+                  ? 'canvas.took'
+                  : status === 'running' || status === 'waiting_for_user'
+                    ? 'canvas.for'
+                    : 'canvas.observed',
+                { duration },
+              )
             : t('canvas.durationUnavailable')}
         </small>
       </footer>
@@ -106,12 +111,14 @@ export function CanvasAgentCard({
 export function FeatureCanvas({
   agents,
   groups,
+  journal = [],
   onOpen,
   onPrepare,
   busy = false,
 }: {
   agents: CanvasAgent[];
   groups: CanvasGroup[];
+  journal?: CanvasJournalEdge[];
   onOpen: (agent: CanvasAgent) => void;
   onPrepare?: () => void;
   busy?: boolean;
@@ -123,7 +130,7 @@ export function FeatureCanvas({
   const [size, setSize] = useState({ width: 1000, height: 700 });
   const drag = useRef<{ id: number; x: number; y: number; camera: CanvasCamera } | null>(null);
   const geometry = useMemo(() => canvasGeometry(agents, groups), [agents, groups]);
-  const edges = useMemo(() => canvasEdges(agents), [agents]);
+  const edges = useMemo(() => canvasEdges(agents, journal), [agents, journal]);
   const fitted = useRef(false);
   useEffect(() => {
     const element = viewport.current;

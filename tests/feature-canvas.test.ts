@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   canvasActivities,
+  canvasDuration,
   canvasEdges,
   canvasGeometry,
   canvasMembers,
@@ -11,35 +12,19 @@ import { syntheticCanvas } from './fixtures/feature-canvas.js';
 import { TauriTerminalLayout } from '../apps/desktop/src/tauri-terminal-layout.js';
 import type { FeatureNativeSnapshot } from '@orqst/protocol';
 
-test('canvas parentage requires explicit validated event binding in the same Feature and Workspace', () => {
-  const { agents } = syntheticCanvas();
-  assert.equal(canvasEdges(agents).length, 6);
-  const child = agents[1]!;
-  child.events = [];
-  assert.equal(
-    canvasEdges(agents).some((edge) => edge.to === child.id),
-    false,
-  );
-  child.events = syntheticCanvas().agents[1]!.events.map((event) => ({
-    ...event,
-    payload: { text: 'delegate to synthetic-session-0' },
-  }));
-  assert.equal(
-    canvasEdges(agents).some((edge) => edge.to === child.id),
-    false,
-  );
-  child.events = syntheticCanvas().agents[1]!.events;
-  child.featureId = 'another-feature';
-  assert.equal(
-    canvasEdges(agents).some((edge) => edge.to === child.id),
-    false,
-  );
-  child.featureId = agents[0]!.featureId;
-  child.events = child.events.map((event) => ({ ...event, workspaceId: 'foreign-workspace' }));
-  assert.equal(
-    canvasEdges(agents).some((edge) => edge.to === child.id),
-    false,
-  );
+test('canvas edges require exact admitted Core journal evidence and scoped terminal bindings', () => {
+  const { agents, journal } = syntheticCanvas();
+  assert.equal(canvasEdges(agents).length, 0); // Source event parentage alone is not the journal.
+  assert.equal(canvasEdges(agents, journal).length, 6);
+  const edge = journal[0]!;
+  const rejected = (entry: typeof edge) => canvasEdges(agents, [entry]).length === 0;
+  assert.ok(rejected({ ...edge, admission: { ...edge.admission, action: 'denied' } }));
+  assert.ok(rejected({ ...edge, admission: { ...edge.admission, messageId: null } }));
+  assert.ok(rejected({ ...edge, target: { ...edge.target, workspaceId: 'foreign' } }));
+  assert.ok(rejected({ ...edge, source: { ...edge.source, terminalId: undefined } }));
+  assert.ok(rejected({ ...edge, message: { ...edge.message, featureId: undefined } }));
+  agents[1]!.featureId = 'another-feature';
+  assert.ok(rejected(edge));
 });
 
 test('canvas shows only three validated source activities and never extracts prose from a PTY', () => {
@@ -61,6 +46,13 @@ test('canvas shows only three validated source activities and never extracts pro
   );
   delete agent.session;
   assert.deepEqual(canvasActivities(agent), []);
+});
+
+test('a completed duration requires a matching completion event, not an unrelated final activity', () => {
+  const agent = syntheticCanvas().agents[2]!;
+  assert.equal(canvasDuration(agent), 180000);
+  agent.events = agent.events.filter((event) => event.type !== 'agent.completed');
+  assert.equal(canvasDuration(agent), null);
 });
 
 test('native metadata produces honest unavailable cards, scoped only by persisted Feature membership', () => {

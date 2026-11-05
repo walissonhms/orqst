@@ -1220,6 +1220,8 @@
     "sessions": "Sessions",
     "metadataConnected": "Core metadata loaded",
     "metadataUnavailable": "Core metadata unavailable",
-    "evidenceLimit": "CLI activity, model and parentage are unavailable in this terminal metadata contract."
+    "evidenceLimit": "CLI activity, model and parentage are unavailable in this terminal metadata contract.",
+    "relayUnknown": "Relay status unavailable",
+    "for": "for {{duration}}"
   }
 }

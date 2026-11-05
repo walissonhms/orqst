@@ -592,6 +592,16 @@ export function FeatureWorkspace({
               }
             >
               {feature.name}
+              {canvasAgents.some(
+                (agent) =>
+                  agent.featureId === feature.featureId &&
+                  agent.session?.status === 'waiting_for_user',
+              ) && (
+                <span
+                  className="canvas-attention-dot"
+                  aria-label={t('canvas.needs', { count: 1 })}
+                />
+              )}
             </button>
           ))}
           <button

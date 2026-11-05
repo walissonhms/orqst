@@ -1,5 +1,11 @@
 import {
   eventSchema,
+  communicationPaneSchema,
+  communicationMessageSchema,
+  communicationAuditSchema,
+  type CommunicationPane,
+  type CommunicationMessage,
+  type CommunicationAudit,
   type SessionView,
   type StoredEvent,
   type FeatureNativeSnapshot,
@@ -22,6 +28,13 @@ export interface CanvasAgent {
 export interface CanvasGroup {
   id: string;
   name: string;
+}
+/** Supplied only by the Core journal projection; absent from the current native facade. */
+export interface CanvasJournalEdge {
+  source: CommunicationPane;
+  target: CommunicationPane;
+  message: CommunicationMessage;
+  admission: CommunicationAudit;
 }
 export interface CanvasRect {
   x: number;
@@ -84,31 +97,76 @@ export function canvasActivities(agent: CanvasAgent): StoredEvent[] {
     .reverse();
 }
 
-/** Parentage must be explicit in a validated source event, scoped to the same Feature. */
-export function canvasEdges(agents: CanvasAgent[]): Array<{ from: string; to: string }> {
-  return agents.flatMap((child) => {
-    const session = child.session;
-    if (!session?.parentSessionId) return [];
-    const parent = agents.find(
-      (agent) =>
-        agent.session?.id === session.parentSessionId &&
-        agent.featureId === child.featureId &&
-        agent.session.workspaceId === session.workspaceId,
-    );
+/** Completed duration requires an actual completion event, not the last unrelated activity. */
+export function canvasDuration(agent: CanvasAgent): number | null {
+  const session = agent.session;
+  if (!session) return null;
+  const start = Date.parse(session.startedAt);
+  const completed =
+    session.status === 'completed'
+      ? agent.events
+          .filter(
+            (event) =>
+              event.sessionId === session.id &&
+              event.workspaceId === session.workspaceId &&
+              ['agent.completed', 'session.completed'].includes(event.type) &&
+              eventSchema.safeParse(event, { jitless: true }).success,
+          )
+          .sort((a, b) => b.sequence - a.sequence)[0]
+      : undefined;
+  const end = Date.parse(
+    session.status === 'completed' ? (completed?.timestamp ?? '') : session.lastActivity,
+  );
+  return Number.isFinite(start) && Number.isFinite(end) && end >= start ? end - start : null;
+}
+
+/** A source-file parent field alone is not a Core journal admission. */
+export function canvasEdges(
+  agents: CanvasAgent[],
+  journal: CanvasJournalEdge[] = [],
+): Array<{ from: string; to: string }> {
+  const edges = new Map<string, { from: string; to: string }>();
+  for (const entry of journal) {
+    const { source, target, message, admission } = entry;
     if (
-      !parent ||
-      parent.id === child.id ||
-      !child.events.some(
-        (event) =>
-          event.sessionId === session.id &&
-          event.workspaceId === session.workspaceId &&
-          event.payload.parentSessionId === session.parentSessionId &&
-          eventSchema.safeParse(event, { jitless: true }).success,
+      !communicationPaneSchema.safeParse(source, { jitless: true }).success ||
+      !communicationPaneSchema.safeParse(target, { jitless: true }).success ||
+      !communicationMessageSchema.safeParse(message, { jitless: true }).success ||
+      !communicationAuditSchema.safeParse(admission, { jitless: true }).success ||
+      !message.featureId ||
+      !source.terminalId ||
+      !target.terminalId ||
+      source.ownership !== 'managed' ||
+      target.ownership !== 'managed' ||
+      !source.binding ||
+      !target.binding ||
+      source.workspaceId !== message.workspaceId ||
+      target.workspaceId !== message.workspaceId ||
+      admission.workspaceId !== message.workspaceId ||
+      source.featureId !== message.featureId ||
+      target.featureId !== message.featureId ||
+      admission.featureId !== message.featureId ||
+      message.sourcePaneId !== source.paneId ||
+      message.targetPaneId !== target.paneId ||
+      admission.paneId !== source.paneId ||
+      admission.messageId !== message.messageId ||
+      admission.action !== 'admitted' ||
+      admission.actorId !== message.actorId ||
+      admission.deliveryState !== 'queued' ||
+      admission.taskState !== 'pending' ||
+      source.terminalId === target.terminalId ||
+      !agents.some(
+        (agent) => agent.id === source.terminalId && agent.featureId === message.featureId,
+      ) ||
+      !agents.some(
+        (agent) => agent.id === target.terminalId && agent.featureId === message.featureId,
       )
     )
-      return [];
-    return [{ from: parent.id, to: child.id }];
-  });
+      continue;
+    const edge = { from: source.terminalId, to: target.terminalId };
+    edges.set(`${edge.from}:${edge.to}`, edge);
+  }
+  return [...edges.values()];
 }
 
 export function canvasGeometry(agents: CanvasAgent[], groups: CanvasGroup[]) {
