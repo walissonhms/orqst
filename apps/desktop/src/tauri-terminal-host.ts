@@ -1,6 +1,8 @@
 import {
   kernelIdentityClient,
   kernelIdentityReplySchema,
+  kernelLivenessClient,
+  kernelLivenessReplySchema,
 } from '../../../packages/core/src/terminal/kernel-channel.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
@@ -58,6 +60,7 @@ async function start() {
   if (selection.some((p) => p.blocker)) throw new Error('Blocked terminal profile');
   const keys = generateKeyPairSync('ed25519');
   const nativeKernel = kernelIdentityClient((query) => send(query));
+  const nativeLiveness = kernelLivenessClient((query) => send(query));
   const core = await connectManagedTerminalCore(
     files,
     join(__dirname, 'managed-terminal-core.cjs'),
@@ -66,6 +69,7 @@ async function start() {
     8, // Native-owned capacity, fixed for this Core lifetime; never renderer supplied.
     startupId,
     nativeKernel.query,
+    nativeLiveness.query,
   );
   const i18n = createInstance();
   activeCore = core;
@@ -137,6 +141,7 @@ async function start() {
     closed = true;
     service.close();
     nativeKernel.close();
+    nativeLiveness.close();
     process.stdin.destroy();
     void core.closeAndWait().catch(() => {
       process.exitCode = 1;
@@ -302,6 +307,10 @@ async function start() {
         const raw: unknown = JSON.parse(line);
         if (kernelIdentityReplySchema.safeParse(raw).success) {
           if (!nativeKernel.accept(raw)) return shutdown();
+          continue;
+        }
+        if (kernelLivenessReplySchema.safeParse(raw).success) {
+          if (!nativeLiveness.accept(raw)) return shutdown();
           continue;
         }
         const enrollment = enrollmentMessage.safeParse(raw);

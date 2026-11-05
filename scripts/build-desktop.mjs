@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { chmod, cp, mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
+import { buildKernelQuery } from './build-kernel-query.mjs';
 await build({
   entryPoints: ['apps/desktop/src/main.ts'],
   outfile: 'apps/desktop/dist/main.cjs',
@@ -60,6 +61,8 @@ for (const dependency of ['@xterm/xterm', '@xterm/addon-fit']) {
 }
 // Stage only the supported native backend. Never chmod package-manager/shared-store files.
 if (process.platform === 'darwin' && process.arch === 'arm64') {
+  await cp(await buildKernelQuery(), 'apps/desktop/dist/orqst-kernel-query');
+  await chmod('apps/desktop/dist/orqst-kernel-query', 0o755);
   const require = createRequire(import.meta.url);
   const source = dirname(require.resolve('node-pty/package.json'));
   const metadata = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));

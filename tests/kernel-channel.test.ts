@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   kernelIdentityClient,
   kernelIdentityQuerySchema,
+  kernelLivenessClient,
 } from '../packages/core/src/terminal/kernel-channel.js';
 
 test('private identity reply is bound to the exact outstanding request and PID', async () => {
@@ -36,6 +37,34 @@ test('private identity reply is bound to the exact outstanding request and PID',
     false,
   );
   client.close();
+});
+
+test('private liveness query binds replies and never treats query failure as absence', async () => {
+  const sent: { id: string }[] = [];
+  const client = kernelLivenessClient((value) => sent.push(value as { id: string }));
+  const identity = {
+    boot: randomUUID(),
+    pid: 123,
+    ppid: 1,
+    uid: 501,
+    startSec: 1,
+    startUsec: 1,
+    sid: 123,
+    pgid: 123,
+  };
+  const pending = client.query(identity);
+  assert.equal(
+    client.accept({ kind: 'kernel-liveness-reply', id: randomUUID(), exists: false }),
+    false,
+  );
+  assert.equal(
+    client.accept({ kind: 'kernel-liveness-reply', id: sent[0]!.id, exists: null }),
+    true,
+  );
+  await assert.rejects(pending);
+  const next = client.query(identity);
+  client.close();
+  await assert.rejects(next);
 });
 
 test('wrong PID, failed query and closed transport refuse rather than infer absence', async () => {

@@ -7,6 +7,7 @@ import test from 'node:test';
 import { build } from 'esbuild';
 import { acquireAdmissionMutation } from '../packages/core/src/terminal/admission-mutation.js';
 import { AdministrativeReviewPipe } from '../apps/desktop/src/offline-recovery-wire.js';
+import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
 
 function syntheticIdentity() {
   return {
@@ -20,6 +21,27 @@ function syntheticIdentity() {
     pgid: 1,
   };
 }
+
+test('owned retirement requires and revalidates the mutation guard', () => {
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-retirement-')));
+  try {
+    const admission = desktopAgentsAdmission(directory, [], undefined, true);
+    admission.claim();
+    assert.throws(() => admission.prepareRelease({}), /guard unavailable/);
+    let current = true;
+    admission.installMutation({
+      validate: () => {
+        if (!current) throw new Error('SYNTHETIC mutation lost');
+      },
+    });
+    const retire = admission.prepareRelease({ fixture: 'SYNTHETIC' });
+    current = false;
+    assert.throws(retire, /mutation lost/);
+    assert.ok(statSync(join(directory, 'active-pair.json')).isFile());
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test('private kernel reply is bound to the request and rejects malformed identity', async () => {
   const frames: object[] = [];

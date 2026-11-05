@@ -2856,6 +2856,49 @@ async fn start_selected_inner(
                             stream_outcome = Outcome::ProtocolRejected;
                             break;
                         }
+                    } else if value["kind"] == "kernel-liveness-query" {
+                        #[cfg(target_os = "macos")]
+                        {
+                            let identity =
+                                crate::terminal_kernel_identity::KernelIdentity::from_json(
+                                    &value["identity"],
+                                );
+                            if value.as_object().is_none_or(|o| o.len() != 3)
+                                || !crate::features::uuid(&value["id"])
+                                || identity.is_none()
+                            {
+                                stream_outcome = Outcome::ProtocolRejected;
+                                break;
+                            }
+                            let exists = crate::terminal_kernel_scan::mutation_owner_exists(
+                                &identity.unwrap(),
+                            )
+                            .ok();
+                            let reply = json!({"kind":"kernel-liveness-reply", "id":value["id"], "exists":exists});
+                            let state = app.state::<Terminals>();
+                            let mut guard = state.0.lock().unwrap();
+                            let Some(running) = guard.as_mut().filter(|r| {
+                                r.epoch == host_epoch
+                                    && r.admission_owner == host_owner
+                                    && r.initial_files == host_initial_files
+                            }) else {
+                                stream_outcome = Outcome::TransportFailed;
+                                break;
+                            };
+                            if running
+                                .child
+                                .write(format!("{reply}\n").as_bytes())
+                                .is_err()
+                            {
+                                stream_outcome = Outcome::TransportFailed;
+                                break;
+                            }
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            stream_outcome = Outcome::ProtocolRejected;
+                            break;
+                        }
                     } else if value["kind"] == "feature-reply" {
                         if presentation_blocked(&app) {
                             continue;

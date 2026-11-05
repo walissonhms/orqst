@@ -1,4 +1,7 @@
-import { kernelIdentityQuerySchema } from '../../../packages/core/src/terminal/kernel-channel.js';
+import {
+  kernelIdentityQuerySchema,
+  kernelLivenessQuerySchema,
+} from '../../../packages/core/src/terminal/kernel-channel.js';
 import type { KernelProcessIdentity } from '../../../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
 import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit-pending.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
@@ -56,6 +59,8 @@ export async function connectManagedTerminalCore(
   limit?: number,
   startupId: string = randomUUID(),
   kernelRead?: (pid: number) => Promise<KernelProcessIdentity>,
+  kernelExists?: (identity: KernelProcessIdentity) => Promise<boolean>,
+  recordKernelIdentity = true,
 ) {
   terminalStartupIdSchema.parse(startupId);
   // Passive before fork, with authoritative admission repeated in the child against races.
@@ -77,7 +82,7 @@ export async function connectManagedTerminalCore(
       admissionDirectory,
       String(terminalSlotLimit(limit)),
       startupId,
-      ...(kernelRead ? ['kernel-v1'] : []),
+      ...(kernelRead ? [recordKernelIdentity ? 'kernel-v1' : 'mutation-v1'] : []),
     ],
     {
       execPath: config.node.path,
@@ -209,6 +214,21 @@ export async function connectManagedTerminalCore(
         .then(
           (identity) => child.send({ kind: 'kernel-identity-reply', id, ok: true, identity }),
           () => child.send({ kind: 'kernel-identity-reply', id, ok: false }),
+        )
+        .catch(close);
+      return;
+    }
+    const livenessQuery = kernelLivenessQuerySchema.safeParse(raw);
+    if (initialized && livenessQuery.success) {
+      const { id, identity } = livenessQuery.data;
+      void (
+        kernelExists
+          ? kernelExists(identity)
+          : Promise.reject(new Error('Kernel liveness unavailable'))
+      )
+        .then(
+          (exists) => child.send({ kind: 'kernel-liveness-reply', id, exists }),
+          () => child.send({ kind: 'kernel-liveness-reply', id, exists: null }),
         )
         .catch(close);
       return;

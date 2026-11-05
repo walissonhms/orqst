@@ -21,6 +21,7 @@ export function desktopAgentsAdmission(
   directory: string,
   manifests: readonly string[] = [],
   epoch?: string,
+  requireMutation = false,
 ) {
   try {
     mkdirSync(directory, { mode: 0o700 });
@@ -46,6 +47,7 @@ export function desktopAgentsAdmission(
     JSON.stringify({ version: 1, owner: identity, manifests, ...(epoch ? { epoch } : {}) }) + '\n';
   let claimed = false;
   let retired = false;
+  let mutation: { validate(): void } | undefined;
   const enrollmentFiles = new Map<string, string>();
   const assertOwner = () => {
     assertNoOfflineRecovery(directory);
@@ -57,6 +59,11 @@ export function desktopAgentsAdmission(
   };
   return {
     owner: identity,
+    installMutation(guard: { validate(): void }) {
+      if (mutation) throw new Error('Admission mutation guard already installed');
+      guard.validate();
+      mutation = guard;
+    },
     preservePendingExit() {
       if (!epoch) throw new Error('Owned Core epoch required');
       detachOwnedExitPending(directory, owner, assertOwner);
@@ -104,6 +111,8 @@ export function desktopAgentsAdmission(
       };
     }) satisfies NonNullable<TerminalPairAdmission['reserveEnrollment']>,
     prepareRelease(evidence: unknown) {
+      if (requireMutation && !mutation) throw new Error('Admission mutation guard unavailable');
+      mutation?.validate();
       assertOwner();
       // Every attempt is exclusive. A failed/partial archive is retained, never overwritten.
       const record = JSON.parse(owner) as { owner: string };
@@ -126,6 +135,7 @@ export function desktopAgentsAdmission(
       assertOwner();
       // The caller must fence the runtime before invoking this marker-only finalizer.
       return () => {
+        mutation?.validate();
         assertOwner();
         if (terminalFile(archive, true, archiveLimit).toString('utf8') !== bytes)
           throw new Error('Desktop retirement archive changed');

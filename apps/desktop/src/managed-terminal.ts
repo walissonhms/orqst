@@ -1,6 +1,8 @@
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { electronKernelQuery } from './electron-kernel-query.js';
+import type { KernelProcessIdentity } from '../../../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
 import { app, WebContentsView, dialog, ipcMain, session, type BrowserWindow } from 'electron';
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
 import { TerminalNativeBroker } from '../../../packages/core/src/terminal/native-broker.js';
@@ -74,14 +76,28 @@ export async function createManagedTerminals(
       } catch {
         blocker = 'capacity_reserved';
       }
-      if (!blocker)
+      if (!blocker) {
+        const kernel =
+          process.platform === 'darwin'
+            ? {
+                identity: (pid: number) =>
+                  electronKernelQuery(join(__dirname, 'orqst-kernel-query')).identity(pid),
+                exists: (identity: KernelProcessIdentity) =>
+                  electronKernelQuery(join(__dirname, 'orqst-kernel-query')).exists(identity),
+              }
+            : undefined;
         core = await connectManagedTerminalCore(
           files,
           join(__dirname, 'managed-terminal-core.cjs'),
           keys.publicKey,
           directory,
           limit,
+          undefined,
+          kernel?.identity,
+          kernel?.exists,
+          false,
         );
+      }
     }
     let layoutStore: ReturnType<typeof terminalLayoutStore> | undefined;
     let initialLayout: TerminalLayoutPreferences | undefined;

@@ -1,4 +1,10 @@
-import { kernelIdentityClient, kernelIdentityReplySchema } from './kernel-channel.js';
+import {
+  kernelIdentityClient,
+  kernelIdentityReplySchema,
+  kernelLivenessClient,
+  kernelLivenessReplySchema,
+} from './kernel-channel.js';
+import { acquireAdmissionMutation } from './admission-mutation.js';
 import {
   preserveOwnedExitPending,
   inspectPendingOwnedExits,
@@ -57,10 +63,11 @@ async function start() {
     !process.send ||
     ![7, 8].includes(process.argv.length) ||
     !/^v24\./.test(process.version) ||
-    (process.argv.length === 8 && process.argv[7] !== 'kernel-v1')
+    (process.argv.length === 8 && !['kernel-v1', 'mutation-v1'].includes(process.argv[7]!))
   )
     throw new Error('Private Node Core only');
   const kernelEnabled = process.argv[7] === 'kernel-v1';
+  const mutationEnabled = process.argv.length === 8;
   const files: string[] = JSON.parse(process.argv[2]!);
   const limit = terminalSlotLimit(
     process.argv[5] === undefined ? undefined : Number(process.argv[5]),
@@ -88,7 +95,12 @@ async function start() {
   });
   const authority = new TerminalAuthority(new Map([['desktop-managed', publicKey]]), Date.now);
   startupStage = 'core_admission';
-  const admission = desktopAgentsAdmission(process.argv[4]!, files, authority.epoch);
+  const admission = desktopAgentsAdmission(
+    process.argv[4]!,
+    files,
+    authority.epoch,
+    mutationEnabled,
+  );
   startupStage = 'core_startup';
   const stores: Store[] = [];
   let pair!: ManagedTerminalPair;
@@ -113,6 +125,17 @@ async function start() {
     : undefined;
   try {
     const kernel = kernelIdentityClient((query) => send(query));
+    const liveness = kernelLivenessClient((query) => send(query));
+    let mutation: Promise<void> | undefined;
+    function ensureMutation() {
+      if (!mutationEnabled) return Promise.resolve();
+      admission.assertOwner();
+      mutation ??= kernel.query(process.pid).then(async (identity) => {
+        const guard = await acquireAdmissionMutation(process.argv[4]!, identity, liveness.query);
+        admission.installMutation(guard);
+      });
+      return mutation;
+    }
     const launches: TerminalMcpLaunch[] = [];
     if (mcp) {
       const relayPath = join(__dirname, 'orqst-mcp-relay.cjs');
@@ -186,6 +209,7 @@ async function start() {
       if (closed) return;
       closed = true;
       kernel.close();
+      liveness.close();
       authority.revoke('desktop-managed');
       pair.close();
       void mcp?.close();
@@ -193,10 +217,14 @@ async function start() {
       if (process.connected) process.disconnect();
     }
     process.on('disconnect', shutdown);
-    process.on('message', (raw: unknown) => {
+    process.on('message', async (raw: unknown) => {
       if (closed) return;
       if (kernelIdentityReplySchema.safeParse(raw).success) {
         if (!kernel.accept(raw)) shutdown();
+        return;
+      }
+      if (kernelLivenessReplySchema.safeParse(raw).success) {
+        if (!liveness.accept(raw)) shutdown();
         return;
       }
       const parsed = terminalPairRPCSchema.safeParse(raw);
@@ -410,6 +438,7 @@ async function start() {
           case 'prepareRetire':
             if (selection.some(({ config }) => config.version === 3))
               throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
+            await ensureMutation();
             value = pair.prepareRetire();
             break;
           case 'retire':

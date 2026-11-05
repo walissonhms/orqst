@@ -151,8 +151,10 @@ pub fn scan() -> io::Result<Vec<Process>> {
         return Err(io::Error::other("Truncated kernel inventory"));
     }
     let records: Vec<_> = bytes[..size]
-        .chunks_exact(RECORD_SIZE)
-        .map(raw_proc)
+        .as_chunks::<RECORD_SIZE>()
+        .0
+        .iter()
+        .map(|chunk| raw_proc(chunk))
         .collect();
     let this = records
         .iter()
@@ -281,6 +283,58 @@ mod tests {
         child.kill().unwrap();
         child.wait().unwrap();
         assert!(!mutation_owner_exists(&identity).unwrap());
+    }
+    #[test]
+    fn dead_session_leader_with_live_child_never_proves_absence() {
+        use std::io::{BufRead, BufReader};
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        extern "C" {
+            fn setsid() -> i32;
+            fn kill(pid: i32, sig: i32) -> i32;
+        }
+        let mut command = Command::new("/bin/sh");
+        command
+            .args(["-c", "sleep 60 & echo $!; wait"])
+            .stdout(Stdio::piped());
+        // SAFETY: setsid is async-signal-safe and touches no shared Rust state.
+        unsafe {
+            command.pre_exec(|| {
+                if setsid() < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            });
+        }
+        let mut leader = command.spawn().unwrap();
+        let mut line = String::new();
+        BufReader::new(leader.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let child: u32 = line.trim().parse().unwrap();
+        struct ChildGuard(i32);
+        impl Drop for ChildGuard {
+            fn drop(&mut self) {
+                // SAFETY: this PID belongs to the disposable test session.
+                unsafe {
+                    kill(self.0, 9);
+                }
+            }
+        }
+        let _cleanup = ChildGuard(child as i32);
+        let identity = crate::terminal_kernel_identity::read_process(leader.id()).unwrap();
+        let child_identity = crate::terminal_kernel_identity::read_process(child).unwrap();
+        assert_eq!(child_identity.sid, identity.sid);
+        leader.kill().unwrap();
+        leader.wait().unwrap();
+        assert!(!recorded_identity_exists(&identity).unwrap());
+        assert!(scan()
+            .unwrap()
+            .iter()
+            .any(|process| process.pid == child && process.sid == identity.sid));
+        let outcome = verify_sessions(&[identity.clone()], &[identity.sid]);
+        assert!(outcome.is_err());
     }
     #[test]
     fn comparison_refuses_count_changes_and_original_session_members() {

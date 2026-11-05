@@ -3,7 +3,13 @@ name = "orqst-desktop"
 version = "0.1.0"
 description = "ORQST native shell with the existing local Node Core"
 edition = "2021"
+default-run = "orqst-desktop"
 license = "Apache-2.0"
+
+[[bin]]
+name = "orqst-kernel-query"
+path = "src/kernel_query_main.rs"
+test = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

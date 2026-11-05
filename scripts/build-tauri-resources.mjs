@@ -6,6 +6,7 @@ import { chmod, cp, mkdir, readFile, readdir, realpath, stat, writeFile } from '
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildKernelQuery } from './build-kernel-query.mjs';
 
 // Native builds only. A cross-target Node binary must never be guessed from PATH.
 if (!/^v24\./.test(process.version)) throw new Error('Tauri resources require Node 24');
@@ -126,6 +127,8 @@ const agentsClientResult = await build({
   metafile: true,
 });
 if (process.platform === 'darwin' && process.arch === 'arm64') {
+  await cp(await buildKernelQuery(), join(output, 'core/orqst-kernel-query'));
+  await chmod(join(output, 'core/orqst-kernel-query'), 0o755);
   const require = createRequire(import.meta.url);
   const source = dirname(require.resolve('node-pty/package.json'));
   const metadata = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
