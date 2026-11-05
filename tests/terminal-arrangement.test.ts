@@ -6,7 +6,11 @@ import {
   containRect,
   dropIndex,
   GAP,
-  linkPath,
+  arcPath,
+  LANE,
+  lanePath,
+  linkStyle,
+  paneView,
   MIN_PANE,
   minimize,
   removePane,
@@ -144,16 +148,42 @@ test('removing a pane clears its weight and maximize', () => {
   assert.equal(removed.panes.length, 1);
 });
 
-test('linkPath connects facing edges', () => {
-  const left: Rect = { x: 0, y: 0, width: 100, height: 100 };
-  const right: Rect = { x: 300, y: 0, width: 100, height: 100 };
-  assert.match(linkPath(left, right), /^M 100 50 C .* 300 50$/);
-  const below: Rect = { x: 0, y: 300, width: 100, height: 100 };
-  assert.match(linkPath(left, below), /^M 50 100 C .* 50 300$/);
+test('link style follows the mode and maximize', () => {
+  assert.equal(linkStyle(stateWith(2, 'mosaic')), 'arc');
+  assert.equal(linkStyle(stateWith(2, 'free')), 'arc');
+  assert.equal(linkStyle(stateWith(2, 'rows')), 'lane');
+  assert.equal(linkStyle(stateWith(2, 'list')), 'lane');
+  assert.equal(linkStyle(stateWith(2, 'focus')), 'focus');
+  assert.equal(linkStyle(toggleMaximize(stateWith(2, 'mosaic'), 'p0')), 'focus');
 });
 
-test('linkPath arcs over the headers of adjacent panes', () => {
-  const a: Rect = { x: 0, y: 0, width: 100, height: 100 };
-  const b: Rect = { x: 108, y: 0, width: 100, height: 100 };
-  assert.match(linkPath(a, b), /^M 50 16 C 50 -20, 158 -20, 158 16$/);
+test('lane modes reserve a left gutter that panes never cover', () => {
+  for (const mode of ['rows', 'list'] as const) {
+    const state = stateWith(3, mode);
+    assert.deepEqual(paneView(state, view), { ...view, x: LANE, width: view.width - LANE });
+    for (const pane of arrange(state, view)) assert.ok(pane.rect.x >= LANE);
+  }
+});
+
+test('arcPath bends up when there is room and down at the top edge', () => {
+  const top: Rect = { x: 0, y: 0, width: 100, height: 100 };
+  const topRight: Rect = { x: 300, y: 0, width: 100, height: 100 };
+  const [, , c1y] = arcPath(top, topRight, view)
+    .match(/C (\S+) (\S+),/)!
+    .slice(0) as string[];
+  assert.ok(Number(c1y) > 32, 'bends down below the headers');
+  const low: Rect = { x: 0, y: 400, width: 100, height: 100 };
+  const lowRight: Rect = { x: 300, y: 400, width: 100, height: 100 };
+  const c = Number(arcPath(low, lowRight, view).match(/C \S+ (\S+),/)![1]);
+  assert.ok(c < 400, 'bends up above the headers');
+  assert.match(arcPath(top, topRight, view), /^M 50 32 C .* 350 32$/);
+});
+
+test('lanePath runs in the gutter between the two headers', () => {
+  const a: Rect = { x: LANE, y: 0, width: 500, height: 44 };
+  const b: Rect = { x: LANE, y: 104, width: 500, height: 44 };
+  const path = lanePath(a, b, view);
+  assert.match(path, new RegExp(`^M ${LANE - 2} 16 `));
+  assert.match(path, new RegExp(`H ${LANE - 2}$`));
+  assert.ok(path.includes('V '));
 });

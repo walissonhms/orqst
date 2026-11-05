@@ -180,6 +180,7 @@ function free(panes: ArrangedPane[], view: Rect, stack: string[]): PlacedPane[] 
  */
 export function arrange(state: ArrangementState, view: Rect, stack: string[] = []): PlacedPane[] {
   const panes = visiblePanes(state);
+  view = paneView(state, view);
   const focusId =
     state.mode === 'focus' ? (state.maximized ?? panes[0]?.id ?? null) : state.maximized;
   if (focusId && panes.some((pane) => pane.id === focusId)) {
@@ -294,35 +295,60 @@ export function removePane(state: ArrangementState, id: string): ArrangementStat
   };
 }
 
+/** Width of the left communication lane reserved in rows and list modes. */
+export const LANE = 34;
+const HEADER_MID = 16;
+const HEADER_HEIGHT = 32;
+
+export type LinkStyle = 'arc' | 'lane' | 'focus';
+
+/** How communication is drawn for the current mode. */
+export function linkStyle(state: ArrangementState): LinkStyle {
+  if (state.mode === 'focus' || state.maximized) return 'focus';
+  return state.mode === 'rows' || state.mode === 'list' ? 'lane' : 'arc';
+}
+
+/** Content area for panes; lane modes keep a gutter on the left for links. */
+export function paneView(state: ArrangementState, view: Rect): Rect {
+  return linkStyle(state) === 'lane'
+    ? { ...view, x: view.x + LANE, width: Math.max(0, view.width - LANE) }
+    : view;
+}
+
+const round = (n: number) => Math.round(n * 10) / 10;
+
 /**
- * Curved link between the facing edges of two panes, like a node graph.
- * Anchors sit on the edge midpoints closest to the other pane.
+ * Arc between two pane headers. It bends upwards when there is room above the
+ * higher header, otherwise downwards, so it never leaves the stage.
  */
-export function linkPath(from: Rect, to: Rect): string {
-  const fc = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
-  const tc = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
-  const horizontal = Math.abs(tc.x - fc.x) >= Math.abs(tc.y - fc.y);
-  const a = horizontal
-    ? { x: tc.x > fc.x ? from.x + from.width : from.x, y: fc.y }
-    : { x: fc.x, y: tc.y > fc.y ? from.y + from.height : from.y };
-  const b = horizontal
-    ? { x: tc.x > fc.x ? to.x : to.x + to.width, y: tc.y }
-    : { x: tc.x, y: tc.y > fc.y ? to.y : to.y + to.height };
-  const r = (n: number) => Math.round(n * 10) / 10;
-  const facing = horizontal ? Math.abs(b.x - a.x) : Math.abs(b.y - a.y);
-  if (facing < 80) {
-    // Neighbours: arc between header centres instead of a loop through the gap.
-    const h1 = { x: fc.x, y: from.y + 16 };
-    const h2 = { x: tc.x, y: to.y + 16 };
-    const lift = Math.min(h1.y, h2.y) - 36;
-    return `M ${r(h1.x)} ${r(h1.y)} C ${r(h1.x)} ${r(lift)}, ${r(h2.x)} ${r(lift)}, ${r(h2.x)} ${r(h2.y)}`;
-  }
-  const bend = Math.max(40, (horizontal ? Math.abs(b.x - a.x) : Math.abs(b.y - a.y)) / 2);
-  const c1 = horizontal
-    ? { x: a.x + Math.sign(b.x - a.x || 1) * bend, y: a.y }
-    : { x: a.x, y: a.y + Math.sign(b.y - a.y || 1) * bend };
-  const c2 = horizontal
-    ? { x: b.x - Math.sign(b.x - a.x || 1) * bend, y: b.y }
-    : { x: b.x, y: b.y - Math.sign(b.y - a.y || 1) * bend };
-  return `M ${r(a.x)} ${r(a.y)} C ${r(c1.x)} ${r(c1.y)}, ${r(c2.x)} ${r(c2.y)}, ${r(b.x)} ${r(b.y)}`;
+export function arcPath(from: Rect, to: Rect, view: Rect): string {
+  const ax = from.x + from.width / 2;
+  const bx = to.x + to.width / 2;
+  const span = Math.hypot(bx - ax, to.y - from.y);
+  const bend = Math.min(90, Math.max(36, span / 4));
+  const top = Math.min(from.y, to.y);
+  const up = top - bend >= view.y + 4;
+  // Leave from the header's outer edge so the line never crosses header text.
+  const ay = up ? from.y : from.y + HEADER_HEIGHT;
+  const by = up ? to.y : to.y + HEADER_HEIGHT;
+  const c = up ? top - bend : Math.max(ay, by) + bend;
+  return `M ${round(ax)} ${round(ay)} C ${round(ax)} ${round(c)}, ${round(bx)} ${round(c)}, ${round(bx)} ${round(by)}`;
+}
+
+/** Bracket in the left lane between two pane headers (rows and list modes). */
+export function lanePath(from: Rect, to: Rect, view: Rect): string {
+  const edge = view.x + LANE - 2;
+  const rail = view.x + 13;
+  const y1 = from.y + Math.min(HEADER_MID, from.height / 2);
+  const y2 = to.y + Math.min(HEADER_MID, to.height / 2);
+  const dir = y2 >= y1 ? 1 : -1;
+  const r = Math.min(8, Math.abs(y2 - y1) / 2);
+  return [
+    `M ${round(edge)} ${round(y1)}`,
+    `H ${round(rail + r)}`,
+    `Q ${round(rail)} ${round(y1)} ${round(rail)} ${round(y1 + dir * r)}`,
+    `V ${round(y2 - dir * r)}`,
+    `Q ${round(rail)} ${round(y2)} ${round(rail + r)} ${round(y2)}`,
+    `H ${round(edge)}`,
+  ].join(' ');
 }

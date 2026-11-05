@@ -394,30 +394,76 @@
   pointer-events: none;
   overflow: visible;
 }
+.ts-link {
+  --ts-flow: var(--orqst-neon);
+}
+.ts-link-message {
+  --ts-flow: var(--orqst-info);
+}
+.ts-link-result {
+  --ts-flow: var(--orqst-success);
+}
 .ts-link path {
   fill: none;
-  stroke: var(--orqst-edge);
-  stroke-width: 1.5;
-  stroke-dasharray: 6 6;
-  animation: ts-dash 0.6s linear infinite;
+  stroke: var(--ts-flow);
+  stroke-linecap: round;
 }
-.ts-dot {
+.ts-link-glow {
+  stroke-width: 6;
+  opacity: 0.35;
+}
+.ts-link-line {
+  stroke-width: 1.75;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation:
+    ts-draw 0.7s ease-out forwards,
+    ts-fade 2.4s ease-in forwards;
+}
+.ts-link-glow {
+  animation: ts-fade 2.4s ease-in forwards;
+}
+@keyframes ts-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ts-fade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.ts-flight {
+  --ts-flow: var(--orqst-neon);
   position: absolute;
-  top: 0;
-  left: 0;
+  top: -10px;
+  left: -10px;
   z-index: 951;
-  width: 9px;
-  height: 9px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--orqst-neon);
-  box-shadow: 0 0 10px var(--orqst-neon);
+  background: var(--ts-flow);
+  color: var(--orqst-background);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--ts-flow) 25%, transparent),
+    0 0 14px var(--ts-flow);
   pointer-events: none;
   offset-rotate: 0deg;
-  animation: ts-travel 1.2s ease-in-out 2 forwards;
+  animation:
+    ts-travel 1.1s cubic-bezier(0.45, 0, 0.25, 1) forwards,
+    ts-fade 2.4s ease-in forwards;
 }
-.ts-dot.ts-link-result {
-  background: var(--orqst-success);
-  box-shadow: 0 0 10px var(--orqst-success);
+.ts-flight.ts-link-message {
+  --ts-flow: var(--orqst-info);
+}
+.ts-flight.ts-link-result {
+  --ts-flow: var(--orqst-success);
 }
 @keyframes ts-travel {
   from {
@@ -427,13 +473,53 @@
     offset-distance: 100%;
   }
 }
-.ts-link-result path {
-  stroke: var(--orqst-success);
+
+/* Header badge: who this pane is talking to */
+.ts-flow {
+  --ts-flow: var(--orqst-neon);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--ts-flow) 55%, transparent);
+  background: color-mix(in srgb, var(--ts-flow) 16%, var(--orqst-surface));
+  color: var(--ts-flow);
+  font-family: var(--orqst-font-mono);
+  font-size: 10px;
+  white-space: nowrap;
+  animation: ts-badge 2.4s ease-in-out forwards;
 }
-@keyframes ts-dash {
-  to {
-    stroke-dashoffset: -12;
+.ts-flow.ts-link-message {
+  --ts-flow: var(--orqst-info);
+}
+.ts-flow.ts-link-result {
+  --ts-flow: var(--orqst-success);
+}
+@keyframes ts-badge {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
   }
+  10%,
+  80% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.ts-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Focus switcher */
@@ -461,6 +547,14 @@
   font-family: var(--orqst-font-mono);
   font-size: 11px;
   color: var(--orqst-muted);
+}
+.ts-focus-switch button.ts-receiving {
+  animation: ts-receive 1.2s ease-out 2;
+  color: var(--orqst-text);
+}
+.ts-focus-switch button.ts-sending {
+  color: var(--orqst-text);
+  background: color-mix(in srgb, var(--orqst-neon) 18%, transparent);
 }
 .ts-focus-switch button.active {
   background: var(--orqst-primary);
@@ -540,11 +634,14 @@
   }
   .ts-receiving,
   .ts-spinner,
-  .ts-link path,
   .ts-toast {
     animation: none;
   }
-  .ts-dot {
+  .ts-link-line {
+    animation: ts-fade 2.4s step-end forwards;
+    stroke-dashoffset: 0;
+  }
+  .ts-flight {
     display: none;
   }
 }
@@ -554,10 +651,14 @@
 }
 :root[data-motion='reduced'] .ts-receiving,
 :root[data-motion='reduced'] .ts-spinner,
-:root[data-motion='reduced'] .ts-link path,
 :root[data-motion='reduced'] .ts-toast {
   animation: none;
 }
-:root[data-motion='reduced'] .ts-dot {
+:root[data-motion='reduced'] .ts-link-line {
+  animation: ts-fade 2.4s step-end forwards;
+  stroke-dashoffset: 0;
+}
+:root[data-motion='reduced'] .ts-flight {
   display: none;
 }
+:root[data-motion='reduced'];

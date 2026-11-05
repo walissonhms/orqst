@@ -4,15 +4,18 @@ import {
   Check,
   CircleHelp,
   Columns3,
+  CornerDownLeft,
   LayoutGrid,
   List,
   Maximize2,
+  MessageSquare,
   Minimize2,
   Minus,
   PictureInPicture2,
   Plus,
   RectangleHorizontal,
   Rows3,
+  Send,
   Square,
   SquareStack,
   X,
@@ -24,7 +27,9 @@ import {
   arrangementModes,
   containRect,
   dropIndex,
-  linkPath,
+  arcPath,
+  lanePath,
+  linkStyle,
   minimize,
   paneSizes,
   removePane,
@@ -94,6 +99,41 @@ const sizeIcons: Record<PaneSize, typeof Square> = {
   wide: RectangleHorizontal,
   large: SquareStack,
 };
+
+const kindIcons: Record<StudioMessage['kind'], typeof Send> = {
+  message: MessageSquare,
+  delegation: Send,
+  result: CornerDownLeft,
+};
+
+/** Header badge naming the other end of the latest message for this pane. */
+function FlowBadge({
+  incoming,
+  outgoing,
+  labelOf,
+}: {
+  incoming?: StudioMessage;
+  outgoing?: StudioMessage;
+  labelOf: (id: string) => string;
+}) {
+  const { t } = useTranslation();
+  const message = incoming ?? outgoing;
+  if (!message) return null;
+  const Icon = kindIcons[message.kind];
+  const text = incoming
+    ? t('terminalStudio.flow.from', { label: labelOf(message.from) })
+    : t('terminalStudio.flow.to', { label: labelOf(message.to) });
+  return (
+    <span
+      key={message.id}
+      className={`ts-flow ts-link-${message.kind} ${incoming ? 'ts-flow-in' : 'ts-flow-out'}`}
+      title={t(`terminalStudio.messageKind.${message.kind}`)}
+    >
+      <Icon size={11} strokeWidth={2.25} />
+      {text}
+    </span>
+  );
+}
 
 const LINK_MS = 2400;
 const MAX_ACTIVE = 3;
@@ -383,14 +423,31 @@ export function TerminalStudio({
         })
       : null;
 
-  const links = active
-    .map((message) => {
-      const from = placedById.get(message.from);
-      const to = placedById.get(message.to);
-      if (!from || !to) return null;
-      return { message, path: linkPath(liveRect(from), liveRect(to)) };
-    })
-    .filter((link) => link !== null);
+  const style = linkStyle(state);
+  const links =
+    style === 'focus'
+      ? []
+      : active
+          .map((message) => {
+            const from = placedById.get(message.from);
+            const to = placedById.get(message.to);
+            if (!from || !to) return null;
+            const a = liveRect(from);
+            const b = liveRect(to);
+            return {
+              message,
+              path: style === 'lane' ? lanePath(a, b, view) : arcPath(a, b, view),
+            };
+          })
+          .filter((link) => link !== null);
+  // Events whose ends are not both on screen are announced in the dock instead.
+  const offscreen = active.filter(
+    (message) => style === 'focus' || !placedById.has(message.from) || !placedById.has(message.to),
+  );
+  const flowFor = (id: string) => ({
+    outgoing: active.findLast((message) => message.from === id),
+    incoming: active.findLast((message) => message.to === id),
+  });
 
   return (
     <section className="ts-root" aria-label={t('terminalStudio.title')}>
@@ -497,6 +554,7 @@ export function TerminalStudio({
                 <StatusIcon status={terminal.status} />
                 <span className="ts-label">{terminal.label}</span>
                 <span className="ts-name">{terminal.name}</span>
+                <FlowBadge {...flowFor(pane.id)} labelOf={(id) => byId.get(id)?.label ?? '?'} />
                 <span className="ts-meta">
                   <ProviderMark provider={terminal.provider} />
                   <span>
@@ -589,20 +647,31 @@ export function TerminalStudio({
         {splitHandles}
 
         <svg className="ts-links" width={view.width} height={view.height} aria-hidden="true">
+          <defs>
+            <filter id="ts-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" />
+            </filter>
+          </defs>
           {links.map(({ message, path }) => (
             <g key={message.id} className={`ts-link ts-link-${message.kind}`}>
-              <path d={path} />
+              <path className="ts-link-glow" d={path} filter="url(#ts-glow)" />
+              <path className="ts-link-line" d={path} />
             </g>
           ))}
         </svg>
-        {links.map(({ message, path }) => (
-          <span
-            key={`dot-${message.id}`}
-            className={`ts-dot ts-link-${message.kind}`}
-            style={{ offsetPath: `path("${path}")` }}
-            aria-hidden="true"
-          />
-        ))}
+        {links.map(({ message, path }) => {
+          const Icon = kindIcons[message.kind];
+          return (
+            <span
+              key={`flight-${message.id}`}
+              className={`ts-flight ts-link-${message.kind}`}
+              style={{ offsetPath: `path("${path}")` }}
+              aria-hidden="true"
+            >
+              <Icon size={11} strokeWidth={2.25} />
+            </span>
+          );
+        })}
 
         {state.mode === 'focus' && visibleCount > 1 && (
           <nav className="ts-focus-switch" aria-label={t('terminalStudio.switchTerminal')}>
@@ -614,7 +683,13 @@ export function TerminalStudio({
                 <button
                   key={pane.id}
                   type="button"
-                  className={current ? 'active' : ''}
+                  className={[
+                    current ? 'active' : '',
+                    receiving.has(pane.id) ? 'ts-receiving' : '',
+                    sending.has(pane.id) ? 'ts-sending' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   aria-current={current}
                   onClick={() => setState((s) => ({ ...s, maximized: pane.id }))}
                 >
@@ -649,14 +724,29 @@ export function TerminalStudio({
             </button>
           );
         })}
-        <div className="ts-toasts" aria-live="polite">
+        <div className="ts-toasts">
+          {offscreen.map((message) => {
+            const Icon = kindIcons[message.kind];
+            return (
+              <div key={message.id} className={`ts-toast ts-link-${message.kind}`}>
+                <Icon size={13} />
+                <span className="ts-label">{byId.get(message.from)?.label ?? '?'}</span>
+                <span aria-hidden="true">→</span>
+                <span className="ts-label">{byId.get(message.to)?.label ?? '?'}</span>
+                {t(`terminalStudio.messageKind.${message.kind}`)}
+              </div>
+            );
+          })}
+        </div>
+        <div className="ts-sr-only" aria-live="polite">
           {active.map((message) => (
-            <div key={message.id} className={`ts-toast ts-link-${message.kind}`}>
-              <span className="ts-label">{byId.get(message.from)?.label ?? '?'}</span>
-              <span aria-hidden="true">→</span>
-              <span className="ts-label">{byId.get(message.to)?.label ?? '?'}</span>
-              {t(`terminalStudio.messageKind.${message.kind}`)}
-            </div>
+            <span key={message.id}>
+              {t('terminalStudio.announce', {
+                from: byId.get(message.from)?.label ?? '?',
+                to: byId.get(message.to)?.label ?? '?',
+                kind: t(`terminalStudio.messageKind.${message.kind}`),
+              })}
+            </span>
           ))}
         </div>
       </footer>

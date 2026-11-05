@@ -14,6 +14,11 @@ import {
   type StudioTerminal,
   type TerminalProvider,
 } from '../TerminalStudio';
+import {
+  NewTerminalDialog,
+  type ProviderCatalog,
+  type TerminalRequest,
+} from '../NewTerminalDialog';
 import './terminal-preview.css';
 
 const start = Date.now();
@@ -49,6 +54,31 @@ function synthetic(index: number): StudioTerminal {
   };
 }
 
+/** Synthetic catalog for the preview; the app uses the native catalog of confirmed models. */
+const syntheticCatalog: ProviderCatalog[] = [
+  { provider: 'codex', available: true, models: [{ id: 'gpt-5.5' }, { id: 'gpt-5.5-mini' }] },
+  {
+    provider: 'claude',
+    available: true,
+    models: [{ id: 'claude-opus-5-5' }, { id: 'claude-sonnet-5-5' }, { id: 'claude-haiku-5-5' }],
+  },
+  { provider: 'opencode', available: true, models: [{ id: 'opencode/default' }] },
+  { provider: 'shell', available: true, models: [] },
+];
+
+function fromRequest(request: TerminalRequest, n: number): StudioTerminal {
+  return {
+    id: `synthetic-${n}`,
+    label: `T-${String(n).padStart(3, '0')}`,
+    name: request.name || `Synthetic ${n}`,
+    provider: request.provider,
+    model: request.model,
+    status: 'running',
+    startedAt: Date.now(),
+    lastActivity: 'Synthetic activity line',
+  };
+}
+
 function SyntheticBody({ terminal }: { terminal: StudioTerminal }) {
   return (
     <pre className="tp-body">
@@ -72,6 +102,7 @@ function Preview() {
   const [terminals, setTerminals] = useState(() => [0, 1, 2, 3].map(synthetic));
   const [messages, setMessages] = useState<StudioMessage[]>([]);
   const [count, setCount] = useState(4);
+  const [creating, setCreating] = useState(false);
   const ids = useMemo(() => terminals.map((terminal) => terminal.id), [terminals]);
 
   const send = (kind: StudioMessage['kind']) => {
@@ -113,14 +144,26 @@ function Preview() {
         terminals={terminals}
         messages={messages}
         renderBody={(terminal) => <SyntheticBody terminal={terminal} />}
-        onNewTerminal={() => {
-          setTerminals((current) => [...current, synthetic(count)]);
-          setCount((value) => value + 1);
-        }}
+        onNewTerminal={() => setCreating(true)}
         onClose={(id) =>
           setTerminals((current) => current.filter((terminal) => terminal.id !== id))
         }
       />
+      {creating && (
+        <NewTerminalDialog
+          catalog={syntheticCatalog}
+          max={Math.max(0, 12 - terminals.length)}
+          onCancel={() => setCreating(false)}
+          onConfirm={(requests) => {
+            setTerminals((current) => [
+              ...current,
+              ...requests.map((request, index) => fromRequest(request, count + index + 1)),
+            ]);
+            setCount((value) => value + requests.length);
+            setCreating(false);
+          }}
+        />
+      )}
     </div>
   );
 }

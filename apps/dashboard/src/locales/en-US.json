@@ -1282,6 +1282,42 @@
       "simulateMessage": "Simulate message",
       "simulateDelegation": "Simulate delegation",
       "simulateResult": "Simulate result"
+    },
+    "flow": {
+      "from": "from {{label}}",
+      "to": "to {{label}}"
+    },
+    "announce": "{{from}} to {{to}}: {{kind}}",
+    "providers": {
+      "codex": "Codex",
+      "claude": "Claude Code",
+      "opencode": "OpenCode",
+      "shell": "Shell"
+    },
+    "create": {
+      "title": "New terminals",
+      "subtitle": "Choose how many to open and which agent runs in each.",
+      "howMany": "How many",
+      "fewer": "One fewer",
+      "more": "One more",
+      "capacity_one": "This Feature has room for {{count}} more terminal.",
+      "capacity_other": "This Feature has room for {{count}} more terminals.",
+      "setup": "Setup",
+      "sameForAll": "Same for all",
+      "eachOwn": "Choose for each",
+      "cli": "Agent CLI",
+      "model": "Model",
+      "modelCount_one": "{{count}} model",
+      "modelCount_other": "{{count}} models",
+      "unavailable": "Not available",
+      "defaultHint": "uses the CLI setting",
+      "namePlaceholder": "Terminal {{n}}",
+      "name": "Name for terminal {{n}}",
+      "times": "{{count}} × {{name}}",
+      "cancel": "Cancel",
+      "open_one": "Open terminal",
+      "open_other": "Open {{count}} terminals",
+      "noModel": "No model needed"
     }
   }
 }
