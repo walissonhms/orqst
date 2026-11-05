@@ -843,6 +843,14 @@ pub(crate) fn permission_diff(
         format!("Feature: {}", escape_plain(feature)),
         format!("Revision: {} -> {}", current_revision, current_revision + 1),
     ];
+    lines.push(format!(
+        "Current configuration: {}",
+        escape_plain(&current.to_string())
+    ));
+    lines.push(format!(
+        "Proposed configuration: {}",
+        escape_plain(&proposed.to_string())
+    ));
     if current.is_null() {
         lines.push("NEUTRAL -> ALLOWLIST: only listed operations will be allowed by this policy; all others will be denied.".into());
         if proposed["rules"].as_array().is_some_and(|rules| {
@@ -1854,6 +1862,8 @@ mod tests {
         let empty = json!({"schemaVersion":1,"rules":[]});
         let neutral = super::permission_diff("Feature <x>", 0, &Value::Null, &empty, &labels);
         assert!(neutral.contains("Feature: Feature &lt;x&gt;"));
+        assert!(neutral.contains("Current configuration: null"));
+        assert!(neutral.contains("Proposed configuration: {\"rules\":[],\"schemaVersion\":1}"));
         assert!(neutral.contains("NEUTRAL -> ALLOWLIST"));
         assert!(neutral.contains("permits no operations"));
         assert!(neutral.contains("a (T-001) -> b (T-002): neutral => allow []; implicitly denied [delegate, execute, view]"));
