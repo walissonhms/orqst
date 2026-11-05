@@ -872,3 +872,23 @@ not run (awaiting release).
 
 Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
 `cargo test` 108 passed / 1 ignored. Native WebKit/AppKit acceptance remains pending.
+
+## Quit re-inspection — 2026-11-05 (source state)
+
+- [x] P0 effects-possible `Starting` phase reserved atomically before the host
+      spawn; it blocks direct exit and new admission. Spawn without a child may be
+      released; readiness failure/timeout/interruption after the child exists becomes
+      lost-unknown; only a fully installed Running becomes active (`c1c76c0`).
+- [x] P1a an authenticated pre-fence `busy`/`denied` reply rolls the phase back to
+      active; timeout, ambiguous transport and uncertain keep the fence (`dac8f09`).
+- [x] P2 the exit phase and in-flight latch are decided before the structured-agents
+      dialog, and the phase is revalidated after the gate (`e23425d`).
+- [ ] P1b managed-agents sheet acceptance still lacks a native presentation token,
+      NSApp-active and key-window/sheet/parent revalidation after the dialog.
+- [ ] Integrated deterministic test for request_quit → agents callback →
+      ExitRequested → receipt/one-shot, including transport failure, replay and
+      start/loss interleavings. Current tests are pure phase/step decisions.
+- [ ] Native AppKit/WebKit acceptance of the Quit and sheet paths.
+
+Validated on this machine: `cargo test` 109 passed / 1 ignored; `pnpm lint` 0.
+Full `pnpm test` not run in this round.
