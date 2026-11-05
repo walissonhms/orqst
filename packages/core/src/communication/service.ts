@@ -394,75 +394,78 @@ export class PaneCommunication {
 
   /** One bounded dispatch; no timer, polling loop, retry, process creation or provider fallback. */
   async dispatchNext(targetPaneId: string): Promise<CommunicationMessage | undefined> {
-    const claim = this.journal.transaction((tx) => {
-      const pane = this.pane(tx, targetPaneId);
-      const messages = tx.messages();
-      const next = messages.find(
-        (m) =>
-          m.targetPaneId === pane.paneId &&
-          m.deliveryState === 'queued' &&
-          m.taskState === 'pending',
-      );
-      if (!next) return undefined;
-      if (next.deadline <= this.now())
+    const claim = this.journal.transaction((tx) =>
+      this.snapshot(() => {
+        const pane = this.pane(tx, targetPaneId);
+        const messages = tx.messages();
+        const next = messages.find(
+          (m) =>
+            m.targetPaneId === pane.paneId &&
+            m.deliveryState === 'queued' &&
+            m.taskState === 'pending',
+        );
+        if (!next) return undefined;
+        if (next.deadline <= this.now())
+          return {
+            message: this.save(tx, next, {
+              deliveryState: 'delivery_failed',
+              taskState: 'failed',
+              reason: 'deadline',
+            }),
+          };
+        const source = this.pane(tx, next.sourcePaneId);
+        const grant = this.grants.get(next.grantId);
+        const adapter = this.adapters.get(targetPaneId);
+        if (
+          source.featureId !== next.featureId ||
+          pane.featureId !== next.featureId ||
+          source.state === 'closed' ||
+          source.ownership !== 'managed' ||
+          !source.capabilities.canSend ||
+          (source.routing !== null &&
+            !source.routing.allowedTargetPaneIds.includes(targetPaneId)) ||
+          !grant ||
+          !this.valid(grant) ||
+          !this.matches(grant, next) ||
+          !this.permitted(tx, grant, targetPaneId, ['delegate', 'execute']) ||
+          pane.state !== 'ready' ||
+          !adapter ||
+          !pane.capabilities.canSend ||
+          !pane.capabilities.canQueueWhileBusy ||
+          !pane.capabilities.canAcknowledge ||
+          !pane.capabilities.canReportTaskCompletion ||
+          !adapter.ready(pane) ||
+          messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
+          tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && crossActive(m.state)) ||
+          messages.filter(active).length +
+            tx.crossUsage().filter((m) => crossActive(m.state)).length >=
+            communicationLimits.activeTasks
+        )
+          return undefined;
+        let content: Uint8Array;
+        try {
+          content = this.content({ ...next, purpose: 'request' }, next.payload);
+        } catch {
+          return {
+            message: this.save(tx, next, {
+              deliveryState: 'delivery_failed',
+              taskState: 'failed',
+              reason: 'payload_unavailable',
+            }),
+          };
+        }
+        if (!this.permitted(tx, grant, targetPaneId, ['delegate', 'execute'])) return undefined;
         return {
           message: this.save(tx, next, {
-            deliveryState: 'delivery_failed',
-            taskState: 'failed',
-            reason: 'deadline',
+            attemptId: randomUUID(),
+            deliveryState: 'dispatching',
+            reason: 'dispatch',
           }),
+          adapter,
+          content,
         };
-      const source = this.pane(tx, next.sourcePaneId);
-      const grant = this.grants.get(next.grantId);
-      const adapter = this.adapters.get(targetPaneId);
-      if (
-        source.featureId !== next.featureId ||
-        pane.featureId !== next.featureId ||
-        source.state === 'closed' ||
-        source.ownership !== 'managed' ||
-        !source.capabilities.canSend ||
-        (source.routing !== null && !source.routing.allowedTargetPaneIds.includes(targetPaneId)) ||
-        !grant ||
-        !this.valid(grant) ||
-        !this.matches(grant, next) ||
-        !this.permitted(tx, grant, targetPaneId, ['delegate', 'execute']) ||
-        pane.state !== 'ready' ||
-        !adapter ||
-        !pane.capabilities.canSend ||
-        !pane.capabilities.canQueueWhileBusy ||
-        !pane.capabilities.canAcknowledge ||
-        !pane.capabilities.canReportTaskCompletion ||
-        !adapter.ready(pane) ||
-        messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
-        tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && crossActive(m.state)) ||
-        messages.filter(active).length +
-          tx.crossUsage().filter((m) => crossActive(m.state)).length >=
-          communicationLimits.activeTasks
-      )
-        return undefined;
-      let content: Uint8Array;
-      try {
-        content = this.content({ ...next, purpose: 'request' }, next.payload);
-      } catch {
-        return {
-          message: this.save(tx, next, {
-            deliveryState: 'delivery_failed',
-            taskState: 'failed',
-            reason: 'payload_unavailable',
-          }),
-        };
-      }
-      if (!this.permitted(tx, grant, targetPaneId, ['delegate', 'execute'])) return undefined;
-      return {
-        message: this.save(tx, next, {
-          attemptId: randomUUID(),
-          deliveryState: 'dispatching',
-          reason: 'dispatch',
-        }),
-        adapter,
-        content,
-      };
-    });
+      }),
+    );
     if (!claim) return undefined;
     this.notify(claim.message);
     if (!claim.adapter || !claim.content) return claim.message;
@@ -833,25 +836,29 @@ export class PaneCommunication {
     if (!pane) throw new Error('Pane unavailable');
     return pane;
   }
+  /**
+   * Every policy read of one decision comes from one preferences snapshot opened
+   * under the journal transaction, reusing the cross-Feature snapshot reader.
+   * Compositions without the snapshot lock keep the previous per-read behavior.
+   */
+  private snapshot<T>(action: () => T): T {
+    if (!this.parentSnapshotLock) return action();
+    return this.parentSnapshotLock((local, cross) => {
+      this.activeParentReader = local;
+      this.activeParentSnapshot = cross;
+      try {
+        return action();
+      } finally {
+        this.activeParentReader = undefined;
+        this.activeParentSnapshot = undefined;
+      }
+    });
+  }
   private operation<T>(grant: Grant, action: (tx: CommunicationTransaction) => T): T {
     const result = this.journal.transaction((tx) => {
       try {
         if (!this.valid(grant)) throw new Error('Grant expired or revoked');
-        const invoke = () => action(tx);
-        const value =
-          this.crossParent && this.parentSnapshotLock
-            ? this.parentSnapshotLock((local, cross) => {
-                this.activeParentReader = local;
-                this.activeParentSnapshot = cross;
-                try {
-                  return invoke();
-                } finally {
-                  this.activeParentReader = undefined;
-                  this.activeParentSnapshot = undefined;
-                }
-              })
-            : invoke();
-        return { ok: true as const, value };
+        return { ok: true as const, value: this.snapshot(() => action(tx)) };
       } catch (error) {
         this.audit(
           tx,

@@ -129,11 +129,14 @@ export class DesktopManagedAgents {
       if (!record || record.scope !== scopeKey(scope)) throw new Error('Content scope denied');
       return Uint8Array.from(record.bytes);
     };
+    const features = this.featureDatabase();
     this.communication = new PaneCommunication(
       this.journal,
       read,
       Date.now,
-      this.featureDatabase()?.permissionReader,
+      features?.permissionReader,
+      undefined,
+      features?.withPermissionSnapshot,
     );
     this.runtime = new CodexStructuredRuntime(
       authority,
