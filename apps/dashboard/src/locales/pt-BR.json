@@ -156,7 +156,9 @@
     "completed": "Concluído",
     "failed": "Falhou",
     "interrupted": "Interrompido",
-    "unknown": "Desconhecido"
+    "unknown": "Desconhecido",
+    "stale": "Sem atividade recente",
+    "staleHint": "Último registro foi em execução, mas nada novo há mais de 15 minutos. Isso não prova que o agente parou nem que continua vivo."
   },
   "events": {
     "session.started": "Sessão descoberta",

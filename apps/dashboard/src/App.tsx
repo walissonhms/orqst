@@ -70,7 +70,7 @@ import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
-import { isTemporaryWorkspace, shellSections, shortAge } from './shell-sections';
+import { isTemporaryWorkspace, shellSections, shortAge, STALE_MS } from './shell-sections';
 import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
 
 function useFormatting() {
@@ -109,12 +109,20 @@ function useFormatting() {
     },
   };
 }
-function Status({ status }: { status: AgentStatus }) {
+/** A last-known `running` without recent activity is labelled stale, never live. */
+function Status({ status, lastActivity }: { status: AgentStatus; lastActivity?: string }) {
   const { t } = useTranslation();
+  const stale =
+    status === 'running' &&
+    lastActivity !== undefined &&
+    Date.now() - (Date.parse(lastActivity) || 0) > STALE_MS;
   return (
-    <span className={`status status-${status}`}>
+    <span
+      className={`status status-${stale ? 'stale' : status}`}
+      title={stale ? t('statusLabels.staleHint') : undefined}
+    >
       <span className="status-dot" />
-      {t(`statusLabels.${status}`)}
+      {stale ? t('statusLabels.stale') : t(`statusLabels.${status}`)}
     </span>
   );
 }
@@ -359,7 +367,7 @@ function SessionDetail({
         </button>
       </div>
       <div className="session-meta">
-        <Status status={session.status} />
+        <Status status={session.status} lastActivity={session.lastActivity} />
         <code>{session.id}</code>
         <span>{f.duration(session)}</span>
         <div className="session-model">
@@ -1582,7 +1590,7 @@ export function App() {
                               </button>
                             </td>
                             <td data-label={t('status')}>
-                              <Status status={session.status} />
+                              <Status status={session.status} lastActivity={session.lastActivity} />
                             </td>
                             <td className="mono muted" data-label={t('duration')}>
                               {f.duration(session)}

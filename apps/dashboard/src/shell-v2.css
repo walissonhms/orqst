@@ -477,3 +477,32 @@ details.analytics-coverage {
 .adapter-panel td {
   text-align: left;
 }
+
+.status-stale {
+  color: var(--orqst-muted);
+}
+.status-stale .status-dot {
+  background: var(--orqst-subtle);
+  box-shadow: none;
+}
+
+/* Narrow windows: the topbar wraps instead of overlapping the page. */
+@media (max-width: 720px) {
+  .topbar {
+    height: auto;
+    min-height: var(--orqst-topbar-height);
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px;
+  }
+  .topbar-actions {
+    gap: 8px;
+    margin-left: auto;
+  }
+  .topbar .language-select {
+    display: none;
+  }
+  main {
+    padding: 16px 14px calc(var(--orqst-statusbar-height) + 16px);
+  }
+}

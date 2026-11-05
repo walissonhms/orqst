@@ -140,7 +140,9 @@
     "completed": "Completed",
     "failed": "Failed",
     "interrupted": "Interrupted",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "stale": "No recent activity",
+    "staleHint": "Last observed as running, but nothing new for over 15 minutes. This does not prove the agent stopped or is still alive."
   },
   "events": {
     "session.started": "Session discovered",
