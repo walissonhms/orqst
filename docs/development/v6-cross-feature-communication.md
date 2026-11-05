@@ -63,3 +63,10 @@ cross-Feature message is only a Core journal state, not provider acceptance or
 completion. Synthetic tests cannot prove the behavior of a future native signer
 or UI. Cross-Workspace is denied by the exact workspace and Feature membership
 checks; a policy cannot grant filesystem, terminal input, or CLI authority.
+
+The communication journal creates cross tables only on explicit Core opt-in.
+Local admission checks the stable indexed cross identity columns without parsing
+cross message metadata, so a future cross schema version or invalid metadata does
+not by itself block local communication. A structurally damaged identity table
+cannot establish uniqueness and still fails closed. Cross recovery is deferred
+until opt-in and remains fenced by the communication owner epoch.

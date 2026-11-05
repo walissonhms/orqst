@@ -194,5 +194,6 @@ export interface CommunicationTransaction {
 }
 export interface CommunicationJournal {
   readonly epoch: string;
+  enableCross(): void;
   transaction<T>(action: (tx: CommunicationTransaction) => T): T;
 }

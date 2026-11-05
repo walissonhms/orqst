@@ -224,6 +224,7 @@ test(
     const reopened = new Store(join(f.dir, 'journal.sqlite'));
     try {
       const journal = reopened.communicationJournal(randomUUID(), { recover: true });
+      journal.enableCross();
       assert.equal(
         journal.transaction((tx) => tx.crossMessages()[0]?.state),
         'outcome_unknown',

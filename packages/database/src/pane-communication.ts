@@ -43,22 +43,32 @@ export function openCommunicationJournal(
   z.boolean().parse(recover);
   if (db.isTransaction) throw new Error('Communication requires an independent commit');
   db.exec('PRAGMA synchronous=FULL');
+  const crossExists = () =>
+    Boolean(
+      db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_feature_messages'")
+        .get(),
+    );
   const tx: CommunicationTransaction = {
     crossMessages: () =>
-      db
-        .prepare('SELECT metadata FROM cross_feature_messages ORDER BY rowid')
-        .all()
-        .map((row) => crossFeatureMessageSchema.parse(JSON.parse(String(row.metadata)))),
+      crossExists()
+        ? db
+            .prepare('SELECT metadata FROM cross_feature_messages ORDER BY rowid')
+            .all()
+            .map((row) => crossFeatureMessageSchema.parse(JSON.parse(String(row.metadata))))
+        : [],
     crossEvents: () =>
-      db
-        .prepare('SELECT sequence, metadata FROM cross_feature_audit ORDER BY sequence')
-        .all()
-        .map((row) =>
-          crossFeatureAuditSchema.parse({
-            ...JSON.parse(String(row.metadata)),
-            sequence: row.sequence,
-          }),
-        ),
+      crossExists()
+        ? db
+            .prepare('SELECT sequence, metadata FROM cross_feature_audit ORDER BY sequence')
+            .all()
+            .map((row) =>
+              crossFeatureAuditSchema.parse({
+                ...JSON.parse(String(row.metadata)),
+                sequence: row.sequence,
+              }),
+            )
+        : [],
     insertCross: (input, event) => {
       const message = crossFeatureMessageSchema.parse(input);
       if (message.state !== 'queued') throw new Error('Invalid cross-Feature admission');
@@ -162,15 +172,18 @@ export function openCommunicationJournal(
         if (tx.messages().length >= communicationLimits.messages)
           throw new Error('Message history capacity');
         if (
-          tx
-            .crossMessages()
-            .some(
-              (m) =>
-                m.request.messageId === message.messageId ||
-                m.request.taskId === message.taskId ||
-                (m.grant.workspaceId === message.workspaceId &&
-                  m.grant.target.paneId === message.targetPaneId &&
-                  m.request.idempotencyKey === message.idempotencyKey),
+          crossExists() &&
+          db
+            .prepare(
+              `SELECT 1 FROM cross_feature_messages WHERE message_id=? OR task_id=?
+          OR (workspace_id=? AND target_id=? AND idempotency_key=?) LIMIT 1`,
+            )
+            .get(
+              message.messageId,
+              message.taskId,
+              message.workspaceId,
+              message.targetPaneId,
+              message.idempotencyKey,
             )
         )
           throw new Error('Message identity already used');
@@ -252,14 +265,16 @@ export function openCommunicationJournal(
       JSON.stringify(event),
     );
   };
-  const commit = <T>(action: () => T): T => {
-    if (db.isTransaction) throw new Error('Communication requires an independent commit');
-    return transaction(action);
-  };
-  commit(() => {
+  const enableCross = () => {
+    const existed = crossExists();
     db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_journal_schema (singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL);
-      INSERT OR IGNORE INTO cross_feature_journal_schema VALUES(1,1);
-      CREATE TABLE IF NOT EXISTS cross_feature_messages (
+      INSERT OR IGNORE INTO cross_feature_journal_schema VALUES(1,1);`);
+    if (
+      db.prepare('SELECT version FROM cross_feature_journal_schema WHERE singleton=1').get()
+        ?.version !== 1
+    )
+      throw new Error('Unsupported cross-Feature journal schema');
+    db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_messages (
         message_id TEXT PRIMARY KEY, task_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL,
         target_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, grant_id TEXT NOT NULL UNIQUE,
         intent_id TEXT NOT NULL UNIQUE, nonce TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL CHECK(json_valid(metadata)),
@@ -271,20 +286,10 @@ export function openCommunicationJournal(
         ?.version !== 1
     )
       throw new Error('Unsupported cross-Feature journal schema');
-    if (
-      !db
-        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='communication_schema'")
-        .get()
-    )
-      db.exec(migration);
-    if (
-      db.prepare('SELECT version FROM communication_schema WHERE singleton=1').get()?.version !== 1
-    )
-      throw new Error('Unsupported communication schema');
-    const owner = db.prepare('SELECT epoch FROM communication_owner WHERE singleton=1').get();
-    if (owner && (!recover || owner.epoch === epoch))
-      throw new Error('Communication already owned');
-    if (owner) {
+    db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_owner
+      (singleton INTEGER PRIMARY KEY CHECK(singleton=1), epoch TEXT NOT NULL)`);
+    const prior = db.prepare('SELECT epoch FROM cross_feature_owner WHERE singleton=1').get();
+    if (existed && (!prior || prior.epoch !== epoch)) {
       for (const message of tx.crossMessages()) {
         if (message.state !== 'dispatching') continue;
         const g = message.grant;
@@ -319,6 +324,28 @@ export function openCommunicationJournal(
           'outcome_unknown',
         );
       }
+    }
+    db.prepare('INSERT OR REPLACE INTO cross_feature_owner VALUES (1,?)').run(epoch);
+  };
+  const commit = <T>(action: () => T): T => {
+    if (db.isTransaction) throw new Error('Communication requires an independent commit');
+    return transaction(action);
+  };
+  commit(() => {
+    if (
+      !db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='communication_schema'")
+        .get()
+    )
+      db.exec(migration);
+    if (
+      db.prepare('SELECT version FROM communication_schema WHERE singleton=1').get()?.version !== 1
+    )
+      throw new Error('Unsupported communication schema');
+    const owner = db.prepare('SELECT epoch FROM communication_owner WHERE singleton=1').get();
+    if (owner && (!recover || owner.epoch === epoch))
+      throw new Error('Communication already owned');
+    if (owner) {
       for (const pane of tx.panes())
         if (pane.state !== 'closed') tx.savePane({ ...pane, state: 'unavailable' });
       for (const message of tx.messages()) {
@@ -353,6 +380,15 @@ export function openCommunicationJournal(
   });
   return {
     epoch,
+    enableCross: () =>
+      commit(() => {
+        if (
+          db.prepare('SELECT epoch FROM communication_owner WHERE singleton=1').get()?.epoch !==
+          epoch
+        )
+          throw new Error('Communication owner fenced');
+        enableCross();
+      }),
     transaction: (action) =>
       commit(() => {
         if (

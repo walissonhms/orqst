@@ -32,7 +32,9 @@ export class CrossFeatureCommunication {
     private readonly snapshot: Snapshot,
     private readonly authority: CrossFeatureAuthority,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) {
+    this.journal.enableCross();
+  }
 
   private check(
     tx: CommunicationTransaction,
