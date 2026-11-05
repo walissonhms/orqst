@@ -46,7 +46,8 @@ export function terminalPreparationCatalog(
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
       return { provider, executables: [], models: null };
     }
-    const executable = executables.length === 1 ? executables[0]! : null;
+    // Discovery preserves launcher PATH order. Authorization verifies this candidate later.
+    const executable = executables[0] ?? null;
     const identity = JSON.stringify([
       provider,
       executable,
@@ -91,16 +92,14 @@ export function terminalPreparationCatalog(
     catalogId,
     providers: providers.map(({ provider, executables, models }) => ({
       provider,
-      status: executables.length === 1 && models ? 'available' : 'unavailable',
+      status: executables.length > 0 && models ? 'available' : 'unavailable',
       reason: !models
         ? 'catalog_limited'
         : !executables.length
           ? 'executable_not_found'
-          : executables.length > 1
-            ? 'ambiguous_executable'
-            : models.limited
-              ? 'catalog_limited'
-              : 'ready',
+          : models.limited
+            ? 'catalog_limited'
+            : 'ready',
       models:
         models?.options.map(({ id, label, selection }) => ({
           id,
@@ -127,7 +126,7 @@ export function resolveCatalogSelection(
   id: string,
 ) {
   const provider = discovered.providers.find((entry) => entry.provider === name);
-  if (!provider?.identity || provider.executables.length !== 1) return undefined;
+  if (!provider?.identity || !provider.executables.length) return undefined;
   const expiresAt = Number.parseInt(id.slice(0, 12), 16);
   for (const option of provider.models?.options ?? []) {
     const currentExpiry = option.selection.expiresAt;
