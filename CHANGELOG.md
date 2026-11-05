@@ -1224,3 +1224,28 @@ Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 
   explicit instance allowlist is attach/input/detach/stop/kill, profile actions
   start/open/login stay explicit, and hide stays layout-only with no native
   request (`8ec55aa`).
+
+## Renderer termination and data stores — 2026-11-05 (source state)
+
+- [x] macOS web-content termination callback installed before webviews; per-label
+      latch, document-only revocation, dead child hidden, static unavailable
+      presentation with a renderer cause, no reload/retry/process effect
+      (`e768f91`).
+- [x] Nonpersistent data store only on dedicated child views; dashboard keeps the
+      default store for preferences; no store data deleted or copied (`e768f91`).
+- [ ] Native macOS acceptance of the termination path and of each child view's
+      IPC/CSP/bootstrap under a nonpersistent store.
+- [ ] Open: migrate dashboard preferences if a nonpersistent store is ever wanted.
+- [x] 2026-11-05 — diagnosed: the locked Tauri/Wry macOS runtime exposes a public
+      web-content termination callback; without it the runtime attempts automatic
+      webview reload (`e768f91`).
+- [x] 2026-11-05 — diagnosed: Tauri incognito selects a nonpersistent WebKit data
+      store, but applying it to the dashboard would affect persisted local
+      preferences; saved OS permissions and unsupported permission categories
+      require separate validation (`e768f91`).
+- [ ] 2026-11-05 — open: Establish a source-backed WebKit resource policy for the
+      external loopback dashboard; Tauri's resource-response hook covers only its
+      own `tauri` protocol and is not an Electron onBeforeRequest replacement.
+- [ ] 2026-11-05 — open: Validate renderer termination, document-grant revocation
+      and unavailable presentation without Core replacement, automatic retry,
+      process adoption or ownership cleanup.

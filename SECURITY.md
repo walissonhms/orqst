@@ -1175,3 +1175,23 @@ fully bound to each phase's RAW/review and repeated approval checks; it is not
 frozen across phases. The unchanged full historical preimage proof restricts the
 exception to its single selected inode on the projected device. No provider
 configuration content is read and no runtime authority is restored.
+
+## Renderer termination and webview data stores — 2026-11-05 (source state)
+
+The locked Tauri/Wry macOS runtime exposes a public web-content termination
+callback; without it the runtime attempts an automatic webview reload. The
+native builder now installs it before any webview exists. The handler keeps a
+per-label latch, revokes only the terminated document's authority through
+narrow wrappers, hides a dead child so it cannot cover the message, and presents
+the static unavailable document with a renderer cause. It does not stop,
+signal, retry, adopt a process or create a Core, and a duplicate or obsolete
+callback does not loop. Native macOS acceptance is pending.
+
+Dedicated child views use a nonpersistent WebKit data store (`incognito(true)`);
+the dashboard keeps the default store because it owns persisted preferences.
+No existing store data is deleted or copied; preference migration is open.
+
+`on_web_resource_request` covers only Tauri's own `tauri` protocol, not external
+loopback HTTP, so it is not an Electron `onBeforeRequest` replacement. macOS
+permission categories without a callback (geolocation, browser notifications,
+clipboard read) remain open and are not claimed as enforced.
