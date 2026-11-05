@@ -20,6 +20,45 @@ import {
 } from '../packages/core/src/terminal/cli-authorization.js';
 import type { TerminalProfile } from '../packages/core/src/terminal/supervisor.js';
 
+test('candidate snapshot is immutable and invalidated by byte or scope changes without writes', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-cli-snapshot-')));
+  const path = join(root, 'synthetic');
+  const bytes = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]);
+  writeFileSync(path, bytes, { mode: 0o700 });
+  const store = new TerminalCliPolicyStore(root);
+  const profile: TerminalProfile = {
+    id: 'test',
+    projectId: 'test',
+    executable: path,
+    executableSha256: terminalDigest(bytes),
+    executableVersion: '',
+    argv: [],
+    cwd: root,
+    environmentProfile: 'synthetic',
+    permissions: 'synthetic',
+    cliAuthorizationScope: 'scope',
+  };
+  try {
+    const snapshot = store.candidateSnapshot(profile, 'codex');
+    assert.ok(Object.isFrozen(snapshot));
+    assert.ok(Object.isFrozen(snapshot.previousProviderGrants));
+    assert.equal(store.candidateSnapshotCurrent(profile, 'codex', snapshot), true);
+    assert.equal(
+      store.candidateSnapshotCurrent(
+        { ...profile, cliAuthorizationScope: 'changed' },
+        'codex',
+        snapshot,
+      ),
+      false,
+    );
+    writeFileSync(path, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 4, 3, 2, 1]));
+    assert.equal(store.candidateSnapshotCurrent(profile, 'codex', snapshot), false);
+    assert.equal(existsSync(join(root, 'cli-authorizations')), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('verified policy stores evidence and asks again for changed bytes, scope and epoch', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-verified-policy-')));
   const path = join(root, 'synthetic');

@@ -80,6 +80,15 @@ export interface TerminalCliReview {
   expectedEpoch?: string;
 }
 
+/** Read-only pre-review snapshot; it never grants permission. */
+export interface TerminalCliCandidateSnapshot {
+  readonly revision: number;
+  readonly previous: Record | undefined;
+  readonly previousProviderGrants: readonly Record[];
+  readonly identity: string;
+  readonly permissionScope: string;
+}
+
 const permissionScope = (profile: Readonly<TerminalProfile>) =>
   terminalDigest(JSON.stringify([profile.environmentProfile, profile.cliAuthorizationScope]));
 
@@ -216,6 +225,40 @@ export class TerminalCliPolicyStore {
     )
       throw new Error('CLI changed');
     this.inspected.set(`${profile.executable}:${profile.executableSha256}`, before);
+  }
+
+  candidateSnapshot(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+  ): TerminalCliCandidateSnapshot {
+    if (!profile.cliAuthorizationScope) throw new Error('CLI scope missing');
+    this.inspect(profile);
+    const snapshot = this.loadSnapshot(profile);
+    const freezeRecord = (record: Record): Record => {
+      if (record.version === 2) Object.freeze(record.signature);
+      return Object.freeze(record);
+    };
+    return Object.freeze({
+      revision: snapshot.revision,
+      previous: snapshot.record ? freezeRecord(snapshot.record) : undefined,
+      previousProviderGrants: Object.freeze(
+        this.previousProviderGrants(provider, profile.executable).map(freezeRecord),
+      ),
+      identity: this.identity(profile),
+      permissionScope: permissionScope(profile),
+    });
+  }
+
+  candidateSnapshotCurrent(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    expected: TerminalCliCandidateSnapshot,
+  ): boolean {
+    try {
+      return JSON.stringify(this.candidateSnapshot(profile, provider)) === JSON.stringify(expected);
+    } catch {
+      return false;
+    }
   }
 
   current(profile: Readonly<TerminalProfile>): TerminalCliAuthorizationState {
