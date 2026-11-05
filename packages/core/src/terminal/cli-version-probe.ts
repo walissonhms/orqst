@@ -47,6 +47,8 @@ export async function probeSignedCliVersion(
     if (terminalExecutableSha256(executable) !== hash)
       throw new Error('CLI changed during version probe');
     await verifiedCliSignature(verifier, provider, executable);
+    if (terminalExecutableSha256(executable) !== hash)
+      throw new Error('CLI changed after signature verification');
     return {
       version,
       signature,
