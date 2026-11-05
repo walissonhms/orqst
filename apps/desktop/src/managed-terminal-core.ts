@@ -1,3 +1,5 @@
+import { kernelIdentityQuerySchema } from '../../../packages/core/src/terminal/kernel-channel.js';
+import type { KernelProcessIdentity } from '../../../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
 import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit-pending.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
@@ -53,6 +55,7 @@ export async function connectManagedTerminalCore(
   admissionDirectory: string,
   limit?: number,
   startupId: string = randomUUID(),
+  kernelRead?: (pid: number) => Promise<KernelProcessIdentity>,
 ) {
   terminalStartupIdSchema.parse(startupId);
   // Passive before fork, with authoritative admission repeated in the child against races.
@@ -196,6 +199,17 @@ export async function connectManagedTerminalCore(
       initialized = true;
       clearTimeout(startupTimer);
       ready();
+      return;
+    }
+    const kernelQuery = kernelIdentityQuerySchema.safeParse(raw);
+    if (initialized && kernelQuery.success) {
+      const { id, pid } = kernelQuery.data;
+      void (kernelRead ? kernelRead(pid) : Promise.reject(new Error('Kernel identity unavailable')))
+        .then(
+          (identity) => child.send({ kind: 'kernel-identity-reply', id, ok: true, identity }),
+          () => child.send({ kind: 'kernel-identity-reply', id, ok: false }),
+        )
+        .catch(close);
       return;
     }
     const parsed = terminalRPCReplySchema.safeParse(raw);

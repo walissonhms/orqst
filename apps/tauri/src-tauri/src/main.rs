@@ -14,6 +14,8 @@ mod renderer;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
+#[cfg(target_os = "macos")]
+mod terminal_kernel_identity;
 mod unavailable;
 mod webview_policy;
 

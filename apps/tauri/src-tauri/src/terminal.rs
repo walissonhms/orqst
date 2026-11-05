@@ -2804,7 +2804,59 @@ async fn start_selected_inner(
                         stream_outcome = Outcome::ProtocolRejected;
                         break;
                     };
-                    if value["kind"] == "feature-reply" {
+                    if value["kind"] == "kernel-identity-query" {
+                        #[cfg(target_os = "macos")]
+                        {
+                            let id = crate::features::uuid(&value["id"])
+                                .then(|| value["id"].as_str())
+                                .flatten();
+                            let pid = value["pid"]
+                                .as_u64()
+                                .and_then(|pid| u32::try_from(pid).ok());
+                            if value.as_object().is_none_or(|o| o.len() != 3)
+                                || id.is_none()
+                                || pid.is_none()
+                            {
+                                stream_outcome = Outcome::ProtocolRejected;
+                                break;
+                            }
+                            let identity =
+                                crate::terminal_kernel_identity::read_process(pid.unwrap());
+                            let reply = match identity {
+                                Ok(i) => {
+                                    json!({"kind":"kernel-identity-reply", "id":id.unwrap(), "ok":true,
+                                    "identity":{"boot":i.boot,"pid":i.pid,"ppid":i.ppid,"uid":i.uid,
+                                        "startSec":i.start_sec,"startUsec":i.start_usec,"sid":i.sid,"pgid":i.pgid}})
+                                }
+                                Err(_) => {
+                                    json!({"kind":"kernel-identity-reply", "id":id.unwrap(), "ok":false})
+                                }
+                            };
+                            let state = app.state::<Terminals>();
+                            let mut guard = state.0.lock().unwrap();
+                            let Some(running) = guard.as_mut().filter(|r| {
+                                r.epoch == host_epoch
+                                    && r.admission_owner == host_owner
+                                    && r.initial_files == host_initial_files
+                            }) else {
+                                stream_outcome = Outcome::TransportFailed;
+                                break;
+                            };
+                            if running
+                                .child
+                                .write(format!("{reply}\n").as_bytes())
+                                .is_err()
+                            {
+                                stream_outcome = Outcome::TransportFailed;
+                                break;
+                            }
+                        }
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            stream_outcome = Outcome::ProtocolRejected;
+                            break;
+                        }
+                    } else if value["kind"] == "feature-reply" {
                         if presentation_blocked(&app) {
                             continue;
                         }

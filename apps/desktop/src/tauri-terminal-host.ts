@@ -1,3 +1,7 @@
+import {
+  kernelIdentityClient,
+  kernelIdentityReplySchema,
+} from '../../../packages/core/src/terminal/kernel-channel.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import {
@@ -53,6 +57,7 @@ async function start() {
   const selection = inspectManagedTerminalFiles(files, files.length);
   if (selection.some((p) => p.blocker)) throw new Error('Blocked terminal profile');
   const keys = generateKeyPairSync('ed25519');
+  const nativeKernel = kernelIdentityClient((query) => send(query));
   const core = await connectManagedTerminalCore(
     files,
     join(__dirname, 'managed-terminal-core.cjs'),
@@ -60,6 +65,7 @@ async function start() {
     directory,
     8, // Native-owned capacity, fixed for this Core lifetime; never renderer supplied.
     startupId,
+    nativeKernel.query,
   );
   const i18n = createInstance();
   activeCore = core;
@@ -130,6 +136,7 @@ async function start() {
     if (closed) return;
     closed = true;
     service.close();
+    nativeKernel.close();
     process.stdin.destroy();
     void core.closeAndWait().catch(() => {
       process.exitCode = 1;
@@ -293,6 +300,10 @@ async function start() {
       if (line === 'shutdown') return shutdown();
       try {
         const raw: unknown = JSON.parse(line);
+        if (kernelIdentityReplySchema.safeParse(raw).success) {
+          if (!nativeKernel.accept(raw)) return shutdown();
+          continue;
+        }
         const enrollment = enrollmentMessage.safeParse(raw);
         if (enrollment.success) {
           void enroll(enrollment.data);

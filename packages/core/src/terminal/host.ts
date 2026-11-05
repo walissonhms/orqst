@@ -1,3 +1,4 @@
+import { kernelIdentityClient, kernelIdentityReplySchema } from './kernel-channel.js';
 import {
   preserveOwnedExitPending,
   inspectPendingOwnedExits,
@@ -105,6 +106,7 @@ async function start() {
       )
     : undefined;
   try {
+    const kernel = kernelIdentityClient((query) => send(query));
     const launches: TerminalMcpLaunch[] = [];
     if (mcp) {
       const relayPath = join(__dirname, 'orqst-mcp-relay.cjs');
@@ -138,6 +140,7 @@ async function start() {
               files[slot]!,
               join(__dirname, 'managed-terminal-host.cjs'),
               launches[slot],
+              { owner: admission.owner, query: kernel.query },
             );
             return mcp ? mcp.wrap(slot, backend) : backend;
           })(),
@@ -164,18 +167,19 @@ async function start() {
         selection.map(({ config }) => terminalIdentity(config).terminalId),
         terminalDigest(selection[0]!.config.project),
       );
-    const send = (value: object) => {
-      if (process.connected)
-        process.send!(value, (error) => {
-          if (error) shutdown();
-        });
-    };
+    function send(value: object) {
+      if (!process.connected) throw new Error('Private Core transport unavailable');
+      process.send!(value, (error) => {
+        if (error) shutdown();
+      });
+    }
     let closed = false;
     let draining = false;
     let preservedOwnedExit: ReturnType<typeof preserveOwnedExitPending> | undefined;
     function shutdown() {
       if (closed) return;
       closed = true;
+      kernel.close();
       authority.revoke('desktop-managed');
       pair.close();
       void mcp?.close();
@@ -185,6 +189,10 @@ async function start() {
     process.on('disconnect', shutdown);
     process.on('message', (raw: unknown) => {
       if (closed) return;
+      if (kernelIdentityReplySchema.safeParse(raw).success) {
+        if (!kernel.accept(raw)) shutdown();
+        return;
+      }
       const parsed = terminalPairRPCSchema.safeParse(raw);
       if (!parsed.success) return shutdown();
       const request = parsed.data;
@@ -234,6 +242,8 @@ async function start() {
               const backend = adapter.backend(
                 request.manifestFile,
                 join(__dirname, 'managed-terminal-host.cjs'),
+                undefined,
+                { owner: admission.owner, query: kernel.query },
               );
               reviewed.validate();
               return {

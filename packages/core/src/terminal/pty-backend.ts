@@ -1,3 +1,8 @@
+import { z } from 'zod';
+import {
+  createKernelLifecycleReceipt,
+  type KernelProcessIdentity,
+} from '../managed-codex/kernel-lifecycle-receipt.js';
 import { fork } from 'node:child_process';
 import { join } from 'node:path';
 import { closeSync, lstatSync } from 'node:fs';
@@ -17,6 +22,7 @@ export function managedTerminalBackend(
   file: string,
   host: string,
   mcp?: TerminalMcpLaunch,
+  kernel?: { owner: string; query(pid: number): Promise<KernelProcessIdentity> },
 ): TerminalBackend {
   const config = readInteractiveTerminalConfig(file);
   const expected = interactiveTerminalProfiles(config, mcp);
@@ -53,25 +59,109 @@ export function managedTerminalBackend(
         ...identity,
         configDigest: terminalDigest(source),
       });
+      let kernelReceipt: ReturnType<typeof createKernelLifecycleReceipt> | undefined;
+      try {
+        kernelReceipt = kernel
+          ? createKernelLifecycleReceipt(config.state, {
+              ...identity,
+              owner: kernel.owner,
+              configDigest: terminalDigest(source),
+            })
+          : undefined;
+      } catch (error) {
+        closeSync(receipt);
+        throw error;
+      }
       let child;
       try {
-        child = fork(host, [file, profile.id, ...(mcp ? [JSON.stringify(mcp)] : [])], {
-          execPath: config.node.path,
-          execArgv: [],
-          cwd: config.state,
-          env: interactiveTerminalEnvironment(config, mcp),
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
-        });
+        child = fork(
+          host,
+          [
+            file,
+            profile.id,
+            ...(mcp ? [JSON.stringify(mcp)] : []),
+            ...(kernel ? ['--kernel-receipt'] : []),
+          ],
+          {
+            execPath: config.node.path,
+            execArgv: [],
+            cwd: config.state,
+            env: interactiveTerminalEnvironment(config, mcp),
+            stdio: ['ignore', 'ignore', 'ignore', 'ipc', receipt],
+          },
+        );
+      } catch (error) {
+        kernelReceipt?.close();
+        throw error;
       } finally {
         closeSync(receipt);
       }
+      let kernelPhase: 'awaiting' | 'host-query' | 'leader' | 'leader-query' | 'done' = 'awaiting';
+      let receiptClosed = false;
+      const closeKernelReceipt = () => {
+        if (!receiptClosed) {
+          receiptClosed = true;
+          kernelReceipt?.close();
+        }
+      };
       let exited = false;
       let disposed = false;
       const lost = () => {
+        closeKernelReceipt();
         if (!disposed && !exited) events.lost();
       };
       const message = (raw: unknown) => {
         if (disposed) return;
+        if (kernel && kernelReceipt) {
+          const awaiting = z.strictObject({ type: z.literal('awaiting-spawn') }).safeParse(raw);
+          const leader = z
+            .strictObject({
+              type: z.literal('kernel-identity-request'),
+              pid: z.number().int().positive().max(2_147_483_647),
+            })
+            .safeParse(raw);
+          if (awaiting.success && kernelPhase === 'awaiting' && child.pid) {
+            kernelPhase = 'host-query';
+            void kernel
+              .query(child.pid)
+              .then((identity) => {
+                if (
+                  disposed ||
+                  receiptClosed ||
+                  identity.pid !== child.pid ||
+                  identity.ppid !== process.pid ||
+                  identity.uid !== process.getuid?.()
+                )
+                  throw new Error('Host identity unavailable');
+                kernelReceipt.host(identity);
+                kernelPhase = 'leader';
+                send({ action: 'spawn' });
+              })
+              .catch(lost);
+            return;
+          }
+          if (leader.success && kernelPhase === 'leader') {
+            kernelPhase = 'leader-query';
+            void kernel
+              .query(leader.data.pid)
+              .then((identity) => {
+                if (disposed || receiptClosed) throw new Error('Leader identity unavailable');
+                kernelReceipt.leader(identity);
+                kernelPhase = 'done';
+                closeKernelReceipt();
+                send({ action: 'kernel-identity-confirmed' });
+              })
+              .catch(() => {
+                closeKernelReceipt();
+                try {
+                  send({ action: 'kernel-identity-unavailable' });
+                } catch {
+                  lost();
+                }
+              });
+            return;
+          }
+        }
         const parsed = managedTerminalEventSchema.safeParse(raw);
         if (!parsed.success) return lost();
         const value = parsed.data;
@@ -98,6 +188,7 @@ export function managedTerminalBackend(
         signal: (signal) => send({ action: 'signal', signal }),
         dispose: () => {
           disposed = true;
+          closeKernelReceipt();
           child.off('message', message);
           child.off('disconnect', lost);
           child.off('exit', lost);
