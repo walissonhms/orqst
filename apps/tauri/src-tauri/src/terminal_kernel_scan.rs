@@ -95,6 +95,13 @@ fn one(pid: u32) -> io::Result<Process> {
     one_optional(pid)?.ok_or_else(|| io::Error::other("Process disappeared"))
 }
 
+fn checked_inventory_size(size: usize, capacity: usize) -> io::Result<()> {
+    if size == 0 || size >= capacity || size % RECORD_SIZE != 0 {
+        return Err(io::Error::other("Truncated kernel inventory"));
+    }
+    Ok(())
+}
+
 /// A failed query never establishes absence; a different boot is outside this mechanism.
 pub fn recorded_identity_exists(
     identity: &crate::terminal_kernel_identity::KernelIdentity,
@@ -147,9 +154,7 @@ pub fn scan() -> io::Result<Vec<Process>> {
     let mut bytes = vec![0_u8; capacity];
     let mut size = bytes.len();
     query(&mut mib, Some(&mut bytes), &mut size)?;
-    if size == 0 || size >= capacity || size % RECORD_SIZE != 0 {
-        return Err(io::Error::other("Truncated kernel inventory"));
-    }
+    checked_inventory_size(size, capacity)?;
     let records: Vec<_> = bytes[..size]
         .as_chunks::<RECORD_SIZE>()
         .0
@@ -263,6 +268,13 @@ pub fn verify_sessions(
 mod tests {
     use super::*;
     #[test]
+    fn inventory_truncation_and_unaligned_results_are_refused() {
+        assert!(checked_inventory_size(0, RECORD_SIZE * 2).is_err());
+        assert!(checked_inventory_size(RECORD_SIZE * 2, RECORD_SIZE * 2).is_err());
+        assert!(checked_inventory_size(RECORD_SIZE + 1, RECORD_SIZE * 3).is_err());
+        assert!(checked_inventory_size(RECORD_SIZE, RECORD_SIZE * 3).is_ok());
+    }
+    #[test]
     fn mutation_owner_distinguishes_alive_and_old_boot() {
         let mut identity =
             crate::terminal_kernel_identity::read_process(std::process::id()).unwrap();
@@ -291,11 +303,10 @@ mod tests {
         use std::process::{Command, Stdio};
         extern "C" {
             fn setsid() -> i32;
-            fn kill(pid: i32, sig: i32) -> i32;
         }
         let mut command = Command::new("/bin/sh");
         command
-            .args(["-c", "sleep 60 & echo $!; wait"])
+            .args(["-c", "sleep 10 & echo $!; wait"])
             .stdout(Stdio::piped());
         // SAFETY: setsid is async-signal-safe and touches no shared Rust state.
         unsafe {
@@ -313,16 +324,6 @@ mod tests {
             .read_line(&mut line)
             .unwrap();
         let child: u32 = line.trim().parse().unwrap();
-        struct ChildGuard(i32);
-        impl Drop for ChildGuard {
-            fn drop(&mut self) {
-                // SAFETY: this PID belongs to the disposable test session.
-                unsafe {
-                    kill(self.0, 9);
-                }
-            }
-        }
-        let _cleanup = ChildGuard(child as i32);
         let identity = crate::terminal_kernel_identity::read_process(leader.id()).unwrap();
         let child_identity = crate::terminal_kernel_identity::read_process(child).unwrap();
         assert_eq!(child_identity.sid, identity.sid);
@@ -335,6 +336,65 @@ mod tests {
             .any(|process| process.pid == child && process.sid == identity.sid));
         let outcome = verify_sessions(&[identity.clone()], &[identity.sid]);
         assert!(outcome.is_err());
+    }
+    #[test]
+    fn forked_group_and_setsid_escape_have_distinct_kernel_scope() {
+        use std::io::{BufRead, BufReader};
+        use std::os::unix::process::CommandExt;
+        use std::process::{Command, Stdio};
+        extern "C" {
+            fn setsid() -> i32;
+        }
+        let program = r#"import os,time
+children=[]
+for escape in (False,True):
+ r,w=os.pipe(); p=os.fork()
+ if p==0:
+  os.close(r)
+  os.setsid() if escape else os.setpgid(0,0)
+  os.write(w,b'x'); time.sleep(10); os._exit(0)
+ os.close(w); os.read(r,1); children.append(p)
+print(*children,flush=True)
+time.sleep(60)
+"#;
+        let mut command = Command::new("/usr/bin/python3");
+        command.args(["-c", program]).stdout(Stdio::piped());
+        // SAFETY: setsid is async-signal-safe and touches no shared Rust state.
+        unsafe {
+            command.pre_exec(|| {
+                if setsid() < 0 {
+                    Err(io::Error::last_os_error())
+                } else {
+                    Ok(())
+                }
+            });
+        }
+        let mut leader = command.spawn().unwrap();
+        let mut line = String::new();
+        BufReader::new(leader.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let children: Vec<u32> = line
+            .split_whitespace()
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert_eq!(children.len(), 2);
+        let original = crate::terminal_kernel_identity::read_process(leader.id()).unwrap();
+        let group = crate::terminal_kernel_identity::read_process(children[0]).unwrap();
+        let escaped = crate::terminal_kernel_identity::read_process(children[1]).unwrap();
+        assert_eq!(group.sid, original.sid);
+        assert_ne!(group.pgid, original.pgid);
+        assert_ne!(escaped.sid, original.sid);
+        leader.kill().unwrap();
+        leader.wait().unwrap();
+        let inventory = scan().unwrap();
+        assert!(inventory
+            .iter()
+            .any(|p| p.pid == group.pid && p.sid == original.sid));
+        assert!(inventory
+            .iter()
+            .any(|p| p.pid == escaped.pid && p.sid == escaped.sid));
+        assert!(verify_sessions(&[original.clone()], &[original.sid]).is_err());
     }
     #[test]
     fn comparison_refuses_count_changes_and_original_session_members() {
