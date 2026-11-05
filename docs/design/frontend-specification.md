@@ -316,18 +316,18 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 
 ### Pending
 
-| Item                                                                                                  | Owner    | Blocked by                                       |
-| ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
-| Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                          | owner    | new package                                      |
-| Studio v2 chrome contract: native acceptance                                                          | pane-817 | owner native test                                |
-| Native OS notifications on completed/failed: owned host wired; native acceptance pending              | pane-817 | owner OS/provider test                           |
-| Claude "needs you" state via owned `--settings` hooks                                                 | pane-817 | step 1b                                          |
-| Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
-| Batch create across several workspaces                                                                | pane-817 | multi-workspace design review (owner + pane-769) |
-| Mentions v1: recorded and answered unsupported/denied (no delivery route); communication events from the MCP pair journal | pane-768 | v2 authorized route design |
-| Account limits: default Codex evidence and refresh/lock wired; native acceptance pending              | pane-817 | native test; other profile/provider sources      |
-| Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot        | pane-817 | steps 7–8                                        |
-| Detach to a new window                                                                                | pane-817 | native support                                   |
-| Orchestrator choice inside the creation dialog (native)                                               | pane-768 | terminal IDs returned by creation                |
-| Links drawn over native terminals are visible only in gaps                                            | pane-768 | native views sit above the chrome                |
-| Rest of the frontend (Overview, Workspaces, Agents, Models, Artifacts, Settings) — audit items F1–F12 | pane-768 | owner release after terminal approval            |
+| Item                                                                                                                      | Owner    | Blocked by                                       |
+| ------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
+| Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                                              | owner    | new package                                      |
+| Studio v2 chrome contract: native acceptance                                                                              | pane-817 | owner native test                                |
+| Native OS notifications on completed/failed: owned host wired; native acceptance pending                                  | pane-817 | owner OS/provider test                           |
+| Claude "needs you" state via owned `--settings` hooks                                                                     | pane-817 | step 1b                                          |
+| Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
+| Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |
+| Mentions v1: recorded and answered unsupported/denied (no delivery route); communication events from the MCP pair journal | pane-768 | v2 authorized route design                       |
+| Account limits: default Codex evidence and refresh/lock wired; native acceptance pending                                  | pane-817 | native test; other profile/provider sources      |
+| Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot                            | pane-817 | steps 7–8                                        |
+| Detach to a new window                                                                                                    | pane-817 | native support                                   |
+| Orchestrator choice inside the creation dialog (native)                                                                   | pane-768 | terminal IDs returned by creation                |
+| Links drawn over native terminals are visible only in gaps                                                                | pane-768 | native views sit above the chrome                |
+| Rest of the frontend (Overview, Workspaces, Agents, Models, Artifacts, Settings) — audit items F1–F12                     | pane-768 | owner release after terminal approval            |
