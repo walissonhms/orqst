@@ -52,7 +52,6 @@ vocabulary!(Outcome {
     AdmissionInvalid => "admission_invalid", StartupFailed => "startup_failed",
     EnrollmentBindingChanged => "enrollment_binding_changed",
     StartupTimeout => "startup_timeout", StartupEof => "startup_eof", StartupProtocol => "startup_protocol",
-    RendererScopeMismatch => "renderer_scope_mismatch",
     StudioInvalidRequest => "studio_invalid_request", StudioIdentity => "studio_identity",
     StudioFocus => "studio_focus", StudioContextChanged => "studio_context_changed",
     StudioMainMissing => "studio_main_missing", StudioReviewEmpty => "studio_review_empty",
@@ -334,7 +333,6 @@ mod tests {
     #[test]
     fn preparation_denial_reasons_are_closed_and_sanitized() {
         for label in [
-            "renderer_scope_mismatch",
             "studio_invalid_request",
             "studio_identity",
             "studio_focus",

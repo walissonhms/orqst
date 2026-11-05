@@ -30,7 +30,6 @@ export type StudioReply = z.infer<typeof studioReplySchema>;
 // Native preparation choices carry no paths, launch proofs or task grants.
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
-  z.strictObject({ action: z.literal('report-catalog-scope-mismatch') }),
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),

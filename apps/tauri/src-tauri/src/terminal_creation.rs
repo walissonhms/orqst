@@ -163,7 +163,7 @@ fn valid_request(value: &Value) -> bool {
         .as_u64()
         .is_some_and(|n| n <= 9_007_199_254_740_991);
     match value["action"].as_str() {
-        Some("snapshot" | "report-catalog-scope-mismatch") => exact(value, &["action"]),
+        Some("snapshot") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
         Some("create-mcp-pair") => {
             exact(
@@ -634,14 +634,6 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return denied(Outcome::StudioIdentity);
     };
     let app = window.app_handle().clone();
-    if request["action"] == "report-catalog-scope-mismatch" {
-        Attempt::begin().record(
-            Stage::Catalog,
-            Outcome::RendererScopeMismatch,
-            Effects::NotStarted,
-        );
-        return json!({"status":"ok", "snapshot":snapshot(&app)});
-    }
     if request["action"] == "snapshot" {
         return json!({"status":"ok", "snapshot":snapshot(&app)});
     }
@@ -1460,12 +1452,9 @@ mod catalog_tests {
         }
     }
     #[test]
-    fn renderer_scope_report_accepts_no_payload() {
-        assert!(valid_request(
-            &json!({"action":"report-catalog-scope-mismatch"})
-        ));
+    fn renderer_scope_report_is_rejected() {
         assert!(!valid_request(
-            &json!({"action":"report-catalog-scope-mismatch", "path":"private"})
+            &json!({"action":"report-catalog-scope-mismatch"})
         ));
     }
     #[test]

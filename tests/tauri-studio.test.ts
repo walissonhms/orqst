@@ -292,7 +292,7 @@ test('preparation failures carry only bounded stage/code/effects and no retry au
     );
 });
 
-test('scope mismatch diagnostics carry no renderer values and need no activation', async () => {
+test('removed renderer scope report is rejected without invoking native', async () => {
   const calls: unknown[] = [];
   const client = createTauriStudioClient(
     async (request) => {
@@ -301,13 +301,8 @@ test('scope mismatch diagnostics carry no renderer values and need no activation
     },
     () => false,
   );
-  assert.equal((await client.request({ action: 'report-catalog-scope-mismatch' })).status, 'ok');
-  assert.deepEqual(calls, [{ action: 'report-catalog-scope-mismatch' }]);
-  assert.equal(
-    tauriStudioRequestSchema.safeParse({
-      action: 'report-catalog-scope-mismatch',
-      path: '/private',
-    }).success,
-    false,
-  );
+  const request = { action: 'report-catalog-scope-mismatch' };
+  assert.equal(tauriStudioRequestSchema.safeParse(request).success, false);
+  assert.equal((await client.request(request as never)).status, 'denied');
+  assert.deepEqual(calls, []);
 });

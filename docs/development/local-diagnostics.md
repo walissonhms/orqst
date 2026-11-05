@@ -183,7 +183,5 @@ Preparation preflight denials now record closed, static `studio_*` and `feature_
 outcomes without request values. `studio_post_identity` reports possible effects;
 earlier native preparation guards report not started. Feature focus and pre-presentation context checks use separate closed outcomes;
 `feature_post_context` identifies the combined fence after presentation.
-A renderer-detected catalog scope mismatch is recorded as
-`renderer_scope_mismatch` through the existing exact-document Studio capability.
-This fixed-label report is an untrusted renderer report and is not evidence that a
-native guard or scope mismatch actually occurred; it carries no request values.
+A renderer-detected catalog scope mismatch shows a local denial notice and does not
+write a native diagnostic.
