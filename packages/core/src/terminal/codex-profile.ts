@@ -1,3 +1,4 @@
+import { cliAuthorizationScope } from './cli-authorization-scope.js';
 import {
   terminalModelSelectionSchema,
   terminalModelArguments,
@@ -241,15 +242,12 @@ export function managedCodexProfiles(
   if (config.interactive?.mcp && !mcp) throw new Error('Interactive MCP composition required');
   const mcpArguments = mcp ? codexMcpArguments(config, mcp) : [];
   const common = {
-    cliAuthorizationScope: `codex-read-only-on-request-v1:${config.authentication ? 'native' : 'managed'}:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}`,
+    ...cliAuthorizationScope('codex', mcp ? 'mcp' : 'tui', !!config.authentication),
     projectId: terminalDigest(config.project),
     executable: config.executable.path,
     executableSha256: config.executable.sha256,
     executableVersion: config.executableVersion,
     cwd: config.project,
-    environmentProfile: config.authentication
-      ? 'native-auth-config-sessions-no-inherited-credentials-v1'
-      : 'managed-home-no-inherited-credentials-v1',
     permissions:
       `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
       'Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.',
