@@ -1,6 +1,7 @@
 // SYNTHETIC adapters/metadata only; never executes providers, PTYs or the application.
 import assert from 'node:assert/strict';
 import { createHash, randomUUID, generateKeyPairSync, sign } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -768,13 +769,24 @@ function multiTargetFixture() {
     let feature = config.create({ name: 'SYNTHETIC snapshot' });
     const store = new Store(':memory:');
     const journal = store.communicationJournal(randomUUID(), { recover: false });
-    const state: { snapshotOpens: number; liveReads: number; liveWrite?: () => void } = {
+    const state: {
+      snapshotOpens: number;
+      liveReads: number;
+      liveWrite?: () => void;
+      onSnapshotRead?: () => void;
+    } = {
       snapshotOpens: 0,
       liveReads: 0,
     };
     const lock: FeatureConfigurationDatabase['withPermissionSnapshot'] = (action) => {
       state.snapshotOpens++;
-      return config.withPermissionSnapshot(action);
+      return config.withPermissionSnapshot((local, cross) =>
+        action((scope) => {
+          const result = local(scope);
+          state.onSnapshotRead?.();
+          return result;
+        }, cross),
+      );
     };
     const liveReader: FeaturePermissionReader = (scope) => {
       state.liveReads++;
@@ -860,6 +872,8 @@ function multiTargetFixture() {
       });
     return {
       state,
+      directory,
+      featureId: feature.featureId,
       a,
       b,
       c,
@@ -939,3 +953,61 @@ test('a policy writer between per-target reads cannot mix a snapshotted decision
     f.close();
   }
 });
+
+test(
+  'a competing policy writer is excluded between both reads of one local decision',
+  { timeout: 15000 },
+  () => {
+    const f = multiTargetFixture();
+    try {
+      f.route(f.a, [f.b, f.c]);
+      const script = `
+      import { featureConfigurationDatabase } from './packages/core/src/terminal/feature-configuration.ts';
+      const [directory, featureId, source, first, second] = process.argv.slice(1);
+      const config = featureConfigurationDatabase(directory, 'synthetic');
+      const current = config.readPermissions(featureId);
+      config.savePermissions(featureId, 'native-owner', {
+        expectedRevision: current.revision,
+        configuration: { schemaVersion: 1, rules: [first, second].map(targetTerminalId => ({
+          sourceTerminalId: source, targetTerminalId, operations: ['view', 'delegate', 'execute'],
+        })) },
+      });
+    `;
+      const write = () =>
+        spawnSync(
+          process.execPath,
+          [
+            '--import',
+            'tsx',
+            '--input-type=module',
+            '-e',
+            script,
+            f.directory,
+            f.featureId,
+            f.a.terminalId!,
+            f.b.terminalId!,
+            f.c.terminalId!,
+          ],
+          { encoding: 'utf8', timeout: 9000 },
+        );
+      let reads = 0;
+      f.state.onSnapshotRead = () => {
+        reads++;
+        if (reads === 1) {
+          const attempt = write();
+          assert.equal(attempt.error, undefined);
+          assert.notEqual(attempt.status, 0);
+          assert.match(attempt.stderr, /locked|busy/i);
+        }
+      };
+      void f.authorize(f.a, [f.b, f.c]);
+      assert.equal(reads, 2);
+      assert.equal(f.policyRevision(), 0);
+      const retry = write();
+      assert.equal(retry.status, 0, retry.stderr);
+      assert.equal(f.policyRevision(), 1);
+    } finally {
+      f.close();
+    }
+  },
+);
