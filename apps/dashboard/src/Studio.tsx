@@ -72,6 +72,12 @@ export function Studio({ preparationOnly = false }: { preparationOnly?: boolean 
       {!native && (
         <p className="notice" role="status">
           {t(desktop ? 'studio.oldDesktop' : 'studio.desktopOnly')}
+          {import.meta.env.DEV && !desktop && (
+            <>
+              {' '}
+              <a href="/preview/terminals.html">{t('studio.layoutPreview')}</a>
+            </>
+          )}
         </p>
       )}
       {notice && (

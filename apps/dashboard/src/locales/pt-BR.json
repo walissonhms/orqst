@@ -993,7 +993,8 @@
       "mcpWorkerModel": "Modelo do executor {{provider}}",
       "mcpInitialOnly": "Pares com comunicação exigem uma seleção inicial nova. Adicionar MCP a um Core existente está indisponível.",
       "openMcpPair": "Revisar e abrir par com comunicação"
-    }
+    },
+    "layoutPreview": "Abrir a prévia do layout de terminais (desenvolvimento)."
   },
   "tauriPreparation": {
     "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",

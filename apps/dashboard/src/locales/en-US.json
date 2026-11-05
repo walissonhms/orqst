@@ -993,7 +993,8 @@
       "mcpWorkerModel": "{{provider}} worker model",
       "mcpInitialOnly": "Communication pairs require a fresh initial selection. Adding MCP to an existing Core is unavailable.",
       "openMcpPair": "Review and open communication pair"
-    }
+    },
+    "layoutPreview": "Open the terminal layout preview (development)."
   },
   "tauriPreparation": {
     "retireDenied": "Retirement was refused or could not be confirmed. Preserve the reservation, archives and journals. After a possibly dispatched authorization, this client stays locked; an archive may already exist. Quit and inspect the evidence before selecting fresh profiles. No automatic recovery or replay is performed.",
