@@ -784,6 +784,7 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
                 "feature-workspace",
                 WebviewUrl::External(CHROME_URL.parse()?),
             )
+            .incognito(true)
             .focused(false)
             .disable_drag_drop_handler()
             .on_navigation(|url| url.as_str() == CHROME_URL)
