@@ -1193,3 +1193,12 @@ acceptance pending.
       reading; this confirms source integration, not native acceptance.
 - [ ] Account profiles, locked-account exclusion in future suggestions, Claude and
       OpenCode profile-bound sources and native acceptance.
+
+## Owned turn notification wiring — 2026-11-05
+
+- [x] Background host polling projects only receipt-backed owned Claude turn
+      evidence; same-turn running→completed/failed transitions are deduplicated.
+- [x] Existing read-only notification preferences and native opt-in/cap apply;
+      private epoch-bound click navigation selects exact membership and revokes input.
+- [ ] Actual macOS background delivery/click/focus and owned provider acceptance.
+      Codex/OpenCode turn binding and Claude waiting-for-user hooks remain pending.

@@ -124,6 +124,37 @@ export class TauriFeatureService {
     }
   }
 
+  /** Native notification click only: metadata navigation, never input/start authority. */
+  async focusOwned(terminalId: string): Promise<boolean> {
+    if (this.busy || !this.initialized) return false;
+    this.busy = true;
+    const presentation = this.layout.presentationRevision();
+    try {
+      const identity = this.core.identities.find((entry) => entry.terminalId === terminalId);
+      if (!identity) return false;
+      await this.refresh();
+      const owners = this.catalog.filter((feature) => feature.terminalIds.includes(terminalId));
+      if (owners.length > 1 || owners.some((feature) => feature.status === 'archived'))
+        return false;
+      const featureId = owners[0]?.featureId ?? null;
+      if (this.view.featureId !== featureId) {
+        await this.core.features.saveView({
+          featureId,
+          expectedRevision: this.view.revision,
+        });
+        await this.refresh();
+      }
+      await this.present(featureId, true, presentation);
+      this.generation++;
+      this.changed(this.snapshot());
+      return this.layout.open(identity.slot);
+    } catch {
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
   private snapshot(): FeatureNativeSnapshot {
     const value = featureNativeSnapshotSchema.parse({
       contractVersion: 1,

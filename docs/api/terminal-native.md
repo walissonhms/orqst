@@ -564,3 +564,40 @@ Security review: this extends the existing authenticated native Feature command;
 it adds no HTTP, WebSocket, network, credential-reading or renderer-supplied path
 capability. Account IDs are allowlisted before preference changes, and the native
 side validates the complete bounded reply before returning it to the renderer.
+
+## Owned turn OS notifications — 2026-11-05
+
+The private terminal host samples receipt-backed owned Claude transcript evidence
+every two seconds, with one in-flight sample, independently of renderer requests.
+Codex/OpenCode remain `unknown`; process liveness/exit is never a turn outcome.
+Only a same-turn observed `running` → `completed`/`failed` transition qualifies.
+First attach, lost/invalid data, a gap/sample above ten seconds, and shutdown do
+not bridge transitions. A turn that starts and finishes between samples may not
+notify. `waiting_for_user` still requires the separately reviewed owned hook work.
+
+Private Node → Rust frame (not a renderer action or WebSocket event):
+
+```ts
+{ contractVersion: 1, kind: 'owned-turn-alert', epoch: UUID,
+  slot: 0..7, terminalId: UUID, turnId: UUID,
+  category: 'completed' | 'failed', silent: boolean, observedAt: epochMs }
+```
+
+The host rereads `core/orqst.db`'s existing notification preferences read-only:
+`completed`, `failed`, and `sound`. Invalid/missing preferences suppress the sample.
+Transitions are deduplicated by `(terminalId, turnId)` and consumed when disabled.
+The existing per-run native-alert toggle and fresh observer connection are also
+required; both observer and owned notifications share the twenty-attempt run cap
+(the plugin retains waiting threads). The dedupe sets and native queue are bounded.
+No prompt, transcript text, path, title, or credential enters the OS notification.
+
+A notification click restores the existing main window and requests passive
+Feature/terminal navigation through the same current owned host. Rust validates
+the host epoch, slot and shutdown/enrollment/presentation fences; Node revalidates
+exact terminal membership and current layout generation. Stale/replaced hosts or
+blocked presentations cannot reopen a pane. Selection revokes input grants; click
+is never Start, keyboard authorization, approval, or prompt delivery. The background
+poller stops on host shutdown. No HTTP, WebSocket or renderer capability is added.
+
+Synthetic Node/Rust tests are distinct from macOS Notification Center, background
+banners, Focus settings and real-provider click/focus acceptance, which remain pending.

@@ -320,11 +320,11 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                          | owner    | new package                                      |
 | Studio v2 chrome contract: native acceptance                                                          | pane-817 | owner native test                                |
-| Native OS notifications on completed/failed                                                           | pane-817 | step 2                                           |
+| Native OS notifications on completed/failed: owned host wired; native acceptance pending              | pane-817 | owner OS/provider test                           |
 | Claude "needs you" state via owned `--settings` hooks                                                 | pane-817 | step 1b                                          |
 | Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
 | Batch create across several workspaces                                                                | pane-817 | multi-workspace design review (owner + pane-769) |
-| Mentions and communication events from the Core journal                                               | pane-817 | step 4                                           |
+| Mentions v1: recorded and answered unsupported/denied (no delivery route); communication events from the MCP pair journal | pane-768 | v2 authorized route design |
 | Account limits: default Codex evidence and refresh/lock wired; native acceptance pending              | pane-817 | native test; other profile/provider sources      |
 | Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot        | pane-817 | steps 7–8                                        |
 | Detach to a new window                                                                                | pane-817 | native support                                   |

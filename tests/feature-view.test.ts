@@ -123,6 +123,43 @@ function fixture(
   };
 }
 
+test('owned notification navigation selects exact membership without starting or granting input', async () => {
+  const f = fixture();
+  try {
+    let feature = f.db.create({ name: 'SYNTHETIC notification target' });
+    feature = f.db.assignTerminal(feature.featureId, f.ids[2]!, feature.revision);
+    await f.service.initialize();
+    assert.equal(await f.service.focusOwned(randomUUID()), false);
+    assert.equal(await f.service.focusOwned(f.ids[2]!), true);
+    assert.equal(f.db.readView().featureId, feature.featureId);
+    assert.equal(f.layout.snapshot().active, 2);
+    assert.deepEqual(f.layout.snapshot().order, [2]);
+    assert.equal(f.layout.snapshot().suspended, false);
+    assert.ok(f.revocations.includes(2));
+    assert.equal(await f.service.focusOwned(f.ids[0]!), true);
+    assert.equal(f.db.readView().featureId, null);
+    assert.equal(f.layout.snapshot().active, 0);
+  } finally {
+    f.close();
+  }
+});
+
+test('owned notification navigation cannot resume a stale presentation', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    const original = f.core.features.list;
+    f.core.features.list = async () => {
+      f.layout.suspend();
+      return original();
+    };
+    assert.equal(await f.service.focusOwned(f.ids[0]!), false);
+    assert.equal(f.layout.snapshot().suspended, true);
+  } finally {
+    f.close();
+  }
+});
+
 test('account limits use the private facade, reject unknown accounts and persist explicit locks', async () => {
   let locked = false;
   const read = () => ({
