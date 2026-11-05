@@ -5,6 +5,7 @@ mod desktop;
 mod features;
 mod files;
 mod host_phase;
+mod host_start;
 mod local_diagnostics;
 mod offline_recovery;
 mod quit_native;

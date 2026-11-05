@@ -111,12 +111,6 @@ impl HostPhase {
 pub fn phase() -> Phase {
     crate::quit_orchestration::QUIT.host.phase()
 }
-pub fn reserve_start() -> Result<(), &'static str> {
-    crate::quit_orchestration::QUIT.host.reserve_start()
-}
-pub fn release_start() {
-    crate::quit_orchestration::QUIT.host.release_start();
-}
 pub fn started() {
     crate::quit_orchestration::QUIT.host.started();
 }

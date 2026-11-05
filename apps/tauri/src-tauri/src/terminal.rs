@@ -1975,38 +1975,39 @@ async fn start_selected_inner(
     // Includes startup-environment selections: uncertain Core setup must never unlock
     // native preparation or reuse a terminal window in this application lifetime.
     crate::terminal_creation::fence_selection(app);
-    // Quit must see effects-possible before the child exists.
-    crate::host_phase::reserve_start()?;
-    let files = serde_json::to_string(&paths)?;
-    let resources = app.path().resource_dir()?;
-    let script = resources.join("core/tauri-terminal-host.cjs");
-    let admission = app.path().app_data_dir()?.join("managed-agents");
     static STARTUP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     let startup_id = format!(
         "startup-{}",
         STARTUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     );
-    let (mut rx, child) = app
-        .shell()
-        .sidecar("orqst-node")?
-        .args([
-            script.as_os_str(),
-            std::ffi::OsStr::new(&files),
-            admission.as_os_str(),
-            std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
-            std::ffi::OsStr::new(&startup_id),
-        ])
-        .env_clear()
-        .envs(std::env::vars_os().filter(|(key, _)| {
-            matches!(
-                key.to_str(),
-                Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
-            )
-        }))
-        .spawn()
-        .inspect_err(|_| {
-            crate::host_phase::release_start();
-        })?;
+    // Every fallible preflight operation is inside the same reversible reservation.
+    let prepared = crate::host_start::prepare::<_, _, _, _, Box<dyn std::error::Error>>(
+        &crate::quit_orchestration::QUIT.host,
+        || Ok(serde_json::to_string(&paths)?),
+        || Ok(app.path().resource_dir()?),
+        || Ok(app.path().app_data_dir()?.join("managed-agents")),
+        |files, resources, admission| {
+            let script = resources.join("core/tauri-terminal-host.cjs");
+            Ok(app
+                .shell()
+                .sidecar("orqst-node")?
+                .args([
+                    script.as_os_str(),
+                    std::ffi::OsStr::new(&files),
+                    admission.as_os_str(),
+                    std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
+                    std::ffi::OsStr::new(&startup_id),
+                ])
+                .env_clear()
+                .envs(std::env::vars_os().filter(|(key, _)| {
+                    matches!(
+                        key.to_str(),
+                        Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
+                    )
+                })))
+        },
+    )?;
+    let (mut rx, child) = prepared.spawn(|command| command.spawn())?;
     diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
         while let Some(event) = rx.recv().await {

@@ -203,3 +203,22 @@ host or previous Quit, require installation before review, and reject a delayed
 Yes after deactivation/reactivation. Dispatch failure, installation failure and a
 dropped callback deny admission. Real NotificationCenter delivery and AppKit sheet
 focus remain separate native acceptance; no application was run here.
+
+### Pre-spawn reservation correction
+
+`host_start::prepare` reserves `Starting` before serialization, resource lookup,
+app-data lookup or sidecar construction. Its RAII guard releases on each proven
+pre-spawn failure, cancellation/drop or unwind. `Prepared::spawn` disables release
+**before** calling the shell plugin. Any returned spawn error, possible spawn,
+ready timeout or later loss remains conservatively blocked; only existing host
+ready/loss transitions can change it. No inferred process cleanup is added.
+
+The resolved `tauri-plugin-shell` 2.6.0 source was inspected at
+[`process::Command::spawn`](https://github.com/tauri-apps/plugins-workspace/blob/128190689dbe59b59d344e01bf07b00862aa3791/plugins/shell/src/process/mod.rs#L387-L470)
+(crate VCS SHA `128190689dbe59b59d344e01bf07b00862aa3791`; existing dependency,
+Apache-2.0 OR MIT, bundled LICENSE_APACHE-2.0/LICENSE_MIT and SPDX metadata;
+no source incorporation or dependency changes): `SharedChild::new(child)?` can fail after OS
+spawn. Therefore its generic error is not proof of non-dispatch and cannot safely
+release the reservation. Tests inject each of the four actual production preflight
+ports plus spawn success/error, pre/post-spawn unwind and dropped preparation.
+No host, provider or process is started by these fixtures.
