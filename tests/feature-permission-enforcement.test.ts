@@ -33,6 +33,7 @@ import {
   type ManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
 import { teamRoutingProposal } from '../packages/core/src/communication/team-configuration.js';
+import type { FeatureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 
 function fixture(file = ':memory:') {
   const store = new Store(file);
@@ -757,3 +758,179 @@ for (const role of ['worker', 'orchestrator'] as const)
       f.close();
     }
   });
+
+// Multi-destination decisions reuse the shared withPermissionSnapshot preferences
+// lock under the journal transaction; the snapshot reader itself is SYNTHETIC data.
+function multiTargetFixture() {
+  const directory = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-policy-snapshot-'));
+  try {
+    const config = featureConfigurationDatabase(directory, 'synthetic');
+    let feature = config.create({ name: 'SYNTHETIC snapshot' });
+    const store = new Store(':memory:');
+    const journal = store.communicationJournal(randomUUID(), { recover: false });
+    const state: { snapshotOpens: number; liveReads: number; liveWrite?: () => void } = {
+      snapshotOpens: 0,
+      liveReads: 0,
+    };
+    const lock: FeatureConfigurationDatabase['withPermissionSnapshot'] = (action) => {
+      state.snapshotOpens++;
+      return config.withPermissionSnapshot(action);
+    };
+    const liveReader: FeaturePermissionReader = (scope) => {
+      state.liveReads++;
+      if (state.liveReads === 2 && state.liveWrite) {
+        const write = state.liveWrite;
+        state.liveWrite = undefined;
+        write();
+      }
+      return config.permissionReader(scope);
+    };
+    const resolver = (): Uint8Array => {
+      throw new Error('SYNTHETIC unused resolver');
+    };
+    const service = new PaneCommunication(journal, resolver, Date.now, liveReader, undefined, lock);
+    const fallback = new PaneCommunication(journal, resolver, Date.now, liveReader);
+    const register = (scope: string | undefined = feature.featureId): CommunicationPane => {
+      const pane = service.registerPane({
+        workspaceId: 'synthetic',
+        ...(scope === undefined ? {} : { featureId: scope }),
+        terminalId: randomUUID(),
+        name: 'SYNTHETIC terminal',
+        provider: 'SYNTHETIC',
+        cliVersion: null,
+        model: null,
+        routing: {
+          handle: `s-${randomUUID().slice(0, 20)}`,
+          role: 'worker',
+          allowedTargetPaneIds: [],
+        },
+        ownership: 'managed',
+        ownerId: 'native-owner',
+        creationReason: 'synthetic fixture',
+        binding: { instanceId: randomUUID(), projectId: 'synthetic', terminalEpoch: randomUUID() },
+        capabilities: {
+          canSend: true,
+          canQueueWhileBusy: true,
+          canAcknowledge: true,
+          canReportTaskCompletion: true,
+          canCancel: true,
+        },
+        state: 'ready',
+      });
+      if (scope === feature.featureId)
+        feature = config.assignTerminal(feature.featureId, pane.terminalId!, feature.revision);
+      return pane;
+    };
+    const a = register(),
+      b = register(),
+      c = register();
+    const legacyTargets: CommunicationPane[] = [];
+    for (let n = 0; n < 2; n++) legacyTargets.push(register(undefined));
+    const grantTargets = (targets: CommunicationPane[]) =>
+      config.savePermissions(feature.featureId, 'native-owner', {
+        expectedRevision: config.readPermissions(feature.featureId).revision,
+        configuration: {
+          schemaVersion: 1,
+          rules: targets.map((target) => ({
+            sourceTerminalId: a.terminalId!,
+            targetTerminalId: target.terminalId!,
+            operations: ['view', 'delegate', 'execute'],
+          })),
+        },
+      });
+    const route = (source: CommunicationPane, targets: CommunicationPane[]) =>
+      service.configureRouting(source.paneId, {
+        name: source.name,
+        ...source.routing!,
+        allowedTargetPaneIds: targets.map((p) => p.paneId),
+      });
+    const authorize = (
+      override: PaneCommunication,
+      source: CommunicationPane,
+      targets: CommunicationPane[],
+    ) =>
+      override.authorize({
+        actorId: 'native-owner',
+        workspaceId: 'synthetic',
+        ...(source.featureId === undefined ? {} : { featureId: source.featureId }),
+        sourcePaneId: source.paneId,
+        targetPaneIds: targets.map((p) => p.paneId),
+        expiresAt: Date.now() + 60000,
+      });
+    return {
+      state,
+      a,
+      b,
+      c,
+      grantTargets,
+      legacyTargets,
+      route,
+      authorize: (source: CommunicationPane, targets: CommunicationPane[]) =>
+        authorize(service, source, targets),
+      fallbackAuthorize: (source: CommunicationPane, targets: CommunicationPane[]) =>
+        authorize(fallback, source, targets),
+      policyRevision: () => config.readPermissions(feature.featureId).revision,
+      close: () => {
+        store.close();
+        rmSync(directory, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+test('multi-destination authorization reads one policy snapshot for every target', () => {
+  const f = multiTargetFixture();
+  try {
+    f.route(f.a, [f.b, f.c]);
+    assert.deepEqual(f.state, { snapshotOpens: 0, liveReads: 0 });
+    const client = f.authorize(f.a, [f.b, f.c]);
+    assert.equal(f.state.snapshotOpens, 1);
+    assert.equal(f.state.liveReads, 0);
+    void client.inbox();
+    void client.events(0);
+    assert.equal(f.state.snapshotOpens, 3);
+    assert.equal(f.state.liveReads, 0);
+    // Single-destination regression under the same snapshot-backed decision.
+    void f.authorize(f.a, [f.c]);
+    assert.equal(f.state.snapshotOpens, 4);
+    assert.equal(f.state.liveReads, 0);
+    // Legacy panes without a Feature keep the exact-grant contract and read no policy.
+    f.route(f.legacyTargets[0]!, [f.legacyTargets[1]!]);
+    void f.authorize(f.legacyTargets[0]!, [f.legacyTargets[1]!]);
+    assert.equal(f.state.snapshotOpens, 5);
+    assert.equal(f.state.liveReads, 0);
+  } finally {
+    f.close();
+  }
+});
+
+test('a policy writer between per-target reads cannot mix a snapshotted decision', () => {
+  const f = multiTargetFixture();
+  try {
+    f.route(f.a, [f.b, f.c]);
+    // The live reader simulates a concurrent policy writer that commits between
+    // the two per-target reads of one decision by rewriting the same permissive
+    // rules under a new revision.
+    f.state.liveWrite = () => f.grantTargets([f.b, f.c]);
+    // The snapshotted decision never consults the mutable live read path, so the
+    // between-reads write cannot land inside it and every target sees revision 0.
+    void f.authorize(f.a, [f.b, f.c]);
+    assert.equal(f.state.snapshotOpens, 1);
+    assert.equal(f.state.liveReads, 0);
+    assert.equal(f.policyRevision(), 0);
+    // Without the snapshot lock the same read path observes a policy revision
+    // change between its two per-target reads and rejects the mixed decision.
+    assert.throws(() => f.fallbackAuthorize(f.a, [f.b, f.c]), /revision changed/);
+    assert.equal(f.state.liveReads, 2);
+    assert.equal(f.policyRevision(), 1);
+    // A later snapshot-backed decision reads the committed revision consistently.
+    void f.authorize(f.a, [f.c]);
+    assert.equal(f.state.snapshotOpens, 2);
+    assert.equal(f.state.liveReads, 2);
+  } finally {
+    f.close();
+  }
+});
