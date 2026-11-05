@@ -7,11 +7,15 @@ undispatched selection was retired natively before human normal old-app Quit.
 The consent-scroll package from `7226686` now opens normally and the user's
 screenshot verifies real Codex initialization/xterm rendering with connected output.
 Later human verification confirms manual keyboard activation, message sending and
-actual Codex CLI replies in Tauri. The displayed model remains TUI self-description.
-Automatic composed Open retains its earlier uncertain status; the separate
-Feature/selection sidebar refusal and an unverified CLI warning remain open.
-Effective backend model, OpenCode, MCP communication, running-provider Quit/Stop/safe
-exit, retirement after dispatch, all-viewport parity and Electron retirement remain pending.
+actual CLI replies for both Codex and OpenCode individually in Tauri. The user's
+OpenCode screenshot and Root's earlier reading of the same TUI confirm native
+startup and interaction; displayed provider/model labels remain TUI self-description.
+Automatic composed Open/input parity remains unaccepted. The Feature sidebar
+refusal, disabled Feature **+ Terminal** (dashboard opening works), earlier OpenCode
+plugin failure and Codex warning remain unresolved. Effective backend models,
+Codex↔OpenCode/MCP communication, coexistence/retained IDs, running-provider
+Quit/Stop/owned exit, retirement after dispatch, all-viewport parity and Electron
+retirement remain pending. This is individual provider acceptance, not a complete migration.
 See [verified milestones and limits](docs/development/native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05).
 This docs-only update does not rebuild or update the running package. Earlier dated
 entries retain their original scope; administrative completion proves no provider exit.

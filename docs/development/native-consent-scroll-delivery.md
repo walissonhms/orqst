@@ -8,6 +8,9 @@ The normally opened `dist/native-preview-consent-scroll/` package is frozen at
 implementation source [`7226686db6c41230136bfd0d62be09d60d41e471`](https://github.com/walissonhms/orqst/tree/7226686db6c41230136bfd0d62be09d60d41e471).
 This later documentation commit does not rebuild or update that running package.
 Earlier dated source/package boundaries below retain their original scope.
+The preceding Codex interaction documentation is pinned at
+[`e0711ea22eebcb220ff9bf7ceab464387cf8249d`](https://github.com/walissonhms/orqst/commit/e0711ea22eebcb220ff9bf7ceab464387cf8249d);
+this later OpenCode record changes only permanent documentation.
 
 - [x] Complete the earlier human-authorized administrative recovery: signed
       capture, `release_prepared` and finalization. Root read completion
@@ -35,19 +38,31 @@ Earlier dated source/package boundaries below retain their original scope.
       startup/rendering to real human/CLI interaction. No raw messages or screenshot
       are incorporated here. GPT-6.1 Terra medium remains the TUI's self-description,
       not authenticated backend/model or session-usage evidence.
+- [x] Accept subsequent user/Root-confirmed OpenCode native initialization,
+      manual keyboard authorization, human message sending and an actual CLI reply.
+      The current user screenshot shows OpenCode in slot B (T-002), Process running,
+      a sent human message and generated CLI response; Root previously read the
+      same TUI. It displays OpenCode 2.2.5 and Build / DeepSeek V4.1 Flash /
+      OpenCode Go / high. These are TUI labels, not independent API/provider/model
+      authentication. No raw prompt, response, image or session capture is versioned.
+      Codex and OpenCode are now verified interactively as individual providers.
 - [ ] Resolve the automatic composed-Open uncertainty. Earlier Root diagnostics
       reported `core_startup=ready` and `opening=ready`, but
       `cli_opening=uncertain` with possible effects and input disabled. Later manual
-      input succeeded; it does not retrospectively resolve that automatic status.
-      The latest screenshot again shows input disabled after the human returned
-      to another app; no causal or keyboard-revocation acceptance is inferred.
-- [ ] Resolve the separate Feature/selection refusal still shown in the sidebar.
-      It does not negate the observed CLI replies. One CLI warning is visible;
-      its cause has not been verified.
-- [ ] Verify the effective backend model, OpenCode, real Codex↔OpenCode
-      MCP/task/result communication, running-provider Quit/Stop/safe exit,
-      retirement after dispatched execution, remaining native/platform parity and
-      Electron retirement. Preserve the currently running app/Core/provider.
+      input succeeded for both providers through separate authorization; it does
+      not retrospectively resolve that status or accept automatic Open/input parity.
+      No keyboard-revocation acceptance or historical cause is inferred.
+- [ ] Resolve the separate Feature sidebar refusal and disabled Feature
+      **+ Terminal** control; dashboard opening works. The earlier OpenCode
+      `overclock-handoff.js` plugin failure and Codex warning have no verified cause.
+      These remain open despite real CLI replies.
+- [ ] Verify effective backend models, real Codex↔OpenCode MCP/task/result
+      communication and coexistence/retained IDs. The observed slot B is not proof
+      of retained identities or simultaneous providers; the visible view shows one terminal.
+- [ ] Accept running-provider Quit/Stop/owned exit, retirement after dispatched
+      execution, remaining native/platform parity and Electron retirement. Preserve
+      the currently running app/Core/providers. Individual interactive verification
+      does not complete migration or accept any whole master/V6 criterion.
 
 This delivery changes existing documentation only. Targeted Markdown formatting,
 local links and diff/scope checks are its verification gates. Full lint,

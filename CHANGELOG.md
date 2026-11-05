@@ -1,5 +1,20 @@
 # Changelog
 
+## Human-verified OpenCode interaction documentation — 2026-11-05
+
+- Record user/Root-confirmed native OpenCode startup, manual keyboard authorization,
+  message sending and a real CLI reply in the unchanged `7226686` package, following
+  the Codex interaction record at `e0711ea`. Providers are verified individually.
+- Keep OpenCode 2.2.5 and Build / DeepSeek V4.1 Flash / OpenCode Go / high as TUI
+  labels, without independent API/effective-model verification. No raw content is versioned.
+- Preserve automatic composed Open/input parity, effective models, coexistence/retained
+  IDs, Codex↔OpenCode/MCP, running-provider Quit/Stop/owned exit, retirement after
+  dispatch, all-viewport acceptance and Electron retirement as pending. Feature
+  sidebar refusal, disabled Feature **+ Terminal** (dashboard opening works), earlier
+  OpenCode plugin failure and Codex warning remain unresolved.
+- Documentation only; no whole acceptance criterion or migration is accepted.
+  See [observations and limits](docs/development/native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05).
+
 ## Human-verified native milestones documentation — 2026-11-05
 
 - Record finalized human-authorized administrative recovery with byte-identical

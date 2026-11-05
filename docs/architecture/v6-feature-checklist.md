@@ -17,11 +17,17 @@ The running package remains frozen at `7226686`; this is a later docs-only deliv
 - [ ] Accept all target authorization viewports and complete native visual geometry.
 - [x] Accept subsequent manual native keyboard activation, human message sending
       and actual Codex CLI replies in Tauri; model remains TUI self-description.
-- [ ] Resolve automatic composed-Open uncertainty (historical despite later manual
-      success), the separate Feature/selection sidebar refusal and unverified CLI warning.
-- [ ] Verify effective backend model, OpenCode, mixed MCP communication,
-      running-provider Quit/Stop/safe exit and retirement after dispatch; finish
-      parity before Electron removal. No keyboard-revocation acceptance is inferred.
+- [x] Accept user/Root-confirmed OpenCode native initialization, manual keyboard
+      authorization, human message sending and a real CLI reply. Codex and OpenCode
+      are now verified individually; displayed provider/model labels remain TUI claims.
+- [ ] Resolve automatic composed Open/input parity, Feature sidebar refusal and
+      disabled Feature **+ Terminal** (dashboard opening works), earlier OpenCode
+      plugin failure and Codex warning; causes remain unverified.
+- [ ] Verify effective backend models, coexistence/retained IDs, real mixed MCP
+      communication, running-provider Quit/Stop/owned exit, retirement after dispatch
+      and remaining native parity. Manual input does not accept automatic Open or
+      keyboard revocation; slot B alone does not prove coexistence.
+      Finish parity before Electron removal.
 
 No full V6 workflow or master criterion becomes accepted from these observations.
 Earlier dated entries retain their original delivery scope.

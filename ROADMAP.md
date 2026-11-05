@@ -8,13 +8,15 @@ normal consent-scroll package opening with real Codex initialization/xterm rende
 Implementation remains frozen at `7226686`; the later docs-only HEAD is not a new package.
 See [exact scope and limits](docs/development/native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05).
 
-Also completed: subsequent manual native keyboard activation, human message
-sending and actual Codex CLI replies in Tauri. The displayed model remains TUI
-self-description. Next: resolve the earlier automatic composed-Open uncertainty,
-separate Feature/selection sidebar refusal and unverified CLI warning; verify the
-effective backend model, OpenCode, real mixed MCP communication, running-provider
-Quit/Stop/safe exit, retirement after dispatch and remaining native/platform parity
-before Electron removal. All-viewport authorization geometry remains pending.
+Also completed: manual native keyboard activation, human message sending and actual
+Codex and OpenCode CLI replies, verified individually. Displayed provider/model
+labels remain TUI self-description. Next: resolve automatic composed Open/input
+parity, Feature sidebar refusal and disabled Feature **+ Terminal** (dashboard
+opening works), earlier OpenCode plugin failure and Codex warning; verify effective
+backend models, coexistence/retained IDs, real mixed MCP communication,
+running-provider Quit/Stop/owned exit, retirement after dispatch and remaining
+native/platform parity before Electron removal. All-viewport authorization geometry
+remains pending. Individual provider acceptance does not complete the migration.
 Administrative recovery and old-app Quit do not prove provider exit or resolve other uncertain evidence.
 Earlier dated gates retain their original delivery scope.
 

@@ -9,15 +9,17 @@ and xterm rendering in the normally opened consent-scroll package. Its frozen
 implementation is `7226686db6c41230136bfd0d62be09d60d41e471`; this docs-only HEAD
 does not update the running app. Administrative completion is not an exit receipt.
 
-A subsequent user screenshot confirms manual native keyboard activation, human
-message sending and actual Codex CLI replies in Tauri. The model is TUI
-self-description, not authenticated backend evidence. Earlier automatic CLI-opening
-uncertainty remains historical despite later manual success. The separate
-Feature/selection sidebar refusal and one CLI warning remain unresolved.
-Automatic composed Open, effective backend model, OpenCode, Codex↔OpenCode MCP/task/result,
-running-provider Quit/Stop/safe exit, retirement after dispatch, full viewport/native
-parity and Electron removal remain pending. No whole acceptance criterion or
-required scenario becomes Accepted.
+Subsequent human verification confirms manual native keyboard activation, message
+sending and actual Codex and OpenCode CLI replies individually in Tauri. The user's
+OpenCode screenshot and Root's earlier reading of the same TUI confirm native
+startup and interaction, not independent API/effective-model evidence. Automatic
+composed Open/input parity remains unaccepted. Feature sidebar refusal, disabled
+Feature **+ Terminal** (dashboard opening works), earlier OpenCode plugin failure
+and Codex warning remain unresolved. Effective backend models, coexistence/retained
+IDs, Codex↔OpenCode MCP/task/result, running-provider Quit/Stop/owned exit,
+retirement after dispatch, full viewport/native parity and Electron removal remain
+pending. Individual provider acceptance does not complete the migration. No whole
+acceptance criterion or required scenario becomes Accepted.
 Earlier dated entries preserve their historical scope; these observations do not
 resolve other quarantined attempts or their missing receipts.
 

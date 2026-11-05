@@ -19,11 +19,16 @@ accept Quit while a provider is running.
 - [ ] Accept complete authorization geometry across target viewports.
 - [x] Accept later manual native keyboard activation, human message sending and
       actual Codex CLI replies in Tauri; the displayed model is self-description.
-- [ ] Resolve automatic composed-Open uncertainty retained from the earlier
-      diagnostic, separate Feature/selection sidebar refusal and unverified CLI warning.
-- [ ] Verify effective backend model, OpenCode, real mixed MCP communication,
-      running-provider Quit/Stop/safe exit, retirement after dispatch and remaining
-      native parity. Later manual success does not accept automatic Open or keyboard revocation.
+- [x] Accept user/Root-confirmed OpenCode native initialization, manual keyboard
+      authorization, human message sending and a real CLI reply. Codex and OpenCode
+      are now verified individually; displayed provider/model labels remain TUI claims.
+- [ ] Resolve automatic composed Open/input parity, Feature sidebar refusal and
+      disabled Feature **+ Terminal** (dashboard opening works), earlier OpenCode
+      plugin failure and Codex warning; causes remain unverified.
+- [ ] Verify effective backend models, coexistence/retained IDs, real mixed MCP
+      communication, running-provider Quit/Stop/owned exit, retirement after dispatch
+      and remaining native parity. Manual input does not accept automatic Open or
+      keyboard revocation; slot B alone does not prove coexistence.
 - [ ] Retire Electron only after the ordered parity/removal gates below are met.
 
 These milestones narrow earlier pending statements for this package and these
