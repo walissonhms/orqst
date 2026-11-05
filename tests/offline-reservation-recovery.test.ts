@@ -723,6 +723,13 @@ test('synthetic native approval releases exact kernel reservation once and recor
     let scans = 0;
     let reviews = 0;
     const result = await releaseKernelReservation(f.directory, scratch1, scratch2, {
+      mutationExecutor: async () => ({
+        ...core,
+        pid: process.pid,
+        ppid: process.ppid,
+        uid: process.getuid!(),
+      }),
+      mutationOwnerExists: async () => true,
       scan: async (identities, sessions) => {
         scans++;
         assert.equal(identities.length, 3);

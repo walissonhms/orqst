@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { z } from 'zod';
+import { acquireAdmissionMutation } from './admission-mutation.js';
 import { terminalDigest } from './authority.js';
 import {
   beginKernelRelease,
@@ -17,6 +18,10 @@ const scanSchema = z.strictObject({
   scans: z.literal(2),
 });
 export interface KernelReleaseAuthority {
+  /** Identity of the native process that actually executes rename, not its Node client. */
+  mutationExecutor(): Promise<KernelProcessIdentity>;
+  /** A native kernel query; reject errors rather than treating them as a dead holder. */
+  mutationOwnerExists(identity: KernelProcessIdentity): Promise<boolean>;
   /** Native kernel queries; error or incomplete evidence rejects. */
   scan(
     identities: readonly KernelProcessIdentity[],
@@ -51,6 +56,13 @@ export async function releaseKernelReservation(
   secondScratch: string,
   authority: KernelReleaseAuthority,
 ) {
+  const executor = await authority.mutationExecutor();
+  const mutation = await acquireAdmissionMutation(
+    directory,
+    executor,
+    (identity) => authority.mutationOwnerExists(identity),
+    executor.pid,
+  );
   reconcileKernelReleases(directory);
   const { name, lock } = beginKernelRelease(directory);
   const first = snapshotKernelReservation(directory, firstScratch);
@@ -85,6 +97,7 @@ export async function releaseKernelReservation(
   const checked = verifyKernelReleaseSource(directory, name);
   if (JSON.stringify(checked) !== JSON.stringify(lock))
     throw new Error('Kernel release lock changed');
+  mutation.validate();
   // No retry or rollback after this effect boundary, including a lost acknowledgement.
   await authority.rename(lock);
   const archive = readRecoveryFile(join(directory, lock.destination));

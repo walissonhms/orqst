@@ -38,9 +38,14 @@ export async function acquireAdmissionMutation(
   directory: string,
   ownerInput: KernelProcessIdentity,
   exists: (identity: KernelProcessIdentity) => Promise<boolean>,
+  executorPid = process.pid,
 ) {
   const owner = kernelProcessIdentitySchema.parse(ownerInput);
-  if (owner.pid !== process.pid || owner.uid !== process.getuid?.())
+  if (
+    (executorPid !== process.pid && executorPid !== process.ppid) ||
+    owner.pid !== executorPid ||
+    owner.uid !== process.getuid?.()
+  )
     throw new Error('Mutation lock owner identity mismatch');
   let name = ROOT;
   let predecessor: string | null = null;
