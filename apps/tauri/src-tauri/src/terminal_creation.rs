@@ -234,7 +234,16 @@ fn digest(value: &Value) -> bool {
     })
 }
 fn valid_catalog(value: &Value, request: &Value) -> bool {
-    exact(
+    (exact(
+        value,
+        &[
+            "contractVersion",
+            "workspaceId",
+            "featureId",
+            "catalogId",
+            "providers",
+        ],
+    ) || exact(
         value,
         &[
             "contractVersion",
@@ -244,19 +253,21 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
             "providers",
             "pendingOwnedExits",
         ],
-    ) && value["pendingOwnedExits"].as_array().is_some_and(|exits| {
-        exits.len() <= 64
-            && exits.iter().all(|exit| {
-                exact(exit, &["id", "code", "principalCount"])
-                    && crate::features::uuid(&exit["id"])
-                    && exit["code"] == "owned_exit_pending"
-                    && exit["principalCount"]
-                        .as_u64()
-                        .is_some_and(|count| count <= 9_007_199_254_740_991)
-            })
-            && exits
-                .windows(2)
-                .all(|pair| pair[0]["id"].as_str() < pair[1]["id"].as_str())
+    )) && value.get("pendingOwnedExits").is_none_or(|pending| {
+        pending.as_array().is_some_and(|exits| {
+            exits.len() <= 64
+                && exits.iter().all(|exit| {
+                    exact(exit, &["id", "code", "principalCount"])
+                        && crate::features::uuid(&exit["id"])
+                        && exit["code"] == "owned_exit_pending"
+                        && exit["principalCount"]
+                            .as_u64()
+                            .is_some_and(|count| count <= 9_007_199_254_740_991)
+                })
+                && exits
+                    .windows(2)
+                    .all(|pair| pair[0]["id"].as_str() < pair[1]["id"].as_str())
+        })
     }) && value["contractVersion"] == 1
         && scope(value)
         && value["workspaceId"] == request["workspaceId"]
@@ -1481,6 +1492,9 @@ mod catalog_tests {
         let providers: Vec<_> = ["codex", "claude", "opencode"].iter().map(|provider| json!({"provider":provider,"status":"unavailable","reason":"executable_not_found","models":[]})).collect();
         let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
         assert!(valid_catalog(&catalog, &request));
+        let mut legacy = catalog.clone();
+        legacy.as_object_mut().unwrap().remove("pendingOwnedExits");
+        assert!(valid_catalog(&legacy, &request));
         let item = json!({"id":"11111111-1111-4111-8111-111111111111","code":"owned_exit_pending","principalCount":1});
         catalog["pendingOwnedExits"] = json!([item.clone()]);
         assert!(valid_catalog(&catalog, &request));
