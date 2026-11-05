@@ -203,10 +203,11 @@ export async function authorizeCliCandidates(
     existing: readonly CliExistingDisclosure[],
   ) => Promise<boolean>,
   current: () => Promise<boolean>,
+  now: () => number = () => performance.now(),
 ) {
   const candidates: Candidate[] = [];
   for (const input of inputs) candidates.push(await prepareCliCandidate(input));
-  return authorizePreparedGroup(candidates, review, current);
+  return authorizePreparedGroup(candidates, review, current, now);
 }
 
 /** The reviewed set and its ephemeral authority stay inside this transaction. */
@@ -217,14 +218,14 @@ export async function authorizePreparedGroup(
     existing: readonly CliExistingDisclosure[],
   ) => Promise<boolean>,
   current: () => Promise<boolean>,
+  now: () => number = () => performance.now(),
 ) {
   if (!(await current())) return candidates.map(() => ({ status: 'blocked' as const }));
   const pending = candidates.flatMap((candidate) =>
     'pending' in candidate ? [candidate.pending] : [],
   );
-  const expires = performance.now() + 30_000;
-  const leaseCurrent = async () =>
-    performance.now() < expires && (await current()) && performance.now() < expires;
+  const expires = now() + 30_000;
+  const leaseCurrent = async () => now() < expires && (await current()) && now() < expires;
   if (
     pending.length &&
     (!(await leaseCurrent()) ||

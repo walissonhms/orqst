@@ -75,6 +75,22 @@ test('one conditional review covers both candidates; cancellation and stale focu
     assert.equal(reviews, 1);
     assert.equal(probes, 0);
     assert.equal(existsSync(parent), false);
+    let monotonicTime = 0;
+    assert.ok(
+      (
+        await authorizeCliCandidates(
+          inputs,
+          async () => {
+            monotonicTime = 30_000;
+            return true;
+          },
+          async () => true,
+          () => monotonicTime,
+        )
+      ).every((entry) => entry.status === 'blocked'),
+    );
+    assert.equal(probes, 0);
+    assert.equal(existsSync(parent), false);
     assert.ok(
       (
         await authorizeCliCandidates(
