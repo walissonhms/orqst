@@ -805,6 +805,44 @@ test('synthetic native approval releases exact kernel reservation once and recor
   }
 });
 
+test('legacy missing kernel identity does not create a per-marker release lock', async () => {
+  const f = fixture();
+  try {
+    const first = join(f.root, 'legacy-kernel-one');
+    const second = join(f.root, 'legacy-kernel-two');
+    mkdirSync(first, { mode: 0o700 });
+    mkdirSync(second, { mode: 0o700 });
+    await assert.rejects(
+      releaseKernelReservation(f.directory, first, second, {
+        mutationExecutor: f.dependencies.mutationExecutor,
+        mutationOwnerExists: f.dependencies.mutationOwnerExists,
+        scan: async () => {
+          throw new Error('Unexpected scan');
+        },
+        review: async () => {
+          throw new Error('Unexpected review');
+        },
+        revalidate: async () => false,
+        rename: async () => {
+          throw new Error('Unexpected rename');
+        },
+      }),
+    );
+    assert.equal(
+      readdirSync(f.directory).some(
+        (name) => name.startsWith('release-') && name.endsWith('.lock'),
+      ),
+      false,
+    );
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    const offline = join(f.root, 'legacy-still-offline');
+    mkdirSync(offline, { mode: 0o700 });
+    assert.doesNotThrow(() => snapshotOfflineReservation(f.directory, offline));
+  } finally {
+    f.close();
+  }
+});
+
 test('kernel snapshot binds every recorded dispatch and preserves unknown journal state', async () => {
   const f = fixture();
   try {

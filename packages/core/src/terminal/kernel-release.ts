@@ -57,6 +57,9 @@ export async function releaseKernelReservation(
   secondScratch: string,
   authority: KernelReleaseAuthority,
 ) {
+  reconcileKernelReleases(directory);
+  // A missing marker is not a recovery attempt and must not strand a mutation lock.
+  readRecoveryFile(join(directory, 'active-pair.json'));
   const executor = await authority.mutationExecutor();
   const mutation = await acquireAdmissionMutation(
     directory,
@@ -64,9 +67,8 @@ export async function releaseKernelReservation(
     (identity) => authority.mutationOwnerExists(identity),
     executor.pid,
   );
-  reconcileKernelReleases(directory);
-  const { name, lock } = beginKernelRelease(directory, mutation);
   const first = snapshotKernelReservation(directory, firstScratch);
+  const { name, lock } = beginKernelRelease(directory, mutation);
   if (
     first.snapshot.files[0]!.identity[0] !== lock.marker.dev ||
     first.snapshot.files[0]!.identity[1] !== lock.marker.inode ||
