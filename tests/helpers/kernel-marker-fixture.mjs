@@ -3,9 +3,8 @@ import {
   closeSync,
   constants,
   fsyncSync,
-  linkSync,
   openSync,
-  unlinkSync,
+  renameSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -29,8 +28,7 @@ process.on('message', (message) => {
   } else if (role === 'owner' && message === 'verify') {
     process.send('verifying'); // Marker remains present until the parent permits release.
   } else if (role === 'owner' && message === 'release') {
-    linkSync(marker, archived); // Exclusive destination; original inode and bytes survive.
-    unlinkSync(marker);
+    renameSync(marker, archived); // Fresh synthetic destination; native RENAME_EXCL has its own test.
     syncDirectory();
     process.send('released');
   } else if (role === 'contender' && message === 'claim') {
