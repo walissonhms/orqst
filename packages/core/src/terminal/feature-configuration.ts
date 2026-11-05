@@ -37,6 +37,44 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
   };
   return {
     permissionReader,
+    withPermissionSnapshot: <T>(
+      action: (
+        local: FeaturePermissionReader,
+        cross: (
+          sourceFeatureId: string,
+          targetFeatureId: string,
+        ) => {
+          source: ReturnType<
+            ReturnType<import('@orqst/database').Store['crossFeaturePermissions']>['read']
+          >;
+          target: ReturnType<
+            ReturnType<import('@orqst/database').Store['crossFeaturePermissions']>['read']
+          >;
+        },
+      ) => T,
+    ): T =>
+      withTerminalPreferences(directory, (store) =>
+        store.transaction(() => {
+          const localPolicies = store.featurePermissions();
+          const crossPolicies = store.crossFeaturePermissions();
+          const local: FeaturePermissionReader = (requested) => {
+            if (requested.workspaceId !== workspaceId)
+              throw new Error('Feature permission workspace denied');
+            return {
+              feature: store.features().read(scope(requested.featureId)),
+              permissions: localPolicies.read(scope(requested.featureId)),
+            };
+          };
+          const cross = (source: string, target: string) => ({
+            source: crossPolicies.read(scope(source)),
+            target: crossPolicies.read(scope(target)),
+          });
+          const result = action(local, cross);
+          if (result && typeof (result as { then?: unknown }).then === 'function')
+            throw new Error('Feature permission snapshot must be synchronous');
+          return result;
+        }),
+      ),
     crossFeatureSnapshot: (sourceFeatureId: string, targetFeatureId: string) =>
       withTerminalPreferences(directory, (store) =>
         store.transaction(() => {

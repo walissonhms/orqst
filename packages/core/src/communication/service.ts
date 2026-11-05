@@ -19,6 +19,7 @@ import {
 } from '@orqst/protocol';
 import { mentionedHandles } from './mentions.js';
 import { featurePermissionRevision, type FeaturePermissionReader } from './feature-permissions.js';
+import type { FeatureConfigurationDatabase } from '../terminal/feature-configuration.js';
 
 const grantSchema = z.strictObject({
   actorId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -84,6 +85,7 @@ export type CrossParentGate = (
   tx: CommunicationTransaction,
   taskId: string,
   expected: { workspaceId: string; featureId: string; targetPaneId: string; correlationId: string },
+  snapshot: FeatureConfigurationDatabase['crossFeatureSnapshot'],
 ) => { sourcePaneId: string; sourceFeatureId: string; parentTaskId: string | null } | undefined;
 
 /** Trusted opt-in Core service. Never constructed by observer startup. */
@@ -92,6 +94,8 @@ export class PaneCommunication {
   private clients = new WeakMap<CommunicationClient, Grant>();
   private adapters = new Map<string, CommunicationAdapter>();
   private listeners = new Map<Grant, Set<(message: CommunicationMessage) => void>>();
+  private activeParentReader?: FeaturePermissionReader;
+  private activeParentSnapshot?: FeatureConfigurationDatabase['crossFeatureSnapshot'];
 
   constructor(
     private journal: CommunicationJournal,
@@ -99,6 +103,7 @@ export class PaneCommunication {
     private now: () => number = Date.now,
     private readFeaturePermissions?: FeaturePermissionReader,
     private readonly crossParent?: CrossParentGate,
+    private readonly parentSnapshotLock?: FeatureConfigurationDatabase['withPermissionSnapshot'],
   ) {}
 
   /** Trusted composition only: enrollment must prove ownership; captured provider text cannot call this. */
@@ -669,13 +674,19 @@ export class PaneCommunication {
         expectedSource = previous.sourcePaneId;
         parent = previous.parentTaskId;
       } else {
-        if (!this.crossParent || !expectedFeature) throw new Error('Delegation parent denied');
-        const cross = this.crossParent(tx, parent, {
-          workspaceId: grant.workspaceId,
-          featureId: expectedFeature,
-          targetPaneId: expectedSource,
-          correlationId: request.correlationId,
-        });
+        if (!this.crossParent || !this.activeParentSnapshot || !expectedFeature)
+          throw new Error('Delegation parent denied');
+        const cross = this.crossParent(
+          tx,
+          parent,
+          {
+            workspaceId: grant.workspaceId,
+            featureId: expectedFeature,
+            targetPaneId: expectedSource,
+            correlationId: request.correlationId,
+          },
+          this.activeParentSnapshot,
+        );
         if (!cross) throw new Error('Delegation parent denied');
         ancestry.push(expectedSource);
         expectedSource = cross.sourcePaneId;
@@ -767,7 +778,12 @@ export class PaneCommunication {
     target: CommunicationPane,
     operations: readonly import('@orqst/protocol').FeaturePermissionOperation[],
   ) {
-    return featurePermissionRevision(source, target, operations, this.readFeaturePermissions);
+    return featurePermissionRevision(
+      source,
+      target,
+      operations,
+      this.activeParentReader ?? this.readFeaturePermissions,
+    );
   }
   private permitted(
     tx: CommunicationTransaction,
@@ -807,7 +823,21 @@ export class PaneCommunication {
     const result = this.journal.transaction((tx) => {
       try {
         if (!this.valid(grant)) throw new Error('Grant expired or revoked');
-        return { ok: true as const, value: action(tx) };
+        const invoke = () => action(tx);
+        const value =
+          this.crossParent && this.parentSnapshotLock
+            ? this.parentSnapshotLock((local, cross) => {
+                this.activeParentReader = local;
+                this.activeParentSnapshot = cross;
+                try {
+                  return invoke();
+                } finally {
+                  this.activeParentReader = undefined;
+                  this.activeParentSnapshot = undefined;
+                }
+              })
+            : invoke();
+        return { ok: true as const, value };
       } catch (error) {
         this.audit(
           tx,

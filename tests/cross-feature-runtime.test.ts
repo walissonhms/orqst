@@ -269,9 +269,16 @@ test('a cross request accepts an exact active local parent and rejects mismatche
       idempotencyKey: randomUUID(),
       deadline: Date.now() + 240000,
     });
-    const service = new CrossFeatureCommunication(f.journal, f.config.crossFeatureSnapshot, {
-      verify: () => true,
-    });
+    const service = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      {
+        verify: () => true,
+      },
+      Date.now,
+      undefined,
+      f.config.withPermissionSnapshot,
+    );
     const bad = { ...base, parentTaskId: parent.taskId, correlationId: randomUUID() };
     const badGrant = { ...baseGrant, intentDigest: crossFeatureIntentDigest(bad) };
     service.configureRoute(badGrant, bad, 'SYNTHETIC');
@@ -411,9 +418,16 @@ test('cross child rejects a parent chain exceeding the shared depth bound', () =
     }
     const request = { ...base, parentTaskId, correlationId };
     const grant = { ...baseGrant, intentDigest: crossFeatureIntentDigest(request) };
-    const service = new CrossFeatureCommunication(f.journal, f.config.crossFeatureSnapshot, {
-      verify: () => true,
-    });
+    const service = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      {
+        verify: () => true,
+      },
+      Date.now,
+      undefined,
+      f.config.withPermissionSnapshot,
+    );
     service.configureRoute(grant, request, 'SYNTHETIC');
     assert.throws(() => service.admit(grant, request, 'SYNTHETIC'), /depth/);
   } finally {
@@ -440,6 +454,7 @@ test('an opt-in local child reads a cross parent only while bilateral view remai
       Date.now,
       f.config.permissionReader,
       cross.crossParent,
+      f.config.withPermissionSnapshot,
     );
     const target = local.registerPane({
       workspaceId: 'synthetic',
@@ -501,9 +516,150 @@ test('an opt-in local child reads a cross parent only while bilateral view remai
       expiresAt: Date.now() + 300000,
     });
     assert.throws(() => unscopedClient.send(child()), /parent/);
+    const missingLock = new PaneCommunication(
+      f.journal,
+      () => Buffer.from('SYNTHETIC local'),
+      Date.now,
+      f.config.permissionReader,
+      cross.crossParent,
+    );
+    const missingLockClient = missingLock.authorize({
+      actorId: 'SYNTHETIC_child',
+      workspaceId: 'synthetic',
+      featureId: f.target.featureId,
+      sourcePaneId: source.paneId,
+      targetPaneIds: [target.paneId],
+      expiresAt: Date.now() + 300000,
+    });
+    assert.throws(() => missingLockClient.send(child()), /parent/);
     assert.equal(client.send(child()).depth, 1);
     f.save('source', 1, { schemaVersion: 1, rules: [] });
     assert.throws(() => client.send(child()), /parent/);
+  } finally {
+    f.close();
+  }
+});
+
+test('cross parent chain uses one snapshot and requires the parent bilateral view', () => {
+  const f = fixture();
+  try {
+    let third = f.config.create({ name: 'SYNTHETIC third' });
+    const thirdTerminal = randomUUID();
+    third = f.config.assignTerminal(third.featureId, thirdTerminal, third.revision);
+    const target = f.journal.transaction((tx) =>
+      tx.panes().find((p) => p.paneId === f.grant.target.paneId)!,
+    );
+    const binding = {
+      instanceId: randomUUID(),
+      projectId: 'synthetic',
+      terminalEpoch: randomUUID(),
+    };
+    const thirdPane = f.local.registerPane({
+      workspaceId: 'synthetic',
+      featureId: third.featureId,
+      terminalId: thirdTerminal,
+      name: 'SYNTHETIC third',
+      routing: { handle: 'third', role: 'worker', allowedTargetPaneIds: [] },
+      provider: 'synthetic',
+      cliVersion: null,
+      model: null,
+      ownership: 'managed',
+      ownerId: 'synthetic',
+      creationReason: 'SYNTHETIC',
+      binding,
+      capabilities: target.capabilities,
+      state: 'ready',
+    });
+    const sourcePolicy = f.policy('outbound');
+    sourcePolicy.rules.push(...f.policy('outbound', true).rules);
+    const targetPolicy = f.policy('inbound');
+    targetPolicy.rules.push(...f.policy('inbound', true).rules);
+    targetPolicy.rules.push({
+      direction: 'outbound',
+      localTerminalId: f.grant.target.terminalId,
+      remoteFeatureId: third.featureId,
+      remoteTerminalId: thirdTerminal,
+      operation: 'task.request',
+    });
+    f.save('source', 0, sourcePolicy);
+    f.save('target', 0, targetPolicy);
+    f.config.saveCrossFeaturePermissions(third.featureId, 'SYNTHETIC_actor', 0, {
+      schemaVersion: 1,
+      rules: [
+        {
+          direction: 'inbound',
+          localTerminalId: thirdTerminal,
+          remoteFeatureId: f.target.featureId,
+          remoteTerminalId: f.grant.target.terminalId,
+          operation: 'task.request',
+        },
+      ],
+    });
+    const correlationId = randomUUID();
+    const parentRequest = { ...f.request, correlationId };
+    const parentGrant = { ...f.grant, intentDigest: crossFeatureIntentDigest(parentRequest) };
+    const cross = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      { verify: () => true },
+      Date.now,
+      undefined,
+      f.config.withPermissionSnapshot,
+    );
+    cross.configureRoute(parentGrant, parentRequest, 'SYNTHETIC');
+    cross.admit(parentGrant, parentRequest, 'SYNTHETIC');
+    const request = {
+      ...f.request,
+      messageId: randomUUID(),
+      taskId: randomUUID(),
+      idempotencyKey: randomUUID(),
+      parentTaskId: parentRequest.taskId,
+      correlationId,
+    };
+    const grant = {
+      ...f.grant,
+      grantId: randomUUID(),
+      intentId: randomUUID(),
+      nonce: randomUUID(),
+      source: f.grant.target,
+      target: {
+        featureId: third.featureId,
+        terminalId: thirdTerminal,
+        paneId: thirdPane.paneId,
+        binding,
+      },
+      intentDigest: crossFeatureIntentDigest(request),
+    };
+    cross.configureRoute(grant, request, 'SYNTHETIC');
+    assert.equal(cross.admit(grant, request, 'SYNTHETIC').depth, 1);
+    f.save('source', 1, { schemaVersion: 1, rules: [] });
+    const rejected = {
+      ...request,
+      messageId: randomUUID(),
+      taskId: randomUUID(),
+      idempotencyKey: randomUUID(),
+    };
+    const fresh = {
+      ...grant,
+      grantId: randomUUID(),
+      intentId: randomUUID(),
+      nonce: randomUUID(),
+      intentDigest: crossFeatureIntentDigest(rejected),
+    };
+    cross.configureRoute(fresh, rejected, 'SYNTHETIC');
+    assert.throws(() => cross.admit(fresh, rejected, 'SYNTHETIC'), /parent/);
+  } finally {
+    f.close();
+  }
+});
+
+test('permission snapshot rejects an asynchronous callback', () => {
+  const f = fixture();
+  try {
+    assert.throws(
+      () => f.config.withPermissionSnapshot(() => Promise.resolve('SYNTHETIC')),
+      /synchronous/,
+    );
   } finally {
     f.close();
   }

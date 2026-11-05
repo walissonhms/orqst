@@ -95,6 +95,11 @@ exact IDs and correlation, verify the active destination as the next source, and
 apply the existing maximum depth and cycle checks. A local child of a cross task
 requires an explicitly injected trusted ancestor gate, which rechecks bilateral
 view and retained authority; the existing production composition does not install it.
+For an admission with parent tasks, all relevant local and cross policies are read
+inside one synchronous preferences transaction under the journal transaction.
+Without that snapshot gate, parent-linked admission fails closed. A multiprocess
+SQLite probe confirms a competing writer cannot acquire the preferences write
+lock until the snapshot decision ends.
 
 A separate versioned administrative audit records a verified grant presented for
 admission, a denial attributed to a verified grant, and an explicit revocation.

@@ -15,6 +15,7 @@ type Message = {
   target?: string;
   admitted?: boolean;
   claimed?: boolean;
+  blocked?: boolean;
 };
 const worker = resolve('tests/helpers/cross-feature-process.ts');
 function start(...args: string[]) {
@@ -158,5 +159,65 @@ test(
     assert.equal(after.code, 19);
     assert.equal(after.count, 1);
     assert.equal(after.audit, 1);
+  },
+);
+
+test(
+  'one preferences snapshot excludes a competing writer until the decision ends',
+  { timeout: 15000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-parent-lock-'));
+    const fifo = join(root, 'barrier');
+    assert.equal(spawnSync('mkfifo', [fifo]).status, 0);
+    const holder = start('hold-preferences', fifo);
+    const next = messages(holder);
+    const holderEnd = exited(holder);
+    let probe: ChildProcess | undefined;
+    let probeEnd: Promise<number | null> | undefined;
+    let writer: ChildProcess | undefined;
+    let writerEnd: Promise<number | null> | undefined;
+    let directory: string | undefined;
+    try {
+      const ready = await bounded(next());
+      directory = ready.dir!;
+      holder.send!('go');
+      assert.equal((await bounded(next())).type, 'locked');
+      probe = start('probe', join(directory, 'terminal-layouts', 'preferences.sqlite'));
+      const probeNext = messages(probe);
+      probeEnd = exited(probe);
+      const observed = await bounded(probeNext());
+      assert.equal(observed.type, 'probe');
+      assert.equal(observed.blocked, true);
+      assert.equal(await bounded(probeEnd), 0);
+      await bounded(release(fifo));
+      assert.equal((await bounded(next())).admitted, true);
+      assert.equal(await bounded(holderEnd), 0);
+      writer = start('writer', directory, ready.target!);
+      const writerNext = messages(writer);
+      writerEnd = exited(writer);
+      assert.equal((await bounded(writerNext())).type, 'written');
+      assert.equal(await bounded(writerEnd), 0);
+      const db = new DatabaseSync(join(directory, 'terminal-layouts', 'preferences.sqlite'), {
+        readOnly: true,
+      });
+      try {
+        assert.equal(
+          db
+            .prepare('SELECT revision FROM cross_feature_permissions WHERE feature_id=?')
+            .get(ready.target!)?.revision,
+          2,
+        );
+      } finally {
+        db.close();
+      }
+    } finally {
+      for (const child of [holder, probe, writer])
+        if (child && child.exitCode === null && child.signalCode === null) child.kill();
+      await bounded(holderEnd);
+      if (probeEnd) await bounded(probeEnd);
+      if (writerEnd) await bounded(writerEnd);
+      if (directory) rmSync(directory, { recursive: true, force: true });
+      rmSync(root, { recursive: true, force: true });
+    }
   },
 );

@@ -17,6 +17,7 @@ import {
   type CommunicationContent,
 } from '@orqst/protocol';
 import type { CrossParentGate } from './service.js';
+import { featurePermissionRevision, type FeaturePermissionReader } from './feature-permissions.js';
 import type { FeatureConfigurationDatabase } from '../terminal/feature-configuration.js';
 
 /** Trusted injected port. No production implementation or renderer endpoint is provided. */
@@ -58,6 +59,8 @@ export const crossFeatureIntentDigest = (request: CrossFeatureRequest) =>
 /** Separate opt-in boundary. Never installed by the production composition. */
 export class CrossFeatureCommunication {
   private readonly admittedGrants = new Map<string, unknown>();
+  private activeSnapshot?: Snapshot;
+  private activeLocalReader?: FeaturePermissionReader;
   private readonly listeners = new Map<string, Set<(message: CrossFeatureMessage) => void>>();
 
   constructor(
@@ -66,6 +69,7 @@ export class CrossFeatureCommunication {
     private readonly authority: CrossFeatureAuthority,
     private readonly now: () => number = Date.now,
     private readonly transport?: CrossFeatureTransport,
+    private readonly snapshotLock?: FeatureConfigurationDatabase['withPermissionSnapshot'],
   ) {
     this.journal.enableCross();
   }
@@ -74,6 +78,7 @@ export class CrossFeatureCommunication {
     tx: CommunicationTransaction,
     grant: CrossFeatureGrant,
     operation: 'task.request' | 'task.view',
+    snapshotReader: Snapshot = this.activeSnapshot ?? this.snapshot,
   ) {
     const panes = tx.panes();
     const source = panes.find((p) => p.paneId === grant.source.paneId);
@@ -110,7 +115,7 @@ export class CrossFeatureCommunication {
     )
       throw new Error('Cross-Feature pane or route denied');
     // One synchronous snapshot, called while the journal transaction is held.
-    const { source: a, target: b } = this.snapshot(grant.source.featureId, grant.target.featureId);
+    const { source: a, target: b } = snapshotReader(grant.source.featureId, grant.target.featureId);
     if (
       a.state.workspaceId !== grant.workspaceId ||
       b.state.workspaceId !== grant.workspaceId ||
@@ -250,108 +255,133 @@ export class CrossFeatureCommunication {
     let admitted: CrossFeatureMessage;
     try {
       admitted = this.journal.transaction((tx) => {
-        this.check(tx, grant, 'task.request');
-        if (grant.deadline <= this.now() || !this.authority.verify(grant, proof))
-          throw new Error('Cross-Feature authority expired');
-        const local = tx.messages();
-        if (
-          local.some(
-            (m) =>
-              m.messageId === request.messageId ||
-              m.taskId === request.taskId ||
-              (m.workspaceId === grant.workspaceId &&
-                m.targetPaneId === grant.target.paneId &&
-                m.idempotencyKey === request.idempotencyKey),
-          )
-        )
-          throw new Error('Cross-Feature message identity conflict');
-        const all = tx.crossMessages();
-        if (
-          all.length + local.length >= communicationLimits.messages ||
-          all.filter((m) => m.state === 'queued' && m.grant.target.paneId === grant.target.paneId)
-            .length +
-            local.filter(
-              (m) =>
-                m.targetPaneId === grant.target.paneId &&
-                m.deliveryState === 'queued' &&
-                m.taskState === 'pending',
-            ).length >=
-            communicationLimits.queuedPerPane ||
-          all.filter((m) => m.grant.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-            .length +
-            local.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-              .length >=
-            communicationLimits.admissionsPerMinute
-        )
-          throw new Error('Cross-Feature queue or rate limit');
-        let depth = 0;
-        let parentId = request.parentTaskId ?? null;
-        let expectedPane = grant.source.paneId;
-        let expectedFeature = grant.source.featureId;
-        const ancestors = new Set([grant.target.paneId]);
-        while (parentId) {
+        const invoke = () => {
+          if (request.parentTaskId && (!this.activeSnapshot || !this.activeLocalReader))
+            throw new Error('Cross-Feature parent snapshot unavailable');
+          this.check(tx, grant, 'task.request');
+          if (grant.deadline <= this.now() || !this.authority.verify(grant, proof))
+            throw new Error('Cross-Feature authority expired');
+          const local = tx.messages();
           if (
-            !request.correlationId ||
-            ancestors.has(expectedPane) ||
-            ++depth > communicationLimits.maxDepth
-          )
-            throw new Error('Cross-Feature parent cycle or depth denied');
-          ancestors.add(expectedPane);
-          const cross = all.find((m) => m.request.taskId === parentId);
-          const legacy = local.find((m) => m.taskId === parentId);
-          if (cross) {
-            const allowed = this.crossParent(tx, parentId, {
-              workspaceId: grant.workspaceId,
-              featureId: expectedFeature,
-              targetPaneId: expectedPane,
-              correlationId: request.correlationId,
-            });
-            if (!allowed) throw new Error('Cross-Feature parent denied');
-            expectedPane = allowed.sourcePaneId;
-            expectedFeature = allowed.sourceFeatureId;
-            parentId = allowed.parentTaskId;
-          } else if (legacy) {
-            if (
-              legacy.workspaceId !== grant.workspaceId ||
-              legacy.featureId !== expectedFeature ||
-              legacy.targetPaneId !== expectedPane ||
-              legacy.correlationId !== request.correlationId ||
-              ['completed', 'failed', 'cancelled', 'outcome_unknown'].includes(legacy.taskState)
+            local.some(
+              (m) =>
+                m.messageId === request.messageId ||
+                m.taskId === request.taskId ||
+                (m.workspaceId === grant.workspaceId &&
+                  m.targetPaneId === grant.target.paneId &&
+                  m.idempotencyKey === request.idempotencyKey),
             )
-              throw new Error('Cross-Feature parent denied');
-            expectedPane = legacy.sourcePaneId;
-            parentId = legacy.parentTaskId;
-          } else throw new Error('Cross-Feature parent unavailable');
-        }
-        if (ancestors.has(expectedPane)) throw new Error('Cross-Feature parent cycle denied');
-        const edges = all
-          .filter((m) => !['completed', 'failed'].includes(m.state))
-          .map((m) => [m.grant.source.paneId, m.grant.target.paneId]);
-        edges.push(
-          ...local
-            .filter((m) => !['completed', 'failed', 'cancelled'].includes(m.taskState))
-            .map((m) => [m.sourcePaneId, m.targetPaneId]),
-        );
-        const reachable = (from: string, seen: Set<string>): boolean => {
-          if (from === grant.source.paneId) return true;
-          if (seen.has(from)) return false;
-          seen.add(from);
-          return edges.some(([a, b]) => a === from && b !== undefined && reachable(b, seen));
+          )
+            throw new Error('Cross-Feature message identity conflict');
+          const all = tx.crossMessages();
+          if (
+            all.length + local.length >= communicationLimits.messages ||
+            all.filter((m) => m.state === 'queued' && m.grant.target.paneId === grant.target.paneId)
+              .length +
+              local.filter(
+                (m) =>
+                  m.targetPaneId === grant.target.paneId &&
+                  m.deliveryState === 'queued' &&
+                  m.taskState === 'pending',
+              ).length >=
+              communicationLimits.queuedPerPane ||
+            all.filter((m) => m.grant.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+              .length +
+              local.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+                .length >=
+              communicationLimits.admissionsPerMinute
+          )
+            throw new Error('Cross-Feature queue or rate limit');
+          let depth = 0;
+          let parentId = request.parentTaskId ?? null;
+          let expectedPane = grant.source.paneId;
+          let expectedFeature = grant.source.featureId;
+          const ancestors = new Set([grant.target.paneId]);
+          while (parentId) {
+            if (
+              !request.correlationId ||
+              ancestors.has(expectedPane) ||
+              ++depth > communicationLimits.maxDepth
+            )
+              throw new Error('Cross-Feature parent cycle or depth denied');
+            ancestors.add(expectedPane);
+            const cross = all.find((m) => m.request.taskId === parentId);
+            const legacy = local.find((m) => m.taskId === parentId);
+            if (cross) {
+              const allowed = this.crossParent(
+                tx,
+                parentId,
+                {
+                  workspaceId: grant.workspaceId,
+                  featureId: expectedFeature,
+                  targetPaneId: expectedPane,
+                  correlationId: request.correlationId,
+                },
+                this.activeSnapshot!,
+              );
+              if (!allowed) throw new Error('Cross-Feature parent denied');
+              expectedPane = allowed.sourcePaneId;
+              expectedFeature = allowed.sourceFeatureId;
+              parentId = allowed.parentTaskId;
+            } else if (legacy) {
+              if (
+                legacy.workspaceId !== grant.workspaceId ||
+                legacy.featureId !== expectedFeature ||
+                legacy.targetPaneId !== expectedPane ||
+                legacy.correlationId !== request.correlationId ||
+                ['completed', 'failed', 'cancelled', 'outcome_unknown'].includes(legacy.taskState)
+              )
+                throw new Error('Cross-Feature parent denied');
+              const sourcePane = tx.panes().find((pane) => pane.paneId === legacy.sourcePaneId);
+              const targetPane = tx.panes().find((pane) => pane.paneId === legacy.targetPaneId);
+              if (!sourcePane || !targetPane || !this.activeLocalReader)
+                throw new Error('Cross-Feature parent unavailable');
+              featurePermissionRevision(sourcePane, targetPane, ['view'], this.activeLocalReader);
+              expectedPane = legacy.sourcePaneId;
+              parentId = legacy.parentTaskId;
+            } else throw new Error('Cross-Feature parent unavailable');
+          }
+          if (ancestors.has(expectedPane)) throw new Error('Cross-Feature parent cycle denied');
+          const edges = all
+            .filter((m) => !['completed', 'failed'].includes(m.state))
+            .map((m) => [m.grant.source.paneId, m.grant.target.paneId]);
+          edges.push(
+            ...local
+              .filter((m) => !['completed', 'failed', 'cancelled'].includes(m.taskState))
+              .map((m) => [m.sourcePaneId, m.targetPaneId]),
+          );
+          const reachable = (from: string, seen: Set<string>): boolean => {
+            if (from === grant.source.paneId) return true;
+            if (seen.has(from)) return false;
+            seen.add(from);
+            return edges.some(([a, b]) => a === from && b !== undefined && reachable(b, seen));
+          };
+          if (reachable(grant.target.paneId, new Set())) throw new Error('Cross-Feature cycle');
+          const timestamp = this.now();
+          const message: CrossFeatureMessage = {
+            schemaVersion: 1,
+            grant,
+            request,
+            depth,
+            state: 'queued',
+            createdAt: timestamp,
+            updatedAt: timestamp,
+          };
+          tx.auditCross(message, this.audit(message, 'grant_issued'));
+          tx.insertCross(message, this.audit(message, 'admitted'));
+          return message;
         };
-        if (reachable(grant.target.paneId, new Set())) throw new Error('Cross-Feature cycle');
-        const timestamp = this.now();
-        const message: CrossFeatureMessage = {
-          schemaVersion: 1,
-          grant,
-          request,
-          depth,
-          state: 'queued',
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        };
-        tx.auditCross(message, this.audit(message, 'grant_issued'));
-        tx.insertCross(message, this.audit(message, 'admitted'));
-        return message;
+        if (!this.snapshotLock) return invoke();
+        return this.snapshotLock((local, cross) => {
+          this.activeSnapshot = cross;
+          this.activeLocalReader = local;
+          try {
+            return invoke();
+          } finally {
+            this.activeSnapshot = undefined;
+            this.activeLocalReader = undefined;
+          }
+        });
       });
     } catch (error) {
       this.journal.transaction((tx) => tx.auditCross(proposed, this.audit(proposed, 'denied')));
@@ -444,7 +474,8 @@ export class CrossFeatureCommunication {
     });
   }
   /** Trusted, opt-in ancestor gate: both policies and the retained authority must allow view. */
-  readonly crossParent: CrossParentGate = (tx, taskId, expected) => {
+  readonly crossParent: CrossParentGate = (tx, taskId, expected, snapshot) => {
+    if (!snapshot) return undefined;
     const message = tx.crossMessages().find((item) => item.request.taskId === taskId);
     if (
       !message ||
@@ -458,7 +489,7 @@ export class CrossFeatureCommunication {
     )
       return undefined;
     try {
-      this.check(tx, message.grant, 'task.view');
+      this.check(tx, message.grant, 'task.view', snapshot);
       if (!this.authority.verify(message.grant, this.admittedGrants.get(message.grant.grantId)))
         return undefined;
     } catch {
