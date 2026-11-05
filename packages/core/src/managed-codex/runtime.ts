@@ -57,6 +57,7 @@ const rootSchema = z.strictObject({
   deadline: z.number().int().safe().positive(),
 });
 interface RootAttempt {
+  policyRevision: number | null;
   id: string;
   correlationId: string;
   source: Attempt;
@@ -592,9 +593,14 @@ export class CodexStructuredRuntime {
       throw new Error('Root delegation plan unavailable or outside policy');
     source.pane = this.communication.resolvePane(source.pane.workspaceId, source.pane.paneId);
     target.pane = this.communication.resolvePane(target.pane.workspaceId, target.pane.paneId);
+    const policyRevision = this.communication.delegationRevision(
+      source.pane.paneId,
+      target.pane.paneId,
+    );
     const id = randomUUID();
     const correlationId = randomUUID();
     const plan = {
+      policyRevision,
       taskId: id,
       correlationId,
       source: source.pane,
@@ -606,6 +612,7 @@ export class CodexStructuredRuntime {
     const digest = terminalDigest(JSON.stringify(plan));
     const challenge = this.authority.prepare(clientId, { operation: 'input', target: id, digest });
     this.roots.set(id, {
+      policyRevision,
       id,
       correlationId,
       source,
@@ -640,6 +647,11 @@ export class CodexStructuredRuntime {
       !currentSource.routing.allowedTargetPaneIds.includes(root.target.pane.paneId)
     )
       throw new Error('Routing permission denied');
+    if (
+      this.communication.delegationRevision(currentSource.paneId, root.target.pane.paneId) !==
+      root.policyRevision
+    )
+      throw new Error('Feature permission revision changed');
     this.authority.consume(proof, { operation: 'input', target: taskId, digest: root.digest });
     root.used = true;
     const context = { taskId, correlationId: root.correlationId, deadline: root.input.deadline };

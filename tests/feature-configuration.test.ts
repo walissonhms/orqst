@@ -263,10 +263,19 @@ function communicationFixture(file = ':memory:') {
   const store = new Store(file);
   const journal = store.communicationJournal(randomUUID(), { recover: false });
   const bytes = Buffer.from('SYNTHETIC Feature task');
-  const service = new PaneCommunication(journal, () => bytes);
+  const service = new PaneCommunication(
+    journal,
+    () => bytes,
+    Date.now,
+    (scope) =>
+      store.transaction(() => ({
+        feature: store.features().read(scope),
+        permissions: store.featurePermissions().read(scope),
+      })),
+  );
   let dispatched = 0;
-  const register = (featureId: string | undefined, handle: string) =>
-    service.registerPane(
+  const register = (featureId: string | undefined, handle: string) => {
+    const pane = service.registerPane(
       {
         workspaceId: workspace,
         ...(featureId ? { featureId } : {}),
@@ -296,6 +305,22 @@ function communicationFixture(file = ':memory:') {
         },
       },
     );
+    const feature = store
+      .features()
+      .list(workspace)
+      .find((item) => item.featureId === featureId);
+    if (feature)
+      store
+        .features()
+        .assignTerminal(
+          { workspaceId: feature.workspaceId, featureId: feature.featureId },
+          pane.terminalId!,
+          feature.revision,
+        );
+    return pane;
+  };
+  const createFeature = () =>
+    store.features().create({ workspaceId: workspace, name: 'SYNTHETIC scope' }).featureId;
   const allow = (source: CommunicationPane, target: CommunicationPane) =>
     service.configureRouting(source.paneId, {
       name: source.name,
@@ -327,14 +352,24 @@ function communicationFixture(file = ':memory:') {
     idempotencyKey: randomUUID(),
     deadline: Date.now() + 30000,
   });
-  return { store, journal, service, register, allow, grant, request, dispatched: () => dispatched };
+  return {
+    store,
+    journal,
+    service,
+    register,
+    createFeature,
+    allow,
+    grant,
+    request,
+    dispatched: () => dispatched,
+  };
 }
 
 test('same alias in two Features resolves locally; legacy and explicit scopes never share routing/grants', async () => {
   const f = communicationFixture();
   try {
-    const featureA = randomUUID(),
-      featureB = randomUUID();
+    const featureA = f.createFeature(),
+      featureB = f.createFeature();
     const a = f.register(featureA, 'source'),
       b = f.register(featureA, 'backend');
     const c = f.register(featureB, 'source'),
@@ -418,7 +453,7 @@ test('Feature journal recovery preserves scope but restores no grants or adapter
   const f = fixture();
   const file = join(f.directory, 'SYNTHETIC-communication.sqlite');
   const first = communicationFixture(file);
-  const featureId = randomUUID();
+  const featureId = first.createFeature();
   const a = first.register(featureId, 'source'),
     b = first.register(featureId, 'backend');
   first.allow(a, b);

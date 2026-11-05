@@ -4,7 +4,12 @@ import {
   type CommunicationPane,
   type TerminalLayoutRecord,
   type TerminalTeamSave,
+  type FeaturePermissionSave,
 } from '@orqst/protocol';
+import {
+  featurePermissionRevision,
+  type FeaturePermissionReader,
+} from '../communication/feature-permissions.js';
 import { teamRoutingProposal } from '../communication/team-configuration.js';
 import { withTerminalPreferences } from './layout-database.js';
 
@@ -22,7 +27,24 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
         return action(store, feature.terminalIds);
       }),
     );
+  const permissionReader: FeaturePermissionReader = (permissionScope) => {
+    if (permissionScope.workspaceId !== workspaceId)
+      throw new Error('Feature permission workspace denied');
+    return withFeature(permissionScope.featureId, (store) => ({
+      feature: store.features().read(scope(permissionScope.featureId)),
+      permissions: store.featurePermissions().read(scope(permissionScope.featureId)),
+    }));
+  };
   return {
+    permissionReader,
+    readPermissions: (featureId: string) =>
+      withFeature(featureId, (store) => store.featurePermissions().read(scope(featureId))),
+    savePermissions: (featureId: string, actorId: string, input: FeaturePermissionSave) =>
+      withFeature(featureId, (store) =>
+        store.featurePermissions().save(scope(featureId), actorId, input),
+      ),
+    permissionEvents: (featureId: string, after = 0) =>
+      withFeature(featureId, (store) => store.featurePermissions().events(scope(featureId), after)),
     readView: () =>
       withTerminalPreferences(directory, (store) => store.features().readView(workspaceId)),
     saveView: (input: unknown) =>
@@ -72,7 +94,19 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
         const state = store.terminalTeams(featureId).read(workspaceId, ids);
         if (state.revision !== expectedRevision || !state.configuration)
           throw new Error('Stale team configuration');
-        return teamRoutingProposal(state.configuration, terminalId, workspaceId, panes, featureId);
+        const reader: FeaturePermissionReader = () => ({
+          feature: store.features().read(scope(featureId)),
+          permissions: store.featurePermissions().read(scope(featureId)),
+        });
+        return teamRoutingProposal(
+          state.configuration,
+          terminalId,
+          workspaceId,
+          panes,
+          featureId,
+          (source, target) =>
+            featurePermissionRevision(source, target, ['delegate', 'execute'], reader),
+        );
       }),
     events: (featureId: string, after = 0) =>
       withTerminalPreferences(directory, (store) =>
