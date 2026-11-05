@@ -29,11 +29,13 @@ function fixture() {
     sid: 100,
     pgid: 100,
   };
+  const core = { ...host, pid: 100, ppid: 1, startUsec: 300 };
   const leader = { ...host, pid: 201, ppid: 200, startUsec: 500, sid: 201, pgid: 201 };
   const path = join(directory, `lifecycle-kernel-${binding.instanceId}.jsonl`);
   return {
     directory,
     binding,
+    core,
     host,
     leader,
     path,
@@ -46,6 +48,7 @@ test('durable receipt requires both a bound host and its new session leader', ()
   try {
     const receipt = createKernelLifecycleReceipt(f.directory, f.binding);
     assert.deepEqual(readKernelLifecycleReceipt(f.directory, f.binding), { status: 'unavailable' });
+    receipt.core(f.core);
     receipt.host(f.host);
     assert.deepEqual(readKernelLifecycleReceipt(f.directory, f.binding), { status: 'unavailable' });
     assert.throws(() => receipt.leader({ ...f.leader, ppid: 999 }));
@@ -54,6 +57,7 @@ test('durable receipt requires both a bound host and its new session leader', ()
     receipt.close();
     assert.deepEqual(readKernelLifecycleReceipt(f.directory, f.binding), {
       status: 'complete',
+      core: f.core,
       host: f.host,
       leader: f.leader,
     });
@@ -77,6 +81,7 @@ test('leader must remain in the same boot and uid and lead its own session and g
     const f = fixture();
     try {
       const receipt = createKernelLifecycleReceipt(f.directory, f.binding);
+      receipt.core(f.core);
       receipt.host(f.host);
       assert.throws(() => receipt.leader({ ...f.leader, ...patch }));
       receipt.close();

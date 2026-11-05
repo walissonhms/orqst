@@ -20,6 +20,7 @@ const bindingSchema = lifecycleBindingSchema.extend({ owner: z.uuid() });
 type Binding = z.infer<typeof bindingSchema>;
 const entrySchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('prepared'), version: z.literal(1), binding: bindingSchema }),
+  z.strictObject({ type: z.literal('core'), identity: kernelProcessIdentitySchema }),
   z.strictObject({ type: z.literal('host'), identity: kernelProcessIdentitySchema }),
   z.strictObject({ type: z.literal('leader'), identity: kernelProcessIdentitySchema }),
 ]);
@@ -50,16 +51,17 @@ function append(fd: number, value: z.infer<typeof entrySchema>) {
   }
   fsyncSync(fd);
 }
-function follows(leader: KernelProcessIdentity, host: KernelProcessIdentity): boolean {
+function later(child: KernelProcessIdentity, parent: KernelProcessIdentity): boolean {
   return (
-    leader.boot === host.boot &&
-    leader.uid === host.uid &&
-    leader.ppid === host.pid &&
-    leader.pid === leader.sid &&
-    leader.pid === leader.pgid &&
-    (leader.startSec > host.startSec ||
-      (leader.startSec === host.startSec && leader.startUsec > host.startUsec))
+    child.boot === parent.boot &&
+    child.uid === parent.uid &&
+    child.ppid === parent.pid &&
+    (child.startSec > parent.startSec ||
+      (child.startSec === parent.startSec && child.startUsec > parent.startUsec))
   );
+}
+function follows(leader: KernelProcessIdentity, host: KernelProcessIdentity): boolean {
+  return later(leader, host) && leader.pid === leader.sid && leader.pid === leader.pgid;
 }
 
 /** New evidence is private and append-only. The caller must never retry an uncertain write. */
@@ -90,12 +92,22 @@ export function createKernelLifecycleReceipt(directory: string, raw: Binding) {
     closeSync(fd);
     throw error;
   }
-  let phase: 'prepared' | 'host' | 'leader' | 'failed' | 'closed' = 'prepared';
+  let phase: 'prepared' | 'core' | 'host' | 'leader' | 'failed' | 'closed' = 'prepared';
+  let core: KernelProcessIdentity | undefined;
   let host: KernelProcessIdentity | undefined;
   return {
-    host(rawIdentity: unknown) {
+    core(rawIdentity: unknown) {
       if (phase !== 'prepared') throw new Error('Kernel receipt order');
       const identity = kernelProcessIdentitySchema.parse(rawIdentity);
+      phase = 'failed';
+      append(fd, { type: 'core', identity });
+      core = identity;
+      phase = 'core';
+    },
+    host(rawIdentity: unknown) {
+      if (phase !== 'core' || !core) throw new Error('Kernel receipt order');
+      const identity = kernelProcessIdentitySchema.parse(rawIdentity);
+      if (!later(identity, core)) throw new Error('Kernel process relationship unavailable');
       phase = 'failed';
       append(fd, { type: 'host', identity });
       host = identity;
@@ -154,17 +166,24 @@ export function readKernelLifecycleReceipt(directory: string, raw: Binding) {
         if (JSON.stringify(value) !== line) throw new Error('Noncanonical kernel receipt');
         return value;
       });
-    if (records.length !== 3) throw new Error('Incomplete kernel receipt');
-    const [prepared, host, leader] = records;
+    if (records.length !== 4) throw new Error('Incomplete kernel receipt');
+    const [prepared, core, host, leader] = records;
     if (
       prepared?.type !== 'prepared' ||
+      core?.type !== 'core' ||
       host?.type !== 'host' ||
       leader?.type !== 'leader' ||
       JSON.stringify(prepared.binding) !== JSON.stringify(binding) ||
+      !later(host.identity, core.identity) ||
       !follows(leader.identity, host.identity)
     )
       throw new Error('Invalid kernel receipt');
-    return { status: 'complete' as const, host: host.identity, leader: leader.identity };
+    return {
+      status: 'complete' as const,
+      core: core.identity,
+      host: host.identity,
+      leader: leader.identity,
+    };
   } catch {
     return { status: 'unavailable' as const };
   } finally {

@@ -123,7 +123,18 @@ export function managedTerminalBackend(
           if (awaiting.success && kernelPhase === 'awaiting' && child.pid) {
             kernelPhase = 'host-query';
             void kernel
-              .query(child.pid)
+              .query(process.pid)
+              .then((coreIdentity) => {
+                if (
+                  disposed ||
+                  receiptClosed ||
+                  coreIdentity.pid !== process.pid ||
+                  coreIdentity.uid !== process.getuid?.()
+                )
+                  throw new Error('Core identity unavailable');
+                kernelReceipt.core(coreIdentity);
+                return kernel.query(child.pid!);
+              })
               .then((identity) => {
                 if (
                   disposed ||
