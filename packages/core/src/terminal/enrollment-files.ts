@@ -5,7 +5,7 @@ import type { TerminalEnrollmentInput } from '@orqst/protocol';
 import { terminalDigest } from './authority.js';
 import { cliProviderIdentities } from './cli-signature.js';
 import { findCliContract } from './cli-contract.js';
-import { z } from 'zod';
+import { v2CliBindingSchema } from './cli-binding.js';
 import { terminalFile } from './codex-profile.js';
 import { terminalIdentity } from './identity.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
@@ -25,17 +25,6 @@ function inode(path: string, missing = false): string | null {
     throw error;
   }
 }
-
-const v2CliBindingSchema = z.strictObject({
-  version: z.literal(2),
-  provider: z.enum(['codex', 'claude', 'opencode']),
-  mode: z.enum(['tui', 'mcp']),
-  teamId: z.string().min(1).max(64),
-  identifier: z.string().min(1).max(256),
-  contractRevision: z.string().min(1).max(128),
-  authorizationEpoch: z.uuid(),
-  policyRevision: z.number().int().positive().max(4096),
-});
 
 function v2CliBinding(config: InteractiveTerminalConfig, source: Buffer) {
   let raw: unknown;

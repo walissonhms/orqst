@@ -1,3 +1,4 @@
+import { v2CliBindingSchema, type V2CliBinding } from './cli-binding.js';
 import { cliAuthorizationScope } from './cli-authorization-scope.js';
 import {
   terminalModelSelectionSchema,
@@ -134,22 +135,47 @@ export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
 }
 
 /** New manifests omit the user CLI digest; legacy signed files remain unchanged and readable. */
-export function serializeInteractiveTerminalConfig(config: InteractiveTerminalConfig): string {
+export function serializeInteractiveTerminalConfig(
+  config: InteractiveTerminalConfig,
+  binding?: V2CliBinding,
+): string {
   return (
     JSON.stringify(
-      { ...config, executable: { path: config.executable.path }, cliAuthorization: 'local-v2' },
+      {
+        ...config,
+        executable: { path: config.executable.path },
+        cliAuthorization: binding ? v2CliBindingSchema.parse(binding) : 'local-v2',
+      },
       null,
       2,
     ) + '\n'
   );
 }
 
+/** Recovery parses metadata only and never reads the current CLI executable. */
+export function parseInteractiveManifestForRecovery(raw: unknown): InteractiveTerminalConfig {
+  if (typeof raw === 'object' && raw !== null && 'cliAuthorization' in raw) {
+    const entry = raw as Record<string, unknown>;
+    if (entry.cliAuthorization === 'local-v2')
+      throw new Error('Unversioned CLI authorization binding cannot be recovered');
+    v2CliBindingSchema.parse(entry.cliAuthorization);
+    const executable = z.strictObject({ path }).parse(entry.executable);
+    const { cliAuthorization: _authorization, ...rest } = entry;
+    raw = {
+      ...rest,
+      executable: { path: executable.path, sha256: terminalDigest('orqst:recovery:unread-cli') },
+    };
+  }
+  return z
+    .union([managedCodexConfigSchema, managedClaudeConfigSchema, managedOpenCodeConfigSchema])
+    .parse(raw);
+}
+
 export function readInteractiveTerminalConfig(file: string): InteractiveTerminalConfig {
   let raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
   if (typeof raw === 'object' && raw !== null && 'cliAuthorization' in raw) {
     const entry = raw as Record<string, unknown>;
-    if (entry.cliAuthorization !== 'local-v2')
-      throw new Error('Unknown CLI authorization manifest');
+    if (entry.cliAuthorization !== 'local-v2') v2CliBindingSchema.parse(entry.cliAuthorization);
     const executable = z.strictObject({ path }).parse(entry.executable);
     const { cliAuthorization: _authorization, ...rest } = entry;
     raw = {

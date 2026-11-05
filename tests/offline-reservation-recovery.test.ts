@@ -33,6 +33,10 @@ import { openTerminalJournal } from '../packages/database/src/terminal-journal.j
 import { committedTerminalImage } from '../packages/database/src/offline-terminal-journal.js';
 import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 import { terminalEnrollmentFile } from '../packages/core/src/terminal/enrollment-files.js';
+import {
+  parseInteractiveManifestForRecovery,
+  serializeInteractiveTerminalConfig,
+} from '../packages/core/src/terminal/interactive-profile.js';
 import { managedCodexConfigSchema } from '../packages/core/src/terminal/codex-profile.js';
 import { managedOpenCodeConfigSchema } from '../packages/core/src/terminal/opencode-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
@@ -53,7 +57,13 @@ import {
 } from '../packages/core/src/terminal/offline-recovery-files.js';
 import { administrativeBlockedOutcome } from '../apps/desktop/src/tauri-offline-recovery.js';
 
-function fixture(wal = false, journalNow?: () => number, twoSources = false, syntheticCli = false) {
+function fixture(
+  wal = false,
+  journalNow?: () => number,
+  twoSources = false,
+  syntheticCli = false,
+  v2 = false,
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
   const directory = join(root, 'preferences');
   const recoveryRoot = join(root, 'captures');
@@ -80,7 +90,10 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false, syn
       identity: { terminalId: randomUUID() },
       project,
       state,
-      node: { path: executable, sha256: '0'.repeat(64) },
+      node: {
+        path: syntheticCli ? realpathSync('/usr/bin/true') : executable,
+        sha256: '0'.repeat(64),
+      },
       model: {
         value: slot ? 'synthetic-selected' : 'synthetic/model',
         source: 'native-config',
@@ -117,7 +130,7 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false, syn
       : managedCodexConfigSchema.parse({
           ...common,
           version: 1,
-          executableVersion: 'SYNTHETIC-NO-PROVIDER',
+          executableVersion: v2 ? '0.162.1' : 'SYNTHETIC-NO-PROVIDER',
           executable: { path: executable, sha256: '0'.repeat(64) },
           authentication: {
             mode: 'reuse-existing',
@@ -129,7 +142,20 @@ function fixture(wal = false, journalNow?: () => number, twoSources = false, syn
   });
   const manifests = configs.map((config, slot) => {
     const path = join(root, `manifest-${slot}.json`);
-    writeFileSync(path, JSON.stringify(config), { mode: 0o600 });
+    const bytes =
+      slot === 1 && v2
+        ? serializeInteractiveTerminalConfig(config, {
+            version: 2,
+            provider: 'codex',
+            mode: 'tui',
+            teamId: '2DC432GLL2',
+            identifier: 'codex',
+            contractRevision: 'codex-tui-0.162.1',
+            authorizationEpoch: randomUUID(),
+            policyRevision: 1,
+          })
+        : JSON.stringify(config);
+    writeFileSync(path, bytes, { mode: 0o600 });
     return path;
   });
   const input = {
@@ -643,6 +669,31 @@ test('legacy CLI updated in place retains a reconstructible binding', async () =
   const f = fixture(true, undefined, false, true);
   try {
     writeFileSync(f.configs[1]!.executable.path, 'synthetic-cli-updated', { mode: 0o700 });
+    const capture = await f.capture();
+    assert.ok(existsSync(join(capture.bundle, 'capture.json')));
+    assert.ok(existsSync(f.marker));
+  } finally {
+    f.close();
+  }
+});
+
+test('mixed v1 and v2 recovery preserves v2 binding after CLI replacement', async () => {
+  const f = fixture(true, undefined, false, true, true);
+  try {
+    const executable = f.configs[1]!.executable.path;
+    const raw = JSON.parse(readFileSync(f.manifests[1]!, 'utf8'));
+    const recovered = parseInteractiveManifestForRecovery(raw);
+    assert.deepEqual(
+      { ...recovered, executable: { path: executable } },
+      { ...f.configs[1]!, executable: { path: executable } },
+    );
+    assert.equal(
+      terminalEnrollmentFile(f.manifests[1]!, recovered).bindingDigest,
+      f.intent.member.bindingDigest,
+    );
+    const replacement = `${executable}.new`;
+    writeFileSync(replacement, 'synthetic-cli-updated', { mode: 0o700 });
+    renameSync(replacement, executable);
     const capture = await f.capture();
     assert.ok(existsSync(join(capture.bundle, 'capture.json')));
     assert.ok(existsSync(f.marker));

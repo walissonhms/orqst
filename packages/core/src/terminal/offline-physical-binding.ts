@@ -90,6 +90,7 @@ export function offlineBindingMetadata(binding: TerminalEnrollmentFile) {
     config.node.path,
   ];
   const identities = paths.map((path, index) => {
+    if (index === 3 && binding.identities[3] === null) return { path, identity: null };
     const info = lstatSync(path, { bigint: true });
     if (
       realpathSync(path) !== path ||

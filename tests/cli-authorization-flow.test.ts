@@ -77,7 +77,11 @@ test('candidate authorization probes once and repeats neither probe nor review f
     assert.equal(probes, 1);
     assert.equal(reviews, 1);
     writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 9, 8, 7, 6]));
-    assert.equal((await authorizeCliCandidate(input)).status, 'allowed');
+    const changed = await authorizeCliCandidate(input);
+    assert.equal(changed.status, 'allowed');
+    if (changed.status !== 'allowed') throw new Error('Synthetic reauthorization failed');
+    assert.notEqual(changed.epoch, initial.epoch);
+    assert.equal(changed.binding.policyRevision, 2);
     assert.equal(probes, 2);
     assert.equal(reviews, 2);
   } finally {

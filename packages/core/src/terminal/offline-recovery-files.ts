@@ -25,14 +25,8 @@ import {
 import { desktopAdmissionMarkerSchema } from '../managed-codex/desktop-admission-inspection.js';
 export { RECOVERY_GATE } from '../managed-codex/offline-recovery-gate.js';
 import { terminalDigest } from './authority.js';
-import {
-  assertSeparateTerminalState,
-  managedCodexConfigSchema,
-  terminalDirectory,
-  terminalFile,
-} from './codex-profile.js';
-import { managedClaudeConfigSchema } from './interactive-profile.js';
-import { managedOpenCodeConfigSchema } from './opencode-profile.js';
+import { assertSeparateTerminalState, terminalDirectory, terminalFile } from './codex-profile.js';
+import { parseInteractiveManifestForRecovery } from './interactive-profile.js';
 import { terminalEnrollmentFile } from './enrollment-files.js';
 import {
   historicalBindingSnapshotSchema,
@@ -357,9 +351,7 @@ export function snapshotOfflineReservation(
     const manifest = take(path);
     files.push(manifest);
     const raw = json(manifest);
-    const config = z
-      .union([managedCodexConfigSchema, managedClaudeConfigSchema, managedOpenCodeConfigSchema])
-      .parse(raw);
+    const config = parseInteractiveManifestForRecovery(raw);
     terminalDirectory(config.project);
     assertSeparateTerminalState(config.project, config.state);
     if (selectedProject && config.project !== selectedProject)
