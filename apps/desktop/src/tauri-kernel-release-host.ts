@@ -35,6 +35,7 @@ const replySchema = z.strictObject({ kind: z.literal('reply'), id: z.uuid(), val
 let pending: { id: string; resolve(value: unknown): void; reject(error: Error): void } | undefined;
 let buffer = '';
 let closed = false;
+let stage: 'identity' | 'scan' | 'approval' | 'rename' = 'identity';
 let live: { pid: number; startSec: number; startUsec: number; sid: number }[] = [];
 function request(operation: string, input: object = {}) {
   if (closed || pending) return Promise.reject(new Error('Native recovery channel unavailable'));
@@ -74,6 +75,7 @@ void releaseKernelReservation(admission, one, two, {
   mutationExecutor: async () => kernelProcessIdentitySchema.parse(await request('executor')),
   mutationOwnerExists: async (identity) => z.boolean().parse(await request('exists', { identity })),
   scan: async (identities, sessions) => {
+    stage = 'scan';
     const value = await request('scan', { identities, sessions });
     const refusal = z
       .strictObject({
@@ -98,9 +100,16 @@ void releaseKernelReservation(admission, one, two, {
       .strictObject({ processCount: z.number(), intervalMs: z.number(), scans: z.literal(2) })
       .parse(value);
   },
-  review: async (intent) => z.boolean().parse(await request('review', { intent })),
-  revalidate: async (intent) => z.boolean().parse(await request('revalidate', { intent })),
+  review: async (intent) => {
+    stage = 'approval';
+    return z.boolean().parse(await request('review', { intent }));
+  },
+  revalidate: async (intent) => {
+    stage = 'approval';
+    return z.boolean().parse(await request('revalidate', { intent }));
+  },
   rename: async (lock) => {
+    stage = 'rename';
     if (!(await request('rename', { lock }))) throw new Error('Native marker rename unconfirmed');
   },
 })
@@ -115,7 +124,13 @@ void releaseKernelReservation(admission, one, two, {
           ? 'missing_identity'
           : message.includes('mutation in progress')
             ? 'in_progress'
-            : 'unavailable';
+            : stage === 'scan'
+              ? 'kernel_unavailable'
+              : stage === 'approval'
+                ? 'approval_unavailable'
+                : stage === 'rename'
+                  ? 'rename_uncertain'
+                  : 'unavailable';
     process.stdout.write(
       JSON.stringify({ kind: 'complete', ok: false, reason, processes: live }) + '\n',
     );

@@ -92,6 +92,9 @@ fn run(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                 let message = match frame["reason"].as_str() {
                     Some("missing_identity") => t("tauriDesktop.kernelRecoveryMissing"),
                     Some("in_progress") => t("tauriDesktop.kernelRecoveryBusy"),
+                    Some("kernel_unavailable") => t("tauriDesktop.kernelRecoveryKernel"),
+                    Some("approval_unavailable") => t("tauriDesktop.kernelRecoveryApproval"),
+                    Some("rename_uncertain") => t("tauriDesktop.kernelRecoveryRename"),
                     Some("live_processes") => {
                         let mut message = t("tauriDesktop.kernelRecoveryLive");
                         if let Some(processes) =
