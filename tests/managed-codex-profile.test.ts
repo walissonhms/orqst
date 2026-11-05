@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import {
   chmodSync,
   copyFileSync,
+  closeSync,
+  ftruncateSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -14,6 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 import {
   assertSeparateTerminalState,
@@ -23,10 +27,73 @@ import {
   readManagedCodexConfig,
   type ManagedCodexConfig,
   structuredCodexArguments,
+  terminalExecutableMaximumBytes,
+  terminalExecutableSha256,
 } from '../packages/core/src/terminal/codex-profile.js';
 import { terminalRPCSchema, terminalRPCOutputSchema } from '../packages/core/src/terminal/rpc.js';
 import { managedTerminalBackend } from '../packages/core/src/terminal/pty-backend.js';
 import type { TerminalMcpLaunch } from '../packages/core/src/terminal/mcp-launch.js';
+
+test('native executable hashing streams a synthetic 320 MiB sparse file within the finite budget', (t) => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-large-hash-')));
+  const file = join(root, 'synthetic-never-executed');
+  try {
+    const header = Buffer.from([0xfe, 0xed, 0xfa, 0xcf, 0, 0, 0, 0]);
+    writeFileSync(file, header, { mode: 0o700 });
+    const length = 320 * 1024 * 1024;
+    const fd = openSync(file, 'r+');
+    try {
+      ftruncateSync(fd, length);
+    } finally {
+      closeSync(fd);
+    }
+    const expected = createHash('sha256').update(header);
+    const zeros = Buffer.alloc(64 * 1024);
+    for (let remaining = length - header.length; remaining > 0; remaining -= zeros.length)
+      expected.update(zeros.subarray(0, Math.min(remaining, zeros.length)));
+    const allocate = Buffer.alloc;
+    const allocations: number[] = [];
+    const allocation = t.mock.method(Buffer, 'alloc', (size: number) => {
+      allocations.push(size);
+      assert.ok(size <= 64 * 1024, 'Executable hashing must use bounded streaming buffers');
+      return allocate(size);
+    });
+    try {
+      assert.equal(terminalExecutableSha256(file), expected.digest('hex'));
+      assert.deepEqual(allocations, [64 * 1024]);
+    } finally {
+      allocation.mock.restore();
+    }
+    chmodSync(file, 0o777);
+    assert.throws(() => terminalExecutableSha256(file), /Untrusted terminal file/);
+    chmodSync(file, 0o600);
+    assert.throws(() => terminalExecutableSha256(file), /not executable/);
+    chmodSync(file, 0o700);
+    const alias = join(root, 'synthetic-symlink');
+    symlinkSync(file, alias);
+    assert.throws(() => terminalExecutableSha256(alias), /Noncanonical/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('native executable hashing refuses a synthetic sparse file above 512 MiB before reading', () => {
+  assert.equal(terminalExecutableMaximumBytes, 512 * 1024 * 1024);
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-oversize-hash-')));
+  const file = join(root, 'synthetic-never-executed');
+  try {
+    writeFileSync(file, Buffer.from([0xfe, 0xed, 0xfa, 0xcf]), { mode: 0o700 });
+    const fd = openSync(file, 'r+');
+    try {
+      ftruncateSync(fd, terminalExecutableMaximumBytes + 1);
+    } finally {
+      closeSync(fd);
+    }
+    assert.throws(() => terminalExecutableSha256(file), /Untrusted terminal file/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-managed-profile-')));
