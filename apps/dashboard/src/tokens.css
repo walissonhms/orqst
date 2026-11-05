@@ -12,6 +12,10 @@
   --orqst-success: #53d6a0;
   --orqst-warning: #f5b95e;
   --orqst-danger: #f17890;
+  --orqst-info: #7cc4ff;
+  --orqst-subtle: color-mix(in srgb, var(--orqst-muted) 70%, var(--orqst-background));
+  --orqst-terminal: #060818;
+  --orqst-edge: color-mix(in srgb, var(--orqst-neon) 70%, var(--orqst-lavender));
   --orqst-border: color-mix(in srgb, var(--orqst-lavender) 16%, var(--orqst-surface));
   --orqst-border-strong: color-mix(in srgb, var(--orqst-muted) 80%, var(--orqst-surface));
   --orqst-accent-soft: color-mix(in srgb, var(--orqst-neon) 12%, var(--orqst-surface));
@@ -21,7 +25,7 @@
   --orqst-primary-hover: color-mix(in srgb, var(--orqst-primary) 85%, var(--orqst-neon));
   --orqst-backdrop: rgb(8 11 30 / 75%);
   --orqst-shadow: rgb(0 0 0 / 30%);
-  --orqst-font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --orqst-font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   --orqst-space-1: 4px;
   --orqst-space-2: 8px;
   --orqst-space-3: 12px;

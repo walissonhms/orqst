@@ -1227,5 +1227,60 @@
     "evidenceLimit": "CLI activity and parentage require additional session evidence. A selected model may differ from the model used by the CLI.",
     "relayUnknown": "Relay status unavailable",
     "for": "for {{duration}}"
+  },
+  "terminalStudio": {
+    "title": "Terminals",
+    "layout": "Layout",
+    "count": "{{visible}} of {{total}} visible",
+    "restoreAll": "Restore all",
+    "newTerminal": "New terminal",
+    "empty": "No terminals in this Feature yet.",
+    "allMinimized": "All terminals are minimized.",
+    "dragHint": "Drag to move · double-click to maximize",
+    "defaultModel": "CLI default",
+    "processTime": "Time since the terminal process started",
+    "size": "Size: {{size}}",
+    "sizes": {
+      "small": "small",
+      "wide": "wide",
+      "large": "large"
+    },
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "hide": "Hide from view",
+    "noActivity": "No activity evidence yet",
+    "resizeSplit": "Resize terminals",
+    "switchTerminal": "Switch terminal",
+    "dock": "Minimized terminals",
+    "minimized": "Minimized",
+    "mode": {
+      "mosaic": "Mosaic",
+      "columns": "Columns",
+      "rows": "Rows",
+      "focus": "Focus",
+      "list": "List",
+      "free": "Free"
+    },
+    "status": {
+      "running": "Running",
+      "waiting_for_user": "Needs you",
+      "completed": "Completed",
+      "failed": "Failed",
+      "interrupted": "Interrupted",
+      "unknown": "Unknown"
+    },
+    "messageKind": {
+      "message": "message",
+      "delegation": "delegated a task",
+      "result": "returned a result"
+    },
+    "preview": {
+      "banner": "Synthetic preview",
+      "explain": "Demo terminals and messages, not real sessions.",
+      "simulateMessage": "Simulate message",
+      "simulateDelegation": "Simulate delegation",
+      "simulateResult": "Simulate result"
+    }
   }
 }

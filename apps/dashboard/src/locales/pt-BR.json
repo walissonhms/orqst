@@ -1227,5 +1227,60 @@
     "evidenceLimit": "Atividade da CLI e parentesco exigem evidências adicionais da sessão. O modelo selecionado pode diferir do modelo usado pela CLI.",
     "relayUnknown": "Estado do relay indisponível",
     "for": "há {{duration}}"
+  },
+  "terminalStudio": {
+    "title": "Terminais",
+    "layout": "Layout",
+    "count": "{{visible}} de {{total}} visíveis",
+    "restoreAll": "Restaurar todos",
+    "newTerminal": "Novo terminal",
+    "empty": "Ainda não há terminais nesta Feature.",
+    "allMinimized": "Todos os terminais estão minimizados.",
+    "dragHint": "Arraste para mover · clique duplo para maximizar",
+    "defaultModel": "Padrão da CLI",
+    "processTime": "Tempo desde que o processo do terminal começou",
+    "size": "Tamanho: {{size}}",
+    "sizes": {
+      "small": "pequeno",
+      "wide": "largo",
+      "large": "grande"
+    },
+    "minimize": "Minimizar",
+    "maximize": "Maximizar",
+    "restore": "Restaurar",
+    "hide": "Ocultar da visão",
+    "noActivity": "Ainda sem evidência de atividade",
+    "resizeSplit": "Redimensionar terminais",
+    "switchTerminal": "Trocar terminal",
+    "dock": "Terminais minimizados",
+    "minimized": "Minimizados",
+    "mode": {
+      "mosaic": "Mosaico",
+      "columns": "Colunas",
+      "rows": "Linhas",
+      "focus": "Foco",
+      "list": "Lista",
+      "free": "Livre"
+    },
+    "status": {
+      "running": "Em execução",
+      "waiting_for_user": "Precisa de você",
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "interrupted": "Interrompido",
+      "unknown": "Desconhecido"
+    },
+    "messageKind": {
+      "message": "mensagem",
+      "delegation": "delegou uma tarefa",
+      "result": "devolveu um resultado"
+    },
+    "preview": {
+      "banner": "Prévia sintética",
+      "explain": "Terminais e mensagens de demonstração, não são sessões reais.",
+      "simulateMessage": "Simular mensagem",
+      "simulateDelegation": "Simular delegação",
+      "simulateResult": "Simular resultado"
+    }
   }
 }
