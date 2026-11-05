@@ -133,6 +133,8 @@ export class TauriFeatureService {
           slot,
           terminalId,
           provider,
+          workspace: { id: this.view.workspaceId, name: basename(this.project) || this.project },
+          agentState: 'unknown',
           ...(selectedModel === undefined ? {} : { selectedModel }),
         };
       }),

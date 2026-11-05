@@ -1,5 +1,28 @@
 # Native terminal client boundary
 
+## Feature orchestrator label — 2026-11-05
+
+Feature snapshots may include `features[].orchestratorTerminalId: UUID | null`.
+Save it with the existing Feature `update` request and
+`input: {expectedRevision, orchestratorTerminalId: UUID | null}`. Core accepts
+only an assigned member of that Feature, uses revision compare-and-swap, and
+persists the label independently of role, grants and routing. Old snapshots may
+omit the field. This metadata does not launch, message or authorize any agent.
+The native document, focus, generation and mutation fences remain in force.
+
+## Slot scope and unknown agent state — 2026-11-05
+
+The version-1 Feature snapshot now emits `slots[].workspace: {id, name}` and
+`slots[].agentState: 'unknown'`. Both fields are optional in the schema for
+compatibility with older hosts. On this single-workspace host Rust and Node
+require the slot workspace to equal the enclosing workspace. `unknown` is not a
+process status: neither a live PTY nor an exited receipt proves an agent turn.
+This increment does not enable multi-workspace enrollment, batch creation or
+turn notifications. The native host's pool capacity is eight slots.
+
+Security review: these are bounded display metadata, not a request, path or
+execution capability. No HTTP/WS route, origin policy or native authority changes.
+
 ## Versioned Studio arrangement — 2026-11-05
 
 Only the authenticated `feature-workspace` document gets

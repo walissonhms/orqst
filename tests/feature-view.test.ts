@@ -124,6 +124,14 @@ test('selected model is bounded display metadata and does not expose preparation
     assert.equal(reply.snapshot?.slots[0]?.selectedModel, 'gpt-synthetic');
     assert.equal(reply.snapshot?.slots[1]?.selectedModel, null);
     assert.equal(reply.snapshot?.slots[2]?.selectedModel, undefined);
+    assert.deepEqual(reply.snapshot?.slots[0]?.workspace, reply.snapshot?.workspace);
+    assert.equal(reply.snapshot?.slots[0]?.agentState, 'unknown');
+    const foreign = structuredClone(reply.snapshot!);
+    foreign.slots[0]!.workspace = { id: 'foreign', name: 'Foreign' };
+    assert.equal(
+      featureNativeReplySchema.safeParse({ ...reply, snapshot: foreign }).success,
+      false,
+    );
     assert.ok(!JSON.stringify(reply).includes('sha256'));
     assert.ok(!JSON.stringify(reply).includes('/synthetic/private'));
     const evidence = {

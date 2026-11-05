@@ -63,6 +63,51 @@ const layout = (ids: string[], columns = 2) =>
     names: [],
   });
 
+test('orchestrator label is a revisioned, persisted Feature member and grants nothing', () => {
+  const f = fixture();
+  try {
+    let feature = f.core.create({ name: 'SYNTHETIC label' });
+    const member = randomUUID();
+    const foreign = randomUUID();
+    feature = f.core.assignTerminal(feature.featureId, member, feature.revision);
+    assert.throws(
+      () =>
+        f.core.update(feature.featureId, {
+          expectedRevision: feature.revision,
+          orchestratorTerminalId: foreign,
+        }),
+      /member/,
+    );
+    assert.equal(f.core.read(feature.featureId).revision, feature.revision);
+    feature = f.core.update(feature.featureId, {
+      expectedRevision: feature.revision,
+      orchestratorTerminalId: member,
+    });
+    assert.equal(feature.orchestratorTerminalId, member);
+    assert.equal(
+      featureConfigurationDatabase(f.directory, workspace).read(feature.featureId)
+        .orchestratorTerminalId,
+      member,
+    );
+    assert.deepEqual(f.core.readTeam(feature.featureId), { revision: 0, configuration: null });
+    assert.throws(
+      () =>
+        f.core.update(feature.featureId, {
+          expectedRevision: feature.revision - 1,
+          orchestratorTerminalId: null,
+        }),
+      /Stale/,
+    );
+    feature = f.core.update(feature.featureId, {
+      expectedRevision: feature.revision,
+      orchestratorTerminalId: null,
+    });
+    assert.equal(feature.orchestratorTerminalId, null);
+  } finally {
+    f.close();
+  }
+});
+
 test('V6 Features survive reopen with independent teams/aliases/layouts and actual metadata audit', () => {
   const f = fixture();
   try {

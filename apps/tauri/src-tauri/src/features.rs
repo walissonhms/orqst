@@ -115,8 +115,14 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                 && value["input"].as_object().is_some_and(|o| {
                     o.len() >= 2
                         && o.keys().all(|k| {
-                            ["expectedRevision", "name", "description", "status"]
-                                .contains(&k.as_str())
+                            [
+                                "expectedRevision",
+                                "name",
+                                "description",
+                                "status",
+                                "orchestratorTerminalId",
+                            ]
+                            .contains(&k.as_str())
                         })
                 })
                 && safe(&value["input"]["expectedRevision"]).is_some_and(|n| n > 0)
@@ -124,6 +130,9 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                 && (value["input"].get("description").is_none()
                     || text(&value["input"]["description"], 2048, false))
                 && (value["input"].get("status").is_none() || status(&value["input"]["status"]))
+                && (value["input"].get("orchestratorTerminalId").is_none()
+                    || value["input"]["orchestratorTerminalId"].is_null()
+                    || uuid(&value["input"]["orchestratorTerminalId"]))
         }
         Some("assign") => {
             exact(
@@ -567,21 +576,28 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
     let mut members = HashSet::new();
     let mut slot_ids = HashSet::new();
     for f in features {
-        if !exact(
-            f,
-            &[
-                "schemaVersion",
-                "workspaceId",
-                "featureId",
-                "name",
-                "description",
-                "status",
-                "revision",
-                "terminalIds",
-                "createdAt",
-                "updatedAt",
-            ],
-        ) || f["schemaVersion"] != 1
+        let base_keys = [
+            "schemaVersion",
+            "workspaceId",
+            "featureId",
+            "name",
+            "description",
+            "status",
+            "revision",
+            "terminalIds",
+            "createdAt",
+            "updatedAt",
+        ];
+        let mut keys_with_label = base_keys.to_vec();
+        keys_with_label.push("orchestratorTerminalId");
+        if !(exact(f, &base_keys) || exact(f, &keys_with_label))
+            || (f.get("orchestratorTerminalId").is_some()
+                && !(f["orchestratorTerminalId"].is_null()
+                    || (uuid(&f["orchestratorTerminalId"])
+                        && f["terminalIds"]
+                            .as_array()
+                            .is_some_and(|ids| ids.contains(&f["orchestratorTerminalId"])))))
+            || f["schemaVersion"] != 1
             || f["workspaceId"] != v["workspace"]["id"]
             || !uuid(&f["featureId"])
             || !feature_ids.insert(f["featureId"].to_string())
@@ -612,9 +628,24 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
         return false;
     }
     for (i, s) in slots.iter().enumerate() {
-        if !(exact(s, &["slot", "terminalId", "provider"])
-            || (exact(s, &["slot", "terminalId", "provider", "selectedModel"])
-                && (s["selectedModel"].is_null()
+        if !s.as_object().is_some_and(|o| {
+            o.keys().all(|key| {
+                matches!(
+                    key.as_str(),
+                    "slot"
+                        | "terminalId"
+                        | "provider"
+                        | "selectedModel"
+                        | "workspace"
+                        | "agentState"
+                )
+            }) && o.contains_key("slot")
+                && o.contains_key("terminalId")
+                && o.contains_key("provider")
+        }) || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
+            || (s.get("agentState").is_some() && s["agentState"] != "unknown")
+            || (s.get("selectedModel").is_some()
+                && !(s["selectedModel"].is_null()
                     || s["selectedModel"].as_str().is_some_and(|model| {
                         !model.is_empty()
                             && model.len() <= 160
@@ -622,7 +653,7 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
                             && model.bytes().all(|byte| {
                                 byte.is_ascii_alphanumeric() || b"._:/#@+-".contains(&byte)
                             })
-                    }))))
+                    })))
             || s["slot"].as_u64() != Some(i as u64)
             || !uuid(&s["terminalId"])
             || !slot_ids.insert(s["terminalId"].to_string())
@@ -2203,10 +2234,25 @@ mod tests {
             "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
             "activeFeatureId":f,"slots":[{"slot":0,"terminalId":t,"provider":"codex"}],"layoutSaved":true});
         let mut displayed = snapshot.clone();
+        displayed["features"][0]["orchestratorTerminalId"] = json!(t);
+        assert!(valid_snapshot(&displayed));
+        displayed["features"][0]["orchestratorTerminalId"] = json!(f);
+        assert!(!valid_snapshot(&displayed));
+        displayed["features"][0]["orchestratorTerminalId"] = Value::Null;
+        assert!(valid_snapshot(&displayed));
         displayed["slots"][0]["selectedModel"] = json!("gpt-synthetic");
         assert!(valid_snapshot(&displayed));
         displayed["slots"][0]["selectedModel"] = json!("bad model");
         assert!(!valid_snapshot(&displayed));
+        let mut owned = snapshot.clone();
+        owned["slots"][0]["workspace"] = snapshot["workspace"].clone();
+        owned["slots"][0]["agentState"] = json!("unknown");
+        assert!(valid_snapshot(&owned));
+        owned["slots"][0]["agentState"] = json!("completed");
+        assert!(!valid_snapshot(&owned));
+        owned["slots"][0]["agentState"] = json!("unknown");
+        owned["slots"][0]["workspace"]["id"] = json!("different");
+        assert!(!valid_snapshot(&owned));
         let mut canvas = json!({"observedAt": 200, "entries":[{"slot":0,"terminalId":t,"state":"exited","startedAt":100,"exitedAt":180}]});
         assert!(valid_canvas(&canvas, &snapshot));
         canvas["entries"][0]["terminalId"] = json!(f);

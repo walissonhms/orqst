@@ -1,5 +1,14 @@
 # V6 feature delivery checklist — 2026-11-04
 
+2026-11-05 multi-workspace groundwork: snapshot slots carry the current Workspace
+and an honest unknown agent state. Eligible workspace enumeration, independent
+cross-workspace membership and preparation, batch outcomes, evidence-backed
+turn states and native notifications with terminal focus remain open.
+
+2026-11-05 descriptive orchestrator label: member-validated, revisioned Core
+metadata is available; messaging, journal-backed communication events and
+native/provider acceptance remain open.
+
 2026-11-05 owned-session increment: Claude's explicit launch UUID can bind to an
 exact newly created transcript and owned lifecycle receipt, with a private binding
 record and at most three redacted tool names. Codex/OpenCode binding, broader

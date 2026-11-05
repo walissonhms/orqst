@@ -147,6 +147,13 @@ export const featureNativeSnapshotSchema = z
           slot: z.number().int().min(0).max(7),
           terminalId: z.uuid(),
           provider: z.enum(['codex', 'claude', 'opencode']),
+          workspace: z
+            .strictObject({
+              id: featureViewStateSchema.shape.workspaceId,
+              name: z.string().min(1).max(2048),
+            })
+            .optional(),
+          agentState: z.literal('unknown').optional(),
           // A recorded selection, not a claim about the model actually used by the CLI.
           selectedModel: z
             .string()
@@ -169,6 +176,12 @@ export const featureNativeSnapshotSchema = z
       new Set(value.features.map((feature) => feature.featureId)).size === value.features.length &&
       new Set(assignments).size === assignments.length &&
       value.slots.every((slot, index) => slot.slot === index) &&
+      value.slots.every(
+        (slot) =>
+          !slot.workspace ||
+          (slot.workspace.id === value.workspace.id &&
+            slot.workspace.name === value.workspace.name),
+      ) &&
       new Set(value.slots.map((slot) => slot.terminalId)).size === value.slots.length &&
       (value.activeFeatureId === null ||
         value.features.some((feature) => feature.featureId === value.activeFeatureId)) &&

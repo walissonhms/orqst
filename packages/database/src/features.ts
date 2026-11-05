@@ -35,6 +35,8 @@ export function openFeatures(
     ); CREATE INDEX IF NOT EXISTS features_workspace ON features(workspace_id);
     CREATE TABLE IF NOT EXISTS feature_terminal_assignments (
       terminal_id TEXT PRIMARY KEY, feature_id TEXT NOT NULL REFERENCES features(id)
+    ); CREATE TABLE IF NOT EXISTS feature_orchestrator_labels (
+      feature_id TEXT PRIMARY KEY REFERENCES features(id), terminal_id TEXT NOT NULL REFERENCES feature_terminal_assignments(terminal_id)
     ); CREATE TABLE IF NOT EXISTS feature_configuration_events (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, metadata TEXT NOT NULL CHECK(json_valid(metadata))
     );`);
@@ -84,6 +86,10 @@ export function openFeatures(
         )
         .all(scope.featureId)
         .map((r) => r.terminal_id),
+      orchestratorTerminalId:
+        db
+          .prepare('SELECT terminal_id FROM feature_orchestrator_labels WHERE feature_id=?')
+          .get(scope.featureId)?.terminal_id ?? null,
     });
   };
   const audit = (
@@ -173,6 +179,11 @@ export function openFeatures(
         const value = featureUpdateSchema.parse(input);
         const before = read(scope);
         if (before.revision !== value.expectedRevision) throw new Error('Stale feature revision');
+        if (
+          value.orchestratorTerminalId &&
+          !before.terminalIds.includes(value.orchestratorTerminalId)
+        )
+          throw new Error('Orchestrator must be a member of the Feature');
         // Native active-work/archive decisions are not implemented here; never guess their safety.
         if (value.status === 'archived' && before.terminalIds.length)
           throw new Error(
@@ -184,6 +195,16 @@ export function openFeatures(
           value.status ?? before.status,
           before.featureId,
         );
+        if (value.orchestratorTerminalId !== undefined) {
+          db.prepare('DELETE FROM feature_orchestrator_labels WHERE feature_id=?').run(
+            before.featureId,
+          );
+          if (value.orchestratorTerminalId !== null)
+            db.prepare('INSERT INTO feature_orchestrator_labels VALUES (?,?)').run(
+              before.featureId,
+              value.orchestratorTerminalId,
+            );
+        }
         advance(before);
         const after = read(scope);
         audit(after, value.status === 'archived' ? 'feature.archived' : 'feature.updated');
