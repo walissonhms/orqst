@@ -1074,19 +1074,22 @@ export class OfflineReservationRecovery {
     const { capture, before } = this.captureRecord(bundle);
     const archive = this.archiveRecord(bundle, capture);
     const directory = before.directory;
-    if (!this.dependencies.mutationExecutor || !this.dependencies.mutationOwnerExists)
-      throw new Error('Native admission mutation authority unavailable');
-    const executor = await this.dependencies.mutationExecutor();
-    const mutation = await acquireAdmissionMutation(directory, executor, (identity) =>
-      this.dependencies.mutationOwnerExists!(identity),
-    );
-    const ignoredMutationNames = mutation.names.filter(
-      (name) => !archive.current.membership.includes(name),
-    );
     const currentBoot = this.boot();
     if (currentBoot === before.beforeBoot) throw new Error('Different kernel boot required');
-    const marker = this.sourceMarker(archive.current, directory);
     const heldPath = join(directory, `recovered-${capture.operationId}.marker.json`);
+    let mutation: Awaited<ReturnType<typeof acquireAdmissionMutation>> | undefined;
+    if (!this.present(heldPath)) {
+      if (!this.dependencies.mutationExecutor || !this.dependencies.mutationOwnerExists)
+        throw new Error('Native admission mutation authority unavailable');
+      const executor = await this.dependencies.mutationExecutor();
+      mutation = await acquireAdmissionMutation(directory, executor, (identity) =>
+        this.dependencies.mutationOwnerExists!(identity),
+      );
+    }
+    const ignoredMutationNames = (mutation?.names ?? []).filter(
+      (name) => !archive.current.membership.includes(name),
+    );
+    const marker = this.sourceMarker(archive.current, directory);
     const archiveHash = readRecoveryFile(join(bundle, 'archive.json'), RECOVERY_LIMIT).sha256;
     const receipt = {
       version: 2,
@@ -1180,6 +1183,7 @@ export class OfflineReservationRecovery {
           throw new OfflineRecoveryBlocked('untrusted_commit_intent', bundle);
       }
       const heldBefore = this.present(heldPath);
+      if (!heldBefore && !mutation) throw new Error('Admission mutation guard unavailable');
       if (heldBefore && !intent)
         throw new OfflineRecoveryBlocked('held_marker_without_signed_final_commit', bundle);
       if (heldBefore) {
@@ -1228,6 +1232,7 @@ export class OfflineReservationRecovery {
       if (!heldBefore && physicalRecords(fresh) !== physicalRecords(archive.current))
         throw new OfflineRecoveryBlocked('pre_commit_physical_source_changed', bundle);
       const assertPrepared = () => {
+        if (!mutation) throw new Error('Admission mutation guard unavailable');
         mutation.validate();
         if (
           this.boot() !== currentBoot ||

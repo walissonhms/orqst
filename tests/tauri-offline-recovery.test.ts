@@ -79,6 +79,26 @@ test('blocked diagnostics expose only a fixed typed code, never arbitrary errors
 });
 function reply(pipe: AdministrativeReviewPipe, frame: Record<string, unknown>, approved = true) {
   if (frame.kind === 'review') return pipe.answer(ack(frame, approved));
+  if (frame.kind === 'kernel-query') {
+    return pipe.kernelAnswer({
+      kind: 'kernel-answer',
+      session: frame.session,
+      id: frame.id,
+      result:
+        frame.operation === 'self'
+          ? {
+              boot: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+              pid: process.pid,
+              ppid: process.ppid,
+              uid: process.getuid!(),
+              startSec: 1,
+              startUsec: 0,
+              sid: 1,
+              pgid: 1,
+            }
+          : true,
+    });
+  }
   pipe.authorized({
     kind: 'authorized',
     session: frame.session,
