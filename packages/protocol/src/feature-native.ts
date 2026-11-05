@@ -58,6 +58,7 @@ export const featurePermissionNativeRequestSchema = z.discriminatedUnion('action
 ]);
 export const featurePermissionNativeEnvelopeSchema = z.strictObject({
   kind: z.literal('feature-permission-request'),
+  actorId: z.string().regex(/^native-[a-fA-F0-9-]{36}$/),
   id: z.uuid(),
   document: z.number().int().positive().safe(),
   source: z.literal('orqst-features://local/index.html'),

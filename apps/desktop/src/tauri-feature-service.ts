@@ -136,7 +136,7 @@ export class TauriFeatureService {
     return value;
   }
 
-  async request(raw: unknown): Promise<FeatureNativeReply> {
+  async request(raw: unknown, actorId?: string): Promise<FeatureNativeReply> {
     const parsed = featureNativeRequestSchema
       .or(featurePermissionNativeRequestSchema)
       .safeParse(raw);
@@ -211,11 +211,12 @@ export class TauriFeatureService {
           return { status: 'ok', permissions, snapshot: this.snapshot() };
         }
         case 'savePermissions': {
+          if (!actorId || !/^native-[a-fA-F0-9-]{36}$/.test(actorId)) return { status: 'denied' };
           let permissions;
           try {
             permissions = await this.core.features.savePermissions(
               request.featureId,
-              'desktop-native',
+              actorId,
               {
                 expectedRevision: request.expectedRevision,
                 configuration: request.configuration,

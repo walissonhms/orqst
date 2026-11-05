@@ -339,11 +339,15 @@ async function start() {
         if (feature.success) {
           const message = feature.data;
           const mutable = message.request.action !== 'snapshot';
-          const allowed = !mutable || service.beginMetadata();
+          const actor = 'actorId' in message ? message.actorId : undefined;
+          const nativeActorMatches = actor === undefined || actor === `native-${core.epoch}`;
+          const allowed = nativeActorMatches && (!mutable || service.beginMetadata());
           void (
             allowed
-              ? features.request(message.request)
-              : Promise.resolve({ status: 'busy' as const })
+              ? features.request(message.request, actor)
+              : Promise.resolve({
+                  status: nativeActorMatches ? ('busy' as const) : ('denied' as const),
+                })
           )
             .then((value) =>
               send({

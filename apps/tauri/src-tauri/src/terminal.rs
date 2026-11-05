@@ -285,7 +285,10 @@ pub(crate) async fn metadata_request(
 ) -> Value {
     let unavailable = || json!({"status":"unavailable"});
     let permission = crate::features::valid_permission_envelope(&envelope);
-    if !(permission || crate::features::valid_envelope(&envelope)) || presentation_blocked(app) {
+    if !(permission || crate::features::valid_envelope(&envelope))
+        || (permission && envelope["actorId"] != format!("native-{epoch}"))
+        || presentation_blocked(app)
+    {
         return json!({"status":"denied"});
     }
     let id = envelope["id"].as_str().unwrap().to_owned();

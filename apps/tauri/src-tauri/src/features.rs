@@ -243,11 +243,17 @@ fn valid_policy(value: &Value) -> bool {
         .any(|id| cycle(id, &edges, &mut visiting, &mut done))
 }
 pub(crate) fn valid_permission_envelope(value: &Value) -> bool {
-    if !exact(value, &["kind", "id", "document", "source", "request"])
-        || value["kind"] != "feature-permission-request"
+    if !exact(
+        value,
+        &["kind", "id", "document", "source", "actorId", "request"],
+    ) || value["kind"] != "feature-permission-request"
         || !uuid(&value["id"])
         || !safe(&value["document"]).is_some_and(|n| n > 0)
         || value["source"] != CHROME_URL
+        || !value["actorId"].as_str().is_some_and(|id| {
+            id.strip_prefix("native-")
+                .is_some_and(|epoch| uuid(&json!(epoch)))
+        })
     {
         return false;
     }
@@ -908,7 +914,7 @@ async fn permission_metadata_request(
         crate::terminal::metadata_request(
             app,
             json!({"kind":"feature-permission-request", "id":id,
-            "document":document,"source":source,"request":request}),
+            "document":document,"source":source,"actorId":format!("native-{epoch}"),"request":request}),
             presentation,
             epoch,
         ),
@@ -1542,7 +1548,7 @@ mod tests {
     fn permission_transport_is_separate_and_strict() {
         let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
         let request = json!({"kind":"feature-permission-request","id":id,"document":2,
-            "source":CHROME_URL,"request":{"action":"readPermissions","contractVersion":1,"generation":7,"featureId":id}});
+            "source":CHROME_URL,"actorId":format!("native-{id}"),"request":{"action":"readPermissions","contractVersion":1,"generation":7,"featureId":id}});
         assert!(super::valid_permission_envelope(&request));
         let mut forged = request.clone();
         forged["kind"] = json!("feature-request");

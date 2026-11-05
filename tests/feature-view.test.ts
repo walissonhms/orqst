@@ -580,6 +580,7 @@ test('permission packets are separate from the renderer metadata envelope', asyn
   const id = 'e10636eb-3a12-4094-9123-49a4cdad27b8';
   const packet = {
     kind: 'feature-permission-request',
+    actorId: `native-${id}`,
     id,
     document: 2,
     source: 'orqst-features://local/index.html',
@@ -619,17 +620,26 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
       expectedRevision: 0,
       configuration: { schemaVersion: 1, rules: [] },
     } as const;
+    assert.equal((await f.service.request(request)).status, 'denied');
     f.db.savePermissions(feature.featureId, 'synthetic-native', {
       expectedRevision: 0,
       configuration: { schemaVersion: 1, rules: [] },
     });
-    assert.equal((await f.service.request(request)).status, 'stale');
+    assert.equal(
+      (await f.service.request(request, 'native-e10636eb-3a12-4094-9123-49a4cdad27b8')).status,
+      'stale',
+    );
     const originalSave = f.core.features.savePermissions;
     f.core.features.savePermissions = async () => {
       throw new FeaturePermissionUnavailable();
     };
     assert.equal(
-      (await f.service.request({ ...request, expectedRevision: 1 })).status,
+      (
+        await f.service.request(
+          { ...request, expectedRevision: 1 },
+          'native-e10636eb-3a12-4094-9123-49a4cdad27b8',
+        )
+      ).status,
       'unavailable',
     );
     f.core.features.savePermissions = async (...args) => {
@@ -639,9 +649,21 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
       };
       return saved;
     };
-    assert.equal((await f.service.request({ ...request, expectedRevision: 1 })).status, 'unknown');
+    assert.equal(
+      (
+        await f.service.request(
+          { ...request, expectedRevision: 1 },
+          'native-e10636eb-3a12-4094-9123-49a4cdad27b8',
+        )
+      ).status,
+      'unknown',
+    );
     assert.equal(f.db.readPermissions(feature.featureId).revision, 2);
     assert.equal(f.db.permissionEvents(feature.featureId).length, 2);
+    assert.equal(
+      f.db.permissionEvents(feature.featureId)[1]?.actorId,
+      'native-e10636eb-3a12-4094-9123-49a4cdad27b8',
+    );
   } finally {
     f.close();
   }
