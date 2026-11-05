@@ -31,7 +31,13 @@ int main(int argc, char **argv) { FILE *f = fopen(${JSON.stringify(marker)}, "w"
     await assert.rejects(probeSignedCliVersion(verifier, 'codex', 'tui', executable), /signature/);
     await assert.rejects(readFile(marker), { code: 'ENOENT' });
     valid = true;
-    const result = await probeSignedCliVersion(verifier, 'codex', 'tui', executable);
+    const result = await probeSignedCliVersion(
+      verifier,
+      'codex',
+      'tui',
+      executable,
+      async () => true,
+    );
     assert.equal(result.version, '0.162.1');
     const [argument, home, secret] = (await readFile(marker, 'utf8')).trimEnd().split('\n');
     assert.equal(argument, '--version');
@@ -62,7 +68,10 @@ test('a synthetic descendant holding the version pipes cannot defeat the timeout
       },
     };
     const start = Date.now();
-    await assert.rejects(probeSignedCliVersion(verifier, 'codex', 'tui', executable), /timed out/);
+    await assert.rejects(
+      probeSignedCliVersion(verifier, 'codex', 'tui', executable, async () => true),
+      /timed out/,
+    );
     assert.ok(Date.now() - start < 8000);
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -5,12 +5,94 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { requireCliGrant } from '../scripts/terminal/require-cli-grant.js';
 import { cliAuthorizationScope } from '../packages/core/src/terminal/cli-authorization-scope.js';
-import { authorizeCliCandidate } from '../packages/core/src/terminal/cli-authorization-flow.js';
+import {
+  authorizeCliCandidate,
+  authorizeCliCandidates,
+} from '../packages/core/src/terminal/cli-authorization-flow.js';
 import {
   TerminalCliPolicyStore,
   type TerminalCliEvidence,
 } from '../packages/core/src/terminal/cli-authorization.js';
 import type { TerminalProfile } from '../packages/core/src/terminal/supervisor.js';
+
+test('one conditional review covers both candidates; cancellation and stale focus never probe or write', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-cli-group-')));
+  const parent = join(root, 'managed-agents');
+  const store = new TerminalCliPolicyStore(parent);
+  let probes = 0;
+  let reviews = 0;
+  let current = true;
+  const inputs = (['codex', 'opencode'] as const).map((provider) => {
+    const executable = join(root, provider);
+    writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
+    const signature =
+      provider === 'codex'
+        ? { valid: true, teamId: '2DC432GLL2', identifier: 'codex' }
+        : { valid: true, teamId: '5NZ4Q7NXJ4', identifier: 'opencode' };
+    return {
+      store,
+      provider,
+      mode: 'mcp' as const,
+      executable,
+      verifier: { verify: async () => signature },
+      profile: (version: string, sha256: string): TerminalProfile => ({
+        id: provider,
+        projectId: 'synthetic',
+        executable,
+        executableSha256: sha256,
+        executableVersion: version,
+        cwd: root,
+        argv: [],
+        permissions: 'synthetic',
+        ...cliAuthorizationScope(provider, 'mcp'),
+      }),
+      probe: async (): Promise<TerminalCliEvidence> => {
+        probes++;
+        throw new Error('unexpected probe');
+      },
+    };
+  });
+  try {
+    const review = async (
+      details: readonly import('../packages/core/src/terminal/cli-authorization-flow.js').CliCandidateDisclosure[],
+    ) => {
+      reviews++;
+      assert.deepEqual(
+        details.map((item) => item.provider),
+        ['codex', 'opencode'],
+      );
+      assert.ok(
+        details.every((item) => item.currentVersion === null && item.contracts.length === 1),
+      );
+      assert.ok(details.every((item) => Object.isFrozen(item) && Object.isFrozen(item.contracts)));
+      return false;
+    };
+    assert.ok(
+      (await authorizeCliCandidates(inputs, review, async () => current)).every(
+        (entry) => entry.status === 'blocked',
+      ),
+    );
+    assert.equal(reviews, 1);
+    assert.equal(probes, 0);
+    assert.equal(existsSync(parent), false);
+    assert.ok(
+      (
+        await authorizeCliCandidates(
+          inputs,
+          async () => {
+            current = false;
+            return true;
+          },
+          async () => current,
+        )
+      ).every((entry) => entry.status === 'blocked'),
+    );
+    assert.equal(probes, 0);
+    assert.equal(existsSync(parent), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('candidate authorization probes once and repeats neither probe nor review for the same grant', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-candidate-')));
@@ -45,6 +127,7 @@ test('candidate authorization probes once and repeats neither probe nor review f
       },
     },
     profile,
+    current: async () => true,
     async review() {
       reviews++;
       return true;
@@ -137,8 +220,10 @@ test('candidate authorization probes once and repeats neither probe nor review f
       }),
       review: async (details) => {
         seenPrevious =
-          details.previous === undefined &&
-          details.previousProviderGrants?.some((grant) => grant.executable === executable) === true;
+          details[0]?.snapshot.previous === undefined &&
+          details[0]?.snapshot.previousProviderGrants.some(
+            (grant) => grant.executable === executable,
+          ) === true;
         return true;
       },
     });

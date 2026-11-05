@@ -171,6 +171,7 @@ export class TauriTerminalService {
                       mode: cli.mode,
                       executable: profile.executable,
                       verifier: this.verifiedCli.verifier,
+                      current: async () => false, // Refuse until the native current check is connected.
                       ...(this.verifiedCli.probe ? { probe: this.verifiedCli.probe } : {}),
                       profile: (version, sha256) => ({
                         ...profile,

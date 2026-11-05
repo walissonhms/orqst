@@ -1,23 +1,29 @@
 import { terminalExecutableSha256 } from './codex-profile.js';
 import { probeSignedCliVersion } from './cli-version-probe.js';
-import type { CliContractMode, CliContractProvider } from './cli-contract.js';
-import { verifiedCliSignature, type CliSignatureVerifier } from './cli-signature.js';
+import {
+  exactCliContracts,
+  type CliContractMode,
+  type CliContractProvider,
+} from './cli-contract.js';
+import {
+  verifiedCliSignature,
+  type CliSignatureVerifier,
+  type CliSignatureEvidence,
+} from './cli-signature.js';
 import type { TerminalProfile } from './supervisor.js';
 import {
   TerminalCliPolicyStore,
+  type TerminalCliCandidateSnapshot,
   type TerminalCliEvidence,
-  type TerminalCliReview,
 } from './cli-authorization.js';
 
-/** Native authorization transaction; the version probe is never part of discovery. */
-export async function authorizeCliCandidate(input: {
+export interface CliCandidateInput {
   store: TerminalCliPolicyStore;
   provider: CliContractProvider;
   mode: CliContractMode;
   executable: string;
   verifier: CliSignatureVerifier;
   profile(version: string, sha256: string): TerminalProfile;
-  review(details: TerminalCliReview): Promise<boolean>;
   expectedEpoch?: string;
   probe?: (
     verifier: CliSignatureVerifier,
@@ -25,34 +31,103 @@ export async function authorizeCliCandidate(input: {
     mode: CliContractMode,
     executable: string,
   ) => Promise<TerminalCliEvidence>;
-}) {
+}
+
+export interface CliCandidateDisclosure {
+  readonly provider: CliContractProvider;
+  readonly mode: CliContractMode;
+  readonly executable: string;
+  readonly sha256: string;
+  readonly signature: CliSignatureEvidence;
+  readonly snapshot: TerminalCliCandidateSnapshot;
+  readonly environmentProfile: string;
+  readonly cliAuthorizationScope: string | undefined;
+  readonly expectedEpoch: string | undefined;
+  readonly currentVersion: null;
+  readonly contracts: ReturnType<typeof exactCliContracts>;
+}
+
+type Allowed = {
+  status: 'allowed';
+  profile: TerminalProfile;
+  epoch: string;
+  binding: NonNullable<Awaited<ReturnType<TerminalCliPolicyStore['verifiedBinding']>>>;
+};
+type Pending = {
+  input: CliCandidateInput;
+  profile(version: string): TerminalProfile;
+  disclosure: CliCandidateDisclosure;
+};
+type Candidate = { existing: Allowed } | { pending: Pending };
+
+/** Capture all candidates before a single native conditional review. */
+export async function prepareCliCandidate(input: CliCandidateInput): Promise<Candidate> {
   const sha256 = terminalExecutableSha256(input.executable);
-  const checkedProfile = (version: string) => {
-    const profile = input.profile(version, sha256);
+  const profile = (version: string) => {
+    const value = input.profile(version, sha256);
     if (
-      profile.executable !== input.executable ||
-      profile.executableSha256 !== sha256 ||
-      profile.executableVersion !== version
+      value.executable !== input.executable ||
+      value.executableSha256 !== sha256 ||
+      value.executableVersion !== version
     )
       throw new Error('CLI profile mismatch');
-    return profile;
+    return Object.freeze({ ...value, argv: Object.freeze([...value.argv]) });
   };
-  const candidate = checkedProfile('');
+  const candidate = profile('');
   const previousVersion = input.store.candidateVersion(candidate, input.provider, input.mode);
   if (previousVersion) {
-    const profile = checkedProfile(previousVersion);
+    const existing = profile(previousVersion);
     const binding = await input.store.verifiedBinding(
-      profile,
+      existing,
       input.provider,
       input.mode,
       input.verifier,
     );
     if (binding && (!input.expectedEpoch || input.expectedEpoch === binding.authorizationEpoch))
-      return { status: 'allowed' as const, profile, epoch: binding.authorizationEpoch, binding };
+      return {
+        existing: {
+          status: 'allowed',
+          profile: existing,
+          epoch: binding.authorizationEpoch,
+          binding,
+        },
+      };
   }
-  await verifiedCliSignature(input.verifier, input.provider, input.executable);
-  if (terminalExecutableSha256(input.executable) !== sha256)
-    throw new Error('CLI changed before version probe');
+  const signature = await verifiedCliSignature(input.verifier, input.provider, input.executable);
+  const snapshot = input.store.candidateSnapshot(candidate, input.provider);
+  const contracts = exactCliContracts(input.provider, input.mode);
+  if (!contracts.length) throw new Error('CLI contract unavailable');
+  const disclosure = Object.freeze({
+    provider: input.provider,
+    mode: input.mode,
+    executable: input.executable,
+    sha256,
+    signature,
+    snapshot,
+    environmentProfile: candidate.environmentProfile,
+    cliAuthorizationScope: candidate.cliAuthorizationScope,
+    expectedEpoch: input.expectedEpoch,
+    currentVersion: null,
+    contracts,
+  });
+  return { pending: { input, profile, disclosure } };
+}
+
+/** The callback is a trusted native authority check, never renderer-provided state. */
+export async function authorizePreparedCli(pending: Pending, current: () => Promise<boolean>) {
+  const { input, profile, disclosure } = pending;
+  const candidate = profile('');
+  const stable = async () => {
+    if (!input.store.candidateSnapshotCurrent(candidate, input.provider, disclosure.snapshot))
+      return false;
+    const signature = await verifiedCliSignature(input.verifier, input.provider, input.executable);
+    return (
+      JSON.stringify(signature) === JSON.stringify(disclosure.signature) &&
+      input.store.candidateSnapshotCurrent(candidate, input.provider, disclosure.snapshot) &&
+      (await current())
+    );
+  };
+  if (!(await stable())) return { status: 'revoked' as const };
   const evidence: TerminalCliEvidence = input.probe
     ? await input.probe(input.verifier, input.provider, input.mode, input.executable)
     : await probeSignedCliVersion(
@@ -60,6 +135,7 @@ export async function authorizeCliCandidate(input: {
         input.provider,
         input.mode,
         input.executable,
+        stable,
       ).then((result) => ({
         provider: input.provider,
         mode: input.mode,
@@ -68,25 +144,76 @@ export async function authorizeCliCandidate(input: {
         sha256: result.sha256,
         signature: result.signature,
       }));
-  if (evidence.sha256 !== sha256) throw new Error('CLI changed during authorization');
-  const profile = checkedProfile(evidence.version);
+  if (
+    !(await stable()) ||
+    evidence.provider !== input.provider ||
+    evidence.mode !== input.mode ||
+    evidence.sha256 !== disclosure.sha256 ||
+    JSON.stringify(evidence.signature) !== JSON.stringify(disclosure.signature) ||
+    !disclosure.contracts.some(
+      (entry) =>
+        entry.version === evidence.version && entry.contractRevision === evidence.contractRevision,
+    )
+  )
+    return { status: 'revoked' as const };
+  const selected = profile(evidence.version);
   const status = await input.store.authorizeVerifiedCli(
-    profile,
+    selected,
     input.provider,
     input.mode,
     input.verifier,
     async () => evidence,
-    input.review,
+    async () => true,
     input.expectedEpoch,
+    { snapshot: disclosure.snapshot, current },
   );
   if (status !== 'allowed') return { status };
   const binding = await input.store.verifiedBinding(
-    profile,
+    selected,
     input.provider,
     input.mode,
     input.verifier,
   );
   return binding
-    ? { status: 'allowed' as const, profile, epoch: binding.authorizationEpoch, binding }
+    ? { status: 'allowed' as const, profile: selected, epoch: binding.authorizationEpoch, binding }
     : { status: 'revoked' as const };
+}
+
+export async function authorizeCliCandidates(
+  inputs: readonly CliCandidateInput[],
+  review: (details: readonly CliCandidateDisclosure[]) => Promise<boolean>,
+  current: () => Promise<boolean>,
+) {
+  const candidates: Candidate[] = [];
+  for (const input of inputs) candidates.push(await prepareCliCandidate(input));
+  if (!(await current())) return candidates.map(() => ({ status: 'blocked' as const }));
+  const pending = candidates.flatMap((candidate) =>
+    'pending' in candidate ? [candidate.pending] : [],
+  );
+  if (
+    pending.length &&
+    (!(await current()) ||
+      !(await review(Object.freeze(pending.map((entry) => entry.disclosure)))) ||
+      !(await current()))
+  )
+    return candidates.map(() => ({ status: 'blocked' as const }));
+  const results = [];
+  for (const candidate of candidates) {
+    const result =
+      'existing' in candidate
+        ? candidate.existing
+        : await authorizePreparedCli(candidate.pending, current);
+    if (result.status !== 'allowed') return candidates.map(() => ({ status: result.status }));
+    results.push(result);
+  }
+  return results;
+}
+
+export async function authorizeCliCandidate(
+  input: CliCandidateInput & {
+    review(details: readonly CliCandidateDisclosure[]): Promise<boolean>;
+    current(): Promise<boolean>;
+  },
+) {
+  return (await authorizeCliCandidates([input], input.review, input.current))[0]!;
 }

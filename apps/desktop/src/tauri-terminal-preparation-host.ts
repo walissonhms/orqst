@@ -109,6 +109,7 @@ async function main() {
               mode: candidate.mode,
               executable: candidate.executable,
               verifier: systemCliSignatureVerifier,
+              current: async () => false, // Refuse until the native current check is connected.
               profile: (version, sha256) => ({
                 id: `${candidate.provider}-terminal-v1`,
                 projectId: terminalDigest(candidate.project),

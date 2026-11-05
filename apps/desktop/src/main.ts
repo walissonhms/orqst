@@ -447,6 +447,7 @@ async function start(): Promise<void> {
           mode,
           executable: item.executable,
           verifier: systemCliSignatureVerifier,
+          current: async () => current(),
           profile: (version, sha256) => ({
             id: `${item.provider}-terminal-v1`,
             projectId: terminalDigest(project),

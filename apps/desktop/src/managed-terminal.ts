@@ -445,6 +445,7 @@ export async function createManagedTerminals(
                     mode,
                     executable: profile.executable,
                     verifier: systemCliSignatureVerifier,
+                    current: async () => initialized && current(true),
                     profile: (version, sha256) => ({
                       ...profile,
                       executableVersion: version,
