@@ -117,6 +117,20 @@ pub fn recorded_identity_exists(
     Ok(true)
 }
 
+/// Unlike a reservation proof, a mutation holder from a different boot cannot
+/// still execute a pending filesystem operation in this kernel.
+pub fn mutation_owner_exists(
+    identity: &crate::terminal_kernel_identity::KernelIdentity,
+) -> io::Result<bool> {
+    if identity.pid == 0 || identity.pid > i32::MAX as u32 || identity.sid == 0 {
+        return Err(io::Error::other("Invalid mutation owner identity"));
+    }
+    if crate::terminal_kernel_identity::read_process(std::process::id())?.boot != identity.boot {
+        return Ok(false);
+    }
+    recorded_identity_exists(identity)
+}
+
 /// Return a fully checked inventory, or refuse if any record disappears or changes.
 pub fn scan() -> io::Result<Vec<Process>> {
     let own = crate::terminal_kernel_identity::read_process(std::process::id())?;
@@ -246,6 +260,16 @@ pub fn verify_sessions(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mutation_owner_distinguishes_alive_and_old_boot() {
+        let mut identity =
+            crate::terminal_kernel_identity::read_process(std::process::id()).unwrap();
+        assert!(mutation_owner_exists(&identity).unwrap());
+        identity.boot = "00000000-0000-4000-8000-000000000000".to_string();
+        assert!(!mutation_owner_exists(&identity).unwrap());
+        identity.pid = 0;
+        assert!(mutation_owner_exists(&identity).is_err());
+    }
     #[test]
     fn comparison_refuses_count_changes_and_original_session_members() {
         let entry = Process {

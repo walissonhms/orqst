@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { fork, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -35,6 +35,7 @@ test('unreadable or partial mutation lock fails closed', async () => {
 test('live holder blocks and one of two real successors wins after its death', async () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mutation-')));
   const workerPath = join(directory, 'worker.cjs');
+  const marker = join(directory, 'active-pair.json');
   const children: ChildProcess[] = [];
   const ask = (child: ChildProcess) =>
     new Promise<{ ok: boolean; error?: string }>((resolve, reject) => {
@@ -46,6 +47,7 @@ test('live holder blocks and one of two real successors wins after its death', a
       child.send('acquire');
     });
   try {
+    writeFileSync(marker, 'SYNTHETIC ORIGINAL', { flag: 'wx', mode: 0o600 });
     await build({
       bundle: true,
       platform: 'node',
@@ -72,8 +74,12 @@ test('live holder blocks and one of two real successors wins after its death', a
     };
     const first = spawn();
     assert.equal((await ask(first)).ok, true);
+    // A has the lock and has checked this exact inode; B cannot mutate its name.
+    const checkedInode = statSync(marker, { bigint: true }).ino;
     const second = spawn();
     assert.match((await ask(second)).error ?? '', /in progress/);
+    assert.equal(statSync(marker, { bigint: true }).ino, checkedInode);
+    assert.equal(readFileSync(marker, 'utf8'), 'SYNTHETIC ORIGINAL');
     const exit = new Promise<void>((resolve) => first.once('exit', () => resolve()));
     first.kill();
     await exit;
