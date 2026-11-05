@@ -439,6 +439,7 @@ fn preparation_failure(value: &Value, committed: bool) -> Option<PreparationFail
                     | "startup_timeout"
                     | "startup_eof"
                     | "startup_protocol"
+                    | "owned_exit_pending"
             )
         )
         || !matches!(value["effects"].as_str(), Some("not_started" | "possible"))

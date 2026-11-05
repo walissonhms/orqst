@@ -358,3 +358,16 @@
 .studio-advanced summary {
   cursor: pointer;
 }
+
+.quit-blocked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--orqst-warning, #f5b95e);
+  background: color-mix(in srgb, var(--orqst-warning, #f5b95e) 12%, transparent);
+}
+.quit-blocked ul {
+  margin: 0;
+  padding-left: 18px;
+}

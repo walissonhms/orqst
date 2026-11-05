@@ -1,12 +1,15 @@
 //! Native-only observer alerts and explicit window lifetime. No renderer capability.
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
+
+static QUIT_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 const MAX_ATTEMPTS: usize = 20;
 const FRESHNESS: Duration = Duration::from_secs(10);
@@ -769,11 +772,23 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.hide();
             }
+        } else if crate::terminal::owned_host_started(app) {
+            // One reviewed flow at a time; a repeated Quit during it opens no second flow.
+            if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+                return;
+            }
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                crate::terminal::quit_owned(app).await;
+            });
         } else {
-            // Preserve the document when the user cancels managed-host exit consent.
             app.exit(0);
         }
     }
+}
+
+pub fn quit_finished() {
+    QUIT_IN_FLIGHT.store(false, Ordering::SeqCst);
 }
 
 pub fn stop(app: &tauri::AppHandle) {

@@ -64,6 +64,7 @@ import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
 import { useFeatureShell } from './use-feature-shell.js';
 import { unassignedTerminalCount } from './feature-counts.js';
+import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
@@ -544,7 +545,21 @@ export function App() {
   const artifactCloseGuard = useRef<ArtifactCloseGuard | null>(null);
   const [artifactRequest, setArtifactRequest] = useState<ArtifactExtractionRequest>();
   const navigation = useRef<DashboardHistory | null>(null);
+  useEffect(() => {
+    const blocked = (event: Event) =>
+      setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));
+    const fenced = (event: Event) =>
+      setQuitFence(Boolean((event as CustomEvent<{ fence?: boolean }>).detail?.fence));
+    window.addEventListener('orqst-quit-blocked', blocked);
+    window.addEventListener('orqst-terminal-fence', fenced);
+    return () => {
+      window.removeEventListener('orqst-quit-blocked', blocked);
+      window.removeEventListener('orqst-terminal-fence', fenced);
+    };
+  }, []);
   const featureShell = useFeatureShell();
+  const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
+  const [quitFence, setQuitFence] = useState(false);
   const pendingSessionLink = useRef(isSessionLocation(location));
   const routeActions = useRef({
     traverse: () => {},
@@ -1204,6 +1219,24 @@ export function App() {
             </button>
           </div>
         </header>
+        {(quitWait || quitFence) && (
+          <div className="quit-blocked" role="alert">
+            <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
+            {quitWait && (
+              <>
+                <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
+                {quitWait.uncertain.length > 0 && (
+                  <ul>
+                    {quitWait.uncertain.map((entry) => (
+                      <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
+                    ))}
+                  </ul>
+                )}
+                <span>{t('quitBlocked.retry')}</span>
+              </>
+            )}
+          </div>
+        )}
         {selectedSession && view === 'overview' && (
           <div
             className="session-context-bar"

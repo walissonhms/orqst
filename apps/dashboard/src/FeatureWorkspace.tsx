@@ -11,6 +11,7 @@ import {
   featureNoticeContext,
   type FeatureNoticeContext,
 } from './feature-notice.js';
+import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -40,6 +41,8 @@ export function FeatureWorkspace({
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<FeatureNativeRequest['action'] | null>(null);
   const [notice, setNotice] = useState('');
+  const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
+  const [quitFence, setQuitFence] = useState(false);
   const [editor, setEditor] = useState<WorkspaceFeature | 'new' | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -120,6 +123,18 @@ export function FeatureWorkspace({
       window.removeEventListener('orqst-feature-state', update);
     };
   }, [request]);
+  useEffect(() => {
+    const blocked = (event: Event) =>
+      setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));
+    const fenced = (event: Event) =>
+      setQuitFence(Boolean((event as CustomEvent<{ fence?: boolean }>).detail?.fence));
+    window.addEventListener('orqst-quit-blocked', blocked);
+    window.addEventListener('orqst-terminal-fence', fenced);
+    return () => {
+      window.removeEventListener('orqst-quit-blocked', blocked);
+      window.removeEventListener('orqst-terminal-fence', fenced);
+    };
+  }, []);
   useEffect(() => {
     if (editor) input.current?.focus();
   }, [editor]);
@@ -442,6 +457,24 @@ export function FeatureWorkspace({
         <span>{t('features.members', { count: members.length })}</span>
         <span>{t('features.metadataOnly')}</span>
       </footer>
+      {(quitWait || quitFence) && (
+        <div className="quit-blocked" role="alert">
+          <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
+          {quitWait && (
+            <>
+              <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
+              {quitWait.uncertain.length > 0 && (
+                <ul>
+                  {quitWait.uncertain.map((entry) => (
+                    <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
+                  ))}
+                </ul>
+              )}
+              <span>{t('quitBlocked.retry')}</span>
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }

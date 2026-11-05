@@ -1043,7 +1043,8 @@
     "reviewDetails": "Detalhes completos…",
     "reviewBack": "Voltar ao resumo",
     "reviewSource": "Origem: {{provider}} · {{model}} · {{id}}",
-    "reviewWorker": "Destino: {{provider}} · {{model}} · {{id}}"
+    "reviewWorker": "Destino: {{provider}} · {{model}} · {{id}}",
+    "code_owned_exit_pending": "A saída do processo principal tem recibo; processos descendentes não foram validados; um novo terminal pode compartilhar recursos nativos (como o banco do OpenCode) com eles."
   },
   "tauriDesktop": {
     "connected": "Core conectado",
@@ -1135,5 +1136,15 @@
     "aborted": "O cancelamento administrativo foi concluído. A reserva original e todos os journals permanecem preservados.",
     "unconfirmed": "A fase solicitada está bloqueada ou seus efeitos são incertos. Preserve a reserva e todas as evidências assinadas. Não houve repetição automática.",
     "enrollment_binding_changed": "O vínculo congelado das fontes de um membro inscrito não corresponde mais ao enrollment (inspection/enrollment_binding_changed). Preserve a reserva e todas as evidências assinadas. Não houve repetição automática."
+  },
+  "quitBlocked": {
+    "title": "O Quit está aguardando os terminais próprios",
+    "transport": "O encerramento próprio não respondeu. Nada foi sinalizado de novo.",
+    "uncertain": "Alguns terminais próprios continuam incertos. Revise a lista e tente Quit de novo.",
+    "busy": "Outra operação própria está ocupada. Tente Quit de novo.",
+    "denied": "O encerramento próprio foi negado. O app continua aberto.",
+    "retirement": "A aposentadoria própria não foi confirmada. O app continua aberto.",
+    "fence": "Encerrando: terminais somente leitura. Tente Quit de novo para concluir.",
+    "retry": "Use Quit de novo; o mesmo encerramento é repetido sem segundo sinal."
   }
 }

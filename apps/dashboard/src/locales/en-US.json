@@ -1043,7 +1043,8 @@
     "reviewDetails": "Full details…",
     "reviewBack": "Back to summary",
     "reviewSource": "Source: {{provider}} · {{model}} · {{id}}",
-    "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}"
+    "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}",
+    "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them."
   },
   "tauriDesktop": {
     "connected": "Core connected",
@@ -1135,5 +1136,15 @@
     "aborted": "Administrative abort completed. The original reservation and every journal remain preserved.",
     "unconfirmed": "The requested phase is blocked or its effects are uncertain. Preserve the reservation and all signed evidence. No automatic retry occurred.",
     "enrollment_binding_changed": "The frozen source binding of an enrolled member no longer matches enrollment (inspection/enrollment_binding_changed). Preserve the reservation and all signed evidence. No automatic retry occurred."
+  },
+  "quitBlocked": {
+    "title": "Quit is waiting for owned terminals",
+    "transport": "The owned shutdown did not answer. Nothing was signaled again.",
+    "uncertain": "Some owned terminals are still uncertain. Review the list and try Quit again.",
+    "busy": "Another owned operation is busy. Try Quit again.",
+    "denied": "The owned shutdown was denied. The app stays open.",
+    "retirement": "The owned retirement was not confirmed. The app stays open.",
+    "fence": "Shutting down: terminals are read-only. Try Quit again to finish.",
+    "retry": "Use Quit again; the same shutdown is retried without a second signal."
   }
 }
