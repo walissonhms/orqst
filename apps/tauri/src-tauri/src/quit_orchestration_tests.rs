@@ -398,15 +398,21 @@ fn uncertain_preserves_the_fence_and_the_reported_inventory() {
 }
 
 #[test]
-fn authenticated_busy_and_denied_roll_back_and_allow_a_fresh_quit() {
-    for status in ["busy", "denied"] {
+fn explicit_prefence_refusal_rolls_back_and_all_other_refusals_keep_the_fence() {
+    for status in ["refused_prefence", "busy", "denied", "fenced", "uncertain"] {
         let mut h = Harness::new(true, false);
         h.quit();
         h.reply("owned-shutdown", status);
         assert_eq!(h.allowed(), 0);
-        assert_eq!(h.phase(), Phase::Active);
+        assert_eq!(
+            h.phase(),
+            if status == "refused_prefence" {
+                Phase::Active
+            } else {
+                Phase::ShutdownInFlight
+            }
+        );
         assert!(!h.in_flight());
-        assert_eq!(h.ports.script.lock().unwrap().blocked[0].0, status);
         h.quit();
         assert_eq!(h.sent_kinds(), ["shutdownOwned", "shutdownOwned"]);
     }
@@ -758,4 +764,42 @@ fn a_start_during_the_legacy_agents_check_cannot_cross_a_direct_exit_requested()
     assert_eq!(h.allowed(), 0);
     assert_eq!(h.phase(), Phase::Starting);
     assert!(h.sent_kinds().is_empty());
+}
+
+#[test]
+#[ignore = "Requires a fresh real-service ORQST_QUIT_NODE_TRANSCRIPT artifact"]
+fn real_node_service_transcripts_keep_the_coordinator_fenced() {
+    let path = std::env::var("ORQST_QUIT_NODE_TRANSCRIPT").expect("Run focused Node tests first");
+    let transcripts: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(transcripts.as_array().unwrap().len(), 2);
+    for transcript in transcripts.as_array().unwrap() {
+        assert_eq!(transcript["nodeFenced"], true);
+        assert_eq!(transcript["signals"], 1);
+        let mut h = Harness::new(true, false);
+        h.quit();
+        let mut ready = transcript["ready"].clone();
+        ready["id"] = json!(h.current_id());
+        h.dispatch(Event::Reply(ready));
+        h.drain();
+        assert_eq!(h.sent_kinds(), ["shutdownOwned", "retireOwned"]);
+        h.dispatch(Event::Advance(8_000));
+        assert_eq!(h.phase(), Phase::ShutdownInFlight);
+        h.quit();
+        let mut busy = transcript["busyRetry"].clone();
+        busy["id"] = json!(h.current_id());
+        h.dispatch(Event::Reply(busy));
+        assert_eq!(h.phase(), Phase::ShutdownInFlight);
+        assert_eq!(h.allowed(), 0);
+        if transcript["hold"] == "retire" {
+            h.quit();
+            let mut retry = transcript["retry"].clone();
+            retry["id"] = json!(h.current_id());
+            h.dispatch(Event::Reply(retry));
+            assert_eq!(h.phase(), Phase::ShutdownInFlight);
+            assert_eq!(h.allowed(), 0);
+        }
+        // A late denied retirement ACK cannot consume a new shutdown waiter.
+        h.dispatch(Event::Reply(transcript["denied"].clone()));
+        assert_eq!(h.phase(), Phase::ShutdownInFlight);
+    }
 }
