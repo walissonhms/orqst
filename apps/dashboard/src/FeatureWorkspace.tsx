@@ -6,6 +6,7 @@ import type {
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
+import { featureNoticeAfterSnapshot } from './feature-notice.js';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -47,6 +48,7 @@ export function FeatureWorkspace({
   const working = useRef(false);
   const editorVersion = useRef(0);
   const current = useRef<FeatureNativeSnapshot | undefined>(undefined);
+  const noticeGeneration = useRef(0);
   const selected = snapshot?.features.find(
     (feature) => feature.featureId === snapshot.activeFeatureId,
   );
@@ -73,7 +75,10 @@ export function FeatureWorkspace({
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
         }
-        if (reply.status !== 'ok') setNotice(reply.status);
+        if (reply.status !== 'ok') {
+          noticeGeneration.current = current.current?.generation ?? 0;
+          setNotice(reply.status);
+        }
         return reply.status;
       } catch {
         if (live.current) setNotice('unavailable');
@@ -98,6 +103,9 @@ export function FeatureWorkspace({
       if (!current.current || incoming.generation >= current.current.generation) {
         current.current = incoming;
         setSnapshot(incoming);
+        setNotice((value) =>
+          featureNoticeAfterSnapshot(value, noticeGeneration.current, incoming.generation),
+        );
       }
     };
     window.addEventListener('orqst-feature-state', update);

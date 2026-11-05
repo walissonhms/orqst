@@ -294,7 +294,7 @@ container.addEventListener(
       pending
     )
       return;
-    // Native dialog displays the exact bounded text; no automatic clipboard read or hidden paste.
+    // Bounded untrusted paste; normal use needs no separate review and the clipboard is never read.
     void send({ version: 1, action: 'paste', instanceId, sequence, text });
   },
   true,
