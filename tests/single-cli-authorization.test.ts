@@ -79,7 +79,7 @@ test('one durable CLI review covers model/cwd/PATH changes and a fresh policy-st
     assert.equal(reviews, 1);
     const stored = JSON.parse(
       readFileSync(
-        join(s.root, 'cli-authorizations', `${terminalDigest(s.selected.executable)}.json`),
+        join(s.root, 'cli-authorizations', `${terminalDigest(s.selected.executable)}.rev-1`),
         'utf8',
       ),
     );
@@ -157,7 +157,7 @@ test('revocation, linked policy source and unsafe file ownership/mode fail close
     const file = join(
       s.root,
       'cli-authorizations',
-      `${terminalDigest(s.selected.executable)}.json`,
+      `${terminalDigest(s.selected.executable)}.rev-2`,
     );
     chmodSync(file, 0o644);
     assert.equal(s.store.current(s.selected), 'revoked');

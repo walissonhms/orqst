@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -62,7 +63,7 @@ test('verified policy stores evidence and asks again for changed bytes, scope an
     assert.equal(await authorize(firstEpoch), 'allowed');
     assert.equal(probes, 1);
     assert.equal(reviews.length, 1);
-    const file = join(root, 'cli-authorizations', `${terminalDigest(path)}.json`);
+    const file = join(root, 'cli-authorizations', `${terminalDigest(path)}.rev-1`);
     const stored = JSON.parse(readFileSync(file, 'utf8'));
     assert.equal(stored.version, 2);
     assert.deepEqual(stored.signature, signature);
@@ -180,7 +181,21 @@ test('legacy policy is readable but requires a fresh verified review', async () 
     signature,
   });
   try {
-    assert.equal(await store.authorizeCli(profile, async () => true), 'allowed');
+    const legacyPath = join(root, 'cli-authorizations', `${terminalDigest(executable)}.json`);
+    const legacy =
+      JSON.stringify({
+        version: 1,
+        scope: 'owned-local-terminal-v1',
+        executable,
+        executableSha256: profile.executableSha256,
+        authorizationEpoch: randomUUID(),
+        permissionScope: terminalDigest(
+          JSON.stringify([profile.environmentProfile, profile.cliAuthorizationScope]),
+        ),
+        state: 'allowed',
+      }) + '\n';
+    writeFileSync(legacyPath, legacy, { mode: 0o600 });
+    assert.equal(store.current(profile), 'allowed');
     assert.equal(await store.verifiedEpoch(profile, 'codex', 'tui', verifier), undefined);
     let previousVersion: number | undefined;
     assert.equal(
@@ -191,6 +206,7 @@ test('legacy policy is readable but requires a fresh verified review', async () 
       'allowed',
     );
     assert.equal(previousVersion, 1);
+    assert.equal(readFileSync(legacyPath, 'utf8'), legacy);
     assert.equal(await store.authorizeCli(profile, async () => true), 'blocked');
     assert.ok(await store.verifiedEpoch(profile, 'codex', 'tui', verifier));
   } finally {

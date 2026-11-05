@@ -4,10 +4,11 @@ import {
   constants,
   fsyncSync,
   lstatSync,
+  linkSync,
   mkdirSync,
   openSync,
   realpathSync,
-  renameSync,
+  readdirSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -23,7 +24,7 @@ import {
   type CliSignatureVerifier,
 } from './cli-signature.js';
 
-export type TerminalCliAuthorizationState = 'allowed' | 'blocked' | 'revoked';
+export type TerminalCliAuthorizationState = 'allowed' | 'blocked' | 'revoked' | 'stale';
 export interface TerminalCliAuthorization<Document extends object> {
   authorizeCli(
     document: Document,
@@ -105,9 +106,25 @@ export class TerminalCliPolicyStore {
     return join(this.directory, `${terminalDigest(profile.executable)}.json`);
   }
 
-  private load(profile: Readonly<TerminalProfile>): Record | undefined {
+  private loadSnapshot(profile: Readonly<TerminalProfile>): {
+    record: Record | undefined;
+    revision: number;
+  } {
+    const base = this.file(profile);
+    const prefix = `${terminalDigest(profile.executable)}.rev-`;
+    const names = readdirSync(this.directory).filter((name) => name.startsWith(prefix));
+    if (names.length > 4096) throw new Error('Too many CLI policy revisions');
+    const revisions = names.map((name) => {
+      const suffix = name.slice(prefix.length);
+      if (!/^[1-9][0-9]{0,14}$/.test(suffix)) throw new Error('Invalid CLI policy revision');
+      const value = Number(suffix);
+      if (!Number.isSafeInteger(value)) throw new Error('Invalid CLI policy revision');
+      return value;
+    });
+    const revision = Math.max(0, ...revisions);
+    if (revision !== revisions.length) throw new Error('CLI policy revision gap');
+    const file = revision ? join(this.directory, `${prefix}${revision}`) : base;
     try {
-      const file = this.file(profile);
       if (lstatSync(file).nlink !== 1) throw new Error('Linked CLI policy');
       const value = recordSchema.parse(JSON.parse(terminalFile(file, true, 4096).toString('utf8')));
       if (value.executable !== profile.executable) throw new Error('CLI policy identity mismatch');
@@ -117,11 +134,16 @@ export class TerminalCliPolicyStore {
           value.permissionScope
       )
         throw new Error('CLI policy scope mismatch');
-      return value;
+      return { record: value, revision };
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      if (!revision && (error as NodeJS.ErrnoException).code === 'ENOENT')
+        return { record: undefined, revision: 0 };
       throw error;
     }
+  }
+
+  private load(profile: Readonly<TerminalProfile>): Record | undefined {
+    return this.loadSnapshot(profile).record;
   }
 
   private identity(profile: Readonly<TerminalProfile>): string {
@@ -181,7 +203,8 @@ export class TerminalCliPolicyStore {
     try {
       if (!profile.cliAuthorizationScope) return 'blocked';
       if (this.current(profile) === 'allowed') return 'allowed';
-      const previous = this.load(profile);
+      const snapshot = this.loadSnapshot(profile);
+      const previous = snapshot.record;
       if (previous?.version === 2) return 'blocked';
       // Revocation and permission expansion require explicit configuration. Opening is not consent to either.
       if (
@@ -194,16 +217,28 @@ export class TerminalCliPolicyStore {
       if (!(await review())) return 'blocked';
       if (identity !== this.identity(profile)) return 'revoked';
       // A concurrent policy change must not be overwritten by a stale native review.
-      if (JSON.stringify(previous) !== JSON.stringify(this.load(profile))) return 'revoked';
-      this.save(profile, {
-        version: 1,
-        scope: 'owned-local-terminal-v1',
-        executable: profile.executable,
-        executableSha256: profile.executableSha256,
-        authorizationEpoch: randomUUID(),
-        permissionScope: permissionScope(profile),
-        state: 'allowed',
-      });
+      try {
+        const current = this.loadSnapshot(profile);
+        if (
+          current.revision !== snapshot.revision ||
+          JSON.stringify(previous) !== JSON.stringify(current.record)
+        )
+          return 'stale';
+      } catch {
+        return 'stale';
+      }
+      if (
+        !this.save(profile, snapshot.revision, {
+          version: 1,
+          scope: 'owned-local-terminal-v1',
+          executable: profile.executable,
+          executableSha256: profile.executableSha256,
+          authorizationEpoch: randomUUID(),
+          permissionScope: permissionScope(profile),
+          state: 'allowed',
+        })
+      )
+        return 'stale';
       return this.current(profile);
     } catch {
       return 'revoked';
@@ -261,7 +296,8 @@ export class TerminalCliPolicyStore {
   ): Promise<TerminalCliAuthorizationState> {
     try {
       if (!profile.cliAuthorizationScope) return 'blocked';
-      const previous = this.load(profile);
+      const snapshot = this.loadSnapshot(profile);
+      const previous = snapshot.record;
       const signature = await verifiedCliSignature(verifier, provider, profile.executable);
       this.inspect(profile);
       const stable = this.identity(profile);
@@ -305,26 +341,38 @@ export class TerminalCliPolicyStore {
       this.inspect(profile);
       if (
         stable !== this.identity(profile) ||
-        JSON.stringify(verified) !== JSON.stringify(signature) ||
-        JSON.stringify(previous) !== JSON.stringify(this.load(profile))
+        JSON.stringify(verified) !== JSON.stringify(signature)
       )
         return 'revoked';
-      this.save(profile, {
-        version: 2,
-        scope: 'owned-local-terminal-v1',
-        executable: profile.executable,
-        executableSha256: profile.executableSha256,
-        authorizationEpoch: candidate.authorizationEpoch,
-        permissionScope: permissionScope(profile),
-        state: 'allowed',
-        environmentProfile: profile.environmentProfile,
-        cliAuthorizationScope: profile.cliAuthorizationScope,
-        provider,
-        mode,
-        executableVersion: evidence.version,
-        contractRevision: contract.revision,
-        signature: { valid: true, teamId: signature.teamId, identifier: signature.identifier },
-      });
+      try {
+        const current = this.loadSnapshot(profile);
+        if (
+          current.revision !== snapshot.revision ||
+          JSON.stringify(previous) !== JSON.stringify(current.record)
+        )
+          return 'stale';
+      } catch {
+        return 'stale';
+      }
+      if (
+        !this.save(profile, snapshot.revision, {
+          version: 2,
+          scope: 'owned-local-terminal-v1',
+          executable: profile.executable,
+          executableSha256: profile.executableSha256,
+          authorizationEpoch: candidate.authorizationEpoch,
+          permissionScope: permissionScope(profile),
+          state: 'allowed',
+          environmentProfile: profile.environmentProfile,
+          cliAuthorizationScope: profile.cliAuthorizationScope,
+          provider,
+          mode,
+          executableVersion: evidence.version,
+          contractRevision: contract.revision,
+          signature: { valid: true, teamId: signature.teamId, identifier: signature.identifier },
+        })
+      )
+        return 'stale';
       return 'allowed';
     } catch {
       return 'revoked';
@@ -366,16 +414,27 @@ export class TerminalCliPolicyStore {
   }
 
   revoke(profile: Readonly<TerminalProfile>): void {
-    const record = this.load(profile);
-    if (!record) return;
-    this.save(profile, { ...record, state: 'revoked', authorizationEpoch: randomUUID() });
+    const snapshot = this.loadSnapshot(profile);
+    if (!snapshot.record) return;
+    if (
+      !this.save(profile, snapshot.revision, {
+        ...snapshot.record,
+        state: 'revoked',
+        authorizationEpoch: randomUUID(),
+      })
+    )
+      throw new Error('Stale CLI policy');
   }
 
-  private save(profile: Readonly<TerminalProfile>, record: Record): void {
-    const file = this.file(profile);
-    // Validate an existing destination before atomic replacement, rejecting links and unsafe ownership.
-    this.load(profile);
-    const temporary = `${file}.${randomUUID()}.tmp`;
+  private save(profile: Readonly<TerminalProfile>, revision: number, record: Record): boolean {
+    if (revision >= 4096 || !Number.isSafeInteger(revision + 1))
+      throw new Error('CLI policy revision exhausted');
+    const base = this.file(profile);
+    const temporary = `${base}.${randomUUID()}.tmp`;
+    const target = join(
+      this.directory,
+      `${terminalDigest(profile.executable)}.rev-${revision + 1}`,
+    );
     try {
       const fd = openSync(
         temporary,
@@ -389,7 +448,20 @@ export class TerminalCliPolicyStore {
         closeSync(fd);
       }
       terminalDirectory(this.directory, true);
-      renameSync(temporary, file);
+      try {
+        linkSync(temporary, target);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+        throw error;
+      }
+      unlinkSync(temporary);
+      const directory = openSync(this.directory, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        fsyncSync(directory);
+      } finally {
+        closeSync(directory);
+      }
+      return true;
     } finally {
       try {
         unlinkSync(temporary);
