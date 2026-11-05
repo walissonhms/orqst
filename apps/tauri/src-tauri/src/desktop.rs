@@ -291,7 +291,7 @@ fn cancel_navigation(app: &tauri::AppHandle) {
     }
 }
 
-fn translate(key: &str) -> String {
+pub(crate) fn translate(key: &str) -> String {
     let portuguese = std::env::var("LANG")
         .unwrap_or_default()
         .to_lowercase()
@@ -689,6 +689,14 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         true,
         None::<&str>,
     )?;
+    #[cfg(target_os = "macos")]
+    let recovery = MenuItem::with_id(
+        app,
+        "native-kernel-recovery",
+        translate("tauriDesktop.kernelRecovery"),
+        true,
+        None::<&str>,
+    )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
@@ -702,6 +710,8 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
             &limit,
             &background,
             &lifetime,
+            #[cfg(target_os = "macos")]
+            &recovery,
             &quit,
         ],
     )?;
@@ -717,6 +727,11 @@ pub fn install(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>>
         .show_menu_on_left_click(true)
         .on_menu_event(move |app, event| match event.id().as_ref() {
             "native-open" => focus(app),
+            #[cfg(target_os = "macos")]
+            "native-kernel-recovery" => {
+                focus(app);
+                crate::kernel_recovery::start(app);
+            }
             "native-quit" => request_quit(app),
             "native-background" => {
                 let desktop = app.state::<Desktop>();

@@ -24,7 +24,7 @@ mod native_focus;
 
 #[cfg(target_os = "macos")]
 #[path = "terminal_consent.rs"]
-mod native_consent;
+pub(crate) mod native_consent;
 
 #[path = "terminal_admission.rs"]
 mod terminal_admission;

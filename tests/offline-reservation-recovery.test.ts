@@ -11,6 +11,8 @@ import {
 } from '../packages/core/src/managed-codex/lifecycle-receipt.js';
 import { createKernelLifecycleReceipt } from '../packages/core/src/managed-codex/kernel-lifecycle-receipt.js';
 import { closeSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { build } from 'esbuild';
 // SYNTHETIC: disposable files/SQLite only. No runtime, Core, PTY, auth DB or reboot.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -66,9 +68,14 @@ import {
 } from '../packages/core/src/terminal/offline-recovery-files.js';
 import { administrativeBlockedOutcome } from '../apps/desktop/src/tauri-offline-recovery.js';
 
-function fixture(wal = false, journalNow?: () => number, twoSources = false) {
+function fixture(
+  wal = false,
+  journalNow?: () => number,
+  twoSources = false,
+  admissionName = 'preferences',
+) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-offline-')));
-  const directory = join(root, 'preferences');
+  const directory = join(root, admissionName);
   const recoveryRoot = join(root, 'captures');
   const project = join(root, 'project');
   const model = join(root, 'model.json');
@@ -838,6 +845,104 @@ test('legacy missing kernel identity does not create a per-marker release lock',
     const offline = join(f.root, 'legacy-still-offline');
     mkdirSync(offline, { mode: 0o700 });
     assert.doesNotThrow(() => snapshotOfflineReservation(f.directory, offline));
+  } finally {
+    f.close();
+  }
+});
+
+test('private helper completes one synthetic native review through its inherited pipe', async () => {
+  if (process.platform !== 'darwin') return;
+  const f = fixture(false, undefined, false, 'managed-agents');
+  try {
+    writeFileSync(
+      f.marker,
+      JSON.stringify({ version: 1, owner: f.owner, epoch: f.epoch, manifests: [f.manifests[0]] }),
+      { mode: 0o600 },
+    );
+    f.databases[0]!.journal.transition(f.attemptId, 'starting');
+    const binding = {
+      instanceId: f.attemptId,
+      epoch: f.epoch,
+      manifestDigest: 'a'.repeat(64),
+      configDigest: terminalDigest(readFileSync(f.manifests[0]!)),
+    };
+    const fd = createLifecycleReceipt(f.configs[0]!.state, binding);
+    const lifecycle = armLifecycleReceipt(fd, binding.configDigest);
+    await lifecycle.record({ type: 'started' });
+    closeSync(fd);
+    const core = {
+      boot: randomUUID(),
+      pid: 100,
+      ppid: 1,
+      uid: 501,
+      startSec: 1,
+      startUsec: 1,
+      sid: 100,
+      pgid: 100,
+    };
+    const host = { ...core, pid: 101, ppid: 100, startUsec: 2 };
+    const leader = { ...host, pid: 102, ppid: 101, startUsec: 3, sid: 102, pgid: 102 };
+    const receipt = createKernelLifecycleReceipt(f.configs[0]!.state, {
+      ...binding,
+      owner: f.owner,
+    });
+    receipt.core(core);
+    receipt.host(host);
+    receipt.leader(leader);
+    receipt.close();
+    const script = join(f.root, 'synthetic-release-helper.cjs');
+    await build({
+      entryPoints: ['apps/desktop/src/tauri-kernel-release-host.ts'],
+      outfile: script,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node24',
+    });
+    const requests: string[] = [];
+    const result = await new Promise<{ ok: boolean }>((resolve, reject) => {
+      const child = spawn(process.execPath, [script, f.root], { stdio: ['pipe', 'pipe', 'pipe'] });
+      let buffer = '';
+      const timeout = setTimeout(() => {
+        child.kill();
+        reject(new Error('Synthetic helper timed out'));
+      }, 5000);
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk: string) => {
+        buffer += chunk;
+        for (let end = buffer.indexOf('\n'); end >= 0; end = buffer.indexOf('\n')) {
+          const frame = JSON.parse(buffer.slice(0, end)) as {
+            kind: string;
+            id: string;
+            operation: string;
+            lock?: { destination: string };
+            ok?: boolean;
+          };
+          buffer = buffer.slice(end + 1);
+          if (frame.kind === 'complete') {
+            clearTimeout(timeout);
+            resolve({ ok: frame.ok === true });
+            continue;
+          }
+          requests.push(frame.operation);
+          let value: unknown = null;
+          if (frame.operation === 'executor')
+            value = { ...core, pid: process.pid, ppid: process.ppid, uid: process.getuid!() };
+          else if (frame.operation === 'scan')
+            value = { processCount: 10, intervalMs: 100, scans: 2 };
+          else if (frame.operation === 'review' || frame.operation === 'revalidate') value = true;
+          else if (frame.operation === 'rename' && frame.lock) {
+            renameSync(f.marker, join(f.directory, frame.lock.destination));
+            value = true;
+          }
+          child.stdin.write(JSON.stringify({ kind: 'reply', id: frame.id, value }) + '\n');
+        }
+      });
+      child.once('error', reject);
+    });
+    assert.equal(result.ok, true);
+    assert.deepEqual(requests, ['executor', 'scan', 'review', 'scan', 'revalidate', 'rename']);
+    assert.equal(existsSync(f.marker), false);
   } finally {
     f.close();
   }

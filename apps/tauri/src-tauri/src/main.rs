@@ -6,6 +6,13 @@ mod features;
 mod files;
 mod host_phase;
 mod host_start;
+#[cfg(target_os = "macos")]
+mod kernel_recovery;
+#[cfg(not(target_os = "macos"))]
+mod kernel_recovery {
+    #[derive(Default)]
+    pub struct KernelRecovery;
+}
 mod local_diagnostics;
 mod offline_recovery;
 mod quit_native;
@@ -16,7 +23,7 @@ mod terminal;
 mod terminal_creation;
 #[cfg(target_os = "macos")]
 mod terminal_kernel_identity;
-#[cfg(all(test, target_os = "macos"))]
+#[cfg(target_os = "macos")]
 mod terminal_kernel_rename;
 #[cfg(target_os = "macos")]
 mod terminal_kernel_scan;
@@ -69,6 +76,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .manage(desktop::Desktop::default())
+        .manage(kernel_recovery::KernelRecovery::default())
         .manage(sidecar::DesktopCore::default())
         .manage(terminal::Terminals::default())
         .manage(agents::Agents::default())

@@ -62,6 +62,7 @@ const terminalResult = await build({
     'tauri-terminal-host': 'apps/desktop/src/tauri-terminal-host.ts',
     'tauri-terminal-preparation-host': 'apps/desktop/src/tauri-terminal-preparation-host.ts',
     'tauri-offline-recovery-host': 'apps/desktop/src/tauri-offline-recovery-host.ts',
+    'tauri-kernel-release-host': 'apps/desktop/src/tauri-kernel-release-host.ts',
     'managed-terminal-core': 'packages/core/src/terminal/host.ts',
     'managed-terminal-host': 'packages/core/src/terminal/pty-host.ts',
     'orqst-mcp-relay': 'packages/core/src/terminal/mcp-relay.ts',

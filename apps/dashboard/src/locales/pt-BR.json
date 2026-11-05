@@ -1053,6 +1053,17 @@
     "code_owned_exit_pending": "A saída do processo principal tem recibo; processos descendentes não foram validados; um novo terminal pode compartilhar recursos nativos (como o banco do OpenCode) com eles."
   },
   "tauriDesktop": {
+    "kernelRecovery": "Revisar capacidade reservada",
+    "kernelRecoveryTitle": "Liberar reserva",
+    "kernelRecoveryProof": "Os processos registrados não existem mais e duas varreduras do kernel não encontraram processos nas sessões originais.",
+    "kernelRecoveryCaution": "Processos que escaparam dessas sessões não foram verificados. Recuperação anterior:",
+    "kernelRecoveryCancel": "Cancelar",
+    "kernelRecoveryRelease": "Liberar",
+    "kernelRecoveryUnavailable": "A reserva continua mantida porque a verificação não pôde ser concluída.",
+    "kernelRecoveryMissing": "Identidade do processo não registrada. Use o fluxo existente de recuperação offline.",
+    "kernelRecoveryBusy": "Recuperação em andamento ou incerta.",
+    "kernelRecoveryLive": "Estes processos ainda estão ativos. Encerre-os e tente novamente:",
+    "kernelRecoveryDone": "A reserva foi liberada. Descendentes fora das sessões originais não foram validados.",
     "connected": "Core conectado",
     "offline": "Core indisponível",
     "enabled": "Ativados; entrega pelo sistema não confirmada",

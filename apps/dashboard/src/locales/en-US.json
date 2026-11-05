@@ -1053,6 +1053,17 @@
     "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them."
   },
   "tauriDesktop": {
+    "kernelRecovery": "Review reserved capacity",
+    "kernelRecoveryTitle": "Release reservation",
+    "kernelRecoveryProof": "The recorded processes are gone and two kernel scans found no process in the original sessions.",
+    "kernelRecoveryCaution": "Processes that escaped those sessions were not checked. Previous recovery:",
+    "kernelRecoveryCancel": "Cancel",
+    "kernelRecoveryRelease": "Release",
+    "kernelRecoveryUnavailable": "The reservation remains held because verification could not be completed.",
+    "kernelRecoveryMissing": "Process identity was not recorded. Use the existing offline recovery flow.",
+    "kernelRecoveryBusy": "Recovery is in progress or its result is uncertain.",
+    "kernelRecoveryLive": "These processes are still alive. End them and try again:",
+    "kernelRecoveryDone": "The reservation was released. Descendants outside the original sessions were not validated.",
     "connected": "Core connected",
     "offline": "Core unavailable",
     "enabled": "Enabled; OS delivery is not confirmed",
