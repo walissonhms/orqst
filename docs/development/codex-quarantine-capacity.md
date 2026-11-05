@@ -56,13 +56,41 @@ receipt-based inspection (`pnpm exec tsx scripts/inspect-codex-lifecycle.ts`) ca
 _future_ attempt's receipt, and even a valid recorded exit there releases no capacity by
 design; it cannot retroactively repair this reservation.
 
+## Re-verification and durable storage — 2026-11-04 21:47 -03
+
+The recorded root `/private/tmp/orqst-two-agent-reuse-598-v4LTlD` no longer existed
+at this re-verification. `ls`, a bounded `find` over the temporary and home trees,
+and Spotlight returned no copy, and no `terminal.sqlite` for that instance was found
+under the application support directory. `/private/tmp` is the system temporary
+location; an environment restart between the original inspection and this one
+cleared it. No journal, WAL, receipt or reservation could therefore be re-read.
+
+The table above remains the last recorded evidence. This note does not reconstruct,
+reconcile, release, delete or replace anything, and it does not assert that the
+original process exited. Consequences:
+
+- Automatic reconciliation remains unavailable, now for two independent reasons:
+  the original host version wrote no independent exit receipt, and the original
+  bytes are no longer present on this machine.
+- The source-level kernel-fenced offline recovery cannot capture a source that no
+  longer exists. It does not unblock this row and is not a substitute for evidence.
+- Only the capacity decision below remains. The exact reserved capacity numbers are
+  those previously recorded, not a fresh measurement.
+
+To prevent recurrence, `scripts/accept-codex-two-agent.ts` now refuses an
+acceptance root inside `os.tmpdir()`, `/tmp` or `/private/tmp`; see
+`assertDurableAcceptanceRoot`. Synthetic fixtures may remain disposable, but a real
+reservation, journal, manifest and lifecycle receipt require an owner-approved
+durable path. This is a storage-safety guard, not a capacity release or a new
+admission policy.
+
 ## Options for the owner
 
-| #   | Option                                                                                                     | Effect                                                             | Risk / limitation                                                                                                                         |
-| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| A   | Declare this root quarantined and authorize one fresh empty root for the next reviewed attempt             | Unblocks the next attempt; quarantine evidence stays untouched     | Capacity is not "released"; it is bypassed for a new project. Requires an explicit, recorded owner decision and a new project id.         |
-| B   | Keep the reservation and postpone all further real two-agent attempts                                      | Nothing is bypassed; strongest evidence posture                    | Criteria 9/10/12 stay blocked; no real provider verification of the pair workflow.                                                        |
-| C   | Design and authorize a reviewed capacity-disposition feature (e.g. owner-signed disposition of a lost row) | Would let a future policy reclaim capacity with auditable evidence | New privileged write path and migration; cannot be retrofitted to this row without an authentic exit receipt, so it does not unblock now. |
+| #   | Option                                                                                                     | Effect                                                             | Risk / limitation                                                                                                                                                                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A   | Declare this root quarantined and authorize one fresh empty root for the next reviewed attempt             | Unblocks the next attempt; quarantine evidence stays untouched     | Capacity is not "released"; it is bypassed for a new project. Requires an explicit, recorded owner decision and a new project id.                                                                                  |
+| B   | Keep the reservation and postpone all further real two-agent attempts                                      | Nothing is bypassed; strongest evidence posture                    | Criteria 9/10/12 stay blocked; no real provider verification of the pair workflow.                                                                                                                                 |
+| C   | Design and authorize a reviewed capacity-disposition feature (e.g. owner-signed disposition of a lost row) | Would let a future policy reclaim capacity with auditable evidence | Not available for this row: its original bytes are now absent, and the source-level offline recovery cannot capture absent evidence. A future feature still needs an authentic receipt and reviewer authorization. |
 
 Option A is the only path that unblocks the pair test without weakening evidence, and it
 still requires the owner's explicit decision. Raising `perProject`/`activeInstances`,
@@ -71,18 +99,24 @@ acceptable substitutes: they either falsify lifecycle evidence or hide the reser
 
 ## Exact human decision required
 
-> I authorize ORQST to treat private root
-> `/private/tmp/orqst-two-agent-reuse-598-v4LTlD` as **quarantined and permanently
-> retained**, including its `ownership_lost` reservation
-> `589f4e6e-a896-42b2-b7a0-a87b676c7050`, which is not released, rewritten or deleted.
-> For the next reviewed Codex↔OpenCode acceptance I authorize **one new empty private
-> root** with a new project directory, and I accept that its capacity is separate rather
-> than reclaimed. I also confirm the admission policy stays `activeInstances: 2`,
-> `perProject: 1`, with `ownership_lost` counting as active until a separately reviewed
-> disposition feature exists.
+The originally proposed statement named a root that no longer exists. The surviving
+decision is:
 
-Without that statement (or an explicit alternative), only synthetic and
-no-credential/no-inference work may continue.
+> I acknowledge that the failed attempt's reservation
+> `589f4e6e-a896-42b2-b7a0-a87b676c7050` is **not released** and that its original
+> journal can no longer be re-inspected because it was stored under the system
+> temporary directory. I choose **(A)** to treat that attempt as permanently
+> quarantined without physical re-inspection and authorize **one new empty durable
+> root** at an owner-approved path with a new project directory for the next reviewed
+> Codex↔OpenCode acceptance, accepting that its capacity is separate rather than
+> reclaimed; or **(B)** to postpone all further real two-agent attempts.
+> In either case the admission policy stays `activeInstances: 2`, `perProject: 1`,
+> with `ownership_lost` counting as active until a separately reviewed disposition
+> feature exists.
+
+Short question: **A or B — and if A, which durable absolute path may hold the new
+root?** Without that answer, only synthetic and no-credential/no-inference work may
+continue.
 
 ## Prepared Codex↔OpenCode gates (not started)
 
@@ -91,8 +125,9 @@ The pair workflow itself is already documented in
 satisfied before any real inference, in this order:
 
 1. Owner decision above, recorded.
-2. A new empty root plus two unused private manifests (one Codex, one OpenCode) with
-   exact installed native binaries, hashes, versions and separate state directories.
+2. A new empty **durable** root (never `os.tmpdir()`, `/tmp` or `/private/tmp`) plus
+   two unused private manifests (one Codex, one OpenCode) with exact installed native
+   binaries, hashes, versions and separate state directories.
 3. OpenCode's separate startup, database-migration and native-activity acknowledgments
    reviewed and explicitly accepted; a blocked manifest blocks the whole runtime.
 4. Native per-provider Start consent observed in the native UI for each slot, then
@@ -115,4 +150,5 @@ tests/codex-lifecycle-receipt.test.ts` and
 (the latter uses synthetic CLIs only).
 
 Nothing in this increment started a provider, opened a login, sent a message, created a
-root, touched the quarantine or authorized the pair test.
+root or authorized the pair test. Re-verification only checked whether the recorded
+path existed; it opened no journal (the path was absent) and wrote no reservation.

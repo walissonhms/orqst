@@ -57,6 +57,34 @@ failure mode would look identical (`Permission denied`) but for a different reas
 Nothing else changed: no key was created, registered, removed or copied, no account
 switched, the remote URL is unchanged and no history was rewritten.
 
+## Current verified status — 2026-11-04 21:55 -03
+
+- Local `main` and `origin/main` both resolve to
+  `dbf92ca284b4192d86511f1443253c57265f282d`; there is no ahead/behind divergence.
+- The previously local `57f711e` and `ba22c44` are ancestors of `origin/main`, and the
+  annotated tag `delivery/2026-11-04-tauri-retirement-mcp` is published on origin
+  (tag object `c2f8c85`, peeled to `57f711e`). `delivery/2026-11-04-worktree-cleanup`
+  is also published.
+- `git ls-remote --heads origin main` succeeded and returned the same SHA.
+- `IdentitiesOnly yes` is present in the effective `ssh -G github-walisson` output;
+  only `~/.ssh/id_ed25519` is offered.
+- A write-path authentication check without publishing succeeded three times and in
+  a final recorded attempt:
+
+  ```sh
+  GIT_SSH_COMMAND='ssh -o BatchMode=yes -o IdentitiesOnly=yes' \
+    git push --dry-run origin <exact-sha>:refs/heads/orqst/publish-probe-693
+  ```
+
+  Exit code 0. A subsequent `git ls-remote origin
+refs/heads/orqst/publish-probe-693` returned no ref, confirming that the dry run did
+  not mutate the remote. This proves authentication/permission for the exact SHA; it
+  is not a publication and creates no branch.
+
+The intermittency described above is not declared fixed by these successes. The
+ControlMaster/explicit-SHA protocol remains mandatory, and the orchestrator still
+owns the decision to publish.
+
 ## Publication protocol
 
 1. Coordinate first; publish only an explicit SHA/refspec, never a moving `HEAD`.

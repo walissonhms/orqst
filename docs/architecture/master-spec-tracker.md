@@ -693,3 +693,39 @@ cases, TypeScript, repository lint and formatting successfully. No installed CLI
 started. The active Preview remains untouched. Packaging/native opening, actual
 model behavior, dynamic catalogue and communication acceptance remain open.
 See [exact references and limits](../research/opencode-executable-equivalence.md).
+
+## Native window evidence, durable roots and publishing — 2026-11-04
+
+A debug artifact built from `dbf92ca` with the isolated identifier
+`dev.orqst.coexistence693` was launched through the coexistence runner on this host.
+The owned PID produced an on-screen layer-0 `1280×860` window after 2.8 s, four
+`orqst-node` children and a loopback Core listener; the runner then ended only its
+own child. `cgWindowNotFound` was not reproduced. This is window evidence, not
+native consent or provider acceptance, and no checklist interaction item is checked.
+See [the run record](../development/tauri-native-coexistence.md#isolated-artifact-run--window-evidence-only-2026-11-04).
+A plist-relabelled copy of an existing preview forwarded to the resident app and
+exited without a window; fixtures must be built with `--config`, never relabelled.
+
+The recorded quarantine root under `/private/tmp` was absent after an environment
+restart, so its journal could not be re-inspected. No reservation was reconstructed,
+released or bypassed, and automatic reconciliation remains unavailable. The real
+acceptance entry point now refuses system temporary roots. The owner must still
+choose A (quarantine without re-inspection plus one new durable root) or B (postpone);
+see [the short decision](../development/codex-quarantine-capacity.md#exact-human-decision-required).
+Criterion 9 remains **Blocked**; no other row changes to Accepted.
+
+Publishing is currently consistent: local `main` and `origin/main` are both
+`dbf92ca`, the earlier `57f711e`/`ba22c44` and their delivery tags are on origin, and
+an explicit-SHA `git push --dry-run` authenticated. No branch, tag, remote, account
+or key was changed by this check. See
+[publishing status](../development/repository-publishing.md#current-verified-status--2026-11-04-2155--03).
+
+Checks for this increment: 24 focused Node cases across the native-window,
+coexistence-preflight, two-agent acceptance and capacity suites passed; `pnpm lint`,
+`tsc --noEmit` and Prettier passed; 97 Rust tests passed with one ignored and Clippy
+with warnings denied passed; the isolated Tauri app build and resource staging
+passed. The complete Node suite reported 1,134 of 1,135 passing: the synthetic
+`feature-private-core` RPC test failed the same way on unmodified `main` and is
+pre-existing, not caused by this change. No provider, native dialog, keyboard, Quit
+or other-platform acceptance was run. Root `pnpm build` was intentionally not run
+because the owner's Preview is executing from the shared `dist` tree.

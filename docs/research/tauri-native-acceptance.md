@@ -40,6 +40,23 @@ no NOTICE/COPYING file is tracked. No fragment, asset, plugin or dependency is
 incorporated in this change. Existing ORQST attribution is preserved. Tucano routing
 and Overclock visual scope are unchanged; no communication mechanism is added.
 
+## Artifact identity is compiled, not only in Info.plist — 2026-11-04
+
+Tauri embeds `tauri.conf.json` in the binary at compile time. The installed
+single-instance plugin and the application's own config therefore use the compiled
+identifier, not a later `Info.plist` edit. Observation: a copy of a prebuilt preview
+whose `Info.plist` identifier was changed to a private value forwarded to the
+resident preview's single-instance socket and exited 0 without creating a window.
+The runner's canonical build with `--config` produced the intended separate
+identity and an on-screen window.
+
+Decision: keep the existing preflight, which reads the shipped bundle identifier as
+one necessary check, and treat it as insufficient evidence of isolation. Never
+relabel an artifact to obtain a fixture identity. Bind the spawned PID to the
+canonical executable path and start time (`assertNativeProcessIdentity`), record
+that in `launch.json`, and rebuild with `--config` when a separate identity is
+needed. No new dependency, plugin or third-party fragment is added.
+
 ## Security and limits
 
 The preflight invokes fixed macOS `ps`/`plutil` executables without a shell. It reads

@@ -250,8 +250,11 @@ pnpm exec tsx scripts/accept-codex-two-agent.ts \
 ```
 
 Missing flags fail before config/filesystem/credential access or a provider launch.
-The script insists on these two slot paths and the empty project, and rejects any
-previous runtime/communication journal. It prints only newly created pane/native
+`ORQST_ACCEPT_ROOT` must be an existing, owner-approved **durable** absolute path and
+is refused under `os.tmpdir()`, `/tmp` or `/private/tmp`, because a temporary root can
+lose the reservation, journal and lifecycle evidence on restart. The script insists
+on these two slot paths and the empty project, and rejects any previous
+runtime/communication journal. It prints only newly created pane/native
 metadata, correlation/result hash, actual metrics as unavailable, and cleanup status;
 no auth material, prompts, captured histories or raw native output are printed.
 
@@ -451,3 +454,18 @@ or inference. A separate bounded thread budget fixed that controlled scenario;
 other RPC deadlines stay unchanged. Optional MCP startup behaved differently.
 This strengthens a timing hypothesis, but no native user config was inspected and
 the original log lacks the method, so no historical causal conclusion follows.
+
+### Re-verification of the quarantine path — 2026-11-04
+
+The originally recorded root under `/private/tmp` was absent at re-verification
+after an environment restart. No journal, WAL, receipt or reservation could be
+re-read; the earlier recorded metadata is the last evidence. Automatic
+reconciliation remains unavailable and nothing was reconstructed or released. The
+full record and the shortened A/B decision live in
+[the quarantine capacity note](codex-quarantine-capacity.md).
+
+The real acceptance entry point now refuses a root inside `os.tmpdir()`, `/tmp` or
+`/private/tmp` through `assertDurableAcceptanceRoot`, so a future reservation cannot
+be lost the same way. This is a storage guard; it does not choose a capacity policy.
+A new real run still requires the explicit A/B decision, a durable empty root, two
+unused manifests and the native/provider gates above; none was started here.

@@ -140,6 +140,59 @@ This checkout has no Rust toolchain (`cargo`/`rustc` absent) and the volume has 
 `cgWindowNotFound` therefore remains **unexplained**; the next run must produce
 `window.json` before any native claim is made.
 
+## Isolated artifact run — window evidence only (2026-11-04)
+
+A debug artifact was built from `dbf92ca` in a private worktree with an isolated
+identifier and launched through the runner on this host:
+
+```sh
+ORQST_NODE_LICENSE=<matching Node 24 LICENSE> pnpm build:tauri-resources
+CARGO_TARGET_DIR=/private/tmp/orqst-target-693 CARGO_PROFILE_DEV_DEBUG=0 \
+  CARGO_INCREMENTAL=0 pnpm exec tauri build --debug --bundles app \
+  --config '{"identifier":"dev.orqst.coexistence693","productName":"ORQST Coexistence 693"}'
+pnpm accept:tauri-coexistence --authorize-synthetic \
+  '/private/tmp/orqst-target-693/debug/bundle/macos/ORQST Coexistence 693.app' combined
+```
+
+The build used an isolated Rust 1.99.0 toolchain and produced a 179.08 MiB macOS
+ARM64 debug application with native SHA-256
+`f0711cfd7274999dc804b3dc28e5bbfda78631831105f34fa9c414d8033c5d8b` and Node
+SHA-256 `b6fb419f0f43bb2fbca273700294dd2f3b685a64b60e8417c295f47646a70e4a`.
+
+Observed for the runner-owned PID `14479`:
+
+- `window.json` = `window-observed` after 2,819 ms and four samples: one on-screen
+  layer-0 window with alpha 1 and integer bounds `1280×860` at `(215, 93)`, plus
+  off-screen helper/sheet-sized windows owned by the same process.
+- Four `orqst-node` children of the owned PID; `127.0.0.1:50289` was `LISTEN` by
+  the Core child, not by another process.
+- `launch.json` recorded the PID, start time, executable path, artifact hashes and
+  port. The runner now binds that PID to the canonical executable by `ps` command
+  path and start time before inspection.
+- The run was ended by the runner's own SIGINT, which forwarded SIGTERM only to its
+  child. `exit.json` records `signal: "SIGTERM"`, the runner exited nonzero, and no
+  fixture host, window or listener remained.
+- A second run of the updated runner recorded the same window after 1,905 ms and
+  wrote `launch.json.process = { executable: <canonical path>, startedAt: "Wed Nov
+4 21:58:42 2026" }`. Its exit was again `SIGTERM` and left no host or listener.
+  This verifies the PID-to-artifact binding code, not native consent.
+
+`cgWindowNotFound` was **not reproduced** for this artifact and host. This is
+current window evidence, not a retrospective explanation of the earlier attempt and
+not native acceptance: no menu, dialog, consent, keyboard input, resize, hide/show,
+Stop or Quit was exercised, and no provider started.
+
+Retained failure: a copy of an existing preview bundle whose `Info.plist`
+identifier alone was changed exited with code 0 after 2.7 s without creating a
+window while the resident preview was running. Tauri resolves single-instance
+identity from its compile-time configuration, so the relabelled copy forwarded to
+the resident app and exited. Never treat a plist-relabelled artifact as an isolated
+identity; build the artifact with `--config` as above and discard the copy.
+
+Disk after the build: 49 GiB free; the isolated target used 1.4 GiB and the
+toolchain 663 MiB. These generated paths are disposable and are not acceptance
+evidence.
+
 ## Focus after a native dialog (leading hypothesis, unproven)
 
 The retained-workspace run reported that the native _Start_ was denied **after** the
@@ -193,9 +246,10 @@ above before any claim is made.
       and verify that a fresh explicit preparation is required.
 - [ ] Start/attach/input/stop the synthetic PTY through native signed dialogs;
       verify hide/show, resize, retained scrollback and no input after window switching.
-- [ ] Record `window-observed` (bounds, layer, on-screen) for the owned fixture PID
-      before attempting any native interaction; a missing/off-screen window is
-      diagnosed from `window.json`, not guessed.
+- [x] Record `window-observed` (bounds, layer, on-screen) and the bound artifact
+      identity for the owned fixture PID before attempting any native interaction;
+      a missing/off-screen window is diagnosed from `window.json`, not guessed.
+      This is window evidence only; every interaction item below remains unchecked.
 - [ ] Record a post-dialog focus timeline (0/100/250/500/1000 ms) when a native Start
       is denied after its confirmation, so the focus race is confirmed or excluded.
 - [ ] Edit directed routes/roles through native review; cancellation and returning
