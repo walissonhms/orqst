@@ -4,7 +4,7 @@ import { OwnedTurnMonitor } from './owned-turn-monitor.js';
 type Entry = {
   terminalId: string;
   turnId?: string;
-  agentState?: 'running' | 'completed' | 'failed' | 'unknown';
+  agentState?: 'running' | 'waiting_for_user' | 'completed' | 'failed' | 'unknown';
 };
 
 /** One in-flight passive sample. Shutdown and stale samples cannot emit alerts. */
@@ -20,7 +20,7 @@ export class OwnedTurnPoller {
     private readonly emit: (alert: {
       terminalId: string;
       turnId: string;
-      category: 'completed' | 'failed';
+      category: 'completed' | 'failed' | 'waiting_for_user';
       silent: boolean;
     }) => void,
     private readonly now: () => number = Date.now,

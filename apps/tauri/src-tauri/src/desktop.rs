@@ -113,6 +113,7 @@ pub(crate) fn parse_owned_alert(value: &Value, epoch: &str, now_ms: u64) -> Opti
     let category = match value["category"].as_str()? {
         "completed" => "completed",
         "failed" => "failed",
+        "waiting_for_user" => "intervention",
         _ => return None,
     };
     Some(OwnedAlert {
@@ -973,7 +974,7 @@ mod tests {
         for (key, field) in [
             ("body", serde_json::json!("private content")),
             ("slot", serde_json::json!(8)),
-            ("category", serde_json::json!("waiting_for_user")),
+            ("category", serde_json::json!("SYNTHETIC-unsupported")),
             ("terminalId", serde_json::json!("nearby")),
             ("contractVersion", serde_json::json!(2)),
         ] {

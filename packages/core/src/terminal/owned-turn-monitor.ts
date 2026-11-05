@@ -4,7 +4,7 @@ import { preferencesSchema, terminalIdentitySchema } from '@orqst/protocol';
 const entrySchema = terminalIdentitySchema
   .extend({
     turnId: z.uuid().optional(),
-    agentState: z.enum(['running', 'completed', 'failed', 'unknown']),
+    agentState: z.enum(['running', 'waiting_for_user', 'completed', 'failed', 'unknown']),
   })
   .refine((entry) => entry.agentState === 'unknown' || entry.turnId !== undefined);
 
@@ -29,7 +29,7 @@ export class OwnedTurnMonitor {
     const alerts: Array<{
       terminalId: string;
       turnId: string;
-      category: 'completed' | 'failed';
+      category: 'completed' | 'failed' | 'waiting_for_user';
       silent: boolean;
     }> = [];
     const next = new Map<string, z.infer<typeof entrySchema>>();
@@ -41,18 +41,21 @@ export class OwnedTurnMonitor {
         !previous ||
         previous.turnId !== entry.turnId ||
         previous.agentState !== 'running' ||
-        (entry.agentState !== 'completed' && entry.agentState !== 'failed')
+        !['completed', 'failed', 'waiting_for_user'].includes(entry.agentState)
       )
         continue;
       const key = `${entry.terminalId}:${entry.turnId}`;
       if (this.seen.has(key) || this.seen.size >= 128) continue;
       // Consume transitions even when disabled, so changing a preference cannot replay them.
       this.seen.add(key);
-      if (preferences[entry.agentState])
+      const category = entry.agentState;
+      if (category !== 'completed' && category !== 'failed' && category !== 'waiting_for_user')
+        continue;
+      if (preferences[category === 'waiting_for_user' ? 'intervention' : category])
         alerts.push({
           terminalId: entry.terminalId,
           turnId: entry.turnId,
-          category: entry.agentState,
+          category,
           silent: !preferences.sound,
         });
     }

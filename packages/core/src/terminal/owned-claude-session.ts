@@ -16,6 +16,7 @@ import { redact } from '@orqst/shared';
 import { terminalDirectory } from './codex-profile.js';
 import type { ManagedClaudeConfig } from './interactive-profile.js';
 import { lifecycleBindingSchema } from '../managed-codex/lifecycle-receipt.js';
+import { ownedClaudeHookEvidence } from './owned-claude-hooks.js';
 
 const maximum = 2 * 1024 * 1024;
 const lineMaximum = 64 * 1024;
@@ -57,6 +58,7 @@ export function ownedClaudeSession(
 ) {
   try {
     if (!lifecycleBindingSchema.safeParse(binding).success) return undefined;
+    const hooks = config.ownedHooks ? ownedClaudeHookEvidence(config) : undefined;
     const root =
       config.authentication.claudeConfigDirectory ?? join(config.authentication.home, '.claude');
     terminalDirectory(root);
@@ -256,6 +258,11 @@ export function ownedClaudeSession(
           turnId = undefined;
         }
         if (!matched || !persist({ ...identity, recordSha256: matched })) return undefined;
+        const turn = hooks
+          ? partial
+            ? { agentState: 'unknown' as const }
+            : hooks()
+          : { agentState, ...(turnId ? { turnId } : {}) };
         return {
           session: {
             provider: 'claude' as const,
@@ -263,8 +270,7 @@ export function ownedClaudeSession(
             bindingEvidence: 'claude-argv-receipt-transcript' as const,
           },
           activities: activities.slice(-3),
-          agentState,
-          ...(turnId ? { turnId } : {}),
+          ...turn,
         };
       } catch {
         if (identity) invalidated = true;

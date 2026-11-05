@@ -8,7 +8,7 @@ export const ownedTurnAlertSchema = z.strictObject({
   slot: z.number().int().min(0).max(7),
   terminalId: z.uuid(),
   turnId: z.uuid(),
-  category: z.enum(['completed', 'failed']),
+  category: z.enum(['completed', 'failed', 'waiting_for_user']),
   silent: z.boolean(),
   observedAt: z.number().int().nonnegative().safe(),
 });
