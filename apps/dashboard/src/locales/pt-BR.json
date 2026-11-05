@@ -1462,7 +1462,9 @@
       "notNow": "Agora não"
     },
     "openTerminal": "Abrir terminal",
-    "noTerminalsYet": "Nenhum terminal aberto ainda. Use Novo terminal para começar."
+    "noTerminalsYet": "Nenhum terminal aberto ainda. Use Novo terminal para começar.",
+    "showPanel": "Mostrar o painel de Features",
+    "hidePanel": "Ocultar o painel de Features"
   },
   "overviewPage": {
     "title": "Visão geral",

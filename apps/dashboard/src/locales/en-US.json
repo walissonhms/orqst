@@ -1462,7 +1462,9 @@
       "notNow": "Not now"
     },
     "openTerminal": "Open terminal",
-    "noTerminalsYet": "No terminals open yet. Use New terminal to start."
+    "noTerminalsYet": "No terminals open yet. Use New terminal to start.",
+    "showPanel": "Show the Feature panel",
+    "hidePanel": "Hide the Feature panel"
   },
   "overviewPage": {
     "title": "Overview",

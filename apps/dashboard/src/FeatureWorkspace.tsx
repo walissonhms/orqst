@@ -26,7 +26,12 @@ import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
 import { TerminalStudio } from './TerminalStudio.js';
-import { arrangeRequest, studioTerminals, type NativePaneLayout } from './studio-native.js';
+import {
+  arrangeRequest,
+  nativeChrome,
+  studioTerminals,
+  type NativePaneLayout,
+} from './studio-native.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
 
 type Action = FeatureNativeRequest extends infer R
@@ -130,6 +135,16 @@ export function FeatureWorkspace({
     () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
     [studio, snapshot, panes, evidence, now],
   );
+  // Full-window terminals like the preview; the Feature panel opens on request.
+  const [immersive, setImmersive] = useState(() => {
+    try {
+      return localStorage.getItem('orqst.studio.panel') !== 'open';
+    } catch {
+      return true;
+    }
+  });
+  const immersiveRef = useRef(immersive);
+  immersiveRef.current = immersive;
   const arranging = useRef<{ layout: NativePaneLayout[]; mode: ArrangementMode } | null>(null);
   /** Send the Studio geometry to native views; the bridge keeps only the latest frame. */
   const arrange = useCallback(
@@ -137,17 +152,17 @@ export function FeatureWorkspace({
       arranging.current = { layout, mode };
       const live = current.current;
       if (!native?.arrange || !live) return;
-      const wide = window.innerWidth > 720;
+      const chrome = nativeChrome(immersiveRef.current, window.innerWidth);
       const viewport = {
-        width: window.innerWidth - (wide ? 155 : 46),
-        height: window.innerHeight - 81 - 34,
+        width: window.innerWidth - chrome.sidebar,
+        height: window.innerHeight - chrome.top - chrome.bottom,
       };
       const memberIds = live.slots
         .filter((slot) => terminals.some((terminal) => terminal.id === slot.terminalId))
         .map((slot) => slot.terminalId);
       void native
         .arrange({
-          ...arrangeRequest(live, memberIds, layout, mode, viewport),
+          ...arrangeRequest(live, memberIds, layout, mode, viewport, chrome),
           contractVersion: 1,
           generation: live.generation,
         })
@@ -155,6 +170,16 @@ export function FeatureWorkspace({
     },
     [native, terminals],
   );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('orqst.studio.panel', immersive ? 'closed' : 'open');
+    } catch {
+      // Storage may be unavailable; the choice still applies to this window.
+    }
+    if (arranging.current) arrange(arranging.current.layout, arranging.current.mode);
+    // Only the panel choice triggers a resend; layout changes report themselves.
+  }, [immersive]);
 
   const request = useCallback(
     async (action: Action) => {
@@ -365,7 +390,7 @@ export function FeatureWorkspace({
   });
   return (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}${studio && nativeWorkspace && immersive ? ' studio-immersive' : ''}`}
       aria-label={t('features.workspace')}
       aria-busy={busy}
     >
@@ -695,6 +720,24 @@ export function FeatureWorkspace({
               )
             }
             onNewTerminal={canPrepare ? () => void prepare() : undefined}
+            {...(nativeWorkspace
+              ? {
+                  toolbarStart: (
+                    <button
+                      type="button"
+                      className="ts-panel-toggle"
+                      aria-pressed={!immersive}
+                      title={t(immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel')}
+                      aria-label={t(
+                        immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel',
+                      )}
+                      onClick={() => setImmersive((value) => !value)}
+                    >
+                      {immersive ? '☰' : '⟨'}
+                    </button>
+                  ),
+                }
+              : {})}
             // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
             onClose={() => 'minimize' as const}
             onMention={async () => 'unsupported' as const}

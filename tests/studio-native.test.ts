@@ -109,10 +109,14 @@ test('arrange requests are valid for every mode and clip to the viewport', () =>
     { id: t2, rect: { x: 610, y: 0, width: 9000, height: 400 }, z: 1 },
   ];
   for (const mode of ['mosaic', 'columns', 'rows', 'focus', 'list', 'free'] as const) {
-    const request = arrangeRequest(snapshot(), [t1, t2], layout, mode, {
-      width: 1200.6,
-      height: 700,
-    });
+    const request = arrangeRequest(
+      snapshot(),
+      [t1, t2],
+      layout,
+      mode,
+      { width: 1200.6, height: 700 },
+      undefined,
+    );
     const parsed = featureNativeRequestSchema.safeParse({
       ...request,
       contractVersion: 1,
@@ -128,6 +132,19 @@ test('arrange requests are valid for every mode and clip to the viewport', () =>
     if (mode === 'list') assert.ok(request.panes.every((pane) => !pane.visible));
     if (mode === 'focus') assert.ok(request.panes.filter((pane) => pane.visible).length <= 1);
   }
+  const full = arrangeRequest(
+    snapshot(),
+    [t1, t2],
+    layout,
+    'mosaic',
+    { width: 1440, height: 830 },
+    { sidebar: 0, top: 36, bottom: 34 },
+  );
+  assert.equal(full.layoutVersion, 2);
+  assert.ok(
+    featureNativeRequestSchema.safeParse({ ...full, contractVersion: 1, generation: 7 }).success,
+    'version 2 with chrome is valid',
+  );
   const hidden = arrangeRequest(snapshot(), [t1, t2], [{ id: t1, rect: null, z: 0 }], 'mosaic', {
     width: 1200,
     height: 700,
@@ -208,7 +225,13 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
     )) as unknown as Frame[];
     const last = frames.at(-1)!;
     assert.equal(last.generation, 7);
-    assert.deepEqual(last.viewport, { width: 1440 - 155, height: 900 - 115 });
+    // Full window like the preview: no Feature panel, 36px toolbar, 34px dock.
+    assert.deepEqual((last as unknown as { chrome: unknown }).chrome, {
+      sidebar: 0,
+      top: 36,
+      bottom: 34,
+    });
+    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 70 });
     assert.deepEqual(last.panes.map((pane) => pane.terminalId).sort(), [t1, t2]);
     for (const pane of last.panes) {
       assert.ok(pane.rect);

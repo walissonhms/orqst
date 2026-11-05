@@ -64,6 +64,19 @@ export function studioTerminals(
     });
 }
 
+/** Native chrome insets: full window (like the preview) or with the Feature panel. */
+export interface NativeChrome {
+  sidebar: 0 | 46 | 155;
+  top: 36 | 81;
+  bottom: 34;
+}
+
+export function nativeChrome(immersive: boolean, windowWidth: number): NativeChrome {
+  return immersive
+    ? { sidebar: 0, top: 36, bottom: 34 }
+    : { sidebar: windowWidth > 720 ? 155 : 46, top: 81, bottom: 34 };
+}
+
 /** Rectangle of a PTY hole, in logical px relative to the native content area. */
 export interface NativePaneLayout {
   id: string;
@@ -86,6 +99,7 @@ export function arrangeRequest(
   layout: NativePaneLayout[],
   mode: ArrangementMode,
   viewport: { width: number; height: number },
+  chrome?: NativeChrome,
 ): ArrangeRequest {
   const width = Math.max(1, Math.floor(viewport.width));
   const height = Math.max(1, Math.floor(viewport.height));
@@ -110,7 +124,9 @@ export function arrangeRequest(
       pane.visible = false;
       pane.rect = null;
     }
-  return { action: 'arrange', layoutVersion: 1, mode, viewport: { width, height }, panes };
+  return chrome
+    ? { action: 'arrange', layoutVersion: 2, chrome, mode, viewport: { width, height }, panes }
+    : { action: 'arrange', layoutVersion: 1, mode, viewport: { width, height }, panes };
 }
 
 function clip(rect: NativePaneLayout['rect'] & object, width: number, height: number) {

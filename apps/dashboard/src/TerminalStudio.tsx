@@ -143,6 +143,8 @@ interface Props {
     onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) => void;
     overlayOpen?: boolean;
   };
+  /** Host controls shown at the start of the toolbar (e.g. the Feature panel toggle). */
+  toolbarStart?: ReactNode;
   /** CLI accounts available for switching. */
   accounts?: AccountOption[];
   /** Actions the host can perform today; others are shown disabled. */
@@ -355,6 +357,7 @@ export function TerminalStudio({
   onTerminalAction,
   accountSuggestions = [],
   native,
+  toolbarStart,
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -821,6 +824,7 @@ export function TerminalStudio({
       }}
     >
       <header className="ts-toolbar">
+        {toolbarStart}
         <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
           {arrangementModes.map((mode) => {
             const Icon = modeIcons[mode];
