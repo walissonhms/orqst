@@ -291,3 +291,23 @@ test('preparation failures carry only bounded stage/code/effects and no retry au
       false,
     );
 });
+
+test('scope mismatch diagnostics carry no renderer values and need no activation', async () => {
+  const calls: unknown[] = [];
+  const client = createTauriStudioClient(
+    async (request) => {
+      calls.push(request);
+      return { status: 'ok', snapshot: empty };
+    },
+    () => false,
+  );
+  assert.equal((await client.request({ action: 'report-catalog-scope-mismatch' })).status, 'ok');
+  assert.deepEqual(calls, [{ action: 'report-catalog-scope-mismatch' }]);
+  assert.equal(
+    tauriStudioRequestSchema.safeParse({
+      action: 'report-catalog-scope-mismatch',
+      path: '/private',
+    }).success,
+    false,
+  );
+});

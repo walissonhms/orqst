@@ -105,3 +105,10 @@ release application mutexes for the wait, then revalidate source/version. Featur
 replies retain Core epoch, presentation/document and exact request ownership checks
 before consumption. This adds no renderer authority or public fields. See the
 [combined source review and native limits](../development/tauri-opening-source-integration.md).
+
+The exact main Studio document may send the field-free
+`report-catalog-scope-mismatch` action after a renderer scope check fails. It
+records only the fixed `renderer_scope_mismatch` local diagnostic and returns the
+current snapshot. The renderer report is untrusted and cannot authorize creation,
+change scope, or include paths, identifiers, or arbitrary diagnostic strings.
+The existing bounded diagnostic queue and exact-document capability still apply.

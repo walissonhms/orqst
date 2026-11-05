@@ -181,6 +181,9 @@ See the [pinned reference and reuse review](../research/local-diagnostics.md).
 
 Preparation preflight denials now record closed, static `studio_*` and `feature_*`
 outcomes without request values. `studio_post_identity` reports possible effects;
-earlier native preparation guards report not started. `feature_focus_or_context`
-identifies the combined focus and context fence and does not distinguish its two
-causes. Renderer-only catalog scope mismatch is not recorded by this native sink.
+earlier native preparation guards report not started. Feature focus and pre-presentation context checks use separate closed outcomes;
+`feature_post_context` identifies the combined fence after presentation.
+A renderer-detected catalog scope mismatch is recorded as
+`renderer_scope_mismatch` through the existing exact-document Studio capability.
+This fixed-label report is an untrusted renderer report and is not evidence that a
+native guard or scope mismatch actually occurred; it carries no request values.

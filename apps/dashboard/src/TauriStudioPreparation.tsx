@@ -54,6 +54,7 @@ export function TauriStudioPreparation({
         if (!active.current || sequence.current !== token) return;
         if (reply.status === 'catalog') {
           if (reply.catalog.workspaceId !== workspaceId || reply.catalog.featureId !== featureId) {
+            void native.request({ action: 'report-catalog-scope-mismatch' }).catch(() => {});
             setNotice('denied');
             setCatalog(undefined);
             return;

@@ -763,22 +763,47 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     ) {
         return json!({"status":"stale"});
     }
+    let guard_reason = std::sync::Mutex::new(crate::local_diagnostics::Outcome::FeatureFocus);
     if !focus_then_current(focused(&window), || {
-        identity(&window) == Some(source)
-            && dashboard_identity(&main) == Some(target.clone())
-            && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
-            && crate::terminal::preparation_admission_current(app, &admission)
-            && crate::terminal_creation::navigation_available(app)
-            && preparation_scope_current(
+        macro_rules! check {
+            ($condition:expr, $reason:ident) => {
+                if !$condition {
+                    *guard_reason.lock().unwrap() = crate::local_diagnostics::Outcome::$reason;
+                    return false;
+                }
+            };
+        }
+        check!(identity(&window) == Some(source), FeatureSourceChanged);
+        check!(
+            dashboard_identity(&main) == Some(target.clone()),
+            FeatureTargetChanged
+        );
+        check!(
+            crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation)),
+            FeatureMetadataChanged
+        );
+        check!(
+            crate::terminal::preparation_admission_current(app, &admission),
+            FeatureAdmissionChanged
+        );
+        check!(
+            crate::terminal_creation::navigation_available(app),
+            FeatureNavigationChanged
+        );
+        check!(
+            preparation_scope_current(
                 &app.state::<Features>().0.lock().unwrap(),
                 &request,
                 &epoch,
-                presentation,
-            )
+                presentation
+            ),
+            FeatureScopeChanged
+        );
+        true
     })
     .await
     {
-        return denied(crate::local_diagnostics::Outcome::FeatureFocusOrContext);
+        return denied(*guard_reason.lock().unwrap());
     }
     // Changing windows revokes existing input through the existing native focus observer.
     // Only this authenticated target receives IDs; the drawer starts no execution on opening.
