@@ -1,3 +1,4 @@
+import type { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
@@ -13,6 +14,7 @@ import {
 import {
   TauriTerminalRetirement,
   type TauriTerminalRetirementCore,
+  type OwnedTerminalRetirementEvidence,
 } from './tauri-terminal-retirement.js';
 
 const slot = z.number().int().min(0).max(7);
@@ -58,6 +60,7 @@ export class TauriTerminalService {
     private readonly translate: (key: string) => string,
     private readonly mcp?: TauriTerminalMcp,
     core?: TauriTerminalRetirementCore,
+    private readonly cliPolicy?: TerminalCliPolicyStore,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
     this.panes = supervisors.map((supervisor, slot) => this.pane(supervisor, slot));
@@ -79,6 +82,41 @@ export class TauriTerminalService {
       {
         current: (target, focus) =>
           !this.closed && !state.closed && target === document && (!focus || state.focused),
+        ...(this.cliPolicy
+          ? {
+              cliAuthorization: {
+                authorizeCli: async (
+                  _document: object,
+                  profile: Parameters<TerminalCliPolicyStore['current']>[0],
+                ) => {
+                  if (!state.focused || state.closed || this.closed) return 'blocked' as const;
+                  return this.cliPolicy!.authorizeCli(profile, () =>
+                    this.confirm(
+                      slot,
+                      this.translate('terminalNative.cliScope'),
+                      JSON.stringify(
+                        {
+                          executable: profile.executable,
+                          sha256: profile.executableSha256,
+                          version: profile.executableVersion,
+                          scope: 'owned-local-terminal-v1',
+                        },
+                        null,
+                        2,
+                      ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
+                      'terminalNative.authorizeCli',
+                    ),
+                  );
+                },
+                current: (
+                  _document: object,
+                  profile: Parameters<TerminalCliPolicyStore['current']>[0],
+                ) => this.cliPolicy!.current(profile),
+                epoch: (profile: Parameters<TerminalCliPolicyStore['current']>[0]) =>
+                  this.cliPolicy!.epoch(profile),
+              },
+            }
+          : {}),
         confirm: async (_document, details) => {
           const detail = JSON.stringify(details, null, 2).replace(
             /\p{Cf}/gu,
@@ -200,6 +238,16 @@ export class TauriTerminalService {
           this.generation === generation,
         confirm: (detail) =>
           this.confirm(message.slot, this.translate('managedTerminal.retireConfirm'), detail),
+        ...(this.cliPolicy
+          ? {
+              authorizeOwnedRetirement: (evidence: OwnedTerminalRetirementEvidence) =>
+                evidence.attempts.every(
+                  (attempt) =>
+                    this.panes[attempt.slot]?.broker.ownsRetirementAttempt(attempt.instanceId) ===
+                    true,
+                ),
+            }
+          : {}),
         closeBrokers: () => {
           for (const p of this.panes) p.broker.close();
         },

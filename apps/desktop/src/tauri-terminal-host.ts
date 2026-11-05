@@ -1,3 +1,4 @@
+import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import {
   terminalStartupHostFailure,
@@ -85,6 +86,7 @@ async function start() {
     translate,
     mcpEnabled ? core : undefined,
     core,
+    new TerminalCliPolicyStore(directory),
   );
   let store = terminalLayoutStore(
     directory,
