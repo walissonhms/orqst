@@ -1435,6 +1435,72 @@ mod catalog_tests {
         ));
     }
     #[test]
+    fn real_node_helper_catalog_crosses_the_rust_boundary() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .unwrap();
+        let output = std::process::Command::new("node")
+            .args([
+                "--import",
+                "tsx",
+                "tests/fixtures/terminal-catalog-contract.ts",
+            ])
+            .current_dir(root)
+            .output()
+            .expect("Node contract fixture must run");
+        assert!(
+            output.status.success(),
+            "Node fixture failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let data: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        for name in ["empty", "populated"] {
+            assert_eq!(data[name]["status"], "catalog");
+            assert!(valid_catalog(&data[name]["catalog"], &data["request"]));
+        }
+        assert_eq!(
+            data["empty"]["catalog"]["pendingOwnedExits"]
+                .as_array()
+                .unwrap()
+                .len(),
+            0
+        );
+        assert_eq!(
+            data["populated"]["catalog"]["pendingOwnedExits"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+    #[test]
+    fn pending_exits_are_bounded_ordered_and_strict() {
+        let request =
+            json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
+        let providers: Vec<_> = ["codex", "claude", "opencode"].iter().map(|provider| json!({"provider":provider,"status":"unavailable","reason":"executable_not_found","models":[]})).collect();
+        let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
+        assert!(valid_catalog(&catalog, &request));
+        let item = json!({"id":"11111111-1111-4111-8111-111111111111","code":"owned_exit_pending","principalCount":1});
+        catalog["pendingOwnedExits"] = json!([item.clone()]);
+        assert!(valid_catalog(&catalog, &request));
+        let mut invalid = catalog.clone();
+        invalid["extra"] = json!(true);
+        assert!(!valid_catalog(&invalid, &request));
+        for (key, value) in [
+            ("id", json!("bad")),
+            ("code", json!("other")),
+            ("principalCount", json!(-1)),
+            ("extra", json!(true)),
+        ] {
+            let mut invalid = catalog.clone();
+            invalid["pendingOwnedExits"][0][key] = value;
+            assert!(!valid_catalog(&invalid, &request));
+        }
+        catalog["pendingOwnedExits"] = json!(vec![item; 65]);
+        assert!(!valid_catalog(&catalog, &request));
+    }
+    #[test]
     fn catalogs_accept_all_reviewed_sources_but_never_entitlement_or_cross_scope() {
         let request =
             json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
