@@ -1,5 +1,15 @@
 # ORQST
 
+## Current-workspace terminal batch — 2026-11-05 (source increment)
+
+The native Studio facade prepares up to eight independently identified requests
+with per-item accepted/refused/unknown outcomes and one preparation review per CLI.
+Existing pool, path, source, input and admission guards remain authoritative;
+uncertainty preserves evidence without rolling back earlier accepted members.
+Renderer wiring and native/provider acceptance remain pending; multi-workspace
+and account-profile creation are unsupported. See the
+[contract](docs/api/terminal-native.md#current-workspace-batch-preparation--2026-11-05).
+
 ## Owned turn notifications — 2026-11-05 (source increment)
 
 The owned terminal host now samples Claude turn evidence in the background and

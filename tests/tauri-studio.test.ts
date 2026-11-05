@@ -291,3 +291,93 @@ test('preparation failures carry only bounded stage/code/effects and no retry au
       false,
     );
 });
+
+test('batch contracts preserve exact per-item results and reject forged admission or native paths', async () => {
+  const { randomUUID } = await import('node:crypto');
+  const id = randomUUID();
+  const terminalId = randomUUID();
+  const request = {
+    action: 'create-batch' as const,
+    generation: 1,
+    workspaceId: 'synthetic-workspace',
+    featureId: null,
+    catalogId: 'a'.repeat(64),
+    requests: [
+      {
+        id,
+        workspaceId: 'synthetic-workspace',
+        provider: 'claude' as const,
+        modelId: null,
+        name: 'Synthetic batch',
+      },
+    ],
+  };
+  const accepted = {
+    id,
+    status: 'accepted',
+    reason: 'core_enrolled',
+    effects: 'possible',
+    terminalId,
+    slot: 0,
+  };
+  let value: unknown = { status: 'batch', items: [accepted] };
+  let active = true;
+  let sent = 0;
+  const client = createTauriStudioClient(
+    async () => {
+      sent++;
+      return value;
+    },
+    () => active,
+  );
+  assert.equal(tauriStudioRequestSchema.safeParse(request).success, true);
+  assert.deepEqual(await client.request(request), value);
+  for (const input of [
+    { ...request, requests: [] },
+    { ...request, requests: Array(9).fill(request.requests[0]) },
+    { ...request, requests: [request.requests[0], request.requests[0]] },
+    { ...request, requests: [{ ...request.requests[0], path: '/SYNTHETIC' }] },
+    { ...request, requests: [{ ...request.requests[0], name: 'name\nforged' }] },
+    { ...request, requests: [{ ...request.requests[0], name: 'x'.repeat(49) }] },
+  ])
+    assert.equal(tauriStudioRequestSchema.safeParse(input).success, false);
+  for (const item of [
+    { ...accepted, terminalId: undefined },
+    { ...accepted, slot: undefined },
+    { ...accepted, effects: 'not_started' },
+    { ...accepted, file: '/SYNTHETIC' },
+    { ...accepted, status: 'refused', effects: 'not_started' },
+    { ...accepted, status: 'unknown' },
+  ])
+    assert.equal(
+      tauriStudioReplySchema.safeParse({ status: 'batch', items: [item] }).success,
+      false,
+    );
+  for (const reply of [
+    { status: 'batch', items: [{ ...accepted, id: randomUUID() }] },
+    {
+      status: 'batch',
+      items: [accepted, { ...accepted, id: randomUUID(), terminalId: randomUUID() }],
+    },
+    { status: 'ok', snapshot: empty },
+  ]) {
+    value = reply;
+    assert.deepEqual(await client.request(request), { status: 'unavailable' });
+  }
+  value = {
+    status: 'batch',
+    items: [
+      { id, status: 'unknown', effects: 'possible', reason: 'opening_uncertain', terminalId },
+    ],
+  };
+  assert.deepEqual(await client.request(request), value);
+  value = {
+    status: 'batch',
+    items: [{ id, status: 'refused', effects: 'not_started', reason: 'capacity_exceeded' }],
+  };
+  assert.deepEqual(await client.request(request), value);
+  active = false;
+  const previous = sent;
+  assert.deepEqual(await client.request(request), { status: 'focus_required' });
+  assert.equal(sent, previous);
+});

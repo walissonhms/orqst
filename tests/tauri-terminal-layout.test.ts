@@ -482,3 +482,21 @@ test('dock reopen rejects missing or stale native generation before any save or 
   assert.deepEqual(f.layout.snapshot(), suspended);
   assert.strictEqual(f.saved(), lastSave);
 });
+
+test('private owned names persist while hidden without opening or focusing a pane', async () => {
+  const f = fixture(2);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  f.layout.act(0, 'dashboard');
+  const before = f.layout.snapshot();
+  assert.equal(before.suspended, true);
+  assert.equal(f.layout.nameOwned(1, ' Synthetic owned name '), true);
+  await f.layout.flush();
+  assert.equal(f.layout.snapshot().suspended, true);
+  assert.deepEqual(f.layout.snapshot().shown, before.shown);
+  assert.equal(f.layout.snapshot().names[1], 'Synthetic owned name');
+  assert.equal(f.layout.nameOwned(2, 'Foreign pane'), false);
+  assert.equal(f.layout.nameOwned(0, 'bad\nname'), false);
+  assert.equal(f.layout.nameOwned(0, 'x'.repeat(49)), false);
+  assert.equal(f.messages.at(-1)!.focus, null);
+});

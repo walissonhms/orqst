@@ -5,6 +5,7 @@ import type {
 } from '@orqst/protocol';
 import {
   terminalPreparationBindingSchema,
+  validateTerminalPreparationBinding,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
@@ -59,6 +60,7 @@ export async function prepareTauriBatch(
   const plans: Array<{
     index: number;
     provider: TerminalBatchRequest['requests'][number]['provider'];
+    modelId: string;
     plan: ReturnType<typeof prepareTerminalCreation>;
   }> = [];
   const capacity = Math.min(
@@ -107,7 +109,7 @@ export async function prepareTauriBatch(
         mcp: false,
         ...(input.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
-      plans.push({ index, provider: input.provider, plan });
+      plans.push({ index, provider: input.provider, modelId: modelId!, plan });
     } catch {
       item.reason = 'preparation_failed';
     }
@@ -121,7 +123,11 @@ export async function prepareTauriBatch(
       trusted,
       context,
     );
-    if (fresh.catalog.catalogId !== request.catalogId) throw new Error('Batch catalog changed');
+    if (
+      fresh.catalog.catalogId !== request.catalogId ||
+      plans.some(({ provider, modelId }) => !resolveCatalogSelection(fresh, provider, modelId))
+    )
+      throw new Error('Batch catalog changed');
     preflight();
   };
   if (!plans.length) return result();
@@ -133,8 +139,15 @@ export async function prepareTauriBatch(
       project: discovered.workspace.project,
       terminals: group.flatMap(({ plan }) => plan.overview.terminals),
     };
-    if (!reviewed() || !(await ports.confirm('selected', detail, overview)) || !reviewed()) {
-      for (const { index } of plans) items[index]!.reason = 'review_cancelled';
+    try {
+      revalidate();
+      if (!(await ports.confirm('selected', detail, overview))) {
+        for (const { index } of plans) items[index]!.reason = 'review_cancelled';
+        return result();
+      }
+      revalidate();
+    } catch {
+      for (const { index } of plans) items[index]!.reason = 'context_changed';
       return result();
     }
   }
@@ -171,19 +184,27 @@ export async function prepareTauriBatch(
       break;
     }
   }
-  const previousLayout =
-    request.featureId === null ? null : discovered.workspace.features.readLayout(request.featureId);
+  let previousLayout: TerminalLayoutRecord | null = null;
   if (request.featureId !== null) {
-    let feature = discovered.workspace.features.read(request.featureId);
-    for (const item of items.filter((item) => item.status === 'prepared')) {
-      try {
-        if (!reviewed()) throw new Error('Batch context changed');
-        feature = discovered.workspace.features.assignTerminal(
-          request.featureId,
-          item.terminalId!,
-          feature.revision,
-        );
-      } catch {
+    try {
+      previousLayout = discovered.workspace.features.readLayout(request.featureId);
+      let feature = discovered.workspace.feature!;
+      for (const item of items.filter((item) => item.status === 'prepared')) {
+        try {
+          if (!reviewed()) throw new Error('Batch context changed');
+          validateTerminalPreparationBinding(binding, discovered.workspace.project);
+          feature = discovered.workspace.features.assignTerminal(
+            request.featureId,
+            item.terminalId!,
+            feature.revision,
+          );
+        } catch {
+          item.status = 'unknown';
+          item.reason = 'preparation_failed';
+        }
+      }
+    } catch {
+      for (const item of items.filter((item) => item.status === 'prepared')) {
         item.status = 'unknown';
         item.reason = 'preparation_failed';
       }

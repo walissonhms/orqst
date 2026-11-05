@@ -905,9 +905,9 @@ fn open_batch(
         .enumerate()
         .filter_map(|(i, item)| (item["status"] == "prepared").then_some(i))
         .collect();
-    app.state::<Preparation>().0.lock().unwrap().prepared = prepared
+    app.state::<Preparation>().0.lock().unwrap().prepared = items
         .iter()
-        .map(|i| items[*i]["file"].as_str().unwrap().to_owned())
+        .filter_map(|item| item["file"].as_str().map(str::to_owned))
         .collect();
     for &index in &prepared {
         items[index]["status"] = json!("unknown");
@@ -949,7 +949,13 @@ fn open_batch(
                 match tauri::async_runtime::block_on(crate::terminal::enroll_selected_named(
                     app,
                     items[index]["file"].as_str().unwrap(),
-                    result["previousLayout"].clone(),
+                    // The first admission expands the saved layout to all prepared members.
+                    // Reapplying it would erase names saved by earlier ACKs in this batch.
+                    if index == prepared[0] {
+                        result["previousLayout"].clone()
+                    } else {
+                        Value::Null
+                    },
                     expected,
                     diagnostic,
                     items[index]["name"].as_str(),
@@ -1737,6 +1743,69 @@ mod tests {
 mod catalog_tests {
     use super::{valid_catalog, valid_request};
     use serde_json::json;
+    #[test]
+    fn batch_requests_bind_exact_items_without_paths_or_execution_authority() {
+        let request = json!({"action":"create-batch","generation":3,
+            "workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),
+            "requests":[{"id":"00000000-0000-4000-8000-000000000001", "workspaceId":"synthetic-workspace",
+                "provider":"claude","modelId":null,"name":"Synthetic batch"}]});
+        assert!(valid_request(&request));
+        for key in [
+            "path",
+            "proof",
+            "task",
+            "currentCore",
+            "epoch",
+            "sourceInstanceId",
+        ] {
+            let mut forged = request.clone();
+            forged["requests"][0][key] = json!("SYNTHETIC");
+            assert!(!valid_request(&forged));
+        }
+        for invalid in [
+            json!([]),
+            json!(vec![request["requests"][0].clone(); 9]),
+            json!([
+                request["requests"][0].clone(),
+                request["requests"][0].clone()
+            ]),
+        ] {
+            let mut forged = request.clone();
+            forged["requests"] = invalid;
+            assert!(!valid_request(&forged));
+        }
+        for invalid in [json!("bad\nname"), json!("x".repeat(49))] {
+            let mut forged = request.clone();
+            forged["requests"][0]["name"] = invalid;
+            assert!(!valid_request(&forged));
+        }
+        let frame = json!({"kind":"complete","status":"batch","previousLayout":null,
+            "items":[{"id":request["requests"][0]["id"],"status":"prepared","reason":"not_attempted",
+                "effects":"possible","terminalId":"00000000-0000-4000-8000-000000000002",
+                "file":"/SYNTHETIC/terminal.json","name":"Synthetic batch"}]});
+        assert!(super::batch_prepared(&frame, &request));
+        for (field, value) in [
+            ("id", json!("00000000-0000-4000-8000-000000000003")),
+            ("status", json!("accepted")),
+            ("effects", json!("not_started")),
+            ("file", json!("relative.json")),
+            ("name", json!("Changed")),
+            ("proof", json!("SYNTHETIC")),
+            ("reason", json!("core_enrolled")),
+        ] {
+            let mut forged = frame.clone();
+            forged["items"][0][field] = value;
+            assert!(!super::batch_prepared(&forged, &request), "{field}");
+        }
+        let failed = super::batch_failure(&request, "opening_uncertain", true);
+        assert_eq!(failed["items"][0]["id"], request["requests"][0]["id"]);
+        assert_eq!(failed["items"][0]["status"], "unknown");
+        assert_eq!(failed["items"][0]["effects"], "possible");
+        let refused = super::batch_failure(&request, "capacity_exceeded", false);
+        assert_eq!(refused["items"][0]["status"], "refused");
+        assert_eq!(refused["items"][0]["effects"], "not_started");
+    }
+
     #[test]
     fn mcp_pair_requests_are_bilateral_and_cannot_supply_task_or_launch_authority() {
         let pair = json!({"action":"create-mcp-pair","generation":3,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"sourceProvider":"codex","codexModelId":"b".repeat(64),"openCodeModelId":"c".repeat(64)});

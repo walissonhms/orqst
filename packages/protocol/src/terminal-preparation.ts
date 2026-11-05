@@ -80,8 +80,13 @@ export const terminalBatchReplySchema = z
             item.slot !== undefined &&
             item.effects === 'possible'
           : item.status === 'unknown'
-            ? item.effects === 'possible'
-            : item.effects === 'not_started',
+            ? item.effects === 'possible' &&
+              item.reason !== 'core_enrolled' &&
+              item.slot === undefined
+            : item.effects === 'not_started' &&
+              item.reason !== 'core_enrolled' &&
+              item.terminalId === undefined &&
+              item.slot === undefined,
       )
     );
   });
