@@ -731,9 +731,9 @@
     "start": "Iniciar CLI",
     "attach": "Conectar saída",
     "input": "Habilitar teclado",
-    "detach": "Desconectar saída",
-    "stop": "Parar processo",
-    "kill": "Forçar parada do processo…",
+    "detach": "Desconectar saída (o processo continua)",
+    "stop": "Parar (SIGTERM; encerramento não garantido)",
+    "kill": "Terminar (forçar; destrutivo)",
     "idle": "Nenhum processo próprio iniciado. Este perfil opcional usa login separado; reuso do login existente indisponível.",
     "denied": "Negado, entrada expirada ou configuração/autenticação alterada. Habilite a entrada novamente se necessário.",
     "cancelled": "Confirmação nativa cancelada.",
@@ -817,7 +817,13 @@
     "unavailable": "Transporte nativo indisponível. Entrada de teclado desativada; estado do processo não confirmado.",
     "openingIncomplete": "A abertura ficou incompleta. A tentativa do processo foi preservada. Confira o estado e conecte a saída ou teclado desta mesma instância; nenhum novo Start foi tentado.",
     "guide_openingIncomplete": "A identidade da tentativa foi preservada, mas o estado atual está indisponível. Atualize esta instância; não inicie outro processo nem remova sua reserva.",
-    "authorization": "Autorize o CLI local para continuar."
+    "authorization": "Autorize o CLI local para continuar.",
+    "hideView": "Esconder visão (o processo continua)",
+    "paneActions": "Ações do painel",
+    "viewGroup": "Somente visão",
+    "viewGroupHelp": "Estas ações nunca sinalizam nem param o processo próprio.",
+    "processGroup": "Processo",
+    "processGroupHelp": "Estas ações sinalizam o processo próprio. Parar envia SIGTERM e o encerramento não é garantido; Terminar força SIGKILL e pode perder trabalho."
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
