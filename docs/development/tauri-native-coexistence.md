@@ -163,12 +163,17 @@ not prove one.
   been fenced; or the gesture used the wrong button (macOS maps the first/Escape button
   to cancel and only the middle button to approve, `terminal.rs:420-423`).
 
-Decisive evidence, not implemented here: record a focus timeline in the private
-diagnostics, e.g. `focused()` observed at 0/100/250/500/1000 ms after the dialog
-completion plus the window's `is_focused`, `is_visible` and first-responder identity.
-A late `true` confirms the race; an always-`false` result points at the first-responder
-or fence checks instead. That instrumentation is Rust and cannot be compiled in this
-checkout.
+Decisive evidence is now available without changing authority: the native
+opening-diagnostics integration emits that timeline behind
+`ORQST_TAURI_FOCUS_DIAGNOSTICS=1` (`trace_dialog_focus`, `terminal.rs:466-501`, called
+after a dialog at `terminal.rs:1154`). It samples at 0/100/250/500/1000 ms with
+`focused`, `visible`, `windowFocused`, key-window state and first-responder identity,
+and the coexistence runner already sets the flag, so `ORQST_TERMINAL_FOCUS` lines land
+in the private `native-stderr.log`. A late `true` confirms the race; an always-`false`
+result points at the first-responder or fence checks instead. The sampler is
+developer-only metadata, never restores focus and never participates in an
+authorization decision. **No run has produced this timeline yet**, so the hypothesis
+stays unproven and no Start denial may be explained from code reading alone.
 
 Proposed correction for a machine with the Rust toolchain (not applied, not compiled
 here): keep every existing predicate and add a bounded re-check used only by the
@@ -198,6 +203,8 @@ above before any claim is made.
       diagnosed from `window.json`, not guessed.
 - [ ] Record a post-dialog focus timeline (0/100/250/500/1000 ms) when a native Start
       is denied after its confirmation, so the focus race is confirmed or excluded.
+      The runner already enables it: read `ORQST_TERMINAL_FOCUS` from
+      `native-stderr.log` (`ORQST_TAURI_FOCUS_DIAGNOSTICS=1`).
 - [ ] Edit directed routes/roles through native review; cancellation and returning
       from the PTY window must not approve an old communication challenge.
 - [ ] Cancel either stage of combined quit, then verify both surfaces ask again;
