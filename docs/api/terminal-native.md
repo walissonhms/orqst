@@ -601,3 +601,24 @@ poller stops on host shutdown. No HTTP, WebSocket or renderer capability is adde
 
 Synthetic Node/Rust tests are distinct from macOS Notification Center, background
 banners, Focus settings and real-provider click/focus acceptance, which remain pending.
+
+## Composer mentions v1 — 2026-11-05
+
+`window.orqstFeatures.request({contractVersion:1, generation, action:'mention',
+from:{kind:'user'}|{kind:'terminal', terminalId}, to:[terminalId…1..8], text})`
+records one attempt in a private append-only journal (`composer-mentions/`, 0700
+directory, 0600 files, `O_EXCL|O_NOFOLLOW`, single-link owner check) and replies
+`{status, snapshot, mention:{id, outcomes:[{terminalId, delivery, reason}]}}`.
+
+- Targets must be exact current terminal IDs and members of the active Feature
+  (or of the unassigned view). Otherwise `denied` with `unknown_terminal`,
+  `not_member` or `cross_feature_denied`.
+- A valid target is always `unsupported` + `no_structured_route` in v1. The MCP
+  grant authenticates the source CLI and cannot speak for the user, so no composer
+  delivery route exists yet. Nothing is typed into a PTY.
+- The origin never carries a grant. Rust accepts only these closed outcomes.
+- A failed record answers `unavailable`; the attempt may or may not exist.
+
+The dashboard shows "Recorded · delivery to terminals is not available yet" or
+"Not allowed" accordingly. An authorized v2 route (for example a target-side MCP
+inbox read with the target's own grant) needs its own design and review.
