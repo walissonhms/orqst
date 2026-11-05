@@ -34,6 +34,7 @@ export function TauriStudioPreparation({
   const sequence = useRef(0);
   const active = useRef(false);
   const inFlight = useRef(false);
+  const rateBlocked = useRef(false);
   const chosen = catalog?.providers.find((entry) => entry.provider === provider);
   const model = chosen?.models.find((entry) => entry.id === modelId);
   const companionProvider = provider === 'codex' ? 'opencode' : 'codex';
@@ -52,6 +53,10 @@ export function TauriStudioPreparation({
       try {
         const reply = await native.request(input);
         if (!active.current || sequence.current !== token) return;
+        if (reply.status === 'rate_limited') {
+          rateBlocked.current = true;
+          setFailure(undefined);
+        }
         if (reply.status === 'catalog') {
           if (reply.catalog.workspaceId !== workspaceId || reply.catalog.featureId !== featureId) {
             setNotice('denied');
@@ -94,7 +99,9 @@ export function TauriStudioPreparation({
     setMcpPair(false);
     setCompanionModelId('');
     void refresh();
-    const inspect = () => void refresh();
+    const inspect = () => {
+      if (!rateBlocked.current) void refresh();
+    };
     window.addEventListener('focus', inspect);
     return () => {
       window.removeEventListener('focus', inspect);
@@ -294,7 +301,14 @@ export function TauriStudioPreparation({
           <Terminal size={16} />
           {t(mcpPair ? 'studio.tauri.openMcpPair' : 'studio.tauri.open')}
         </button>
-        <button className="button" disabled={!native || busy} onClick={() => void refresh()}>
+        <button
+          className="button"
+          disabled={!native || busy}
+          onClick={() => {
+            rateBlocked.current = false;
+            void refresh();
+          }}
+        >
           {t('studio.refresh')}
         </button>
       </div>

@@ -64,6 +64,7 @@ vocabulary!(Outcome {
     FeatureTargetChanged => "feature_target_changed", FeatureMetadataChanged => "feature_metadata_changed",
     FeatureAdmissionChanged => "feature_admission_changed", FeatureNavigationChanged => "feature_navigation_changed",
     FeatureScopeChanged => "feature_scope_changed", FeaturePostContext => "feature_post_context",
+    RateLimited => "rate_limited",
     Uncertain => "uncertain", Unconfirmed => "unconfirmed",
 });
 vocabulary!(Effects {
@@ -81,6 +82,7 @@ pub enum RefusalSource {
     Studio,
     Feature,
     Terminal,
+    Agents,
 }
 impl RefusalSource {
     fn name(self) -> &'static str {
@@ -88,6 +90,7 @@ impl RefusalSource {
             Self::Studio => "studio",
             Self::Feature => "feature",
             Self::Terminal => "terminal",
+            Self::Agents => "agents",
         }
     }
 }
@@ -136,6 +139,69 @@ pub fn refusal(source: RefusalSource, outcome: Outcome, effects: Effects) {
     } else {
         Attempt::begin().record_native(Stage::Request, outcome, effects);
     }
+}
+
+// A separate aggregate guarantees one rate-limit record per source and window even
+// when the general renderer refusal vocabulary is saturated.
+static RATE_LIMITS: OnceLock<Mutex<RateWindow>> = OnceLock::new();
+struct RateWindow {
+    started: Instant,
+    counts: [u64; 4],
+}
+impl RateWindow {
+    fn new(now: Instant) -> Self {
+        Self {
+            started: now,
+            counts: [0; 4],
+        }
+    }
+    fn add(&mut self, source: RefusalSource) {
+        let index = match source {
+            RefusalSource::Studio => 0,
+            RefusalSource::Feature => 1,
+            RefusalSource::Terminal => 2,
+            RefusalSource::Agents => 3,
+        };
+        self.counts[index] = self.counts[index].saturating_add(1);
+    }
+    fn drain(&mut self, now: Instant) -> Option<[u64; 4]> {
+        if now.saturating_duration_since(self.started) < REFUSAL_WINDOW {
+            return None;
+        }
+        self.started = now;
+        Some(std::mem::take(&mut self.counts))
+    }
+}
+pub fn rate_limited(source: RefusalSource) {
+    if WRITER.get().is_none() {
+        return;
+    }
+    if let Ok(mut state) = RATE_LIMITS
+        .get_or_init(|| Mutex::new(RateWindow::new(Instant::now())))
+        .lock()
+    {
+        state.add(source);
+    }
+}
+fn rate_lines(now: Instant) -> Vec<String> {
+    let Some(state) = RATE_LIMITS.get() else {
+        return Vec::new();
+    };
+    let Ok(mut state) = state.lock() else {
+        return Vec::new();
+    };
+    let Some(counts) = state.drain(now) else {
+        return Vec::new();
+    };
+    let unix_ms = millis(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default(),
+    );
+    [RefusalSource::Studio, RefusalSource::Feature, RefusalSource::Terminal, RefusalSource::Agents].into_iter()
+        .zip(counts).filter(|(_, count)| *count > 0)
+        .map(|(source, count)| format!("{{\"v\":1,\"unix_ms\":{},\"source\":\"{}\",\"stage\":\"request\",\"outcome\":\"{}\",\"effects\":\"not_started\",\"count\":{}}}\n", unix_ms, source.name(), Outcome::RateLimited.name(), count))
+        .collect()
 }
 
 // A closed request-event allowlist. Every other event is native by default,
@@ -353,7 +419,10 @@ pub fn install(parent: PathBuf) {
                 };
                 let mut refusal_sink_available = true;
                 loop {
-                    for line in refusal_lines(Instant::now()) {
+                    for line in refusal_lines(Instant::now())
+                        .into_iter()
+                        .chain(rate_lines(Instant::now()))
+                    {
                         if refusal_sink_available
                             && (line.len() > RECORD_LIMIT
                                 || sink.append_refusal(line.as_bytes()).is_err())
@@ -573,6 +642,23 @@ mod tests {
     }
 
     #[test]
+    fn rate_limit_aggregate_counts_flood_once_per_source_and_window() {
+        let now = Instant::now();
+        let mut window = RateWindow::new(now);
+        for _ in 0..1000 {
+            window.add(RefusalSource::Studio);
+        }
+        for _ in 0..500 {
+            window.add(RefusalSource::Terminal);
+        }
+        assert!(window
+            .drain(now + REFUSAL_WINDOW - Duration::from_millis(1))
+            .is_none());
+        assert_eq!(window.drain(now + REFUSAL_WINDOW), Some([1000, 0, 500, 0]));
+        assert_eq!(window.drain(now + REFUSAL_WINDOW * 2), Some([0, 0, 0, 0]));
+    }
+
+    #[test]
     fn refusal_flood_is_deduplicated_bounded_and_renews() {
         let start = Instant::now();
         let mut window = RefusalWindow::new(start);
@@ -747,6 +833,33 @@ mod tests {
         let start = Instant::now();
         let native = Attempt::begin();
         native.record_native(Stage::NativeSetup, Outcome::Ready, Effects::Unconfirmed);
+        let mut catalogs = 0;
+        let mut opens = 0;
+        for _ in 0..1000 {
+            if crate::renderer_admission::admit(
+                "main",
+                crate::renderer_admission::Action::Catalog,
+                RefusalSource::Studio,
+            ) {
+                catalogs += 1;
+                let request = Attempt::renderer(RefusalSource::Studio);
+                request.record(Stage::HelperSpawn, Outcome::Requested, Effects::Unconfirmed);
+                request.record(Stage::HelperSpawn, Outcome::Started, Effects::Possible);
+                request.record(Stage::HelperComplete, Outcome::Succeeded, Effects::Possible);
+            }
+            if crate::renderer_admission::admit(
+                "terminal-0",
+                crate::renderer_admission::Action::Open,
+                RefusalSource::Terminal,
+            ) {
+                opens += 1;
+                let request = Attempt::renderer(RefusalSource::Terminal);
+                request.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
+                request.record(Stage::CliOpening, Outcome::Refused, Effects::Possible);
+            }
+        }
+        assert_eq!((catalogs, opens), (12, 12));
+        native.record_native(Stage::NativeExit, Outcome::Succeeded, Effects::Unconfirmed);
         for _ in 0..10_000 {
             let request = Attempt::renderer(RefusalSource::Studio);
             request.record(Stage::Request, Outcome::Requested, Effects::Unconfirmed);
@@ -797,12 +910,35 @@ mod tests {
             .unwrap()
             .drain(start + REFUSAL_WINDOW * 2)
             .unwrap();
-        assert_eq!(entries.len(), 3);
-        assert_eq!(suppressed, 39_999);
+        assert_eq!(entries.len(), 4);
+        assert_eq!(suppressed, 40_022);
         for line in format_refusals(entries, suppressed) {
             sink.append_refusal(line.as_bytes()).unwrap();
         }
         let native_lines = fs::read_to_string(parent.join("diagnostics/native.jsonl")).unwrap();
+        assert_eq!(
+            native_lines.matches("\"stage\":\"helper_spawn\"").count(),
+            24
+        );
+        assert_eq!(
+            native_lines
+                .matches("\"stage\":\"helper_complete\"")
+                .count(),
+            12
+        );
+        assert_eq!(
+            native_lines.matches("\"stage\":\"cli_opening\"").count(),
+            24
+        );
+        assert!(native_lines.contains("\"stage\":\"native_exit\""));
+        let rate = RATE_LIMITS
+            .get()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .drain(start + REFUSAL_WINDOW * 2)
+            .unwrap();
+        assert_eq!(rate, [988, 0, 988, 0]);
         for value in [
             "native_setup",
             "host_spawn",
@@ -814,8 +950,8 @@ mod tests {
             assert!(native_lines.contains(value), "missing {value}");
         }
         let requests = fs::read_to_string(parent.join("diagnostics/refusals.jsonl")).unwrap();
-        assert_eq!(requests.lines().count(), 4);
-        assert!(requests.contains("\"suppressed\":39999"));
+        assert_eq!(requests.lines().count(), 5);
+        assert!(requests.contains("\"suppressed\":40022"));
         drop(sink);
         fs::remove_dir_all(parent).unwrap();
     }

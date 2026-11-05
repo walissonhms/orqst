@@ -683,6 +683,7 @@
     "dismiss": "Voltar ao painel"
   },
   "managedTerminal": {
+    "rate_limited": "Muitas solicitações; aguarde um instante.",
     "selectionRetryReady": "A abertura falhou antes de admissão/Core e todas as views parciais foram limpas. Nenhuma reserva, journal ou provider foi criado. Crie ou selecione e revise um par novamente nesta execução do Desktop; manifests e reservas anteriores estão preservados.",
     "selectionFocusRequired": "Traga o dashboard ORQST ao primeiro plano com o macOS desbloqueado e tente novamente pelo menu nativo. Não houve criação, abertura ou autorização.",
     "createTeam": "Criar equipe de terminais…",
@@ -826,6 +827,7 @@
     "processGroupHelp": "Estas ações sinalizam o processo próprio. Parar envia SIGTERM e o encerramento não é garantido; Terminar força SIGKILL e pode perder trabalho."
   },
   "managedAgents": {
+    "rate_limited": "Muitas solicitações; aguarde um instante.",
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
     "tauriRetired": "Reserva encerrada após saídas comprovadas. Journals e resultados incertos são preservados. Para selecionar uma dupla nova, saia com segurança e reabra a prévia com novos perfis.",
     "title": "Agentes gerenciados",
@@ -889,6 +891,7 @@
     "state_closed": "Fechado"
   },
   "studio": {
+    "rate_limited": "Muitas solicitações; aguarde um instante.",
     "eyebrow": "ESPAÇO DE DESENVOLVIMENTO LOCAL",
     "intro": "Prepare os terminais, revise as permissões e trabalhe lado a lado.",
     "local": "Desktop nativo",
@@ -1065,6 +1068,7 @@
     "quit": "Sair do ORQST e encerrar seu Core"
   },
   "features": {
+    "rate_limited": "Muitas solicitações; aguarde um instante.",
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",
     "heading": "FEATURES",

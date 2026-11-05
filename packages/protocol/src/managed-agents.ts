@@ -84,7 +84,15 @@ export const managedAgentsSnapshotSchema = z.strictObject({
 });
 export type ManagedAgentsSnapshot = z.infer<typeof managedAgentsSnapshotSchema>;
 export const managedAgentsReplySchema = z.strictObject({
-  status: z.enum(['ok', 'cancelled', 'busy', 'denied', 'focus_required', 'unavailable']),
+  status: z.enum([
+    'ok',
+    'cancelled',
+    'busy',
+    'denied',
+    'focus_required',
+    'unavailable',
+    'rate_limited',
+  ]),
   snapshot: managedAgentsSnapshotSchema.optional(),
   empty: z.boolean().optional(),
 });

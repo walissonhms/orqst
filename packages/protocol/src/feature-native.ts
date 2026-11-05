@@ -144,7 +144,7 @@ export const featurePreparationRequestSchema = z.strictObject({
 });
 export type FeaturePreparationRequest = z.infer<typeof featurePreparationRequestSchema>;
 export const featurePreparationReplySchema = z.strictObject({
-  status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable']),
+  status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'rate_limited']),
 });
 export type FeaturePreparationReply = z.infer<typeof featurePreparationReplySchema>;
 

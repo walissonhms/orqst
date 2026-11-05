@@ -2,7 +2,7 @@
 //! No arbitrary program, CLI invocation or observer API is exposed.
 use crate::local_diagnostics::{refusal, Attempt, Effects, Outcome, RefusalSource, Stage};
 use serde_json::{json, Value};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::{Manager, Webview, WebviewWindow, Window, WindowEvent};
@@ -32,6 +32,87 @@ fn confirm_review(current: impl Fn() -> bool, mut show: impl FnMut(bool) -> Revi
         }
     }
     false
+}
+
+#[derive(Clone, Default)]
+pub struct CatalogFlight(Arc<Mutex<Option<Flight>>>);
+struct Flight {
+    request: Value,
+    generation: u64,
+    result: tokio::sync::watch::Receiver<Option<Value>>,
+}
+impl CatalogFlight {
+    fn subscribe(
+        &self,
+        request: Value,
+        generation: u64,
+        start: impl FnOnce() -> bool,
+        work: impl FnOnce() -> Value + Send + 'static,
+    ) -> Option<tokio::sync::watch::Receiver<Option<Value>>> {
+        let mut flight = self.0.lock().unwrap();
+        if let Some(current) = flight.as_ref() {
+            if current.request != request || current.generation != generation {
+                return None;
+            }
+            Some(current.result.clone())
+        } else {
+            if !start() {
+                return None;
+            }
+            let (sender, receiver) = tokio::sync::watch::channel(None);
+            *flight = Some(Flight {
+                request,
+                generation,
+                result: receiver.clone(),
+            });
+            let state = self.clone();
+            tauri::async_runtime::spawn(async move {
+                let result = tauri::async_runtime::spawn_blocking(work)
+                    .await
+                    .unwrap_or_else(|_| json!({"status":"unavailable"}));
+                sender.send_replace(Some(result));
+                *state.0.lock().unwrap() = None;
+            });
+            Some(receiver)
+        }
+    }
+    async fn run(
+        &self,
+        request: Value,
+        generation: u64,
+        start: impl FnOnce() -> bool,
+        work: impl FnOnce() -> Value + Send + 'static,
+    ) -> Value {
+        let Some(mut receiver) = self.subscribe(request, generation, start, work) else {
+            return json!({"status":"busy"});
+        };
+        loop {
+            if let Some(result) = receiver.borrow().clone() {
+                return result;
+            }
+            if receiver.changed().await.is_err() {
+                return json!({"status":"unavailable"});
+            }
+        }
+    }
+}
+async fn catalog_request(
+    app: &tauri::AppHandle,
+    parent: WebviewWindow,
+    request: Value,
+    source: String,
+    generation: u64,
+) -> Value {
+    let work_request = request.clone();
+    let worker = app.clone();
+    app.state::<CatalogFlight>()
+        .run(
+            request.clone(),
+            generation,
+            || begin(app, &request, Some(generation)).is_some(),
+            move || execute(&worker, &parent, work_request, &source, generation, false),
+        )
+        .await
 }
 
 #[derive(Default)]
@@ -654,6 +735,14 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     if request["action"] == "snapshot" {
         return json!({"status":"ok", "snapshot":snapshot(&app)});
     }
+    let action = match request["action"].as_str() {
+        Some("catalog") => crate::renderer_admission::Action::Catalog,
+        Some("review") => crate::renderer_admission::Action::Selection,
+        _ => crate::renderer_admission::Action::Create,
+    };
+    if !crate::renderer_admission::admit(window.label(), action, RefusalSource::Studio) {
+        return json!({"status":"rate_limited"});
+    }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
         refusal(
@@ -693,6 +782,29 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     } else {
         json!({"action":"create", "provider":request["provider"], "count":request["count"]})
     };
+    if request["action"] == "catalog" {
+        let value = catalog_request(&app, parent, native_request, source.clone(), generation).await;
+        if identity(&window) != Some((source, generation)) {
+            refusal(
+                RefusalSource::Studio,
+                Outcome::StudioPostIdentity,
+                Effects::Possible,
+            );
+            return json!({"status":"denied"});
+        }
+        if value["status"] == "busy" {
+            let current = snapshot(&app);
+            if current["busy"] != true {
+                refusal(
+                    RefusalSource::Studio,
+                    Outcome::StudioLatchUnavailable,
+                    Effects::NotStarted,
+                );
+            }
+            return json!({"status":if current["busy"] == true { "busy" } else { "denied" }, "snapshot":current});
+        }
+        return value;
+    }
     if begin(&app, &native_request, Some(generation)).is_none() {
         let current = snapshot(&app);
         if current["busy"] != true {
@@ -1260,6 +1372,50 @@ mod tests {
     use super::{create_action, document_matches, invalidates_preparation, valid_request, State};
     use serde_json::json;
     use tauri::WindowEvent;
+
+    #[test]
+    fn concurrent_catalogs_share_one_worker_and_result() {
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        let flight = super::CatalogFlight::default();
+        let starts = Arc::new(AtomicUsize::new(0));
+        let seen = starts.clone();
+        let (release, wait) = std::sync::mpsc::channel::<()>();
+        let request = json!({"action":"catalog", "workspaceId":"synthetic", "featureId":null});
+        let mut first = flight
+            .subscribe(
+                request.clone(),
+                7,
+                || true,
+                move || {
+                    seen.fetch_add(1, Ordering::SeqCst);
+                    wait.recv().unwrap();
+                    json!({"status":"catalog", "value":"synthetic"})
+                },
+            )
+            .unwrap();
+        let mut second = flight
+            .subscribe(
+                request.clone(),
+                7,
+                || panic!("second admission"),
+                || panic!("second worker"),
+            )
+            .unwrap();
+        assert!(flight
+            .subscribe(request.clone(), 8, || true, || json!({}))
+            .is_none());
+        release.send(()).unwrap();
+        tauri::async_runtime::block_on(async {
+            first.changed().await.unwrap();
+            second.changed().await.unwrap();
+        });
+        assert_eq!(*first.borrow(), *second.borrow());
+        assert_eq!(first.borrow().as_ref().unwrap()["status"], "catalog");
+        assert_eq!(starts.load(Ordering::SeqCst), 1);
+    }
 
     #[test]
     fn failure_contract_is_bounded_and_native_commit_evidence_cannot_be_downgraded() {

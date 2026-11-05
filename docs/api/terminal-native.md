@@ -392,3 +392,7 @@ See [migration and limits](../development/terminal-layout-sqlite.md).
 ## Native consent detail presentation — 2026-11-04
 
 The macOS private `confirm` review now keeps complete title/message/detail in a bounded native plain-text scroll view. Cancel remains default/Escape; only the distinct Authorize button response can approve, followed by existing focus/document/generation/revocation checks. The private payload, authority and deadlines are unchanged. See [source and acceptance limits](../research/native-consent-scroll.md).
+
+Native `open` and `start` may return `rate_limited` before dispatch, with no
+operation started. A rejected prepared-open intent is not consumed. See the
+[admission limits](../development/local-diagnostics.md#renderer-admission-and-lock-test-limitation).

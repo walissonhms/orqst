@@ -49,3 +49,6 @@ new prepared profiles require a fresh preview launch; no automatic reselection e
 
 See [run instructions and checklist](../development/tauri.md#structured-agent-communication--2026-11-04)
 and [component review](../research/tauri-agent-communication.md).
+
+The native managed-agent `start` request may return `rate_limited` before
+transport or process work. See the [admission limits](../development/local-diagnostics.md#renderer-admission-and-lock-test-limitation).

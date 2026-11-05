@@ -134,6 +134,7 @@ const show = (key: string) => {
     'cancelled',
     'gap',
     'focus_required',
+    'rate_limited',
     'unavailable',
     'authorization',
   ].includes(key)

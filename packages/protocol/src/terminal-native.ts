@@ -35,7 +35,7 @@ export type TerminalNativeRequest = z.infer<typeof terminalNativeRequestSchema>;
 
 export const terminalNativeReplySchema = z.union([
   z.strictObject({
-    status: z.enum(['denied', 'cancelled', 'busy', 'focus_required']),
+    status: z.enum(['denied', 'cancelled', 'busy', 'focus_required', 'rate_limited']),
     authorization: z.enum(['blocked', 'revoked']).optional(),
   }),
   z.strictObject({

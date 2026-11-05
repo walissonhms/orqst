@@ -739,6 +739,13 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     let Some(source) = identity(&window) else {
         return denied(crate::local_diagnostics::Outcome::FeatureIdentity);
     };
+    if !crate::renderer_admission::admit(
+        window.label(),
+        crate::renderer_admission::Action::Navigate,
+        crate::local_diagnostics::RefusalSource::Feature,
+    ) {
+        return json!({"status":"rate_limited"});
+    }
     let app = window.app_handle();
     let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});

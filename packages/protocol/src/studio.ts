@@ -23,7 +23,7 @@ export const studioSnapshotSchema = z.strictObject({
 });
 export type StudioSnapshot = z.infer<typeof studioSnapshotSchema>;
 export const studioReplySchema = z.strictObject({
-  status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),
+  status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable', 'rate_limited']),
   snapshot: studioSnapshotSchema.optional(),
 });
 export type StudioReply = z.infer<typeof studioReplySchema>;
@@ -116,7 +116,7 @@ export const tauriStudioReplySchema = z.union([
   z.strictObject({ status: z.literal('catalog'), catalog: terminalPreparationCatalogSchema }),
   z
     .strictObject({
-      status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),
+      status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable', 'rate_limited']),
       snapshot: tauriStudioSnapshotSchema.optional(),
       failure: terminalPreparationFailureSchema.optional(),
     })

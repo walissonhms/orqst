@@ -683,6 +683,7 @@
     "dismiss": "Back to dashboard"
   },
   "managedTerminal": {
+    "rate_limited": "Too many requests; please wait a moment.",
     "selectionRetryReady": "Opening failed before admission/Core and all partial views were cleaned up. No claim, journal or provider was created. Create or select and review a pair again in this Desktop run; retained manifests and reservations are unchanged.",
     "selectionFocusRequired": "Bring the ORQST dashboard to the foreground with macOS unlocked, then retry the native menu action. No creation, opening or authorization occurred.",
     "createTeam": "Create terminal team…",
@@ -826,6 +827,7 @@
     "processGroupHelp": "These actions signal the owned process. Stop sends SIGTERM and exit is not guaranteed; Terminate forces SIGKILL and can lose work."
   },
   "managedAgents": {
+    "rate_limited": "Too many requests; please wait a moment.",
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",
     "tauriRetired": "Pair retired after confirmed exits. Journals and uncertain outcomes are preserved. To select a fresh pair, safely quit and reopen the preview with new profiles.",
     "title": "Managed agents",
@@ -889,6 +891,7 @@
     "state_closed": "Closed"
   },
   "studio": {
+    "rate_limited": "Too many requests; please wait a moment.",
     "eyebrow": "LOCAL DEVELOPER WORKSPACE",
     "intro": "Prepare your terminals, review the permissions, then work side by side.",
     "local": "Native Desktop",
@@ -1065,6 +1068,7 @@
     "quit": "Quit ORQST and its owned Core"
   },
   "features": {
+    "rate_limited": "Too many requests; please wait a moment.",
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",
     "heading": "FEATURES",

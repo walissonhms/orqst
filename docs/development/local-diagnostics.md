@@ -204,3 +204,46 @@ earlier native preparation guards report not started. Feature focus and pre-pres
 `feature_post_context` identifies the combined fence after presentation.
 A renderer-detected catalog scope mismatch shows a local denial notice and does not
 write a native diagnostic.
+
+## Renderer admission and lock-test limitation
+
+Native admission limits each authenticated document label and action to 12 requests
+per fixed 60-second window. Catalog, creation, selection, preparation navigation,
+terminal open and terminal start (including managed-agent start) use separate buckets. A burst across a window edge
+can admit up to 24 operations. Exceeding a bucket returns `rate_limited` before the
+helper, opening diagnostic or native dispatch; the UI displays a localized notice
+and does not retry that operation. Automatic catalog refresh on focus is suspended
+after a refusal until the user explicitly refreshes. A prepared open intent is not
+consumed by a refusal. Native menu actions and lifecycle records do not use this
+renderer admission path.
+
+Equal in-flight catalog requests for the same native generation and exact scope
+share the same helper and result, up to the admission limit. A different scope or
+generation does not join it. The detached native task completes even if its caller
+disappears, and each caller revalidates its own document before receiving a result.
+Rate refusals are counted without document IDs or payloads in the renderer stream:
+one aggregate per source per 60-second diagnostic window, subject to the existing
+best-effort sink and rotation. Native event classification is unchanged.
+
+The diagnostic lock test previously observed `WouldBlock` reopening the lock in
+3/30 and 2/30 parallel suite runs. A separate experiment showed inherited file
+descriptors can plausibly retain a lock. Isolating the lock lifetime in a subprocess
+then yielded 0/30 failures in both isolated and full-suite repetitions. Suite
+interference is probable, **not proved**: the descriptor owner was not identified.
+The test still checks competing-writer exclusion and immediate reopen after close;
+no production lock behavior, retry or timeout was changed. This does not establish
+whether an independent production defect exists.
+
+The reference decisions in [the pinned diagnostics review](../research/local-diagnostics.md)
+remain applicable: Anywh `AgentEventLog.append/rotate` at `546f189c04415c3c5af5f40e3931a0a90b9aba31`
+is a synchronous replay log, and Tucano's router at `0501956d127699300209902e889f3e69a0948766`
+handles content-oriented routing; neither provides this native admission contract.
+Both pinned root licenses are Apache-2.0, with no NOTICE found in that review.
+No upstream code or dependency is incorporated.
+
+Synthetic tests exercise the admission implementation, in-flight coordinator,
+aggregated counts and bounded representative native records, plus the typed client
+responses. They do not invoke a real Tauri Webview command or prove native UI,
+provider or package behavior. Like any finite rotating log, sustained admitted
+activity can eventually rotate older native records; the rate limit bounds work
+per window and does not promise indefinite retention.

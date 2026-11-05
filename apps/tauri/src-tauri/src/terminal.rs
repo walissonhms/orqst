@@ -901,6 +901,21 @@ async fn dispatch_terminal_request(
     request: Value,
     expected: Option<(u64, u64, Instant)>,
 ) -> Value {
+    if expected.is_none() {
+        let action = match request["action"].as_str() {
+            Some("open") => Some(crate::renderer_admission::Action::Open),
+            Some("start") => Some(crate::renderer_admission::Action::Start),
+            _ => None,
+        };
+        if let Some(action) = action {
+            if slot(&window).is_none() {
+                return json!({"status":"denied"});
+            }
+            if !crate::renderer_admission::admit(window.label(), action, RefusalSource::Terminal) {
+                return json!({"status":"rate_limited"});
+            }
+        }
+    }
     // Retain the originating preparation attempt for the first dispatch per member.
     // Taking this optional tag cannot consume an intent, grant, pending reply or reservation.
     let diagnostic = if request["action"] == "open" {
@@ -1087,6 +1102,13 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         }
         (r.generations[slot], r.layout_generation, intent.expires)
     };
+    if !crate::renderer_admission::admit(
+        window.label(),
+        crate::renderer_admission::Action::Open,
+        RefusalSource::Terminal,
+    ) {
+        return json!({"attempted":true,"value":{"status":"rate_limited"}});
+    }
     if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
         return idle();
     }

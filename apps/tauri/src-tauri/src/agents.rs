@@ -147,6 +147,15 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
     if !current(&window) {
         return denied();
     }
+    if request["action"] == "start"
+        && !crate::renderer_admission::admit(
+            window.label(),
+            crate::renderer_admission::Action::Start,
+            crate::local_diagnostics::RefusalSource::Agents,
+        )
+    {
+        return json!({"status":"rate_limited"});
+    }
     let app = window.app_handle().clone();
     if crate::terminal::presentation_blocked(&app) {
         return denied();

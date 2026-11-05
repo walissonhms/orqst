@@ -1693,3 +1693,14 @@ refresh performs a new native read with the same focus gate, without automatic r
 CSP is unchanged. Reset is not implemented; an empty allowlist denies all
 operations. Synthetic tests and source review do not establish native AppKit,
 real provider, package or platform acceptance.
+
+## Renderer preparation admission — 2026-11-05 (source state)
+
+The owned Studio, Feature, terminal and managed-agent documents are authenticated
+before per-label native admission. Fixed, per-action windows bound helper creation,
+preparation navigation and open/start dispatches. Excess requests return the
+closed `rate_limited` status before those effects; catalog requests for the same
+scope and generation share an in-flight helper. The limit does not grant focus,
+review or execution authority, and does not suppress native lifecycle diagnostics.
+The renderer receives no paths or private identifiers in the refusal. See the
+[limits and synthetic validation scope](../development/local-diagnostics.md#renderer-admission-and-lock-test-limitation).

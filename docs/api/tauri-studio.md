@@ -108,3 +108,8 @@ before consumption. This adds no renderer authority or public fields. See the
 
 A catalog scope mismatch detected by the renderer shows a local denial notice.
 Native guard diagnostics use closed, sanitized outcomes and do not accept renderer reports.
+
+The native preparation boundary can return `rate_limited` without starting a
+helper or applying an action. Equal admitted in-flight catalog requests for the
+same scope and native generation share the result. See the [admission limits and
+diagnostic behavior](../development/local-diagnostics.md#renderer-admission-and-lock-test-limitation).

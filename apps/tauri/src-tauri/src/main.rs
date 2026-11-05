@@ -11,6 +11,7 @@ mod offline_recovery;
 mod quit_native;
 mod quit_orchestration;
 mod renderer;
+mod renderer_admission;
 mod sidecar;
 mod terminal;
 mod terminal_creation;
@@ -70,6 +71,7 @@ fn main() {
         .manage(features::Features::default())
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, terminal::terminal_restore, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, features::feature_permissions, terminal_creation::studio_request])
         .manage(terminal_creation::Preparation::default())
+        .manage(terminal_creation::CatalogFlight::default())
         .manage(offline_recovery::Recovery::default())
         .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); agents::on_window_event(window,event); })
         .register_uri_scheme_protocol("orqst-recovery", |_, request| offline_recovery::response(&request))

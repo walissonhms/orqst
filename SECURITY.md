@@ -1237,3 +1237,12 @@ conflicts return `stale`; an unconfirmed save returns `unknown` without retry.
 CSP is unchanged. Reset is not implemented; an empty allowlist denies all
 operations. Synthetic tests and source review do not establish native AppKit,
 real provider, package or platform acceptance.
+
+## Renderer preparation admission — 2026-11-05 (source state)
+
+Native per-document admission bounds renderer-triggered preparation, navigation
+and open/start requests before their native effects. Excess requests return a
+closed `rate_limited` status. This does not grant authority or suppress native
+lifecycle diagnostics. See the [security model](docs/architecture/security-model.md#renderer-preparation-admission--2026-11-05-source-state)
+for the boundary and [diagnostic limits](docs/development/local-diagnostics.md#renderer-admission-and-lock-test-limitation)
+for window constants and limitations.
