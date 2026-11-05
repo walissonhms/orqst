@@ -16,6 +16,12 @@ import { z } from 'zod';
 import { terminalDigest } from './authority.js';
 import { terminalDirectory, terminalExecutableSha256, terminalFile } from './codex-profile.js';
 import type { TerminalProfile } from './supervisor.js';
+import { findCliContract, type CliContractMode, type CliContractProvider } from './cli-contract.js';
+import {
+  verifiedCliSignature,
+  type CliSignatureEvidence,
+  type CliSignatureVerifier,
+} from './cli-signature.js';
 
 export type TerminalCliAuthorizationState = 'allowed' | 'blocked' | 'revoked';
 export interface TerminalCliAuthorization<Document extends object> {
@@ -27,7 +33,7 @@ export interface TerminalCliAuthorization<Document extends object> {
   epoch(profile: Readonly<TerminalProfile>): string | undefined;
 }
 
-const recordSchema = z.strictObject({
+const legacyRecordSchema = z.strictObject({
   version: z.literal(1),
   scope: z.literal('owned-local-terminal-v1'),
   executable: z.string().min(1).max(2048),
@@ -36,7 +42,33 @@ const recordSchema = z.strictObject({
   permissionScope: z.string().regex(/^[a-f0-9]{64}$/),
   state: z.enum(['allowed', 'revoked']),
 });
+const verifiedRecordSchema = legacyRecordSchema.extend({
+  version: z.literal(2),
+  provider: z.enum(['codex', 'claude', 'opencode']),
+  mode: z.enum(['tui', 'mcp']),
+  executableVersion: z.string().min(1).max(64),
+  contractRevision: z.string().min(1).max(128),
+  signature: z.strictObject({
+    valid: z.literal(true),
+    teamId: z.string().min(1).max(64),
+    identifier: z.string().min(1).max(256),
+  }),
+});
+const recordSchema = z.discriminatedUnion('version', [legacyRecordSchema, verifiedRecordSchema]);
 type Record = z.infer<typeof recordSchema>;
+export interface TerminalCliEvidence {
+  provider: CliContractProvider;
+  mode: CliContractMode;
+  version: string;
+  contractRevision: string;
+  sha256: string;
+  signature: CliSignatureEvidence;
+}
+export interface TerminalCliReview {
+  previous: Record | undefined;
+  candidate: TerminalCliEvidence & { executable: string; permissionScope: string };
+}
+
 const permissionScope = (profile: Readonly<TerminalProfile>) =>
   terminalDigest(JSON.stringify([profile.environmentProfile, profile.cliAuthorizationScope]));
 
@@ -104,7 +136,7 @@ export class TerminalCliPolicyStore {
     try {
       if (!profile.cliAuthorizationScope) return 'blocked';
       const record = this.load(profile);
-      if (!record) return 'blocked';
+      if (!record || record.version !== 1) return 'blocked';
       if (record.state === 'revoked' || record.executableSha256 !== profile.executableSha256)
         return 'revoked';
       if (record.permissionScope !== permissionScope(profile)) return 'blocked';
@@ -134,6 +166,7 @@ export class TerminalCliPolicyStore {
       if (!profile.cliAuthorizationScope) return 'blocked';
       if (this.current(profile) === 'allowed') return 'allowed';
       const previous = this.load(profile);
+      if (previous?.version === 2) return 'blocked';
       // Revocation and permission expansion require explicit configuration. Opening is not consent to either.
       if (
         previous &&
@@ -158,6 +191,116 @@ export class TerminalCliPolicyStore {
       return this.current(profile);
     } catch {
       return 'revoked';
+    }
+  }
+
+  /** Versioned authorization path. The verifier and probe must be supplied by the native host. */
+  async authorizeVerifiedCli(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+    verifier: CliSignatureVerifier,
+    probe: () => Promise<TerminalCliEvidence>,
+    review: (details: TerminalCliReview) => Promise<boolean>,
+    expectedEpoch?: string,
+  ): Promise<TerminalCliAuthorizationState> {
+    try {
+      if (!profile.cliAuthorizationScope) return 'blocked';
+      const previous = this.load(profile);
+      const signature = await verifiedCliSignature(verifier, provider, profile.executable);
+      this.inspect(profile);
+      const stable = this.identity(profile);
+      const matches =
+        previous?.version === 2 &&
+        previous.state === 'allowed' &&
+        previous.provider === provider &&
+        previous.mode === mode &&
+        previous.executableSha256 === profile.executableSha256 &&
+        previous.executableVersion === profile.executableVersion &&
+        previous.permissionScope === permissionScope(profile) &&
+        previous.contractRevision ===
+          findCliContract(provider, mode, profile.executableVersion)?.revision &&
+        JSON.stringify(previous.signature) === JSON.stringify(signature) &&
+        (expectedEpoch === undefined || expectedEpoch === previous.authorizationEpoch);
+      if (matches) return 'allowed';
+      const evidence = await probe();
+      const contract = findCliContract(provider, mode, evidence.version);
+      if (
+        !contract ||
+        evidence.provider !== provider ||
+        evidence.mode !== mode ||
+        evidence.version !== profile.executableVersion ||
+        evidence.contractRevision !== contract.revision ||
+        evidence.sha256 !== profile.executableSha256 ||
+        JSON.stringify(evidence.signature) !== JSON.stringify(signature) ||
+        stable !== this.identity(profile)
+      )
+        return 'revoked';
+      const candidate = {
+        ...evidence,
+        executable: profile.executable,
+        permissionScope: permissionScope(profile),
+      };
+      if (!(await review({ previous, candidate }))) return 'blocked';
+      const verified = await verifiedCliSignature(verifier, provider, profile.executable);
+      this.inspect(profile);
+      if (
+        stable !== this.identity(profile) ||
+        JSON.stringify(verified) !== JSON.stringify(signature) ||
+        JSON.stringify(previous) !== JSON.stringify(this.load(profile))
+      )
+        return 'revoked';
+      this.save(profile, {
+        version: 2,
+        scope: 'owned-local-terminal-v1',
+        executable: profile.executable,
+        executableSha256: profile.executableSha256,
+        authorizationEpoch: randomUUID(),
+        permissionScope: permissionScope(profile),
+        state: 'allowed',
+        provider,
+        mode,
+        executableVersion: evidence.version,
+        contractRevision: contract.revision,
+        signature: { valid: true, teamId: signature.teamId, identifier: signature.identifier },
+      });
+      return 'allowed';
+    } catch {
+      return 'revoked';
+    }
+  }
+
+  async verifiedEpoch(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+    verifier: CliSignatureVerifier,
+  ): Promise<string | undefined> {
+    try {
+      const record = this.load(profile);
+      if (
+        !record ||
+        record.version !== 2 ||
+        record.state !== 'allowed' ||
+        record.provider !== provider ||
+        record.mode !== mode ||
+        record.executableVersion !== profile.executableVersion ||
+        record.executableSha256 !== profile.executableSha256 ||
+        record.permissionScope !== permissionScope(profile) ||
+        record.contractRevision !==
+          findCliContract(provider, mode, profile.executableVersion)?.revision
+      )
+        return;
+      const signature = await verifiedCliSignature(verifier, provider, profile.executable);
+      this.inspect(profile);
+      if (
+        JSON.stringify(signature) !== JSON.stringify(record.signature) ||
+        JSON.stringify(record) !== JSON.stringify(this.load(profile))
+      )
+        return;
+      return record.authorizationEpoch;
+    } catch {
+      return;
     }
   }
 
