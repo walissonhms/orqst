@@ -99,11 +99,15 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
 }
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
+  validateClaudeManifest(config);
+  validateClaudeLaunchContract(config);
+}
+
+function validateClaudeManifest(config: ManagedClaudeConfig): void {
   managedClaudeConfigSchema.parse(config);
   validateTerminalModelSelection(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
-  validateClaudeLaunchContract(config);
   if (!!config.interactive.mcp !== !!config.interactive.strictMcpAcknowledged)
     throw new Error('Claude MCP requires explicit strict-MCP exclusion acknowledgment');
   terminalDirectory(config.project);
@@ -165,6 +169,7 @@ export function parseInteractiveManifestForRecovery(raw: unknown): InteractiveTe
 
 export function readInteractiveTerminalConfig(file: string): InteractiveTerminalConfig {
   let raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
+  const legacy = typeof raw === 'object' && raw !== null && !('cliAuthorization' in raw);
   if (typeof raw === 'object' && raw !== null && 'cliAuthorization' in raw) {
     const entry = raw as Record<string, unknown>;
     if (entry.cliAuthorization !== 'local-v2') v2CliBindingSchema.parse(entry.cliAuthorization);
@@ -183,7 +188,11 @@ export function readInteractiveTerminalConfig(file: string): InteractiveTerminal
   }
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 2) {
     const config = managedClaudeConfigSchema.parse(raw);
-    validateManagedClaudeConfig(config);
+    // A legacy TUI manifest remains inspectable, but profile construction still
+    // requires a current launch contract and the normal authorization checks.
+    if (legacy && !config.interactive.mcp && config.executableVersion === '2.1.178')
+      validateClaudeManifest(config);
+    else validateManagedClaudeConfig(config);
     return config;
   }
   const config = managedCodexConfigSchema.parse(raw);

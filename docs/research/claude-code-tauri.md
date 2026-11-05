@@ -8,6 +8,14 @@ configuration was read.
 
 ## Independent contracts
 
+2026-11-05 correction: the following paragraphs record the earlier pin-based
+implementation. The current policy uses vendor signature, measured local bytes,
+reviewed version contracts and authorization. Legacy Claude 2.1.178 TUI
+manifests without a v2 CLI binding can be read for inspection while their saved
+file and filesystem checks remain valid; they cannot launch without a current TUI
+contract. The independent 2.1.178 MCP contract remains separate. This does not
+change the conservative handling of unverifiable historical recovery bindings.
+
 | Contract                  | Version label | SHA-256                                   |
 | ------------------------- | ------------- | ----------------------------------------- |
 | Normal TUI                | 2.1.318       | `[historical CLI binary SHA-256 removed]` |

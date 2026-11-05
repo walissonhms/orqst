@@ -1,7 +1,7 @@
 // Synthetic profile claims only. No provider, native login, credentials or external sessions.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -10,8 +10,10 @@ import {
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
   managedClaudeConfigSchema,
+  readInteractiveTerminalConfig,
   reviewedClaudeTuiBinary,
 } from '../packages/core/src/terminal/interactive-profile.js';
+import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { terminalRPCSchema, terminalPairReadySchema } from '../packages/core/src/terminal/rpc.js';
 
@@ -36,7 +38,7 @@ function fixture() {
   });
 }
 
-test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched MCP pins', () => {
+test('reviewed Claude TUI rejects versions without a TUI contract', () => {
   const legacy = fixture();
   assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.318');
   const config = managedClaudeConfigSchema.parse({
@@ -70,6 +72,38 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
     /No reviewed Claude/,
   );
   assert.equal(reviewedProviderMcpBinaries.claude.version, '2.1.178');
+});
+
+test('legacy Claude TUI manifest is inspectable but cannot launch without a current contract', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-legacy-claude-')));
+  try {
+    const project = join(root, 'project');
+    const state = join(root, 'state');
+    const home = join(root, 'home');
+    for (const directory of [project, state, home, join(state, 'tmp')])
+      mkdirSync(directory, { mode: 0o700 });
+    const executable = join(root, 'synthetic-cli');
+    copyFileSync(realpathSync(process.execPath), executable);
+    const sha256 = terminalExecutableSha256(executable);
+    const config = {
+      ...fixture(),
+      executableVersion: '2.1.178',
+      executable: { path: executable, sha256 },
+      node: { path: executable, sha256 },
+      project,
+      state,
+      authentication: { mode: 'reuse-existing', home, sharedNativeConfiguration: true },
+    };
+    const manifest = join(state, 'terminal.json');
+    writeFileSync(manifest, JSON.stringify(config), { mode: 0o600 });
+    const read = readInteractiveTerminalConfig(manifest);
+    assert.equal(read.executableVersion, '2.1.178');
+    assert.throws(() => interactiveTerminalProfiles(read), /No reviewed Claude launch contract/);
+    writeFileSync(executable, 'changed synthetic bytes');
+    assert.throws(() => readInteractiveTerminalConfig(manifest));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('legacy Claude pin still composes the unchanged reviewed strict MCP launch', () => {
