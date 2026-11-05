@@ -135,6 +135,10 @@ async function main() {
       process.argv[5] && process.argv[5] !== 'null'
         ? desktopAdmissionContextSchema.parse(JSON.parse(process.argv[5]))
         : undefined,
+      process.argv[6] === undefined
+        ? 8
+        : z.number().int().min(0).max(8).parse(Number(process.argv[6])),
+      process.argv[7] === 'true',
     );
     if (live) send({ kind: 'complete', ...result });
   } finally {

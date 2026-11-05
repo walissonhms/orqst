@@ -212,6 +212,59 @@ fn valid_request(value: &Value) -> bool {
                     .as_u64()
                     .is_some_and(|n| (1..=8).contains(&n))
         }
+        Some("create-batch") => {
+            exact(
+                value,
+                &[
+                    "action",
+                    "generation",
+                    "workspaceId",
+                    "featureId",
+                    "catalogId",
+                    "requests",
+                ],
+            ) && generation
+                && scope(value)
+                && digest(&value["catalogId"])
+                && value["requests"].as_array().is_some_and(|items| {
+                    !items.is_empty()
+                        && items.len() <= 8
+                        && items.iter().all(|item| {
+                            (exact(item, &["id", "workspaceId", "provider", "modelId", "name"])
+                                || exact(
+                                    item,
+                                    &[
+                                        "id",
+                                        "workspaceId",
+                                        "provider",
+                                        "modelId",
+                                        "name",
+                                        "accountId",
+                                    ],
+                                ))
+                                && crate::features::uuid(&item["id"])
+                                && crate::features::workspace_id(&item["workspaceId"])
+                                && matches!(
+                                    item["provider"].as_str(),
+                                    Some("codex" | "claude" | "opencode")
+                                )
+                                && (item["modelId"].is_null() || digest(&item["modelId"]))
+                                && crate::features::name(&item["name"])
+                                && item.get("accountId").is_none_or(|id| {
+                                    id.is_null()
+                                        || id
+                                            .as_str()
+                                            .is_some_and(|id| !id.is_empty() && id.len() <= 80)
+                                })
+                        })
+                        && items
+                            .iter()
+                            .map(|item| item["id"].to_string())
+                            .collect::<std::collections::HashSet<_>>()
+                            .len()
+                            == items.len()
+                })
+        }
         Some("review") => exact(value, &["action", "generation"]) && generation,
         Some("create") => {
             exact(value, &["action", "generation", "provider", "count"])
@@ -386,7 +439,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let incremental = running
         && matches!(
             request["action"].as_str(),
-            Some("catalog" | "create-selected")
+            Some("catalog" | "create-selected" | "create-batch")
         );
     if running
         && (!incremental
@@ -409,7 +462,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
             !guard.begin(
                 matches!(
                     request["action"].as_str(),
-                    Some("create" | "create-selected" | "create-mcp-pair")
+                    Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
                 ),
                 running,
             )
@@ -638,6 +691,9 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
+        if request["action"] == "create-batch" {
+            return batch_failure(&request, "focus_required", false);
+        }
         return json!({"status":"focus_required"});
     }
     if identity(&window) != Some((source.clone(), generation))
@@ -651,6 +707,10 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     let Some(parent) = app.get_webview("main") else {
         return denied();
     };
+    if request["action"] == "create-batch" && crate::terminal::pool_available_slots(&app) == Some(0)
+    {
+        return batch_failure(&request, "capacity_exceeded", false);
+    }
     let native_request = if request["action"] == "review" {
         let files = app
             .state::<Preparation>()
@@ -665,7 +725,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"review", "files":files})
     } else if matches!(
         request["action"].as_str(),
-        Some("catalog" | "create-selected" | "create-mcp-pair")
+        Some("catalog" | "create-selected" | "create-mcp-pair" | "create-batch")
     ) {
         let mut native = request.clone();
         native.as_object_mut().unwrap().remove("generation");
@@ -675,11 +735,23 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     };
     if begin(&app, &native_request, Some(generation)).is_none() {
         let current = snapshot(&app);
+        if request["action"] == "create-batch" {
+            return batch_failure(
+                &request,
+                if current["busy"] == true {
+                    "busy"
+                } else {
+                    "context_changed"
+                },
+                false,
+            );
+        }
         return json!({"status":if current["busy"] == true { "busy" } else { "denied" }, "snapshot":current});
     }
     // Once admitted, the native task owns completion even if the JS invocation disappears.
     let native_app = app.clone();
     let native_source = source.clone();
+    let requested = request.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         execute(
             &native_app,
@@ -695,6 +767,22 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return denied();
     }
     match result {
+        Ok(value) if value["status"] == "batch" => value,
+        Ok(value) if requested["action"] == "create-batch" => {
+            let possible = value["failure"]["effects"] != "not_started";
+            batch_failure(
+                &requested,
+                if possible {
+                    "opening_uncertain"
+                } else {
+                    "preparation_failed"
+                },
+                possible,
+            )
+        }
+        Err(_) if requested["action"] == "create-batch" => {
+            batch_failure(&requested, "opening_uncertain", true)
+        }
         Ok(value) if value["status"] == "catalog" => value,
         Ok(value) if value["status"] == "denied" => {
             json!({"status":"denied", "failure":value["failure"], "snapshot":snapshot(&app)})
@@ -702,6 +790,195 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         Ok(_) => json!({"status":"ok", "snapshot":snapshot(&app)}),
         _ => json!({"status":"unavailable", "snapshot":snapshot(&app)}),
     }
+}
+
+fn batch_failure(request: &Value, reason: &str, possible: bool) -> Value {
+    json!({"status":"batch", "items":request["requests"].as_array().unwrap().iter().map(|item|
+        json!({"id":item["id"],"status":if possible { "unknown" } else { "refused" },
+            "reason":reason,"effects":if possible { "possible" } else { "not_started" }})
+    ).collect::<Vec<_>>()})
+}
+
+fn batch_prepared(value: &Value, request: &Value) -> bool {
+    if !exact(value, &["kind", "status", "items", "previousLayout"])
+        || value["kind"] != "complete"
+        || value["status"] != "batch"
+    {
+        return false;
+    }
+    let Some(items) = value["items"].as_array() else {
+        return false;
+    };
+    let requests = request["requests"].as_array().unwrap();
+    if items.len() != requests.len() {
+        return false;
+    }
+    let mut files = std::collections::HashSet::new();
+    let mut ids = std::collections::HashSet::new();
+    items.iter().zip(requests).all(|(item, input)| {
+        let Some(fields) = item.as_object() else {
+            return false;
+        };
+        if !fields.keys().all(|key| {
+            [
+                "id",
+                "status",
+                "reason",
+                "effects",
+                "terminalId",
+                "file",
+                "name",
+            ]
+            .contains(&key.as_str())
+        }) || item["id"] != input["id"]
+            || !matches!(
+                item["reason"].as_str(),
+                Some(
+                    "not_attempted"
+                        | "workspace_unsupported"
+                        | "account_unsupported"
+                        | "capacity_exceeded"
+                        | "selection_unavailable"
+                        | "catalog_changed"
+                        | "review_cancelled"
+                        | "context_changed"
+                        | "preparation_failed"
+                )
+            )
+            || !matches!(item["effects"].as_str(), Some("not_started" | "possible"))
+            || !matches!(
+                item["status"].as_str(),
+                Some("prepared" | "refused" | "unknown")
+            )
+        {
+            return false;
+        }
+        if let Some(id) = item.get("terminalId") {
+            if !crate::features::uuid(id) || !ids.insert(id.to_string()) {
+                return false;
+            }
+        }
+        if let Some(file) = item.get("file") {
+            if !file
+                .as_str()
+                .is_some_and(|path| path.len() <= 2048 && std::path::Path::new(path).is_absolute())
+                || !files.insert(file.to_string())
+            {
+                return false;
+            }
+        }
+        if item.get("name").is_some_and(|name| *name != input["name"]) {
+            return false;
+        }
+        match item["status"].as_str() {
+            Some("prepared") => {
+                item["effects"] == "possible"
+                    && item.get("file").is_some()
+                    && item.get("terminalId").is_some()
+                    && item["name"] == input["name"]
+            }
+            Some("refused") => {
+                item["effects"] == "not_started"
+                    && item.get("file").is_none()
+                    && item.get("terminalId").is_none()
+            }
+            Some("unknown") => item["effects"] == "possible",
+            _ => false,
+        }
+    })
+}
+
+fn open_batch(
+    app: &tauri::AppHandle,
+    result: &Value,
+    request: &Value,
+    mut admission: Option<crate::terminal::PreparationAdmission>,
+    current: impl Fn() -> bool,
+    diagnostic: &Attempt,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    if !batch_prepared(result, request) {
+        return Err("Invalid batch preparation".into());
+    }
+    let mut items = result["items"].as_array().unwrap().clone();
+    let prepared: Vec<usize> = items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, item)| (item["status"] == "prepared").then_some(i))
+        .collect();
+    app.state::<Preparation>().0.lock().unwrap().prepared = prepared
+        .iter()
+        .map(|i| items[*i]["file"].as_str().unwrap().to_owned())
+        .collect();
+    for &index in &prepared {
+        items[index]["status"] = json!("unknown");
+        items[index]["reason"] = json!("opening_uncertain");
+    }
+    if !prepared.is_empty()
+        && current()
+        && crate::terminal::preparation_admission_current(app, &admission)
+    {
+        // The existing latch is acquired before the first possible Core operation.
+        app.state::<Preparation>().0.lock().unwrap().opened = true;
+        if admission.is_none() {
+            let paths = prepared
+                .iter()
+                .map(|i| items[*i]["file"].as_str().unwrap().to_owned())
+                .collect();
+            let names = json!(prepared
+                .iter()
+                .map(|i| json!({"terminalId":items[*i]["terminalId"],"name":items[*i]["name"]}))
+                .collect::<Vec<_>>());
+            if tauri::async_runtime::block_on(crate::terminal::start_selected_with_names(
+                app, paths, true, diagnostic, names,
+            ))
+            .is_ok()
+            {
+                for (slot, index) in prepared.iter().enumerate() {
+                    items[*index]["status"] = json!("accepted");
+                    items[*index]["reason"] = json!("core_enrolled");
+                    items[*index]["slot"] = json!(slot);
+                }
+            }
+        } else {
+            for &index in &prepared {
+                if !current() || !crate::terminal::preparation_admission_current(app, &admission) {
+                    break;
+                }
+                let expected = admission.as_ref().unwrap();
+                let slot = expected.slot_count();
+                match tauri::async_runtime::block_on(crate::terminal::enroll_selected_named(
+                    app,
+                    items[index]["file"].as_str().unwrap(),
+                    result["previousLayout"].clone(),
+                    expected,
+                    diagnostic,
+                    items[index]["name"].as_str(),
+                )) {
+                    Ok(next) => {
+                        admission = Some(next); // Exact post-ACK snapshot, never a newly adopted host/view.
+                        items[index]["status"] = json!("accepted");
+                        items[index]["reason"] = json!("core_enrolled");
+                        items[index]["slot"] = json!(slot);
+                    }
+                    Err(_) => break, // Unknown admission is not rolled back, skipped, or retried.
+                }
+            }
+        }
+    }
+    let uncertain = items.iter().any(|item| item["status"] == "unknown");
+    if !uncertain && !prepared.is_empty() {
+        let state = app.state::<Preparation>();
+        let mut guard = state.0.lock().unwrap();
+        guard.prepared.clear();
+        guard.committed = false;
+        guard.opened = false;
+    }
+    for item in &mut items {
+        let fields = item.as_object_mut().unwrap();
+        fields.remove("file");
+        fields.remove("name");
+    }
+    Ok(json!({"status":"batch", "items":items}))
 }
 pub fn configure(
     app: &tauri::AppHandle,
@@ -765,7 +1042,7 @@ fn run(
             && (!crate::terminal::is_running(app)
                 || (matches!(
                     request["action"].as_str(),
-                    Some("catalog" | "create-selected")
+                    Some("catalog" | "create-selected" | "create-batch")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
             && crate::terminal::preparation_admission_current(app, &admission)
@@ -807,6 +1084,17 @@ fn run(
             parent.as_os_str(),
             std::ffi::OsStr::new(&trusted),
             std::ffi::OsStr::new(&admission_context),
+            std::ffi::OsStr::new(
+                &admission
+                    .as_ref()
+                    .map_or(8, |value| value.available_slots())
+                    .to_string(),
+            ),
+            std::ffi::OsStr::new(if unsupported_opencode {
+                "true"
+            } else {
+                "false"
+            }),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
@@ -902,7 +1190,15 @@ fn run(
                         let cancel = field(&value, "cancel", 1024)?;
                         let title = field(&value, "title", 1024)?;
                         let message = field(&value, "message", 4096)?;
-                        let detail = field(&value, "detail", 16384)?;
+                        let detail = field(
+                            &value,
+                            "detail",
+                            if request["action"] == "create-batch" {
+                                65536
+                            } else {
+                                16384
+                            },
+                        )?;
                         let summary = value
                             .get("summary")
                             .map(|_| field(&value, "summary", 4096))
@@ -986,7 +1282,7 @@ fn run(
                     Some("commit")
                         if matches!(
                             request["action"].as_str(),
-                            Some("create" | "create-selected" | "create-mcp-pair")
+                            Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
                         ) =>
                     {
                         let valid = current();
@@ -1048,6 +1344,25 @@ fn run(
         "inspection"
     };
     let mut result = complete.ok_or("Incomplete preparation")?;
+    if request["action"] == "create-batch" {
+        if !current() {
+            return Err("Batch context changed; prepared evidence retained".into());
+        }
+        return open_batch(
+            app,
+            &result,
+            &request,
+            admission.clone(),
+            || {
+                Instant::now() < deadline
+                    && window.window().is_visible().unwrap_or(false)
+                    && window.url().is_ok_and(|url| url.as_str() == source)
+                    && app.state::<Preparation>().0.lock().unwrap().generation == generation
+                    && !crate::terminal::presentation_blocked(app)
+            },
+            diagnostic,
+        );
+    }
     if request["action"] == "catalog" {
         if result["status"] != "catalog" || !valid_catalog(&result["catalog"], &request) {
             return Err("Invalid scoped catalog".into());

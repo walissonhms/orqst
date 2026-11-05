@@ -2214,8 +2214,15 @@ pub(crate) struct PreparationAdmission {
     presentation: u64,
     revision: u64,
     count: usize,
+    capacity: usize,
 }
 impl PreparationAdmission {
+    pub(crate) fn available_slots(&self) -> usize {
+        self.capacity.saturating_sub(self.count)
+    }
+    pub(crate) fn slot_count(&self) -> usize {
+        self.count
+    }
     pub(crate) fn context(&self) -> Value {
         json!({"owner":self.owner, "epoch":self.epoch, "initialFiles":self.initial_files})
     }
@@ -2252,6 +2259,7 @@ fn admission_snapshot(r: &Running) -> PreparationAdmission {
         presentation: r.layout_generation,
         revision: r.layout_revision,
         count: r.documents.len(),
+        capacity: r.capacity,
     }
 }
 pub(crate) fn preparation_admission(
@@ -2441,8 +2449,22 @@ pub(crate) async fn enroll_selected(
     expected: &PreparationAdmission,
     diagnostic: &Attempt,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    enroll_selected_named(app, manifest, previous_layout, expected, diagnostic, None)
+        .await
+        .map(|_| ())
+}
+
+pub(crate) async fn enroll_selected_named(
+    app: &tauri::AppHandle,
+    manifest: &str,
+    previous_layout: Value,
+    expected: &PreparationAdmission,
+    diagnostic: &Attempt,
+    name: Option<&str>,
+) -> Result<PreparationAdmission, Box<dyn std::error::Error>> {
     diagnostic.record(Stage::Enrollment, Outcome::Requested, Effects::Unconfirmed);
-    let result = enroll_selected_inner(app, manifest, previous_layout, expected, diagnostic).await;
+    let result =
+        enroll_selected_inner(app, manifest, previous_layout, expected, diagnostic, name).await;
     diagnostic.record(
         Stage::Enrollment,
         if result.is_ok() {
@@ -2461,7 +2483,8 @@ async fn enroll_selected_inner(
     previous_layout: Value,
     expected: &PreparationAdmission,
     diagnostic: &Attempt,
-) -> Result<(), Box<dyn std::error::Error>> {
+    name: Option<&str>,
+) -> Result<PreparationAdmission, Box<dyn std::error::Error>> {
     if !enrollment_available(app) {
         return Err("Native enrollment unavailable".into());
     }
@@ -2484,8 +2507,11 @@ async fn enroll_selected_inner(
         r.enrollment_request = Some(id.clone());
         // Once a mutation may have reached Core, uncertainty never unlocks enrollment.
         r.enrollment_fenced = true;
-        let message = json!({"kind":"enroll", "id":id, "epoch":r.epoch,
+        let mut message = json!({"kind":"enroll", "id":id, "epoch":r.epoch,
             "generation":r.layout_generation, "manifestFile":manifest, "previousLayout":previous_layout});
+        if let Some(name) = name {
+            message["name"] = json!(name);
+        }
         if r.child.write(format!("{message}\n").as_bytes()).is_err() {
             r.pending.remove(&id);
             r.enrollment_pending = false;
@@ -2662,11 +2688,19 @@ async fn enroll_selected_inner(
     r.enrollment_fenced = false;
     r.enrollment_request = None;
     diagnostic.record(Stage::Presentation, Outcome::Ready, Effects::Possible);
-    Ok(())
+    Ok(admission_snapshot(r))
 }
 
 pub fn is_running(app: &tauri::AppHandle) -> bool {
     app.state::<Terminals>().0.lock().unwrap().is_some()
+}
+pub(crate) fn pool_available_slots(app: &tauri::AppHandle) -> Option<usize> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|running| running.capacity.saturating_sub(running.documents.len()))
 }
 
 /// Paths originate only from startup configuration or the native provisioning review.
@@ -2683,8 +2717,18 @@ pub async fn start_selected_with_open(
     operational_open: bool,
     diagnostic: &Attempt,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    start_selected_with_names(app, paths, operational_open, diagnostic, json!([])).await
+}
+
+pub(crate) async fn start_selected_with_names(
+    app: &tauri::AppHandle,
+    paths: Vec<String>,
+    operational_open: bool,
+    diagnostic: &Attempt,
+    names: Value,
+) -> Result<(), Box<dyn std::error::Error>> {
     diagnostic.record(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
-    let result = start_selected_inner(app, paths, operational_open, diagnostic).await;
+    let result = start_selected_inner(app, paths, operational_open, diagnostic, names).await;
     if let Err(error) = &result {
         crate::terminal_creation::record_failure(diagnostic, error.as_ref(), Stage::CoreStartup);
     } else {
@@ -2698,6 +2742,7 @@ async fn start_selected_inner(
     paths: Vec<String>,
     operational_open: bool,
     diagnostic: &Attempt,
+    names: Value,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if is_running(app) {
         return Err("Existing Core requires explicit native enrollment".into());
@@ -2713,6 +2758,7 @@ async fn start_selected_inner(
         "startup-{}",
         STARTUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     );
+    let names = serde_json::to_string(&names)?;
     // Every fallible preflight operation is inside the same reversible reservation.
     let prepared = crate::host_start::prepare::<_, _, _, _, Box<dyn std::error::Error>>(
         &crate::quit_orchestration::QUIT.host,
@@ -2730,6 +2776,7 @@ async fn start_selected_inner(
                     admission.as_os_str(),
                     std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
                     std::ffi::OsStr::new(&startup_id),
+                    std::ffi::OsStr::new(&names),
                 ])
                 .env_clear()
                 .envs(std::env::vars_os().filter(|(key, _)| {

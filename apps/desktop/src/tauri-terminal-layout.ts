@@ -6,7 +6,11 @@ import {
   type TerminalLayoutState,
   type TerminalViewAction,
 } from './terminal-layout.js';
-import { featureNativeRequestSchema, type FeatureNativeRequest } from '@orqst/protocol';
+import {
+  featureNativeRequestSchema,
+  terminalDisplayNameSchema,
+  type FeatureNativeRequest,
+} from '@orqst/protocol';
 
 type Arrangement = Extract<FeatureNativeRequest, { action: 'arrange' }>;
 
@@ -455,6 +459,15 @@ export class TauriTerminalLayout {
     )
       this.canvas = false;
     return this.apply(slot, action, false);
+  }
+
+  /** Private native creation metadata only. Naming never shows or starts a pane. */
+  nameOwned(slot: number, raw: unknown): boolean {
+    const name = terminalDisplayNameSchema.safeParse(raw);
+    if (!name.success || !this.state.order.includes(slot)) return false;
+    this.state.names[slot] = name.data.trim();
+    this.changed();
+    return true;
   }
 
   private apply(slot: number, action: TerminalViewAction, nativeFocus = true): boolean {
