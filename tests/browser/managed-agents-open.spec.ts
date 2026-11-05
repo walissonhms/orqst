@@ -1,7 +1,7 @@
-import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 import { managedAgentsDocument } from '../../apps/desktop/src/managed-agents-document.js';
 import en from '../../apps/dashboard/src/locales/en-US.json' with { type: 'json' };
+import { buildSharedTestRenderer } from '../../scripts/helpers/shared-test-resources.js';
 
 // Synthetic opener replies only; real sender/preload/focus refusal is checked in Electron smoke.
 test('managed opener explains focus refusal, recovers and supports an older running preload', async ({
@@ -96,7 +96,8 @@ test('focus refusal preserves known lifecycle until a fresh snapshot restores co
       },
     });
   });
-  await page.addScriptTag({ path: resolve('apps/desktop/dist/managed-agents-client.js') });
+  const { script } = await buildSharedTestRenderer('agents');
+  await page.addScriptTag({ content: script });
   await expect(page.locator('#lifetime')).toHaveText(en.managedAgents.lifetime_active);
   await expect(page.locator('#stop-0')).toBeEnabled();
   await page.locator('#stop-0').click();

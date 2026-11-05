@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect } from '@playwright/test';
+import { buildSharedTestHosts } from './helpers/shared-test-resources.js';
 import { connectManagedTerminalCore } from '../apps/desktop/src/managed-terminal-core.js';
 import {
   TerminalAuthority,
@@ -34,6 +35,8 @@ const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-reuse-')));
 const run = promisify(execFile);
 let core: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
 try {
+  const resources = join(root, 'resources');
+  await buildSharedTestHosts(resources, 'terminal');
   const fake = join(root, 'SYNTHETIC-NOT-CODEX');
   const home = join(root, 'synthetic-native-home');
   const project = join(root, 'synthetic-project');
@@ -74,7 +77,7 @@ try {
   const keys = generateKeyPairSync('ed25519');
   core = await connectManagedTerminalCore(
     files,
-    resolve('apps/desktop/dist/managed-terminal-core.cjs'),
+    join(resources, 'managed-terminal-core.cjs'),
     keys.publicKey,
     join(root, 'admission'),
   );

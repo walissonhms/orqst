@@ -1,6 +1,6 @@
 // Explicit renderer-only acceptance: disposable Chromium, synthetic native transport, no CLI.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect } from '@playwright/test';
@@ -8,12 +8,12 @@ import { terminalDocument } from '../apps/desktop/src/terminal-document.js';
 import { terminalScriptURL, terminalStyleURL } from '../apps/desktop/src/terminal-policy.js';
 import en from '../apps/dashboard/src/locales/en-US.json';
 import pt from '../apps/dashboard/src/locales/pt-BR.json';
+import { buildSharedTestRenderer } from './helpers/shared-test-resources.js';
 
 assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-ui']);
 assert.match(process.version, /^v24\./);
 const artifacts = await mkdtemp(join(tmpdir(), 'orqst-terminal-ui-'));
-const script = await readFile('apps/desktop/dist/managed-terminal-client.js', 'utf8');
-const style = await readFile('apps/desktop/dist/managed-terminal.css', 'utf8');
+const { script, style } = await buildSharedTestRenderer('terminal');
 const browser = await chromium.launch();
 try {
   const approved = await browser.newPage({
