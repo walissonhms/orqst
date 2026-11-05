@@ -38,6 +38,10 @@ import {
   terminalToolPath,
 } from '../../../packages/core/src/terminal/local-cli-path.js';
 import type { LocalCliProvider } from '../../../packages/core/src/terminal/local-cli.js';
+import {
+  claudeOwnedHookFiles,
+  claudeOwnedHookChannelName,
+} from '../../../packages/core/src/terminal/owned-claude-hooks.js';
 
 // Passive hash of the selected local native candidate; no version/login/provider command run.
 export const reviewedDesktopCodexBinary = Object.freeze({
@@ -177,6 +181,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         provider: 'claude',
         executableVersion: pin.version,
         sessionId: randomUUID(),
+        ...(!input.mcp ? { ownedHooks: true } : {}),
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -309,6 +314,11 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         mkdirSync(state, { mode: 0o700 });
         for (const name of config.version === 1 ? ['home', 'codex', 'tmp'] : ['tmp'])
           mkdirSync(join(state, name), { mode: 0o700 });
+        if (config.version === 2 && config.ownedHooks) {
+          for (const [name, bytes] of Object.entries(claudeOwnedHookFiles(config)))
+            writeFileSync(join(state, name), bytes, { flag: 'wx', mode: 0o600 });
+          writeFileSync(join(state, claudeOwnedHookChannelName), '', { flag: 'wx', mode: 0o600 });
+        }
         if (config.version === 1)
           writeFileSync(join(state, 'codex/config.toml'), managedCodexSettings(config), {
             flag: 'wx',
