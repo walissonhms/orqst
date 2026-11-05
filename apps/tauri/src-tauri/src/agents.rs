@@ -319,6 +319,15 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
         });
 }
 
+/// Fixed native roots only. Core resolves stable IDs from validated private preparation
+/// bindings and checks the catalogue, selection fence and current Feature membership.
+fn feature_bootstrap(parent: &std::path::Path) -> Value {
+    json!({
+        "observerDatabase": parent.join("core/orqst.db"),
+        "preferencesDirectory": parent.join("managed-agents"),
+    })
+}
+
 pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let Ok(files) = std::env::var("ORQST_TAURI_AGENTS") else {
         return Ok(());
@@ -334,7 +343,9 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         .path()
         .resource_dir()?
         .join("core/tauri-agents-host.cjs");
-    let admission = app.path().app_data_dir()?.join("structured-agents");
+    let parent = app.path().app_data_dir()?;
+    let admission = parent.join("structured-agents");
+    let feature_context = feature_bootstrap(&parent).to_string();
     let (mut rx, child) = app
         .shell()
         .sidecar("orqst-node")?
@@ -342,6 +353,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
             script.as_os_str(),
             std::ffi::OsStr::new(&files),
             admission.as_os_str(),
+            std::ffi::OsStr::new(&feature_context),
         ])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
@@ -751,6 +763,18 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
 #[cfg(test)]
 mod tests {
     use super::document_matches;
+    #[test]
+    fn feature_bootstrap_uses_native_roots_and_keeps_admission_separate() {
+        let parent = std::path::Path::new("/SYNTHETIC/native-app-data");
+        assert_eq!(
+            super::feature_bootstrap(parent),
+            serde_json::json!({
+                "observerDatabase": "/SYNTHETIC/native-app-data/core/orqst.db",
+                "preferencesDirectory": "/SYNTHETIC/native-app-data/managed-agents",
+            })
+        );
+    }
+
     #[test]
     fn a_delayed_sheet_yes_requires_current_token_active_app_and_key_sheet() {
         assert!(super::sheet_accepts(true, true, true, true));

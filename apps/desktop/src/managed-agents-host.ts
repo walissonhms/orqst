@@ -1,20 +1,14 @@
-import { createPublicKey } from 'node:crypto';
 import { join } from 'node:path';
-import { DesktopManagedAgents } from '../../../packages/core/src/managed-codex/desktop.js';
+import { managedAgentsHostComposition } from './managed-agents-context.js';
 import { nativeCodexBackend } from '../../../packages/core/src/managed-codex/runtime.js';
 import { desktopAgentsAdmission } from '../../../packages/core/src/managed-codex/desktop-admission.js';
 import { agentsHostRequestSchema } from './managed-agents-wire.js';
 
 process.umask(0o077);
-if (!process.send || !/^v24\./.test(process.version) || process.argv.length !== 6)
+if (!process.send || !/^v24\./.test(process.version) || ![6, 7].includes(process.argv.length))
   throw new Error('Private Desktop host requires Node 24 IPC');
-const service = new DesktopManagedAgents(
-  [process.argv[2]!, process.argv[3]!],
-  createPublicKey({
-    key: Buffer.from(process.argv[4]!, 'base64url'),
-    format: 'der',
-    type: 'spki',
-  }),
+const service = managedAgentsHostComposition(
+  process.argv.slice(2),
   nativeCodexBackend(join(__dirname, 'codex-structured-host.cjs')),
   desktopAgentsAdmission(process.argv[5]!, [process.argv[2]!, process.argv[3]!]),
 );

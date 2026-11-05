@@ -5,6 +5,10 @@ import {
   managedCodexEnvironment,
   readManagedCodexConfig,
 } from '../../../packages/core/src/terminal/codex-profile.js';
+import {
+  managedAgentsFeatureContextSchema,
+  type ManagedAgentsFeatureContext,
+} from '../../../packages/core/src/managed-codex/feature-context.js';
 import { agentsHostReplySchema, agentsHostRequestSchema } from './managed-agents-wire.js';
 
 /** Only the selected, hash-validated Node helper runs here; it owns all private SQLite state. */
@@ -12,6 +16,7 @@ export async function connectManagedAgents(
   files: [string, string],
   publicKey: KeyObject,
   admissionDirectory: string,
+  featureContext?: ManagedAgentsFeatureContext,
 ) {
   const config = readManagedCodexConfig(files[0]);
   const child = fork(
@@ -20,6 +25,9 @@ export async function connectManagedAgents(
       ...files,
       publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
       admissionDirectory,
+      ...(featureContext
+        ? [JSON.stringify(managedAgentsFeatureContextSchema.parse(featureContext))]
+        : []),
     ],
     {
       execPath: config.node.path,

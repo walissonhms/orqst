@@ -15,6 +15,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { Store } from '@orqst/database';
+import { stableId } from '@orqst/shared';
+import { terminalTeamDatabase } from '../packages/core/src/terminal/team-database.js';
+import { terminalIdentity } from '../packages/core/src/terminal/identity.js';
+import { terminalDigest } from '../packages/core/src/terminal/authority.js';
+import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
+import { resolveTerminalPreparationContext } from '../packages/core/src/terminal/preparation-context.js';
+import {
+  managedAgentsHostComposition,
+  nativeManagedAgentsFeatureContext,
+} from '../apps/desktop/src/managed-agents-context.js';
+import { agentsHostRequestSchema } from '../apps/desktop/src/managed-agents-wire.js';
 import { managedAgentsRequestSchema } from '@orqst/protocol';
 import { DesktopManagedAgents } from '../packages/core/src/managed-codex/desktop.js';
 import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
@@ -115,6 +127,7 @@ class SyntheticDesktopTransport implements CodexTransport {
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 function fixture(
   wrapAdmission = (admission: ReturnType<typeof desktopAgentsAdmission>) => admission,
+  scoped = false,
 ) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-desktop-agents-')));
   const project = join(root, 'project');
@@ -146,31 +159,85 @@ function fixture(
     writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
     return file;
   }) as [string, string];
+  const preferencesDirectory = join(root, 'preferences');
+  mkdirSync(preferencesDirectory, { mode: 0o700 });
+  const native = { observerDatabase: join(root, 'observer.sqlite'), preferencesDirectory };
+  const workspaceId = stableId('workspace', project);
+  const features = featureConfigurationDatabase(preferencesDirectory, workspaceId);
+  let featureId: string | undefined;
+  if (scoped) {
+    const observer = new Store(native.observerDatabase);
+    assert.equal(observer.workspace(project, 'SYNTHETIC project'), workspaceId);
+    observer.close();
+    let feature = features.create({ name: 'SYNTHETIC Feature' });
+    for (const file of files) {
+      const config = JSON.parse(readFileSync(file, 'utf8')) as ManagedCodexConfig;
+      feature = features.assignTerminal(
+        feature.featureId,
+        terminalIdentity(config).terminalId,
+        feature.revision,
+      );
+    }
+    featureId = feature.featureId;
+    features.saveView({ expectedRevision: 0, featureId });
+    const { fence } = resolveTerminalPreparationContext(native, workspaceId, featureId);
+    for (const file of files) {
+      const config = JSON.parse(readFileSync(file, 'utf8')) as ManagedCodexConfig;
+      config.preparation = { ...native, workspaceId, featureId, fence };
+      writeFileSync(file, JSON.stringify(config), { mode: 0o600 });
+    }
+  }
   const keys = generateKeyPairSync('ed25519');
   const transports: SyntheticDesktopTransport[] = [];
   const admissionDirectory = join(root, 'admission');
   const exits: Array<(code: number | null, signal: string | null) => void> = [];
-  const service = new DesktopManagedAgents(
-    files,
-    keys.publicKey,
-    {
-      open: (_f, _c, events) => {
-        exits.push(events.exit);
-        const transport = new SyntheticDesktopTransport();
-        transports.push(transport);
-        queueMicrotask(() => events.started(123));
-        return transport;
-      },
+  const backend = {
+    open: (
+      _f: string,
+      _c: ManagedCodexConfig,
+      events: Parameters<
+        import('../packages/core/src/managed-codex/runtime.js').CodexRuntimeBackend['open']
+      >[2],
+    ) => {
+      exits.push(events.exit);
+      const transport = new SyntheticDesktopTransport();
+      transports.push(transport);
+      queueMicrotask(() => events.started(123));
+      return transport;
     },
-    wrapAdmission(desktopAgentsAdmission(admissionDirectory)),
+  };
+  const hostContext = scoped ? nativeManagedAgentsFeatureContext(files, native) : undefined;
+  const hostArgs = [
+    ...files,
+    keys.publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
     admissionDirectory,
-  );
+    ...(hostContext ? [JSON.stringify(hostContext)] : []),
+  ];
+  const service = scoped
+    ? managedAgentsHostComposition(
+        hostArgs,
+        backend,
+        wrapAdmission(desktopAgentsAdmission(admissionDirectory)),
+      )
+    : new DesktopManagedAgents(
+        files,
+        keys.publicKey,
+        backend,
+        wrapAdmission(desktopAgentsAdmission(admissionDirectory)),
+        admissionDirectory,
+      );
   const proof = (challenge: TerminalChallenge) => ({
     challengeId: challenge.challengeId,
     signature: sign(null, terminalChallengeBytes(challenge), keys.privateKey).toString('base64url'),
   });
   return {
     service,
+    native,
+    features,
+    featureId,
+    workspaceId,
+    hostArgs,
+    backend,
     files,
     keys,
     transports,
@@ -690,5 +757,302 @@ test('saved team intent stays inert until fresh live identities and a signed rou
     assert.equal(f.service.readTeam().team.revision, 1);
   } finally {
     f.close();
+  }
+});
+
+async function startFeaturePair(f: ReturnType<typeof fixture>) {
+  for (const slot of [0, 1]) {
+    const start = f.service.prepareStart(slot, 'synthetic-model');
+    assert.equal(start.manifest.workspaceId, f.workspaceId);
+    assert.equal(start.manifest.featureId, f.featureId);
+    await f.service.launch(slot, f.proof(start.challenge));
+  }
+  f.allowRoute();
+}
+
+function saveFeaturePolicy(
+  f: ReturnType<typeof fixture>,
+  operations: Array<'delegate' | 'execute' | 'view'>,
+) {
+  const ids = f.service.readTeam().terminalIds;
+  return f.features.savePermissions(f.featureId!, 'SYNTHETIC-native-owner', {
+    expectedRevision: f.features.readPermissions(f.featureId!).revision,
+    configuration: {
+      schemaVersion: 1,
+      rules: operations.length
+        ? [{ sourceTerminalId: ids[0]!, targetTerminalId: ids[1]!, operations }]
+        : [],
+    },
+  });
+}
+
+test('production host composition uses canonical Feature IDs, neutral absence, scoped mentions and retained journal digest', async () => {
+  const f = fixture(undefined, true);
+  try {
+    const catalogue = readFileSync(f.native.observerDatabase);
+    assert.notEqual(f.workspaceId, terminalDigest(f.service.project));
+    assert.deepEqual(f.features.readPermissions(f.featureId!).configuration, null);
+    await startFeaturePair(f);
+    for (const slot of f.service.snapshot().slots) {
+      assert.equal(slot!.pane!.workspaceId, f.workspaceId);
+      assert.equal(slot!.pane!.featureId, f.featureId);
+    }
+    const task = f.service.prepareTask('SYNTHETIC neutral', '@terminal-b SYNTHETIC worker');
+    assert.equal(task.plan.policyRevision, 0);
+    f.service.runTask(task.plan.taskId, task.plan.correlationId, f.proof(task.challenge));
+    await tick();
+    f.transports[0]!.delegate(task.plan.target.paneId, '@terminal-b SYNTHETIC worker');
+    await tick();
+    assert.equal(f.transports[1]!.turns, 1);
+    assert.deepEqual(readFileSync(f.native.observerDatabase), catalogue);
+    const journal = new DatabaseSync(join(f.service.project, '..', 'a', 'terminal.sqlite'), {
+      readOnly: true,
+    });
+    try {
+      // The execution journal uses its historical project domain, independently of the catalogue.
+      const rows = journal.prepare('SELECT project_id FROM terminal_attempts').all();
+      assert.equal(rows[0]!.project_id, terminalDigest(f.service.project));
+    } finally {
+      journal.close();
+    }
+  } finally {
+    f.close();
+  }
+});
+
+test('production host saved policy restricts root preparation and stale plans without starting provider turns', async () => {
+  const f = fixture(undefined, true);
+  try {
+    await startFeaturePair(f);
+    f.allowRoute(0, 1, { role: 'orchestrator' });
+    const stale = f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC');
+    saveFeaturePolicy(f, []);
+    assert.throws(
+      () => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'),
+      /permission denied/,
+    );
+    f.service.runTask(stale.plan.taskId, stale.plan.correlationId, f.proof(stale.challenge));
+    await tick();
+    assert.deepEqual(
+      f.transports.map((t) => t.turns),
+      [0, 0],
+    );
+    assert.equal(f.service.snapshot().root!.state, 'outcome_unknown');
+    assert.deepEqual(f.service.snapshot().messages, []);
+  } finally {
+    f.close();
+  }
+});
+
+for (const failure of [
+  'archived',
+  'corrupt',
+  'foreign-workspace',
+  'future-schema',
+  'reader-unavailable',
+] as const) {
+  test(`production host composition denies ${failure} after capture; no provider turn or new message`, async () => {
+    const f = fixture(undefined, true);
+    try {
+      await startFeaturePair(f);
+      saveFeaturePolicy(f, ['delegate', 'execute', 'view']);
+      if (failure === 'reader-unavailable') {
+        chmodSync(
+          join(f.native.preferencesDirectory, 'terminal-layouts/preferences.sqlite'),
+          0o644,
+        );
+      } else {
+        const db = new DatabaseSync(
+          join(f.native.preferencesDirectory, 'terminal-layouts/preferences.sqlite'),
+        );
+        try {
+          // Simulate an already archived catalogue, without weakening native lifecycle review.
+          if (failure === 'archived') db.exec("UPDATE features SET status='archived'");
+          if (failure === 'corrupt') db.exec("UPDATE feature_permissions SET metadata='{}'");
+          if (failure === 'foreign-workspace')
+            db.prepare('UPDATE feature_permissions SET workspace_id=?').run(
+              terminalDigest(f.service.project),
+            );
+          if (failure === 'future-schema')
+            db.exec('UPDATE feature_permission_schema SET version=2');
+        } finally {
+          db.close();
+        }
+      }
+      assert.throws(() => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'));
+      assert.deepEqual(
+        f.transports.map((t) => t.turns),
+        [0, 0],
+      );
+      assert.deepEqual(f.service.snapshot().messages, []);
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('production host uses Feature team facade and preserves legacy keys without policy fallback', async () => {
+  const f = fixture(undefined, true);
+  try {
+    const ids = f.service.readTeam().terminalIds;
+    const legacy = terminalTeamDatabase(
+      f.native.preferencesDirectory,
+      ids,
+      terminalDigest(f.service.project),
+    );
+    const configuration = {
+      version: 1 as const,
+      name: 'SYNTHETIC retained legacy team',
+      members: ids.map((terminalId, slot) => ({
+        terminalId,
+        name: `SYNTHETIC ${slot}`,
+        handle: `scoped-${slot}`,
+        role: 'worker' as const,
+        allowedTargetTerminalIds: slot === 0 ? [ids[1]!] : [],
+      })),
+    };
+    legacy.save({ expectedRevision: 0, configuration });
+    const retained = legacy.read();
+    assert.equal(f.service.readTeam().team.revision, 0);
+    f.service.saveTeam({
+      expectedRevision: 0,
+      configuration: { ...configuration, name: 'SYNTHETIC Feature team' },
+    });
+    assert.deepEqual(legacy.read(), retained);
+    await startFeaturePair(f);
+    saveFeaturePolicy(f, []);
+    const denied = f.service.prepareTeamRouting(0, 1);
+    assert.deepEqual(denied.plan.update.allowedTargetPaneIds, []);
+    saveFeaturePolicy(f, ['delegate', 'execute', 'view']);
+    const allowed = f.service.prepareTeamRouting(0, 1);
+    assert.deepEqual(allowed.plan.update.allowedTargetPaneIds, [
+      f.service.snapshot().slots[1]!.pane!.paneId,
+    ]);
+    assert.deepEqual(legacy.read(), retained);
+  } finally {
+    f.close();
+  }
+});
+
+test('production bootstrap refuses missing reader context, divergent IDs, foreign native roots and mixed bindings', () => {
+  const f = fixture(undefined, true);
+  try {
+    const admission = { claim() {}, assertOwner() {}, prepareRelease: () => () => {} };
+    assert.throws(
+      () => nativeManagedAgentsFeatureContext(f.files, undefined),
+      /Native Feature context unavailable/,
+    );
+    assert.throws(
+      () => managedAgentsHostComposition(f.hostArgs.slice(0, 4), f.backend, admission),
+      /Native Feature context unavailable/,
+    );
+    const divergent = JSON.parse(f.hostArgs[4]!) as Record<string, unknown>;
+    divergent.workspaceId = terminalDigest(f.service.project);
+    assert.throws(
+      () =>
+        managedAgentsHostComposition(
+          [...f.hostArgs.slice(0, 4), JSON.stringify(divergent)],
+          f.backend,
+          admission,
+        ),
+      /scope mismatch/,
+    );
+    assert.throws(
+      () =>
+        nativeManagedAgentsFeatureContext(f.files, {
+          ...f.native,
+          preferencesDirectory: f.admissionDirectory,
+        }),
+      /binding mismatch/,
+    );
+    const original = readFileSync(f.files[1], 'utf8');
+    const config = JSON.parse(original) as ManagedCodexConfig;
+    delete config.preparation;
+    writeFileSync(f.files[1], JSON.stringify(config), { mode: 0o600 });
+    assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native), /binding mismatch/);
+    assert.throws(
+      () => f.service.prepareStart(0, 'synthetic-model'),
+      /Native pair identity changed/,
+    );
+    assert.equal(f.transports.length, 0);
+  } finally {
+    f.close();
+  }
+});
+
+test('Feature composition revalidates view fence before launch without promoting legacy manifests', async () => {
+  const f = fixture(undefined, true);
+  try {
+    const start = f.service.prepareStart(0, 'synthetic-model');
+    f.features.saveView({ expectedRevision: f.features.readView().revision, featureId: null });
+    assert.throws(() => f.service.launch(0, f.proof(start.challenge)), /Selected Feature changed/);
+    assert.equal(f.transports.length, 0);
+    assert.equal(f.service.snapshot().admission, 'unclaimed');
+  } finally {
+    f.close();
+  }
+  const legacy = fixture();
+  try {
+    assert.equal(nativeManagedAgentsFeatureContext(legacy.files, legacy.native), undefined);
+    assert.equal(nativeManagedAgentsFeatureContext(legacy.files, undefined), undefined);
+    assert.equal(legacy.service.prepareStart(0, 'synthetic-model').manifest.featureId, undefined);
+  } finally {
+    legacy.close();
+  }
+});
+
+test('captured Feature scope survives navigation while policies keep restricting delegation', async () => {
+  const f = fixture(undefined, true);
+  try {
+    await startFeaturePair(f);
+    f.features.saveView({ expectedRevision: f.features.readView().revision, featureId: null });
+    const task = f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC');
+    assert.equal(task.plan.policyRevision, 0);
+    saveFeaturePolicy(f, []);
+    assert.throws(
+      () => f.service.prepareTask('SYNTHETIC', '@terminal-b SYNTHETIC'),
+      /permission denied/,
+    );
+    assert.deepEqual(
+      f.transports.map((t) => t.turns),
+      [0, 0],
+    );
+    assert.deepEqual(
+      f.transports.flatMap((t) => t.signals),
+      [],
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test('renderer and operational IPC requests cannot override the native Feature bootstrap', () => {
+  for (const injected of [
+    { workspaceId: 'a'.repeat(64) },
+    { featureId: randomUUID() },
+    { preferencesDirectory: '/SYNTHETIC/foreign' },
+    { observerDatabase: '/SYNTHETIC/foreign.sqlite' },
+    { featureContext: { workspaceId: 'a'.repeat(64), featureId: randomUUID() } },
+  ]) {
+    assert.equal(
+      managedAgentsRequestSchema.safeParse({
+        version: 1,
+        action: 'start',
+        slot: 0,
+        model: 'synthetic',
+        ...injected,
+      }).success,
+      false,
+    );
+    assert.equal(
+      agentsHostRequestSchema.safeParse({
+        id: randomUUID(),
+        operation: 'prepareStart',
+        slot: 0,
+        model: 'synthetic',
+        ...injected,
+      }).success,
+      false,
+    );
   }
 });

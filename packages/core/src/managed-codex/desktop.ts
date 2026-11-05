@@ -9,6 +9,13 @@ import {
   type PaneRoutingUpdate,
   type TerminalTeamSave,
 } from '@orqst/protocol';
+import { featureConfigurationDatabase } from '../terminal/feature-configuration.js';
+import {
+  managedAgentsFeatureContextSchema,
+  managedAgentsWorkspaceIds,
+  resolveManagedAgentsFeatureContext,
+  type ManagedAgentsFeatureContext,
+} from './feature-context.js';
 import { terminalIdentity } from '../terminal/identity.js';
 import { terminalTeamDatabase } from '../terminal/team-database.js';
 import { teamRoutingProposal } from '../communication/team-configuration.js';
@@ -17,7 +24,7 @@ import { TerminalAuthority, terminalDigest } from '../terminal/authority.js';
 import { readManagedCodexConfig } from '../terminal/codex-profile.js';
 import { CodexStructuredRuntime, type CodexRuntimeBackend } from './runtime.js';
 
-/** Trusted Desktop composition. No observer database, session adoption or renderer-selected paths. */
+/** Trusted native composition. Read-only observer catalogue, no session adoption or renderer paths. */
 export class DesktopManagedAgents {
   private store: Store;
   private authority: TerminalAuthority;
@@ -46,6 +53,9 @@ export class DesktopManagedAgents {
   private content = new Map<string, { scope: string; bytes: Uint8Array }>();
   readonly project: string;
   private terminalIds: string[];
+  private featureContext?: Readonly<ManagedAgentsFeatureContext>;
+  private workspaceId: string;
+  private preparationFence?: string;
 
   constructor(
     private files: [string, string],
@@ -57,6 +67,7 @@ export class DesktopManagedAgents {
       prepareRelease(evidence: unknown): () => void;
     },
     private configurationDirectory?: string,
+    trustedFeatureContext?: ManagedAgentsFeatureContext,
   ) {
     const configs = files.map(readManagedCodexConfig);
     const [a, b] = configs;
@@ -71,11 +82,27 @@ export class DesktopManagedAgents {
       a.state === b.state
     )
       throw new Error('Two distinct existing-login slots for the same project are required');
+    this.project = a.project;
+    const trusted = trustedFeatureContext
+      ? managedAgentsFeatureContextSchema.parse(trustedFeatureContext)
+      : undefined;
+    const resolved = resolveManagedAgentsFeatureContext(
+      configs,
+      trusted && {
+        observerDatabase: trusted.observerDatabase,
+        preferencesDirectory: trusted.preferencesDirectory,
+      },
+    );
+    if (JSON.stringify(resolved) !== JSON.stringify(trusted))
+      throw new Error('Native Feature scope mismatch');
+    this.featureContext = resolved && Object.freeze(resolved);
+    this.preparationFence = resolved ? a.preparation?.fence : undefined;
+    const domains = managedAgentsWorkspaceIds(this.project);
+    this.workspaceId = resolved ? domains.canonicalWorkspaceId : domains.legacyProjectDigest;
     // Never open/migrate an existing journal or erase uncertainty to recover capacity.
     for (const config of configs)
       for (const file of ['terminal.sqlite', 'desktop-communication.sqlite'])
         if (existsSync(join(config.state, file))) throw new Error('Fresh private slots required');
-    this.project = a.project;
     this.terminalIds = configs.map((config) => terminalIdentity(config).terminalId);
     const authority = (this.authority = new TerminalAuthority(
       new Map([['desktop-agents', publicKey]]),
@@ -96,7 +123,12 @@ export class DesktopManagedAgents {
       if (!record || record.scope !== scopeKey(scope)) throw new Error('Content scope denied');
       return Uint8Array.from(record.bytes);
     };
-    this.communication = new PaneCommunication(this.journal, read);
+    this.communication = new PaneCommunication(
+      this.journal,
+      read,
+      Date.now,
+      this.featureDatabase()?.permissionReader,
+    );
     this.runtime = new CodexStructuredRuntime(
       authority,
       this.communication,
@@ -111,6 +143,33 @@ export class DesktopManagedAgents {
     );
   }
 
+  private featureDatabase() {
+    const context = this.featureContext;
+    return context
+      ? featureConfigurationDatabase(context.preferencesDirectory, context.workspaceId)
+      : undefined;
+  }
+  private assertPreparationContext() {
+    const configs = this.files.map(readManagedCodexConfig);
+    if (
+      configs.some(
+        (config, slot) =>
+          config.project !== this.project ||
+          terminalIdentity(config).terminalId !== this.terminalIds[slot] ||
+          (this.featureContext && config.preparation?.fence !== this.preparationFence),
+      )
+    )
+      throw new Error('Native pair identity changed');
+    const resolved = resolveManagedAgentsFeatureContext(
+      configs,
+      this.featureContext && {
+        observerDatabase: this.featureContext.observerDatabase,
+        preferencesDirectory: this.featureContext.preferencesDirectory,
+      },
+    );
+    if (JSON.stringify(resolved) !== JSON.stringify(this.featureContext))
+      throw new Error('Native Feature scope changed');
+  }
   private teamDatabase() {
     if (!this.configurationDirectory) throw new Error('Team configuration unavailable');
     return terminalTeamDatabase(
@@ -120,13 +179,35 @@ export class DesktopManagedAgents {
     );
   }
   readTeam() {
-    return { team: this.teamDatabase().read(), terminalIds: [...this.terminalIds] };
+    const feature = this.featureDatabase();
+    return {
+      team: feature ? feature.readTeam(this.featureContext!.featureId) : this.teamDatabase().read(),
+      terminalIds: [...this.terminalIds],
+    };
   }
   saveTeam(input: TerminalTeamSave) {
     // Saved intent does not mutate routing revisions, pending tasks, ownership or grants.
-    return { team: this.teamDatabase().save(input), terminalIds: [...this.terminalIds] };
+    const feature = this.featureDatabase();
+    return {
+      team: feature
+        ? feature.saveTeam(this.featureContext!.featureId, input)
+        : this.teamDatabase().save(input),
+      terminalIds: [...this.terminalIds],
+    };
   }
   prepareTeamRouting(slot: number, expectedRevision: number) {
+    const feature = this.featureDatabase();
+    if (feature) {
+      return this.prepareRouting(
+        slot,
+        feature.routingProposal(
+          this.featureContext!.featureId,
+          this.terminalIds[slot] ?? '',
+          this.snapshot().slots.flatMap((s) => (s?.pane ? [s.pane] : [])),
+          expectedRevision,
+        ),
+      );
+    }
     const state = this.teamDatabase().read();
     if (state.revision !== expectedRevision || !state.configuration)
       throw new Error('Stale team configuration');
@@ -145,8 +226,10 @@ export class DesktopManagedAgents {
     const previous = this.ids[slot];
     if (previous && this.runtime.snapshot(previous).state !== 'prepared')
       throw new Error('No retry or slot replacement after launch admission');
+    this.assertPreparationContext();
     const result = this.runtime.prepare('desktop-agents', this.files[slot]!, {
-      workspaceId: terminalDigest(this.project),
+      workspaceId: this.workspaceId,
+      ...(this.featureContext ? { featureId: this.featureContext.featureId } : {}),
       ownerId: 'desktop-agents',
       name: slot === 0 ? 'A' : 'B',
       model,
@@ -158,6 +241,7 @@ export class DesktopManagedAgents {
   }
   launch(slot: number, proof: unknown) {
     if (this.fenced) throw new Error('Pair retired');
+    this.assertPreparationContext();
     this.admission.claim();
     this.reserved = true;
     return this.runtime.launch(this.id(slot), proof);
@@ -220,7 +304,11 @@ export class DesktopManagedAgents {
       throw new Error('Task capacity unavailable; no retry of uncertain work');
     const source = this.snapshot().slots[sourceSlot]?.pane;
     if (!source?.routing) throw new Error('Routing source unavailable');
-    const targetPane = this.communication.resolveMention(terminalDigest(this.project), task);
+    const targetPane = this.communication.resolveMention(
+      this.workspaceId,
+      task,
+      this.featureContext?.featureId,
+    );
     if (!source.routing.allowedTargetPaneIds.includes(targetPane.paneId))
       throw new Error('Routing permission denied');
     const target = targetPane.paneId;
@@ -280,9 +368,7 @@ export class DesktopManagedAgents {
         return {
           instanceId: id,
           state: s.state,
-          pane: s.paneId
-            ? this.communication.resolvePane(terminalDigest(this.project), s.paneId)
-            : null,
+          pane: s.paneId ? this.communication.resolvePane(this.workspaceId, s.paneId) : null,
           nativeThreadId: s.nativeThreadId,
           reportedModel: s.reportedModel,
           startupPhase: s.startupPhase,

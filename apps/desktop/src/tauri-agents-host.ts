@@ -3,6 +3,7 @@ import { createInstance } from 'i18next';
 import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
+import { nativeManagedAgentsFeatureContext } from './managed-agents-context.js';
 import { connectManagedAgents } from './managed-agents-core.js';
 import { managedAgentsDocument } from './managed-agents-document.js';
 import { TauriAgentsService } from './tauri-agents-service.js';
@@ -21,9 +22,14 @@ async function start() {
     .tuple([z.string().min(1).max(2048), z.string().min(1).max(2048)])
     .parse(JSON.parse(process.argv[2]!));
   const directory = process.argv[3];
-  if (!directory) throw new Error('Private admission directory required');
+  if (!directory || ![4, 5].includes(process.argv.length))
+    throw new Error('Private native bootstrap required');
+  const featureContext = nativeManagedAgentsFeatureContext(
+    files,
+    process.argv[4] === undefined ? undefined : JSON.parse(process.argv[4]),
+  );
   const keys = generateKeyPairSync('ed25519');
-  const core = await connectManagedAgents(files, keys.publicKey, directory);
+  const core = await connectManagedAgents(files, keys.publicKey, directory, featureContext);
   activeCore = core;
   const language = process.env.LANG?.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US';
   const i18n = createInstance();
