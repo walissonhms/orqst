@@ -927,3 +927,39 @@ remains pending.
 
 Validated on this machine: `cargo test` 106 passed / 1 ignored. Full `pnpm test`
 not run (awaiting release).
+
+## Quit review items and Claude integration — 2026-11-05 (source state)
+
+- [x] P2 Node: the visual adapter consults the service shutdown fence; layout-open,
+      action, focus and resize are rejected during it, only suspension and approved
+      reads apply (`ab939b3`).
+- [x] P1b: every exit entry runs the structured-agents gate before the owned
+      terminal shutdown; cancel signals nothing and releases the latch (`2cd9bae`).
+- [x] P1c: managed-agents requires the presented surface, the WKWebView
+      first-responder descendant and an unchanged visibility epoch; hide/reveal bump
+      the epoch and the dialog accept re-checks it (`df659c5`).
+- [x] Quit steps extracted as pure shutdown/retire/close branches with tests
+      (`3df4d5c`).
+- [ ] P1c native macOS tests for hidden/other-child/delayed-callback focus.
+- [ ] Integrated native state-machine test for app.exit → ExitRequested → both
+      hosts (current tests are pure decisions plus static checks).
+- [x] Claude normal Tauri preparation uses the passively reviewed 2.1.318 TUI
+      version/hash, independently of the retained 2.1.178 strict MCP pin; historical
+      manifests remain valid and unreviewed MCP composition fails closed
+      (`a533c65`, integrated `8faf558`).
+- [x] Native executable hashing has a finite 512 MiB streaming budget with existing
+      no-follow/owner/mode/Mach-O checks; synthetic 320 MiB admission and
+      above-budget refusal are covered (`961f1f5`, integrated `146e6d1`).
+- [x] Claude CLI default and sonnet/opus/haiku selections reach the existing
+      prepared TUI profile without provider execution (`a533c65`).
+- [x] Claude self-update drift requires a new passive review and exact pin; no
+      fallback to unreviewed bytes (`a533c65`).
+- [ ] Human-accept Claude startup, existing authentication, native TUI input/focus
+      and real replies in the integrated single-window Tauri package.
+- [ ] Validate actual owned Claude Stop/Quit/exit and retirement; descendant
+      containment is not claimed.
+- [ ] Review and accept Claude 2.1.318 ORQST MCP independently before enabling that
+      composition; normal Open remains mcp:false.
+
+Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
+`cargo test` 108 passed / 1 ignored. Native WebKit/AppKit acceptance remains pending.
