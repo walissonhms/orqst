@@ -778,6 +778,16 @@ pub fn configure(
     let client = std::fs::read_to_string(app.path().resource_dir()?.join("features/client.js"))?;
     Ok(format!("if(window.top===window.self && location.origin === {} && !location.search) {{\n{client}\n}}",json!(origin)))
 }
+fn workspace_capability() -> tauri::ipc::CapabilityBuilder {
+    tauri::ipc::CapabilityBuilder::new("feature-workspace-metadata")
+        .local(true)
+        .remote(CHROME_URL.into())
+        .webview("feature-workspace")
+        .permission("allow-feature-request")
+        .permission("allow-feature-prepare")
+        .permission("allow-terminal-restore")
+}
+
 pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let Some(workspace) = app.get_window("main") else {
         return Ok(());
@@ -792,15 +802,7 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     }
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         if !app.state::<Features>().0.lock().unwrap().chrome_capability {
-            app.add_capability(
-                tauri::ipc::CapabilityBuilder::new("feature-workspace-metadata")
-                    .local(true)
-                    .remote(CHROME_URL.into())
-                    .webview("feature-workspace")
-                    .permission("allow-feature-request")
-                    .permission("allow-feature-prepare")
-                    .permission("allow-terminal-restore"),
-            )?;
+            app.add_capability(workspace_capability())?;
             app.state::<Features>().0.lock().unwrap().chrome_capability = true;
         }
         let size = workspace
@@ -1009,6 +1011,66 @@ mod tests {
         resume.wait();
         assert!(!worker.join().unwrap());
         assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn dock_restore_runtime_acl_and_exact_source_gate_are_chrome_only() {
+        // Resolve the real build.rs app manifest and static capabilities without starting an app.
+        let mut context = crate::app_context();
+        let authority = context.runtime_authority_mut();
+        // Registered custom protocols are classified Local by Tauri::is_local_url.
+        let correct = tauri::ipc::Origin::Local;
+        assert!(authority
+            .resolve_access("terminal_restore", "main", "feature-workspace", &correct)
+            .is_none());
+        authority.add_capability(workspace_capability()).unwrap();
+        assert!(authority
+            .resolve_access("terminal_restore", "main", "feature-workspace", &correct)
+            .is_some());
+        for label in ["main", "terminal-0", "terminal-7", "managed-agents"] {
+            assert!(
+                authority
+                    .resolve_access("terminal_restore", "main", label, &correct)
+                    .is_none(),
+                "{label}"
+            );
+        }
+        for wrong in [
+            "orqst-features://local/index.html?x=1",
+            "orqst-features://local/index.html#other",
+            "orqst-features://local/other.html",
+            "orqst-features://other/index.html",
+            "https://example.invalid/index.html",
+        ] {
+            // Local ACL resolution has no URL field. The real handler's exact source gate
+            // supplies this restriction; claiming the ACL alone denies these URLs is false.
+            let admitted = authority
+                .resolve_access("terminal_restore", "main", "feature-workspace", &correct)
+                .is_some()
+                && restore_source_allowed("feature-workspace", "main", wrong);
+            assert!(!admitted, "{wrong}");
+        }
+        let remote = tauri::ipc::Origin::Remote {
+            url: CHROME_URL.parse().unwrap(),
+        };
+        assert!(authority
+            .resolve_access("terminal_restore", "main", "feature-workspace", &remote)
+            .is_some());
+        for wrong in [
+            "orqst-features://local/other.html",
+            "orqst-features://other/index.html",
+            "https://example.invalid/index.html",
+        ] {
+            let origin = tauri::ipc::Origin::Remote {
+                url: wrong.parse().unwrap(),
+            };
+            assert!(
+                authority
+                    .resolve_access("terminal_restore", "main", "feature-workspace", &origin)
+                    .is_none(),
+                "{wrong}"
+            );
+        }
     }
 
     #[test]

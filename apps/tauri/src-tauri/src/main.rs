@@ -17,6 +17,11 @@ mod terminal_creation;
 mod unavailable;
 mod webview_policy;
 
+// Share the generated manifest/ACL with resolver tests; do not construct or run an app there.
+fn app_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
 use tauri::webview::{NewWindowResponse, PermissionResponse};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -189,7 +194,7 @@ fn main() {
             diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Ready, local_diagnostics::Effects::Unconfirmed);
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(app_context())
         .expect("ORQST could not initialize the native Desktop")
         .run(|app, event| {
             #[cfg(target_os = "macos")]

@@ -222,6 +222,40 @@ dispatch. The pinned Anywh Agent Host process-exit/hibernation lifecycle cited
 above changes owned process state and does not implement child-webview visibility;
 copying it would exceed this presentation-only boundary. No external code added.
 
+### Resolved ACL test and local-origin limit — 2026-11-05
+
+The Tauri 2.12.5 resolver test uses the same generated context as production
+(the real build.rs app manifest and static capabilities) and adds the production
+`workspace_capability` builder. Before that dynamic capability, restore is denied;
+after it, the chrome is allowed and main, terminal-0, terminal-7 and managed-agents
+are denied. No app/runtime/webview is created or run.
+
+The pinned Tauri source `webview/mod.rs::is_local_url` classifies registered
+custom protocols as `Origin::Local`. `ipc/authority.rs::resolve_access` then
+receives labels and Local, with no URL. Therefore ACL alone cannot prove exact
+CHROME_URL denial for a wrong document in the same local chrome webview. The test
+asserts the composed real ACL plus `restore_source_allowed` denies query,
+fragment, path, host and scheme variants. Remote-origin resolution separately
+allows CHROME_URL and denies different paths/hosts/schemes; omitted query/hash
+are wildcarded by tauri-utils 2.10.2 `acl/mod.rs::RemoteUrlPattern::from_str`.
+The existing source test remains as a limited source assertion. Exact document
+admission comes from the production handler's source and document fences, not
+from the Local ACL's URL awareness.
+
+Native acceptance remains: invoke restore from the real feature-workspace at
+CHROME_URL, main and terminal children; verify wrong-document navigation/invoke
+is denied and no reopen/save occurs. These resolver/handler tests do not prove
+WebKit's runtime origin classification, IPC delivery or the native click.
+
+Resolver research uses the installed crates' `.cargo_vcs_info.json` pins:
+[`tauri::RuntimeAuthority::resolve_access`](https://github.com/tauri-apps/tauri/blob/993038c49185307dfc895ab7657d77ca0d5ed7c7/crates/tauri/src/ipc/authority.rs#L462-L498),
+[`Webview::is_local_url`](https://github.com/tauri-apps/tauri/blob/993038c49185307dfc895ab7657d77ca0d5ed7c7/crates/tauri/src/webview/mod.rs#L1961-L2001),
+and [`RemoteUrlPattern::from_str`](https://github.com/tauri-apps/tauri/blob/59b63ab500da9859f12d8888c3298bc29bba0b92/crates/tauri-utils/src/acl/mod.rs#L284-L305).
+These existing dependencies carry MIT/Apache-2.0 licenses and dual-license source
+headers; no root NOTICE is present in the installed crate. Decision: call the
+existing resolver in tests, retain the native handler's stricter document gate.
+No dependency, upstream source copy or production ACL scope change is introduced.
+
 ### Reply router correction
 
 `PendingReplies` now records ID, expected kind and host epoch and validates each
