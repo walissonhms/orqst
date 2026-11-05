@@ -924,3 +924,8 @@ Validated on this machine: `pnpm test` 1232/1232, `pnpm lint`, `pnpm typecheck`,
 - [ ] Native WebKit acceptance of the grouped pane disclosure.
 
 Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 0.
+
+- corrigido: the pane action allowlist now sends attach and input again; the
+  explicit instance allowlist is attach/input/detach/stop/kill, profile actions
+  start/open/login stay explicit, and hide stays layout-only with no native
+  request (`8ec55aa`).
