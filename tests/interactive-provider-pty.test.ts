@@ -52,6 +52,7 @@ for (const provider of ['claude', 'opencode'] as const)
         const project = join(root, 'project');
         for (const dir of [state, home, project, join(state, 'tmp')])
           mkdirSync(dir, { mode: 0o700 });
+        if (provider === 'claude') mkdirSync(join(home, '.claude'), { mode: 0o700 });
         const nativeSentinel = join(home, 'SYNTHETIC-DO-NOT-READ');
         writeFileSync(nativeSentinel, 'SYNTHETIC-UNCHANGED', { mode: 0o000 });
         const node = realpathSync(process.execPath);
@@ -259,6 +260,33 @@ for (const provider of ['claude', 'opencode'] as const)
         };
         await until(() => started && output.includes('SYNTHETIC:OWNED_TUI'));
         assert.ok(startEvidence?.startedAt);
+        if (config.version === 2) {
+          const transcriptDir = join(
+            home,
+            '.claude',
+            'projects',
+            project.replace(/[^a-zA-Z0-9-]/g, '-'),
+          );
+          mkdirSync(transcriptDir, { recursive: true, mode: 0o700 });
+          writeFileSync(
+            join(transcriptDir, `${config.sessionId}.jsonl`),
+            JSON.stringify({
+              sessionId: config.sessionId,
+              cwd: project,
+              timestamp: new Date().toISOString(),
+              type: 'assistant',
+              message: {
+                content: [{ type: 'tool_use', name: 'Read', input: { secret: 'SYNTHETIC ONLY' } }],
+              },
+            }) + '\n',
+            { mode: 0o600 },
+          );
+          const session = handle.sessionEvidence?.() as
+            { session?: { sessionId?: string }; activities?: Array<{ label: string }> } | undefined;
+          assert.equal(session?.session?.sessionId, config.sessionId);
+          assert.equal(session?.activities?.[0]?.label, 'Read');
+          assert.ok(!JSON.stringify(session).includes('SYNTHETIC ONLY'));
+        }
         assert.equal(backend.validate(profile), false);
         assert.throws(
           () =>

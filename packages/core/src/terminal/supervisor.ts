@@ -52,6 +52,8 @@ export interface OwnedTerminalHandle {
   write(text: string): void;
   resize(cols: number, rows: number): void;
   signal(signal: 'SIGTERM' | 'SIGKILL'): void;
+  /** Read-only, provider-native evidence bound at this exact dispatch. */
+  sessionEvidence?: () => unknown;
   /** Release listeners only. Must never signal the process. */
   dispose(): void;
 }
@@ -96,6 +98,7 @@ interface Attempt {
   startupTimer?: ReturnType<typeof setTimeout>;
   exit?: { exitCode: number; signal?: number };
   lifecycle?: { startedAt: number; exitedAt?: number };
+  sessionEvidence?: () => unknown;
 }
 
 /** Owns only handles it creates. There is deliberately no PID/session adoption API. */
@@ -203,6 +206,23 @@ export class TerminalSupervisor {
     };
   }
 
+  /** Existing owned attempt only; no session adoption or process control. */
+  canvasSessionEvidence(id: string) {
+    const attempt = this.get(id);
+    if (
+      !this.owned(attempt) ||
+      !attempt.lifecycle ||
+      !['running', 'exited'].includes(attempt.state)
+    )
+      return null;
+    if (attempt.state === 'exited' && attempt.lifecycle.exitedAt === undefined) return null;
+    try {
+      return attempt.sessionEvidence?.() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   launch(id: string, proof: unknown): void {
     if (this.closed) throw new Error('Terminal supervisor is closed');
     const attempt = this.get(id);
@@ -291,6 +311,7 @@ export class TerminalSupervisor {
       };
       const handle = this.journal ? this.journal.withOwner(start) : start();
       attempt.handle = handle;
+      attempt.sessionEvidence = handle.sessionEvidence;
       if (['exited', 'ownership_lost'].includes(attempt.state)) this.releaseHandle(attempt);
     } catch {
       // A thrown start can have uncertain side effects. Never retry or signal a stored PID.

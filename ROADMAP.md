@@ -2,6 +2,9 @@
 
 ## Feature canvas increment — 2026-11-05
 
+Claude now has a narrow receipt-backed owned-session projection for tool names;
+Codex/OpenCode binding and real-provider acceptance remain open.
+
 The native facade now exposes the reviewed selected model and receipt-backed owned
 PTY lifecycle as separate display evidence. Canonical session binding, observed
 tool activity, effective model verification and native/provider acceptance remain open.

@@ -33,6 +33,7 @@ export type TerminalNativeSupervisor = {
       | 'prepare'
       | 'launch'
       | 'snapshot'
+      | 'canvasSessionEvidence'
       | 'requestAttach'
       | 'attach'
       | 'requestInput'

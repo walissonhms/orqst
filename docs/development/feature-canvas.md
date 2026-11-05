@@ -4,8 +4,9 @@
 summary DOM. `canvasMembers` projects current Feature membership from the existing
 Core snapshot and saved native pane names. It never associates observed sessions
 by title, slot number, provider, timing or working directory. The current facade
-does not supply an explicit owned CLI-session/event binding: real cards therefore
-show unavailable agent activity/status and no delegation edges. The separate native
+supplies an owned Claude session only when its exact fresh launch UUID, transcript
+and lifecycle receipt agree; Codex/OpenCode session activity and agent status remain
+unavailable. No delegation edges are inferred. The separate native
 snapshot carries the selected model, and a display-only `canvas` reply carries owned
 PTY lifecycle timestamps when the bound receipt can be verified. Running/exited
 describes the PTY, not a model turn. Unknown, transport loss, or missing receipt

@@ -1705,3 +1705,15 @@ Native sibling ordering changes no focus/input authority. Preparation uncovers t
 retained main dialog only after source revalidation and revokes the old presentation.
 No HTTP/WS endpoint or observed-session execution is added; all captured activity
 continues to render as plain text. Native acceptance remains pending.
+
+## Owned Claude session display boundary — 2026-11-05
+
+An owned, one-shot Claude launch may expose its explicitly supplied session UUID
+and up to three tool names only after the exact lifecycle receipt and a new matching
+transcript record are validated. The transcript path must be absent before launch;
+reads reject symlinks, links, wrong ownership, unsafe modes, inode replacement,
+oversized sources and mismatched UUID/CWD. The private state stores a 0600 binding
+with launch digests and a hash of the matching source record; uncertain creation
+is never retried or removed. Input, output and transcript contents never enter the
+facade. The function grants no control over observed sessions or communication.
+Same-user malicious filesystem races remain outside the existing terminal contract.

@@ -1,5 +1,10 @@
 # V6 feature delivery checklist — 2026-11-04
 
+2026-11-05 owned-session increment: Claude's explicit launch UUID can bind to an
+exact newly created transcript and owned lifecycle receipt, with a private binding
+record and at most three redacted tool names. Codex/OpenCode binding, broader
+Claude observation, provider verification and native UI acceptance remain open.
+
 ## Owner-amended Feature canvas — 2026-11-05
 
 - [x] Dated design amendment; preserved original V6 sources remain unchanged.
@@ -11,8 +16,9 @@
       and generation/document/focus/input/permission/Quit fences.
 - [x] Opt-in EN/PT renderer captures at 1440×900 and 390×900, separately labelled
       synthetic evidence preview and actual metadata-only FeatureWorkspace.
-- [ ] Canonical owned CLI-session/event binding in the native facade; production
-      activity/state/effective model/duration/parentage remain unavailable.
+- [ ] Provider-complete owned CLI-session/event binding; Claude tool-name evidence
+      is narrow, while Codex/OpenCode activity, agent state, effective model and
+      unproven parentage remain unavailable.
 - [ ] Native visibility/geometry, drawer, real-terminal navigation and normal Quit acceptance.
 - [ ] Real delegation, N-member interactive MCP, mentions, role/group editing and results.
 

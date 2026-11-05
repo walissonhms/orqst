@@ -579,24 +579,76 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
         let Some(slot) = entry["slot"].as_u64() else {
             return false;
         };
-        if !seen.insert(slot)
-            || !slots
-                .iter()
-                .any(|s| s["slot"] == slot && s["terminalId"] == entry["terminalId"])
-        {
+        let Some(member) = slots
+            .iter()
+            .find(|s| s["slot"] == slot && s["terminalId"] == entry["terminalId"])
+        else {
             return false;
+        };
+        if !seen.insert(slot) {
+            return false;
+        }
+        let has_session = entry.get("session").is_some() || entry.get("activities").is_some();
+        if has_session {
+            let session = &entry["session"];
+            if member["provider"] != "claude"
+                || !exact(session, &["provider", "sessionId", "bindingEvidence"])
+                || session["provider"] != "claude"
+                || !uuid(&session["sessionId"])
+                || session["bindingEvidence"] != "claude-argv-receipt-transcript"
+                || !entry["activities"].as_array().is_some_and(|activities| {
+                    activities.len() <= 3
+                        && activities.iter().all(|item| {
+                            exact(item, &["at", "kind", "label"])
+                                && item["kind"] == "tool"
+                                && safe(&item["at"]).is_some_and(|at| at <= observed)
+                                && item["label"].as_str().is_some_and(|label| {
+                                    !label.is_empty()
+                                        && label.len() <= 64
+                                        && label.as_bytes()[0].is_ascii_alphabetic()
+                                        && label.bytes().all(|byte| {
+                                            byte.is_ascii_alphanumeric() || b"_.-".contains(&byte)
+                                        })
+                                })
+                        })
+                })
+            {
+                return false;
+            }
         }
         match entry["state"].as_str() {
             Some("unknown") => exact(entry, &["slot", "terminalId", "state"]),
             Some("running") => {
-                exact(entry, &["slot", "terminalId", "state", "startedAt"])
+                (exact(entry, &["slot", "terminalId", "state", "startedAt"])
+                    || exact(
+                        entry,
+                        &[
+                            "slot",
+                            "terminalId",
+                            "state",
+                            "startedAt",
+                            "session",
+                            "activities",
+                        ],
+                    ))
                     && safe(&entry["startedAt"]).is_some_and(|start| start <= observed)
             }
             Some("exited") => {
-                exact(
+                (exact(
                     entry,
                     &["slot", "terminalId", "state", "startedAt", "exitedAt"],
-                ) && safe(&entry["startedAt"])
+                ) || exact(
+                    entry,
+                    &[
+                        "slot",
+                        "terminalId",
+                        "state",
+                        "startedAt",
+                        "exitedAt",
+                        "session",
+                        "activities",
+                    ],
+                )) && safe(&entry["startedAt"])
                     .zip(safe(&entry["exitedAt"]))
                     .is_some_and(|(start, end)| start <= end && end <= observed)
             }
@@ -2050,6 +2102,13 @@ mod tests {
         assert!(valid_canvas(&canvas, &snapshot));
         canvas["entries"][0]["terminalId"] = json!(f);
         assert!(!valid_canvas(&canvas, &snapshot));
+        let mut scoped = snapshot.clone();
+        scoped["slots"][0]["provider"] = json!("claude");
+        let mut activity = json!({"observedAt":200,"entries":[{"slot":0,"terminalId":t,"state":"running","startedAt":100,"session":{"provider":"claude","sessionId":f,"bindingEvidence":"claude-argv-receipt-transcript"},"activities":[{"at":150,"kind":"tool","label":"Read"}]}]});
+        assert!(valid_canvas(&activity, &scoped));
+        assert!(!valid_canvas(&activity, &snapshot));
+        activity["entries"][0]["activities"][0]["label"] = json!("raw secret input");
+        assert!(!valid_canvas(&activity, &scoped));
         canvas["entries"][0]["terminalId"] = json!(t);
         canvas["entries"][0]
             .as_object_mut()

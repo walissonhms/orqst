@@ -67,8 +67,16 @@ agent or task status. The host requests only its own broker-created attempt unde
 the same Core epoch, and Rust checks the slot and terminal UUID against the reply's
 snapshot. Data is not part of a permission review or execution authorization.
 Consumers should discard stale readings and never extrapolate liveness indefinitely.
-No canonical owned terminal-to-observed-session binding is currently exposed, so
-tool activity and session state are unavailable in this facade.
+Entries may additionally carry both `session` and `activities`:
+`session: {provider:'claude',sessionId:UUID,bindingEvidence:'claude-argv-receipt-transcript'}`
+and `activities: [{at:epochMilliseconds,kind:'tool',label:string}]` (at most three).
+The label contains only the validated tool name, never arguments, tool result or
+transcript content; known secrets are redacted by exclusion. A fresh launch UUID,
+pre-dispatch absence, a matching Claude transcript record, the exact owned receipt
+and a durable private binding are all required. Paths and private receipt fields do
+not cross the facade. A missing or invalid proof omits both fields. This is not
+agent-turn status. Codex and OpenCode session bindings remain unavailable until
+an exact native identity source is implemented and verified.
 
 The Rust command derives label, parent window, URL, native document generation
 and wire UUID. Metadata requests/replies are bounded to 128 KiB with at most eight

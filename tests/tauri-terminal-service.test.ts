@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
-import { terminalNativeReplySchema, type TerminalNativeRequest } from '@orqst/protocol';
+import {
+  featureCanvasEvidenceSchema,
+  terminalNativeReplySchema,
+  type TerminalNativeRequest,
+} from '@orqst/protocol';
 import { TauriTerminalService } from '../apps/desktop/src/tauri-terminal-service.js';
 import { TerminalAuthority, terminalDigest } from '../packages/core/src/terminal/authority.js';
 import {
@@ -11,7 +15,7 @@ import {
   type TerminalEvents,
 } from '../packages/core/src/terminal/supervisor.js';
 
-function setup(evidenced = false) {
+function setup(evidenced = false, sessionEvidence?: () => unknown) {
   const keys = generateKeyPairSync('ed25519');
   const messages: Array<Record<string, unknown>> = [];
   const starts = [0, 0];
@@ -30,6 +34,7 @@ function setup(evidenced = false) {
             else events.started();
             capturedEvents[slot] = events;
             return {
+              ...(sessionEvidence ? { sessionEvidence } : {}),
               write: (text) => {
                 writes[slot]!.push(text);
               },
@@ -74,6 +79,34 @@ function setup(evidenced = false) {
   }
   return { service, supervisors, messages, starts, writes, signals, request, capturedEvents };
 }
+
+test('canvas session evidence stays bound to the broker slot and Claude provider', async () => {
+  const evidence = {
+    session: {
+      provider: 'claude',
+      sessionId: randomUUID(),
+      bindingEvidence: 'claude-argv-receipt-transcript',
+    },
+    activities: [{ at: Date.now() - 100, kind: 'tool', label: 'Read' }],
+  };
+  const s = setup(true, () => evidence);
+  try {
+    const started = await s.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    if (started.status !== 'ok' || !started.snapshot) throw new Error('Missing synthetic start');
+    const identity = { slot: 0, terminalId: randomUUID(), provider: 'claude' };
+    const found = featureCanvasEvidenceSchema.parse(
+      await s.service.canvasEvidence([identity], started.snapshot.epoch),
+    );
+    assert.deepEqual(found.entries[0]?.session, evidence.session);
+    assert.deepEqual(found.entries[0]?.activities, evidence.activities);
+    const wrongProvider = featureCanvasEvidenceSchema.parse(
+      await s.service.canvasEvidence([{ ...identity, provider: 'codex' }], started.snapshot.epoch),
+    );
+    assert.equal(wrongProvider.entries[0]?.session, undefined);
+  } finally {
+    s.service.close();
+  }
+});
 
 test('canvas projection requires this broker instance, current epoch and lifecycle evidence', async () => {
   const s = setup(true);

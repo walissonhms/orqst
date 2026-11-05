@@ -14,6 +14,10 @@ The upstream tree at this commit contains LICENSE and no NOTICE file.
 See LICENSE and docs/research/reuse-first-audit.md for provenance and changes.
 
 Additional Anywh source adapted at the same commit:
+Source: relay/src/runtimes/defs/claude/transcriptReader.ts (sanitizeCwd, transcriptPath)
+Destination: packages/core/src/terminal/owned-claude-session.ts
+Modified for exact owned UUIDs, absence checks, no-follow bounded reads, receipt
+binding and tool-name-only projection. No upstream transcript parser copied.
 Source: client/src-tauri/src/tailnet_sidecar.rs (tailnet_sidecar_start, kill_all)
 Destination: apps/tauri/src-tauri/src/sidecar.rs
 Modified by ORQST for a fixed local Node Core, bounded readiness, environment

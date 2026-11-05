@@ -141,6 +141,22 @@ export const featureNativeSnapshotSchema = z
     );
   }, 'Invalid Feature snapshot scope');
 export type FeatureNativeSnapshot = z.infer<typeof featureNativeSnapshotSchema>;
+export const featureCanvasSessionEvidenceSchema = z.strictObject({
+  session: z.strictObject({
+    provider: z.literal('claude'),
+    sessionId: z.uuid(),
+    bindingEvidence: z.literal('claude-argv-receipt-transcript'),
+  }),
+  activities: z
+    .array(
+      z.strictObject({
+        at: z.number().int().nonnegative().safe(),
+        kind: z.literal('tool'),
+        label: z.string().regex(/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/),
+      }),
+    )
+    .max(3),
+});
 /** Display-only owned PTY evidence, never a session status or execution grant. */
 export const featureCanvasEvidenceSchema = z
   .strictObject({
@@ -153,6 +169,8 @@ export const featureCanvasEvidenceSchema = z
           state: z.enum(['running', 'exited', 'unknown']),
           startedAt: z.number().int().nonnegative().safe().optional(),
           exitedAt: z.number().int().nonnegative().safe().optional(),
+          session: featureCanvasSessionEvidenceSchema.shape.session.optional(),
+          activities: featureCanvasSessionEvidenceSchema.shape.activities.optional(),
         }),
       )
       .max(8),
@@ -161,16 +179,22 @@ export const featureCanvasEvidenceSchema = z
     (value) =>
       new Set(value.entries.map((entry) => entry.slot)).size === value.entries.length &&
       new Set(value.entries.map((entry) => entry.terminalId)).size === value.entries.length &&
-      value.entries.every((entry) =>
-        entry.state === 'unknown'
-          ? entry.startedAt === undefined && entry.exitedAt === undefined
-          : entry.startedAt !== undefined &&
-            entry.startedAt <= value.observedAt &&
-            (entry.state === 'running'
-              ? entry.exitedAt === undefined
-              : entry.exitedAt !== undefined &&
-                entry.exitedAt >= entry.startedAt &&
-                entry.exitedAt <= value.observedAt),
+      value.entries.every(
+        (entry) =>
+          (entry.session === undefined
+            ? entry.activities === undefined
+            : entry.state !== 'unknown' &&
+              entry.activities !== undefined &&
+              entry.activities.every((activity) => activity.at <= value.observedAt)) &&
+          (entry.state === 'unknown'
+            ? entry.startedAt === undefined && entry.exitedAt === undefined
+            : entry.startedAt !== undefined &&
+              entry.startedAt <= value.observedAt &&
+              (entry.state === 'running'
+                ? entry.exitedAt === undefined
+                : entry.exitedAt !== undefined &&
+                  entry.exitedAt >= entry.startedAt &&
+                  entry.exitedAt <= value.observedAt)),
       ),
   );
 export type FeatureCanvasEvidence = z.infer<typeof featureCanvasEvidenceSchema>;
@@ -191,7 +215,10 @@ export const featureNativeReplySchema = z
       (!!value.snapshot &&
         value.canvas.entries.every((entry) =>
           value.snapshot!.slots.some(
-            (slot) => slot.slot === entry.slot && slot.terminalId === entry.terminalId,
+            (slot) =>
+              slot.slot === entry.slot &&
+              slot.terminalId === entry.terminalId &&
+              (entry.session === undefined || entry.session.provider === slot.provider),
           ),
         )),
     'Canvas evidence outside snapshot scope',

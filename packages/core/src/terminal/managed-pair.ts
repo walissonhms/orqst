@@ -234,6 +234,8 @@ export class ManagedTerminalPair {
         return supervisor.launch(...request.args);
       case 'snapshot':
         return supervisor.snapshot(...request.args);
+      case 'canvasSessionEvidence':
+        return supervisor.canvasSessionEvidence(...request.args);
       case 'requestAttach':
         return supervisor.requestAttach(...request.args);
       case 'attach':
