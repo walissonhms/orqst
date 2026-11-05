@@ -621,7 +621,7 @@ async function start(): Promise<void> {
           type: 'warning',
           message: i18n.t(
             result === 'launch_unavailable'
-              ? 'terminalNative.launch_unavailable'
+              ? 'managedTerminal.launch_unavailable'
               : 'managedTerminal.selectionDenied',
           ),
           buttons: [i18n.t('terminalNative.cancel')],
