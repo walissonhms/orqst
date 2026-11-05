@@ -1004,6 +1004,22 @@ mod tests {
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     #[test]
     fn rotation_permissions_and_writer_exclusion_are_bounded() {
+        // Keep unrelated parallel test subprocess creation out of this lock lifetime.
+        const CHILD: &str = "ORQST_DIAGNOSTIC_LOCK_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "local_diagnostics::tests::rotation_permissions_and_writer_exclusion_are_bounded"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
         use std::os::unix::fs::PermissionsExt;
         let parent = temporary();
         let mut sink = disk::Sink::open(&parent, 20).unwrap();
@@ -1023,7 +1039,7 @@ mod tests {
             assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         }
         drop(sink);
-        assert!(disk::Sink::open(&parent, 20).is_ok());
+        disk::Sink::open(&parent, 20).expect("reopen after releasing lock");
         fs::remove_dir_all(parent).unwrap();
     }
 
