@@ -693,10 +693,15 @@ test('verified service reviews one CLI grant and reuses it across two owned slot
         [selected],
       ),
   );
-  const service = new TauriTerminalService(
+  const service: TauriTerminalService = new TauriTerminalService(
     supervisors,
     keys,
-    (message) => messages.push(message as Record<string, unknown>),
+    (message) => {
+      const value = message as Record<string, unknown>;
+      messages.push(value);
+      if (value.kind === 'cli-current')
+        void service.receive({ kind: 'cli-current', id: value.id, accepted: true });
+    },
     (key) => key,
     undefined,
     undefined,
@@ -736,7 +741,9 @@ test('verified service reviews one CLI grant and reuses it across two owned slot
     await setImmediate();
     const confirmation = messages.find((message) => message.kind === 'confirm');
     assert.ok(confirmation);
-    assert.match(String(confirmation.detail), /signed-cli-version-probe/);
+    assert.match(String(confirmation.detail), /not yet probed/);
+    assert.match(String(confirmation.detail), /codex-tui-0\.162\.1/);
+    assert.equal(probes, 0);
     await service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
     await opening;
     assert.equal(
