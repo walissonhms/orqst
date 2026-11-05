@@ -28,6 +28,7 @@ import {
 } from '../apps/desktop/src/tauri-terminal-preparation.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-tauri-preparation-')));
 const nativePreparationSupported =
@@ -50,18 +51,25 @@ await build({
     {
       name: 'synthetic-provisioning-pins-only',
       setup(builder) {
-        builder.onLoad({ filter: /(?:terminal-creation|provider-mcp-config)\.ts$/ }, (args) => ({
-          contents: readFileSync(args.path, 'utf8')
-            .replaceAll(
-              reviewedDesktopCodexBinary.sha256,
-              terminalExecutableSha256(realpathSync(process.execPath)),
-            )
-            .replaceAll(
-              reviewedProviderMcpBinaries.claude.sha256,
-              terminalExecutableSha256(realpathSync(process.execPath)),
-            ),
-          loader: 'ts',
-        }));
+        builder.onLoad(
+          { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
+          (args) => ({
+            contents: readFileSync(args.path, 'utf8')
+              .replaceAll(
+                reviewedDesktopCodexBinary.sha256,
+                terminalExecutableSha256(realpathSync(process.execPath)),
+              )
+              .replaceAll(
+                reviewedClaudeTuiBinary.sha256,
+                terminalExecutableSha256(realpathSync(process.execPath)),
+              )
+              .replaceAll(
+                reviewedProviderMcpBinaries.claude.sha256,
+                terminalExecutableSha256(realpathSync(process.execPath)),
+              ),
+            loader: 'ts',
+          }),
+        );
       },
     },
   ],
