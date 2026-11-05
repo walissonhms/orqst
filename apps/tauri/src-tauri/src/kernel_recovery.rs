@@ -65,15 +65,27 @@ fn run(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let mut rechecked = false;
     let mut authorized = false;
     let mut complete = false;
+    let mut diagnostic_bytes = 0usize;
+    let mut output_bytes = 0usize;
     while Instant::now() < deadline {
         let event = tauri::async_runtime::block_on(tokio::time::timeout(
             deadline.saturating_duration_since(Instant::now()),
             rx.recv(),
         ))?;
-        let Some(CommandEvent::Stdout(line)) = event else {
-            break;
+        let line = match event {
+            Some(CommandEvent::Stdout(line)) => line,
+            Some(CommandEvent::Stderr(line)) => {
+                // The helper may emit runtime warnings; never log their contents.
+                diagnostic_bytes = diagnostic_bytes.saturating_add(line.len());
+                if diagnostic_bytes > 256 * 1024 {
+                    break;
+                }
+                continue;
+            }
+            _ => break,
         };
-        if line.len() > 256 * 1024 {
+        output_bytes = output_bytes.saturating_add(line.len());
+        if line.len() > 256 * 1024 || output_bytes > 2 * 1024 * 1024 {
             break;
         }
         let frame: Value = serde_json::from_slice(&line)?;
