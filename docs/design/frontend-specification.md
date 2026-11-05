@@ -319,9 +319,10 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Item                                                                                                  | Owner    | Blocked by                                       |
 | ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                          | owner    | new package                                      |
-| Native OS notifications on completed/failed                                                           | pane-817 | step 2                                           |
+| Native OS notifications on completed/failed (transition monitor WIP `b0a5ca5`; not wired)             | pane-817 | step 2: native dispatch and click routing        |
 | Claude "needs you" state via owned `--settings` hooks                                                 | pane-817 | step 1b                                          |
 | Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
+| Batch create in the current workspace                                                                 | pane-817 | step 3: per-item native admission and results    |
 | Batch create across several workspaces                                                                | pane-817 | multi-workspace design review (owner + pane-769) |
 | Mentions and communication events from the Core journal                                               | pane-817 | step 4                                           |
 | Account profiles per CLI, limit evidence, migrate/duplicate, copy conversation, token snapshot        | pane-817 | steps 7–8                                        |
