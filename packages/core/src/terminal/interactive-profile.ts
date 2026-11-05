@@ -160,7 +160,8 @@ export function parseInteractiveManifestForRecovery(raw: unknown): InteractiveTe
       throw new Error('Unversioned CLI authorization binding cannot be recovered');
     v2CliBindingSchema.parse(entry.cliAuthorization);
     const executable = z.strictObject({ path }).parse(entry.executable);
-    const { cliAuthorization: _authorization, ...rest } = entry;
+    const rest = { ...entry };
+    delete rest.cliAuthorization;
     raw = {
       ...rest,
       executable: { path: executable.path, sha256: terminalDigest('orqst:recovery:unread-cli') },
@@ -177,7 +178,8 @@ export function readInteractiveTerminalConfig(file: string): InteractiveTerminal
     const entry = raw as Record<string, unknown>;
     if (entry.cliAuthorization !== 'local-v2') v2CliBindingSchema.parse(entry.cliAuthorization);
     const executable = z.strictObject({ path }).parse(entry.executable);
-    const { cliAuthorization: _authorization, ...rest } = entry;
+    const rest = { ...entry };
+    delete rest.cliAuthorization;
     raw = {
       ...rest,
       executable: { path: executable.path, sha256: terminalExecutableSha256(executable.path) },
