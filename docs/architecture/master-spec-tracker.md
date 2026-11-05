@@ -726,7 +726,7 @@ Implemented in code on this branch, not validated on a machine:
   chrome follows the same parent. WebKit/AppKit acceptance is pending.
 - Single local CLI authorization (backend `541ebf0`): one `open` review, then
   normal launch/attach/input; denied replies expose `authorization:
-  blocked|revoked` and the terminal chrome surfaces the single authorization
+blocked|revoked` and the terminal chrome surfaces the single authorization
   copy. Native acceptance is pending.
 - Feature + Terminal entry (`61eb2fd`, pane-766) is integrated in code; native
   acceptance is pending.
