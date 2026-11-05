@@ -19,7 +19,8 @@ if (
   if (location.href === 'orqst-features://local/index.html') {
     Object.defineProperty(window, 'orqstTerminalDock', {
       value: Object.freeze({
-        restore: (slot: number) => invoke<boolean>('terminal_restore', { slot }),
+        restore: (slot: number, generation: number) =>
+          invoke<boolean>('terminal_restore', { slot, generation }),
       }),
     });
   }

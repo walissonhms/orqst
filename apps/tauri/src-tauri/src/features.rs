@@ -339,6 +339,11 @@ fn identity_from(
         && matches(&source, &guard.origin))
     .then_some((source, expected.1))
 }
+/// The dock restore is accepted only from the exact chrome child of main.
+pub(crate) fn restore_source_allowed(label: &str, parent: &str, source: &str) -> bool {
+    label == "feature-workspace" && parent == "main" && source == CHROME_URL
+}
+
 /// Exact chrome document identity for the dock route; no process or metadata authority.
 pub(crate) fn chrome_current(app: &tauri::AppHandle, view: &Webview) -> bool {
     identity(view).is_some() && !crate::terminal::presentation_blocked(app)
@@ -778,7 +783,8 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
                     .remote(CHROME_URL.into())
                     .webview("feature-workspace")
                     .permission("allow-feature-request")
-                    .permission("allow-feature-prepare"),
+                    .permission("allow-feature-prepare")
+                    .permission("allow-terminal-restore"),
             )?;
             app.state::<Features>().0.lock().unwrap().chrome_capability = true;
         }
@@ -951,6 +957,25 @@ mod tests {
     }
 
     use super::*;
+    #[test]
+    fn dock_restore_capability_and_source_are_chrome_only() {
+        let source = include_str!("features.rs");
+        assert!(source.contains(".webview(\"feature-workspace\")"));
+        assert!(source.contains(".permission(\"allow-terminal-restore\")"));
+        assert!(restore_source_allowed(
+            "feature-workspace",
+            "main",
+            CHROME_URL
+        ));
+        assert!(!restore_source_allowed("main", "main", CHROME_URL));
+        assert!(!restore_source_allowed("terminal-0", "main", CHROME_URL));
+        assert!(!restore_source_allowed(
+            "feature-workspace",
+            "main",
+            "orqst-features://local/index.html?x=1"
+        ));
+    }
+
     #[test]
     fn metadata_document_identity_is_exact_and_parent_bound() {
         assert!(document_matches(

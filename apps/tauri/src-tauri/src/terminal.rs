@@ -923,17 +923,26 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
 }
 
 /// A dock restore only re-shows an existing hidden slot; it grants no process authority.
-pub(crate) fn restore_allowed(slot: u64, count: usize, visible: &[u64]) -> bool {
-    (slot as usize) < count && !visible.contains(&slot)
+pub(crate) fn restore_allowed(
+    slot: u64,
+    count: usize,
+    visible: &[u64],
+    generation: u64,
+    current: u64,
+) -> bool {
+    generation == current && (slot as usize) < count && !visible.contains(&slot)
 }
 
 #[tauri::command]
-pub async fn terminal_restore(window: Webview, slot: u64) -> Value {
+pub async fn terminal_restore(window: Webview, slot: u64, generation: u64) -> Value {
     let app = window.app_handle();
-    if !crate::features::chrome_current(app, &window) {
+    let source = window.url().map(|url| url.to_string()).unwrap_or_default();
+    if !crate::features::restore_source_allowed(window.label(), window.window().label(), &source)
+        || !crate::features::chrome_current(app, &window)
+    {
         return json!(false);
     }
-    let (count, visible) = {
+    let (count, visible, current) = {
         let terminal = app.state::<Terminals>();
         let guard = terminal.0.lock().unwrap();
         let Some(r) = guard.as_ref() else {
@@ -943,9 +952,12 @@ pub async fn terminal_restore(window: Webview, slot: u64) -> Value {
             .as_array()
             .map(|items| items.iter().filter_map(Value::as_u64).collect())
             .unwrap_or_default();
-        (r.documents.len(), visible)
+        (r.documents.len(), visible, r.layout_generation)
     };
-    if !restore_allowed(slot, count, &visible) {
+    // Revalidate the same gesture generation before the only effect.
+    if !restore_allowed(slot, count, &visible, generation, current)
+        || !crate::features::chrome_current(app, &window)
+    {
         return json!(false);
     }
     json!(send(
@@ -1125,7 +1137,7 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
 }
 
 /// Minimal dock state only: hidden slot, label and provider. No ids, proofs or epochs.
-fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool) {
+fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64) {
     let Some(chrome) = app.get_webview("feature-workspace") else {
         return;
     };
@@ -1155,7 +1167,7 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool) {
             })
         })
         .collect();
-    let detail = json!({"hidden": hidden, "count": labels.len()});
+    let detail = json!({"hidden": hidden, "count": labels.len(), "generation": generation});
     let _ = chrome.eval(format!(
         "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
     ));
@@ -1205,7 +1217,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     } else {
         crate::agents::hide_surface(app);
     }
-    emit_dock(app, state, show);
+    emit_dock(app, state, show, value["generation"].as_u64().unwrap_or(0));
     if let Some(chrome) = app.get_webview("feature-workspace") {
         if show {
             let _ = chrome.show();

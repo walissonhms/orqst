@@ -6,7 +6,7 @@ import type {
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
-import { dockPanes, type DockPane } from './feature-workspace-dock.js';
+import { dockGeneration, dockPanes, type DockPane } from './feature-workspace-dock.js';
 import {
   featureNoticeAfterSnapshot,
   featureNoticeContext,
@@ -43,6 +43,7 @@ export function FeatureWorkspace({
   const [operation, setOperation] = useState<FeatureNativeRequest['action'] | null>(null);
   const [notice, setNotice] = useState('');
   const [dock, setDock] = useState<DockPane[]>([]);
+  const [dockEpoch, setDockEpoch] = useState(0);
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   const [quitFence, setQuitFence] = useState(false);
   const [editor, setEditor] = useState<WorkspaceFeature | 'new' | null>(null);
@@ -143,7 +144,11 @@ export function FeatureWorkspace({
 
   useEffect(() => {
     if (!nativeWorkspace) return;
-    const update = (event: Event) => setDock(dockPanes((event as CustomEvent<unknown>).detail));
+    const update = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      setDock(dockPanes(detail));
+      setDockEpoch(dockGeneration(detail));
+    };
     window.addEventListener('orqst-terminal-dock', update);
     return () => window.removeEventListener('orqst-terminal-dock', update);
   }, [nativeWorkspace]);
@@ -491,7 +496,7 @@ export function FeatureWorkspace({
             <button
               key={pane.slot}
               type="button"
-              onClick={() => void window.orqstTerminalDock?.restore(pane.slot)}
+              onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
               title={t('features.dockRestore', { name: pane.label || `T-${pane.slot + 1}` })}
             >
               <span aria-hidden="true">▣</span> {pane.label || `T-${pane.slot + 1}`}

@@ -5,6 +5,11 @@ export interface DockPane {
   provider: string;
 }
 
+export function dockGeneration(detail: unknown): number {
+  const value = (detail as { generation?: unknown } | null)?.generation;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
 export function dockPanes(detail: unknown): DockPane[] {
   if (!detail || typeof detail !== 'object') return [];
   const hidden = (detail as { hidden?: unknown }).hidden;

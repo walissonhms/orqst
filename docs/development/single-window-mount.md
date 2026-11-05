@@ -222,3 +222,17 @@ spawn. Therefore its generic error is not proof of non-dispatch and cannot safel
 release the reservation. Tests inject each of the four actual production preflight
 ports plus spawn success/error, pre/post-spawn unwind and dropped preparation.
 No host, provider or process is started by these fixtures.
+
+Exact cross-language check (disposable artifact, never committed):
+
+```bash
+export ORQST_QUIT_NODE_TRANSCRIPT=/tmp/orqst-quit-transcript.json
+pnpm exec tsx --test tests/owned-terminal-shutdown.test.ts
+ORQST_QUIT_NODE_TRANSCRIPT=$ORQST_QUIT_NODE_TRANSCRIPT \
+  cargo test --manifest-path apps/tauri/src-tauri/Cargo.toml \
+  real_node_service_transcripts_keep_the_coordinator_fenced -- --ignored
+```
+
+The 2026-11-05 run produced the two-transcript artifact and the ignored Rust
+test passed (`1 passed; 0 failed`). It remains ignored by default so an absent
+artifact can never be mistaken for a pass.

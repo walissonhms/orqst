@@ -1272,3 +1272,20 @@ Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 
 Validated on this machine: `pnpm test` 1284/1284, `pnpm lint`, `pnpm typecheck`,
 `cargo test` 143 passed / 2 ignored, `cargo clippy --all-targets -D warnings` and
 rustfmt clean.
+
+## Final review fixes — 2026-11-05 (source state)
+
+- [x] Dock restore capability granted only to the dynamic
+      `feature-workspace-metadata` capability; source test asserts the chrome
+      webview, the exact CHROME_URL and denial for main/terminals/wrong URL
+      (`allow-terminal-restore`).
+- [x] `terminal_restore` now enforces label `feature-workspace`, parent `main`,
+      exact CHROME_URL, the chrome identity, and binds the layout generation,
+      revalidating it before the only effect; an obsolete gesture is denied.
+- [x] Renderer presentation hides and suspends the remaining children (with input
+      revocation) before the unavailable document, without ownership, Core or
+      process effects.
+- [x] The ignored cross-language test has the exact documented commands and was
+      run explicitly: artifact generated, Rust replay `1 passed; 0 failed`.
+- [ ] Native AppKit/WebKit acceptance of the dock restore and unavailable cover.
+- [ ] Wire the Feature permission library into the production composition.

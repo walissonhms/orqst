@@ -34,6 +34,12 @@ pub(crate) fn on_terminate(webview: &tauri::Webview) {
             let _ = view.hide();
         }
     }
+    // No remaining child may cover the unavailable document or keep input.
+    crate::terminal::suspend_surface(app);
+    crate::agents::hide_surface(app);
+    if let Some(chrome) = app.get_webview("feature-workspace") {
+        let _ = chrome.hide();
+    }
     crate::files::invalidate(app);
     crate::terminal_creation::invalidate(app);
     crate::unavailable::show_renderer_unavailable(app);
