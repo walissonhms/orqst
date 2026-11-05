@@ -83,6 +83,7 @@ pub enum RefusalSource {
     Feature,
     Terminal,
     Agents,
+    Files,
 }
 impl RefusalSource {
     fn name(self) -> &'static str {
@@ -91,6 +92,7 @@ impl RefusalSource {
             Self::Feature => "feature",
             Self::Terminal => "terminal",
             Self::Agents => "agents",
+            Self::Files => "files",
         }
     }
 }
@@ -146,13 +148,13 @@ pub fn refusal(source: RefusalSource, outcome: Outcome, effects: Effects) {
 static RATE_LIMITS: OnceLock<Mutex<RateWindow>> = OnceLock::new();
 struct RateWindow {
     started: Instant,
-    counts: [u64; 4],
+    counts: [u64; 5],
 }
 impl RateWindow {
     fn new(now: Instant) -> Self {
         Self {
             started: now,
-            counts: [0; 4],
+            counts: [0; 5],
         }
     }
     fn add(&mut self, source: RefusalSource) {
@@ -161,10 +163,11 @@ impl RateWindow {
             RefusalSource::Feature => 1,
             RefusalSource::Terminal => 2,
             RefusalSource::Agents => 3,
+            RefusalSource::Files => 4,
         };
         self.counts[index] = self.counts[index].saturating_add(1);
     }
-    fn drain(&mut self, now: Instant) -> Option<[u64; 4]> {
+    fn drain(&mut self, now: Instant) -> Option<[u64; 5]> {
         if now.saturating_duration_since(self.started) < REFUSAL_WINDOW {
             return None;
         }
@@ -198,7 +201,7 @@ fn rate_lines(now: Instant) -> Vec<String> {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default(),
     );
-    [RefusalSource::Studio, RefusalSource::Feature, RefusalSource::Terminal, RefusalSource::Agents].into_iter()
+    [RefusalSource::Studio, RefusalSource::Feature, RefusalSource::Terminal, RefusalSource::Agents, RefusalSource::Files].into_iter()
         .zip(counts).filter(|(_, count)| *count > 0)
         .map(|(source, count)| format!("{{\"v\":1,\"unix_ms\":{},\"source\":\"{}\",\"stage\":\"request\",\"outcome\":\"{}\",\"effects\":\"not_started\",\"count\":{}}}\n", unix_ms, source.name(), Outcome::RateLimited.name(), count))
         .collect()
@@ -654,8 +657,14 @@ mod tests {
         assert!(window
             .drain(now + REFUSAL_WINDOW - Duration::from_millis(1))
             .is_none());
-        assert_eq!(window.drain(now + REFUSAL_WINDOW), Some([1000, 0, 500, 0]));
-        assert_eq!(window.drain(now + REFUSAL_WINDOW * 2), Some([0, 0, 0, 0]));
+        assert_eq!(
+            window.drain(now + REFUSAL_WINDOW),
+            Some([1000, 0, 500, 0, 0])
+        );
+        assert_eq!(
+            window.drain(now + REFUSAL_WINDOW * 2),
+            Some([0, 0, 0, 0, 0])
+        );
     }
 
     #[test]
@@ -942,7 +951,7 @@ mod tests {
             .unwrap()
             .drain(start + REFUSAL_WINDOW * 2)
             .unwrap();
-        assert_eq!(rate, [988, 0, 988, 0]);
+        assert_eq!(rate, [988, 0, 988, 0, 0]);
         for value in [
             "native_setup",
             "host_spawn",

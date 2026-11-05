@@ -15,6 +15,16 @@ pub enum Action {
     Open,
     Start,
     Navigate,
+    Input,
+    Read,
+    Resize,
+    Control,
+    Stop,
+    Metadata,
+    Permissions,
+    File,
+    Context,
+    View,
 }
 struct Window {
     start: Instant,
@@ -54,7 +64,16 @@ impl Limiter {
             window.start = now;
             window.accepted = 0;
         }
-        if window.accepted >= LIMIT {
+        let limit = match action {
+            Action::Input | Action::Read | Action::Resize => 6000,
+            Action::Control
+            | Action::Metadata
+            | Action::Permissions
+            | Action::Context
+            | Action::View => 120,
+            _ => LIMIT,
+        };
+        if window.accepted >= limit {
             return false;
         }
         window.accepted += 1;
@@ -112,6 +131,24 @@ mod tests {
             now + WINDOW - Duration::from_millis(1)
         ));
         assert!(limiter.admit("main", "", 1, Action::Catalog, now + WINDOW));
+    }
+    #[test]
+    fn high_frequency_routes_are_bounded_and_stop_has_independent_quota() {
+        let now = Instant::now();
+        let mut limiter = Limiter::default();
+        for action in [Action::Input, Action::Read, Action::Resize] {
+            assert_eq!(
+                (0..7000)
+                    .filter(|_| limiter.admit("terminal-0", "host", 1, action, now))
+                    .count(),
+                6000
+            );
+        }
+        for _ in 0..120 {
+            assert!(limiter.admit("terminal-0", "host", 1, Action::Control, now));
+        }
+        assert!(!limiter.admit("terminal-0", "host", 1, Action::Control, now));
+        assert!(limiter.admit("terminal-0", "host", 1, Action::Stop, now));
     }
     #[test]
     fn spaced_human_requests_are_admitted() {

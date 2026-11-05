@@ -1,7 +1,9 @@
 //! Narrow native export transport. Filesystem policy stays in ORQST's existing Node savers.
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+static FILE_EPOCH: AtomicU64 = AtomicU64::new(1);
 use std::time::Duration;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
@@ -15,6 +17,7 @@ struct Running {
     child: CommandChild,
     origin: String,
     document: u64,
+    admission_epoch: u64,
     sequence: u64,
     pending: HashMap<String, (u64, oneshot::Sender<Value>)>,
 }
@@ -75,6 +78,20 @@ pub async fn file_request(window: WebviewWindow, request: Value) -> Value {
         }
         if r.pending.len() >= 8 {
             return json!({"status":"busy"});
+        }
+        let action = if context {
+            crate::renderer_admission::Action::Context
+        } else {
+            crate::renderer_admission::Action::File
+        };
+        if !crate::renderer_admission::admit(
+            window.label(),
+            &r.admission_epoch.to_string(),
+            r.document,
+            action,
+            crate::local_diagnostics::RefusalSource::Files,
+        ) {
+            return failed();
         }
         r.sequence += 1;
         let id = r.sequence.to_string();
@@ -268,6 +285,7 @@ pub async fn start(
         child,
         origin: origin.into(),
         document: 0,
+        admission_epoch: FILE_EPOCH.fetch_add(1, Ordering::Relaxed),
         sequence: 0,
         pending: HashMap::new(),
     });

@@ -207,9 +207,9 @@ write a native diagnostic.
 
 ## Renderer admission and lock-test limitation
 
-Native admission limits each authenticated document identity and action to 12 requests
-per fixed 60-second window. Catalog, creation, selection, preparation navigation,
-terminal open and terminal start (including managed-agent start) use separate buckets. A burst across a window edge
+Native admission limits each authenticated document identity and action per fixed
+60-second window. Catalog, creation, selection, preparation navigation,
+terminal open and terminal start (including managed-agent start) each permit 12 requests. A burst across a window edge
 can admit up to 24 operations. Exceeding a bucket returns `rate_limited` before the
 helper, opening diagnostic or native dispatch; the UI displays a localized notice
 and does not retry that operation. Automatic catalog refresh on focus is suspended
@@ -254,3 +254,34 @@ responses. They do not invoke a real Tauri Webview command or prove native UI,
 provider or package behavior. Like any finite rotating log, sustained admitted
 activity can eventually rotate older native records; the rate limit bounds work
 per window and does not promise indefinite retention.
+
+## Renderer command inventory
+
+The registered commands are enumerated by `tests/tauri-renderer-route-inventory.test.ts`.
+The entries below refer to the native source tree `apps/tauri/src-tauri/src/`.
+One admitted request may cause multiple related IPC messages or dialogs; the
+limit bounds admitted requests, not each downstream operation independently.
+
+| Renderer command         | Coverage and effect                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `studio_request`         | `terminal_creation.rs:785` limits catalog, review and create variants before helper or dialog. `snapshot` only reads in-memory state (`terminal_creation.rs:463`, `:754`).   |
+| `feature_prepare`        | `features.rs:811` limits navigation and presentation.                                                                                                                        |
+| `feature_request`        | `features.rs:1338` limits snapshot, create, update, assign, select and organize before host IPC and presentation changes.                                                    |
+| `feature_permissions`    | `features.rs:1162` limits reads and proposals before host IPC, native review and saving.                                                                                     |
+| `terminal_request`       | `terminal.rs:993` limits open, start, attach, input, write, paste, resize, read, snapshot, detach and stop before pipe writes and native review. Unknown actions are denied. |
+| `terminal_open_prepared` | `terminal.rs:1158` limits opening after the one-use intent and focus guards and before the intent is consumed.                                                               |
+| `terminal_restore`       | `terminal.rs:1361` limits the validated restore before host IPC.                                                                                                             |
+| `terminal_view`          | `terminal.rs:1425` limits layout mutations and navigation before presentation effects and IPC. `layout` only reads in-memory state (`terminal.rs:1381`).                     |
+| `agents_request`         | `agents.rs:196` limits snapshot, retire, routing, start, delegate and stop before host IPC and possible dialogs. Unknown actions are denied.                                 |
+| `file_request`           | `files.rs:87` limits analytics context and save, and artifact export before host IPC, dialogs and writes.                                                                    |
+
+Input, read and resize each permit 6,000 requests per 60-second window per
+current document; control, stop, metadata, permissions, context and view each
+permit 120; preparation and file operations retain 12. Stop has its own bucket.
+A fixed-window boundary can admit twice the stated count in a short burst. A
+finite rate limit can still reject sufficiently rapid legitimate activity; these
+values have synthetic coverage but no native interactive usability acceptance.
+Terminal replies include `rate_limited`; existing feature, file and boolean view
+contracts return their existing denial/failure form. No operation is retried by
+the native admission layer. This source inventory and synthetic tests do not
+prove live Webview behavior, provider behavior or package acceptance.

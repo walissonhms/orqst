@@ -1159,6 +1159,15 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
         }
         (feature_id.to_owned(), generation)
     };
+    if !crate::renderer_admission::admit(
+        window.label(),
+        "",
+        document,
+        crate::renderer_admission::Action::Permissions,
+        crate::local_diagnostics::RefusalSource::Feature,
+    ) {
+        return denied();
+    }
     let read = json!({"action":"readPermissions","contractVersion":1,"generation":generation,"featureId":feature_id});
     let read_reply = permission_metadata_request(
         app,
@@ -1313,12 +1322,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
     };
-    let presentation = if matches!(request["action"].as_str(), Some("select" | "organize")) {
-        crate::terminal::metadata_view_begin(app)
-    } else {
-        crate::terminal::metadata_generation(app)
-    };
-    let Some(presentation) = presentation else {
+    let Some(presentation) = crate::terminal::metadata_generation(app) else {
         return json!({"status":"unavailable"});
     };
     let mutable = request["action"] != "snapshot";
@@ -1331,6 +1335,23 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     {
         return denied();
     }
+    if !crate::renderer_admission::admit(
+        window.label(),
+        "",
+        document,
+        crate::renderer_admission::Action::Metadata,
+        crate::local_diagnostics::RefusalSource::Feature,
+    ) {
+        return denied();
+    }
+    let presentation = if matches!(request["action"].as_str(), Some("select" | "organize")) {
+        let Some(presentation) = crate::terminal::metadata_view_begin(app) else {
+            return denied();
+        };
+        presentation
+    } else {
+        presentation
+    };
     let _ = install_workspace(app);
     let id = {
         let state = app.state::<Features>();

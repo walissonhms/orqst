@@ -186,15 +186,20 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
         if (r.admission_epoch, r.generation) != document {
             return denied();
         }
-        if request["action"] == "start"
-            && !crate::renderer_admission::admit(
-                window.label(),
-                &document.0.to_string(),
-                document.1,
-                crate::renderer_admission::Action::Start,
-                crate::local_diagnostics::RefusalSource::Agents,
-            )
-        {
+        let action = match request["action"].as_str() {
+            Some("start") => crate::renderer_admission::Action::Start,
+            Some("snapshot") => crate::renderer_admission::Action::Read,
+            Some("stop") => crate::renderer_admission::Action::Stop,
+            Some("retire" | "routing" | "delegate") => crate::renderer_admission::Action::Control,
+            _ => return denied(),
+        };
+        if !crate::renderer_admission::admit(
+            window.label(),
+            &document.0.to_string(),
+            document.1,
+            action,
+            crate::local_diagnostics::RefusalSource::Agents,
+        ) {
             return json!({"status":"rate_limited"});
         }
         r.sequence += 1;

@@ -980,7 +980,14 @@ async fn dispatch_terminal_request_inner(
             let action = match request["action"].as_str() {
                 Some("open") => Some(crate::renderer_admission::Action::Open),
                 Some("start") => Some(crate::renderer_admission::Action::Start),
-                _ => None,
+                Some("write" | "paste") => Some(crate::renderer_admission::Action::Input),
+                Some("read" | "snapshot") => Some(crate::renderer_admission::Action::Read),
+                Some("resize") => Some(crate::renderer_admission::Action::Resize),
+                Some("stop") => Some(crate::renderer_admission::Action::Stop),
+                Some("attach" | "input" | "detach") => {
+                    Some(crate::renderer_admission::Action::Control)
+                }
+                _ => return denied(),
             };
             if let Some(action) = action {
                 if !crate::renderer_admission::admit(
@@ -1351,7 +1358,13 @@ pub async fn terminal_restore(window: Webview, slot: u64, generation: u64) -> Va
             document_current: crate::features::document_version_current(app, &source, document),
         }),
         |running, value| crate::features::with_chrome_document(app, document, || {
-            running
+            crate::renderer_admission::admit(
+                window.label(),
+                "",
+                document,
+                crate::renderer_admission::Action::View,
+                RefusalSource::Feature,
+            ) && running
                 .as_mut()
                 .is_some_and(|r| r.child.write(format!("{value}\n").as_bytes()).is_ok())
         }),
@@ -1374,6 +1387,17 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
             .map(|r| r.layout.clone())
             .unwrap_or(Value::Null);
     }
+    let document = {
+        let state = app.state::<Terminals>();
+        let guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else {
+            return json!(false);
+        };
+        let Some(generation) = r.generations.get(slot) else {
+            return json!(false);
+        };
+        (r.epoch.clone(), *generation)
+    };
     let retiring = app
         .state::<Terminals>()
         .0
@@ -1382,6 +1406,30 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         .as_ref()
         .is_some_and(|r| r.retiring || r.metadata_mutating.is_some() || r.enrollment_pending);
     if retiring || presentation_blocked(app) || !focused(&window).await {
+        return json!(false);
+    }
+    let current = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|r| {
+            r.loaded.get(slot) == Some(&true)
+                && r.revoked.get(slot) == Some(&false)
+                && r.generations.get(slot) == Some(&document.1)
+                && r.epoch == document.0
+        });
+    if !current
+        || self::slot(&window) != Some(slot)
+        || !crate::renderer_admission::admit(
+            window.label(),
+            &document.0,
+            document.1,
+            crate::renderer_admission::Action::View,
+            RefusalSource::Terminal,
+        )
+    {
         return json!(false);
     }
     // Revoke immediately, before the asynchronous Node layout update arrives.
