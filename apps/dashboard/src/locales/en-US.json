@@ -596,7 +596,7 @@
     "open": "Open this exact CLI and model in this workspace and allow normal terminal use?",
     "authorizeCli": "Authorize local CLI",
     "cliScope": "Allow normal use of terminals you open with this reviewed executable. Native provider approvals remain unchanged.",
-    "cliProbeDisclosure": "The version check executes the signed vendor CLI in a temporary home. It is not a network sandbox."
+    "cliProbeDisclosure": "The current version is not yet known. Accepting runs the signed vendor CLI with --version, without a shell, using a temporary HOME and TMPDIR and a minimal environment. The check is limited to 3 seconds and 4096 output bytes; it is not a network sandbox. This review expires after 30 seconds. A grant is created only if the result matches an exact displayed version and contract and all identity and authority checks remain valid."
   },
   "overviewLayout": {
     "title": "Customize overview",
@@ -1047,11 +1047,11 @@
     "failureStage": "Stage",
     "failureReason": "Reason",
     "reviewWorkspace": "Workspace: {{project}}",
-    "reviewTerminal": "{{provider}} · {{model}} · {{id}}",
+    "reviewTerminal": "{{provider}} {{version}} · {{model}} · {{id}}",
     "reviewDetails": "Full details…",
     "reviewBack": "Back to summary",
-    "reviewSource": "Source: {{provider}} · {{model}} · {{id}}",
-    "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}",
+    "reviewSource": "Source: {{provider}} {{version}} · {{model}} · {{id}}",
+    "reviewWorker": "Worker: {{provider}} {{version}} · {{model}} · {{id}}",
     "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them.",
     "code_cli_authorization_stale": "CLI authorization changed during review; review it again"
   },

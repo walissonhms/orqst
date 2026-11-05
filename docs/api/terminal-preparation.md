@@ -1,5 +1,25 @@
 # Native terminal catalogue and selected preparation
 
+## Conditional CLI review — 2026-11-05
+
+The historical pin description below predates signature and version contracts.
+Claude 2.1.178 TUI manifests remain inspectable when their saved filesystem checks
+pass, but launch is unavailable without a current TUI contract. Claude MCP has
+separate reviewed contracts; changing its binary version requires a new terminal.
+
+Before any new version probe, the native CLI review shows the candidate path,
+signature, scope, previous policy and the exact finite set of allowed version and
+contract pairs. The current version is unknown at that point. Acceptance permits
+the disclosed signed executable to run `--version` only under that condition;
+it does not itself create a grant, provision files or approve the manifest. Pair
+preparation groups pending candidates in one CLI review. Native authority and
+identity are checked before probing and again before publishing each policy grant.
+The detected version must match the disclosed set. Subsequent manifest/selection
+reviews and pre-PTY revalidation remain separate. Pair grants are individual: a
+later failure can leave an earlier grant, without establishing a created terminal.
+No automatic retry follows an uncertain effect. Native UI and real providers have
+not been accepted on the basis of synthetic tests.
+
 ## Claude TUI pin update — 2026-11-05
 
 Normal Claude discovery/provisioning uses the separately reviewed 2.1.318 TUI

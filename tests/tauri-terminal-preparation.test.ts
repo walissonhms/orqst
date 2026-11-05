@@ -55,7 +55,7 @@ await build({
           namespace: 'synthetic-flow',
         }));
         builder.onLoad({ filter: /.*/, namespace: 'synthetic-flow' }, () => ({
-          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function authorizeCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); return { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } }; }`,
+          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function prepareCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); return { existing: { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } } }; } export async function authorizePreparedGroup(candidates, review, current) { if (!(await current())) return candidates.map(() => ({status:'blocked'})); return candidates.map((entry) => entry.existing); }`,
           loader: 'js',
         }));
       },

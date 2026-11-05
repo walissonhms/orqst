@@ -190,8 +190,10 @@ These diagnostics are integrated with the OpenCode correction below; see the
 [combined source checks](docs/development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04).
 
 Interactive CLI discovery keeps canonical candidates in PATH order. Preparation
-verifies the provider's macOS code signature, then probes a bounded reviewed
-version as part of one-time native authorization. The selected path and its
+verifies the provider's macOS code signature, then requests one native conditional
+authorization showing the exact reviewed versions before running the bounded
+version probe. The probe executes the signed CLI and is not a network sandbox.
+The detected version is shown in the subsequent manifest review. The selected path and its
 local authorization are checked again before each PTY start; see the
 [security model](docs/architecture/security-model.md#interactive-cli-authorization--2026-11-05).
 Native/provider acceptance remains a separate gate.

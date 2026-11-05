@@ -25,6 +25,8 @@ export interface CliCandidateInput {
   verifier: CliSignatureVerifier;
   profile(version: string, sha256: string): TerminalProfile;
   expectedEpoch?: string;
+  expectedVersion?: string;
+  expectedSha256?: string;
   probe?: (
     verifier: CliSignatureVerifier,
     provider: CliContractProvider,
@@ -47,6 +49,13 @@ export interface CliCandidateDisclosure {
   readonly contracts: ReturnType<typeof exactCliContracts>;
 }
 
+export interface CliExistingDisclosure {
+  readonly alreadyAuthorized: true;
+  readonly executable: string;
+  readonly version: string;
+  readonly binding: Allowed['binding'];
+}
+
 type Allowed = {
   status: 'allowed';
   profile: TerminalProfile;
@@ -63,6 +72,8 @@ type Candidate = { existing: Allowed } | { pending: Pending };
 /** Capture all candidates before a single native conditional review. */
 export async function prepareCliCandidate(input: CliCandidateInput): Promise<Candidate> {
   const sha256 = terminalExecutableSha256(input.executable);
+  if (input.expectedSha256 && input.expectedSha256 !== sha256)
+    throw new Error('CLI manifest executable changed');
   const profile = (version: string) => {
     const value = input.profile(version, sha256);
     if (
@@ -83,7 +94,11 @@ export async function prepareCliCandidate(input: CliCandidateInput): Promise<Can
       input.mode,
       input.verifier,
     );
-    if (binding && (!input.expectedEpoch || input.expectedEpoch === binding.authorizationEpoch))
+    if (
+      binding &&
+      (!input.expectedEpoch || input.expectedEpoch === binding.authorizationEpoch) &&
+      (!input.expectedVersion || input.expectedVersion === previousVersion)
+    )
       return {
         existing: {
           status: 'allowed',
@@ -114,7 +129,7 @@ export async function prepareCliCandidate(input: CliCandidateInput): Promise<Can
 }
 
 /** The callback is a trusted native authority check, never renderer-provided state. */
-export async function authorizePreparedCli(pending: Pending, current: () => Promise<boolean>) {
+async function authorizePreparedCli(pending: Pending, current: () => Promise<boolean>) {
   const { input, profile, disclosure } = pending;
   const candidate = profile('');
   const stable = async () => {
@@ -149,6 +164,7 @@ export async function authorizePreparedCli(pending: Pending, current: () => Prom
     evidence.provider !== input.provider ||
     evidence.mode !== input.mode ||
     evidence.sha256 !== disclosure.sha256 ||
+    (input.expectedVersion !== undefined && evidence.version !== input.expectedVersion) ||
     JSON.stringify(evidence.signature) !== JSON.stringify(disclosure.signature) ||
     !disclosure.contracts.some(
       (entry) =>
@@ -181,20 +197,54 @@ export async function authorizePreparedCli(pending: Pending, current: () => Prom
 
 export async function authorizeCliCandidates(
   inputs: readonly CliCandidateInput[],
-  review: (details: readonly CliCandidateDisclosure[]) => Promise<boolean>,
+  review: (
+    details: readonly CliCandidateDisclosure[],
+    existing: readonly CliExistingDisclosure[],
+  ) => Promise<boolean>,
   current: () => Promise<boolean>,
 ) {
   const candidates: Candidate[] = [];
   for (const input of inputs) candidates.push(await prepareCliCandidate(input));
+  return authorizePreparedGroup(candidates, review, current);
+}
+
+/** The reviewed set and its ephemeral authority stay inside this transaction. */
+export async function authorizePreparedGroup(
+  candidates: readonly Candidate[],
+  review: (
+    details: readonly CliCandidateDisclosure[],
+    existing: readonly CliExistingDisclosure[],
+  ) => Promise<boolean>,
+  current: () => Promise<boolean>,
+) {
   if (!(await current())) return candidates.map(() => ({ status: 'blocked' as const }));
   const pending = candidates.flatMap((candidate) =>
     'pending' in candidate ? [candidate.pending] : [],
   );
+  const expires = performance.now() + 30_000;
+  const leaseCurrent = async () =>
+    performance.now() < expires && (await current()) && performance.now() < expires;
   if (
     pending.length &&
-    (!(await current()) ||
-      !(await review(Object.freeze(pending.map((entry) => entry.disclosure)))) ||
-      !(await current()))
+    (!(await leaseCurrent()) ||
+      !(await review(
+        Object.freeze(pending.map((entry) => entry.disclosure)),
+        Object.freeze(
+          candidates.flatMap((entry) =>
+            'existing' in entry
+              ? [
+                  Object.freeze({
+                    alreadyAuthorized: true as const,
+                    executable: entry.existing.profile.executable,
+                    version: entry.existing.profile.executableVersion,
+                    binding: Object.freeze({ ...entry.existing.binding }),
+                  }),
+                ]
+              : [],
+          ),
+        ),
+      )) ||
+      !(await leaseCurrent()))
   )
     return candidates.map(() => ({ status: 'blocked' as const }));
   const results = [];
@@ -202,7 +252,7 @@ export async function authorizeCliCandidates(
     const result =
       'existing' in candidate
         ? candidate.existing
-        : await authorizePreparedCli(candidate.pending, current);
+        : await authorizePreparedCli(candidate.pending, leaseCurrent);
     if (result.status !== 'allowed') return candidates.map(() => ({ status: result.status }));
     results.push(result);
   }

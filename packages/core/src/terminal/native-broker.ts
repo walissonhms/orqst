@@ -353,7 +353,14 @@ export class TerminalNativeBroker<Document extends object> {
     if (this.host.cliAuthorization) {
       const policy = this.host.cliAuthorization;
       if (challenge.operation === 'start') {
-        const status = await policy.authorizeCli(document, view.profile);
+        const status = await policy.authorizeCli(
+          document,
+          view.profile,
+          () =>
+            generation === this.generation &&
+            this.current(document, true) &&
+            challenge.expiresAt > this.authority.now(),
+        );
         if (status !== 'allowed') return 'denied';
         view.policyEpoch = policy.epoch(view.profile);
       }

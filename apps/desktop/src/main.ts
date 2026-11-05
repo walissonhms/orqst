@@ -20,7 +20,7 @@ import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTerminalCreation } from './terminal-creation.js';
-import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import { authorizeCliCandidates } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
 import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
@@ -439,16 +439,14 @@ async function start(): Promise<void> {
           ? [{ provider: 'opencode' as const, executable: companionExecutable }]
           : []),
       ];
-      const cliEvidence = [];
-      for (const item of candidates) {
-        const result = await authorizeCliCandidate({
+      const results = await authorizeCliCandidates(
+        candidates.map((item) => ({
           store: policy,
           provider: item.provider,
           mode,
           executable: item.executable,
           verifier: systemCliSignatureVerifier,
-          current: async () => current(),
-          profile: (version, sha256) => ({
+          profile: (version: string, sha256: string) => ({
             id: `${item.provider}-terminal-v1`,
             projectId: terminalDigest(project),
             executable: item.executable,
@@ -459,38 +457,45 @@ async function start(): Promise<void> {
             permissions: 'Native owned terminal CLI authorization',
             ...cliAuthorizationScope(item.provider, mode),
           }),
-          review: async (details) => {
-            const detail = JSON.stringify(
+        })),
+        async (details, existing) => {
+          const detail = JSON.stringify(
+            {
+              candidates: [...details, ...existing],
+              versionEvidence: 'not yet probed',
+              signatureEvidence: 'macOS /usr/bin/codesign',
+            },
+            null,
+            2,
+          ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+          if (!current() || detail.length > 16384) return false;
+          const answer = await dialog.showMessageBox(context.target!, {
+            type: 'warning',
+            title: i18n.t('terminalNative.title'),
+            message: `${i18n.t('terminalNative.cliScope')}\n\n${i18n.t('terminalNative.cliProbeDisclosure')}`,
+            detail,
+            buttons: [i18n.t('terminalNative.cancel'), i18n.t('terminalNative.authorizeCli')],
+            defaultId: 0,
+            cancelId: 0,
+            noLink: true,
+          });
+          return answer.response === 1 && current();
+        },
+        async () => current(),
+      );
+      if (results.some((result) => result.status !== 'allowed') || !current()) return;
+      const cliEvidence = results.flatMap((result) =>
+        result.status === 'allowed'
+          ? [
               {
-                ...details,
-                versionEvidence: 'signed-cli-version-probe',
-                signatureEvidence: 'macOS /usr/bin/codesign',
+                executable: result.profile.executable,
+                version: result.profile.executableVersion,
+                sha256: result.profile.executableSha256,
+                binding: result.binding,
               },
-              null,
-              2,
-            ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
-            if (!current() || detail.length > 16384) return false;
-            const answer = await dialog.showMessageBox(context.target!, {
-              type: 'warning',
-              title: i18n.t('terminalNative.title'),
-              message: `${i18n.t('terminalNative.cliScope')}\n\n${i18n.t('terminalNative.cliProbeDisclosure')}`,
-              detail,
-              buttons: [i18n.t('terminalNative.cancel'), i18n.t('terminalNative.authorizeCli')],
-              defaultId: 0,
-              cancelId: 0,
-              noLink: true,
-            });
-            return answer.response === 1 && current();
-          },
-        });
-        if (result.status !== 'allowed' || !current()) return;
-        cliEvidence.push({
-          executable: item.executable,
-          version: result.profile.executableVersion,
-          sha256: result.profile.executableSha256,
-          binding: result.binding,
-        });
-      }
+            ]
+          : [],
+      );
       const creationInput = {
         cliEvidence,
         count,

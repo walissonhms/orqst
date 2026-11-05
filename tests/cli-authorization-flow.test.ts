@@ -89,10 +89,119 @@ test('one conditional review covers both candidates; cancellation and stale focu
     );
     assert.equal(probes, 0);
     assert.equal(existsSync(parent), false);
+    current = true;
+    const validInputs = inputs.map((input) => ({
+      ...input,
+      probe: async (): Promise<TerminalCliEvidence> => {
+        probes++;
+        const version = input.provider === 'codex' ? '0.162.1' : '2.2.5';
+        const { terminalExecutableSha256 } =
+          await import('../packages/core/src/terminal/codex-profile.js');
+        return {
+          provider: input.provider,
+          mode: 'mcp',
+          version,
+          contractRevision: `${input.provider}-mcp-${version}`,
+          sha256: terminalExecutableSha256(input.executable),
+          signature: await input.verifier.verify(),
+        };
+      },
+    }));
+    let approved = 0;
+    const result = await authorizeCliCandidates(
+      validInputs,
+      async (details) => {
+        approved++;
+        assert.equal(details.length, 2);
+        return true;
+      },
+      async () => current,
+    );
+    assert.equal(approved, 1);
+    assert.equal(probes, 2);
+    assert.deepEqual(
+      result.map((entry) => (entry.status === 'allowed' ? entry.profile.executableVersion : '')),
+      ['0.162.1', '2.2.5'],
+    );
+    assert.equal(
+      (
+        await authorizeCliCandidates(
+          validInputs,
+          async () => {
+            throw new Error('repeated review');
+          },
+          async () => true,
+        )
+      ).every((entry) => entry.status === 'allowed'),
+      true,
+    );
+    assert.equal(probes, 2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+for (const fault of ['bytes-before', 'signature-before', 'version-after', 'scope-after'] as const) {
+  test(`conditional review rejects ${fault} without publishing a grant`, async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-cli-fault-')));
+    const executable = join(root, 'synthetic');
+    const bytes = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]);
+    writeFileSync(executable, bytes, { mode: 0o700 });
+    const parent = join(root, 'managed-agents');
+    const store = new TerminalCliPolicyStore(parent);
+    let signatureValid = true;
+    let scope = 'scope-a';
+    let probes = 0;
+    const signature = { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
+    const input = {
+      store,
+      provider: 'codex' as const,
+      mode: 'tui' as const,
+      executable,
+      verifier: { verify: async () => ({ ...signature, valid: signatureValid }) },
+      profile: (version: string, sha256: string): TerminalProfile => ({
+        id: 'synthetic',
+        projectId: 'test',
+        executable,
+        executableSha256: sha256,
+        executableVersion: version,
+        cwd: root,
+        argv: [],
+        environmentProfile: 'synthetic',
+        cliAuthorizationScope: scope,
+        permissions: 'synthetic',
+      }),
+      current: async () => true,
+      review: async () => {
+        if (fault === 'bytes-before')
+          writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 9, 8, 7, 6]));
+        if (fault === 'signature-before') signatureValid = false;
+        return true;
+      },
+      probe: async (): Promise<TerminalCliEvidence> => {
+        probes++;
+        if (fault === 'scope-after') scope = 'scope-b';
+        return {
+          provider: 'codex',
+          mode: 'tui',
+          version: fault === 'version-after' ? '0.162.2' : '0.162.1',
+          contractRevision: 'codex-tui-0.162.1',
+          sha256: (
+            await import('../packages/core/src/terminal/codex-profile.js')
+          ).terminalExecutableSha256(executable),
+          signature,
+        };
+      },
+    };
+    try {
+      await authorizeCliCandidate(input).catch(() => undefined);
+      assert.equal(probes, fault.endsWith('before') ? 0 : 1);
+      assert.equal(existsSync(parent), false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
 
 test('candidate authorization probes once and repeats neither probe nor review for the same grant', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-candidate-')));

@@ -596,7 +596,7 @@
     "open": "Abrir este CLI e modelo exatos neste workspace e permitir o uso normal do terminal?",
     "authorizeCli": "Autorizar CLI local",
     "cliScope": "Permitir o uso normal dos terminais que você abrir com este executável revisado. As aprovações nativas do provedor continuam inalteradas.",
-    "cliProbeDisclosure": "A verificação de versão executa o CLI assinado do fornecedor em uma pasta pessoal temporária. Ela não isola a rede."
+    "cliProbeDisclosure": "A versão atual ainda não é conhecida. Ao aceitar, o CLI assinado do fornecedor será executado com --version, sem shell, com HOME e TMPDIR temporários e ambiente mínimo. A consulta é limitada a 3 segundos e 4096 bytes de saída; ela não isola a rede. Esta revisão expira após 30 segundos. A autorização só será gravada se o resultado corresponder a uma versão e contrato exatos exibidos e todas as verificações de identidade e autoridade continuarem válidas."
   },
   "overviewLayout": {
     "title": "Personalizar visão geral",
@@ -1047,11 +1047,11 @@
     "failureStage": "Etapa",
     "failureReason": "Motivo",
     "reviewWorkspace": "Workspace: {{project}}",
-    "reviewTerminal": "{{provider}} · {{model}} · {{id}}",
+    "reviewTerminal": "{{provider}} {{version}} · {{model}} · {{id}}",
     "reviewDetails": "Detalhes completos…",
     "reviewBack": "Voltar ao resumo",
-    "reviewSource": "Origem: {{provider}} · {{model}} · {{id}}",
-    "reviewWorker": "Destino: {{provider}} · {{model}} · {{id}}",
+    "reviewSource": "Origem: {{provider}} {{version}} · {{model}} · {{id}}",
+    "reviewWorker": "Destino: {{provider}} {{version}} · {{model}} · {{id}}",
     "code_owned_exit_pending": "A saída do processo principal tem recibo; processos descendentes não foram validados; um novo terminal pode compartilhar recursos nativos (como o banco do OpenCode) com eles.",
     "code_cli_authorization_stale": "A autorização do CLI mudou durante a revisão; revise novamente"
   },

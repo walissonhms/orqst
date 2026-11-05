@@ -43,6 +43,7 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('suspend-input'), slot }),
   z.strictObject({ kind: z.literal('close'), slot }),
   z.strictObject({ kind: z.literal('confirm'), id: z.uuid(), accepted: z.boolean() }),
+  z.strictObject({ kind: z.literal('cli-current'), id: z.uuid(), accepted: z.boolean() }),
   z.strictObject({ kind: z.literal('authorizeMcp'), id: z.uuid(), slot, focused: z.boolean() }),
 ]);
 
@@ -70,6 +71,7 @@ export class TauriTerminalService {
     string,
     { slot: number; resolve(value: boolean): void }
   >();
+  private readonly cliChecks = new Map<string, (value: boolean) => void>();
   private closed = false;
   private generation = 0;
   private mcpBusy = false;
@@ -161,6 +163,7 @@ export class TauriTerminalService {
                 authorizeCli: async (
                   _document: object,
                   profile: Parameters<TerminalCliPolicyStore['current']>[0],
+                  current: () => boolean,
                 ) => {
                   if (!state.focused || state.closed || this.closed) return 'blocked' as const;
                   if (this.verifiedCli) {
@@ -170,8 +173,11 @@ export class TauriTerminalService {
                       provider: cli.provider,
                       mode: cli.mode,
                       executable: profile.executable,
+                      expectedSha256: profile.executableSha256,
+                      expectedVersion: profile.executableVersion,
                       verifier: this.verifiedCli.verifier,
-                      current: async () => false, // Refuse until the native current check is connected.
+                      current: async () =>
+                        current() && (await this.nativeCliCurrent(slot)) && current(),
                       ...(this.verifiedCli.probe ? { probe: this.verifiedCli.probe } : {}),
                       profile: (version, sha256) => ({
                         ...profile,
@@ -184,8 +190,8 @@ export class TauriTerminalService {
                           `${this.translate('terminalNative.cliScope')}\n\n${this.translate('terminalNative.cliProbeDisclosure')}`,
                           JSON.stringify(
                             {
-                              ...details,
-                              versionEvidence: 'signed-cli-version-probe',
+                              candidates: details,
+                              versionEvidence: 'not yet probed',
                               signatureEvidence: 'macOS /usr/bin/codesign',
                             },
                             null,
@@ -299,6 +305,10 @@ export class TauriTerminalService {
       this.confirmations.get(message.id)?.resolve(message.accepted);
       return;
     }
+    if (message.kind === 'cli-current') {
+      this.cliChecks.get(message.id)?.(message.accepted);
+      return;
+    }
     if (
       message.kind === 'shutdownOwned' ||
       message.kind === 'retireOwned' ||
@@ -316,6 +326,7 @@ export class TauriTerminalService {
     }
     if (message.kind === 'revoke' || message.kind === 'close') {
       this.generation++;
+      for (const pending of [...this.cliChecks.values()]) pending(false);
       pane.state.focused = false;
       for (const pending of [...this.confirmations.values()])
         if (pending.slot === message.slot || this.mcpBusy || this.retirement?.busy)
@@ -552,6 +563,30 @@ export class TauriTerminalService {
     }
   }
 
+  private nativeCliCurrent(slot: number): Promise<boolean> {
+    const pane = this.panes[slot];
+    if (!pane || !pane.state.focused || pane.state.closed || this.closed)
+      return Promise.resolve(false);
+    const id = randomUUID();
+    const generation = this.generation;
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(false), 1000);
+      const finish = (accepted: boolean) => {
+        clearTimeout(timer);
+        this.cliChecks.delete(id);
+        resolve(
+          accepted &&
+            generation === this.generation &&
+            pane.state.focused &&
+            !pane.state.closed &&
+            !this.closed,
+        );
+      };
+      this.cliChecks.set(id, finish);
+      this.send({ kind: 'cli-current', id, slot });
+    });
+  }
+
   private confirm(
     slot: number,
     message: string,
@@ -587,6 +622,7 @@ export class TauriTerminalService {
     if (this.closed) return;
     this.closed = true;
     for (const pending of [...this.confirmations.values()]) pending.resolve(false);
+    for (const pending of [...this.cliChecks.values()]) pending(false);
     for (const pane of this.panes) pane.broker.close();
   }
 }

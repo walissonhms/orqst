@@ -436,7 +436,7 @@ export async function createManagedTerminals(
             {
               current: (_document, focus) => initialized && current(focus),
               cliAuthorization: {
-                authorizeCli: async (_document, profile) => {
+                authorizeCli: async (_document, profile, currentChallenge) => {
                   if (!cliPolicy || !initialized || !current(true)) return 'blocked';
                   const mode = config.interactive?.mcp ? 'mcp' : 'tui';
                   const result = await authorizeCliCandidate({
@@ -444,8 +444,10 @@ export async function createManagedTerminals(
                     provider,
                     mode,
                     executable: profile.executable,
+                    expectedSha256: profile.executableSha256,
+                    expectedVersion: profile.executableVersion,
                     verifier: systemCliSignatureVerifier,
-                    current: async () => initialized && current(true),
+                    current: async () => initialized && current(true) && currentChallenge(),
                     profile: (version, sha256) => ({
                       ...profile,
                       executableVersion: version,
@@ -454,8 +456,8 @@ export async function createManagedTerminals(
                     review: async (details) => {
                       const detail = JSON.stringify(
                         {
-                          ...details,
-                          versionEvidence: 'signed-cli-version-probe',
+                          candidates: details,
+                          versionEvidence: 'not yet probed',
                           signatureEvidence: 'macOS /usr/bin/codesign',
                         },
                         null,

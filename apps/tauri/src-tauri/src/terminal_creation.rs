@@ -861,6 +861,12 @@ fn run(
                     return Err("Invalid dialog sequence".into());
                 }
                 let answer = match value["kind"].as_str() {
+                    Some("cli-current") => {
+                        if !exact(&value, &["kind", "id"]) {
+                            return Err("Invalid CLI authority check".into());
+                        }
+                        json!(current() && window.is_focused().unwrap_or(false))
+                    }
                     Some("pick") => {
                         let picker = app
                             .dialog()

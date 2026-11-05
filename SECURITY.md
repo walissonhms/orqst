@@ -1248,7 +1248,11 @@ verifies a signature, not notarization. Discovery is passive; a path or director
 name is not version evidence.
 
 Only the one-time authorization flow probes `--version`, after signature
-verification. The signed provider executable runs with a temporary HOME, minimal
+verification and native conditional consent to the exact displayed contract set.
+The current version is unknown at review time. Native authority and the captured
+candidate are checked again before probing and before publishing a grant. Pair
+preparation uses one CLI review, separate from the required manifest review.
+The signed provider executable runs with a temporary HOME, minimal
 environment without inherited credentials, a short timeout and bounded output.
 The probe executes vendor code and does not sandbox network access. Unknown,
 prerelease or unreviewed versions are denied. The reviewed contracts currently
@@ -1263,3 +1267,7 @@ that last check and `exec` can still win a residual TOCTOU race; this path-based
 implementation does not claim an atomic executable handle or a network sandbox.
 These controls are implemented for the interactive PTY path; native provider
 acceptance and structured-mode parity are separate.
+
+Pair grants are individual: a later failure may leave an earlier grant without
+proving a manifest was created or a provider started. Uncertain effects are not
+automatically retried.

@@ -81,6 +81,7 @@ export interface TerminalCreationOverview {
   terminals: {
     id: string;
     provider: LocalCliProvider;
+    version: string;
     model: string | null;
     role?: 'source' | 'worker';
   }[];
@@ -319,6 +320,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       terminals: configs.map((config, index) => ({
         id: config.identity!.terminalId,
         provider: members[index]!.provider,
+        version: config.executableVersion,
         model: config.model?.value ?? null,
         ...(input.mcp ? { role: index === 0 ? ('source' as const) : ('worker' as const) } : {}),
       })),

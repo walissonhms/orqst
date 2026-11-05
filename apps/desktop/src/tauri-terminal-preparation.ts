@@ -64,6 +64,15 @@ export interface TauriPreparationPorts {
     sha256?: string;
     binding?: V2CliBinding;
   }>;
+  authorizeCliGroup?(candidates: readonly PreparationCliCandidate[]): Promise<
+    readonly {
+      status: TerminalCliAuthorizationState | 'ineligible';
+      executable?: string;
+      version?: string;
+      sha256?: string;
+      binding?: V2CliBinding;
+    }[]
+  >;
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
   confirm(
@@ -135,6 +144,32 @@ export async function prepareTauriTerminals(
         string,
         { executable: string; version: string; sha256: string; binding?: V2CliBinding }
       >();
+      if (ports.authorizeCliGroup) {
+        const results = await ports.authorizeCliGroup(candidates);
+        if (!current() || results.length !== candidates.length) return;
+        for (let index = 0; index < candidates.length; index++) {
+          const candidate = candidates[index]!;
+          const result = results[index]!;
+          if (result.status === 'blocked') return;
+          if (result.status === 'stale') fail('cli_authorization_stale');
+          if (
+            result.status !== 'allowed' ||
+            !result.executable ||
+            !result.version ||
+            !result.sha256 ||
+            !(candidate.alternatives ?? [candidate.executable]).includes(result.executable)
+          )
+            return fail('selection_blocked');
+          evidence.set(JSON.stringify([candidate.provider, candidate.executable, candidate.mode]), {
+            executable: result.executable,
+            version: result.version,
+            sha256: result.sha256,
+            ...(result.binding ? { binding: result.binding } : {}),
+          });
+        }
+        return evidence;
+      }
+      if (candidates.length > 1) return fail('selection_blocked');
       for (const candidate of candidates) {
         const originalKey = JSON.stringify([
           candidate.provider,

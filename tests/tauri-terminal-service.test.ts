@@ -1,12 +1,117 @@
 // Synthetic supervisors only. No real provider, native window or observed session.
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID } from 'node:crypto';
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import test from 'node:test';
 import { terminalNativeReplySchema, type TerminalNativeRequest } from '@orqst/protocol';
 import { TauriTerminalService } from '../apps/desktop/src/tauri-terminal-service.js';
 import { TerminalAuthority, terminalDigest } from '../packages/core/src/terminal/authority.js';
 import { TerminalSupervisor } from '../packages/core/src/terminal/supervisor.js';
+import { TerminalCliPolicyStore } from '../packages/core/src/terminal/cli-authorization.js';
+import { cliAuthorizationScope } from '../packages/core/src/terminal/cli-authorization-scope.js';
+
+test('native CLI review cancellation and lost native current cannot probe or publish policy', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-native-cli-')));
+  const executable = join(root, 'synthetic');
+  const bytes = Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]);
+  writeFileSync(executable, bytes, { mode: 0o700 });
+  const parent = join(root, 'managed-agents');
+  const keys = generateKeyPairSync('ed25519');
+  const policy = new TerminalCliPolicyStore(parent);
+  let probes = 0;
+  let starts = 0;
+  let checks = 0;
+  let reviews = 0;
+  let acceptReview = false;
+  let loseAfterReview = false;
+  let displayed = '';
+  const supervisor = new TerminalSupervisor(
+    new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
+    {
+      validate: () => true,
+      start: () => {
+        starts++;
+        throw new Error('unexpected spawn');
+      },
+    },
+    [
+      {
+        id: 'synthetic',
+        projectId: 'test',
+        executable,
+        executableSha256: terminalDigest(bytes),
+        executableVersion: '0.162.1',
+        argv: [],
+        cwd: root,
+        permissions: 'synthetic',
+        ...cliAuthorizationScope('codex', 'tui'),
+      },
+    ],
+  );
+  let service: TauriTerminalService;
+  service = new TauriTerminalService(
+    [supervisor],
+    keys,
+    (raw) => {
+      const message = raw as Record<string, unknown>;
+      if (message.kind === 'cli-current') {
+        checks++;
+        void service.receive({
+          kind: 'cli-current',
+          id: message.id,
+          accepted: !(loseAfterReview && checks > 2),
+        });
+      } else if (message.kind === 'confirm') {
+        reviews++;
+        displayed = String(message.detail);
+        void service.receive({ kind: 'confirm', id: message.id, accepted: acceptReview });
+      }
+    },
+    (key) => key,
+    undefined,
+    undefined,
+    policy,
+    {
+      members: [{ provider: 'codex', mode: 'tui' }],
+      verifier: {
+        verify: async () => ({ valid: true, teamId: '2DC432GLL2', identifier: 'codex' }),
+      },
+      probe: async () => {
+        probes++;
+        throw new Error('unexpected probe');
+      },
+    },
+  );
+  try {
+    const request = () =>
+      service.receive({
+        kind: 'request',
+        id: randomUUID(),
+        slot: 0,
+        focused: true,
+        request: { version: 1, action: 'start', profileId: 'synthetic' },
+      });
+    await request();
+    assert.ok(displayed.includes('codex-tui-0.162.1'));
+    assert.equal(reviews, 1);
+    assert.equal(probes, 0);
+    assert.equal(existsSync(parent), false);
+    acceptReview = true;
+    loseAfterReview = true;
+    checks = 0;
+    await request();
+    assert.equal(reviews, 2);
+    assert.equal(probes, 0);
+    assert.equal(starts, 0);
+    assert.equal(existsSync(parent), false);
+  } finally {
+    service.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function setup() {
   const keys = generateKeyPairSync('ed25519');

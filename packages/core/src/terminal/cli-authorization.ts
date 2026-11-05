@@ -29,6 +29,7 @@ export interface TerminalCliAuthorization<Document extends object> {
   authorizeCli(
     document: Document,
     profile: Readonly<TerminalProfile>,
+    current: () => boolean,
   ): Promise<TerminalCliAuthorizationState>;
   current(document: Document, profile: Readonly<TerminalProfile>): TerminalCliAuthorizationState;
   epoch(profile: Readonly<TerminalProfile>): string | undefined;

@@ -1704,7 +1704,13 @@ verifies a signature, not notarization. Discovery is passive; a path or director
 name is not version evidence.
 
 Only the one-time authorization flow probes `--version`, after signature
-verification. The signed provider executable runs with a temporary HOME, minimal
+verification and a native conditional review of the exact finite contract set.
+The review says the current version is unknown and permits the probe only for the
+displayed candidates. A private native current check, the candidate snapshot and
+the signature are checked again before the probe and policy publication. Pair
+preparation groups the candidates in one CLI review; the separate manifest review
+still controls provisioning. Cancellation before probing creates no policy grant.
+The signed provider executable runs with a temporary HOME, minimal
 environment without inherited credentials, a short timeout and bounded output.
 The probe executes vendor code and does not sandbox network access. Unknown,
 prerelease or unreviewed versions are denied. The reviewed contracts currently
@@ -1719,3 +1725,9 @@ that last check and `exec` can still win a residual TOCTOU race; this path-based
 implementation does not claim an atomic executable handle or a network sandbox.
 These controls are implemented for the interactive PTY path; native provider
 acceptance and structured-mode parity are separate.
+
+Pair grants are published individually after each successful probe. If a later
+candidate or transport fails, an earlier policy grant may remain; this is not an
+atomic pair grant and does not establish that manifests were created or a CLI
+started. No automatic retry follows an uncertain operation. The native checks and
+the final path-based spawn still have a residual same-user replacement window.

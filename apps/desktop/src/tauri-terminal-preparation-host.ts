@@ -3,14 +3,21 @@ import { desktopAdmissionContextSchema } from '../../../packages/core/src/manage
 import { createInstance } from 'i18next';
 import { z } from 'zod';
 import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
-import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import {
+  prepareCliCandidate,
+  authorizePreparedGroup,
+} from '../../../packages/core/src/terminal/cli-authorization-flow.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import { join } from 'node:path';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
-import { prepareTauriTerminals, tauriPreparationFailure } from './tauri-terminal-preparation.js';
+import {
+  prepareTauriTerminals,
+  tauriPreparationFailure,
+  type PreparationCliCandidate,
+} from './tauri-terminal-preparation.js';
 
 process.umask(0o077);
 
@@ -99,73 +106,91 @@ async function main() {
       { parent, home, node: process.execPath, environment: process.env },
       {
         current: () => live,
-        authorizeCli: async (candidate) => {
-          const scope = cliAuthorizationScope(candidate.provider, candidate.mode);
-          let result: Awaited<ReturnType<typeof authorizeCliCandidate>>;
-          try {
-            result = await authorizeCliCandidate({
-              store: (cliPolicy ??= new TerminalCliPolicyStore(join(parent, 'managed-agents'))),
-              provider: candidate.provider,
-              mode: candidate.mode,
-              executable: candidate.executable,
-              verifier: systemCliSignatureVerifier,
-              current: async () => false, // Refuse until the native current check is connected.
-              profile: (version, sha256) => ({
-                id: `${candidate.provider}-terminal-v1`,
-                projectId: terminalDigest(candidate.project),
-                executable: candidate.executable,
-                executableSha256: sha256,
-                executableVersion: version,
-                argv: [],
-                cwd: candidate.project,
-                permissions: 'Native owned terminal CLI authorization',
-                ...scope,
-              }),
-              review: async (details) => {
-                const detail = JSON.stringify(
-                  {
-                    ...details,
-                    versionEvidence: 'signed-cli-version-probe',
-                    signatureEvidence: 'macOS /usr/bin/codesign',
-                  },
-                  null,
-                  2,
-                ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
-                if (detail.length > 16384 || !live) return false;
-                const accepted =
-                  (await ask({
-                    kind: 'confirm',
-                    title: translate('terminalNative.authorizeCli'),
-                    message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
-                    detail,
-                    cancel: translate('terminalNative.cancel'),
-                    approve: translate('terminalNative.authorizeCli'),
-                  })) === true;
-                return accepted && live && (await commit());
-              },
-            });
-          } catch (error) {
-            if (
-              error instanceof Error &&
-              [
-                'CLI provider signature unavailable or invalid',
-                'Unknown or unsupported CLI version',
-                'CLI version probe failed',
-                'CLI version probe timed out',
-                'CLI version output exceeds limit',
-              ].includes(error.message)
-            )
-              return { status: 'ineligible' as const };
-            throw error;
-          }
-          return result.status === 'allowed'
-            ? {
-                status: result.status,
-                version: result.profile.executableVersion,
-                sha256: result.profile.executableSha256,
-                binding: result.binding,
+        authorizeCli: async () => ({ status: 'blocked' as const }),
+        authorizeCliGroup: async (candidates: readonly PreparationCliCandidate[]) => {
+          const prepared: Awaited<ReturnType<typeof prepareCliCandidate>>[] = [];
+          for (const candidate of candidates) {
+            let selected: Awaited<ReturnType<typeof prepareCliCandidate>> | undefined;
+            for (const executable of candidate.alternatives ?? [candidate.executable]) {
+              try {
+                const scope = cliAuthorizationScope(candidate.provider, candidate.mode);
+                selected = await prepareCliCandidate({
+                  store: (cliPolicy ??= new TerminalCliPolicyStore(join(parent, 'managed-agents'))),
+                  provider: candidate.provider,
+                  mode: candidate.mode,
+                  executable,
+                  verifier: systemCliSignatureVerifier,
+                  profile: (version, sha256) => ({
+                    id: `${candidate.provider}-terminal-v1`,
+                    projectId: terminalDigest(candidate.project),
+                    executable,
+                    executableSha256: sha256,
+                    executableVersion: version,
+                    argv: [],
+                    cwd: candidate.project,
+                    permissions: 'Native owned terminal CLI authorization',
+                    ...scope,
+                  }),
+                });
+                break;
+              } catch (error) {
+                if (
+                  !(error instanceof Error) ||
+                  error.message !== 'CLI provider signature unavailable or invalid'
+                )
+                  throw error;
               }
-            : { status: result.status };
+            }
+            if (!selected) return candidates.map(() => ({ status: 'ineligible' as const }));
+            prepared.push(selected);
+          }
+          const current = async () => live && (await ask({ kind: 'cli-current' })) === true && live;
+          const results = await authorizePreparedGroup(
+            prepared,
+            async () => {
+              const detail = JSON.stringify(
+                {
+                  candidates: prepared.map((entry) =>
+                    'pending' in entry
+                      ? entry.pending.disclosure
+                      : {
+                          alreadyAuthorized: true,
+                          executable: entry.existing.profile.executable,
+                          version: entry.existing.profile.executableVersion,
+                          binding: entry.existing.binding,
+                        },
+                  ),
+                  versionEvidence: 'not yet probed',
+                  signatureEvidence: 'macOS /usr/bin/codesign',
+                },
+                null,
+                2,
+              ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+              if (detail.length > 16384 || !live) return false;
+              const accepted =
+                (await ask({
+                  kind: 'confirm',
+                  title: translate('terminalNative.authorizeCli'),
+                  message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
+                  detail,
+                  cancel: translate('terminalNative.cancel'),
+                  approve: translate('terminalNative.authorizeCli'),
+                })) === true;
+              return accepted && live && (await commit());
+            },
+            current,
+          );
+          return results.map((result) =>
+            result.status === 'allowed'
+              ? {
+                  status: 'allowed' as const,
+                  executable: result.profile.executable,
+                  version: result.profile.executableVersion,
+                  sha256: result.profile.executableSha256,
+                  binding: result.binding,
+                }
+              : { status: result.status },
+          );
         },
         choose: async (directory) => {
           const value = await ask({
@@ -194,6 +219,7 @@ async function main() {
                         {
                           id: terminal.id,
                           provider: terminal.provider,
+                          version: terminal.version,
                           model: terminal.model ?? translate('studio.prepare.cliDefault'),
                           interpolation: { escapeValue: false },
                         },

@@ -168,6 +168,18 @@ function fixture(openCodeCopies = false) {
     }),
     commit: async () => true,
   };
+  const groupPorts = {
+    ...ports,
+    authorizeCliGroup: async (
+      candidates: readonly import('../apps/desktop/src/tauri-terminal-preparation.js').PreparationCliCandidate[],
+    ) =>
+      Promise.all(
+        candidates.map(async (candidate) => ({
+          ...(await ports.authorizeCli(candidate)),
+          executable: candidate.executable,
+        })),
+      ),
+  };
   return {
     root,
     home,
@@ -175,7 +187,7 @@ function fixture(openCodeCopies = false) {
     workspaceId,
     context,
     trusted,
-    ports,
+    ports: groupPorts,
     confirmations,
     close: () => rmSync(root, { recursive: true, force: true }),
   };
@@ -415,10 +427,17 @@ test('fallback discovery skips an ineligible CLI and authorizes the first valid 
     const examined: string[] = [];
     const ports = {
       ...f.ports,
-      authorizeCli: async (candidate: Parameters<typeof f.ports.authorizeCli>[0]) => {
-        examined.push(candidate.executable);
-        if (candidate.executable === first) return { status: 'ineligible' as const };
-        return f.ports.authorizeCli(candidate);
+      authorizeCliGroup: async (
+        candidates: readonly import('../apps/desktop/src/tauri-terminal-preparation.js').PreparationCliCandidate[],
+      ) => {
+        const candidate = candidates[0]!;
+        examined.push(first, second); // Synthetic signature inspection before any consent or probe.
+        return [
+          {
+            ...(await f.ports.authorizeCli({ ...candidate, executable: second })),
+            executable: second,
+          },
+        ];
       },
     };
     const prepared = await prepareTauriTerminals(
@@ -475,9 +494,9 @@ test('fallback CLI selection stops on cancellation without probing another candi
       f.context,
       {
         ...f.ports,
-        authorizeCli: async () => {
+        authorizeCliGroup: async () => {
           attempts++;
-          return { status: 'blocked' as const };
+          return [{ status: 'blocked' as const }];
         },
       },
       Date.now,

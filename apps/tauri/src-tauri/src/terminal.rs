@@ -2887,6 +2887,41 @@ async fn start_selected_inner(
                                 let _ = sender.send(value.clone());
                             }
                         }
+                    } else if value["kind"] == "cli-current" {
+                        let id = value["id"].as_str().filter(|id| id.len() == 36);
+                        let slot = value["slot"].as_u64().and_then(|n| usize::try_from(n).ok());
+                        if let (Some(id), Some(slot)) = (id, slot) {
+                            let generation = app
+                                .state::<Terminals>()
+                                .0
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .and_then(|r| r.generations.get(slot).copied());
+                            let focused =
+                                if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+                                    self::slot(&view) == Some(slot) && focused(&view).await
+                                } else {
+                                    false
+                                };
+                            let presentation = !presentation_blocked(&app);
+                            let current = app
+                                .state::<Terminals>()
+                                .0
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .is_some_and(|r| {
+                                    generation.is_some()
+                                        && r.generations.get(slot).copied() == generation
+                                        && r.revoked.get(slot) == Some(&false)
+                                        && r.loaded.get(slot) == Some(&true)
+                                });
+                            send(
+                                &app,
+                                json!({"kind":"cli-current", "id":id, "accepted":focused && presentation && current}),
+                            );
+                        }
                     } else if value["kind"] == "confirm" {
                         confirm(&app, &value).await;
                     } else if value["kind"] == "layout" {
