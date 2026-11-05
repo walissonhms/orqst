@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod agents;
+pub mod cli_signature;
 mod desktop;
 mod features;
 mod files;
