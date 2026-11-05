@@ -1,5 +1,12 @@
 # ORQST
 
+## Independently reviewed native consent source — 2026-11-04
+
+The bounded native authorization fix, synthetic startup fixture correction and
+pinned Rust formatting/Clippy checks are integrated. The source freeze precedes a
+separate Preview package; real native visibility remains human acceptance.
+See [review, current checks and retirement-before-Quit boundary](docs/development/native-consent-scroll-delivery.md).
+
 ## Native authorization viewport correction — source only — 2026-11-04
 
 Native authorization detail now uses a bounded plain-text scroll area with native Cancel/Authorize controls. The open package is preserved; replacement packaging and small-screen visual acceptance remain pending.

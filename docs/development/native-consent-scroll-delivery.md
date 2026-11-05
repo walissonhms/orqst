@@ -86,3 +86,27 @@ is not native acceptance. Synthetic 390/720/1440 geometry cases cannot prove rea
 AppKit control visibility, scrolling or keyboard interaction. Those and actual
 provider/model behavior remain Root 676 / human acceptance. The new package is
 not launched by this delivery. Offline recovery is not invoked again.
+
+## Integrated source checks
+
+On integrated source `4aa466e65e5cd914dddda2c0dfcd244ee47da00d`, all six real
+Cargo gates passed in series: check/test/clippy, default and custom-protocol,
+`--all-targets --locked --offline`, Clippy `-D warnings`. Each test configuration
+passed 97 tests with one existing explicit FIFO ignore. The four standalone layout
+fixtures passed. Rustfmt, full lint and TypeScript passed. The full Node suite in
+the review tree passed 1,168/1,168 after the one-line fixture correction; that Node
+source is identical in the integrated tree. Nothing is inferred from prior gates.
+
+The first isolated checks lacked package/resource links; those environmental
+failures were repaired without changing dependencies. Initial Clippy required
+Option propagation; the separate corrective commit preserves the same None path.
+The private Rust toolchain reports its existing nonfatal rust-objcopy/libLLVM
+stripping advisory; no warning suppression or dependency/lock update was used.
+
+Source is frozen under `delivery/2026-11-04-native-consent-scroll-source` and must
+be published atomically with main and the original implementation branch before
+packaging. The separate ignored `dist/native-preview-consent-scroll/` manifest is
+the authority for package/build/signature/inventory results, rather than this
+source document predicting a successful build. Root `pnpm build` is excluded to
+preserve active dist; dashboard/resources and the existing native bundle flow are
+used directly. Native visual/provider/Quit acceptance is still pending.
