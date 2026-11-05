@@ -75,15 +75,18 @@ are written at window end, followed by one aggregate `suppressed` count when
 nonzero. The existing `refusals.*` segments hold this entire bounded stream. Source,
 stage and outcome are closed labels; request data, paths and IDs are excluded.
 The shared window never enters the native operational queue or rotates its segments.
-Native setup, exit and subsequent host stream loss remain in the reserved native
-stream even when the host originated in a renderer request. A renderer stream write
-failure disables only that stream. Abrupt exit or sink failure can lose records;
+Native setup, exit, host initialization, spawn, readiness, startup failure and
+subsequent host stream loss remain in the reserved native stream even when the host
+originated in a renderer request. Request outcomes and refusals before host
+initialization remain aggregated. A renderer stream write failure disables only
+that stream. Abrupt exit or sink failure can lose records;
 aggregation is best effort, not a security audit or proof of a request.
 
 ## Instrumented boundaries and correlation
 
 - Native setup, observer startup, readiness, timeout, protocol/transport failure,
-  disconnection and EOF share the setup's diagnostic attempt. Exit has a fresh
+  disconnection and EOF share the setup's diagnostic attempt. The owned shutdown
+  circuit records its observed exit or blocked result in the native stream. Exit has a fresh
   diagnostic attempt and does not wait for a flush.
 - Preparation creates one attempt before the existing helper run. Its
   spawn, review choice, commit decision, helper exit/cancellation and final typed

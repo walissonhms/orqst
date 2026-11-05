@@ -38,7 +38,7 @@ vocabulary!(Stage {
     Plan => "plan", Review => "review", Revalidation => "revalidation", Commit => "commit",
     Provision => "provision", Inspection => "inspection", FeatureAssignment => "feature_assignment",
     Opening => "opening", CliOpening => "cli_opening", AdmissionPreflight => "admission_preflight", CoreAdmission => "core_admission", CoreStartup => "core_startup",
-    HostSpawn => "host_spawn", HostStream => "host_stream", Enrollment => "enrollment",
+    HostSpawn => "host_spawn", HostStream => "host_stream", OwnedShutdown => "owned_shutdown", Enrollment => "enrollment",
     Presentation => "presentation", Unconfirmed => "unconfirmed",
 });
 vocabulary!(Outcome {
@@ -636,6 +636,76 @@ mod tests {
             fs::read(parent.join("diagnostics/native.jsonl")).unwrap(),
             b"legitimate startup\nlegitimate quit\n"
         );
+        drop(sink);
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn renderer_flood_cannot_suppress_synthetic_host_lifecycle() {
+        const CHILD: &str = "ORQST_DIAGNOSTIC_FLOOD_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "local_diagnostics::tests::renderer_flood_cannot_suppress_synthetic_host_lifecycle"])
+                .env(CHILD, "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+            return;
+        }
+        let (sender, receiver) = sync_channel(256);
+        assert!(WRITER.set(sender).is_ok());
+        let parent = temporary();
+        let mut sink = disk::Sink::open(&parent, 1024 * 1024).unwrap();
+        let start = Instant::now();
+        let native = Attempt::begin();
+        native.record_native(Stage::NativeSetup, Outcome::Ready, Effects::Unconfirmed);
+        for _ in 0..10_000 {
+            let request = Attempt::renderer(RefusalSource::Studio);
+            request.record(Stage::Request, Outcome::Requested, Effects::Unconfirmed);
+            request.record(Stage::Selection, Outcome::Succeeded, Effects::Possible);
+        }
+        // Synthetic lifecycle events carry a renderer-created attempt, as in the host path.
+        let host = Attempt::renderer(RefusalSource::Studio);
+        host.record_native(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
+        host.record_native(Stage::HostSpawn, Outcome::Started, Effects::Possible);
+        host.record_native(
+            Stage::CoreStartup,
+            Outcome::StartupTimeout,
+            Effects::Possible,
+        );
+        host.record_native(Stage::HostStream, Outcome::Eof, Effects::Possible);
+        for record in receiver.try_iter() {
+            sink.append(record.line(0).as_bytes()).unwrap();
+        }
+        let window = REFUSALS.get().unwrap();
+        let (entries, suppressed) = window
+            .lock()
+            .unwrap()
+            .drain(start + REFUSAL_WINDOW * 2)
+            .unwrap();
+        assert_eq!(entries.len(), 3);
+        assert_eq!(suppressed, 29_998);
+        for line in format_refusals(entries, suppressed) {
+            sink.append_refusal(line.as_bytes()).unwrap();
+        }
+        let native_lines = fs::read_to_string(parent.join("diagnostics/native.jsonl")).unwrap();
+        for value in [
+            "native_setup",
+            "host_spawn",
+            "startup_timeout",
+            "host_stream",
+        ] {
+            assert!(native_lines.contains(value), "missing {value}");
+        }
+        let requests = fs::read_to_string(parent.join("diagnostics/refusals.jsonl")).unwrap();
+        assert_eq!(requests.lines().count(), 4);
+        assert!(requests.contains("\"suppressed\":29998"));
         drop(sink);
         fs::remove_dir_all(parent).unwrap();
     }

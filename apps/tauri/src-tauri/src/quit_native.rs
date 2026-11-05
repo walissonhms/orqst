@@ -60,7 +60,8 @@ impl ExitPort for NativePorts {
     fn start_owned_shutdown(&self) {
         let ports = Self(self.0.clone());
         tauri::async_runtime::spawn(async move {
-            QUIT.quit_owned(&ports, &ports, &ports).await;
+            let exit = ShutdownExit(&ports);
+            QUIT.quit_owned(&ports, &exit, &ports).await;
         });
     }
 
@@ -74,6 +75,37 @@ impl ExitPort for NativePorts {
 
     fn fence(&self) {
         crate::terminal::quit_event(&self.0, "orqst-terminal-fence", json!({"fence": true}));
+    }
+}
+
+// Records only results from the owned shutdown circuit before forwarding them.
+struct ShutdownExit<'a>(&'a NativePorts);
+
+impl ExitPort for ShutdownExit<'_> {
+    fn request_exit(&self) {
+        crate::local_diagnostics::Attempt::begin().record_native(
+            crate::local_diagnostics::Stage::OwnedShutdown,
+            crate::local_diagnostics::Outcome::Succeeded,
+            crate::local_diagnostics::Effects::Possible,
+        );
+        self.0.request_exit();
+    }
+
+    fn start_owned_shutdown(&self) {
+        self.0.start_owned_shutdown();
+    }
+
+    fn blocked(&self, reason: &str, uncertain: Value) {
+        crate::local_diagnostics::Attempt::begin().record_native(
+            crate::local_diagnostics::Stage::OwnedShutdown,
+            crate::local_diagnostics::Outcome::Uncertain,
+            crate::local_diagnostics::Effects::Possible,
+        );
+        self.0.blocked(reason, uncertain);
+    }
+
+    fn fence(&self) {
+        self.0.fence();
     }
 }
 

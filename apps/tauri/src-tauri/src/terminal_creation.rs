@@ -550,6 +550,19 @@ pub(crate) fn record_failure(
     }
 }
 
+/// Host startup failures are lifecycle evidence even when requested by a renderer.
+pub(crate) fn record_host_failure(diagnostic: &Attempt, error: &(dyn std::error::Error + 'static)) {
+    if let Some(failure) = error.downcast_ref::<PreparationFailure>() {
+        diagnostic.record_native(
+            Stage::parse(failure.0["stage"].as_str().unwrap_or("")),
+            Outcome::parse(failure.0["code"].as_str().unwrap_or("")),
+            Effects::parse(failure.0["effects"].as_str().unwrap_or("")),
+        );
+    } else {
+        diagnostic.record_native(Stage::CoreStartup, Outcome::Uncertain, Effects::Possible);
+    }
+}
+
 fn execute(
     app: &tauri::AppHandle,
     window: &WebviewWindow,

@@ -2477,9 +2477,13 @@ pub async fn start_selected_with_open(
     operational_open: bool,
     diagnostic: &Attempt,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    diagnostic.record(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
-    let result = start_selected_inner(app, paths, operational_open, diagnostic).await;
+    let host_attempted = std::cell::Cell::new(false);
+    let result =
+        start_selected_inner(app, paths, operational_open, diagnostic, &host_attempted).await;
     if let Err(error) = &result {
+        if host_attempted.get() {
+            crate::terminal_creation::record_host_failure(diagnostic, error.as_ref());
+        }
         crate::terminal_creation::record_failure(diagnostic, error.as_ref(), Stage::CoreStartup);
     } else {
         diagnostic.record(Stage::Opening, Outcome::Ready, Effects::Possible);
@@ -2492,6 +2496,7 @@ async fn start_selected_inner(
     paths: Vec<String>,
     operational_open: bool,
     diagnostic: &Attempt,
+    host_attempted: &std::cell::Cell<bool>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if is_running(app) {
         return Err("Existing Core requires explicit native enrollment".into());
@@ -2502,6 +2507,7 @@ async fn start_selected_inner(
     // Includes startup-environment selections: uncertain Core setup must never unlock
     // native preparation or reuse a terminal window in this application lifetime.
     crate::terminal_creation::fence_selection(app);
+    host_attempted.set(true);
     static STARTUP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     let startup_id = format!(
         "startup-{}",
@@ -2534,8 +2540,15 @@ async fn start_selected_inner(
                 })))
         },
     )?;
-    let (mut rx, child) = prepared.spawn(|command| command.spawn())?;
-    diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
+    diagnostic.record_native(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
+    let (mut rx, child) = match prepared.spawn(|command| command.spawn()) {
+        Ok(result) => result,
+        Err(error) => {
+            diagnostic.record_native(Stage::HostSpawn, Outcome::Failed, Effects::Possible);
+            return Err(Box::new(error));
+        }
+    };
+    diagnostic.record_native(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
         while let Some(event) = rx.recv().await {
             match event {
@@ -2575,7 +2588,7 @@ async fn start_selected_inner(
             return Err(error);
         }
     };
-    diagnostic.record(Stage::CoreStartup, Outcome::Ready, Effects::Possible);
+    diagnostic.record_native(Stage::CoreStartup, Outcome::Ready, Effects::Possible);
     let panes = ready["panes"]
         .as_array()
         .ok_or("Missing terminal documents")?;
