@@ -53,8 +53,14 @@ function startupFailed(error: unknown) {
     });
 }
 async function start() {
-  if (!process.send || process.argv.length !== 7 || !/^v24\./.test(process.version))
+  if (
+    !process.send ||
+    ![7, 8].includes(process.argv.length) ||
+    !/^v24\./.test(process.version) ||
+    (process.argv.length === 8 && process.argv[7] !== 'kernel-v1')
+  )
     throw new Error('Private Node Core only');
+  const kernelEnabled = process.argv[7] === 'kernel-v1';
   const files: string[] = JSON.parse(process.argv[2]!);
   const limit = terminalSlotLimit(
     process.argv[5] === undefined ? undefined : Number(process.argv[5]),
@@ -140,7 +146,7 @@ async function start() {
               files[slot]!,
               join(__dirname, 'managed-terminal-host.cjs'),
               launches[slot],
-              { owner: admission.owner, query: kernel.query },
+              kernelEnabled ? { owner: admission.owner, query: kernel.query } : undefined,
             );
             return mcp ? mcp.wrap(slot, backend) : backend;
           })(),
@@ -243,7 +249,7 @@ async function start() {
                 request.manifestFile,
                 join(__dirname, 'managed-terminal-host.cjs'),
                 undefined,
-                { owner: admission.owner, query: kernel.query },
+                kernelEnabled ? { owner: admission.owner, query: kernel.query } : undefined,
               );
               reviewed.validate();
               return {

@@ -77,6 +77,7 @@ export async function connectManagedTerminalCore(
       admissionDirectory,
       String(terminalSlotLimit(limit)),
       startupId,
+      ...(kernelRead ? ['kernel-v1'] : []),
     ],
     {
       execPath: config.node.path,
