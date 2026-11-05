@@ -67,8 +67,10 @@ checks; a policy cannot grant filesystem, terminal input, or CLI authority.
 The communication journal creates cross tables only on explicit Core opt-in.
 Local admission checks the stable indexed cross identity columns without parsing
 cross message metadata, so a future cross schema version or invalid metadata does
-not by itself block local communication. A structurally damaged identity table
-cannot establish uniqueness and still fails closed. Cross recovery is deferred
+not by itself block local communication. Local send fails with an honest error
+when structural damage to the cross identity table prevents uniqueness from being
+proved; no data is deleted or repaired automatically. A journal that has never
+enabled cross communication has no cross identity table and is unaffected. Cross recovery is deferred
 until opt-in and remains fenced by the communication owner epoch.
 
 A trusted host may configure a cross route only with a verified grant and its

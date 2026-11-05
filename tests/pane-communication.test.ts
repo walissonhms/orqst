@@ -892,6 +892,47 @@ test('a legacy journal does not create cross tables before opt-in', () => {
       f.journal.transaction((tx) => tx.crossMessages().length),
       0,
     );
+    const message = f.request();
+    assert.equal(f.authorize().send(message).messageId, message.messageId);
+    assert.equal(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE name='cross_feature_messages'").get(),
+      undefined,
+    );
+  } finally {
+    db.close();
+    f.store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('local send fails closed without repairing a structurally damaged cross identity table', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-damaged-identity-'));
+  const file = join(directory, 'journal.sqlite');
+  const f = setup(file);
+  const db = new DatabaseSync(file);
+  try {
+    db.exec(
+      "CREATE TABLE cross_feature_messages (damaged TEXT); INSERT INTO cross_feature_messages VALUES ('preserve');",
+    );
+    const original = db
+      .prepare("SELECT sql FROM sqlite_master WHERE name='cross_feature_messages'")
+      .get();
+    assert.throws(() => f.authorize().send(f.request()), /no such column/);
+    assert.equal(
+      f.journal.transaction((tx) => tx.messages().length),
+      0,
+    );
+    assert.deepEqual(
+      db.prepare("SELECT sql FROM sqlite_master WHERE name='cross_feature_messages'").get(),
+      original,
+    );
+    assert.deepEqual(
+      db
+        .prepare('SELECT damaged FROM cross_feature_messages')
+        .all()
+        .map((row) => row.damaged),
+      ['preserve'],
+    );
   } finally {
     db.close();
     f.store.close();
