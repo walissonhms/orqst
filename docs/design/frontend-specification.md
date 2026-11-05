@@ -319,7 +319,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Item                                                                                                  | Owner    | Blocked by                                       |
 | ----------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                          | owner    | new package                                      |
-| Studio v2 chrome contract: renderer integration and native acceptance                                 | pane-817 | pane-768 integration and owner native test       |
+| Studio v2 chrome contract: native acceptance                                                          | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed                                                           | pane-817 | step 2                                           |
 | Claude "needs you" state via owned `--settings` hooks                                                 | pane-817 | step 1b                                          |
 | Codex/OpenCode session binding and turn state                                                         | pane-817 | no proven identity yet                           |
