@@ -1,6 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { z } from 'zod';
+import { randomUUID } from 'node:crypto';
 import {
+  crossFeatureMessageSchema,
+  crossFeatureAuditSchema,
   communicationAuditSchema,
   communicationLimits,
   communicationMessageSchema,
@@ -41,6 +44,60 @@ export function openCommunicationJournal(
   if (db.isTransaction) throw new Error('Communication requires an independent commit');
   db.exec('PRAGMA synchronous=FULL');
   const tx: CommunicationTransaction = {
+    crossMessages: () =>
+      db
+        .prepare('SELECT metadata FROM cross_feature_messages ORDER BY rowid')
+        .all()
+        .map((row) => crossFeatureMessageSchema.parse(JSON.parse(String(row.metadata)))),
+    crossEvents: () =>
+      db
+        .prepare('SELECT sequence, metadata FROM cross_feature_audit ORDER BY sequence')
+        .all()
+        .map((row) =>
+          crossFeatureAuditSchema.parse({
+            ...JSON.parse(String(row.metadata)),
+            sequence: row.sequence,
+          }),
+        ),
+    insertCross: (input, event) => {
+      const message = crossFeatureMessageSchema.parse(input);
+      if (message.state !== 'queued') throw new Error('Invalid cross-Feature admission');
+      const g = message.grant;
+      db.prepare(
+        `INSERT INTO cross_feature_messages
+        (message_id, task_id, workspace_id, target_id, idempotency_key, grant_id, intent_id, nonce, metadata)
+        VALUES (?,?,?,?,?,?,?,?,?)`,
+      ).run(
+        message.request.messageId,
+        message.request.taskId,
+        g.workspaceId,
+        g.target.paneId,
+        message.request.idempotencyKey,
+        g.grantId,
+        g.intentId,
+        g.nonce,
+        JSON.stringify(message),
+      );
+      crossAudit(message, event, 'admitted');
+    },
+    updateCross: (input, event) => {
+      const message = crossFeatureMessageSchema.parse(input);
+      const old = tx.crossMessages().find((m) => m.request.messageId === message.request.messageId);
+      if (
+        !old ||
+        old.state !== 'queued' ||
+        message.state !== 'dispatching' ||
+        JSON.stringify(old.grant) !== JSON.stringify(message.grant) ||
+        JSON.stringify(old.request) !== JSON.stringify(message.request) ||
+        old.createdAt !== message.createdAt
+      )
+        throw new Error('Invalid cross-Feature transition');
+      db.prepare('UPDATE cross_feature_messages SET metadata=? WHERE message_id=?').run(
+        JSON.stringify(message),
+        message.request.messageId,
+      );
+      crossAudit(message, event, 'dispatch_claimed');
+    },
     panes: () =>
       db
         .prepare('SELECT metadata FROM communication_panes ORDER BY rowid')
@@ -101,8 +158,23 @@ export function openCommunicationJournal(
           previous.createdAt !== message.createdAt
         )
           throw new Error('Immutable message identity');
-      } else if (tx.messages().length >= communicationLimits.messages)
-        throw new Error('Message history capacity');
+      } else {
+        if (tx.messages().length >= communicationLimits.messages)
+          throw new Error('Message history capacity');
+        if (
+          tx
+            .crossMessages()
+            .some(
+              (m) =>
+                m.request.messageId === message.messageId ||
+                m.request.taskId === message.taskId ||
+                (m.grant.workspaceId === message.workspaceId &&
+                  m.grant.target.paneId === message.targetPaneId &&
+                  m.request.idempotencyKey === message.idempotencyKey),
+            )
+        )
+          throw new Error('Message identity already used');
+      }
       db.prepare(
         `INSERT INTO communication_messages VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET metadata=excluded.metadata`,
       ).run(
@@ -143,11 +215,62 @@ export function openCommunicationJournal(
         .map((row) => communicationAuditSchema.parse(JSON.parse(String(row.metadata))));
     },
   };
+  const crossAudit = (
+    message: import('@orqst/protocol').CrossFeatureMessage,
+    event: Omit<import('@orqst/protocol').CrossFeatureAudit, 'sequence'>,
+    outcome: import('@orqst/protocol').CrossFeatureAudit['outcome'],
+  ) => {
+    const g = message.grant;
+    if (
+      Number(db.prepare('SELECT COUNT(*) AS n FROM cross_feature_audit').get()?.n) >=
+      communicationLimits.auditEvents
+    )
+      throw new Error('Cross-Feature audit capacity');
+    const sequence = Number(
+      db.prepare('SELECT COALESCE(MAX(sequence),0)+1 AS n FROM cross_feature_audit').get()?.n,
+    );
+    const audit = crossFeatureAuditSchema.parse({ ...event, sequence });
+    if (
+      audit.outcome !== outcome ||
+      audit.grantId !== g.grantId ||
+      audit.intentId !== g.intentId ||
+      audit.actorId !== g.actorId ||
+      audit.workspaceId !== g.workspaceId ||
+      audit.messageId !== message.request.messageId ||
+      audit.sourceFeatureId !== g.source.featureId ||
+      audit.targetFeatureId !== g.target.featureId ||
+      audit.sourceTerminalId !== g.source.terminalId ||
+      audit.targetTerminalId !== g.target.terminalId ||
+      audit.sourcePaneId !== g.source.paneId ||
+      audit.targetPaneId !== g.target.paneId ||
+      audit.sourceRevision !== g.sourceRevision ||
+      audit.targetRevision !== g.targetRevision
+    )
+      throw new Error('Invalid cross-Feature audit scope');
+    db.prepare('INSERT INTO cross_feature_audit(sequence, metadata) VALUES (?,?)').run(
+      sequence,
+      JSON.stringify(event),
+    );
+  };
   const commit = <T>(action: () => T): T => {
     if (db.isTransaction) throw new Error('Communication requires an independent commit');
     return transaction(action);
   };
   commit(() => {
+    db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_journal_schema (singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL);
+      INSERT OR IGNORE INTO cross_feature_journal_schema VALUES(1,1);
+      CREATE TABLE IF NOT EXISTS cross_feature_messages (
+        message_id TEXT PRIMARY KEY, task_id TEXT NOT NULL UNIQUE, workspace_id TEXT NOT NULL,
+        target_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, grant_id TEXT NOT NULL UNIQUE,
+        intent_id TEXT NOT NULL UNIQUE, nonce TEXT NOT NULL UNIQUE, metadata TEXT NOT NULL CHECK(json_valid(metadata)),
+        UNIQUE(workspace_id,target_id,idempotency_key));
+      CREATE TABLE IF NOT EXISTS cross_feature_audit (
+        sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));`);
+    if (
+      db.prepare('SELECT version FROM cross_feature_journal_schema WHERE singleton=1').get()
+        ?.version !== 1
+    )
+      throw new Error('Unsupported cross-Feature journal schema');
     if (
       !db
         .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='communication_schema'")
@@ -162,6 +285,40 @@ export function openCommunicationJournal(
     if (owner && (!recover || owner.epoch === epoch))
       throw new Error('Communication already owned');
     if (owner) {
+      for (const message of tx.crossMessages()) {
+        if (message.state !== 'dispatching') continue;
+        const g = message.grant;
+        const timestamp = Math.max(now(), message.updatedAt);
+        const recovered = { ...message, state: 'outcome_unknown' as const, updatedAt: timestamp };
+        db.prepare('UPDATE cross_feature_messages SET metadata=? WHERE message_id=?').run(
+          JSON.stringify(recovered),
+          message.request.messageId,
+        );
+        crossAudit(
+          recovered,
+          {
+            schemaVersion: 1,
+            eventId: randomUUID(),
+            timestamp,
+            actorId: g.actorId,
+            workspaceId: g.workspaceId,
+            sourceFeatureId: g.source.featureId,
+            targetFeatureId: g.target.featureId,
+            sourceTerminalId: g.source.terminalId,
+            targetTerminalId: g.target.terminalId,
+            sourcePaneId: g.source.paneId,
+            targetPaneId: g.target.paneId,
+            operation: g.operation,
+            grantId: g.grantId,
+            intentId: g.intentId,
+            messageId: message.request.messageId,
+            sourceRevision: g.sourceRevision,
+            targetRevision: g.targetRevision,
+            outcome: 'outcome_unknown',
+          },
+          'outcome_unknown',
+        );
+      }
       for (const pane of tx.panes())
         if (pane.state !== 'closed') tx.savePane({ ...pane, state: 'unavailable' });
       for (const message of tx.messages()) {

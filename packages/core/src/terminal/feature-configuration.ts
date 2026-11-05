@@ -37,6 +37,25 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
   };
   return {
     permissionReader,
+    crossFeatureSnapshot: (sourceFeatureId: string, targetFeatureId: string) =>
+      withTerminalPreferences(directory, (store) =>
+        store.transaction(() => {
+          const permissions = store.crossFeaturePermissions();
+          return {
+            source: permissions.read(scope(sourceFeatureId)),
+            target: permissions.read(scope(targetFeatureId)),
+          };
+        }),
+      ),
+    saveCrossFeaturePermissions: (
+      featureId: string,
+      actorId: string,
+      expectedRevision: number,
+      policy: import('@orqst/protocol').CrossFeaturePolicy,
+    ) =>
+      withTerminalPreferences(directory, (store) =>
+        store.crossFeaturePermissions().save(scope(featureId), actorId, expectedRevision, policy),
+      ),
     readPermissions: (featureId: string) =>
       withFeature(featureId, (store) => store.featurePermissions().read(scope(featureId))),
     savePermissions: (featureId: string, actorId: string, input: FeaturePermissionSave) =>
