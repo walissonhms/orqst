@@ -79,6 +79,7 @@ test('synthetic v2 binding omits CLI digest and inode while binding authorizatio
       identifier: 'codex',
       contractRevision: 'codex-tui-0.162.1',
       authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+      policyRevision: 1,
     };
     writeFileSync(
       manifest,

@@ -34,6 +34,7 @@ const v2CliBindingSchema = z.strictObject({
   identifier: z.string().min(1).max(256),
   contractRevision: z.string().min(1).max(128),
   authorizationEpoch: z.uuid(),
+  policyRevision: z.number().int().positive().max(4096),
 });
 
 function v2CliBinding(config: InteractiveTerminalConfig, source: Buffer) {

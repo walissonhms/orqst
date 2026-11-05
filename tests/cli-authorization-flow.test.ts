@@ -66,6 +66,12 @@ test('candidate authorization probes once and repeats neither probe nor review f
     valid = true;
     const initial = await authorizeCliCandidate(input);
     assert.equal(initial.status, 'allowed');
+    if (initial.status !== 'allowed') throw new Error('Synthetic authorization failed');
+    const binding = await store.verifiedBinding(initial.profile, 'codex', 'tui', input.verifier);
+    assert.equal(binding?.policyRevision, 1);
+    assert.equal(binding?.authorizationEpoch, initial.epoch);
+    assert.equal(binding?.teamId, signature.teamId);
+    assert.equal('sha256' in binding!, false);
     const second = await authorizeCliCandidate(input);
     assert.equal(second.status, 'allowed');
     assert.equal(probes, 1);

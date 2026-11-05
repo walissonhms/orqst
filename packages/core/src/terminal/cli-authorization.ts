@@ -479,6 +479,41 @@ export class TerminalCliPolicyStore {
     }
   }
 
+  /** Returns only verified authorization metadata; the local digest stays in the policy store. */
+  async verifiedBinding(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+    verifier: CliSignatureVerifier,
+  ) {
+    const epoch = await this.verifiedEpoch(profile, provider, mode, verifier);
+    if (!epoch) return;
+    try {
+      const snapshot = this.loadSnapshot(profile);
+      const record = snapshot.record;
+      if (
+        !record ||
+        record.version !== 2 ||
+        record.state !== 'allowed' ||
+        record.authorizationEpoch !== epoch ||
+        snapshot.revision < 1
+      )
+        return;
+      return {
+        version: 2 as const,
+        provider,
+        mode,
+        teamId: record.signature.teamId,
+        identifier: record.signature.identifier,
+        contractRevision: record.contractRevision,
+        authorizationEpoch: epoch,
+        policyRevision: snapshot.revision,
+      };
+    } catch {
+      return;
+    }
+  }
+
   revoke(profile: Readonly<TerminalProfile>): void {
     const snapshot = this.loadSnapshot(profile);
     if (!snapshot.record) return;
