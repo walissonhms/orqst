@@ -1108,7 +1108,9 @@
     "creationUnavailable": "Use a preparação nativa para criar/revisar terminais. Atribua apenas os slots revisados disponíveis.",
     "loading": "Carregando…",
     "switching": "Alternando visão…",
-    "terminalCount": "{{count}} terminais"
+    "terminalCount": "{{count}} terminais",
+    "dockLabel": "Minimizados",
+    "dockRestore": "Restaurar {{name}}"
   },
   "tauriCoreUnavailable": {
     "title": "Observador indisponível",

@@ -371,3 +371,25 @@
   margin: 0;
   padding-left: 18px;
 }
+
+.feature-dock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-top: 1px solid var(--orqst-border, #262334);
+  min-height: 34px;
+}
+.feature-dock-label {
+  font-size: 10px;
+  letter-spacing: 1.4px;
+  color: var(--orqst-muted, #9994b2);
+  margin-right: 4px;
+}
+.feature-dock button {
+  background: var(--orqst-elevated, #241a3e);
+  border: 1px solid var(--orqst-border, #262334);
+  color: var(--orqst-text, #f5f3ff);
+  border-radius: 5px;
+  padding: 4px 8px;
+}

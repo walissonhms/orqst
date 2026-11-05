@@ -6,6 +6,7 @@ import type {
   WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
+import { dockPanes, type DockPane } from './feature-workspace-dock.js';
 import {
   featureNoticeAfterSnapshot,
   featureNoticeContext,
@@ -41,6 +42,7 @@ export function FeatureWorkspace({
   const [busy, setBusy] = useState(false);
   const [operation, setOperation] = useState<FeatureNativeRequest['action'] | null>(null);
   const [notice, setNotice] = useState('');
+  const [dock, setDock] = useState<DockPane[]>([]);
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   const [quitFence, setQuitFence] = useState(false);
   const [editor, setEditor] = useState<WorkspaceFeature | 'new' | null>(null);
@@ -138,6 +140,13 @@ export function FeatureWorkspace({
   useEffect(() => {
     if (editor) input.current?.focus();
   }, [editor]);
+
+  useEffect(() => {
+    if (!nativeWorkspace) return;
+    const update = (event: Event) => setDock(dockPanes((event as CustomEvent<unknown>).detail));
+    window.addEventListener('orqst-terminal-dock', update);
+    return () => window.removeEventListener('orqst-terminal-dock', update);
+  }, [nativeWorkspace]);
 
   function openEditor(feature: WorkspaceFeature | 'new') {
     editorVersion.current++;
@@ -473,6 +482,21 @@ export function FeatureWorkspace({
               <span>{t('quitBlocked.retry')}</span>
             </>
           )}
+        </div>
+      )}
+      {nativeWorkspace && dock.length > 0 && (
+        <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
+          <span className="feature-dock-label">{t('features.dockLabel')}</span>
+          {dock.map((pane) => (
+            <button
+              key={pane.slot}
+              type="button"
+              onClick={() => void window.orqstTerminalDock?.restore(pane.slot)}
+              title={t('features.dockRestore', { name: pane.label || `T-${pane.slot + 1}` })}
+            >
+              <span aria-hidden="true">▣</span> {pane.label || `T-${pane.slot + 1}`}
+            </button>
+          ))}
         </div>
       )}
     </section>

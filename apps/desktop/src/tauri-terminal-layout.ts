@@ -235,7 +235,17 @@ export class TauriTerminalLayout {
 
   act(slot: number, raw: unknown): boolean {
     const action = parseTerminalViewAction(raw);
-    if (!action || !this.snapshot().visible.includes(slot)) return false;
+    if (!action) return false;
+    // Dock restore only re-shows an existing hidden pane; it never starts a process.
+    if (action === 'reopen') {
+      if (!this.state.order.includes(slot)) return false;
+      this.state.shown = [slot, ...this.state.shown.filter((index) => index !== slot)];
+      this.state.maximized = null;
+      this.state.active = slot;
+      this.changed(null);
+      return true;
+    }
+    if (!this.snapshot().visible.includes(slot)) return false;
     const state = this.state;
     if (action === 'dashboard') {
       this.presentation++;

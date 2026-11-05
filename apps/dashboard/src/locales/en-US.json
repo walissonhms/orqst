@@ -1108,7 +1108,9 @@
     "creationUnavailable": "Use native preparation to create/review terminals. Assign only the available reviewed slots.",
     "loading": "Loading…",
     "switching": "Switching view…",
-    "terminalCount": "{{count}} terminals"
+    "terminalCount": "{{count}} terminals",
+    "dockLabel": "Minimized",
+    "dockRestore": "Restore {{name}}"
   },
   "tauriCoreUnavailable": {
     "title": "Observer unavailable",
