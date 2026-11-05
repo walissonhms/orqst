@@ -63,6 +63,7 @@ import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
 import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
 import { useFeatureShell } from './use-feature-shell.js';
+import { unassignedTerminalCount } from './feature-counts.js';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
@@ -1079,13 +1080,7 @@ export function App() {
               >
                 <Layers3 size={16} />
                 <span>{t('features.unassigned')}</span>
-                <small>
-                  {featureShell.snapshot.slots.length -
-                    featureShell.snapshot.features.reduce(
-                      (total, feature) => total + feature.terminalIds.length,
-                      0,
-                    )}
-                </small>
+                <small>{unassignedTerminalCount(featureShell.snapshot)}</small>
               </button>
             </nav>
           </>

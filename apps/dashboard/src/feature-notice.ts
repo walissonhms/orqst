@@ -25,8 +25,8 @@ export function featureNoticeContext(
 
 /**
  * A refusal stays visible with its reason until the user acts again or the exact target
- * it was raised against changes. Unrelated generation bumps (layout, focus, another
- * Feature) never clear it.
+ * it was raised against changes. Layout, focus, resize and unrelated generation bumps
+ * never clear it; only the active Feature or that Feature's own revision does.
  */
 export function featureNoticeAfterSnapshot(
   notice: string,
@@ -34,7 +34,6 @@ export function featureNoticeAfterSnapshot(
   incoming: FeatureNativeSnapshot,
 ) {
   if (incoming.activeFeatureId !== context.featureId) return '';
-  if (incoming.view.revision !== context.viewRevision) return '';
   if (featureRevision(incoming, context.featureId) !== context.featureRevision) return '';
   return notice;
 }

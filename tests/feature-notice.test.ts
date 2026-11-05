@@ -36,6 +36,14 @@ test('an unrelated generation bump keeps the refusal and its reason', () => {
   assert.equal(featureNoticeAfterSnapshot('stale', raised, incoming), 'stale');
 });
 
+test('a view-only bump keeps the refusal because the target did not change', () => {
+  const incoming = snapshot('auth', 9, [
+    { featureId: 'auth', revision: 2 },
+    { featureId: 'dash', revision: 1 },
+  ]);
+  assert.equal(featureNoticeAfterSnapshot('denied', raised, incoming), 'denied');
+});
+
 test('the refused target changing clears the refusal', () => {
   const other = snapshot('dash', 4, [
     { featureId: 'auth', revision: 2 },
@@ -45,11 +53,6 @@ test('the refused target changing clears the refusal', () => {
 });
 
 test('the same target actually changing clears the refusal', () => {
-  const view = snapshot('auth', 5, [
-    { featureId: 'auth', revision: 2 },
-    { featureId: 'dash', revision: 1 },
-  ]);
-  assert.equal(featureNoticeAfterSnapshot('denied', raised, view), '');
   const feature = snapshot('auth', 4, [
     { featureId: 'auth', revision: 3 },
     { featureId: 'dash', revision: 1 },
