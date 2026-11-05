@@ -1,5 +1,12 @@
 # ORQST
 
+## Final cross-boot source integration — 2026-11-04
+
+The reviewed physical-difference recovery and pre-commit generation pin are
+integrated. All 295 focused cases and full lint/types passed in the integrating
+tree. The isolated package records its own build evidence; native use remains
+Root 676 and human acceptance. See [delivery and operator boundaries](docs/development/offline-cross-boot-delivery.md).
+
 ## Offline approval clock correction — source only — 2026-11-04
 
 Complete offline review now precedes fresh, one-use proof issuance. Native consent

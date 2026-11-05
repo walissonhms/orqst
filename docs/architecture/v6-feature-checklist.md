@@ -577,3 +577,12 @@ No real-state use, native UI, build or provider acceptance is claimed here.
       second device generation is refused before approval and marker rename.
 - [ ] Owner acceptance of the changed administrative meaning and native review.
 - [ ] Real-state recovery and CLI → model → Open acceptance; not performed here.
+
+## Cross-boot final source delivery — 2026-11-04
+
+- [x] Fast-forward the reviewed 0622fca → 7ae5d18 chain; preserve original branches.
+- [x] Rerun 295 focused synthetic cases and full lint/typecheck in the integrating tree.
+- [x] Document the published-freeze gate, isolated package and same-boot two-phase operation.
+- [ ] Native acceptance and actual administrative effects: Root 676 and human only.
+
+See [delivery boundaries and actual evidence locations](../development/offline-cross-boot-delivery.md).
