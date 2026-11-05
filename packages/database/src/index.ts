@@ -26,6 +26,7 @@ import { stableId } from '@orqst/shared';
 import { readSessionMetrics } from './live-metrics.js';
 import { readSessionModelHistory } from './model-history.js';
 import { openFeatures } from './features.js';
+import { openFeaturePermissions } from './feature-permissions.js';
 import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
@@ -217,6 +218,10 @@ export class Store {
   /** Opt-in metadata only; never called by observer startup or exposed over HTTP. */
   features() {
     return openFeatures(this.db, (action) => this.transaction(action));
+  }
+
+  featurePermissions() {
+    return openFeaturePermissions(this.db, (action) => this.transaction(action));
   }
 
   terminalTeams(featureId?: string) {
