@@ -1,5 +1,128 @@
 # Electron retirement — ORQST
 
+## Non-removal preparation — 2026-11-05
+
+This increment starts at `5db368b` and prepares test/build consumers only. No
+Electron adapter, dependency, command, CI step or native resource is removed.
+`apps/desktop` remains a required shared workspace. Native acceptance, Quit,
+WebKit policy, providers, UI and Rust are outside this increment.
+
+### Mixed-test separation
+
+The same 70 executed cases remain: 48 now run in Electron-neutral files and 22
+remain in the seven original adapter files. A TypeScript AST comparison against
+`5db368b` found the same 57 test declarations (loops expand to 70 cases), with
+identical test bodies/assertions. Only imports and fixture placement changed.
+
+| Original test file                      | Neutral destination and preserved assertions                                                                                                                                                                                                                                                     | Cases moved / retained               |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `tests/desktop-artifacts.test.ts`       | `tests/artifact-writers.test.ts`: extraction identity/JSON/byte bounds, original/draft bytes, overwrite/cancel, symlink/hardlink/mode/size checks, target/parent replacement, O_EXCL, saved verification, grant revocation/replay and sanitized open failure                                     | 11 / 1 sender case                   |
+| `tests/managed-terminal-qa.test.ts`     | `tests/managed-terminal-core-qa.test.ts`: profile admission, SQLite exclusive ownership, duplicate/overlapping manifests and pair admission/retirement including capacity rejection                                                                                                              | 5 / 3 IPC cases                      |
+| `tests/terminal-native-broker.test.ts`  | `tests/terminal-broker.test.ts`: signed broker/grants, cancellation, busy/replay, input sequencing, blur/detach/suspension, uncertain shutdown, immutable Open consent/deadlines and focus loss. The unchanged synthetic supervisor fixture is shared through `tests/helpers/terminal-broker.ts` | 30 / 3 sender/dialog/lifecycle cases |
+| `tests/terminal-runtime.test.ts`        | `tests/terminal-client-policy.test.ts`: client activation, request/reply validation, no queue, bounded output and exact document/network/CSP policy                                                                                                                                              | 2 / 4 runtime cases                  |
+| `tests/terminal-panels-runtime.test.ts` | No extraction: the complete case exercises Electron parent/frame sender, focus and lifecycle routing                                                                                                                                                                                             | 0 / 1                                |
+| `tests/terminal-panels.test.ts`         | No extraction: owned handles, layout persistence and failure assertions are coupled to `TerminalPanels` and mocked Electron `WebContentsView`                                                                                                                                                    | 0 / 8                                |
+| `tests/terminal-router.test.ts`         | No extraction: both cases exercise the Electron IPC/frame router, busy state, blur, navigation and disposal                                                                                                                                                                                      | 0 / 2                                |
+
+No panel/router case was weakened or deleted to make it neutral. The neutral
+TypeScript roots plus the new build helper compile with Electron resolution
+denied: zero Electron resolution attempts and zero diagnostics. The remaining
+adapter tests still require Electron types. Existing monitor/SQLite/sidecar suites
+are retained; this preparation does not change monitor behavior or claim new
+monitor acceptance.
+
+### Shared build consumers
+
+`scripts/helpers/shared-test-resources.ts` reuses the entries and Node 24/CJS,
+Chromium 156/IIFE settings from `scripts/build-desktop.mjs`. The existing
+`accept-terminal-open-renderer.ts` in-memory esbuild fixture is the local pattern.
+An esbuild resolver rejects Electron instead of externalizing it. Renderers are
+built in memory; hosts and the pinned MIT `node-pty` 1.1.0 backend are staged only
+under each runner's disposable temporary directory. The PTY LICENSE is retained;
+only its copied spawn helper is chmodded. No Cargo, Tauri package builder, bundled
+Node replacement or `dist/` write is required.
+
+| Consumer retained                                            | New source build                                                                                              | Existing behavior retained                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `accept:terminal-reuse` / `scripts/accept-terminal-reuse.ts` | Temporary `managed-terminal-core.cjs`, `managed-terminal-host.cjs`, `orqst-mcp-relay.cjs` and `terminal-pty/` | Existing opt-in, two synthetic PTYs, signed lifecycle and sentinel/receipt assertions; no provider substitution |
+| `accept:managed-agents` / `scripts/accept-managed-agents.ts` | Temporary `codex-structured-host.cjs` and in-memory `managed-agents-client.ts`                                | Existing synthetic executable, structured hosts, task/ownership/retirement and Chromium assertions              |
+| `scripts/accept-terminal-ui.ts`                              | In-memory `managed-terminal-client.ts` and bundled `managed-terminal.css`                                     | Same synthetic facade, real xterm document, locales, layout and screenshots                                     |
+| `tests/browser/managed-agents-open.spec.ts`                  | In-memory `managed-agents-client.ts` for the isolated document case                                           | Same focus-refusal/lifecycle/recovery assertions; the dashboard opener case is unchanged                        |
+
+These four consumers no longer require `build:desktop` or pre-existing
+`apps/desktop/dist`. This does not decouple the root build or CI yet. A temporary
+build-only comparison produced byte-identical four Node bundles, two renderer
+scripts and terminal CSS against the existing desktop build settings; five PTY
+files and copied helper mode were checked. No host was executed by that check.
+
+Reuse review rechecked the separate pinned Anywh tree: architecture, Agent Host
+and runtime docs plus
+[`HostClient` in `hostClient.ts`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/hostClient.ts)
+use reconnecting Unix-socket/process contracts. Tucano's
+[`router.ts`](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f3e69a0948766/src/core/router.ts)
+uses engine/shared agent, connector and language contracts. Neither replaces an
+ORQST fixture bundler or its signed private-host boundary. **Keep existing ORQST**
+entries and tests; no upstream code/dependency/assets are incorporated. Both exact
+trees have Apache-2.0 LICENSE and no tracked NOTICE/COPYING; existing ORQST
+LICENSE/NOTICE are unchanged. Overclock remains a visual reference with no
+verified source reuse grant; this increment has no visual changes.
+
+### Exact remaining removal set and gates
+
+This is a removal plan, not permission to delete before parity. Recheck all
+imports/types/bundle inputs at the removal commit; retain every shared path in
+[Dependency and path closure](#dependency-and-path-closure).
+
+| Future removal/change                                                                                                                                                                                                                                                                      | Required parity before execution                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/desktop/src/main.ts`, `preload.ts`, `artifact-sender.ts`                                                                                                                                                                                                                             | Final-package observer/analytics, file save/overwrite/default editor, clipboard, notification routing/identity, tray, close/background/Dock/single-instance, Core/renderer failure, webview security and receipt-backed Quit accepted                                                                                                                                    |
+| `apps/desktop/src/managed-agents.ts`, `managed-agents-preload.ts`                                                                                                                                                                                                                          | Structured native opening/transport, focus/consent/revocation, task routing, independent ownership/failure and both native Quit gates accepted; shared `managed-agents-{host,core,wire,client,document}.ts` stay                                                                                                                                                         |
+| `apps/desktop/src/managed-terminal.ts`, `terminal-preload.ts`, `terminal-panels.ts`, `terminal-runtime.ts`, `terminal-sender.ts`, `terminal-confirmation.ts`, `terminal-lifecycle.ts`, `terminal-lab.ts`                                                                                   | Native exact source/document/focus, signed Open/start/output/input, paste, blur/reload, resize/hide/restore, N-pane layout, independent failure, stop/terminate and owned-exit receipts accepted; retained adapter QA must have equivalent Tauri coverage                                                                                                                |
+| The 22 retained cases in the seven original adapter test files                                                                                                                                                                                                                             | Port each adapter-specific assertion to equivalent native/adapter coverage first; retain all 48 neutral cases and the shared broker fixture                                                                                                                                                                                                                              |
+| Electron source/preload/package assertions in `tests/desktop-qa.test.ts`                                                                                                                                                                                                                   | Equivalent native security/package tests accepted, then replace only those assertions. Its pure policy cases stay. `desktop-artifacts-qa.test.ts`, `desktop-export-qa.test.ts` and `mention-routing.test.ts` already use shared neutral imports at this base and stay                                                                                                    |
+| `scripts/smoke-desktop.ts`; `scripts/accept-desktop-stdio.ts`; `scripts/accept-managed-terminal.ts`; `scripts/accept-terminal-{native,pair,cycles,gestures,creation,selection,team}.ts`                                                                                                    | Same smoke, private stdio, PTY/native consent, pair, lifecycle cycles, gestures, creation, selection and team scenarios covered and accepted on the final supported Tauri package, including uncertainty/receipt paths                                                                                                                                                   |
+| Root scripts `desktop`, `dev:desktop`, `build:desktop`, `test:desktop`, `accept:managed-terminal`, `accept:terminal-native`, `accept:terminal-pair`, `accept:terminal-cycles`, `accept:terminal-gestures`, `accept:terminal-creation`, `accept:terminal-selection`, `accept:terminal-team` | Their exact launchers above retired only after equivalent native scenarios pass. Keep `accept:terminal-pty`, `accept:terminal-reuse`, `accept:managed-agents`, setup/discovery, Playwright and Tauri commands                                                                                                                                                            |
+| `scripts/build-desktop.mjs`; root `build` tail `&& pnpm build:desktop`; desktop package `main: dist/main.cjs`                                                                                                                                                                              | Shared resource/type closure rechecked; all shared outputs have neutral consumers; Node/browser builds and final Tauri staging/package verified without Electron. Do not make root build unconditionally run Cargo                                                                                                                                                       |
+| `apps/desktop/package.json` `devDependencies.electron` (`45.2.1`) and pnpm orphaned lock closure                                                                                                                                                                                           | All preceding adapter/QA/build consumers closed and final native parity accepted. Remove via pnpm only; retain the workspace and protocol/xterm/i18next/zod/shared dependencies; never remove transitives by name                                                                                                                                                        |
+| `.github/workflows/ci.yml` transitive Electron install/build/type/test dependency                                                                                                                                                                                                          | There is no standalone Electron-only CI step to delete at this base. Keep frozen install, lint, typecheck, test, build, Chromium installation and browser tests; after the preceding changes prove this lane resolves/builds/runs without Electron. Add a separately scoped supported-target native lane with packaging/license/signature prerequisites and no providers |
+
+All items above remain open. The native matrix and ordered checklist below retain
+their broader P0/P1 acceptance gates, including WebKit persistent/saved grants,
+renderer failure, real provider/model/MCP and running-provider Quit. Nothing in
+this preparation accepts these behaviors.
+
+### Preparation checks and checklist
+
+Node `24.22.2`, pnpm `10.34.9`; offline frozen install used `--ignore-scripts` and
+left the lock unchanged. Baseline lint/typecheck and the seven-file suite passed
+(70/70). After extraction and runner changes lint/typecheck passed; the combined
+11-file suite passed 70/70, including a separately verified neutral subset of
+48/48 (a subset, not 118 distinct tests). AST preservation and denied-Electron
+type closure passed. The changed isolated Chromium document test passed 1/1 using
+a temporary config with no web server. Its unchanged dashboard opener case was
+not run: it requires the built dashboard/server, outside this preparation.
+The fixture-only bundle comparison above passed without running hosts.
+
+Intermediate typechecks identified unused moved imports and an inferred union
+in the helper's entry map; those were corrected without changing assertions.
+The first temporary byte comparator rejected Buffer versus Uint8Array types;
+normalizing the comparator to Buffer then verified the actual bytes unchanged.
+These intermediate failures are not hidden by the final passing results.
+
+The complete `pnpm test` remains unrun pending coordinator release. Root/native
+builds, Cargo, full browser suite, the explicit synthetic PTY/agent/UI acceptance
+runners, providers and native app were not run. No native/package acceptance is
+claimed. All `dist/` paths, the running consent-scroll app and its resources,
+Rust, Quit, MCP implementation and UI source are untouched. Disk checks showed
+42 GiB before and 41 GiB after the small disposable build comparison (rounded
+filesystem values); its generated resources were removed.
+
+- [x] **2026-11-05 — prepared:** Preserve all 70 mixed-suite cases; move 48 unchanged shared cases into Electron-neutral files and keep 22 adapter cases.
+- [x] **2026-11-05 — prepared:** Repoint the four approved Node/Chromium consumers to disposable source builds without Electron or desktop dist inputs.
+- [x] **2026-11-05 — verified:** Focused tests, neutral type closure, unchanged bundle bytes, lint and typecheck pass; no native parity is inferred.
+- [ ] **2026-11-05 — open:** Complete the exact adapter/QA/build/dependency/CI removal set only after its corresponding parity gates above.
+- [ ] **2026-11-05 — open:** Release and run the full suite through the coordinator, then perform the separately authorized native/package/provider acceptance needed for final retirement.
+
 ## Current native milestones — 2026-11-05
 
 The [current native record](native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05)
