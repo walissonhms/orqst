@@ -34,6 +34,10 @@ const decisionSchema = z.strictObject({
     version: z.literal(1),
     operationId: z.uuid(),
     previousRecovery: z.uuid().nullable(),
+    previousLock: z
+      .string()
+      .regex(/^release-[0-9]+-[0-9]+-[a-f0-9]{64}(?:-after-[0-9a-f-]{36})?\.lock$/)
+      .nullable(),
     evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
     marker: identitySchema,
     destination: z.string(),
@@ -104,6 +108,7 @@ export function beginKernelRelease(
   assertNoOfflineRecovery(directory);
   const marker = markerIdentity(join(directory, 'active-pair.json'));
   let previousRecovery: string | undefined;
+  let previousLock: string | undefined;
   if (mutation) {
     mutation.validate();
     for (let depth = 0; depth < 128; depth++) {
@@ -118,6 +123,7 @@ export function beginKernelRelease(
       if (previous.previousRecovery !== previousRecovery || !equal(previous.marker, marker))
         throw new Error('Recovery predecessor mismatch');
       previousRecovery = previous.id;
+      previousLock = candidate;
       if (depth === 127) throw new Error('Recovery predecessor budget');
     }
   }
@@ -133,7 +139,7 @@ export function beginKernelRelease(
   writeRecoveryFile(join(directory, name), JSON.stringify(lock) + '\n', sync);
   if (!equal(markerIdentity(join(directory, 'active-pair.json')), marker))
     throw new Error('Release marker changed after locking');
-  return { lock, name };
+  return { lock, name, ...(previousLock ? { previousLock } : {}) };
 }
 
 /** Recheck the exact reviewed source immediately before calling the native exclusive rename. */
@@ -150,20 +156,34 @@ export function reconcileKernelRelease(directory: string, name: string) {
   const lock = readLock(directory, name);
   const completed = join(directory, `release-decision-${lock.id}.json`);
   if (maybeIdentity(completed)) {
-    const decision = decisionSchema.parse(
-      JSON.parse(Buffer.from(readRecoveryFile(completed).bytes, 'base64').toString('utf8')),
-    );
-    if (
-      decision.intent.operationId !== lock.id ||
-      decision.intent.previousRecovery !== (lock.previousRecovery ?? null) ||
-      !equal(decision.intent.marker, lock.marker) ||
-      decision.intent.destination !== lock.destination ||
-      decision.archivedMarker !== lock.destination ||
-      terminalDigest(JSON.stringify(decision.intent)) !== decision.intentDigest ||
-      !equal(maybeIdentity(join(directory, lock.destination)), lock.marker)
-    )
-      throw new Error('Release decision binding changed');
-    return { status: 'released' as const, lock };
+    const bytes = Buffer.from(readRecoveryFile(completed).bytes, 'base64').toString('utf8');
+    let decision: z.infer<typeof decisionSchema> | undefined;
+    try {
+      decision = decisionSchema.parse(JSON.parse(bytes));
+    } catch (error) {
+      if (!(error instanceof SyntaxError) && !(error instanceof z.ZodError)) throw error;
+      // A partial exclusive decision is preserved. The inode-bound archive is
+      // reconciled below without treating these incomplete bytes as authority.
+    }
+    if (decision) {
+      const predecessor = decision.intent.previousLock
+        ? readLock(directory, decision.intent.previousLock)
+        : null;
+      if (
+        decision.intent.operationId !== lock.id ||
+        decision.intent.previousRecovery !== (lock.previousRecovery ?? null) ||
+        (decision.intent.previousLock === null) !== (lock.previousRecovery === undefined) ||
+        (predecessor !== null &&
+          (predecessor.id !== lock.previousRecovery || !equal(predecessor.marker, lock.marker))) ||
+        !equal(decision.intent.marker, lock.marker) ||
+        decision.intent.destination !== lock.destination ||
+        decision.archivedMarker !== lock.destination ||
+        terminalDigest(JSON.stringify(decision.intent)) !== decision.intentDigest ||
+        !equal(maybeIdentity(join(directory, lock.destination)), lock.marker)
+      )
+        throw new Error('Release decision binding changed');
+      return { status: 'released' as const, lock };
+    }
   }
   const current = maybeIdentity(join(directory, 'active-pair.json'));
   if (equal(current, lock.marker)) return { status: 'review_required' as const, lock };
@@ -177,17 +197,19 @@ export function reconcileKernelRelease(directory: string, name: string) {
     destination: lock.destination,
     limitation: 'descendants_not_validated',
   });
-  const path = observationPath(directory, lock.id);
-  const existing = maybeIdentity(path);
-  if (existing) {
+  let path = observationPath(directory, lock.id);
+  for (let depth = 0; depth < 128; depth++) {
+    const existing = maybeIdentity(path);
+    if (!existing) {
+      syncRecoveryDirectory(directory);
+      writeRecoveryFile(path, JSON.stringify(observation) + '\n');
+      return { status, lock };
+    }
     const bytes = Buffer.from(readRecoveryFile(path).bytes, 'base64').toString('utf8');
-    if (bytes !== JSON.stringify(observation) + '\n')
-      throw new Error('Release observation changed');
-  } else {
-    syncRecoveryDirectory(directory);
-    writeRecoveryFile(path, JSON.stringify(observation) + '\n');
+    if (bytes === JSON.stringify(observation) + '\n') return { status, lock };
+    path = join(directory, `release-observation-${lock.id}-after-${existing.sha256}.json`);
   }
-  return { status, lock };
+  throw new Error('Release observation chain budget');
 }
 
 /** Bounded startup audit. Invalid or unreadable locks refuse the audit rather than being skipped. */

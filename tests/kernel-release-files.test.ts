@@ -67,6 +67,7 @@ test('a fresh fenced recovery preserves and references the previous marker lock'
     const original = beginKernelRelease(f.directory);
     const successor = beginKernelRelease(f.directory, { validate: () => {} });
     assert.equal(successor.lock.previousRecovery, original.lock.id);
+    assert.equal(successor.previousLock, original.name);
     assert.notEqual(successor.name, original.name);
     assert.deepEqual(verifyKernelReleaseSource(f.directory, original.name), original.lock);
     assert.deepEqual(verifyKernelReleaseSource(f.directory, successor.name), successor.lock);
@@ -106,6 +107,39 @@ test('missing original and archive records uncertainty without creating a marker
     );
     assert.equal(observation.status, 'uncertain');
     assert.throws(() => readFileSync(f.marker));
+  } finally {
+    f.close();
+  }
+});
+
+test('a partial decision is preserved while its exact archived marker is reconciled', () => {
+  const f = fixture();
+  try {
+    const { name, lock } = beginKernelRelease(f.directory);
+    renameSync(f.marker, join(f.directory, lock.destination));
+    writeFileSync(join(f.directory, `release-decision-${lock.id}.json`), '{', {
+      flag: 'wx',
+      mode: 0o600,
+    });
+    writeFileSync(f.marker, 'SYNTHETIC-NEW-OWNER\n', { flag: 'wx', mode: 0o600 });
+    assert.equal(reconcileKernelRelease(f.directory, name).status, 'released_durability_uncertain');
+    assert.equal(readFileSync(join(f.directory, `release-decision-${lock.id}.json`), 'utf8'), '{');
+    assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-NEW-OWNER\n');
+  } finally {
+    f.close();
+  }
+});
+
+test('a partial observation is preserved and followed by fresh audit evidence', () => {
+  const f = fixture();
+  try {
+    const { name, lock } = beginKernelRelease(f.directory);
+    renameSync(f.marker, join(f.directory, lock.destination));
+    const partial = join(f.directory, `release-observation-${lock.id}.json`);
+    writeFileSync(partial, '{', { flag: 'wx', mode: 0o600 });
+    assert.equal(reconcileKernelRelease(f.directory, name).status, 'released_durability_uncertain');
+    assert.equal(readFileSync(partial, 'utf8'), '{');
+    assert.equal(reconcileKernelRelease(f.directory, name).status, 'released_durability_uncertain');
   } finally {
     f.close();
   }

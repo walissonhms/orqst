@@ -205,7 +205,7 @@ fn run(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         format!(
                             "{} {}",
                             t("tauriDesktop.kernelRecoveryCaution"),
-                            intent["previousRecovery"]
+                            intent["previousLock"]
                         ),
                         t("tauriDesktop.kernelRecoveryCancel"),
                         t("tauriDesktop.kernelRecoveryRelease"),

@@ -39,6 +39,7 @@ export interface KernelReleaseIntent {
   readonly version: 1;
   readonly operationId: string;
   readonly previousRecovery: string | null;
+  readonly previousLock: string | null;
   readonly evidenceDigest: string;
   readonly marker: Readonly<KernelReleaseLock['marker']>;
   readonly destination: string;
@@ -68,7 +69,7 @@ export async function releaseKernelReservation(
     executor.pid,
   );
   const first = snapshotKernelReservation(directory, firstScratch);
-  const { name, lock } = beginKernelRelease(directory, mutation);
+  const { name, lock, previousLock } = beginKernelRelease(directory, mutation);
   if (
     first.snapshot.files[0]!.identity[0] !== lock.marker.dev ||
     first.snapshot.files[0]!.identity[1] !== lock.marker.inode ||
@@ -85,6 +86,7 @@ export async function releaseKernelReservation(
     version: 1,
     operationId: lock.id,
     previousRecovery: lock.previousRecovery ?? null,
+    previousLock: previousLock ?? null,
     evidenceDigest: first.evidenceDigest,
     marker: Object.freeze({ ...lock.marker }),
     destination: lock.destination,
