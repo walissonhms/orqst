@@ -1,5 +1,11 @@
 # Offline administrative reservation recovery
 
+The 2026-11-05 [kernel reservation review](kernel-reservation-recovery.md) is a
+separate same-boot path. Offline finalization now holds the same durable admission
+mutation lock before verifying and renaming a present original marker. Cleanup
+after an already observed rename never mutates a future marker. Legacy markers
+without kernel identities remain subject to this existing flow's eligibility.
+
 This is a private Core module, not an HTTP/WebSocket, renderer command, runtime
 RPC, recovery CLI or production menu. Source entry:
 `packages/core/src/terminal/offline-recovery.ts`. Native integration must first

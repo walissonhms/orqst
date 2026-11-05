@@ -1,5 +1,13 @@
 # Changelog
 
+## Scoped kernel reservation review — 2026-11-05
+
+- Bind new managed PTY receipts to kernel identities and add a fail-closed private
+  macOS review with one native confirmation, durable mutation exclusion and
+  preserved marker/decision evidence. Session escapees remain unvalidated.
+- Preserve the existing legacy offline path and the separate current-host timeout
+  signal policy. Native UI, packaging and provider acceptance remain unverified.
+
 ## Human-verified OpenCode interaction documentation — 2026-11-05
 
 - Record user/Root-confirmed native OpenCode startup, manual keyboard authorization,

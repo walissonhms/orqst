@@ -1,5 +1,13 @@
 # Data model
 
+## Kernel reservation evidence — 2026-11-05
+
+Private append-only kernel receipts bind the owner and dispatch to Core, PTY host
+and session-leader identities. Separate retained lock, marker and decision records
+describe scoped original-session absence and `descendants_not_validated`; they
+do not modify SQLite attempts or create exit codes. See [the crash matrix and
+legacy limits](../api/kernel-reservation-recovery.md).
+
 ## Offline reservation artifacts — 2026-11-04
 
 No SQLite migration or journal-owner acquisition is added. Prepared attempts and

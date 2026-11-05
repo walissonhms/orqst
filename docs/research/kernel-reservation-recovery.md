@@ -2,6 +2,9 @@
 
 Research baseline: 2026-11-05. This note records design research, not an implemented
 recovery mechanism or acceptance result. No reference source is incorporated.
+The later source implementation and its limits are documented separately in the
+[kernel reservation contract](../api/kernel-reservation-recovery.md). The inspected
+macOS SDK did not expose `PROC_PIDUNIQIDENTIFIERINFO`; no such identifier is claimed.
 
 ## Anywh
 

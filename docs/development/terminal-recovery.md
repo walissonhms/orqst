@@ -1,5 +1,9 @@
 # Experimental Terminal recovery — 2026-11-03
 
+The later 2026-11-05 owner decision adds a separate scoped
+[macOS kernel reservation review](../api/kernel-reservation-recovery.md). It
+does not turn this historical journal recovery into exit or descendant evidence.
+
 Current update: future structured hosts add [durable lifecycle receipts](codex-lifecycle-receipts.md)
 and private journal feature schema 2 for signal-only exits. Receipt reading never
 changes lost reservations. The historical schema-1 details below predate that update.

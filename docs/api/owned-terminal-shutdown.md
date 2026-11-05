@@ -1,5 +1,9 @@
 # Native owned terminal shutdown
 
+The 2026-11-05 [kernel reservation review](kernel-reservation-recovery.md) is a
+separate cross-launch path; the same-Core shutdown contract below remains distinct.
+Its normal marker retirement now also holds the durable admission mutation lock.
+
 This private API follows the [single CLI policy](single-cli-authorization.md) and the
 [dated owner decision / pinned source review](../research/owned-terminal-shutdown.md).
 It is absent from renderer `terminalNativeRequestSchema` and observer HTTP/WS APIs.

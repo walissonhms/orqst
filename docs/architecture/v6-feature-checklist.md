@@ -1,5 +1,10 @@
 # V6 feature delivery checklist — 2026-11-04
 
+The later [kernel reservation review](../api/kernel-reservation-recovery.md) is
+implemented in source with disposable tests. It does not change the historical
+human acceptance below; native UI, package signing and real-provider checks remain
+open for that separate recovery path.
+
 ## Current human-verified milestones — 2026-11-05
 
 These narrow milestones supersede earlier pending wording only for the exact

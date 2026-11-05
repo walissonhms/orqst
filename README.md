@@ -1,5 +1,10 @@
 # ORQST
 
+The macOS source includes a private [kernel reservation review](docs/api/kernel-reservation-recovery.md)
+for owned sessions, with one native confirmation and explicit unvalidated descendants.
+Its disposable tests do not establish packaged/native UI or provider acceptance; legacy
+reservations without kernel identities remain in the existing offline flow.
+
 ## Human-verified native progress — 2026-11-05
 
 The earlier administrative recovery is finalized, and the previous owned

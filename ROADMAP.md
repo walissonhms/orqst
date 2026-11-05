@@ -1,5 +1,9 @@
 # ORQST roadmap
 
+The owned macOS kernel-reservation review is implemented in source and covered by
+disposable tests. Native confirmation, packaged helper signing and real-provider
+acceptance remain separate gates. See [the scoped contract](docs/api/kernel-reservation-recovery.md).
+
 ## Current native progress and next gates — 2026-11-05
 
 Completed: human-authorized administrative recovery finalization; separate native

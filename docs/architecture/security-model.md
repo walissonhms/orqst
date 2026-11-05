@@ -1,5 +1,18 @@
 # Security model
 
+## Scoped kernel reservation release — owner decision 2026-11-05
+
+The owner authorized a macOS owned-session release only after recorded kernel
+identities, two complete consistent session inventories, a durable mutual mutation
+fence and one fresh native confirmation. The original marker and all lifecycle
+evidence are preserved. A PID, SID or PGID alone, partial visibility, failed query
+or confirmation alone never establishes absence or authorizes a signal. Escaped
+descendants are not validated and the scoped decision records that limitation;
+no exit code or completion is inferred. Legacy reservations without identities use
+the pre-existing offline flow, subject to its own eligibility checks. See the
+[private recovery contract](../api/kernel-reservation-recovery.md). Native UI,
+signing, packaging and real-provider acceptance remain separate from test fixtures.
+
 ## Renderer unavailable presentation fence — 2026-11-05
 
 Renderer termination sets an app-lifetime unavailable latch and invalidates the

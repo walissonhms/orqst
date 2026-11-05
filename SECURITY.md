@@ -1,5 +1,17 @@
 # Security policy
 
+## Scoped kernel reservation release — owner decision 2026-11-05
+
+An owned managed reservation may be released across launches only after the
+documented macOS kernel identity, full-session checks, durable mutation fence and
+one fresh native owner confirmation. A PID alone, partial inventory, failed query
+or confirmation alone does not establish absence or authorize signalling. The
+original marker and lifecycle evidence are preserved. Session escapees are not
+validated; the decision records this limitation without inventing an exit. Legacy
+reservations without identities remain in the existing offline flow and may be
+ineligible there. See [the private contract](docs/api/kernel-reservation-recovery.md).
+Disposable tests are not native UI, packaging or provider acceptance.
+
 ## Renderer unavailable presentation fence — 2026-11-05
 
 The native renderer-termination callback latches child presentation unavailable
