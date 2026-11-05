@@ -472,9 +472,9 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 });
             }
         }
-        WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
-            revoke(window.app_handle(), true)
-        }
+        // Hiding the surface is not destruction: revoke temporarily so reopening works.
+        WindowEvent::CloseRequested { .. } => revoke(window.app_handle(), false),
+        WindowEvent::Destroyed => revoke(window.app_handle(), true),
         _ => {}
     }
 }

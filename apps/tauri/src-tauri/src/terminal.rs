@@ -523,6 +523,20 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
 }
 
 #[cfg(test)]
+mod presentation_phase_tests {
+    use crate::host_phase::Phase;
+
+    #[test]
+    fn a_shutdown_or_lost_host_blocks_presentation() {
+        assert!(!super::phase_blocks_presentation(Phase::NotStarted));
+        assert!(!super::phase_blocks_presentation(Phase::Active));
+        assert!(super::phase_blocks_presentation(Phase::ShutdownInFlight));
+        assert!(super::phase_blocks_presentation(Phase::LostUnknown));
+        assert!(!super::phase_blocks_presentation(Phase::ExitEvidenceConfirmed));
+    }
+}
+
+#[cfg(test)]
 mod quit_exit_tests {
     #[test]
     fn only_the_reviewed_quit_flow_exits_the_app() {
@@ -2571,7 +2585,17 @@ pub(crate) fn presentation_blocked(app: &tauri::AppHandle) -> bool {
         .unwrap()
         .as_ref()
         .is_some_and(|r| r.confirming_quit || r.exit_authorized);
-    terminal || crate::agents::exit_pending(app)
+    terminal
+        || crate::agents::exit_pending(app)
+        || phase_blocks_presentation(crate::host_phase::phase())
+}
+
+/// A shutdown fence or a lost host blocks presentation; only revocation and reads remain.
+pub(crate) fn phase_blocks_presentation(phase: crate::host_phase::Phase) -> bool {
+    matches!(
+        phase,
+        crate::host_phase::Phase::ShutdownInFlight | crate::host_phase::Phase::LostUnknown
+    )
 }
 
 /// Closing the application requires explicit consent to disconnect owned tasks.
