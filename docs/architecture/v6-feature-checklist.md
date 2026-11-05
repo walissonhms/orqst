@@ -1053,3 +1053,47 @@ No app/provider, native UI acceptance, resource build or package was run.
 - [ ] Reset to the Feature default is open: the Core has no policy removal and
       an empty save revokes.
 - [ ] Native WebKit acceptance of the matrix and the review sheet.
+
+## Feature permission matrix corrections — 2026-11-05 (source state)
+
+Implemented in code and synthetic tests (native acceptance pending):
+
+- [x] Dynamic capability exclusive to the chrome plus the real Tauri ACL resolver
+      test, before/after and negatives for main, terminals and agents, with the
+      exact URL gate (`2b2b72f`).
+- [x] Native first responder, document and epoch; the sheet is identified by an
+      internal pointer never leaked to diagnostics; observers invalidate the
+      review on focus loss; `confirm_webview` checks AppKit and context on the main
+      thread (`533a4ea`, `1833e29`).
+- [x] Private envelope separate from the generic allowlist, strict correlation,
+      document and generation, strict replies including permission state and
+      members; RAII for requests and the review reservation with a real timeout and
+      drop test (`392d3e7`, `ee7c1b7`, `533a4ea`, `1cef9a3`).
+- [x] Immutable plan binds the natively captured Feature, document, epoch,
+      generation, snapshot, configuration and revisions; the review is reserved,
+      checked on the main thread before the sheet and again at send; the Core
+      compares policy, Feature and view revisions transactionally (`533a4ea`,
+      `5b2ab80`; capability `2b2b72f`).
+- [x] Diff includes stable IDs/labels, the exact configuration, pairs and
+      operations implicitly denied, including neutral → empty allowlist; schema,
+      membership and cycles are validated in Rust; the plan SHA-256 is validated by
+      the host and recorded in the audit event (`64ca510`, `3b4143e`, `9a4bf61`).
+- [x] Conflicting CAS is typed in the database and transported as a confirmed
+      conflict; post-commit update failure and uncertain transport become unknown
+      with no retry; tests use disposable SQLite and force a post-commit failure
+      (`7b5a923`, `ef0cba5`, `5b2ab80`).
+- [x] Rust derives `native-{epoch}` and sends it in the private envelope; the host
+      validates it against its epoch; the Core records the actor and the renderer
+      never supplies it (`e75f5ab`).
+- [x] Per-Feature UI isolation with an A→B→A late-response test (`de370c2`).
+- [x] Proposal rejection is treated as unknown: warning, revision invalidated and
+      Propose disabled until an explicit fresh read, no automatic resend
+      (`46c6750`).
+- [x] Explicit Refresh on the same native read path, blocked during the read, no
+      automatic retry; denied → Refresh → valid read → Propose enabled
+      (`3c86953`).
+- [ ] Reset to the Feature default remains open: the Core has no policy removal and
+      an empty save revokes.
+- [ ] Native AppKit/WebKit acceptance of the matrix, the review sheet and the real
+      ACL/transport round-trip.
+- [ ] Cross-Feature operations (pane-789) are not part of this increment.
