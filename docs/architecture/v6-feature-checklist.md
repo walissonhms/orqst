@@ -1,5 +1,31 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Current human-verified milestones — 2026-11-05
+
+These narrow milestones supersede earlier pending wording only for the exact
+workflows described in the [current native record](../development/native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05).
+The running package remains frozen at `7226686`; this is a later docs-only delivery.
+
+- [x] Finalize the earlier signed administrative recovery; preserve the original
+      marker byte-identically in its archive and remove the old recovery controls.
+      Administrative completion does not prove process/provider exit.
+- [x] Natively retire the previous package's owned undispatched selection (two
+      prepared attempts), verify archive/marker state and human normal old-app Quit.
+- [x] Normally open the consent-scroll package; observe real Codex initialization
+      and xterm rendering in the user's screenshot, with connected output.
+- [x] Observe use of the native authorization source to reach that TUI.
+- [ ] Accept all target authorization viewports and complete native visual geometry.
+- [x] Accept subsequent manual native keyboard activation, human message sending
+      and actual Codex CLI replies in Tauri; model remains TUI self-description.
+- [ ] Resolve automatic composed-Open uncertainty (historical despite later manual
+      success), the separate Feature/selection sidebar refusal and unverified CLI warning.
+- [ ] Verify effective backend model, OpenCode, mixed MCP communication,
+      running-provider Quit/Stop/safe exit and retirement after dispatch; finish
+      parity before Electron removal. No keyboard-revocation acceptance is inferred.
+
+No full V6 workflow or master criterion becomes accepted from these observations.
+Earlier dated entries retain their original delivery scope.
+
 ## Offline administrative recovery source — 2026-11-04
 
 - [x] Implement bounded full capture, native boot source and prepared-only logical
@@ -206,7 +232,7 @@ See [the pinned source review and reuse decisions](../research/opencode-executab
 | V6 visual Studio                        | Approved reference preserved/inspected; runtime still has earlier preparation/terminal chrome | Compact hierarchy/sidebar/breadcrumb, dense docked/floating surface, menus, individual configuration |
 | Context switching                       | Hide preserves retained documents/processes within a selection                                | Workspace/Feature switching with independent layout and no process recreation                        |
 | Metrics and communication motion        | Existing observed metrics; no V6 Feature filter                                               | Scope by Feature; animate actual Core events; unknown usage stays unavailable                        |
-| Native acceptance                       | Blocked; diagnostics improved                                                                 | Explain `cgWindowNotFound`, verify focus after consent, actual WebKit/input/dialog/lifecycle flow    |
+| Native acceptance                       | Partial; Codex manual input/replies verified on `7226686`; automatic Open uncertain           | Explain `cgWindowNotFound`, verify focus after consent, actual WebKit/input/dialog/lifecycle flow    |
 | Real provider communication             | Blocked by preserved quarantine and outstanding native reviews                                | Explicit capacity decision and verified Codex↔OpenCode task/result                                   |
 
 ## Integrated foundation and chrome — 2026-11-04

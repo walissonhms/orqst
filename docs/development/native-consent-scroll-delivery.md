@@ -1,5 +1,60 @@
 # Native terminal consent review and delivery — 2026-11-04
 
+## Human-verified milestones — 2026-11-05
+
+Root 676 reports the following completed human/native observations. This update
+records their scope without copying private receipts, captured content or images.
+The normally opened `dist/native-preview-consent-scroll/` package is frozen at
+implementation source [`7226686db6c41230136bfd0d62be09d60d41e471`](https://github.com/walissonhms/orqst/tree/7226686db6c41230136bfd0d62be09d60d41e471).
+This later documentation commit does not rebuild or update that running package.
+Earlier dated source/package boundaries below retain their original scope.
+
+- [x] Complete the earlier human-authorized administrative recovery: signed
+      capture, `release_prepared` and finalization. Root read completion
+      `status=finalized`, `cleanup=old_controls_removed`; the original marker was
+      archived byte-identically and the recovery gate/lock removed. This proves
+      administrative completion, without proving process exit or provider exit.
+- [x] Retire the previous package's separate owned, undispatched selection through
+      native **Retire exited terminal selection**. Core evidence showed two
+      prepared attempts; Root verified archive present and active marker absent
+      before the human quit that old app normally. This is not Quit acceptance
+      with a running provider.
+- [x] Normally open the frozen consent-scroll package and observe real Codex
+      initialization/rendering. The user's screenshot shows OpenAI Codex v0.162.1
+      in xterm, project working directory AgentReport, CLI-displayed GPT-6.1 Terra
+      medium, Process running, connected output and Ask Codex. These are visible
+      CLI/UI observations; that initial screenshot alone did not verify a reply
+      or the backend's effective model. Subsequent manual replies are recorded
+      below. The user's raw screenshot is not versioned.
+- [x] Observe use of the new authorization source through successful TUI opening.
+- [ ] Accept authorization geometry/button visibility for all target viewports;
+      successful opening alone does not establish complete visual acceptance.
+- [x] Accept the subsequent manual native keyboard/input/output interaction:
+      the human sent messages and the Codex CLI returned its own replies, with
+      completed-turn indicators and Process running in Tauri. This advances beyond
+      startup/rendering to real human/CLI interaction. No raw messages or screenshot
+      are incorporated here. GPT-6.1 Terra medium remains the TUI's self-description,
+      not authenticated backend/model or session-usage evidence.
+- [ ] Resolve the automatic composed-Open uncertainty. Earlier Root diagnostics
+      reported `core_startup=ready` and `opening=ready`, but
+      `cli_opening=uncertain` with possible effects and input disabled. Later manual
+      input succeeded; it does not retrospectively resolve that automatic status.
+      The latest screenshot again shows input disabled after the human returned
+      to another app; no causal or keyboard-revocation acceptance is inferred.
+- [ ] Resolve the separate Feature/selection refusal still shown in the sidebar.
+      It does not negate the observed CLI replies. One CLI warning is visible;
+      its cause has not been verified.
+- [ ] Verify the effective backend model, OpenCode, real Codex↔OpenCode
+      MCP/task/result communication, running-provider Quit/Stop/safe exit,
+      retirement after dispatched execution, remaining native/platform parity and
+      Electron retirement. Preserve the currently running app/Core/provider.
+
+This delivery changes existing documentation only. Targeted Markdown formatting,
+local links and diff/scope checks are its verification gates. Full lint,
+typecheck, Node tests (including the earlier 1,168-case suite), Cargo, builds,
+resource staging and native/provider acceptance are not rerun. No runtime,
+AppData/session/auth/model-source content or private evidence is read for it.
+
 Independent code review accepts implementation
 `5d8e828f805b117ef57650c60ca3e8daeffc1c1b` against baseline
 `12dab3b8ba03e86c6ea97c51fef4fa960ac2f2f4`. The delivery additionally supplies

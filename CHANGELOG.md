@@ -1,5 +1,23 @@
 # Changelog
 
+## Human-verified native milestones documentation — 2026-11-05
+
+- Record finalized human-authorized administrative recovery with byte-identical
+  marker archive and old-control removal; no process/provider exit claim.
+- Record separate native retirement of the previous owned undispatched selection
+  (two prepared attempts), archive/marker verification and human normal old-app Quit.
+- Record normal opening and real Codex initialization/xterm rendering observed in
+  the user's screenshot of the consent-scroll package from source `7226686`.
+- Record subsequent manual native keyboard activation, human message sending and
+  actual Codex CLI replies in Tauri. The displayed model remains TUI self-description.
+- Keep earlier automatic composed-Open uncertainty historical despite later manual
+  success. The separate Feature/selection sidebar refusal and unverified CLI warning
+  remain open. Effective backend model, OpenCode, mixed MCP communication,
+  running-provider Quit/Stop/safe exit, retirement after dispatch, all-viewport
+  visual parity and Electron removal remain pending. See [current scope](docs/development/native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05).
+- Documentation only: no running-package update, private evidence incorporation,
+  new tests, runtime action or claim of future acceptance.
+
 ## Native authorization viewport correction — 2026-11-04
 
 Move complete terminal authorization detail into a bounded native plain-text scroll view. Preserve default/Escape cancellation, explicit authorization and existing native authority checks; no package or native visual acceptance is included.

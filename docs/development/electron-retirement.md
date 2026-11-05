@@ -1,5 +1,35 @@
 # Electron retirement — ORQST
 
+## Current native milestones — 2026-11-05
+
+The [current native record](native-consent-scroll-delivery.md#human-verified-milestones--2026-11-05)
+adds human-verified administrative recovery finalization, retirement of the old
+owned undispatched selection and normal old-app Quit, plus real Codex
+initialization/xterm rendering in the normally opened consent-scroll package.
+Its implementation remains `7226686`; the later docs-only HEAD changes no package.
+No process/provider exit is inferred from recovery, and old-app Quit does not
+accept Quit while a provider is running.
+
+- [x] Complete signed capture/release/finalize, byte-identical marker archive and
+      removal of the old recovery controls, as verified by Root.
+- [x] Retire the previous selection natively with two prepared attempts; verify
+      archive present/active marker absent before human old-app Quit.
+- [x] Observe real Codex startup/rendering and use of the new native authorization
+      source in the exact normally opened consent-scroll package.
+- [ ] Accept complete authorization geometry across target viewports.
+- [x] Accept later manual native keyboard activation, human message sending and
+      actual Codex CLI replies in Tauri; the displayed model is self-description.
+- [ ] Resolve automatic composed-Open uncertainty retained from the earlier
+      diagnostic, separate Feature/selection sidebar refusal and unverified CLI warning.
+- [ ] Verify effective backend model, OpenCode, real mixed MCP communication,
+      running-provider Quit/Stop/safe exit, retirement after dispatch and remaining
+      native parity. Later manual success does not accept automatic Open or keyboard revocation.
+- [ ] Retire Electron only after the ordered parity/removal gates below are met.
+
+These milestones narrow earlier pending statements for this package and these
+specific workflows only; historical package results and other uncertain evidence
+remain scoped to their original deliveries. Keep the currently open app/Core/provider intact.
+
 ## Shared document URL boundary — 2026-11-04
 
 The existing pure `apps/desktop/src/terminal-policy.ts` now owns
