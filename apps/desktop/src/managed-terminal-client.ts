@@ -7,7 +7,7 @@ import type {
   TerminalNativeWireReply,
 } from '@orqst/protocol';
 import { terminalNativeReplySchema } from '@orqst/protocol';
-import { paneActionRequest } from './pane-actions.js';
+import { paneActionRequest, profileAction } from './pane-actions.js';
 
 const client = (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal;
 const status = document.querySelector<HTMLElement>('#status')!;
@@ -324,19 +324,18 @@ for (const action of actions) {
       // There is no native request queue/retry; activation and native focus are checked anew.
       await pollInFlight;
       if (generation !== interactionGeneration || target !== instanceId) return;
-      if (action === 'start' || action === 'login') {
+      const profile = profileAction(
+        action,
+        document.querySelector<HTMLElement>('main')!.dataset.operationalOpen === 'true',
+      );
+      if (profile) {
         if (!live)
           await send({
             version: 1,
-            action:
-              action === 'start' &&
-              document.querySelector<HTMLElement>('main')!.dataset.operationalOpen === 'true'
-                ? 'open'
-                : 'start',
-            profileId:
-              action === 'login'
-                ? 'codex-login-v1'
-                : document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
+            action: profile.action,
+            profileId: profile.login
+              ? 'codex-login-v1'
+              : document.querySelector<HTMLElement>('main')!.dataset.startProfile!,
           });
         return;
       }
