@@ -22,6 +22,14 @@ import {
 import './terminal-preview.css';
 
 const start = Date.now();
+/** Synthetic workspaces; the app lists the user's real workspaces. */
+const syntheticWorkspaces = [
+  { id: 'ws-synthetic-a', name: 'Synthetic API', detail: '/synthetic/api' },
+  { id: 'ws-synthetic-b', name: 'Synthetic Web', detail: '/synthetic/web' },
+  { id: 'ws-synthetic-c', name: 'Synthetic Docs', detail: '/synthetic/docs' },
+];
+const workspaceOf = (id: string) =>
+  syntheticWorkspaces.find((workspace) => workspace.id === id) ?? syntheticWorkspaces[0]!;
 const providers: TerminalProvider[] = ['codex', 'claude', 'opencode', 'claude', 'codex', 'shell'];
 const models: (string | null)[] = [
   'gpt-5.5',
@@ -51,6 +59,7 @@ function synthetic(index: number): StudioTerminal {
     status: statuses[index % statuses.length]!,
     startedAt: start - (index + 1) * 97_000,
     lastActivity: 'Synthetic activity line',
+    workspace: syntheticWorkspaces[index % 2]!,
   };
 }
 
@@ -76,6 +85,7 @@ function fromRequest(request: TerminalRequest, n: number): StudioTerminal {
     status: 'running',
     startedAt: Date.now(),
     lastActivity: 'Synthetic activity line',
+    workspace: workspaceOf(request.workspaceId),
   };
 }
 
@@ -116,6 +126,15 @@ function Preview() {
     ]);
   };
 
+  const setStatus = (from: StudioTerminal['status'][], to: StudioTerminal['status']) =>
+    setTerminals((current) => {
+      const candidates = current.filter((terminal) => from.includes(terminal.status));
+      const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+      return chosen
+        ? current.map((terminal) => (terminal === chosen ? { ...terminal, status: to } : terminal))
+        : current;
+    });
+
   return (
     <div className="tp-shell">
       <div className="tp-banner" role="note">
@@ -133,6 +152,20 @@ function Preview() {
           </button>
           <button
             type="button"
+            onClick={() =>
+              setStatus(['completed', 'unknown', 'waiting_for_user', 'failed'], 'running')
+            }
+          >
+            {t('terminalStudio.preview.simulateStart')}
+          </button>
+          <button type="button" onClick={() => setStatus(['running'], 'completed')}>
+            {t('terminalStudio.preview.simulateFinish')}
+          </button>
+          <button type="button" onClick={() => setStatus(['running'], 'waiting_for_user')}>
+            {t('terminalStudio.preview.simulateAsk')}
+          </button>
+          <button
+            type="button"
             onClick={() => void i18n.changeLanguage(i18n.language === 'pt-BR' ? 'en-US' : 'pt-BR')}
           >
             {i18n.language === 'pt-BR' ? 'EN' : 'PT'}
@@ -145,6 +178,18 @@ function Preview() {
         messages={messages}
         renderBody={(terminal) => <SyntheticBody terminal={terminal} />}
         onNewTerminal={() => setCreating(true)}
+        onStatusEvent={(event, terminal) => {
+          // The app sends a native OS notification; the preview uses the browser one.
+          if (typeof Notification === 'undefined') return;
+          const show = () =>
+            new Notification(`${terminal.label} ${terminal.name}`, {
+              body: `${t(`terminalStudio.notice.${event.status}`)} · ${terminal.workspace.name}`,
+              tag: event.id,
+            });
+          if (Notification.permission === 'granted') show();
+          else if (Notification.permission === 'default')
+            void Notification.requestPermission().then((p) => p === 'granted' && show());
+        }}
         onClose={(id) =>
           setTerminals((current) => current.filter((terminal) => terminal.id !== id))
         }
@@ -152,6 +197,8 @@ function Preview() {
       {creating && (
         <NewTerminalDialog
           catalog={syntheticCatalog}
+          workspaces={syntheticWorkspaces}
+          initialWorkspaceId={syntheticWorkspaces[0]!.id}
           max={Math.max(0, 12 - terminals.length)}
           onCancel={() => setCreating(false)}
           onConfirm={(requests) => {

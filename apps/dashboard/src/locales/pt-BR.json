@@ -1281,7 +1281,10 @@
       "explain": "Terminais e mensagens de demonstração, não são sessões reais.",
       "simulateMessage": "Simular mensagem",
       "simulateDelegation": "Simular delegação",
-      "simulateResult": "Simular resultado"
+      "simulateResult": "Simular resultado",
+      "simulateStart": "Iniciar trabalho",
+      "simulateFinish": "Concluir trabalho",
+      "simulateAsk": "Pedir resposta"
     },
     "flow": {
       "from": "de {{label}}",
@@ -1317,7 +1320,30 @@
       "cancel": "Cancelar",
       "open_one": "Abrir terminal",
       "open_other": "Abrir {{count}} terminais",
-      "noModel": "Não precisa de modelo"
+      "noModel": "Não precisa de modelo",
+      "where": "Workspace",
+      "perWorkspace_one": "{{count}} terminal em cada um dos {{workspaces}} Workspaces.",
+      "perWorkspace_other": "{{count}} terminais em cada um dos {{workspaces}} Workspaces.",
+      "howManyEach": "Quantos em cada",
+      "workspaceFor": "Workspace do terminal {{n}}",
+      "overCapacity": "Demais: há espaço para mais {{count}}.",
+      "summaryAcross": "{{summary}} · em {{count}} Workspaces"
+    },
+    "workspaces": "Workspaces",
+    "allWorkspaces": "Todos",
+    "scopeTitle": "{{name}}: {{working}} trabalhando de {{total}}",
+    "summary": {
+      "working_one": "{{count}} trabalhando",
+      "working_other": "{{count}} trabalhando",
+      "needsYou_one": "{{count}} precisa de você",
+      "needsYou_other": "{{count}} precisam de você"
+    },
+    "notice": {
+      "completed": "Concluiu",
+      "failed": "Falhou",
+      "waiting_for_user": "Precisa da sua resposta",
+      "open": "Abrir",
+      "dismiss": "Dispensar"
     }
   }
 }

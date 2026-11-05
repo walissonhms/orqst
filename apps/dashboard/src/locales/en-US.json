@@ -1281,7 +1281,10 @@
       "explain": "Demo terminals and messages, not real sessions.",
       "simulateMessage": "Simulate message",
       "simulateDelegation": "Simulate delegation",
-      "simulateResult": "Simulate result"
+      "simulateResult": "Simulate result",
+      "simulateStart": "Start work",
+      "simulateFinish": "Finish work",
+      "simulateAsk": "Ask for input"
     },
     "flow": {
       "from": "from {{label}}",
@@ -1317,7 +1320,30 @@
       "cancel": "Cancel",
       "open_one": "Open terminal",
       "open_other": "Open {{count}} terminals",
-      "noModel": "No model needed"
+      "noModel": "No model needed",
+      "where": "Workspace",
+      "perWorkspace_one": "{{count}} terminal in each of the {{workspaces}} workspaces.",
+      "perWorkspace_other": "{{count}} terminals in each of the {{workspaces}} workspaces.",
+      "howManyEach": "How many in each",
+      "workspaceFor": "Workspace for terminal {{n}}",
+      "overCapacity": "Too many: room for {{count}} more.",
+      "summaryAcross": "{{summary}} · across {{count}} workspaces"
+    },
+    "workspaces": "Workspaces",
+    "allWorkspaces": "All",
+    "scopeTitle": "{{name}}: {{working}} working of {{total}}",
+    "summary": {
+      "working_one": "{{count}} working",
+      "working_other": "{{count}} working",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "notice": {
+      "completed": "Finished",
+      "failed": "Failed",
+      "waiting_for_user": "Needs your input",
+      "open": "Open",
+      "dismiss": "Dismiss"
     }
   }
 }

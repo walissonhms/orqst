@@ -1,7 +1,7 @@
 /* New terminal dialog. Colors come only from tokens.css. */
 
 .ntd {
-  width: min(720px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   margin: auto;
   padding: 0;
@@ -85,6 +85,47 @@
   margin: 8px 0 0;
   color: var(--orqst-muted);
   font-size: 12px;
+}
+
+/* Workspaces */
+.ntd-workspaces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 104px;
+  overflow-y: auto;
+}
+.ntd-workspaces button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  max-width: 220px;
+  padding: 0 12px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 15px;
+  background: var(--orqst-background);
+  color: var(--orqst-muted);
+}
+.ntd-workspaces button:hover {
+  color: var(--orqst-text);
+  border-color: var(--orqst-border-strong);
+}
+.ntd-workspaces button.active {
+  color: var(--orqst-text);
+  border-color: hsl(var(--ts-ws, 270) 70% 62%);
+  background: hsl(var(--ts-ws, 270) 70% 62% / 14%);
+}
+.ntd-ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntd-select.ntd-ws-select {
+  font-family: inherit;
+}
+.ntd-over {
+  color: var(--orqst-danger);
 }
 
 /* Quantity */
@@ -286,7 +327,7 @@
 }
 .ntd-row {
   display: grid;
-  grid-template-columns: 22px minmax(80px, 0.7fr) auto minmax(160px, 1fr);
+  grid-template-columns: 22px minmax(110px, 0.8fr) minmax(80px, 0.7fr) auto minmax(150px, 1fr);
   align-items: center;
   gap: 8px;
   padding: 8px;

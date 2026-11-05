@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Minus, Plus, Sparkles, X } from 'lucide-react';
 import { Modal } from './Modal';
-import type { TerminalProvider } from './TerminalStudio';
+import { workspaceHue, type TerminalProvider } from './TerminalStudio';
 import './new-terminal-dialog.css';
 
 export interface CatalogModel {
@@ -20,7 +20,15 @@ export interface ProviderCatalog {
   models: CatalogModel[];
 }
 
+export interface WorkspaceOption {
+  id: string;
+  name: string;
+  /** Shown as a hint, e.g. the project path. */
+  detail?: string;
+}
+
 export interface TerminalRequest {
+  workspaceId: string;
   provider: TerminalProvider;
   /** `null` = let the CLI use its own default model. */
   model: string | null;
@@ -29,6 +37,9 @@ export interface TerminalRequest {
 
 interface Props {
   catalog: ProviderCatalog[];
+  workspaces: WorkspaceOption[];
+  /** Workspace preselected when the dialog opens (usually the current one). */
+  initialWorkspaceId?: string;
   /** Remaining capacity of the current Feature. */
   max: number;
   onCancel: () => void;
@@ -36,6 +47,7 @@ interface Props {
 }
 
 interface Choice {
+  workspaceId: string;
   provider: TerminalProvider;
   model: string | null;
   name: string;
@@ -50,11 +62,24 @@ function firstAvailable(catalog: ProviderCatalog[]): ProviderCatalog | undefined
   );
 }
 
-export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) {
+export function NewTerminalDialog({
+  catalog,
+  workspaces,
+  initialWorkspaceId,
+  max,
+  onCancel,
+  onConfirm,
+}: Props) {
   const { t } = useTranslation();
   const limit = Math.max(1, Math.min(8, max));
   const initial = firstAvailable(catalog);
+  const firstWorkspace =
+    workspaces.find((workspace) => workspace.id === initialWorkspaceId)?.id ??
+    workspaces[0]?.id ??
+    '';
+  const [targets, setTargets] = useState<string[]>(firstWorkspace ? [firstWorkspace] : []);
   const base: Choice = {
+    workspaceId: firstWorkspace,
     provider: initial?.provider ?? 'codex',
     model: initial?.models[0]?.id ?? null,
     name: '',
@@ -65,11 +90,31 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
   const [rows, setRows] = useState<Choice[]>(() => Array.from({ length: 8 }, () => ({ ...base })));
 
   const byProvider = useMemo(() => new Map(catalog.map((c) => [c.provider, c])), [catalog]);
+  // Same setup: `count` terminals in EACH selected workspace. Each own: one row per terminal.
   const choices = same
-    ? Array.from({ length: count }, () => ({ ...shared, name: '' }))
+    ? targets.flatMap((workspaceId) =>
+        Array.from({ length: count }, () => ({ ...shared, workspaceId, name: '' })),
+      )
     : rows.slice(0, count);
+  const total = choices.length;
+  const overCapacity = total > max;
   const valid =
-    count >= 1 && choices.every((choice) => byProvider.get(choice.provider)?.available === true);
+    total >= 1 &&
+    !overCapacity &&
+    choices.every(
+      (choice) =>
+        byProvider.get(choice.provider)?.available === true &&
+        workspaces.some((workspace) => workspace.id === choice.workspaceId),
+    );
+  const nameOf = (id: string) => workspaces.find((workspace) => workspace.id === id)?.name ?? '?';
+  const toggleTarget = (id: string) =>
+    setTargets((current) =>
+      current.includes(id)
+        ? current.length > 1
+          ? current.filter((entry) => entry !== id)
+          : current
+        : [...current, id],
+    );
 
   const summary = providerOrder
     .map((provider) => ({
@@ -79,6 +124,7 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
     .filter((entry) => entry.n > 0)
     .map((entry) => `${entry.n} ${t(`terminalStudio.providers.${entry.provider}`)}`)
     .join(' · ');
+  const workspaceCount = new Set(choices.map((choice) => choice.workspaceId)).size;
 
   const presetLists: TerminalProvider[][] = [
     ['codex', 'codex'],
@@ -110,7 +156,12 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
     });
 
   function pick(provider: TerminalProvider): Choice {
-    return { provider, model: byProvider.get(provider)?.models[0]?.id ?? null, name: '' };
+    return {
+      workspaceId: targets[0] ?? firstWorkspace,
+      provider,
+      model: byProvider.get(provider)?.models[0]?.id ?? null,
+      name: '',
+    };
   }
   function applyPreset(list: Choice[]) {
     const n = Math.min(list.length, limit);
@@ -126,7 +177,14 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
 
   const confirm = () => {
     if (!valid) return;
-    onConfirm(choices.map((choice) => ({ ...choice, name: choice.name.trim() })));
+    onConfirm(
+      choices.map((choice) => ({
+        workspaceId: choice.workspaceId,
+        provider: choice.provider,
+        model: choice.model,
+        name: choice.name.trim(),
+      })),
+    );
   };
 
   return (
@@ -158,8 +216,47 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
           </button>
         </header>
 
+        {workspaces.length > 0 && (
+          <section className="ntd-section">
+            <h3>{t('terminalStudio.create.where')}</h3>
+            <div
+              className="ntd-workspaces"
+              role="group"
+              aria-label={t('terminalStudio.create.where')}
+            >
+              {workspaces.map((workspace) => {
+                const selected = targets.includes(workspace.id);
+                return (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    aria-pressed={selected}
+                    className={selected ? 'active' : ''}
+                    style={{ '--ts-ws': workspaceHue(workspace.id) } as React.CSSProperties}
+                    title={workspace.detail}
+                    onClick={() => toggleTarget(workspace.id)}
+                  >
+                    <span className="ts-ws-dot" aria-hidden="true" />
+                    <span className="ntd-ws-name">{workspace.name}</span>
+                    {selected && <Check size={13} aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </div>
+            {same && targets.length > 1 && (
+              <p className="ntd-hint">
+                {t('terminalStudio.create.perWorkspace', { count, workspaces: targets.length })}
+              </p>
+            )}
+          </section>
+        )}
+
         <section className="ntd-section">
-          <h3>{t('terminalStudio.create.howMany')}</h3>
+          <h3>
+            {same && targets.length > 1
+              ? t('terminalStudio.create.howManyEach')
+              : t('terminalStudio.create.howMany')}
+          </h3>
           <div className="ntd-count">
             <button
               type="button"
@@ -213,13 +310,23 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
           )}
         </section>
 
-        {count > 1 && (
+        {(count > 1 || targets.length > 1) && (
           <div
             className="ntd-toggle"
             role="radiogroup"
             aria-label={t('terminalStudio.create.setup')}
           >
-            <button type="button" role="radio" aria-checked={same} onClick={() => setSame(true)}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={same}
+              onClick={() => {
+                // Back to one setup: the count is per workspace again.
+                if (!same)
+                  setCount(Math.max(1, Math.min(limit, Math.round(count / targets.length))));
+                setSame(true);
+              }}
+            >
               {t('terminalStudio.create.sameForAll')}
             </button>
             <button
@@ -227,7 +334,11 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
               role="radio"
               aria-checked={!same}
               onClick={() => {
-                if (same) setRows((current) => current.map(() => ({ ...shared })));
+                if (same)
+                  setRows(
+                    choices.concat(Array.from({ length: 8 }, () => ({ ...shared }))).slice(0, 8),
+                  );
+                if (same) setCount(Math.min(8, Math.max(1, choices.length)));
                 setSame(false);
               }}
             >
@@ -257,7 +368,12 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
                     disabled={!entry.available}
                     className={`ntd-provider ntd-provider-${provider}${selected ? ' active' : ''}`}
                     onClick={() =>
-                      setShared({ provider, model: entry.models[0]?.id ?? null, name: '' })
+                      setShared({
+                        ...shared,
+                        provider,
+                        model: entry.models[0]?.id ?? null,
+                        name: '',
+                      })
                     }
                   >
                     <span className="ntd-mark" aria-hidden="true" />
@@ -294,6 +410,18 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
               return (
                 <div key={index} className="ntd-row">
                   <span className="ntd-row-index">{index + 1}</span>
+                  <select
+                    className="ntd-select ntd-ws-select"
+                    value={row.workspaceId}
+                    aria-label={t('terminalStudio.create.workspaceFor', { n: index + 1 })}
+                    onChange={(event) => setRow(index, { workspaceId: event.target.value })}
+                  >
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>
+                        {workspace.name}
+                      </option>
+                    ))}
+                  </select>
                   <input
                     className="ntd-input"
                     value={row.name}
@@ -355,13 +483,22 @@ export function NewTerminalDialog({ catalog, max, onCancel, onConfirm }: Props) 
         )}
 
         <footer className="ntd-foot">
-          <span className="ntd-summary">{summary}</span>
+          <span className={`ntd-summary${overCapacity ? ' ntd-over' : ''}`}>
+            {overCapacity
+              ? t('terminalStudio.create.overCapacity', { count: max })
+              : workspaceCount > 1
+                ? t('terminalStudio.create.summaryAcross', {
+                    summary,
+                    count: workspaceCount,
+                  })
+                : `${summary} · ${nameOf(choices[0]?.workspaceId ?? '')}`}
+          </span>
           <button type="button" className="ntd-secondary" onClick={onCancel}>
             {t('terminalStudio.create.cancel')}
           </button>
           <button type="submit" className="ntd-primary" disabled={!valid}>
             <Plus size={15} />
-            {t('terminalStudio.create.open', { count })}
+            {t('terminalStudio.create.open', { count: total })}
           </button>
         </footer>
       </form>

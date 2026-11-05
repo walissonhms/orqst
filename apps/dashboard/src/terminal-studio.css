@@ -1,8 +1,8 @@
 /* Studio terminal workspace. Colors come only from tokens.css. */
 
 .ts-root {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   min-height: 0;
   background: var(--orqst-background);
@@ -93,6 +93,7 @@
 /* Stage */
 .ts-stage {
   position: relative;
+  flex: 1;
   min-height: 0;
   margin: var(--orqst-space-3);
   overflow: hidden;
@@ -239,6 +240,14 @@
 @container (max-width: 300px) {
   .ts-meta {
     display: none;
+  }
+}
+/* On narrow panes the workspace chip keeps only its color dot. */
+@container (max-width: 380px) {
+  .ts-pane .ts-ws {
+    padding: 0 4px;
+    font-size: 0;
+    gap: 0;
   }
 }
 .ts-pane {
@@ -661,4 +670,236 @@
 :root[data-motion='reduced'] .ts-flight {
   display: none;
 }
-:root[data-motion='reduced'];
+
+/* Summary in the toolbar */
+.ts-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--orqst-space-3);
+  margin-left: auto;
+  white-space: nowrap;
+}
+.ts-summary .ts-count {
+  margin-left: 0;
+}
+.ts-sum-working {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--orqst-neon);
+  font-size: 12px;
+}
+.ts-sum-attention {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--orqst-warning-soft);
+  color: var(--orqst-warning);
+  font-size: 12px;
+}
+
+/* Workspace scope bar */
+.ts-scopes {
+  display: flex;
+  gap: 6px;
+  padding: 6px var(--orqst-space-3);
+  border-bottom: 1px solid var(--orqst-border);
+  background: var(--orqst-surface);
+  overflow-x: auto;
+}
+.ts-scopes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 13px;
+  color: var(--orqst-muted);
+  white-space: nowrap;
+}
+.ts-scopes button:hover {
+  color: var(--orqst-text);
+  border-color: var(--orqst-border-strong);
+}
+.ts-scopes button.active {
+  color: var(--orqst-text);
+  border-color: hsl(var(--ts-ws, 270) 70% 62%);
+  background: hsl(var(--ts-ws, 270) 70% 62% / 14%);
+}
+.ts-scope-count {
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+  color: var(--orqst-subtle);
+}
+.ts-scope-alert {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--orqst-warning);
+  color: var(--orqst-background);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.ts-scopes .ts-spinner {
+  width: 9px;
+  height: 9px;
+  color: var(--orqst-neon);
+}
+/* Workspace identity colors are generated hues, not brand colors. */
+.ts-ws-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: hsl(var(--ts-ws, 270) 70% 62%);
+}
+.ts-ws {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 2 auto;
+  min-width: 0;
+  max-width: 140px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  background: hsl(var(--ts-ws, 270) 70% 62% / 12%);
+  color: hsl(var(--ts-ws, 270) 60% 78%);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ts-pane {
+  border-top: 2px solid hsl(var(--ts-ws, 270) 70% 62% / 55%);
+}
+
+/* Working: a thin moving bar under the header */
+.ts-working .ts-head {
+  position: relative;
+}
+.ts-working .ts-head::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--orqst-neon) 40%,
+    var(--orqst-lavender) 50%,
+    var(--orqst-neon) 60%,
+    transparent
+  );
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: ts-working 1.6s ease-in-out infinite;
+}
+@keyframes ts-working {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
+/* Finished: a short flash in the status color */
+.ts-done {
+  --ts-done: var(--orqst-success);
+  animation: ts-done 1.4s ease-out 2;
+  border-color: var(--ts-done);
+}
+.ts-done-failed {
+  --ts-done: var(--orqst-danger);
+}
+.ts-done-waiting_for_user {
+  --ts-done: var(--orqst-warning);
+}
+@keyframes ts-done {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--ts-done) 60%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--ts-done) 18%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 14px transparent,
+      inset 0 0 0 transparent;
+  }
+}
+
+/* Completion notices */
+.ts-notice {
+  --ts-done: var(--orqst-success);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  padding: 10px 10px 10px 12px;
+  border: 1px solid var(--orqst-border-strong);
+  border-left: 3px solid var(--ts-done);
+  border-radius: var(--orqst-radius-panel);
+  background: var(--orqst-elevated);
+  box-shadow: 0 12px 32px var(--orqst-shadow);
+  animation: ts-toast-in 220ms ease-out;
+}
+.ts-notice-failed {
+  --ts-done: var(--orqst-danger);
+}
+.ts-notice-waiting_for_user {
+  --ts-done: var(--orqst-warning);
+}
+.ts-notice-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  margin-right: auto;
+}
+.ts-notice-text strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ts-notice-text > span {
+  color: var(--orqst-muted);
+  font-size: 12px;
+}
+.ts-notice > button:not(.ts-notice-close) {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--orqst-radius-control);
+  background: var(--ts-done);
+  color: var(--orqst-background);
+  font-weight: 600;
+}
+.ts-notice-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--orqst-radius-control);
+  color: var(--orqst-muted);
+}
+.ts-notice-close:hover {
+  background: var(--orqst-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-working .ts-head::after,
+  .ts-done,
+  .ts-notice {
+    animation: none;
+  }
+}
+:root[data-motion='reduced'] .ts-working .ts-head::after,
+:root[data-motion='reduced'] .ts-done,
+:root[data-motion='reduced'] .ts-notice {
+  animation: none;
+}

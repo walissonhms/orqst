@@ -5,6 +5,8 @@ import {
   arrange,
   containRect,
   dropIndex,
+  dropTarget,
+  orderIndex,
   GAP,
   arcPath,
   LANE,
@@ -186,4 +188,17 @@ test('lanePath runs in the gutter between the two headers', () => {
   assert.match(path, new RegExp(`^M ${LANE - 2} 16 `));
   assert.match(path, new RegExp(`H ${LANE - 2}$`));
   assert.ok(path.includes('V '));
+});
+
+test('drag targets map to the full order even with minimized panes', () => {
+  let state = minimize(stateWith(4), 'p0');
+  const placed = arrange(state, view);
+  const p3 = placed.find((pane) => pane.id === 'p3')!.rect;
+  const target = dropTarget(placed, p3.x + 4, p3.y + 4);
+  assert.equal(target, 'p3');
+  state = reorder(state, 'p1', orderIndex(state, target!));
+  assert.deepEqual(
+    [...state.panes].sort((a, b) => a.order - b.order).map((pane) => pane.id),
+    ['p0', 'p2', 'p3', 'p1'],
+  );
 });

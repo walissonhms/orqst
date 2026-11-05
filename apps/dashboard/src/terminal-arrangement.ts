@@ -215,6 +215,19 @@ export function reorder(
   return { ...state, panes: ordered.map((pane, order) => ({ ...pane, order })) };
 }
 
+/** Pane whose rectangle contains the point, for drop targets. */
+export function dropTarget(placed: PlacedPane[], x: number, y: number): string | undefined {
+  return placed.find(
+    ({ rect }) =>
+      x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height,
+  )?.id;
+}
+
+/** Position of a pane in the full order, including minimized panes, for `reorder`. */
+export function orderIndex(state: ArrangementState, id: string): number {
+  return [...state.panes].sort((a, b) => a.order - b.order).findIndex((pane) => pane.id === id);
+}
+
 /** Index in the visible order whose rectangle contains the point, for drop targets. */
 export function dropIndex(placed: PlacedPane[], state: ArrangementState, x: number, y: number) {
   const order = visiblePanes(state).map((pane) => pane.id);
