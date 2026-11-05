@@ -262,10 +262,39 @@ test('confirmed append reserves one stable slot without changing old layout or p
 
 test('dock reopen re-shows only an existing hidden slot without starting anything', () => {
   const f = fixture(2);
+  f.layout.open(0);
   f.layout.act(1, 'hide');
   assert.equal(f.layout.snapshot().visible.includes(1), false);
-  assert.equal(f.layout.act(1, 'reopen'), true);
+  assert.equal(f.layout.act(1, 'reopen', 0), true);
   assert.equal(f.layout.snapshot().shown.includes(1), true);
   assert.equal(f.layout.snapshot().active, 1);
-  assert.equal(f.layout.act(5, 'reopen'), false);
+  assert.equal(f.layout.act(5, 'reopen', 0), false);
+});
+
+test('dock reopen rejects missing or stale native generation before any save or publication', () => {
+  const f = fixture(2);
+  f.layout.open(0);
+  f.layout.act(1, 'hide');
+  const capturedGeneration = 4;
+  f.layout.setNativeGeneration(capturedGeneration);
+  // Deterministic transport barrier: the generation invalidation arrives before the old action.
+  f.layout.setNativeGeneration(capturedGeneration + 1);
+  const before = f.layout.snapshot();
+  const saved = f.saved();
+  const publications = f.messages.length;
+  const revocations = f.revoked.length;
+  for (const generation of [undefined, capturedGeneration, capturedGeneration + 2]) {
+    assert.equal(f.layout.act(1, 'reopen', generation), false);
+    assert.deepEqual(f.layout.snapshot(), before);
+    assert.strictEqual(f.saved(), saved);
+    assert.equal(f.messages.length, publications);
+    assert.equal(f.revoked.length, revocations);
+  }
+  assert.equal(f.layout.act(1, 'reopen', capturedGeneration + 1), true);
+  f.layout.suspend();
+  const suspended = f.layout.snapshot();
+  const lastSave = f.saved();
+  assert.equal(f.layout.act(1, 'reopen', capturedGeneration + 1), false);
+  assert.deepEqual(f.layout.snapshot(), suspended);
+  assert.strictEqual(f.saved(), lastSave);
 });

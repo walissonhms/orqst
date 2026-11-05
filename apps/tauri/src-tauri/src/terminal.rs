@@ -933,36 +933,172 @@ pub(crate) fn restore_allowed(
     generation == current && (slot as usize) < count && !visible.contains(&slot)
 }
 
+struct RestoreContext {
+    count: usize,
+    visible: Vec<u64>,
+    generation: u64,
+    suspended: bool,
+    fenced: bool,
+    document_current: bool,
+}
+
+#[cfg(test)]
+mod restore_tests {
+    use super::*;
+    use std::sync::Barrier;
+
+    #[test]
+    fn restore_barrier_rejects_invalidation_before_the_locked_write() {
+        for invalidation in [
+            "generation",
+            "document",
+            "suspended",
+            "fenced",
+            "visible",
+            "none",
+        ] {
+            let state = Arc::new(Mutex::new((
+                7_u64,
+                3_u64,
+                false,
+                false,
+                vec![0],
+                Vec::<Value>::new(),
+            )));
+            let captured = {
+                let guard = state.lock().unwrap();
+                (guard.0, guard.1)
+            };
+            let barrier = Arc::new(Barrier::new(2));
+            let resume = Arc::new(Barrier::new(2));
+            let worker = {
+                let state = state.clone();
+                let barrier = barrier.clone();
+                let resume = resume.clone();
+                std::thread::spawn(move || {
+                    // The document getter has completed; hold the gesture before the pipe mutex.
+                    barrier.wait();
+                    resume.wait();
+                    commit_restore(
+                        &state,
+                        1,
+                        captured.0,
+                        |r| {
+                            Some(RestoreContext {
+                                count: 2,
+                                visible: r.4.clone(),
+                                generation: r.0,
+                                suspended: r.2,
+                                fenced: r.3,
+                                document_current: captured.1 == r.1,
+                            })
+                        },
+                        |r, packet| {
+                            r.5.push(packet);
+                            true
+                        },
+                    )
+                })
+            };
+            barrier.wait();
+            {
+                let mut guard = state.lock().unwrap();
+                match invalidation {
+                    "generation" => guard.0 += 1,
+                    "document" => guard.1 += 1,
+                    "suspended" => guard.2 = true,
+                    "fenced" => guard.3 = true,
+                    "visible" => guard.4.push(1),
+                    _ => {}
+                }
+            }
+            resume.wait();
+            assert_eq!(
+                worker.join().unwrap(),
+                invalidation == "none",
+                "{invalidation}"
+            );
+            let guard = state.lock().unwrap();
+            if invalidation == "none" {
+                assert_eq!(
+                    guard.5,
+                    vec![json!({"kind":"layout-action","slot":1,"action":"reopen","generation":7})]
+                );
+            } else {
+                assert!(
+                    guard.5.is_empty(),
+                    "No reopen reaches Node or persistence: {invalidation}"
+                );
+            }
+        }
+    }
+}
+
+// The UI getter runs before this critical section. Validation and write share one mutex.
+fn commit_restore<T>(
+    state: &Mutex<T>,
+    slot: u64,
+    generation: u64,
+    current: impl FnOnce(&T) -> Option<RestoreContext>,
+    write: impl FnOnce(&mut T, Value) -> bool,
+) -> bool {
+    let mut guard = state.lock().unwrap();
+    let Some(context) = current(&guard) else {
+        return false;
+    };
+    if context.suspended
+        || context.fenced
+        || !context.document_current
+        || !restore_allowed(
+            slot,
+            context.count,
+            &context.visible,
+            generation,
+            context.generation,
+        )
+    {
+        return false;
+    }
+    write(
+        &mut guard,
+        json!({"kind":"layout-action","slot":slot,"action":"reopen","generation":generation}),
+    )
+}
+
 #[tauri::command]
 pub async fn terminal_restore(window: Webview, slot: u64, generation: u64) -> Value {
     let app = window.app_handle();
-    let source = window.url().map(|url| url.to_string()).unwrap_or_default();
-    if !crate::features::restore_source_allowed(window.label(), window.window().label(), &source)
-        || !crate::features::chrome_current(app, &window)
-    {
+    // Capture the stable exact document before taking the pipe's mutex: url() can block.
+    let Some((source, document)) = crate::features::chrome_identity(&window) else {
         return json!(false);
-    }
-    let (count, visible, current) = {
-        let terminal = app.state::<Terminals>();
-        let guard = terminal.0.lock().unwrap();
-        let Some(r) = guard.as_ref() else {
-            return json!(false);
-        };
-        let visible: Vec<u64> = r.layout["visible"]
-            .as_array()
-            .map(|items| items.iter().filter_map(Value::as_u64).collect())
-            .unwrap_or_default();
-        (r.documents.len(), visible, r.layout_generation)
     };
-    // Revalidate the same gesture generation before the only effect.
-    if !restore_allowed(slot, count, &visible, generation, current)
-        || !crate::features::chrome_current(app, &window)
-    {
+    if presentation_blocked(app) {
         return json!(false);
     }
-    json!(send(
-        app,
-        json!({"kind":"layout-action","slot":slot,"action":"reopen"})
+    let terminal = app.state::<Terminals>();
+    json!(commit_restore(
+        &terminal.0,
+        slot,
+        generation,
+        |running| running.as_ref().map(|r| RestoreContext {
+            count: r.documents.len(),
+            visible: r.layout["visible"]
+                .as_array()
+                .map(|items| items.iter().filter_map(Value::as_u64).collect())
+                .unwrap_or_default(),
+            generation: r.layout_generation,
+            suspended: r.presentation_suspended,
+            fenced: r.confirming_quit
+                || r.exit_authorized
+                || crate::agents::exit_pending(app)
+                || phase_blocks_presentation(crate::host_phase::phase()),
+            document_current: crate::features::document_version_current(app, &source, document),
+        }),
+        |running, value| crate::features::with_chrome_document(app, document, || {
+            running
+                .as_mut()
+                .is_some_and(|r| r.child.write(format!("{value}\n").as_bytes()).is_ok())
+        }),
     ))
 }
 

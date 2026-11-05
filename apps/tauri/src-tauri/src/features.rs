@@ -345,8 +345,23 @@ pub(crate) fn restore_source_allowed(label: &str, parent: &str, source: &str) ->
 }
 
 /// Exact chrome document identity for the dock route; no process or metadata authority.
-pub(crate) fn chrome_current(app: &tauri::AppHandle, view: &Webview) -> bool {
-    identity(view).is_some() && !crate::terminal::presentation_blocked(app)
+pub(crate) fn chrome_identity(view: &Webview) -> Option<(String, u64)> {
+    let identity = identity(view)?;
+    restore_source_allowed(view.label(), view.window().label(), &identity.0).then_some(identity)
+}
+
+// Keep the getter-free document fence through the pipe write. Navigation invalidates this mutex.
+fn with_chrome_version(state: &Mutex<State>, document: u64, write: impl FnOnce() -> bool) -> bool {
+    let guard = state.lock().unwrap();
+    document > 0 && guard.chrome_document == document && write()
+}
+
+pub(crate) fn with_chrome_document(
+    app: &tauri::AppHandle,
+    document: u64,
+    write: impl FnOnce() -> bool,
+) -> bool {
+    with_chrome_version(&app.state::<Features>().0, document, write)
 }
 
 fn identity(view: &Webview) -> Option<(String, u64)> {
@@ -957,6 +972,45 @@ mod tests {
     }
 
     use super::*;
+    #[test]
+    fn dock_document_barrier_rejects_navigation_after_capture_before_write() {
+        let state = std::sync::Arc::new(Mutex::new(State {
+            chrome_document: 3,
+            ..State::default()
+        }));
+        let captured = identity_from(
+            &state,
+            false,
+            || Some(CHROME_URL.into()),
+            |source, _| source == CHROME_URL,
+        )
+        .unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let resume = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let writes = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let worker = {
+            let (state, barrier, resume, writes) = (
+                state.clone(),
+                barrier.clone(),
+                resume.clone(),
+                writes.clone(),
+            );
+            std::thread::spawn(move || {
+                barrier.wait();
+                resume.wait();
+                with_chrome_version(&state, captured.1, || {
+                    writes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    true
+                })
+            })
+        };
+        barrier.wait();
+        state.lock().unwrap().chrome_document += 1;
+        resume.wait();
+        assert!(!worker.join().unwrap());
+        assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
     #[test]
     fn dock_restore_capability_and_source_are_chrome_only() {
         let source = include_str!("features.rs");

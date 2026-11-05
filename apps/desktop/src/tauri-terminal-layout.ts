@@ -233,12 +233,17 @@ export class TauriTerminalLayout {
     return true;
   }
 
-  act(slot: number, raw: unknown): boolean {
+  act(slot: number, raw: unknown, generation?: number): boolean {
     const action = parseTerminalViewAction(raw);
     if (!action) return false;
     // Dock restore only re-shows an existing hidden pane; it never starts a process.
     if (action === 'reopen') {
-      if (!this.state.order.includes(slot)) return false;
+      if (
+        generation !== this.nativeGeneration ||
+        this.suspended ||
+        !this.state.order.includes(slot)
+      )
+        return false;
       this.state.shown = [slot, ...this.state.shown.filter((index) => index !== slot)];
       this.state.maximized = null;
       this.state.active = slot;

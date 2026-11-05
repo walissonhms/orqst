@@ -139,6 +139,7 @@ async function start() {
       kind: z.literal('layout-action'),
       slot: z.number().int().min(0).max(7),
       action: z.unknown(),
+      generation: z.number().int().nonnegative().safe().optional(),
     }),
     z.strictObject({ kind: z.literal('layout-suspend') }),
     z.strictObject({
@@ -363,8 +364,10 @@ async function start() {
           if (message.kind === 'layout-generation') {
             nativeGeneration = Math.max(nativeGeneration, message.generation);
             layout.setNativeGeneration(message.generation);
-          } else if (message.kind === 'layout-action') layout.act(message.slot, message.action);
-          else if (message.kind === 'layout-open') layout.open(message.slot);
+          } else if (message.kind === 'layout-action') {
+            if (message.action === 'reopen' && message.generation !== nativeGeneration) continue;
+            layout.act(message.slot, message.action, message.generation);
+          } else if (message.kind === 'layout-open') layout.open(message.slot);
           else if (message.kind === 'layout-focus') layout.focus(message.slot);
           else if (message.kind === 'layout-suspend') layout.suspend();
           else layout.resize(message.width, message.height);

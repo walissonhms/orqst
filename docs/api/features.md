@@ -1,5 +1,13 @@
 # Private Feature configuration contract — v1
 
+The separate chrome-only `terminal_restore` command accepts an existing hidden
+`slot` and its Dock `generation`. Rust captures the exact chrome document before
+the pipe lock, then validates current generation, slot, suspension, presentation
+fences and document under that lock. The document mutex remains held through the
+write. Its private `layout-action/reopen` envelope includes `generation`; Node
+rejects missing/stale generations before any reopen or layout preference save.
+This is visual metadata only and grants no process authority.
+
 The schemas live in `packages/protocol/src/features.ts` and `terminal-team.ts`.
 The existing inherited Node IPC (`terminalPairRPCSchema`) supports Feature list,
 read, create, update, reviewed-slot assignment, team read/save and layout read/save.

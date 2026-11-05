@@ -179,6 +179,31 @@ NOTICE). Decision remains **keep the existing ORQST implementation**: Anywh's
 Node process/hibernation/tree-sweep lifecycle cannot supply native Rust proof or
 focus fences. No external code, assets or dependencies were incorporated.
 
+### Dock restore generation fence — 2026-11-05
+
+The exact chrome document is captured before taking the terminal pipe mutex.
+The final critical section checks current generation, hidden slot, suspension,
+presentation fences and the captured document; the getter-free chrome document
+mutex remains held through the pipe write. The private `layout-action/reopen`
+packet carries `generation`. The Node host rejects a different generation before
+`layout.act`; the layout adapter independently rejects a missing/different
+generation or suspended presentation before mutation, publication or persistence.
+Barrier tests cover invalidation before the Rust write and Node rejection before
+save. These synthetic tests do not prove the native Dock click or WebKit delivery.
+
+Reuse research rechecked Anywh's architecture, Agent Host/runtime documents and
+[`HostClient` event subscription fence](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/hostClient.ts#L372-L379).
+It rejects replaced subscription IDs before callbacks, using its Node socket,
+protocol and event cursor. Its Apache-2.0 LICENSE has no root NOTICE. Decision:
+**keep the existing ORQST implementation**; a relay subscription fence does not
+validate a Tauri document or serialize the native pipe. No upstream source or
+dependencies were copied. Tucano communication and Overclock visual assets are
+outside this presentation-only fix; their previously recorded decisions stand.
+
+Security review: no public API, WebSocket, cookie or static-file behavior changes;
+only the existing private native layout envelope gains a generation fence. No
+execution authority, ownership, process, Core or Quit behavior changes.
+
 ### Reply router correction
 
 `PendingReplies` now records ID, expected kind and host epoch and validates each
