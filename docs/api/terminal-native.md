@@ -1,5 +1,15 @@
 # Native terminal client boundary
 
+## Feature orchestrator label — 2026-11-05
+
+Feature snapshots may include `features[].orchestratorTerminalId: UUID | null`.
+Save it with the existing Feature `update` request and
+`input: {expectedRevision, orchestratorTerminalId: UUID | null}`. Core accepts
+only an assigned member of that Feature, uses revision compare-and-swap, and
+persists the label independently of role, grants and routing. Old snapshots may
+omit the field. This metadata does not launch, message or authorize any agent.
+The native document, focus, generation and mutation fences remain in force.
+
 ## Slot scope and unknown agent state — 2026-11-05
 
 The version-1 Feature snapshot now emits `slots[].workspace: {id, name}` and

@@ -27,27 +27,38 @@ export const featureUpdateSchema = z
     name: terminalDisplayNameSchema.optional(),
     description: z.string().max(2048).optional(),
     status: featureStatusSchema.optional(),
+    orchestratorTerminalId: z.uuid().nullable().optional(),
   })
   .refine(
     (value) =>
-      value.name !== undefined || value.description !== undefined || value.status !== undefined,
+      value.name !== undefined ||
+      value.description !== undefined ||
+      value.status !== undefined ||
+      value.orchestratorTerminalId !== undefined,
     'Feature update is empty',
   );
 export type FeatureCreate = z.input<typeof featureCreateSchema>;
 export type FeatureUpdate = z.infer<typeof featureUpdateSchema>;
-export const workspaceFeatureSchema = featureScopeSchema.extend({
-  schemaVersion: z.literal(1),
-  name: terminalDisplayNameSchema,
-  description: z.string().max(2048),
-  status: featureStatusSchema,
-  revision: z.number().int().positive().safe(),
-  terminalIds: z
-    .array(z.uuid())
-    .max(TERMINAL_SLOT_CEILING)
-    .refine((ids) => new Set(ids).size === ids.length),
-  createdAt: z.number().int().nonnegative().safe(),
-  updatedAt: z.number().int().nonnegative().safe(),
-});
+export const workspaceFeatureSchema = featureScopeSchema
+  .extend({
+    schemaVersion: z.literal(1),
+    name: terminalDisplayNameSchema,
+    description: z.string().max(2048),
+    status: featureStatusSchema,
+    revision: z.number().int().positive().safe(),
+    terminalIds: z
+      .array(z.uuid())
+      .max(TERMINAL_SLOT_CEILING)
+      .refine((ids) => new Set(ids).size === ids.length),
+    orchestratorTerminalId: z.uuid().nullable().optional(),
+    createdAt: z.number().int().nonnegative().safe(),
+    updatedAt: z.number().int().nonnegative().safe(),
+  })
+  .refine(
+    (feature) =>
+      !feature.orchestratorTerminalId ||
+      feature.terminalIds.includes(feature.orchestratorTerminalId),
+  );
 export type WorkspaceFeature = z.infer<typeof workspaceFeatureSchema>;
 export const featureConfigurationEventSchema = featureScopeSchema.extend({
   schemaVersion: z.literal(1),
