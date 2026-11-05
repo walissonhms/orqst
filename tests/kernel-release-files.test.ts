@@ -40,6 +40,27 @@ test('the same marker cannot start two recoveries; interruption before rename ne
   }
 });
 
+for (const failedSync of [1, 2]) {
+  test(`per-marker lock fsync failure ${failedSync} retains marker and uncertain evidence`, () => {
+    const f = fixture();
+    let calls = 0;
+    try {
+      assert.throws(
+        () =>
+          beginKernelRelease(f.directory, undefined, () => {
+            if (++calls === failedSync) throw new Error('SYNTHETIC fsync failure');
+          }),
+        /SYNTHETIC fsync failure/,
+      );
+      assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-ORIGINAL\n');
+      assert.throws(() => beginKernelRelease(f.directory), { code: 'EEXIST' });
+      assert.equal(reconcileKernelReleases(f.directory)[0]?.status, 'review_required');
+    } finally {
+      f.close();
+    }
+  });
+}
+
 test('a fresh fenced recovery preserves and references the previous marker lock', () => {
   const f = fixture();
   try {

@@ -1,5 +1,5 @@
 import { assertNoOfflineRecovery } from '../managed-codex/offline-recovery-gate.js';
-import { readdirSync } from 'node:fs';
+import { fsyncSync, readdirSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { z } from 'zod';
@@ -96,7 +96,11 @@ function readLock(directory: string, file: string) {
 }
 
 /** Lock one exact inode forever; an existing lock is never overwritten or removed. */
-export function beginKernelRelease(directory: string, mutation?: { validate(): void }) {
+export function beginKernelRelease(
+  directory: string,
+  mutation?: { validate(): void },
+  sync = fsyncSync,
+) {
   assertNoOfflineRecovery(directory);
   const marker = markerIdentity(join(directory, 'active-pair.json'));
   let previousRecovery: string | undefined;
@@ -126,7 +130,7 @@ export function beginKernelRelease(directory: string, mutation?: { validate(): v
     ...(previousRecovery ? { previousRecovery } : {}),
   });
   const name = lockName(marker, previousRecovery);
-  writeRecoveryFile(join(directory, name), JSON.stringify(lock) + '\n');
+  writeRecoveryFile(join(directory, name), JSON.stringify(lock) + '\n', sync);
   if (!equal(markerIdentity(join(directory, 'active-pair.json')), marker))
     throw new Error('Release marker changed after locking');
   return { lock, name };
