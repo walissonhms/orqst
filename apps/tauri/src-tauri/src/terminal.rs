@@ -60,6 +60,7 @@ struct Running {
     permission_review: Option<(String, usize)>,
     layout_generation: u64,
     layout_revision: u64,
+    last_focus_notice: Option<Instant>,
     presentation_suspended: bool,
     busy: Vec<bool>,
     reviewing: Vec<bool>,
@@ -1326,8 +1327,49 @@ pub async fn terminal_view(window: Webview, action: Value) -> Value {
         .unwrap()
         .as_ref()
         .is_some_and(|r| r.retiring || r.metadata_mutating.is_some() || r.enrollment_pending);
+    let generation = metadata_generation(app);
     if retiring || presentation_blocked(app) || !focused(&window).await {
         return json!(false);
+    }
+    if action == "note-focus" {
+        if generation.is_none()
+            || metadata_generation(app) != generation
+            || self::slot(&window) != Some(slot)
+            || presentation_blocked(app)
+        {
+            return json!(false);
+        }
+        let visible = app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_mut()
+            .is_some_and(|r| {
+                let now = Instant::now();
+                if r.last_focus_notice.is_some_and(|last| {
+                    now.saturating_duration_since(last) < Duration::from_millis(16)
+                }) {
+                    return false;
+                }
+                r.last_focus_notice = Some(now);
+                !r.retiring
+                    && r.metadata_mutating.is_none()
+                    && !r.enrollment_pending
+                    && Some(r.layout_generation) == generation
+                    && r.layout["visible"].as_array().is_some_and(|slots| {
+                        slots
+                            .iter()
+                            .any(|value| value.as_u64() == Some(slot as u64))
+                    })
+            });
+        return json!(
+            visible
+                && send(
+                    app,
+                    json!({"kind":"layout-focus","slot":slot,"generation":generation})
+                )
+        );
     }
     // Revoke immediately, before the asynchronous Node layout update arrives.
     metadata_view_begin(app);
@@ -1651,6 +1693,37 @@ fn raise_surface(view: &Webview) {
     #[cfg(not(target_os = "macos"))]
     let _ = view;
 }
+/// Called only after full native layout validation; back-to-front for AppKit.
+fn ordered_bounds(value: &Value) -> Vec<&Value> {
+    let mut bounds: Vec<&Value> = value["bounds"].as_array().unwrap().iter().collect();
+    if value["kind"] == "layout-v2" {
+        bounds.sort_by_key(|bound| bound["z"].as_u64().unwrap());
+    }
+    bounds
+}
+#[cfg(test)]
+mod arrangement_order_tests {
+    use super::*;
+    #[test]
+    fn v2_surfaces_are_raised_back_to_front_without_reordering_legacy_layout() {
+        let mut value = json!({"kind":"layout-v2","bounds":[{"slot":0,"z":2},{"slot":1,"z":0},{"slot":2,"z":1}]});
+        assert_eq!(
+            ordered_bounds(&value)
+                .iter()
+                .map(|v| v["slot"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![1, 2, 0]
+        );
+        value["kind"] = json!("layout");
+        assert_eq!(
+            ordered_bounds(&value)
+                .iter()
+                .map(|v| v["slot"].as_u64().unwrap())
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2]
+        );
+    }
+}
 fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
         return;
@@ -1705,7 +1778,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             let _ = chrome.hide();
         }
     }
-    for bound in value["bounds"].as_array().unwrap() {
+    for bound in ordered_bounds(value) {
         let slot = bound["slot"].as_u64().unwrap();
         let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
             continue;
@@ -2727,6 +2800,7 @@ async fn start_selected_inner(
         permission_review: None,
         layout_generation: 0,
         layout_revision: 0,
+        last_focus_notice: None,
         presentation_suspended: true,
         busy: vec![false; count],
         reviewing: vec![false; count],
@@ -2978,7 +3052,7 @@ async fn start_selected_inner(
                         }
                     } else if value["kind"] == "confirm" {
                         confirm(&app, &value).await;
-                    } else if value["kind"] == "layout" {
+                    } else if value["kind"] == "layout" || value["kind"] == "layout-v2" {
                         apply_layout(&app, &value);
                     } else {
                         stream_outcome = Outcome::ProtocolRejected;

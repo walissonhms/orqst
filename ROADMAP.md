@@ -2,6 +2,9 @@
 
 ## Feature canvas increment — 2026-11-05
 
+The native facade supports versioned Studio arrangement and free-mode overlap;
+renderer integration and actual AppKit drag/focus acceptance remain pending.
+
 Claude now has a narrow receipt-backed owned-session projection for tool names;
 Codex/OpenCode binding and real-provider acceptance remain open.
 

@@ -1,5 +1,16 @@
 # Security model
 
+## Studio arrangement boundary — 2026-11-05
+
+The layout-only `arrange` action is accepted only from the current focused native
+Feature chrome, through the existing epoch, document, generation, membership,
+metadata-review and Quit fences. Node checks exact current slot/terminal UUID
+membership; Rust independently validates the viewport, insets, geometry, overlap
+policy and back-to-front order before applying any Webview bounds. Hiding a Webview
+never stops a process. Native first-responder checks, rather than renderer focus
+claims, govern click-to-front; the notice and geometry channel are rate-limited.
+No resize or ordering action grants keyboard input or process authority.
+
 ## Renderer unavailable presentation fence — 2026-11-05
 
 Renderer termination sets an app-lifetime unavailable latch and invalidates the

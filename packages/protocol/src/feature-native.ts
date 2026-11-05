@@ -13,10 +13,46 @@ import {
 
 const base = { contractVersion: z.literal(1), generation: z.number().int().nonnegative().safe() };
 const featureId = z.uuid();
+const logical = z.number().finite().min(0).max(32768);
+const arrangementPaneSchema = z
+  .strictObject({
+    slot: z.number().int().min(0).max(7),
+    terminalId: z.uuid(),
+    visible: z.boolean(),
+    z: z.number().int().min(0).max(255),
+    rect: z
+      .strictObject({
+        x: logical,
+        y: logical,
+        width: logical.positive(),
+        height: logical.positive(),
+      })
+      .nullable(),
+  })
+  .refine((pane) => pane.visible === (pane.rect !== null));
 /** Metadata/view only. No process bindings, paths, execution proofs, team grants or generic RPC. */
 export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('snapshot') }),
   z.strictObject({ ...base, action: z.literal('canvas') }),
+  z
+    .strictObject({
+      ...base,
+      action: z.literal('arrange'),
+      layoutVersion: z.literal(1),
+      mode: z.enum(['mosaic', 'columns', 'rows', 'focus', 'list', 'free']),
+      viewport: z.strictObject({
+        width: z.number().int().positive().max(32768),
+        height: z.number().int().positive().max(32768),
+      }),
+      panes: z.array(arrangementPaneSchema).max(8),
+    })
+    .refine(
+      (value) =>
+        new Set(value.panes.map((pane) => pane.slot)).size === value.panes.length &&
+        new Set(value.panes.map((pane) => pane.terminalId)).size === value.panes.length &&
+        (value.mode !== 'list' || value.panes.every((pane) => !pane.visible)) &&
+        (value.mode !== 'focus' || value.panes.filter((pane) => pane.visible).length <= 1),
+    ),
   z.strictObject({
     ...base,
     action: z.literal('create'),
@@ -255,5 +291,9 @@ export type FeaturePreparationReply = z.infer<typeof featurePreparationReplySche
 export interface DesktopFeatures {
   readonly contractVersion: 1;
   request(input: FeatureNativeRequest): Promise<FeatureNativeReply>;
+  /** Passive native geometry; latest pending drag frame wins. */
+  arrange?(
+    input: Extract<FeatureNativeRequest, { action: 'arrange' }>,
+  ): Promise<FeatureNativeReply>;
   showPreparationDrawer?(input: FeaturePreparationRequest): Promise<FeaturePreparationReply>;
 }

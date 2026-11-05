@@ -1,5 +1,12 @@
 # Changelog
 
+## Native Studio arrangement — 2026-11-05
+
+- Add a versioned current-Feature geometry contract for retained child Webviews,
+  with free-mode overlap, bounded drag coalescing and native back-to-front order.
+- Preserve input revocation and process ownership when panes are hidden or moved.
+  Native drag/focus acceptance and renderer integration remain pending.
+
 ## Owned Claude session evidence — 2026-11-05
 
 - Bind a Claude session only after a fresh explicit launch UUID, owned lifecycle

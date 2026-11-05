@@ -14,6 +14,7 @@ if (
       location.href === 'orqst-features://local/index.html'
         ? (request) => invoke('feature_prepare', { request })
         : undefined,
+      location.href === 'orqst-features://local/index.html',
     ),
   });
   if (location.href === 'orqst-features://local/index.html') {

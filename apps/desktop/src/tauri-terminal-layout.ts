@@ -6,6 +6,9 @@ import {
   type TerminalLayoutState,
   type TerminalViewAction,
 } from './terminal-layout.js';
+import { featureNativeRequestSchema, type FeatureNativeRequest } from '@orqst/protocol';
+
+type Arrangement = Extract<FeatureNativeRequest, { action: 'arrange' }>;
 
 /** Native layout adapter only. No CLI, process, input or session recovery authority. */
 export class TauriTerminalLayout {
@@ -23,6 +26,7 @@ export class TauriTerminalLayout {
   private layoutRevision = 0;
   private nativeGeneration = 0;
   private saveError = false;
+  private arrangement?: Arrangement;
 
   constructor(
     private count: number,
@@ -70,7 +74,15 @@ export class TauriTerminalLayout {
       order: [...this.state.order],
       shown: [...this.state.shown],
       names: [...this.state.names],
-      visible: this.suspended || this.canvas ? [] : page.visible,
+      visible:
+        this.suspended || this.canvas
+          ? []
+          : this.arrangement
+            ? this.arrangement.panes
+                .filter((pane) => pane.visible)
+                .sort((a, b) => a.z - b.z)
+                .map((pane) => pane.slot)
+            : page.visible,
       count: this.count,
       persisted: this.persisted,
       suspended: this.suspended,
@@ -94,8 +106,11 @@ export class TauriTerminalLayout {
       state.columns,
       state.axis,
     ).columns;
+    const custom =
+      this.arrangement && !state.suspended && !state.canvas ? this.arrangement : undefined;
     this.send({
-      kind: 'layout',
+      kind: custom ? 'layout-v2' : 'layout',
+      ...(custom ? { mode: custom.mode } : {}),
       generation: this.nativeGeneration,
       revision: ++this.layoutRevision,
       viewport: { width: this.width, height: this.height },
@@ -104,6 +119,23 @@ export class TauriTerminalLayout {
       focus,
       bounds: Array.from({ length: this.count }, (_, slot) => {
         const position = state.visible.indexOf(slot);
+        const placement = custom?.panes.find((pane) => pane.slot === slot);
+        if (custom) {
+          const rect = placement?.visible ? placement.rect : null;
+          const rounded = rect
+            ? {
+                x: Math.round(rect.x),
+                y: Math.round(rect.y),
+                width: Math.round(rect.x + rect.width) - Math.round(rect.x),
+                height: Math.round(rect.y + rect.height) - Math.round(rect.y),
+              }
+            : null;
+          return {
+            slot,
+            rect: rounded ? this.offset(rounded, left, top) : null,
+            z: position < 0 ? 0 : position,
+          };
+        }
         return {
           slot,
           rect:
@@ -141,6 +173,82 @@ export class TauriTerminalLayout {
     return { ...rect, x: rect.x + left, y: rect.y + top };
   }
 
+  /** Apply geometry only, keeping the retained PTYs and their process ownership unchanged. */
+  arrange(input: Arrangement): boolean {
+    if (this.suspended || !this.chrome || !featureNativeRequestSchema.safeParse(input).success)
+      return false;
+    const left = this.width <= 720 ? 46 : 155;
+    const width = this.width - left;
+    const height = this.height - 115;
+    if (
+      width <= 0 ||
+      height <= 0 ||
+      input.viewport.width !== width ||
+      input.viewport.height !== height ||
+      input.panes.length !== this.state.order.length ||
+      new Set(input.panes.map((pane) => pane.slot)).size !== input.panes.length ||
+      input.panes.some((pane) => !this.state.order.includes(pane.slot))
+    )
+      return false;
+    const visible = input.panes.filter((pane) => pane.visible);
+    if ((input.mode === 'list' && visible.length) || (input.mode === 'focus' && visible.length > 1))
+      return false;
+    for (const pane of input.panes) {
+      const rect = pane.rect;
+      if (
+        pane.visible !== (rect !== null) ||
+        !Number.isInteger(pane.z) ||
+        pane.z < 0 ||
+        pane.z > 255
+      )
+        return false;
+      if (!rect) continue;
+      if (
+        ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
+        rect.x < 0 ||
+        rect.y < 0 ||
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        rect.x + rect.width > width ||
+        rect.y + rect.height > height ||
+        Math.round(rect.x + rect.width) <= Math.round(rect.x) ||
+        Math.round(rect.y + rect.height) <= Math.round(rect.y)
+      )
+        return false;
+    }
+    const overlaps = (a: NonNullable<Arrangement['panes'][number]['rect']>, b: typeof a) =>
+      a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    if (
+      input.mode !== 'free' &&
+      visible.some((a, i) => visible.slice(i + 1).some((b) => overlaps(a.rect!, b.rect!)))
+    )
+      return false;
+    const prior = this.arrangement;
+    const topology = (value: Arrangement | undefined) =>
+      JSON.stringify(
+        value?.panes
+          .filter((p) => p.visible)
+          .sort((a, b) => a.z - b.z)
+          .map((p) => p.slot) ?? [],
+      );
+    const covered = (value: Arrangement | undefined) => {
+      const stack = value?.panes.filter((pane) => pane.visible).sort((a, b) => a.z - b.z) ?? [];
+      const index = stack.findIndex((pane) => pane.slot === this.state.active);
+      const active = stack[index];
+      return !!active && stack.slice(index + 1).some((pane) => overlaps(active.rect!, pane.rect!));
+    };
+    if (!prior || topology(prior) !== topology(input)) {
+      for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
+    } else if (!covered(prior) && covered(input)) this.revoke(this.state.active);
+    this.state.shown = this.state.order.filter(
+      (slot) => this.state.shown.includes(slot) || visible.some((pane) => pane.slot === slot),
+    );
+    this.arrangement = structuredClone(input);
+    this.canvas = false;
+    this.publish();
+    return true;
+  }
+
   private persist(): void {
     const revision = ++this.saveRevision;
     const finished = (saved: boolean) => {
@@ -175,6 +283,7 @@ export class TauriTerminalLayout {
   setNativeGeneration(generation: number): void {
     if (generation <= this.nativeGeneration) return;
     this.nativeGeneration = generation;
+    this.arrangement = undefined;
     this.presentation++;
   }
 
@@ -184,6 +293,7 @@ export class TauriTerminalLayout {
 
   /** A summary view never changes pane membership, hidden preferences or process state. */
   showCanvas(): void {
+    this.arrangement = undefined;
     this.suspended = false;
     this.canvas = true;
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
@@ -197,6 +307,7 @@ export class TauriTerminalLayout {
     open = true,
     canvas = false,
   ): void {
+    this.arrangement = undefined;
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
     this.presentation++;
     this.saveRevision++;
@@ -215,12 +326,19 @@ export class TauriTerminalLayout {
     const before = this.snapshot().visible;
     this.width = width;
     this.height = height;
+    if (this.arrangement)
+      this.arrangement = {
+        ...this.arrangement,
+        mode: 'list',
+        panes: this.arrangement.panes.map((pane) => ({ ...pane, visible: false, rect: null })),
+      };
     const after = this.snapshot().visible;
     for (const slot of before) if (!after.includes(slot)) this.revoke(slot);
     this.publish();
   }
 
   suspend(): void {
+    this.arrangement = undefined;
     this.presentation++;
     this.suspended = true;
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
@@ -228,7 +346,28 @@ export class TauriTerminalLayout {
   }
 
   focus(slot: number): void {
-    if (this.state.active === slot || !this.snapshot().visible.includes(slot)) return;
+    if (!this.snapshot().visible.includes(slot)) return;
+    if (this.arrangement?.mode === 'free') {
+      const stack = this.arrangement.panes.filter((pane) => pane.visible).sort((a, b) => a.z - b.z);
+      if (stack.at(-1)?.slot !== slot) {
+        const ordered = [
+          ...stack.filter((pane) => pane.slot !== slot),
+          ...stack.filter((pane) => pane.slot === slot),
+        ];
+        this.arrangement = {
+          ...this.arrangement,
+          panes: this.arrangement.panes.map((pane) => ({
+            ...pane,
+            z: Math.max(
+              0,
+              ordered.findIndex((item) => item.slot === pane.slot),
+            ),
+          })),
+        };
+        this.publish();
+      }
+    }
+    if (this.state.active === slot) return;
     this.state.active = slot;
     this.persist();
     this.publish();
@@ -237,6 +376,7 @@ export class TauriTerminalLayout {
   open(slot: number): boolean {
     if (this.firstOpen && slot === 0 && this.preferences.initial) slot = this.state.active;
     if (!this.state.order.includes(slot)) return false;
+    this.arrangement = undefined;
     this.firstOpen = false;
     this.suspended = false;
     this.canvas = false;
@@ -258,6 +398,7 @@ export class TauriTerminalLayout {
         !this.state.order.includes(slot)
       )
         return false;
+      this.arrangement = undefined;
       this.state.shown = [slot, ...this.state.shown.filter((index) => index !== slot)];
       this.state.maximized = null;
       this.state.active = slot;
@@ -265,6 +406,7 @@ export class TauriTerminalLayout {
       return true;
     }
     if (!this.snapshot().visible.includes(slot)) return false;
+    this.arrangement = undefined;
     return this.apply(slot, action);
   }
 
@@ -272,6 +414,7 @@ export class TauriTerminalLayout {
   workspaceAct(slot: number, raw: unknown): boolean {
     if (this.suspended || !this.state.order.includes(slot)) return false;
     if (raw === 'focus') {
+      this.arrangement = undefined;
       this.canvas = false;
       this.state.active = slot;
       this.state.maximized = slot;
@@ -294,6 +437,7 @@ export class TauriTerminalLayout {
         !this.state.order.includes(action.moveTo))
     )
       return false;
+    this.arrangement = undefined;
     // Maximizing an explicitly selected tab restores only that pane, not other minimized panes.
     if (action === 'maximize' && !this.state.shown.includes(slot)) this.state.shown.push(slot);
     if (

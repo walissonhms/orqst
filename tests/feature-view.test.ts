@@ -141,6 +141,100 @@ test('selected model is bounded display metadata and does not expose preparation
   }
 });
 
+test('arrangement requires the current feature membership, exact terminal UUIDs and viewport', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    f.layout.resize(1440, 900);
+    f.layout.showCanvas();
+    const request = {
+      contractVersion: 1,
+      generation: 0,
+      action: 'arrange',
+      layoutVersion: 1,
+      mode: 'free',
+      viewport: { width: 1285, height: 785 },
+      panes: f.ids.map((terminalId, slot) => ({
+        slot,
+        terminalId,
+        visible: slot < 2,
+        z: slot,
+        rect: slot < 2 ? { x: slot * 50, y: slot * 50, width: 400, height: 300 } : null,
+      })),
+    };
+    assert.equal(featureNativeRequestSchema.safeParse(request).success, true);
+    assert.equal(
+      featureNativeRequestSchema.safeParse({
+        ...request,
+        mode: 'focus',
+        panes: request.panes.map((pane, slot) =>
+          slot === 0 ? { ...pane, z: 8 } : { ...pane, visible: false, rect: null },
+        ),
+      }).success,
+      true,
+    );
+    assert.equal((await f.service.request(request)).status, 'ok');
+    assert.deepEqual(f.layout.snapshot().visible, [0, 1]);
+    const forged = structuredClone(request);
+    forged.panes[0]!.terminalId = randomUUID();
+    assert.equal((await f.service.request(forged)).status, 'denied');
+    assert.deepEqual(f.layout.snapshot().visible, [0, 1]);
+    assert.equal((await f.service.request({ ...request, generation: 1 })).status, 'stale');
+  } finally {
+    f.close();
+  }
+});
+
+test('arrangement bridge coalesces pending drag frames and is opt-in for feature chrome', async () => {
+  const calls: unknown[] = [];
+  const invoke = async (input: unknown) => {
+    calls.push(input);
+    return { status: 'denied' };
+  };
+  assert.equal(createFeatureClient(invoke, () => false).arrange, undefined);
+  const client = createFeatureClient(invoke, () => false, undefined, true);
+  const input: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    generation: 0,
+    action: 'arrange',
+    layoutVersion: 1,
+    mode: 'list',
+    viewport: { width: 100, height: 100 },
+    panes: [],
+  };
+  const replies = await Promise.all([
+    client.arrange!(input),
+    client.arrange!(input),
+    client.arrange!(input),
+  ]);
+  assert.deepEqual(
+    replies.map((reply) => reply.status),
+    ['busy', 'busy', 'denied'],
+  );
+  assert.equal(calls.length, 1);
+  let attempts = 0;
+  const delayed = createFeatureClient(
+    async () => ({ status: ++attempts < 3 ? 'busy' : 'denied' }),
+    () => false,
+    undefined,
+    true,
+  );
+  assert.equal((await delayed.arrange!(input)).status, 'denied');
+  assert.equal(attempts, 3);
+  attempts = 0;
+  const uncertain = createFeatureClient(
+    async () => {
+      attempts++;
+      throw new Error('SYNTHETIC');
+    },
+    () => false,
+    undefined,
+    true,
+  );
+  assert.equal((await uncertain.arrange!(input)).status, 'unavailable');
+  assert.equal(attempts, 1);
+});
+
 test('workspace controls bind each off-page command to the current Feature and exact terminal UUID', async () => {
   const f = fixture();
   try {

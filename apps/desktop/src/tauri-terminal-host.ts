@@ -152,6 +152,7 @@ async function start() {
     z.strictObject({
       kind: z.literal('layout-focus'),
       slot: z.number().int().min(0).max(7),
+      generation: z.number().int().nonnegative().safe().optional(),
     }),
     z.strictObject({
       kind: z.literal('layout-open'),
@@ -395,8 +396,10 @@ async function start() {
             if (message.action === 'reopen' && message.generation !== nativeGeneration) continue;
             layout.act(message.slot, message.action, message.generation);
           } else if (message.kind === 'layout-open') layout.open(message.slot);
-          else if (message.kind === 'layout-focus') layout.focus(message.slot);
-          else if (message.kind === 'layout-suspend') layout.suspend();
+          else if (message.kind === 'layout-focus') {
+            if (message.generation === undefined || message.generation === nativeGeneration)
+              layout.focus(message.slot);
+          } else if (message.kind === 'layout-suspend') layout.suspend();
           else layout.resize(message.width, message.height);
         } else void service.receive(raw).catch(shutdown);
       } catch {
