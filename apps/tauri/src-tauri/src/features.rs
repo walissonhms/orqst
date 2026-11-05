@@ -785,7 +785,7 @@ fn escape_plain(value: &str) -> String {
         .collect()
 }
 
-/// Exact plain-text diff of the proposed policy against the current one.
+/// Exact ID-keyed review, including operations absent from the allowlist.
 pub(crate) fn permission_diff(
     feature: &str,
     current_revision: u64,
@@ -793,69 +793,82 @@ pub(crate) fn permission_diff(
     proposed: &Value,
     labels: &HashMap<String, String>,
 ) -> String {
-    let label = |id: &str| labels.get(id).cloned().unwrap_or_else(|| id.to_string());
-    let rules = |value: &Value| -> Vec<(String, String, Vec<String>)> {
-        value["rules"]
-            .as_array()
-            .map(|items| {
-                items
-                    .iter()
-                    .map(|rule| {
-                        let source = label(rule["sourceTerminalId"].as_str().unwrap_or(""));
-                        let target = label(rule["targetTerminalId"].as_str().unwrap_or(""));
-                        let ops = rule["operations"]
-                            .as_array()
-                            .map(|ops| {
-                                ops.iter()
-                                    .filter_map(|op| op.as_str().map(str::to_owned))
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        (source, target, ops)
+    let operations = ["delegate", "execute", "view"];
+    let enabled = |policy: &Value, source: &str, target: &str| -> Vec<&'static str> {
+        operations
+            .into_iter()
+            .filter(|operation| {
+                policy["rules"].as_array().is_some_and(|rules| {
+                    rules.iter().any(|r| {
+                        r["sourceTerminalId"] == source
+                            && r["targetTerminalId"] == target
+                            && r["operations"]
+                                .as_array()
+                                .is_some_and(|ops| ops.iter().any(|op| op == *operation))
                     })
-                    .collect()
+                })
             })
-            .unwrap_or_default()
+            .collect()
     };
-    let before = rules(current);
-    let after = rules(proposed);
+    let mut ids: Vec<&String> = labels.keys().collect();
+    ids.sort();
     let mut lines = vec![
         format!("Feature: {}", escape_plain(feature)),
         format!("Revision: {} -> {}", current_revision, current_revision + 1),
-        String::new(),
     ];
-    for (source, target, ops) in &after {
-        match before.iter().find(|(s, t, _)| s == source && t == target) {
-            None => lines.push(format!(
-                "ADDED {} -> {}: {}",
-                source,
-                target,
-                ops.join(", ")
-            )),
-            Some((_, _, old)) if old != ops => lines.push(format!(
-                "CHANGED {} -> {}: {} => {}",
-                source,
-                target,
-                old.join(", "),
-                ops.join(", ")
-            )),
-            _ => {}
+    if current.is_null() {
+        lines.push("NEUTRAL -> ALLOWLIST: only listed operations will be allowed by this policy; all others will be denied.".into());
+        if proposed["rules"].as_array().is_some_and(|rules| {
+            rules
+                .iter()
+                .all(|r| r["operations"].as_array().is_some_and(Vec::is_empty))
+        }) {
+            lines.push("From now on, this policy permits no operations.".into());
         }
     }
-    for (source, target, ops) in &before {
-        if !after.iter().any(|(s, t, _)| s == source && t == target) && !ops.is_empty() {
+    for source in &ids {
+        for target in &ids {
+            if source == target {
+                continue;
+            }
+            let before = if current.is_null() {
+                "neutral".to_string()
+            } else {
+                let allowed = enabled(current, source, target);
+                format!("allow [{}]", allowed.join(", "))
+            };
+            let allowed = enabled(proposed, source, target);
+            let denied: Vec<_> = operations
+                .into_iter()
+                .filter(|op| !allowed.contains(op))
+                .collect();
+            let id_label = |id: &str| {
+                format!(
+                    "{} ({})",
+                    escape_plain(id),
+                    escape_plain(labels.get(id).map(String::as_str).unwrap_or(id))
+                )
+            };
             lines.push(format!(
-                "REMOVED {} -> {}: {}",
-                source,
-                target,
-                ops.join(", ")
+                "{} -> {}: {} => allow [{}]; implicitly denied [{}]",
+                id_label(source),
+                id_label(target),
+                before,
+                allowed.join(", "),
+                denied.join(", ")
             ));
         }
     }
-    if lines.len() == 3 {
-        lines.push("No effective change".into());
-    }
     lines.join("\n")
+}
+
+fn policy_members(value: &Value, feature: &Value) -> bool {
+    valid_policy(value)
+        && feature["terminalIds"].as_array().is_some_and(|ids| {
+            value["rules"].as_array().unwrap().iter().all(|rule| {
+                ids.contains(&rule["sourceTerminalId"]) && ids.contains(&rule["targetTerminalId"])
+            })
+        })
 }
 
 fn permission_scope_generation(
@@ -946,20 +959,42 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     if current["revision"].as_u64() != Some(expected) {
         return json!({"status":"stale","permissions":current});
     }
-    let mut labels = HashMap::new();
-    if let Some(slots) = read_reply["snapshot"]["slots"].as_array() {
-        for slot in slots {
-            if let (Some(id), Some(index)) = (slot["terminalId"].as_str(), slot["slot"].as_u64()) {
-                labels.insert(id.to_owned(), format!("T-{:03}", index + 1));
-            }
-        }
-    }
-    let feature_name = read_reply["snapshot"]["features"]
+    let snapshot = &read_reply["snapshot"];
+    let Some(feature) = snapshot["features"]
         .as_array()
         .and_then(|features| features.iter().find(|f| f["featureId"] == feature_id))
-        .and_then(|f| f["name"].as_str())
-        .unwrap_or("Feature")
-        .to_owned();
+    else {
+        return denied();
+    };
+    if snapshot["activeFeatureId"] != feature_id
+        || snapshot["generation"].as_u64() != Some(generation)
+        || current["featureId"] != feature_id
+        || feature["status"] == "archived"
+        || !policy_members(&request["configuration"], feature)
+        || (!current["configuration"].is_null()
+            && !policy_members(&current["configuration"], feature))
+    {
+        return denied();
+    }
+    let mut labels = HashMap::new();
+    for id in feature["terminalIds"].as_array().unwrap() {
+        let Some(id) = id.as_str() else {
+            return denied();
+        };
+        let Some(slot) = snapshot["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|slot| slot["terminalId"] == id)
+        else {
+            return denied();
+        };
+        labels.insert(
+            id.to_owned(),
+            format!("T-{:03}", slot["slot"].as_u64().unwrap() + 1),
+        );
+    }
+    let feature_name = format!("{} ({})", feature["name"].as_str().unwrap(), feature_id);
     let detail = permission_diff(
         &feature_name,
         expected,
@@ -1526,21 +1561,40 @@ mod tests {
     }
 
     #[test]
-    fn permission_diff_reports_the_exact_change_with_labels() {
+    fn policy_validation_rejects_foreign_duplicate_and_cyclic_rules() {
+        let a = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let b = "a10636eb-3a12-4094-9123-49a4cdad27b8";
+        let c = "b10636eb-3a12-4094-9123-49a4cdad27b8";
+        let feature = json!({"terminalIds":[a,b]});
+        let rule = |source, target| json!({"sourceTerminalId":source,"targetTerminalId":target,"operations":["delegate"]});
+        let policy = |rules| json!({"schemaVersion":1,"rules":rules});
+        assert!(policy_members(&policy(vec![rule(a, b)]), &feature));
+        assert!(!policy_members(&policy(vec![rule(a, c)]), &feature));
+        assert!(!policy_members(
+            &policy(vec![rule(a, b), rule(a, b)]),
+            &feature
+        ));
+        assert!(!policy_members(
+            &policy(vec![rule(a, b), rule(b, a)]),
+            &feature
+        ));
+    }
+
+    #[test]
+    fn permission_diff_reports_ids_removals_and_neutral_empty_allowlist() {
         let labels = HashMap::from([
             ("a".to_owned(), "T-001".to_owned()),
             ("b".to_owned(), "T-002".to_owned()),
         ]);
-        let current = json!({"rules":[{"sourceTerminalId":"a","targetTerminalId":"b","operations":["view"]}]});
-        let proposed = json!({"rules":[
-            {"sourceTerminalId":"a","targetTerminalId":"b","operations":["view","execute"]},
-            {"sourceTerminalId":"b","targetTerminalId":"a","operations":["view"]}
-        ]});
-        let text = super::permission_diff("Feature <x>", 0, &current, &proposed, &labels);
-        assert!(text.contains("Feature: Feature &lt;x&gt;"));
-        assert!(text.contains("Revision: 0 -> 1"));
-        assert!(text.contains("CHANGED T-001 -> T-002: view => view, execute"));
-        assert!(text.contains("ADDED T-002 -> T-001: view"));
+        let empty = json!({"schemaVersion":1,"rules":[]});
+        let neutral = super::permission_diff("Feature <x>", 0, &Value::Null, &empty, &labels);
+        assert!(neutral.contains("Feature: Feature &lt;x&gt;"));
+        assert!(neutral.contains("NEUTRAL -> ALLOWLIST"));
+        assert!(neutral.contains("permits no operations"));
+        assert!(neutral.contains("a (T-001) -> b (T-002): neutral => allow []; implicitly denied [delegate, execute, view]"));
+        let current = json!({"schemaVersion":1,"rules":[{"sourceTerminalId":"a","targetTerminalId":"b","operations":["view"]}]});
+        let diff = super::permission_diff("Feature", 1, &current, &empty, &labels);
+        assert!(diff.contains("a (T-001) -> b (T-002): allow [view] => allow []; implicitly denied [delegate, execute, view]"));
     }
 
     #[test]
