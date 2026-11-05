@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { fsyncSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import {
@@ -39,6 +40,7 @@ export async function acquireAdmissionMutation(
   ownerInput: KernelProcessIdentity,
   exists: (identity: KernelProcessIdentity) => Promise<boolean>,
   executorPid = process.pid,
+  sync: (fd: number) => void = fsyncSync,
 ) {
   const owner = kernelProcessIdentitySchema.parse(ownerInput);
   if (
@@ -56,7 +58,7 @@ export async function acquireAdmissionMutation(
       const lock: MutationLock = { version: 1, id: randomUUID(), owner, predecessor };
       const bytes = JSON.stringify(lock) + '\n';
       // O_EXCL and fsync are mandatory; EEXIST or an uncertain write is never retried.
-      writeRecoveryFile(join(directory, name), bytes);
+      writeRecoveryFile(join(directory, name), bytes, sync);
       const held = readLock(directory, name);
       if (!held || held.bytes !== bytes) throw new Error('Mutation lock changed');
       const validate = () => {

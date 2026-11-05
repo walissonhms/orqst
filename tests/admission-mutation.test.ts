@@ -52,6 +52,33 @@ test('unreadable or partial mutation lock fails closed', async () => {
   }
 });
 
+for (const failedSync of [1, 2]) {
+  test(`mutation lock fsync failure ${failedSync} preserves the uncertain lock`, async () => {
+    const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mutation-')));
+    let calls = 0;
+    try {
+      await assert.rejects(
+        acquireAdmissionMutation(
+          directory,
+          syntheticIdentity(),
+          async () => true,
+          process.pid,
+          () => {
+            if (++calls === failedSync) throw new Error('SYNTHETIC fsync failure');
+          },
+        ),
+        /SYNTHETIC fsync failure/,
+      );
+      await assert.rejects(
+        acquireAdmissionMutation(directory, syntheticIdentity(), async () => true),
+        /in progress/,
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+}
+
 test('live holder blocks and one of two real successors wins after its death', async () => {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-mutation-')));
   const workerPath = join(directory, 'worker.cjs');
