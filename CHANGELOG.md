@@ -1249,3 +1249,26 @@ Validated on this machine: focused tests 16/16, `pnpm typecheck` 0, `pnpm lint` 
 - [ ] 2026-11-05 — open: Validate renderer termination, document-grant revocation
       and unavailable presentation without Core replacement, automatic retry,
       process adoption or ownership cleanup.
+
+## Final integration — 2026-11-05 (source state)
+
+- [x] Quit orchestration from pane-775 (2c33d2d, 781d891, 9c5ab12, c945d08,
+      5afe9b8, ca98a56) merged preserving its history: Coordinator, pending
+      replies by id+kind, pre-fence refusal, observer before consent and the RAII
+      reservation are intact. Merge `ff2fe3f`.
+- [x] Pane-778 review fixes (9c5ab12, c945d08, 5afe9b8, ca98a56) are part of the
+      same chain and preserved.
+- [x] Feature permission policies as a Core library (`000ab1b`, `cc7f5af`,
+      `6f60869`): implemented in the Core, **not yet wired into the production
+      composition**. Defaults and security boundaries documented.
+- [x] Clippy preexisting `features.rs:370` fixed (`b566426`); pane actions
+      (`eba47a5`..`6302336`); renderer termination and child incognito
+      (`48567c1`, `3f04f07`); minimized dock TS + allowlisted Rust route
+      (`ecac3dd`, `a824def`).
+- [ ] Native AppKit/WebKit acceptance of Quit, sheet, renderer termination and dock.
+- [ ] Wire the Feature permission library into the production composition.
+- [ ] Human acceptance of Claude and the packaged single-window app.
+
+Validated on this machine: `pnpm test` 1284/1284, `pnpm lint`, `pnpm typecheck`,
+`cargo test` 143 passed / 2 ignored, `cargo clippy --all-targets -D warnings` and
+rustfmt clean.
