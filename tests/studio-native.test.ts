@@ -73,6 +73,8 @@ test('studio terminals use only evidenced snapshot facts', () => {
             bindingEvidence: 'claude-argv-receipt-transcript',
           },
           activities: [{ at: 2000, kind: 'tool', label: 'Read' }],
+          agentState: 'completed',
+          turnId: '00000000-0000-4000-8000-0000000000bb',
         },
       ],
     },
@@ -89,10 +91,8 @@ test('studio terminals use only evidenced snapshot facts', () => {
   assert.equal(terminals[1]!.startedAt, 1000);
   assert.equal(terminals[1]!.lastActivity, 'Read');
   assert.equal(terminals[1]!.orchestrator, true);
-  assert.ok(
-    terminals.every((t) => t.status === 'unknown'),
-    'process state never becomes an agent state',
-  );
+  assert.equal(terminals[0]!.status, 'unknown', 'no turn evidence means unknown');
+  assert.equal(terminals[1]!.status, 'completed', 'evidenced Claude turn state is shown');
   const stale = studioTerminals(
     snapshot(),
     [],
@@ -145,11 +145,11 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
         import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
         import en from './src/locales/en-US.json';
         window.startFixture = async (snapshot) => {
-          window.frames = [];
+          window.arrangeFrames = [];
           window.orqstFeatures = {
             contractVersion: 1,
             request: async () => ({ status: 'ok', snapshot }),
-            arrange: async (input) => { window.frames.push(input); return { status: 'ok', snapshot }; },
+            arrange: async (input) => { window.arrangeFrames.push(input); return { status: 'ok', snapshot }; },
           };
           const i18n = createInstance();
           await i18n.init({ lng: 'en-US', resources: { 'en-US': { translation: en } } });
@@ -188,7 +188,7 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
     await page.addScriptTag({ content: result.outputFiles[0]!.text });
     await page.evaluate((value) => Reflect.get(window, 'startFixture')(value), snapshot());
     await page.waitForFunction(() =>
-      (Reflect.get(window, 'frames') as { panes: { visible: boolean }[] }[]).some(
+      (Reflect.get(window, 'arrangeFrames') as unknown as { panes: { visible: boolean }[] }[]).some(
         (frame) => frame.panes.filter((pane) => pane.visible).length === 2,
       ),
     );
@@ -196,9 +196,15 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
       mode: string;
       generation: number;
       viewport: { width: number; height: number };
-      panes: { terminalId: string; visible: boolean; rect: null | Record<string, number> }[];
+      panes: {
+        terminalId: string;
+        visible: boolean;
+        rect: null | { x: number; y: number; width: number; height: number };
+      }[];
     };
-    const frames = (await page.evaluate(() => Reflect.get(window, 'frames'))) as Frame[];
+    const frames = (await page.evaluate(() =>
+      Reflect.get(window, 'arrangeFrames'),
+    )) as unknown as Frame[];
     const last = frames.at(-1)!;
     assert.equal(last.generation, 7);
     assert.deepEqual(last.viewport, { width: 1440 - 155, height: 900 - 115 });
@@ -206,24 +212,30 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
     for (const pane of last.panes) {
       assert.ok(pane.rect);
       assert.ok(pane.rect.x >= 0 && pane.rect.y >= 0);
-      assert.ok(pane.rect.x + pane.rect.width! <= last.viewport.width);
-      assert.ok(pane.rect.y + pane.rect.height! <= last.viewport.height);
+      assert.ok(pane.rect.x + pane.rect.width <= last.viewport.width);
+      assert.ok(pane.rect.y + pane.rect.height <= last.viewport.height);
       assert.ok(pane.rect.y >= 30, 'the PTY starts below the pane header');
     }
-    const [a, b] = last.panes.map((pane) => pane.rect!);
+    const [a, b] = last.panes.map((pane) => pane.rect!) as [
+      { x: number; y: number; width: number; height: number },
+      { x: number; y: number; width: number; height: number },
+    ];
     assert.ok(
-      a!.x + a!.width! <= b!.x! || b!.x! + b!.width! <= a!.x! || a!.y! + a!.height! <= b!.y!,
+      a.x + a.width <= b.x ||
+        b.x + b.width <= a.x ||
+        a.y + a.height <= b.y ||
+        b.y + b.height <= a.y,
       'tiled holes do not overlap',
     );
     // Opening the pane menu hides every native view; closing it shows them again.
     await page.locator('.ts-pane').first().getByRole('button', { name: 'More actions' }).click();
     await page.waitForFunction(() => {
-      const list = Reflect.get(window, 'frames') as Frame[];
+      const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
       return list.at(-1)!.panes.every((pane) => !pane.visible);
     });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {
-      const list = Reflect.get(window, 'frames') as Frame[];
+      const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
       return list.at(-1)!.panes.every((pane) => pane.visible);
     });
     await page.close();

@@ -12,7 +12,7 @@ const EVIDENCE_MS = 10_000;
 
 /**
  * Project the native snapshot into Studio terminals. Only evidenced facts are used:
- * the agent status stays `unknown` until the host reports an evidenced agent state.
+ * the agent status comes only from evidenced turn records (otherwise `unknown`).
  */
 export function studioTerminals(
   snapshot: FeatureNativeSnapshot | undefined,
@@ -48,7 +48,8 @@ export function studioTerminals(
         name: pane?.label || label,
         provider: slot.provider,
         ...(slot.selectedModel === undefined ? {} : { model: slot.selectedModel }),
-        status: 'unknown' as const,
+        // Agent state only from evidenced turns (owned Claude today); never from the process.
+        status: entry?.agentState ?? 'unknown',
         ...(entry?.startedAt !== undefined && entry.state === 'running'
           ? { startedAt: entry.startedAt }
           : {}),
