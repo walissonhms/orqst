@@ -75,3 +75,9 @@ A trusted host may configure a cross route only with a verified grant and its
 exact request digest, managed pane bindings, and current same-Workspace Feature
 membership. The route is stored separately from the local routing matrix. It
 is not a grant: admission still rechecks both policies and the one-use proof.
+
+A compact cross usage ledger is updated in the same journal transaction as each
+admission and claim. Local and cross admission share the history, per-target queue,
+and per-actor rate limits; both dispatch paths count active and uncertain work in
+the same target and global capacity. Local accounting reads this ledger without
+parsing cross message content. A failed ledger write rolls back cross admission.

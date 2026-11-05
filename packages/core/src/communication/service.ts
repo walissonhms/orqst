@@ -412,7 +412,10 @@ export class PaneCommunication {
         !pane.capabilities.canReportTaskCompletion ||
         !adapter.ready(pane) ||
         messages.some((m) => m.targetPaneId === targetPaneId && active(m)) ||
-        messages.filter(active).length >= communicationLimits.activeTasks
+        tx.crossUsage().some((m) => m.targetPaneId === targetPaneId && m.state !== 'queued') ||
+        messages.filter(active).length +
+          tx.crossUsage().filter((m) => m.state !== 'queued').length >=
+          communicationLimits.activeTasks
       )
         return undefined;
       let content: Uint8Array;
@@ -581,6 +584,9 @@ export class PaneCommunication {
     if (!this.permitted(tx, grant, target.paneId, ['delegate', 'execute']))
       throw new Error('Feature permission denied or revision changed');
     const messages = tx.messages();
+    const crossUsage = tx.crossUsage();
+    if (messages.length + crossUsage.length >= communicationLimits.messages)
+      throw new Error('Message history capacity');
     const duplicate = messages.find(
       (m) =>
         m.workspaceId === request.workspaceId &&
@@ -615,9 +621,15 @@ export class PaneCommunication {
           m.targetPaneId === request.targetPaneId &&
           m.deliveryState === 'queued' &&
           m.taskState === 'pending',
-      ).length >= communicationLimits.queuedPerPane ||
+      ).length +
+        crossUsage.filter((m) => m.targetPaneId === request.targetPaneId && m.state === 'queued')
+          .length >=
+        communicationLimits.queuedPerPane ||
       messages.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
-        .length >= communicationLimits.admissionsPerMinute
+        .length +
+        crossUsage.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+          .length >=
+        communicationLimits.admissionsPerMinute
     )
       throw new Error('Queue or rate limit');
     const ancestry = [request.targetPaneId];

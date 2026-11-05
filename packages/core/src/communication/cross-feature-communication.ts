@@ -219,9 +219,21 @@ export class CrossFeatureCommunication {
       if (
         all.length + local.length >= communicationLimits.messages ||
         all.filter((m) => m.state === 'queued' && m.grant.target.paneId === grant.target.paneId)
-          .length >= communicationLimits.queuedPerPane
+          .length +
+          local.filter(
+            (m) =>
+              m.targetPaneId === grant.target.paneId &&
+              m.deliveryState === 'queued' &&
+              m.taskState === 'pending',
+          ).length >=
+          communicationLimits.queuedPerPane ||
+        all.filter((m) => m.grant.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+          .length +
+          local.filter((m) => m.actorId === grant.actorId && m.createdAt > this.now() - 60000)
+            .length >=
+          communicationLimits.admissionsPerMinute
       )
-        throw new Error('Cross-Feature queue capacity');
+        throw new Error('Cross-Feature queue or rate limit');
       const edges = all.map((m) => [m.grant.source.paneId, m.grant.target.paneId]);
       edges.push(
         ...local
@@ -289,7 +301,11 @@ export class CrossFeatureCommunication {
             ) ||
           tx
             .crossMessages()
-            .some((m) => m.grant.target.paneId === target.paneId && m.state === 'dispatching')
+            .some(
+              (m) =>
+                m.grant.target.paneId === target.paneId &&
+                ['dispatching', 'outcome_unknown'].includes(m.state),
+            )
         )
           return undefined;
       } catch {

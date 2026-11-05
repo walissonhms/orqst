@@ -3,6 +3,7 @@ import type {
   CrossFeatureMessage,
   CrossFeatureAudit,
   CrossFeatureRoute,
+  CrossFeatureUsage,
 } from './cross-feature-communication.js';
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/);
@@ -182,6 +183,7 @@ export type PaneProviderEvidence = z.infer<typeof paneProviderEvidenceSchema>;
 
 /** Private single-writer persistence boundary. No HTTP/MCP caller receives this interface. */
 export interface CommunicationTransaction {
+  crossUsage(): CrossFeatureUsage[];
   crossRoutes(): CrossFeatureRoute[];
   saveCrossRoute(route: CrossFeatureRoute): void;
   crossMessages(): CrossFeatureMessage[];

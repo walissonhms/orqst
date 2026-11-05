@@ -50,7 +50,28 @@ export function openCommunicationJournal(
         .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_feature_messages'")
         .get(),
     );
+  const usageExists = () =>
+    Boolean(
+      db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cross_feature_usage'")
+        .get(),
+    );
   const tx: CommunicationTransaction = {
+    crossUsage: () =>
+      usageExists()
+        ? db
+            .prepare(
+              'SELECT message_id,actor_id,target_id,state,created_at FROM cross_feature_usage',
+            )
+            .all()
+            .map((row) => ({
+              messageId: z.uuid().parse(row.message_id),
+              actorId: z.string().min(1).max(128).parse(row.actor_id),
+              targetPaneId: z.uuid().parse(row.target_id),
+              state: z.enum(['queued', 'dispatching', 'outcome_unknown']).parse(row.state),
+              createdAt: z.number().int().nonnegative().safe().parse(row.created_at),
+            }))
+        : [],
     crossRoutes: () =>
       crossExists()
         ? db
@@ -103,6 +124,13 @@ export function openCommunicationJournal(
         g.nonce,
         JSON.stringify(message),
       );
+      db.prepare('INSERT INTO cross_feature_usage VALUES (?,?,?,?,?)').run(
+        message.request.messageId,
+        g.actorId,
+        g.target.paneId,
+        message.state,
+        message.createdAt,
+      );
       crossAudit(message, event, 'admitted');
     },
     updateCross: (input, event) => {
@@ -119,6 +147,10 @@ export function openCommunicationJournal(
         throw new Error('Invalid cross-Feature transition');
       db.prepare('UPDATE cross_feature_messages SET metadata=? WHERE message_id=?').run(
         JSON.stringify(message),
+        message.request.messageId,
+      );
+      db.prepare('UPDATE cross_feature_usage SET state=? WHERE message_id=?').run(
+        message.state,
         message.request.messageId,
       );
       crossAudit(message, event, 'dispatch_claimed');
@@ -296,6 +328,9 @@ export function openCommunicationJournal(
         UNIQUE(workspace_id,target_id,idempotency_key));
       CREATE TABLE IF NOT EXISTS cross_feature_audit (
         sequence INTEGER PRIMARY KEY, metadata TEXT NOT NULL CHECK(json_valid(metadata)));
+      CREATE TABLE IF NOT EXISTS cross_feature_usage (
+        message_id TEXT PRIMARY KEY, actor_id TEXT NOT NULL, target_id TEXT NOT NULL,
+        state TEXT NOT NULL, created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS cross_feature_routes (
         workspace_id TEXT NOT NULL, source_id TEXT NOT NULL, target_id TEXT NOT NULL,
         metadata TEXT NOT NULL CHECK(json_valid(metadata)), PRIMARY KEY(workspace_id,source_id,target_id));`);
@@ -306,6 +341,14 @@ export function openCommunicationJournal(
       throw new Error('Unsupported cross-Feature journal schema');
     db.exec(`CREATE TABLE IF NOT EXISTS cross_feature_owner
       (singleton INTEGER PRIMARY KEY CHECK(singleton=1), epoch TEXT NOT NULL)`);
+    for (const message of tx.crossMessages())
+      db.prepare('INSERT OR IGNORE INTO cross_feature_usage VALUES (?,?,?,?,?)').run(
+        message.request.messageId,
+        message.grant.actorId,
+        message.grant.target.paneId,
+        message.state,
+        message.createdAt,
+      );
     const prior = db.prepare('SELECT epoch FROM cross_feature_owner WHERE singleton=1').get();
     if (existed && (!prior || prior.epoch !== epoch)) {
       for (const message of tx.crossMessages()) {
@@ -316,6 +359,10 @@ export function openCommunicationJournal(
         db.prepare('UPDATE cross_feature_messages SET metadata=? WHERE message_id=?').run(
           JSON.stringify(recovered),
           message.request.messageId,
+        );
+        db.prepare('UPDATE cross_feature_usage SET state=? WHERE message_id=?').run(
+          recovered.state,
+          recovered.request.messageId,
         );
         crossAudit(
           recovered,

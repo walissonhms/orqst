@@ -121,3 +121,12 @@ export const crossFeatureRouteSchema = z
       route.source.paneId !== route.target.paneId,
   );
 export type CrossFeatureRoute = z.infer<typeof crossFeatureRouteSchema>;
+
+/** Compact journal accounting, independent of captured message metadata. */
+export interface CrossFeatureUsage {
+  messageId: string;
+  actorId: string;
+  targetPaneId: string;
+  state: CrossFeatureMessage['state'];
+  createdAt: number;
+}
