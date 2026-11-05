@@ -1,5 +1,11 @@
 # V6 feature delivery checklist — 2026-11-04
 
+2026-11-05 pane-817 notification WIP: `b0a5ca5` contains a standalone,
+synthetically tested turn-transition and deduplication monitor. It is not wired
+to background monitoring, OS notifications, preferences or click-to-terminal;
+the current-workspace batch remains pending. No native/provider acceptance is
+claimed by this note.
+
 2026-11-05 multi-workspace groundwork: snapshot slots carry the current Workspace
 and an honest unknown agent state. Eligible workspace enumeration, independent
 cross-workspace membership and preparation, batch outcomes, evidence-backed
