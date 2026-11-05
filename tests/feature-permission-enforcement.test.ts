@@ -790,7 +790,8 @@ function multiTargetFixture() {
     };
     const service = new PaneCommunication(journal, resolver, Date.now, liveReader, undefined, lock);
     const fallback = new PaneCommunication(journal, resolver, Date.now, liveReader);
-    const register = (scope: string | undefined = feature.featureId): CommunicationPane => {
+    const legacy = new PaneCommunication(journal, resolver);
+    const register = (scope: string | undefined): CommunicationPane => {
       const pane = service.registerPane({
         workspaceId: 'synthetic',
         ...(scope === undefined ? {} : { featureId: scope }),
@@ -821,9 +822,9 @@ function multiTargetFixture() {
         feature = config.assignTerminal(feature.featureId, pane.terminalId!, feature.revision);
       return pane;
     };
-    const a = register(),
-      b = register(),
-      c = register();
+    const a = register(feature.featureId),
+      b = register(feature.featureId),
+      c = register(feature.featureId);
     const legacyTargets: CommunicationPane[] = [];
     for (let n = 0; n < 2; n++) legacyTargets.push(register(undefined));
     const grantTargets = (targets: CommunicationPane[]) =>
@@ -869,6 +870,8 @@ function multiTargetFixture() {
         authorize(service, source, targets),
       fallbackAuthorize: (source: CommunicationPane, targets: CommunicationPane[]) =>
         authorize(fallback, source, targets),
+      legacyAuthorize: (source: CommunicationPane, targets: CommunicationPane[]) =>
+        authorize(legacy, source, targets),
       policyRevision: () => config.readPermissions(feature.featureId).revision,
       close: () => {
         store.close();
@@ -899,8 +902,10 @@ test('multi-destination authorization reads one policy snapshot for every target
     assert.equal(f.state.liveReads, 0);
     // Legacy panes without a Feature keep the exact-grant contract and read no policy.
     f.route(f.legacyTargets[0]!, [f.legacyTargets[1]!]);
-    void f.authorize(f.legacyTargets[0]!, [f.legacyTargets[1]!]);
-    assert.equal(f.state.snapshotOpens, 5);
+    assert.equal(f.legacyTargets[0]!.featureId, undefined);
+    assert.equal(f.legacyTargets[1]!.featureId, undefined);
+    void f.legacyAuthorize(f.legacyTargets[0]!, [f.legacyTargets[1]!]);
+    assert.equal(f.state.snapshotOpens, 4);
     assert.equal(f.state.liveReads, 0);
   } finally {
     f.close();
