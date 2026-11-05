@@ -88,6 +88,7 @@ test('canvas session evidence stays bound to the broker slot and Claude provider
       bindingEvidence: 'claude-argv-receipt-transcript',
     },
     activities: [{ at: Date.now() - 100, kind: 'tool', label: 'Read' }],
+    agentState: 'unknown',
   };
   const s = setup(true, () => evidence);
   try {

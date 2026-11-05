@@ -9,6 +9,11 @@ turn states and native notifications with terminal focus remain open.
 metadata is available; messaging, journal-backed communication events and
 native/provider acceptance remain open.
 
+2026-11-05 Claude turn projection: bound transcript records can expose a user
+turn UUID, running, explicit end-turn or explicit API-error state. Pending
+questions/permissions, notifications and provider/native acceptance remain open;
+Codex/OpenCode remain unknown without canonical bindings.
+
 2026-11-05 owned-session increment: Claude's explicit launch UUID can bind to an
 exact newly created transcript and owned lifecycle receipt, with a private binding
 record and at most three redacted tool names. Codex/OpenCode binding, broader

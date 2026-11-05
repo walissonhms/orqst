@@ -27,6 +27,17 @@ channel would need exact session/launch correlation, turn identity, passive
 non-blocking behavior, independent configuration and consent review, and
 provider-version acceptance before being used for state or notifications.
 
+For a bounded display projection, the [Messages API stop-reason reference](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons)
+defines `end_turn` as completion of a response and `tool_use` as a tool call.
+Claude Code's transcript is a distinct, undocumented local format, so these
+fields are recognized only when present in the exact owned transcript; missing
+fields remain unknown. A [Claude Code issue](https://github.com/anthropics/claude-code/issues/96795)
+reports a pending `AskUserQuestion` is absent until answered. Consequently no
+pending prompt or permission is inferred from absence of a result; hook delivery
+is deferred. An [upstream issue](https://github.com/anthropics/claude-code/issues/87972)
+reports API errors marked `isApiErrorMessage`; this projection requires that
+explicit flag and remains unvalidated against a real owned provider session.
+
 [OpenAI's app-server documentation](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server)
 binds `thread/start` to its structured response and reports `turn/completed` with
 a turn status. It does not supply that channel to the existing interactive PTY.

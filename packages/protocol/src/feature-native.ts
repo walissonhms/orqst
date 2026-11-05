@@ -153,7 +153,9 @@ export const featureNativeSnapshotSchema = z
               name: z.string().min(1).max(2048),
             })
             .optional(),
-          agentState: z.literal('unknown').optional(),
+          agentState: z
+            .enum(['running', 'waiting_for_user', 'completed', 'failed', 'unknown'])
+            .optional(),
           // A recorded selection, not a claim about the model actually used by the CLI.
           selectedModel: z
             .string()
@@ -205,6 +207,8 @@ export const featureCanvasSessionEvidenceSchema = z.strictObject({
       }),
     )
     .max(3),
+  agentState: z.enum(['running', 'completed', 'failed', 'unknown']),
+  turnId: z.uuid().optional(),
 });
 /** Display-only owned PTY evidence, never a session status or execution grant. */
 export const featureCanvasEvidenceSchema = z
@@ -220,6 +224,8 @@ export const featureCanvasEvidenceSchema = z
           exitedAt: z.number().int().nonnegative().safe().optional(),
           session: featureCanvasSessionEvidenceSchema.shape.session.optional(),
           activities: featureCanvasSessionEvidenceSchema.shape.activities.optional(),
+          agentState: featureCanvasSessionEvidenceSchema.shape.agentState.optional(),
+          turnId: featureCanvasSessionEvidenceSchema.shape.turnId,
         }),
       )
       .max(8),
@@ -231,9 +237,13 @@ export const featureCanvasEvidenceSchema = z
       value.entries.every(
         (entry) =>
           (entry.session === undefined
-            ? entry.activities === undefined
+            ? entry.activities === undefined &&
+              entry.agentState === undefined &&
+              entry.turnId === undefined
             : entry.state !== 'unknown' &&
               entry.activities !== undefined &&
+              entry.agentState !== undefined &&
+              (entry.agentState === 'unknown' || entry.turnId !== undefined) &&
               entry.activities.every((activity) => activity.at <= value.observedAt)) &&
           (entry.state === 'unknown'
             ? entry.startedAt === undefined && entry.exitedAt === undefined
@@ -271,6 +281,21 @@ export const featureNativeReplySchema = z
           ),
         )),
     'Canvas evidence outside snapshot scope',
+  )
+  .refine(
+    (value) =>
+      value.snapshot?.slots.every(
+        (slot) =>
+          !slot.agentState ||
+          slot.agentState === 'unknown' ||
+          value.canvas?.entries.some(
+            (entry) =>
+              entry.slot === slot.slot &&
+              entry.terminalId === slot.terminalId &&
+              entry.agentState === slot.agentState,
+          ),
+      ) ?? true,
+    'Agent state requires matching owned turn evidence',
   );
 export type FeatureNativeReply = z.infer<typeof featureNativeReplySchema>;
 

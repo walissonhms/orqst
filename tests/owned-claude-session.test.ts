@@ -131,3 +131,58 @@ test('existing binding evidence is never overwritten or silently adopted', () =>
     f.close();
   }
 });
+
+test('owned Claude turns use explicit records and never process liveness', () => {
+  const f = fixture();
+  try {
+    const read = ownedClaudeSession(f.config, f.binding)!;
+    mkdirSync(f.folder, { recursive: true, mode: 0o700 });
+    const turnId = randomUUID();
+    const user = JSON.stringify({
+      sessionId: f.sessionId,
+      cwd: f.config.project,
+      type: 'user',
+      uuid: turnId,
+      message: { content: 'SYNTHETIC private prompt' },
+    });
+    const assistant = (stop_reason: string | null, extra = {}) =>
+      f.row('Read', { message: { stop_reason, content: [] }, ...extra });
+    const write = (lines: string[]) =>
+      writeFileSync(f.file, lines.join('\n') + '\n', { mode: 0o600 });
+    write([f.row('Read'), user]);
+    assert.equal(read()?.agentState, 'running');
+    assert.equal(read()?.turnId, turnId);
+    write([f.row('Read'), user, assistant('end_turn')]);
+    assert.equal(read()?.agentState, 'completed');
+    const toolResult = JSON.stringify({
+      sessionId: f.sessionId,
+      cwd: f.config.project,
+      type: 'user',
+      uuid: randomUUID(),
+      message: { content: [{ type: 'tool_result', tool_use_id: 'synthetic' }] },
+    });
+    write([f.row('Read'), user, assistant('end_turn'), toolResult]);
+    assert.equal(read()?.turnId, turnId);
+    assert.equal(read()?.agentState, 'unknown');
+    write([
+      f.row('Read'),
+      user,
+      f.row('Read', {
+        message: {
+          stop_reason: 'tool_use',
+          content: [{ type: 'tool_use', name: 'AskUserQuestion' }],
+        },
+      }),
+    ]);
+    assert.equal(read()?.agentState, 'unknown');
+    write([f.row('Read'), user, assistant(null, { isApiErrorMessage: true })]);
+    assert.equal(read()?.agentState, 'failed');
+    write([f.row('Read'), user, assistant('end_turn'), '{broken']);
+    assert.equal(read()?.agentState, 'unknown');
+    writeFileSync(f.file, [f.row('Read'), user, assistant('end_turn'), '{partial'].join('\n'));
+    assert.equal(read()?.agentState, 'unknown');
+    assert.ok(!JSON.stringify(read()).includes('SYNTHETIC private prompt'));
+  } finally {
+    f.close();
+  }
+});

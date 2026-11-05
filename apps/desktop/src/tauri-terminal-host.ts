@@ -366,7 +366,15 @@ async function start() {
                   const result = featureCanvasEvidenceSchema.safeParse(
                     await service.canvasEvidence(value.snapshot.slots, core.epoch),
                   );
-                  if (result.success) canvas = result.data;
+                  if (result.success) {
+                    canvas = result.data;
+                    for (const slot of value.snapshot.slots) {
+                      const evidence = canvas.entries.find(
+                        (entry) => entry.terminalId === slot.terminalId && entry.slot === slot.slot,
+                      );
+                      slot.agentState = evidence?.agentState ?? 'unknown';
+                    }
+                  }
                 } catch {
                   // A display read cannot trigger shutdown or authorize a retry.
                 }
