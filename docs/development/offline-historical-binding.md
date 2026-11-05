@@ -72,6 +72,66 @@ After namespace commit, cleanup-only continuation keeps the existing historical
 pre-commit snapshot scope; it does not inspect a future owner's marker or sessions.
 No historical approval is promoted into new runtime authority.
 
+## Cross-boot device namespace limitation
+
+The current contract persists `st_dev:st_ino` in the enrollment digest and compares
+it across kernel boots. The historical exception authorizes one inode substitution
+on the **same device**; it does not authorize a device namespace substitution.
+A reboot can leave paths, manifest bytes and inodes unchanged while the current
+`st_dev` differs. Such a reservation is unsupported by this contract.
+
+The first typed refusal can occur in
+`offline-recovery-files.ts::snapshotOfflineReservation`: the historical member's
+manifest identity is compared with its current device/inode before the model-source
+preimage check. `offline-recovery.ts::captureRecord` also requires the persisted
+evidence copy's complete physical record, and the snapshot's logical projection
+contains physical identities in immutable file records and database identities.
+Changing only the model-source check cannot make this transaction boot-stable.
+
+A read-only diagnostic may reconstruct the exact frozen preimage with an explicitly
+known historical device number, unchanged inode numbers, original manifest bytes
+and the already registered historical model-source list. A matching digest explains
+the failure; it does not establish that an old device number and a current device
+number designate the same persistent volume. Neither schema-1 capsule nor snapshot
+records a persistent filesystem/volume identity for that comparison. Never search
+for matching inodes, rewrite signed records or accept another identity delta to
+force continuation. A changed boot UUID alone does not prove filesystem identity.
+
+This is a lifecycle/identity coupling defect, not a native focus or approval-clock
+failure. An injected boot UUID in existing fixture success cases does not simulate
+a filesystem device namespace change. The synthetic device-only regressions cover
+the typed manifest refusal and same-device proof boundary without changing runtime
+acceptance, mounting filesystems or operating on real reservations.
+
+### Shorter normal-flow direction, separate from this reservation
+
+`tauri-terminal-preparation.ts::prepareTauriTerminals` calls
+`inspectDesktopAdmission` before non-catalog preparation. The latter intentionally
+blocks an offline gate or another owner's global marker. Restarting the app or
+creating another profile therefore cannot restore **CLI → model → Open** for a
+preserved unknown reservation.
+
+Reuse the current native catalog/selection, Core lifecycle, epoch fencing and
+signed retirement. Existing `ManagedTerminalPair::prepareRetire`/`retire` requires
+live ownership and confirmed exits for every dispatched attempt. Journal recovery
+in `terminal-journal.ts` changes interrupted live records to `ownership_lost` and
+retains their capacity; it is not a legacy reservation release path.
+
+The recommended future correction is to keep persistent Workspace/Feature/Pane
+metadata and passive CLI/model selection independent of prior runtime possession,
+and scope runtime admission/physical freshness to the actual owned runtime and
+boot. Mutable catalog/config-file inodes should not become persistent runtime
+identity. Core start still needs explicit authority and truthful capacity checks.
+This direction requires a reviewed contract change, not a new recovery phase,
+another reboot, automatic PID takeover or a bypass of the current gate. It is not
+implemented here and does not authorize opening this legacy reservation.
+
+For the existing reservation, preserve all records. A separate reviewed resolution
+must decide what historical filesystem identity evidence is actually available, or
+explicitly define a different owner-approved archival contract. No such evidence
+or authority may be inferred from the reconstructed digest. This delivery offers
+no executable workaround or claim that real release is fixed.
+
 ## Reference decision
 
 Keep ORQST's existing serializer, bounded no-follow readers, committed DB/WAL
@@ -86,6 +146,21 @@ imports shared language/types and engine types, selects speakers without grantin
 tools, and supplies no compatible historical filesystem proof (root Apache-2.0;
 license evidence remains in the preserved audit). Neither supplies this contract.
 No pane/layout/navigation redesign or Overclock source reuse is involved.
+
+For the cross-boot investigation, re-inspect those same pinned documents,
+`instanceLock.ts` and Tucano `router.ts`: keep the existing ORQST lifecycle and
+selection services. Anywh's non-Linux `takeLockFile` explicitly removes a stale PID
+lock and notes a race; importing that behavior would change ORQST's retained-unknown
+ownership contract. Its host's independent lifetime is a reference for separating
+metadata and runtime, not evidence that ORQST can adopt or release old processes.
+Pinned [`agentHost.ts::start`/`restore`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L283-L348)
+uses Node filesystem, registry/log/process-tree modules and the host socket: start
+locks, sweeps prior marked processes and restores metadata as stopped. Keep ORQST;
+copying that sweep or treating stopped metadata as an owned exit would violate
+the preserved-unknown contract.
+The exact pinned root LICENSE files remain Apache-2.0; prior tracked-tree NOTICE
+evidence is recorded in the [reuse audit](../research/reuse-first-audit.md). No
+upstream source or dependency is incorporated for these diagnostic regressions.
 
 Tests are synthetic disposable files/journals and injected kernel boots. They do
 not accept real provider content, native UI, a reboot, installed packaging or any

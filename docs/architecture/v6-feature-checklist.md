@@ -554,3 +554,14 @@ future owner preservation afterward. No native/provider/kernel acceptance added.
       complete native detail transport implemented over final 744 service freeze.
 - [ ] Serial joint review, commit-point TTL correction, package and actual native
       external-fence/focus/scrolling/operator acceptance; no real acceptance implied.
+
+## Cross-boot filesystem identity gap — 2026-11-04
+
+- [x] Explain the enrollment/evidence/snapshot device namespace coupling and add
+      synthetic device-only refusal regressions without relaxing acceptance.
+- [ ] Review a smaller normal-flow correction using existing selection, Core
+      lifecycle and boot/epoch fencing; no new administrative phases.
+- [ ] Resolve the preserved legacy reservation under a separately reviewed
+      evidence/authority contract; no real release or native acceptance claimed.
+
+See [the limitation and recommendation](../development/offline-historical-binding.md#cross-boot-device-namespace-limitation).

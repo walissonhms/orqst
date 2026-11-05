@@ -1,5 +1,13 @@
 # Changelog
 
+## Offline device namespace diagnosis — 2026-11-04
+
+- Document cross-boot `st_dev` coupling in enrollment, evidence and snapshots.
+- Add synthetic device-only refusal regressions; preserve all runtime acceptance
+  checks and the one-inode historical evidence boundary.
+- Record the existing lifecycle alternative and pending normal-flow correction;
+  no real reservation release or recovery fix is claimed.
+
 ## Exact offline historical enrollment binding — 2026-11-04
 
 - Accept an explicit private native candidate only when one model-source inode

@@ -1,5 +1,12 @@
 # ORQST
 
+## Offline cross-boot binding limitation — 2026-11-04
+
+A changed filesystem device namespace can invalidate the frozen enrollment and
+snapshot after reboot even when paths, manifest bytes and inodes remain unchanged.
+This remains an unsupported recovery case; no automatic release or extra reboot is
+recommended. See [the cause and normal-flow direction](docs/development/offline-historical-binding.md#cross-boot-device-namespace-limitation).
+
 ## Offline approval clock correction — source only — 2026-11-04
 
 Complete offline review now precedes fresh, one-use proof issuance. Native consent

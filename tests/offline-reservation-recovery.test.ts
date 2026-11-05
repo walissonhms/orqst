@@ -29,7 +29,15 @@ import { inspectDesktopAdmission } from '../packages/core/src/managed-codex/desk
 import { openTerminalJournal } from '../packages/database/src/terminal-journal.js';
 import { committedTerminalImage } from '../packages/database/src/offline-terminal-journal.js';
 import { terminalDigest } from '../packages/core/src/terminal/authority.js';
-import { terminalEnrollmentFile } from '../packages/core/src/terminal/enrollment-files.js';
+import {
+  terminalEnrollmentFile,
+  terminalEnrollmentPreimage,
+} from '../packages/core/src/terminal/enrollment-files.js';
+import {
+  historicalBindingEvidenceSchema,
+  offlineModelSourceMetadata,
+  verifyHistoricalBinding,
+} from '../packages/core/src/terminal/offline-historical-binding.js';
 import { managedCodexConfigSchema } from '../packages/core/src/terminal/codex-profile.js';
 import { managedOpenCodeConfigSchema } from '../packages/core/src/terminal/opencode-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
@@ -2293,6 +2301,67 @@ test('persisted historical evidence metadata remains strict even for unchanged b
     chmodSync(join(captured.bundle, 'historical-binding-evidence.json'), 0o400);
     await assert.rejects(f.recovery.release(captured.bundle), /evidence must be private/);
     assert.ok(existsSync(f.marker));
+  } finally {
+    f.close();
+  }
+});
+
+// SYNTHETIC device namespace only; no mount operation or real reboot is performed.
+test('historical manifest device drift refuses before review without an inode change', async () => {
+  const f = historicalFixture();
+  try {
+    const info = lstatSync(f.manifests[1]!);
+    f.evidence.member.manifestIdentity = `${info.dev + 1}:${info.ino}`;
+    f.save();
+    await assert.rejects(f.captureHistorical(), OfflineEnrollmentBindingChanged);
+    assert.equal(f.reviews.length, 0);
+    assert.equal(f.fullReviews.length, 0);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.equal(existsSync(join(f.directory, RECOVERY_GATE)), false);
+  } finally {
+    f.close();
+  }
+});
+
+test('a complete hypothetical old device preimage is not same-device historical authority', () => {
+  const f = historicalFixture(true);
+  try {
+    const binding = terminalEnrollmentFile(f.manifests[1]!, f.configs[1]!);
+    const bytes = readFileSync(binding.file);
+    const sources = offlineModelSourceMetadata(binding.config.model!.files.map(({ path }) => path));
+    const historicalDevice = String(lstatSync(binding.file).dev + 1);
+    const withDevice = (identity: string | null) =>
+      identity === null ? null : `${historicalDevice}:${identity.split(':')[1]}`;
+    const evidence = historicalBindingEvidenceSchema.parse(f.evidence);
+    evidence.member.manifestIdentity = withDevice(evidence.member.manifestIdentity)!;
+    evidence.historicalModelSource.identity = withDevice(evidence.historicalModelSource.identity)!;
+    evidence.modelSources = evidence.modelSources.map((source) => ({
+      ...source,
+      identity: withDevice(source.identity),
+    }));
+    const historicalSources = evidence.modelSources.map(
+      ({ path, identity }) => [path, identity] as const,
+    );
+    const historicalIdentities = binding.identities.map(withDevice);
+    const frozen = terminalDigest(
+      terminalEnrollmentPreimage(binding.config, historicalIdentities, bytes, historicalSources),
+    );
+    evidence.member.frozenBindingDigest = frozen;
+    assert.notEqual(binding.bindingDigest, frozen);
+    // Current metadata reconstructs the current physical preimage without source content.
+    const currentSources = sources.map(
+      ({ path, identity }) => [path, identity ? `${identity[0]}:${identity[1]}` : null] as const,
+    );
+    assert.equal(
+      terminalDigest(
+        terminalEnrollmentPreimage(binding.config, binding.identities, bytes, currentSources),
+      ),
+      binding.bindingDigest,
+    );
+    assert.throws(
+      () => verifyHistoricalBinding(evidence, binding, sources),
+      /exactly one inode on the same device/,
+    );
   } finally {
     f.close();
   }

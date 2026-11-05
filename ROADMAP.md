@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Offline identity and normal-flow gap — 2026-11-04
+
+Separate persistent selection metadata from runtime ownership and boot-scoped
+physical freshness. The current cross-boot `dev:ino` contract remains unsupported
+when the device namespace changes; preserving the legacy reservation is required.
+See [the contract limit and source-backed direction](docs/development/offline-historical-binding.md#cross-boot-device-namespace-limitation).
+
 ## Offline approval usability gate — 2026-11-04
 
 Source separates immutable full review from the short proof window and preserves
