@@ -1053,8 +1053,8 @@ async fn quit_pipe(app: &tauri::AppHandle, kind: &str) -> Option<Value> {
     value
 }
 
-pub fn owned_host_started(app: &tauri::AppHandle) -> bool {
-    app.state::<Terminals>().0.lock().unwrap().is_some()
+pub fn owned_host_started(_app: &tauri::AppHandle) -> bool {
+    crate::host_phase::owned()
 }
 
 fn quit_event(app: &tauri::AppHandle, name: &str, detail: Value) {
@@ -1065,6 +1065,10 @@ fn quit_event(app: &tauri::AppHandle, name: &str, detail: Value) {
             ));
         }
     }
+}
+
+pub fn quit_blocked_public(app: &tauri::AppHandle, reason: &str) {
+    quit_blocked(app, reason, json!([]));
 }
 
 fn quit_blocked(app: &tauri::AppHandle, reason: &str, uncertain: Value) {
@@ -1078,6 +1082,7 @@ fn quit_blocked(app: &tauri::AppHandle, reason: &str, uncertain: Value) {
 
 /// One reviewed Quit flow. Never signals twice and never fakes a clean exit.
 pub async fn quit_owned(app: tauri::AppHandle) {
+    crate::host_phase::shutdown_started();
     let Some(shutdown) = quit_pipe(&app, "shutdownOwned").await else {
         quit_blocked(&app, "transport", json!([]));
         return;
@@ -1087,13 +1092,19 @@ pub async fn quit_owned(app: tauri::AppHandle) {
         Some("ready") => {
             quit_event(&app, "orqst-terminal-fence", json!({"fence": true}));
             match quit_pipe(&app, "retireOwned").await {
-                Some(retire) if retire["status"].as_str() == Some("retired") => app.exit(0),
+                Some(retire) if retire["status"].as_str() == Some("retired") => {
+                    crate::host_phase::exit_evidence();
+                    app.exit(0);
+                }
                 _ => quit_blocked(&app, "retirement", uncertain),
             }
         }
         Some("exited_retirement_unavailable") => {
             match quit_pipe(&app, "closePreservedOwned").await {
-                Some(closed) if closed["status"].as_str() == Some("closed") => app.exit(0),
+                Some(closed) if closed["status"].as_str() == Some("closed") => {
+                    crate::host_phase::exit_evidence();
+                    app.exit(0);
+                }
                 _ => quit_blocked(&app, "transport", uncertain),
             }
         }
@@ -2179,6 +2190,7 @@ async fn start_selected_inner(
         true,
         None::<&str>,
     )?)?;
+    crate::host_phase::started();
     for (slot, pane) in panes.iter().enumerate() {
         let label = format!("terminal-{slot}");
         submenu.append(&MenuItem::with_id(
@@ -2446,6 +2458,8 @@ async fn start_selected_inner(
             )
         };
         stop_running(running);
+        // Losing the handle after a start is unknown, never proof of a clean exit.
+        crate::host_phase::lost();
     });
     if operational_open {
         metadata_view_begin(&opening_app);

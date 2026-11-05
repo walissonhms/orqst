@@ -4,6 +4,7 @@ mod agents;
 mod desktop;
 mod features;
 mod files;
+mod host_phase;
 mod local_diagnostics;
 mod offline_recovery;
 mod sidecar;
@@ -179,7 +180,9 @@ fn main() {
             if let tauri::RunEvent::Reopen { .. } = event { desktop::focus(app); }
             if let tauri::RunEvent::ExitRequested { ref api, .. } = event {
                 terminal_creation::invalidate(app);
-                if terminal::owned_host_started(app) {
+                if host_phase::consume_exit_evidence() {
+                    // The reviewed retirement evidence allows exactly this exit.
+                } else if terminal::owned_host_started(app) {
                     api.prevent_exit();
                     desktop::request_quit(app);
                 } else if terminal::confirm_exit(app) || agents::confirm_exit(app) {

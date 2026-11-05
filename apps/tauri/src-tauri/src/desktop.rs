@@ -780,6 +780,10 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
 
 /// Every exit point uses this single latched entry. No direct exit with an owned host.
 pub fn request_quit(app: &tauri::AppHandle) {
+    if crate::host_phase::lost_unknown() {
+        crate::terminal::quit_blocked_public(app, "host_lost");
+        return;
+    }
     if !crate::terminal::owned_host_started(app) {
         app.exit(0);
         return;
