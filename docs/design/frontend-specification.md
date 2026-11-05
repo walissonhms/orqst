@@ -304,6 +304,14 @@ on the native app unless stated.
 | Evidenced Claude turn state (running/completed/failed) and last tool name                                                                                       | `studio-native.ts`                                        | synthetic                                                                       |
 | Orchestrator label saved in the Feature                                                                                                                         | `FeatureWorkspace.tsx`                                    | synthetic                                                                       |
 
+| Shell v2: sidebar search/new session, Needs you / Running (recent activity only) / Recent, temporary workspaces hidden, status bar, compact headings | `App.tsx`, `shell-sections.ts`, `shell-v2.css` | `tests/shell-sections.test.ts`, browser captures |
+| Overview: running split from sessions without recent activity, compact KPI strip | `App.tsx` | browser captures |
+| Browser Studio: one honest Desktop-only state | `Studio.tsx` | browser capture |
+| Agents: per-CLI cards separating Observe from Managed terminal; `—` instead of `0` | `Agents.tsx` | browser capture |
+| Models: filter help, coverage and export collapsed behind one-line summaries | `ModelAnalytics.tsx` | browser capture |
+| Artifacts: two-column cards with a short readable excerpt | `shell-v2.css` | browser capture |
+| Workspaces/Settings: one-line paths, quieter help text | `shell-v2.css` | browser capture |
+
 Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414/1414.
 
 ### Pending

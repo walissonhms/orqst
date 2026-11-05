@@ -351,19 +351,30 @@ export function ModelAnalytics({
             {t('analytics.unidentifiedOnly')}
           </label>
         </div>
-        <p className="fine-print">
-          {t('analytics.calendar', { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
-        </p>
-        <p className="fine-print">{t('analytics.identifiers')}</p>
+        <details className="fine-print disclosure">
+          <summary>{t('analytics.filtersHelp')}</summary>
+          <p>
+            {t('analytics.calendar', { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
+          </p>
+          <p>{t('analytics.identifiers')}</p>
+        </details>
         {!request && (
           <p className="notice" role="alert">
             {t('analytics.invalidCustom')}
           </p>
         )}
       </div>
-      <p className="notice analytics-coverage">{t('analytics.incomplete')}</p>
-      <section className="panel analytics-export" aria-label={t('analytics.export.title')}>
-        <h2>{t('analytics.export.title')}</h2>
+      <details className="notice analytics-coverage disclosure">
+        <summary>{t('analytics.incompleteShort')}</summary>
+        {t('analytics.incomplete')}
+      </details>
+      <details
+        className="panel analytics-export disclosure"
+        aria-label={t('analytics.export.title')}
+      >
+        <summary>
+          <h2>{t('analytics.export.title')}</h2>
+        </summary>
         <p className="fine-print">{t('analytics.export.privacy')}</p>
         {desktop && !native ? (
           <p className="notice">{t('analytics.export.desktop')}</p>
@@ -400,7 +411,7 @@ export function ModelAnalytics({
           </>
         )}
         {exportFailure && <p role="alert">{t('analytics.export.failed')}</p>}
-      </section>
+      </details>
       {failure?.key === key && (
         <div className="notice" role="alert">
           {t(`analytics.${failure.reason}`)}

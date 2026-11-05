@@ -55,6 +55,22 @@ export function Studio({ preparationOnly = false }: { preparationOnly?: boolean 
           : snapshot.canCreate
             ? 'empty'
             : 'blocked';
+  if (!native && !window.orqstFeatures)
+    // Browser observer: terminals run only in ORQST Desktop. One short, honest state.
+    return (
+      <section className="studio-page studio-browser" aria-labelledby="studio-title">
+        <div className="studio-browser-card">
+          <Terminal size={28} aria-hidden="true" />
+          <h1 id="studio-title">{t('shell.views.studio')}</h1>
+          <p>{t(desktop ? 'studio.oldDesktop' : 'studio.browserOnly')}</p>
+          {import.meta.env.DEV && !desktop && (
+            <a className="button" href="/preview/terminals.html">
+              {t('studio.layoutPreview')}
+            </a>
+          )}
+        </div>
+      </section>
+    );
   return (
     <section className="studio-page" aria-labelledby="studio-title">
       {!preparationOnly && window.orqstFeatures && <FeatureWorkspace />}

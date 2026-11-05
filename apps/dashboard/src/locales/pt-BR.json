@@ -299,7 +299,9 @@
       "from": "Início da janela (UTC, inclusivo)",
       "to": "Fim da janela (UTC, exclusivo)",
       "missing": "Janelas indisponíveis não têm intervalo admitido terminando nelas. Elas não comprovam inatividade ou consumo zero. O cache já está incluído na entrada."
-    }
+    },
+    "filtersHelp": "Como funcionam períodos e filtros",
+    "incompleteShort": "Cobertura incompleta · detalhes"
   },
   "desktopShell": {
     "unavailable": "Bridge local indisponível",
@@ -501,7 +503,14 @@
       "unavailable": "Indisponível",
       "limits": "As capacidades descrevem suporte à observação comprovado na origem. Um turno registrado como em execução não comprova que o processo está ativo. Execução gerenciada, entrada no terminal e troca de modelo estão indisponíveis.",
       "evidence": "Evidências e limites dos adaptadores",
-      "evidenceNote": "As descrições de evidência são fornecidas pelos adaptadores e mantidas no idioma original."
+      "evidenceNote": "As descrições de evidência são fornecidas pelos adaptadores e mantidas no idioma original.",
+      "cards": "CLIs de agentes",
+      "observe": "Observar",
+      "observeOn": "Lendo sessões locais · {{count}} observadas",
+      "observeOff": "Ainda não observado",
+      "managed": "Terminal gerenciado",
+      "managedOn": "No ORQST Desktop: escolha CLI, modelo e abra",
+      "aboutMatrix": "O que esta matriz cobre"
     },
     "adapters": {
       "codex": "Codex CLI",
@@ -1010,7 +1019,8 @@
       "mcpInitialOnly": "Pares com comunicação exigem uma seleção inicial nova. Adicionar MCP a um Core existente está indisponível.",
       "openMcpPair": "Revisar e abrir par com comunicação"
     },
-    "layoutPreview": "Abrir a prévia do layout de terminais (desenvolvimento)."
+    "layoutPreview": "Abrir a prévia do layout de terminais (desenvolvimento).",
+    "browserOnly": "Os terminais rodam no app ORQST Desktop. Este navegador mostra apenas as sessões observadas."
   },
   "tauriPreparation": {
     "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",

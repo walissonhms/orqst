@@ -282,3 +282,198 @@ main .stat small {
 main .panel-heading {
   padding: 12px 16px;
 }
+
+/* Browser Studio: one honest empty state */
+.studio-browser {
+  display: grid;
+  place-items: center;
+  min-height: 60vh;
+}
+.studio-browser-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  max-width: 460px;
+  padding: 32px;
+  border: 1px solid var(--orqst-border);
+  border-radius: 14px;
+  background: var(--orqst-surface);
+  text-align: center;
+  color: var(--orqst-muted);
+}
+.studio-browser-card svg {
+  color: var(--orqst-neon);
+}
+.studio-browser-card h1 {
+  color: var(--orqst-text);
+}
+
+/* Agents: one card per CLI, observation separate from managed terminals */
+.agent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.agent-card {
+  --agent: var(--orqst-muted);
+  padding: 14px 16px;
+  border: 1px solid var(--orqst-border);
+  border-top: 2px solid var(--agent);
+  border-radius: var(--orqst-radius-panel);
+  background: var(--orqst-surface);
+}
+.agent-codex {
+  --agent: var(--orqst-info);
+}
+.agent-claude {
+  --agent: var(--orqst-warning);
+}
+.agent-opencode {
+  --agent: var(--orqst-success);
+}
+.agent-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.agent-card h2 {
+  font-size: 15px;
+}
+.agent-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--agent);
+}
+.agent-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+.agent-card dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--orqst-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.agent-card dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+.adapter-panel table {
+  table-layout: fixed;
+}
+.adapter-panel th:first-child {
+  width: 34%;
+}
+.adapter-intro summary {
+  cursor: pointer;
+  color: var(--orqst-lavender);
+}
+
+/* Long explanations collapse behind a one-line summary */
+details.disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+details.disclosure > summary::before {
+  content: 'ⓘ ';
+  color: var(--orqst-lavender);
+}
+details.disclosure[open] > summary {
+  margin-bottom: 6px;
+}
+details.analytics-export > summary h2 {
+  display: inline;
+  font-size: 14px;
+}
+details.analytics-coverage {
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* Artifacts: dense cards with a short readable excerpt */
+.artifact-source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+  gap: 10px;
+}
+.artifact-source-card {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+.artifact-source-card .panel-heading {
+  padding: 10px 14px;
+}
+.artifact-source-card .panel-heading h2,
+.artifact-source-card .panel-heading h3 {
+  font-size: 13px;
+}
+.artifact-source-excerpt {
+  display: -webkit-box;
+  margin: 0 14px;
+  max-height: 7.5em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--orqst-muted);
+}
+.artifact-source-card > .button,
+.artifact-source-card .source-detail {
+  margin: 8px 14px 12px;
+}
+.artifact-library > .fine-print,
+.workspaces-page .panel-footer {
+  font-size: 12px;
+  color: var(--orqst-subtle);
+}
+
+/* Workspaces: paths stay on one line */
+.workspace-path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+/* Settings: quieter help text, tighter groups */
+.settings-groups {
+  gap: 12px;
+}
+.settings-group {
+  padding: 16px 18px;
+}
+.settings-group .fine-print {
+  margin: 2px 0 10px;
+  color: var(--orqst-subtle);
+  font-size: 12px;
+}
+.settings-field {
+  padding: 6px 0;
+}
+.settings-page .page-heading h1 svg {
+  display: none;
+}
+
+/* The status bar replaces the old page footer. */
+.app-footer {
+  display: none;
+}
+.adapter-panel th,
+.adapter-panel td {
+  text-align: left;
+}

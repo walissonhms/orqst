@@ -299,7 +299,9 @@
       "from": "Window start (UTC, inclusive)",
       "to": "Window end (UTC, exclusive)",
       "missing": "Unavailable windows have no admitted interval ending there. They do not prove inactivity or zero consumption. Cached input is already included in input."
-    }
+    },
+    "filtersHelp": "How periods and filters work",
+    "incompleteShort": "Coverage is incomplete · details"
   },
   "desktopShell": {
     "unavailable": "Local Bridge unavailable",
@@ -501,7 +503,14 @@
       "unavailable": "Unavailable",
       "limits": "Capabilities describe source-backed observation support. A recorded running turn does not prove process liveness. Managed execution, terminal input and model changes are unavailable.",
       "evidence": "Adapter evidence & limits",
-      "evidenceNote": "Evidence descriptions are supplied by the adapters and kept in their original language."
+      "evidenceNote": "Evidence descriptions are supplied by the adapters and kept in their original language.",
+      "cards": "Agent CLIs",
+      "observe": "Observe",
+      "observeOn": "Reading local sessions · {{count}} observed",
+      "observeOff": "Not observed yet",
+      "managed": "Managed terminal",
+      "managedOn": "In ORQST Desktop: choose CLI, model and open",
+      "aboutMatrix": "What this matrix covers"
     },
     "adapters": {
       "codex": "Codex CLI",
@@ -1010,7 +1019,8 @@
       "mcpInitialOnly": "Communication pairs require a fresh initial selection. Adding MCP to an existing Core is unavailable.",
       "openMcpPair": "Review and open communication pair"
     },
-    "layoutPreview": "Open the terminal layout preview (development)."
+    "layoutPreview": "Open the terminal layout preview (development).",
+    "browserOnly": "Terminals run in the ORQST Desktop app. This browser shows observed sessions only."
   },
   "tauriPreparation": {
     "retireDenied": "Retirement was refused or could not be confirmed. Preserve the reservation, archives and journals. After a possibly dispatched authorization, this client stays locked; an archive may already exist. Quit and inspect the evidence before selecting fresh profiles. No automatic recovery or replay is performed.",
