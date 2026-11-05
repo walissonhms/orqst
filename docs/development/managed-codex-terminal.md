@@ -347,3 +347,9 @@ project. Creation requires the reviewed Codex hash in addition to its declared
 selectors stay shared; separate native start and MCP task grants remain mandatory.
 No login or compatibility claim follows from the pin. See
 [creation and safe pre-Core recovery](cli-team-recovery.md).
+
+> 2026-11-05 update: The interactive setup scripts require an existing native
+> CLI authorization and `--cli-policy-directory /absolute/path/to/managed-agents`.
+> Authorize the exact executable through Desktop first. The scripts verify that
+> local grant without running the provider and write a v2 manifest. Historical
+> command examples above predate this requirement.

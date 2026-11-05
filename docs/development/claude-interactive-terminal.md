@@ -199,3 +199,9 @@ disposable two-manifest regression now checks rejection before journal creation.
 
 > 2026-11-05: The project owner directed removal of real CLI binary SHA-256
 > values from the repository. The historical findings above are otherwise unchanged.
+
+> 2026-11-05 update: The interactive setup scripts require an existing native
+> CLI authorization and `--cli-policy-directory /absolute/path/to/managed-agents`.
+> Authorize the exact executable through Desktop first. The scripts verify that
+> local grant without running the provider and write a v2 manifest. Historical
+> command examples above predate this requirement.

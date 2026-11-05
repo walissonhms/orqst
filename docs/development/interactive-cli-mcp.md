@@ -293,3 +293,9 @@ loss, exit and invalidation remain terminal. No new network listener, credential
 exposure, renderer authority or PTY injection is introduced. The Tauri test and
 synthetic acceptance script split replay from a new native grant; the script and real
 provider acceptance were not run for this increment.
+
+> 2026-11-05 update: The interactive setup scripts require an existing native
+> CLI authorization and `--cli-policy-directory /absolute/path/to/managed-agents`.
+> Authorize the exact executable through Desktop first. The scripts verify that
+> local grant without running the provider and write a v2 manifest. Historical
+> command examples above predate this requirement.
