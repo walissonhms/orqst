@@ -69,6 +69,7 @@ export interface TerminalCliEvidence {
 }
 export interface TerminalCliReview {
   previous: Record | undefined;
+  previousProviderGrants?: readonly Record[];
   candidate: TerminalCliEvidence & {
     executable: string;
     permissionScope: string;
@@ -160,6 +161,37 @@ export class TerminalCliPolicyStore {
 
   private load(profile: Readonly<TerminalProfile>): Record | undefined {
     return this.loadSnapshot(profile).record;
+  }
+
+  /** Other paths are disclosed as candidates, without inferring which one was replaced. */
+  private previousProviderGrants(provider: CliContractProvider, executable: string): Record[] {
+    if (!this.directoryPresent()) return [];
+    const names = readdirSync(this.directory);
+    if (names.length > 4096) throw new Error('CLI policy review budget exceeded');
+    const latest = new Map<string, { revision: number; file: string }>();
+    for (const name of names) {
+      const match = /^([a-f0-9]{64})(?:\.rev-([1-9][0-9]{0,3})|\.json)$/.exec(name);
+      if (!match) continue;
+      const revision = match[2] ? Number(match[2]) : 0;
+      if (revision > 4096) throw new Error('Invalid CLI policy revision');
+      const previous = latest.get(match[1]!);
+      if (!previous || revision > previous.revision)
+        latest.set(match[1]!, { revision, file: name });
+    }
+    const records: Record[] = [];
+    for (const [key, value] of latest) {
+      const file = join(this.directory, value.file);
+      if (lstatSync(file).nlink !== 1) throw new Error('Linked CLI policy');
+      const record = recordSchema.parse(
+        JSON.parse(terminalFile(file, true, 4096).toString('utf8')),
+      );
+      if (terminalDigest(record.executable) !== key)
+        throw new Error('CLI policy identity mismatch');
+      if (record.version === 2 && record.provider === provider && record.executable !== executable)
+        records.push(record);
+    }
+    if (records.length > 16) throw new Error('Too many prior CLI grants for native review');
+    return records.sort((a, b) => a.executable.localeCompare(b.executable));
   }
 
   private identity(profile: Readonly<TerminalProfile>): string {
@@ -351,7 +383,15 @@ export class TerminalCliPolicyStore {
         cliAuthorizationScope: profile.cliAuthorizationScope,
         authorizationEpoch: randomUUID(),
       };
-      if (!(await review({ previous, candidate, ...(expectedEpoch ? { expectedEpoch } : {}) })))
+      const previousProviderGrants = this.previousProviderGrants(provider, profile.executable);
+      if (
+        !(await review({
+          previous,
+          candidate,
+          previousProviderGrants,
+          ...(expectedEpoch ? { expectedEpoch } : {}),
+        }))
+      )
         return 'blocked';
       const verified = await verifiedCliSignature(verifier, provider, profile.executable);
       this.inspect(profile);

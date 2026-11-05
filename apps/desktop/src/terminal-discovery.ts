@@ -16,10 +16,13 @@ export function discoverTerminalExecutable(
   searchPath: string,
   home: string,
 ): string[] {
-  const candidates = (
-    discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)?.candidates ??
-    []
-  )
+  const discovered = discoverLocalClis(searchPath, home).find(
+    (entry) => entry.provider === provider,
+  );
+  const ordered = [...(discovered?.candidates ?? [])].sort(
+    (a, b) => Number(b.origin === 'env') - Number(a.origin === 'env'),
+  );
+  const candidates = ordered
     .filter(({ canonical }) => {
       try {
         terminalExecutableSha256(canonical);

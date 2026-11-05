@@ -1,3 +1,4 @@
+import { findCliContract } from './cli-contract.js';
 import { v2CliBindingSchema, type V2CliBinding } from './cli-binding.js';
 import { cliAuthorizationScope } from './cli-authorization-scope.js';
 import {
@@ -52,7 +53,6 @@ const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/)
 // See docs/research/claude-code-tauri.md for source evidence and acceptance limits.
 export const reviewedClaudeTuiBinary = Object.freeze({
   version: '2.1.318',
-  sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
 });
 export const managedClaudeConfigSchema = z.strictObject({
   version: z.literal(2),
@@ -94,17 +94,8 @@ export function interactiveProvider(
 }
 
 function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
-  const pin = config.interactive.mcp
-    ? reviewedProviderMcpBinaries.claude
-    : config.executableVersion === reviewedClaudeTuiBinary.version
-      ? reviewedClaudeTuiBinary
-      : reviewedProviderMcpBinaries.claude;
-  if (config.executableVersion !== pin.version || config.executable.sha256 !== pin.sha256)
-    throw new Error(
-      config.interactive.mcp
-        ? 'No reviewed Claude MCP launch contract for this version/hash'
-        : 'No reviewed launch contract for this exact Claude binary version/hash',
-    );
+  if (!findCliContract('claude', config.interactive.mcp ? 'mcp' : 'tui', config.executableVersion))
+    throw new Error('No reviewed Claude launch contract for this version');
 }
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {

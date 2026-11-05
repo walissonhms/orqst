@@ -1,3 +1,4 @@
+import { syntheticCliAuthorization } from './terminal/synthetic-cli-authorization.js';
 import { openTerminalPaneMenu, openTerminalPaneSettings } from './terminal/ui-controls.js';
 // Explicit disposable Electron/Core/PTY exercise. Native focus/dialogs are synthetic doubles.
 import assert from 'node:assert/strict';
@@ -25,7 +26,6 @@ import { terminalLayoutRecordSchema } from '@orqst/protocol';
 import { _electron, expect, type ElectronApplication } from '@playwright/test';
 import { build } from 'esbuild';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import type { DesktopTerminal } from '@orqst/protocol';
 import { createBridge } from '../apps/bridge/src/app.js';
 
@@ -178,20 +178,7 @@ try {
         format: 'cjs',
         external: ['electron', 'node-pty'],
         logLevel: 'silent',
-        plugins: [
-          {
-            name: 'synthetic-opencode-pin-only',
-            setup(builder) {
-              builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, async (args) => ({
-                contents: (await readFile(args.path, 'utf8')).replace(
-                  reviewedProviderMcpBinaries.opencode.sha256,
-                  terminalExecutableSha256(fake),
-                ),
-                loader: 'ts',
-              }));
-            },
-          },
-        ],
+        plugins: [syntheticCliAuthorization()],
       });
   }
   const manifestBytes = await Promise.all(

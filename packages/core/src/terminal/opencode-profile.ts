@@ -30,7 +30,7 @@ export const managedOpenCodeConfigSchema = z.strictObject({
   version: z.literal(3),
   provider: z.literal('opencode'),
   trust: z.literal('native-same-user'),
-  executable: binary.extend({ sha256: z.literal(reviewedProviderMcpBinaries.opencode.sha256) }),
+  executable: binary,
   executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
   node: binary,
   toolPath: terminalToolPathSchema.optional(),

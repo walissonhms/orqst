@@ -1,3 +1,4 @@
+import { syntheticCliAuthorization } from './terminal/synthetic-cli-authorization.js';
 // Explicit disposable two-cycle Desktop/Core/PTY check. Only a compiled synthetic CLI runs.
 // Native dialogs/focus and the reviewed provider pin are test doubles, never provider acceptance.
 import assert from 'node:assert/strict';
@@ -10,8 +11,6 @@ import { promisify } from 'node:util';
 import { _electron, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { createBridge } from '../apps/bridge/src/app.js';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
-import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { readLifecycleReceipt } from '../packages/core/src/managed-codex/lifecycle-receipt.js';
 
 assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-pty']);
@@ -43,7 +42,7 @@ try {
     fake,
   ]);
   const node = await realpath(process.execPath);
-  const hash = terminalExecutableSha256(fake);
+
   const output = join(root, 'desktop');
   await cp(resolve('apps/desktop/dist'), output, { recursive: true });
   await build({
@@ -55,20 +54,7 @@ try {
     format: 'cjs',
     external: ['electron'],
     logLevel: 'silent',
-    plugins: [
-      {
-        name: 'synthetic-native-pin-only',
-        setup(builder) {
-          builder.onLoad({ filter: /terminal-creation\.ts$/ }, async ({ path }) => ({
-            contents: (await readFile(path, 'utf8')).replace(
-              reviewedDesktopCodexBinary.sha256,
-              hash,
-            ),
-            loader: 'ts',
-          }));
-        },
-      },
-    ],
+    plugins: [syntheticCliAuthorization()],
   });
   const bootstrap = join(root, 'bootstrap.cjs');
   await writeFile(

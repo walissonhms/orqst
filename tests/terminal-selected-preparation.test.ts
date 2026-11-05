@@ -30,8 +30,6 @@ import { Store } from '../packages/database/src/index.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { cliProviderIdentities } from '../packages/core/src/terminal/cli-signature.js';
 import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
-import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
@@ -55,24 +53,6 @@ await build({
   target: 'node24',
   format: 'cjs',
   logLevel: 'silent',
-  plugins: [
-    {
-      name: 'synthetic-binary-pins-only',
-      setup(builder) {
-        builder.onLoad(
-          { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
-          (args) => ({
-            contents: readFileSync(args.path, 'utf8')
-              .replaceAll(reviewedDesktopCodexBinary.sha256, hash)
-              .replaceAll(reviewedProviderMcpBinaries.claude.sha256, hash)
-              .replaceAll(reviewedClaudeTuiBinary.sha256, hash)
-              .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash),
-            loader: 'ts',
-          }),
-        );
-      },
-    },
-  ],
 });
 const { prepareTauriTerminals } = (await import(
   pathToFileURL(join(bundle, 'preparation.cjs')).href
@@ -369,7 +349,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       assert.deepEqual(discoverTerminalExecutable('claude', f.context.environment.PATH, f.home), [
         config.executable.path,
       ]);
-      assert.throws(() => backend.validate(profile), /executable changed/);
+      assert.equal(backend.validate(profile), false);
     } finally {
       f.close();
     }
@@ -408,6 +388,104 @@ test('OpenCode discovery keeps distinct candidates without asserting vendor iden
     assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [
       join(unreviewed, 'opencode'),
     ]);
+  } finally {
+    f.close();
+  }
+});
+
+test('fallback discovery skips an ineligible CLI and authorizes the first valid candidate', async () => {
+  const f = fixture(true);
+  try {
+    const firstDirectory = join(f.home, '.local/bin');
+    mkdirSync(firstDirectory, { recursive: true, mode: 0o700 });
+    const first = join(firstDirectory, 'opencode');
+    const second = join(f.home, '.opencode/bin/opencode');
+    writeFileSync(first, readFileSync(binary), { mode: 0o700 });
+    f.context.environment.PATH = '/usr/bin:/bin';
+    const discovered = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(discovered.status, 'catalog');
+    const model = discovered.catalog.providers.find((entry) => entry.provider === 'opencode')!
+      .models[0]!;
+    const examined: string[] = [];
+    const ports = {
+      ...f.ports,
+      authorizeCli: async (candidate: Parameters<typeof f.ports.authorizeCli>[0]) => {
+        examined.push(candidate.executable);
+        if (candidate.executable === first) return { status: 'ineligible' as const };
+        return f.ports.authorizeCli(candidate);
+      },
+    };
+    const prepared = await prepareTauriTerminals(
+      {
+        action: 'create-selected',
+        workspaceId: f.workspaceId,
+        featureId: null,
+        catalogId: discovered.catalog.catalogId,
+        provider: 'opencode',
+        modelId: model.id,
+        count: 1,
+      },
+      f.context,
+      ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(prepared.status, 'open');
+    assert.deepEqual(examined, [first, second]);
+    assert.equal(readInteractiveTerminalConfig(prepared.files[0]!).executable.path, second);
+  } finally {
+    f.close();
+  }
+});
+
+test('fallback CLI selection stops on cancellation without probing another candidate', async () => {
+  const f = fixture(true);
+  try {
+    const firstDirectory = join(f.home, '.local/bin');
+    mkdirSync(firstDirectory, { recursive: true, mode: 0o700 });
+    writeFileSync(join(firstDirectory, 'opencode'), readFileSync(binary), { mode: 0o700 });
+    f.context.environment.PATH = '/usr/bin:/bin';
+    const discovered = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(discovered.status, 'catalog');
+    const model = discovered.catalog.providers.find((entry) => entry.provider === 'opencode')!
+      .models[0]!;
+    let attempts = 0;
+    const result = await prepareTauriTerminals(
+      {
+        action: 'create-selected',
+        workspaceId: f.workspaceId,
+        featureId: null,
+        catalogId: discovered.catalog.catalogId,
+        provider: 'opencode',
+        modelId: model.id,
+        count: 1,
+      },
+      f.context,
+      {
+        ...f.ports,
+        authorizeCli: async () => {
+          attempts++;
+          return { status: 'blocked' as const };
+        },
+      },
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'cancelled');
+    assert.equal(attempts, 1);
+    assert.deepEqual(readdirSync(f.context.parent), []);
   } finally {
     f.close();
   }
@@ -597,7 +675,12 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       assert.deepEqual(reviews, ['mcpPair']);
       for (const config of configs) {
         const written = JSON.parse(readFileSync(join(config.state, 'terminal.json'), 'utf8'));
-        assert.deepEqual(written, config);
+        assert.equal(written.cliAuthorization.version, 2);
+        assert.deepEqual(written.executable, { path: config.executable.path });
+        assert.deepEqual(
+          readInteractiveTerminalConfig(join(config.state, 'terminal.json')),
+          config,
+        );
       }
       assert.deepEqual(
         features.read(feature.featureId).terminalIds,
@@ -1181,7 +1264,7 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
     });
     assert.ok(config.model!.files.some((file) => file.path.endsWith('/opencode/model.json')));
     // The written manifest is the complete configuration that the short consent authorized.
-    assert.deepEqual(JSON.parse(readFileSync(join(config.state, 'terminal.json'), 'utf8')), config);
+    assert.deepEqual(readInteractiveTerminalConfig(join(config.state, 'terminal.json')), config);
   } finally {
     f.close();
   }

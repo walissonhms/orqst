@@ -19,7 +19,6 @@ import test, { after } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import {
-  reviewedDesktopCodexBinary,
   prepareTerminalCreation as prepareProductionCreation,
   type TerminalCreationInput,
 } from '../apps/desktop/src/terminal-creation.js';
@@ -38,20 +37,6 @@ await build({
   target: 'node24',
   format: 'esm',
   logLevel: 'silent',
-  plugins: [
-    {
-      name: 'synthetic-codex-pin-only',
-      setup(builder) {
-        builder.onLoad({ filter: /terminal-creation\.ts$/ }, (args) => ({
-          contents: readFileSync(args.path, 'utf8').replace(
-            reviewedDesktopCodexBinary.sha256,
-            terminalExecutableSha256(realpathSync(process.execPath)),
-          ),
-          loader: 'ts',
-        }));
-      },
-    },
-  ],
 });
 const { prepareTerminalCreation } = (await import(
   pathToFileURL(join(bundle, 'creation.mjs')).href
@@ -67,9 +52,27 @@ function fixture() {
   for (const path of [project, parent, home, codexHome]) mkdirSync(path, { mode: 0o700 });
   const marker = join(parent, 'active-pair.json');
   writeFileSync(marker, 'SYNTHETIC-UNKNOWN-RESERVATION', { mode: 0o600 });
+  const executable = join(root, 'synthetic-cli');
+  writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
+  const cliEvidence = (['tui', 'mcp'] as const).map((mode) => ({
+    executable,
+    version: '0.162.1',
+    sha256: terminalExecutableSha256(executable),
+    binding: {
+      version: 2 as const,
+      provider: 'codex' as const,
+      mode,
+      teamId: '2DC432GLL2',
+      identifier: 'codex',
+      contractRevision: `codex-${mode}-0.162.1`,
+      authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+      policyRevision: 1,
+    },
+  }));
   const input: TerminalCreationInput = {
+    cliEvidence,
     provider: 'codex',
-    executable: realpathSync(process.execPath),
+    executable,
     node: realpathSync(process.execPath),
     project,
     parent,
@@ -108,7 +111,7 @@ test('creation plans without writes, publishes complete private A/B and reuses n
     for (const file of files) {
       assert.equal(lstatSync(file).mode & 0o777, 0o600);
       const persisted = JSON.parse(readFileSync(file, 'utf8'));
-      assert.equal(persisted.cliAuthorization, 'local-v2');
+      assert.equal(persisted.cliAuthorization.version, 2);
       assert.deepEqual(Object.keys(persisted.executable), ['path']);
     }
     for (const { config } of inspected) {
@@ -204,7 +207,10 @@ test('absent focus/expiry and changed project or directory identity refuse befor
 test('canonical selectors, private ancestry and exact provider pins are enforced before writes', () => {
   const f = fixture();
   try {
-    assert.throws(() => prepareProductionCreation(f.input), /reviewed Codex/);
+    assert.throws(
+      () => prepareProductionCreation({ ...f.input, cliEvidence: [] }),
+      /authorization evidence/,
+    );
     assert.throws(
       () => prepareTerminalCreation({ ...f.input, openCodeStartupAuthorized: true }),
       /provider-specific/,
@@ -212,7 +218,10 @@ test('canonical selectors, private ancestry and exact provider pins are enforced
     const alias = join(f.root, 'node-alias');
     symlinkSync(f.input.node, alias);
     assert.throws(() => prepareTerminalCreation({ ...f.input, node: alias }), /Noncanonical/);
-    assert.throws(() => prepareTerminalCreation({ ...f.input, provider: 'claude' }), /reviewed/);
+    assert.throws(
+      () => prepareTerminalCreation({ ...f.input, provider: 'claude' }),
+      /authorization evidence/,
+    );
     assert.throws(() => prepareTerminalCreation({ ...f.input, provider: 'opencode' }));
     assert.throws(() =>
       prepareTerminalCreation({ ...f.input, environment: { CODEX_HOME: 'relative' } }),

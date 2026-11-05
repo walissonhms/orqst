@@ -89,7 +89,7 @@ for (const provider of ['claude', 'opencode'] as const)
                 provider: 'claude',
                 trust: 'native-same-user',
                 executable: { path: fake, sha256: hash },
-                executableVersion: '2.1.178',
+                executableVersion: '2.1.318',
                 node: { path: node, sha256: terminalExecutableSha256(node) },
                 project,
                 state,
@@ -127,12 +127,6 @@ for (const provider of ['claude', 'opencode'] as const)
                 builder.onLoad({ filter: /.*/, namespace: 'synthetic-signature' }, () => ({
                   contents: 'export const systemCliSignatureVerifier = {};',
                   loader: 'js',
-                }));
-                builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
-                  contents: readFileSync(args.path, 'utf8')
-                    .replace(reviewedProviderMcpBinaries.claude.sha256, hash)
-                    .replace(reviewedProviderMcpBinaries.opencode.sha256, hash),
-                  loader: 'ts',
                 }));
               },
             },
@@ -225,7 +219,7 @@ for (const provider of ['claude', 'opencode'] as const)
                 ...common,
                 version: 2,
                 provider: 'claude',
-                executableVersion: reviewedProviderMcpBinaries.claude.version,
+                executableVersion: '2.1.318',
                 sessionId: randomUUID(),
                 authentication: { mode: 'reuse-existing', home, sharedNativeConfiguration: true },
                 interactive: { sharedNativeSessions: true },

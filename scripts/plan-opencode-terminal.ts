@@ -10,7 +10,7 @@ import {
 } from '../packages/core/src/terminal/codex-profile.js';
 import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 import { opencodeInteractiveLaunchPlan } from '../packages/core/src/terminal/opencode-launch-plan.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
 
 if (!/^v24\./.test(process.version)) throw new Error('OpenCode review requires Node 24');
 const { values } = parseArgs({
@@ -30,11 +30,8 @@ if (!values.executable || !values.project || !values['executable-version'])
   );
 const executable = realpathSync(values.executable);
 const hash = terminalExecutableSha256(executable);
-if (
-  values['executable-version'] !== reviewedProviderMcpBinaries.opencode.version ||
-  hash !== reviewedProviderMcpBinaries.opencode.sha256
-)
-  throw new Error('No reviewed plan for this exact OpenCode binary/version');
+if (!findCliContract('opencode', 'tui', values['executable-version']))
+  throw new Error('No reviewed plan for this OpenCode version');
 const identity: Record<string, string> = {
   HOME: realpathSync(values['user-home'] ?? homedir()),
 };

@@ -1,3 +1,4 @@
+import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 // Synthetic inputs only. No installed CLI, database, configuration or credentials are opened.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -11,7 +12,7 @@ function fixture() {
   return {
     executable: '/synthetic/opencode',
     executableVersion: reviewedProviderMcpBinaries.opencode.version,
-    executableSha256: reviewedProviderMcpBinaries.opencode.sha256,
+    executableSha256: terminalDigest('synthetic CLI bytes'),
     project: '/synthetic/project',
     nodePath: '/synthetic/node',
     nativeIdentity: {
@@ -59,7 +60,7 @@ test('OpenCode standalone candidate preserves native identity without granting l
 test('OpenCode plan rejects binary/version drift, credentials, identity injection and relative selectors', () => {
   const input = fixture();
   for (const extra of [
-    { executableSha256: '0'.repeat(64) },
+    { executableSha256: 'invalid' },
     { executableVersion: 'future' },
     { argv: ['--server', 'http://external'] },
     { sessionId: randomUUID() },

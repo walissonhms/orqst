@@ -1,3 +1,4 @@
+import { findCliContract } from '../../../packages/core/src/terminal/cli-contract.js';
 import type { V2CliBinding } from '../../../packages/core/src/terminal/cli-binding.js';
 import { terminalSlotLimit } from '@orqst/protocol';
 // Native provisioning only. No process, credential or captured session reads.
@@ -22,7 +23,6 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   managedClaudeConfigSchema,
-  reviewedClaudeTuiBinary,
   readInteractiveTerminalConfig,
   serializeInteractiveTerminalConfig,
   validateManagedClaudeConfig,
@@ -33,7 +33,6 @@ import {
   validateOpenCodeSelection,
   validateManagedOpenCodeConfig,
 } from '../../../packages/core/src/terminal/opencode-profile.js';
-import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import {
   localCliPathDirectories,
   legacyTerminalPath,
@@ -41,10 +40,9 @@ import {
 } from '../../../packages/core/src/terminal/local-cli-path.js';
 import type { LocalCliProvider } from '../../../packages/core/src/terminal/local-cli.js';
 
-// Passive hash of the selected local native candidate; no version/login/provider command run.
+// Historical version label; authorization supplies independently verified evidence.
 export const reviewedDesktopCodexBinary = Object.freeze({
   version: '0.162.1',
-  sha256: '74c6a6d263f40d65f99c27a815275f5b4ed0bcc2baecc396b4cf3255498bdfc0',
 });
 
 export interface TerminalCreationInput {
@@ -88,7 +86,7 @@ function overlaps(a: string, b: string): boolean {
   return [relative(a, b), relative(b, a)].some((path) => path !== '..' && !path.startsWith('../'));
 }
 
-/** Complete pre-write plan. Version labels are reviewed contracts, never --version evidence. */
+/** Complete pre-write plan, bound to the authorized CLI evidence. */
 export function prepareTerminalCreation(input: TerminalCreationInput) {
   const count = input.count ?? 2;
   if (!Number.isInteger(count) || count < 1 || count > terminalSlotLimit(input.limit))
@@ -144,8 +142,12 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         entry.binding.provider === provider &&
         entry.binding.mode === (input.mcp ? 'mcp' : 'tui'),
     );
-    if (input.cliEvidence && (!authorized || authorized.sha256 !== executable.sha256))
-      throw new Error('CLI authorization evidence changed');
+    if (
+      !authorized ||
+      authorized.sha256 !== executable.sha256 ||
+      !findCliContract(provider, authorized.binding.mode, authorized.version)
+    )
+      throw new Error('Missing or changed CLI authorization evidence');
     const common = {
       identity: { terminalId: randomUUID() },
       trust: 'native-same-user',
@@ -158,15 +160,13 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       state: join(root, slot),
     };
     if (provider === 'codex') {
-      if (executable.sha256 !== reviewedDesktopCodexBinary.sha256)
-        throw new Error('No reviewed Codex binary');
       const codexHome = input.environment.CODEX_HOME ?? join(input.home, '.codex');
       directories.add(codexHome);
       nativeRoots.push(codexHome);
       return managedCodexConfigSchema.parse({
         ...common,
         version: 1,
-        executableVersion: authorized?.version ?? reviewedDesktopCodexBinary.version,
+        executableVersion: authorized.version,
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -177,13 +177,6 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       });
     }
     if (provider === 'claude') {
-      const pin = input.mcp ? reviewedProviderMcpBinaries.claude : reviewedClaudeTuiBinary;
-      if (executable.sha256 !== pin.sha256)
-        throw new Error(
-          input.mcp
-            ? 'No reviewed Claude MCP launch contract for this version/hash'
-            : 'No reviewed Claude binary version/hash',
-        );
       const claudeConfigDirectory = input.environment.CLAUDE_CONFIG_DIR;
       if (claudeConfigDirectory !== undefined) directories.add(claudeConfigDirectory);
       nativeRoots.push(claudeConfigDirectory ?? join(input.home, '.claude'));
@@ -191,7 +184,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         ...common,
         version: 2,
         provider: 'claude',
-        executableVersion: authorized?.version ?? pin.version,
+        executableVersion: authorized.version,
         sessionId: randomUUID(),
         authentication: {
           mode: 'reuse-existing',
@@ -226,7 +219,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       ...common,
       version: 3,
       provider: 'opencode',
-      executableVersion: authorized?.version ?? reviewedProviderMcpBinaries.opencode.version,
+      executableVersion: authorized.version,
       authentication: { mode: 'reuse-existing', nativeIdentity, sharedNativeConfiguration: true },
       interactive: {
         sharedNativeSessions: true,
@@ -349,6 +342,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
             input.cliEvidence?.find(
               (item) =>
                 item.executable === config.executable.path &&
+                item.binding.provider === (config.version === 1 ? 'codex' : config.provider) &&
                 item.binding.mode === (input.mcp ? 'mcp' : 'tui'),
             )?.binding,
           ),

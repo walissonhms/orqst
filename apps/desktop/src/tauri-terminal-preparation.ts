@@ -27,6 +27,7 @@ export interface PreparationCliCandidate {
   executable: string;
   mode: CliContractMode;
   project: string;
+  alternatives?: readonly string[];
 }
 import {
   prepareTerminalCreation,
@@ -58,7 +59,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 
 export interface TauriPreparationPorts {
   authorizeCli(candidate: PreparationCliCandidate): Promise<{
-    status: TerminalCliAuthorizationState;
+    status: TerminalCliAuthorizationState | 'ineligible';
     version?: string;
     sha256?: string;
     binding?: V2CliBinding;
@@ -132,31 +133,44 @@ export async function prepareTauriTerminals(
     const authorizeCandidates = async (candidates: PreparationCliCandidate[]) => {
       const evidence = new Map<
         string,
-        { version: string; sha256: string; binding?: V2CliBinding }
+        { executable: string; version: string; sha256: string; binding?: V2CliBinding }
       >();
       for (const candidate of candidates) {
-        const key = JSON.stringify([candidate.provider, candidate.executable, candidate.mode]);
-        if (evidence.has(key)) continue;
-        const authorized = await ports.authorizeCli(candidate);
-        if (!current() || authorized.status === 'blocked') return;
-        if (authorized.status === 'stale') fail('cli_authorization_stale');
-        if (authorized.status !== 'allowed' || !authorized.version || !authorized.sha256)
-          return fail('selection_blocked');
-        evidence.set(key, {
-          version: authorized.version,
-          sha256: authorized.sha256,
-          ...(authorized.binding ? { binding: authorized.binding } : {}),
-        });
+        const originalKey = JSON.stringify([
+          candidate.provider,
+          candidate.executable,
+          candidate.mode,
+        ]);
+        if (evidence.has(originalKey)) continue;
+        let accepted = false;
+        for (const executable of candidate.alternatives ?? [candidate.executable]) {
+          const authorized = await ports.authorizeCli({ ...candidate, executable });
+          if (!current() || authorized.status === 'blocked') return;
+          if (authorized.status === 'ineligible') continue;
+          if (authorized.status === 'stale') fail('cli_authorization_stale');
+          if (authorized.status !== 'allowed' || !authorized.version || !authorized.sha256)
+            return fail('selection_blocked');
+          evidence.set(originalKey, {
+            executable,
+            version: authorized.version,
+            sha256: authorized.sha256,
+            ...(authorized.binding ? { binding: authorized.binding } : {}),
+          });
+          accepted = true;
+          break;
+        }
+        if (!accepted) return fail('selection_blocked');
       }
       return evidence;
     };
     const matchesPlan = (
       plan: ReturnType<typeof prepareTerminalCreation>,
-      evidence: Map<string, { version: string; sha256: string }>,
+      evidence: Map<string, { executable: string; version: string; sha256: string }>,
     ) => {
       for (const candidate of plan.cliCandidates) {
-        const key = JSON.stringify([candidate.provider, candidate.executable, candidate.mode]);
-        const authorized = evidence.get(key);
+        const authorized = [...evidence.values()].find(
+          (entry) => entry.executable === candidate.executable,
+        );
         if (
           authorized?.version !== candidate.expectedVersion ||
           authorized.sha256 !== candidate.expectedSha256
@@ -228,6 +242,7 @@ export async function prepareTauriTerminals(
         [source, ...(companion ? [companion] : [])].map(({ provider, executable }) => ({
           provider,
           executable,
+          alternatives: (provider === source.provider ? source : companion)?.alternatives,
           mode,
           project: discovered.workspace.project,
         })),
@@ -235,11 +250,11 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
-        cliEvidence: [...evidence.entries()].flatMap(([key, value]) =>
+        cliEvidence: [...evidence.values()].flatMap((value) =>
           value.binding
             ? [
                 {
-                  executable: JSON.parse(key)[1] as string,
+                  executable: value.executable,
                   version: value.version,
                   sha256: value.sha256,
                   binding: value.binding,
@@ -248,7 +263,18 @@ export async function prepareTauriTerminals(
             : [],
         ),
         ...source,
-        ...(companion ? { companion } : {}),
+        executable: evidence.get(JSON.stringify([source.provider, source.executable, mode]))!
+          .executable,
+        ...(companion
+          ? {
+              companion: {
+                ...companion,
+                executable: evidence.get(
+                  JSON.stringify([companion.provider, companion.executable, mode]),
+                )!.executable,
+              },
+            }
+          : {}),
         count,
         limit: 8,
         project: discovered.workspace.project,
@@ -339,11 +365,11 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
-        cliEvidence: [...evidence.entries()].flatMap(([key, value]) =>
+        cliEvidence: [...evidence.values()].flatMap((value) =>
           value.binding
             ? [
                 {
-                  executable: JSON.parse(key)[1] as string,
+                  executable: value.executable,
                   version: value.version,
                   sha256: value.sha256,
                   binding: value.binding,

@@ -24,7 +24,7 @@ export const opencodeNativeIdentitySchema = z.strictObject({
 const inputSchema = z.strictObject({
   executable: path,
   executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
-  executableSha256: z.literal(reviewedProviderMcpBinaries.opencode.sha256),
+  executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
   project: path,
   nativeIdentity: opencodeNativeIdentitySchema,
   nodePath: path,

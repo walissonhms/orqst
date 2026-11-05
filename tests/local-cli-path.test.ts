@@ -1,3 +1,4 @@
+import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 // Disposable synthetic executables only. Installed providers and native credentials are never opened.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -283,7 +284,7 @@ test('discovery and every provider child environment use the exact reviewed PATH
       ...common,
       version: 3,
       provider: 'opencode',
-      executable: { ...common.executable, sha256: reviewedProviderMcpBinaries.opencode.sha256 },
+      executable: { ...common.executable, sha256: terminalDigest('synthetic CLI bytes') },
       executableVersion: reviewedProviderMcpBinaries.opencode.version,
       authentication: {
         mode: 'reuse-existing',

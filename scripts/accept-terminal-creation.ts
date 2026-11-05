@@ -1,3 +1,4 @@
+import { syntheticCliAuthorization } from './terminal/synthetic-cli-authorization.js';
 // Explicit disposable Electron test. Native dialogs/focus and CLI pins are synthetic doubles.
 // Never opens a provider, credential, native database, quarantine or user profile.
 import assert from 'node:assert/strict';
@@ -18,9 +19,6 @@ import { join, resolve } from 'node:path';
 import { _electron, expect, type ElectronApplication } from '@playwright/test';
 import { build } from 'esbuild';
 import { createBridge } from '../apps/bridge/src/app.js';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
-import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 
 assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-creation']);
 assert.match(process.version, /^v24\./);
@@ -44,10 +42,14 @@ const bridge = createBridge({
 try {
   const port = await bridge.start();
   const binary = await realpath(process.execPath);
-  const hash = terminalExecutableSha256(binary);
   await mkdir(join(root, '.local/bin'), { recursive: true, mode: 0o700 });
-  for (const name of ['codex', 'claude', 'opencode', 'node'])
-    await symlink(binary, join(root, '.local/bin', name));
+  for (const [index, name] of ['codex', 'claude', 'opencode'].entries())
+    await writeFile(
+      join(root, '.local/bin', name),
+      Buffer.from([0xcf, 0xfa, 0xed, 0xfe, index, 2, 3, 4]),
+      { mode: 0o700 },
+    );
+  await symlink(binary, join(root, '.local/bin/node'));
   const output = join(root, 'desktop');
   await cp(resolve('apps/desktop/dist'), output, { recursive: true });
   await build({
@@ -59,23 +61,7 @@ try {
     format: 'cjs',
     external: ['electron'],
     logLevel: 'silent',
-    plugins: [
-      {
-        name: 'synthetic-pins-only',
-        setup(builder) {
-          builder.onLoad(
-            { filter: /(?:provider-mcp-config|terminal-creation)\.ts$/ },
-            async (args) => ({
-              contents: (await readFile(args.path, 'utf8'))
-                .replace(reviewedDesktopCodexBinary.sha256, hash)
-                .replace(reviewedProviderMcpBinaries.claude.sha256, hash)
-                .replace(reviewedProviderMcpBinaries.opencode.sha256, hash),
-              loader: 'ts',
-            }),
-          );
-        },
-      },
-    ],
+    plugins: [syntheticCliAuthorization()],
   });
   const require = createRequire(resolve('apps/desktop/package.json'));
   for (const { provider, startupAuthorized } of [
@@ -313,7 +299,8 @@ try {
     );
     assert.equal(configs.length, 2);
     for (const config of configs) {
-      assert.equal(config.executable.sha256, hash);
+      assert.deepEqual(Object.keys(config.executable), ['path']);
+      assert.equal(config.cliAuthorization.version, 2);
       assert.equal(config.node.path, binary);
       assert.equal(config.project, project);
       assert.equal(config.interactive.mcp, true);

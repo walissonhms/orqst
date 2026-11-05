@@ -209,7 +209,7 @@ for (const providers of [
           if (provider !== 'relay') {
             const input = {
               executableVersion: reviewedProviderMcpBinaries[provider].version,
-              executableSha256: reviewedProviderMcpBinaries[provider].sha256,
+              executableSha256: terminalDigest('synthetic CLI bytes'),
               nodePath: process.execPath,
               mcp: {
                 serverName: 'orqst_' + 'a'.repeat(32),

@@ -18,7 +18,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { build, type PluginBuild } from 'esbuild';
+import { build } from 'esbuild';
 import {
   managedCodexSettings,
   terminalExecutableSha256,
@@ -30,7 +30,6 @@ import {
   openCodeTerminalProfiles,
   openCodeTerminalEnvironment,
 } from '../packages/core/src/terminal/opencode-profile.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import {
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
@@ -44,7 +43,7 @@ function configFixture() {
     trust: 'native-same-user',
     executable: {
       path: '/synthetic/opencode',
-      sha256: reviewedProviderMcpBinaries.opencode.sha256,
+      sha256: terminalDigest('synthetic CLI bytes'),
     },
     executableVersion: '2.2.5',
     node: { path: '/synthetic/node', sha256: 'a'.repeat(64) },
@@ -243,18 +242,6 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
     const db = join(home, 'SYNTHETIC-UNREADABLE.db');
     writeFileSync(db, 'SYNTHETIC-NEVER-OPEN', { mode: 0o000 });
     const node = realpathSync(process.execPath);
-    const plugin = {
-      name: 'synthetic-node-hash-only',
-      setup(builder: PluginBuild) {
-        builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
-          contents: readFileSync(args.path, 'utf8').replace(
-            reviewedProviderMcpBinaries.opencode.sha256,
-            terminalExecutableSha256(node),
-          ),
-          loader: 'ts',
-        }));
-      },
-    };
     const setup = join(root, 'setup.cjs'),
       driver = join(root, 'driver.cjs'),
       selectionDriver = join(root, 'selection.cjs');
@@ -270,7 +257,6 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
         platform: 'node',
         format: 'cjs',
         target: 'node24',
-        plugins: [plugin],
         logLevel: 'silent',
       });
     const state = join(root, 'review');

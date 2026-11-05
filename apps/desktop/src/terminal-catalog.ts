@@ -10,6 +10,7 @@ import {
   type TerminalModelSelection,
 } from '../../../packages/core/src/terminal/model-selection.js';
 import {
+  discoverLocalClis,
   localCliProviders,
   type LocalCliProvider,
 } from '../../../packages/core/src/terminal/local-cli.js';
@@ -34,6 +35,13 @@ export function terminalPreparationCatalog(
       context.environment.PATH ?? '',
       context.home,
     );
+    const rawCandidates =
+      discoverLocalClis(context.environment.PATH ?? '', context.home).find(
+        (entry) => entry.provider === provider,
+      )?.candidates ?? [];
+    const hasPathLauncher = rawCandidates.some(
+      (candidate) => candidate.origin === 'env' && executables.includes(candidate.canonical),
+    );
     let models;
     try {
       models = discoverTerminalModels(
@@ -44,7 +52,7 @@ export function terminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables: [], models: null };
+      return { provider, executables: [], models: null, hasPathLauncher };
     }
     // Discovery preserves launcher PATH order. Authorization verifies this candidate later.
     const executable = executables[0] ?? null;
@@ -52,6 +60,7 @@ export function terminalPreparationCatalog(
       provider,
       executable,
       executable ? terminalExecutableSha256(executable) : null,
+      executables.map((path) => [path, terminalExecutableSha256(path)]),
       context.home,
       context.environment.PATH ?? '',
       // Only native selectors consumed by this provider, never credential variables.
@@ -75,7 +84,7 @@ export function terminalPreparationCatalog(
         id: selectionId(identity, option.label, option.selection),
       })),
     };
-    return { provider, executables, models, identity };
+    return { provider, executables, models, identity, hasPathLauncher };
   });
   const catalogId = terminalDigest(
     JSON.stringify([
@@ -138,7 +147,14 @@ export function resolveCatalogSelection(
       continue;
     const selection = { ...option.selection, ...(expiresAt ? { expiresAt } : {}) };
     if (selectionId(provider.identity, option.label, selection) === id)
-      return { provider: name, executable: provider.executables[0]!, model: selection };
+      return {
+        provider: name,
+        executable: provider.executables[0]!,
+        alternatives: provider.hasPathLauncher
+          ? provider.executables.slice(0, 1)
+          : provider.executables,
+        model: selection,
+      };
   }
   return undefined;
 }

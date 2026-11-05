@@ -16,8 +16,6 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { studioRequestSchema } from '@orqst/protocol';
-import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { discoverTerminalNode } from '../apps/desktop/src/terminal-discovery.js';
 
@@ -34,19 +32,6 @@ await build({
   format: 'esm',
   target: 'node24',
   logLevel: 'silent',
-  plugins: [
-    {
-      name: 'synthetic-pair-pins',
-      setup(builder) {
-        builder.onLoad({ filter: /(?:terminal-creation|provider-mcp-config)\.ts$/ }, (args) => ({
-          contents: readFileSync(args.path, 'utf8')
-            .replace(reviewedDesktopCodexBinary.sha256, hash)
-            .replace(reviewedProviderMcpBinaries.opencode.sha256, hash),
-          loader: 'ts',
-        }));
-      },
-    },
-  ],
 });
 const { prepareTerminalCreation } = (await import(
   pathToFileURL(join(bundle, 'creation.mjs')).href
@@ -58,16 +43,52 @@ function fixture() {
   const parent = join(root, 'profile');
   for (const path of [project, home, parent, join(home, '.codex')])
     mkdirSync(path, { mode: 0o700 });
+  const codex = join(root, 'synthetic-codex');
+  const opencode = join(root, 'synthetic-opencode');
+  writeFileSync(codex, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
+  writeFileSync(opencode, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 5, 6, 7, 8]), { mode: 0o700 });
   return {
     root,
     project,
     home,
     parent,
     node,
-    executable: node,
+    executable: codex,
     provider: 'codex' as const,
-    companion: { provider: 'opencode' as const, executable: node },
+    companion: { provider: 'opencode' as const, executable: opencode },
     environment: {},
+    cliEvidence: [
+      {
+        executable: codex,
+        version: '0.162.1',
+        sha256: terminalExecutableSha256(codex),
+        binding: {
+          version: 2 as const,
+          provider: 'codex' as const,
+          mode: 'tui' as const,
+          teamId: '2DC432GLL2',
+          identifier: 'codex',
+          contractRevision: 'codex-tui-0.162.1',
+          authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+          policyRevision: 1,
+        },
+      },
+      {
+        executable: opencode,
+        version: '2.2.5',
+        sha256: terminalExecutableSha256(opencode),
+        binding: {
+          version: 2 as const,
+          provider: 'opencode' as const,
+          mode: 'tui' as const,
+          teamId: '5NZ4Q7NXJ4',
+          identifier: 'opencode',
+          contractRevision: 'opencode-tui-2.2.5',
+          authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+          policyRevision: 1,
+        },
+      },
+    ],
     mcp: false,
   };
 }
@@ -90,8 +111,12 @@ test('mixed provisioning reviews both identities and keeps OpenCode consent prov
       const files = plan.provision(() => true);
       const saved = files.map((file) => JSON.parse(readFileSync(file, 'utf8')));
       assert.deepEqual(
-        saved.map((entry) => entry.executable.sha256),
-        [hash, hash],
+        saved.map((entry) => Object.keys(entry.executable)),
+        [['path'], ['path']],
+      );
+      assert.deepEqual(
+        saved.map((entry) => entry.cliAuthorization.provider),
+        ['codex', 'opencode'],
       );
       assert.deepEqual(readdirSync(f.project), []);
       assert.deepEqual(readdirSync(f.home), ['.codex']);
@@ -114,11 +139,15 @@ test('mixed creation rejects other combinations, wrong count and changed compani
       /Only the reviewed/,
     );
     const companion = join(f.root, 'synthetic-native-copy');
-    copyFileSync(node, companion);
-    chmodSync(companion, 0o700);
+    writeFileSync(companion, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 5, 6, 7, 8]), { mode: 0o700 });
     const plan = prepareTerminalCreation({
       ...f,
       companion: { provider: 'opencode', executable: companion },
+      cliEvidence: f.cliEvidence.map((item) =>
+        item.binding.provider === 'opencode'
+          ? { ...item, executable: companion, sha256: terminalExecutableSha256(companion) }
+          : item,
+      ),
     });
     writeFileSync(companion, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]));
     assert.throws(() => plan.provision(() => true), /executable changed/);

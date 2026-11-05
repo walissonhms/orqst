@@ -18,7 +18,6 @@ import { createInterface } from 'node:readline';
 import test, { after } from 'node:test';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
-import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import {
   prepareTauriTerminals as productionPreparation,
   tauriPreparationSchema,
@@ -29,8 +28,6 @@ import {
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { cliProviderIdentities } from '../packages/core/src/terminal/cli-signature.js';
 import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
-import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-tauri-preparation-')));
 const nativePreparationSupported =
@@ -61,25 +58,6 @@ await build({
           contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function authorizeCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); return { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } }; }`,
           loader: 'js',
         }));
-        builder.onLoad(
-          { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
-          (args) => ({
-            contents: readFileSync(args.path, 'utf8')
-              .replaceAll(
-                reviewedDesktopCodexBinary.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              )
-              .replaceAll(
-                reviewedClaudeTuiBinary.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              )
-              .replaceAll(
-                reviewedProviderMcpBinaries.claude.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              ),
-            loader: 'ts',
-          }),
-        );
       },
     },
   ],
@@ -106,10 +84,12 @@ function fixture() {
     node: realpathSync(process.execPath),
     environment: { HOME: home, PATH: '/usr/bin:/bin' },
   };
+  const executable = join(root, 'synthetic-cli');
+  writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
   const confirmations: string[] = [];
   const ports: TauriPreparationPorts = {
     current: () => true,
-    choose: async (directory) => (directory ? project : context.node),
+    choose: async (directory) => (directory ? project : executable),
     confirm: async (key, detail) => {
       confirmations.push(key);
       assert.ok(detail.length <= 4096);
@@ -153,7 +133,7 @@ function fixture() {
     commit: async () => true,
   };
   const close = () => rmSync(root, { recursive: true, force: true });
-  return { root, context, project, ports, confirmations, close };
+  return { root, context, project, executable, ports, confirmations, close };
 }
 
 for (const provider of ['codex', 'claude']) {
@@ -357,11 +337,18 @@ test('a manifest changed during opening review is never returned as open', async
   }
 });
 
-test('production pins and strict native request bounds remain enforced', async () => {
+test('unreviewed version and strict native request bounds remain enforced', async () => {
   const f = fixture();
   try {
+    const ports = {
+      ...f.ports,
+      authorizeCli: async (candidate: Parameters<TauriPreparationPorts['authorizeCli']>[0]) => ({
+        ...(await f.ports.authorizeCli(candidate)),
+        version: '999.0.0',
+      }),
+    };
     await assert.rejects(
-      productionPreparation({ action: 'create', provider: 'codex', count: 1 }, f.context, f.ports),
+      productionPreparation({ action: 'create', provider: 'codex', count: 1 }, f.context, ports),
       (error: unknown) => {
         assert.deepEqual(tauriPreparationFailure(error), {
           stage: 'plan',
@@ -414,7 +401,7 @@ test(
         child.stdin.write(
           JSON.stringify({
             id: value.id,
-            value: value.kind === 'pick' ? (value.directory ? f.project : f.context.node) : true,
+            value: value.kind === 'pick' ? (value.directory ? f.project : f.executable) : true,
           }) + '\n',
         );
     });
@@ -467,7 +454,7 @@ for (const fault of ['eof', 'wrong-id', 'oversized'] as const) {
           child.stdin.write(
             JSON.stringify({
               id: fault === 'wrong-id' ? 999 : message.id,
-              value: fault === 'oversized' ? 'x'.repeat(17000) : f.context.node,
+              value: fault === 'oversized' ? 'x'.repeat(17000) : f.executable,
             }) + '\n',
           );
       });

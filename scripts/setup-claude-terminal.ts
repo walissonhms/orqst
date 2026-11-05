@@ -14,7 +14,7 @@ import {
   managedClaudeConfigSchema,
   validateManagedClaudeConfig,
 } from '../packages/core/src/terminal/interactive-profile.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
 
 if (!/^v24\./.test(process.version))
   throw new Error('Claude terminal provisioning requires Node 24');
@@ -35,14 +35,19 @@ const { values } = parseArgs({
 });
 if (
   !values.executable ||
-  values['executable-version'] !== reviewedProviderMcpBinaries.claude.version ||
+  !values['executable-version'] ||
+  !findCliContract(
+    'claude',
+    values['interactive-mcp'] ? 'mcp' : 'tui',
+    values['executable-version'],
+  ) ||
   !values.project ||
   !values.state ||
   !values['acknowledge-shared-native-config'] ||
   !values['acknowledge-shared-native-sessions']
 )
   throw new Error(
-    'No state created. Required: --executable NATIVE_BINARY --executable-version 2.1.178 --project PROJECT --state NEW_DIRECTORY --acknowledge-shared-native-config --acknowledge-shared-native-sessions. Native identity/configuration/hooks/plugins and new session writes stay shared; no sandbox or automatic login.',
+    'No state created. Required: --executable NATIVE_BINARY --executable-version REVIEWED_VERSION --project PROJECT --state NEW_DIRECTORY --acknowledge-shared-native-config --acknowledge-shared-native-sessions. Native identity/configuration/hooks/plugins and new session writes stay shared; no sandbox or automatic login.',
   );
 if (!!values['interactive-mcp'] !== !!values['acknowledge-strict-mcp'])
   throw new Error(
@@ -50,8 +55,6 @@ if (!!values['interactive-mcp'] !== !!values['acknowledge-strict-mcp'])
   );
 const executable = realpathSync(values.executable);
 const executableHash = terminalExecutableSha256(executable);
-if (executableHash !== reviewedProviderMcpBinaries.claude.sha256)
-  throw new Error('No state created. Claude binary has no exact reviewed launch contract.');
 const node = realpathSync(process.execPath);
 const project = realpathSync(values.project);
 const state = join(realpathSync(dirname(resolve(values.state))), basename(resolve(values.state)));

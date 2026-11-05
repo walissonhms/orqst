@@ -119,7 +119,7 @@ function fixture(
           version: 3,
           provider: 'opencode',
           executableVersion: reviewedProviderMcpBinaries.opencode.version,
-          executable: { path: executable, sha256: reviewedProviderMcpBinaries.opencode.sha256 },
+          executable: { path: executable, sha256: terminalDigest('synthetic CLI bytes') },
           authentication: {
             mode: 'reuse-existing',
             nativeIdentity: { HOME: join(root, 'DO-NOT-OPEN-AUTH') },

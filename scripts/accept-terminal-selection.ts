@@ -1,3 +1,4 @@
+import { syntheticCliAuthorization } from './terminal/synthetic-cli-authorization.js';
 // Explicit disposable Electron integration. Native focus/dialog answers are doubles, not acceptance.
 // Production pins stay unchanged; the test bundle accepts Node as a SYNTHETIC, never-run provider.
 import assert from 'node:assert/strict';
@@ -9,7 +10,6 @@ import { _electron, expect, type ElectronApplication } from '@playwright/test';
 import { build } from 'esbuild';
 import { createBridge } from '../apps/bridge/src/app.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 
 assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-review']);
 assert.match(process.version, /^v24\./);
@@ -35,10 +35,11 @@ try {
     project = join(root, 'project'),
     home = join(root, 'native-home');
   for (const path of [state, project, home, join(state, 'tmp')]) await mkdir(path, { mode: 0o700 });
-  const binary = {
-    path: await realpath(process.execPath),
-    sha256: terminalExecutableSha256(process.execPath),
-  };
+  const syntheticCli = join(root, 'synthetic-opencode');
+  await writeFile(syntheticCli, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 7, 6, 5, 4]), { mode: 0o700 });
+  const binary = { path: syntheticCli, sha256: terminalExecutableSha256(syntheticCli) };
+  const nodePath = await realpath(process.execPath);
+  const node = { path: nodePath, sha256: terminalExecutableSha256(nodePath) };
   const file = join(state, 'terminal.json');
   const bytes = JSON.stringify({
     version: 3,
@@ -46,7 +47,7 @@ try {
     trust: 'native-same-user',
     executable: binary,
     executableVersion: '2.2.5',
-    node: binary,
+    node,
     project,
     state,
     authentication: {
@@ -73,20 +74,7 @@ try {
     format: 'cjs',
     external: ['electron'],
     logLevel: 'silent',
-    plugins: [
-      {
-        name: 'synthetic-review-pin-only',
-        setup(builder) {
-          builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, async (args) => ({
-            contents: (await readFile(args.path, 'utf8')).replace(
-              reviewedProviderMcpBinaries.opencode.sha256,
-              binary.sha256,
-            ),
-            loader: 'ts',
-          }));
-        },
-      },
-    ],
+    plugins: [syntheticCliAuthorization()],
   });
   const bootstrap = join(root, 'bootstrap.cjs');
   await writeFile(

@@ -11,7 +11,6 @@ import {
   interactiveTerminalProfiles,
   managedClaudeConfigSchema,
   reviewedClaudeTuiBinary,
-  validateManagedClaudeConfig,
 } from '../packages/core/src/terminal/interactive-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { terminalRPCSchema, terminalPairReadySchema } from '../packages/core/src/terminal/rpc.js';
@@ -21,8 +20,8 @@ function fixture() {
     version: 2,
     provider: 'claude',
     trust: 'native-same-user',
-    executable: { path: '/synthetic/claude', sha256: reviewedProviderMcpBinaries.claude.sha256 },
-    executableVersion: '2.1.178',
+    executable: { path: '/synthetic/claude', sha256: terminalDigest('synthetic CLI bytes') },
+    executableVersion: '2.1.318',
     node: { path: '/synthetic/node', sha256: 'b'.repeat(64) },
     project: '/synthetic/project',
     state: '/synthetic/state',
@@ -39,11 +38,11 @@ function fixture() {
 
 test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched MCP pins', () => {
   const legacy = fixture();
-  assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.178');
+  assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.318');
   const config = managedClaudeConfigSchema.parse({
     ...legacy,
     executableVersion: reviewedClaudeTuiBinary.version,
-    executable: { ...legacy.executable, sha256: reviewedClaudeTuiBinary.sha256 },
+    executable: { ...legacy.executable, sha256: terminalDigest('synthetic CLI bytes') },
   });
   for (const model of [null, 'sonnet', 'opus', 'haiku']) {
     config.model = {
@@ -66,31 +65,17 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
       '1',
     );
   }
-  for (const mismatched of [
-    { ...config, executable: legacy.executable },
-    { ...legacy, executable: config.executable },
-  ])
-    assert.throws(() => interactiveTerminalProfiles(mismatched), /version\/hash/);
-  config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
   assert.throws(
-    () => validateManagedClaudeConfig(config),
-    /No reviewed Claude MCP launch contract/,
-  );
-  assert.throws(
-    () => interactiveTerminalProfiles(config),
-    /No reviewed Claude MCP launch contract/,
+    () => interactiveTerminalProfiles({ ...config, executableVersion: '2.1.178' }),
+    /No reviewed Claude/,
   );
   assert.equal(reviewedProviderMcpBinaries.claude.version, '2.1.178');
-  assert.equal(
-    reviewedProviderMcpBinaries.claude.sha256,
-    '473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309',
-  );
 });
 
 test('legacy Claude pin still composes the unchanged reviewed strict MCP launch', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-claude-mcp-')));
   try {
-    const config = fixture();
+    const config = { ...fixture(), executableVersion: '2.1.178' as const };
     config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
     const bytes = Buffer.from('// SYNTHETIC relay, never executed\n');
     const path = join(root, 'synthetic-relay.cjs');
@@ -110,12 +95,9 @@ test('legacy Claude pin still composes the unchanged reviewed strict MCP launch'
     const current = {
       ...config,
       executableVersion: reviewedClaudeTuiBinary.version,
-      executable: { ...config.executable, sha256: reviewedClaudeTuiBinary.sha256 },
+      executable: { ...config.executable, sha256: terminalDigest('synthetic CLI bytes') },
     };
-    assert.throws(
-      () => interactiveTerminalProfiles(current, launch),
-      /No reviewed Claude MCP launch contract/,
-    );
+    assert.equal(interactiveTerminalProfiles(current, launch)[0]!.executableVersion, '2.1.318');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -159,13 +141,11 @@ test('Claude profile preserves explicit native identity and rejects inherited se
       authentication: { ...config.authentication, mode: 'separate-login' },
     }),
   );
-  assert.throws(
-    () =>
-      validateManagedClaudeConfig({
-        ...config,
-        executable: { ...config.executable, sha256: '0'.repeat(64) },
-      }),
-    /exact Claude binary/,
+  assert.throws(() =>
+    managedClaudeConfigSchema.parse({
+      ...config,
+      executable: { ...config.executable, sha256: 'invalid' },
+    }),
   );
 });
 

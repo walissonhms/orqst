@@ -1,16 +1,15 @@
 // Configuration review only. No filesystem/process/credential access and no executable factory.
 import { z } from 'zod';
+import { findCliContract } from './cli-contract.js';
 import { terminalMcpLaunchSchema } from './mcp-launch.js';
 
-/** Passive local binary metadata, not a provider run or proof of login/protocol compatibility. */
+/** Reviewed configuration versions only; input values are not provider or login proof. */
 export const reviewedProviderMcpBinaries = Object.freeze({
   claude: Object.freeze({
     version: '2.1.178',
-    sha256: '473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309',
   }),
   opencode: Object.freeze({
     version: '2.2.5',
-    sha256: 'abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e',
   }),
 });
 
@@ -39,9 +38,8 @@ function assertReviewed(
   provider: keyof typeof reviewedProviderMcpBinaries,
   input: z.infer<typeof inputSchema>,
 ) {
-  const reviewed = reviewedProviderMcpBinaries[provider];
-  if (input.executableVersion !== reviewed.version || input.executableSha256 !== reviewed.sha256)
-    throw new Error('No reviewed MCP configuration for this exact provider binary');
+  if (!findCliContract(provider, 'mcp', input.executableVersion))
+    throw new Error('No reviewed MCP configuration for this provider version');
 }
 
 /** Offline argv candidate only; HOME/CLAUDE_CONFIG_DIR and native Keychain identity stay untouched. */
@@ -52,7 +50,7 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
   return {
     provider: 'claude' as const,
     executableVersion: input.executableVersion,
-    evidence: 'passive_binary_metadata_and_official_documentation' as const,
+    evidence: 'reviewed_version_and_official_documentation' as const,
     execution: 'blocked' as const,
     providerAcceptance: 'not_run' as const,
     argv: [
@@ -77,7 +75,9 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
     blockers: [
       ...commonBlockers,
       'strict_mcp_exclusion_requires_acknowledgment',
-      'strict_project_mcp_approval_can_still_block_2_1_178',
+      ...(input.executableVersion === '2.1.178'
+        ? ['strict_project_mcp_approval_can_still_block_2_1_178']
+        : []),
     ],
   };
 }
@@ -90,7 +90,7 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
   return {
     provider: 'opencode' as const,
     executableVersion: input.executableVersion,
-    evidence: 'passive_binary_metadata_and_official_documentation' as const,
+    evidence: 'reviewed_version_and_official_documentation' as const,
     execution: 'blocked' as const,
     providerAcceptance: 'not_run' as const,
     // Default 2.2.5 startup discovers/starts the user's background service. Never use it.

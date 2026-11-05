@@ -93,6 +93,32 @@ test('candidate authorization probes once and repeats neither probe nor review f
     assert.equal(changed.binding.policyRevision, 2);
     assert.equal(probes, 2);
     assert.equal(reviews, 2);
+    const next = join(root, 'synthetic-other-path');
+    writeFileSync(next, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 9, 8, 7, 6]), { mode: 0o700 });
+    let seenPrevious = false;
+    const moved = await authorizeCliCandidate({
+      ...input,
+      executable: next,
+      profile: (version, sha256) => ({ ...profile(version, sha256), executable: next }),
+      probe: async () => ({
+        provider: 'codex',
+        mode: 'tui',
+        version: '0.162.1',
+        contractRevision: 'codex-tui-0.162.1',
+        sha256: (
+          await import('../packages/core/src/terminal/codex-profile.js')
+        ).terminalExecutableSha256(next),
+        signature,
+      }),
+      review: async (details) => {
+        seenPrevious =
+          details.previous === undefined &&
+          details.previousProviderGrants?.some((grant) => grant.executable === executable) === true;
+        return true;
+      },
+    });
+    assert.equal(moved.status, 'allowed');
+    assert.equal(seenPrevious, true);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

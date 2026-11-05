@@ -101,46 +101,62 @@ async function main() {
         current: () => live,
         authorizeCli: async (candidate) => {
           const scope = cliAuthorizationScope(candidate.provider, candidate.mode);
-          const result = await authorizeCliCandidate({
-            store: (cliPolicy ??= new TerminalCliPolicyStore(join(parent, 'managed-agents'))),
-            provider: candidate.provider,
-            mode: candidate.mode,
-            executable: candidate.executable,
-            verifier: systemCliSignatureVerifier,
-            profile: (version, sha256) => ({
-              id: `${candidate.provider}-terminal-v1`,
-              projectId: terminalDigest(candidate.project),
+          let result: Awaited<ReturnType<typeof authorizeCliCandidate>>;
+          try {
+            result = await authorizeCliCandidate({
+              store: (cliPolicy ??= new TerminalCliPolicyStore(join(parent, 'managed-agents'))),
+              provider: candidate.provider,
+              mode: candidate.mode,
               executable: candidate.executable,
-              executableSha256: sha256,
-              executableVersion: version,
-              argv: [],
-              cwd: candidate.project,
-              permissions: 'Native owned terminal CLI authorization',
-              ...scope,
-            }),
-            review: async (details) => {
-              const detail = JSON.stringify(
-                {
-                  ...details,
-                  versionEvidence: 'signed-cli-version-probe',
-                  signatureEvidence: 'macOS /usr/bin/codesign',
-                },
-                null,
-                2,
-              ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
-              if (detail.length > 16384 || !live) return false;
-              const accepted =
-                (await ask({
-                  kind: 'confirm',
-                  title: translate('terminalNative.authorizeCli'),
-                  message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
-                  detail,
-                  cancel: translate('terminalNative.cancel'),
-                  approve: translate('terminalNative.authorizeCli'),
-                })) === true;
-              return accepted && live && (await commit());
-            },
-          });
+              verifier: systemCliSignatureVerifier,
+              profile: (version, sha256) => ({
+                id: `${candidate.provider}-terminal-v1`,
+                projectId: terminalDigest(candidate.project),
+                executable: candidate.executable,
+                executableSha256: sha256,
+                executableVersion: version,
+                argv: [],
+                cwd: candidate.project,
+                permissions: 'Native owned terminal CLI authorization',
+                ...scope,
+              }),
+              review: async (details) => {
+                const detail = JSON.stringify(
+                  {
+                    ...details,
+                    versionEvidence: 'signed-cli-version-probe',
+                    signatureEvidence: 'macOS /usr/bin/codesign',
+                  },
+                  null,
+                  2,
+                ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+                if (detail.length > 16384 || !live) return false;
+                const accepted =
+                  (await ask({
+                    kind: 'confirm',
+                    title: translate('terminalNative.authorizeCli'),
+                    message: `${translate('terminalNative.cliScope')}\n\n${translate('terminalNative.cliProbeDisclosure')}`,
+                    detail,
+                    cancel: translate('terminalNative.cancel'),
+                    approve: translate('terminalNative.authorizeCli'),
+                  })) === true;
+                return accepted && live && (await commit());
+              },
+            });
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              [
+                'CLI provider signature unavailable or invalid',
+                'Unknown or unsupported CLI version',
+                'CLI version probe failed',
+                'CLI version probe timed out',
+                'CLI version output exceeds limit',
+              ].includes(error.message)
+            )
+              return { status: 'ineligible' as const };
+            throw error;
+          }
           return result.status === 'allowed'
             ? {
                 status: result.status,

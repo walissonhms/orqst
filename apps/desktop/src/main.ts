@@ -20,6 +20,13 @@ import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTerminalCreation } from './terminal-creation.js';
+import { authorizeCliCandidate } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
+import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
+import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
+import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
+import { inspectDesktopAdmission } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
+
 import { discoverTerminalExecutable, discoverTerminalNode } from './terminal-discovery.js';
 import { studioRequestSchema, type StudioSnapshot } from '@orqst/protocol';
 import { TerminalPreCoreFailure } from './terminal-selection.js';
@@ -422,7 +429,69 @@ async function start(): Promise<void> {
               noLink: true,
             });
       if (!current() || ![1, 2].includes(mcpResult.response)) return;
+      const policyDirectory = join(app.getPath('userData'), 'managed-agents');
+      inspectDesktopAdmission(policyDirectory);
+      const policy = new TerminalCliPolicyStore(policyDirectory);
+      const mode = mcpResult.response === 2 ? ('mcp' as const) : ('tui' as const);
+      const candidates = [
+        { provider, executable },
+        ...(companionExecutable
+          ? [{ provider: 'opencode' as const, executable: companionExecutable }]
+          : []),
+      ];
+      const cliEvidence = [];
+      for (const item of candidates) {
+        const result = await authorizeCliCandidate({
+          store: policy,
+          provider: item.provider,
+          mode,
+          executable: item.executable,
+          verifier: systemCliSignatureVerifier,
+          profile: (version, sha256) => ({
+            id: `${item.provider}-terminal-v1`,
+            projectId: terminalDigest(project),
+            executable: item.executable,
+            executableSha256: sha256,
+            executableVersion: version,
+            argv: [],
+            cwd: project,
+            permissions: 'Native owned terminal CLI authorization',
+            ...cliAuthorizationScope(item.provider, mode),
+          }),
+          review: async (details) => {
+            const detail = JSON.stringify(
+              {
+                ...details,
+                versionEvidence: 'signed-cli-version-probe',
+                signatureEvidence: 'macOS /usr/bin/codesign',
+              },
+              null,
+              2,
+            ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+            if (!current() || detail.length > 16384) return false;
+            const answer = await dialog.showMessageBox(context.target!, {
+              type: 'warning',
+              title: i18n.t('terminalNative.title'),
+              message: `${i18n.t('terminalNative.cliScope')}\n\n${i18n.t('terminalNative.cliProbeDisclosure')}`,
+              detail,
+              buttons: [i18n.t('terminalNative.cancel'), i18n.t('terminalNative.authorizeCli')],
+              defaultId: 0,
+              cancelId: 0,
+              noLink: true,
+            });
+            return answer.response === 1 && current();
+          },
+        });
+        if (result.status !== 'allowed' || !current()) return;
+        cliEvidence.push({
+          executable: item.executable,
+          version: result.profile.executableVersion,
+          sha256: result.profile.executableSha256,
+          binding: result.binding,
+        });
+      }
       const creationInput = {
+        cliEvidence,
         count,
         limit: terminalLimit,
         provider,

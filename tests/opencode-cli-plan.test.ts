@@ -1,21 +1,11 @@
 // Disposable plan bundle only: Node substitutes the reviewed binary hash, never a provider run.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { build, type PluginBuild } from 'esbuild';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
-import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
+import { build } from 'esbuild';
 
 test('passive OpenCode command emits an exact-binary candidate without state, native reads or relay execution', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-opencode-plan-fixture-')));
@@ -37,20 +27,6 @@ test('passive OpenCode command emits an exact-binary candidate without state, na
       format: 'cjs',
       target: 'node24',
       logLevel: 'silent',
-      plugins: [
-        {
-          name: 'synthetic-node-metadata-only',
-          setup(builder: PluginBuild) {
-            builder.onLoad({ filter: /provider-mcp-config\.ts$/ }, (args) => ({
-              contents: readFileSync(args.path, 'utf8').replace(
-                reviewedProviderMcpBinaries.opencode.sha256,
-                terminalExecutableSha256(node),
-              ),
-              loader: 'ts',
-            }));
-          },
-        },
-      ],
     });
     const args = [
       file,

@@ -1,3 +1,4 @@
+import { terminalDigest } from '../packages/core/src/terminal/authority.js';
 // Synthetic configuration inputs only. No provider executable, login or native state is accessed.
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -18,7 +19,7 @@ function fixture(provider: 'claude' | 'opencode') {
   const reviewed = reviewedProviderMcpBinaries[provider];
   return {
     executableVersion: reviewed.version,
-    executableSha256: reviewed.sha256, // Synthetic claim, never execution authority.
+    executableSha256: terminalDigest('synthetic CLI bytes'), // Synthetic claim, never execution authority.
     nodePath: '/synthetic/private/node',
     mcp: {
       serverName: `orqst_${'a'.repeat(32)}`,
@@ -89,11 +90,8 @@ test('provider configuration review rejects version/hash drift and injected cred
       provider === 'claude'
         ? claudeInteractiveMcpConfiguration
         : opencodeInteractiveMcpConfiguration;
-    assert.throws(() => build({ ...input, executableVersion: 'future' }), /exact provider binary/);
-    assert.throws(
-      () => build({ ...input, executableSha256: '0'.repeat(64) }),
-      /exact provider binary/,
-    );
+    assert.throws(() => build({ ...input, executableVersion: 'future' }), /provider version/);
+    assert.throws(() => build({ ...input, executableSha256: 'invalid' }));
     for (const extra of [
       { HOME: '/new-login' },
       { token: 'SYNTHETIC' },
