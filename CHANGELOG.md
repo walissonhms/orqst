@@ -1,5 +1,10 @@
 # Changelog
 
+## Offline selected current inode correction — 2026-11-04
+
+Remove the redundant captured-current-inode equality and exclude model sources from the inter-phase reservation pin. Keep complete historical proof, strict metadata and intra-phase RAW checks.
+See [contract and verification limits](docs/research/offline-cross-boot-admission.md).
+
 ## Exact offline historical enrollment binding — 2026-11-04
 
 - Accept an explicit private native candidate only when one model-source inode

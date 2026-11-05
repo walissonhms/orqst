@@ -2308,6 +2308,7 @@ function deviceNamespace() {
   const originalFstat = fs.fstatSync;
   let enabled = false;
   let offset = 100n;
+  let unmapped: string | undefined;
   const device = originalLstat(tmpdir()).dev;
   const map = <T extends { dev: number | bigint }>(info: T): T => {
     if (!enabled || BigInt(info.dev) !== BigInt(device)) return info;
@@ -2316,7 +2317,7 @@ function deviceNamespace() {
     return result;
   };
   const lstat = mock.method(fs, 'lstatSync', (...args: Parameters<typeof originalLstat>) =>
-    map(originalLstat(...args)!),
+    args[0] === unmapped ? originalLstat(...args)! : map(originalLstat(...args)!),
   );
   const fstat = mock.method(fs, 'fstatSync', (...args: Parameters<typeof originalFstat>) =>
     map(originalFstat(...args)),
@@ -2325,6 +2326,9 @@ function deviceNamespace() {
   return {
     enable: () => {
       enabled = true;
+    },
+    unmap: (path: string) => {
+      unmapped = path;
     },
     // A later external reboot is a different generation, never a renewed consent.
     setOffset: (value: number) => {
@@ -2391,7 +2395,7 @@ for (const mutation of [
   'snapshot',
   'manifest',
   'evidence',
-  'model',
+  'other_model',
   'within_release',
   'within_finalize',
 ] as const) {
@@ -2418,7 +2422,11 @@ for (const mutation of [
           join(captured.bundle, 'historical-binding-evidence.json'),
           `${readFileSync(f.evidenceFile, 'utf8')} `,
         );
-      if (mutation === 'model') f.replace();
+      if (mutation === 'other_model') {
+        const file = f.configs[0]!.model!.files[0]!.path;
+        writeFileSync(`${file}.replacement`, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
+        renameSync(`${file}.replacement`, file);
+      }
       if (mutation === 'within_release')
         f.review((challenge) => {
           if (challenge.phase === 'release') f.replace();
@@ -2587,3 +2595,149 @@ test('final commit physical pin does not block permitted model source drift outs
     f.close();
   }
 });
+
+for (const stage of ['before_release', 'before_finalize', 'both'] as const) {
+  test(`cross-boot capsule permits fresh selected inode between phases: ${stage}`, async () => {
+    const f = historicalFixture(true);
+    const namespace = deviceNamespace();
+    try {
+      const captured = await f.captureHistorical();
+      const signed = readFileSync(join(captured.bundle, 'snapshot.json'));
+      f.changeBoot();
+      namespace.enable();
+      if (stage !== 'before_finalize') f.replace();
+      const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+      await recovery.release(captured.bundle);
+      const releaseRaw = f.reviews.at(-1)!.currentDigest;
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      if (stage !== 'before_release') f.replace();
+      await recovery.finalize(captured.bundle);
+      assert.equal(f.reviews.length, 3);
+      if (stage !== 'before_release') assert.notEqual(f.reviews.at(-1)!.currentDigest, releaseRaw);
+      assert.deepEqual(readFileSync(join(captured.bundle, 'snapshot.json')), signed);
+      assert.ok(existsSync(join(captured.bundle, 'completion.json')));
+    } finally {
+      namespace.restore();
+      f.close();
+    }
+  });
+}
+
+for (const phase of ['release', 'finalize'] as const) {
+  for (const point of ['review', 'sign', 'revalidate', 'sync', 'commit'] as const) {
+    if (point === 'commit' && phase !== 'finalize') continue;
+    test(`cross-boot capsule selected inode change during ${phase} ${point} denies`, async () => {
+      const f = historicalFixture(true);
+      const namespace = deviceNamespace();
+      try {
+        const captured = await f.captureHistorical();
+        f.changeBoot();
+        namespace.enable();
+        f.replace(); // Real combination: selected source already changed before release.
+        const recovery = new OfflineReservationRecovery(f.authority, f.dependencies);
+        if (phase === 'finalize') await recovery.release(captured.bundle);
+        let changed = false;
+        let signed = false;
+        const mutate = () => {
+          if (!changed) {
+            changed = true;
+            f.replace();
+          }
+        };
+        if (point === 'review') f.reading(mutate);
+        f.review(() => {
+          signed = true;
+          if (point === 'sign') mutate();
+        });
+        if (point === 'revalidate')
+          f.revalidation(() => {
+            mutate();
+            return 30_001;
+          });
+        if (point === 'sync')
+          f.synced(() => {
+            if (signed) mutate();
+          });
+        if (point === 'commit')
+          f.boundary((stage) => {
+            if (stage === 'before_marker') mutate();
+          });
+        await assert.rejects(recovery[phase](captured.bundle));
+        assert.ok(changed);
+        assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+        assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+        assert.equal(
+          existsSync(join(f.directory, `recovered-${captured.operationId}.marker.json`)),
+          false,
+        );
+        assert.equal(existsSync(join(captured.bundle, 'completion.json')), false);
+      } finally {
+        namespace.restore();
+        f.close();
+      }
+    });
+  }
+}
+
+test('cross-boot capsule still denies a second model inode delta after selected replacement', async () => {
+  const f = historicalFixture(true);
+  const namespace = deviceNamespace();
+  try {
+    const captured = await f.captureHistorical();
+    f.changeBoot();
+    namespace.enable();
+    f.replace();
+    const other = f.configs[1]!.model!.files[1]!.path;
+    writeFileSync(`${other}.replacement`, 'SYNTHETIC-NO-CREDENTIAL', { mode: 0o600 });
+    renameSync(`${other}.replacement`, other);
+    await assert.rejects(
+      f.recovery.release(captured.bundle),
+      /enrollment binding|additional source drift/,
+    );
+    assert.equal(f.reviews.length, 1);
+    assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+    assert.equal(existsSync(join(captured.bundle, 'archive.json')), false);
+  } finally {
+    namespace.restore();
+    f.close();
+  }
+});
+
+for (const mutation of ['device', 'mode', 'nlink', 'symlink', 'missing'] as const) {
+  test(`cross-boot capsule fresh selected source still denies ${mutation}`, async () => {
+    const f = historicalFixture(true);
+    const namespace = deviceNamespace();
+    try {
+      const captured = await f.captureHistorical();
+      f.changeBoot();
+      namespace.enable();
+      f.replace();
+      if (mutation === 'device') namespace.unmap(f.file);
+      if (mutation === 'mode') chmodSync(f.file, 0o666);
+      if (mutation === 'nlink') linkSync(f.file, `${f.file}.link`);
+      if (mutation === 'symlink') {
+        renameSync(f.file, `${f.file}.real`);
+        symlinkSync(`${f.file}.real`, f.file);
+      }
+      if (mutation === 'missing') unlinkSync(f.file);
+      await assert.rejects(f.recovery.release(captured.bundle), (error) => {
+        if (mutation === 'device' || mutation === 'missing') {
+          assert.ok(error instanceof OfflineEnrollmentBindingChanged);
+          assert.deepEqual(administrativeBlockedOutcome(error), {
+            status: 'blocked',
+            outcome: 'unconfirmed',
+            failure: { stage: 'inspection', code: 'enrollment_binding_changed' },
+          });
+        }
+        return true;
+      });
+      assert.equal(f.reviews.length, 1);
+      assert.equal(readFileSync(f.marker, 'utf8'), f.markerBytes);
+      assert.ok(existsSync(join(f.directory, RECOVERY_GATE)));
+      assert.equal(existsSync(join(captured.bundle, 'archive.json')), false);
+    } finally {
+      namespace.restore();
+      f.close();
+    }
+  });
+}

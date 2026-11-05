@@ -426,6 +426,21 @@ export function snapshotOfflineReservation(
       const currentSources = offlineModelSourceMetadata(
         config.model?.files.map((file) => file.path) ?? [],
       );
+      // A projected historical preimage cannot admit a source still on the old
+      // device (or an arbitrary device). Require the declared current mapping first.
+      if (
+        difference &&
+        currentSources.some((source, index) => {
+          const original = evidence.modelSources[index]?.identity;
+          if (!original || !source.identity) return false; // Full proof below checks presence.
+          const device = original.split(':')[0]!;
+          return (
+            source.identity[0] !==
+            (device === difference.historicalDevice ? difference.currentDevice : device)
+          );
+        })
+      )
+        throw new OfflineEnrollmentBindingChanged();
       const projectedSources = currentSources.map((source) => ({
         ...source,
         identity: source.identity
@@ -437,18 +452,19 @@ export function snapshotOfflineReservation(
             ]
           : null,
       }));
-      verifyHistoricalBinding(
-        evidence,
-        binding,
-        projectedSources,
-        binding.identities.map((identity) => historicalIdentity(identity, difference)),
-      );
-      if (
-        difference &&
-        JSON.stringify(projectedSources) !==
-          JSON.stringify(signedHistorical?.historicalBinding?.currentSources)
-      )
-        throw new Error('Recovery physical comparison model metadata changed');
+      try {
+        verifyHistoricalBinding(
+          evidence,
+          binding,
+          projectedSources,
+          binding.identities.map((identity) => historicalIdentity(identity, difference)),
+        );
+      } catch (error) {
+        if (difference) throw new OfflineEnrollmentBindingChanged();
+        throw error;
+      }
+      // The selected CURRENT inode is reviewed afresh per phase. The complete signed
+      // historical preimage above still permits exactly one same-device source delta.
       historicalBinding = { evidenceSha256: historical.sha256, evidence, currentSources };
       bindingDigest = evidence.member.frozenBindingDigest;
     }

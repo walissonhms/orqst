@@ -66,3 +66,38 @@ No real AppData, reservation, capsule, anchor, auth/config/key content or provid
 state is part of integration/packaging. No application, Core, PTY or provider is
 launched, signalled, adopted or retried. Normal Open remains a later distinct human
 action with the existing authority checks.
+
+## Follow-up source correction — 2026-11-04
+
+A narrow follow-up on `50c1aeb` removes the accidental capture-time selected current
+inode freeze when a device difference is declared. The final physical pin now
+covers only snapshot files, the device pair and the five ordered runtime identities;
+model sources remain in phase-local RAW and full fresh review. Historical evidence,
+complete frozen SHA and exactly-one-model-inode constraints are unchanged.
+
+A private comparator-only read-only preflight against the existing bundle verified
+all 10 captured files and both full enrollment preimages, reproduced the removed
+predicate's refusal and passed the corrected comparators. It did not call recovery,
+create a real bundle inspection, use a private anchor or reverify its signature,
+open a live DB, inspect model-source content or grant acceptance. This is evidence
+for the specific predicate correction, not complete real recovery acceptance.
+Package `dist/native-preview-cross-boot-release`, its open process and real
+reservation remain unchanged. No new packaging, push, launch or operator retry is
+part of this source delivery.
+
+The preflight also checked the exact marker/gate hashes and the preserved 66-byte
+release-attempt hash supplied for this failure. It repeated successfully after the
+explicit current-device constraint was added. A combined negative initially exposed
+that an unmoved historical source device could survive projection; it now refuses
+before review using the existing allowlisted enrollment-binding failure. An early
+focused run/types failed because workspace dependency links were absent in the
+isolated tree; links to existing dependencies fixed the environment without any
+installation or dependency changes.
+
+Final follow-up verification on Node 24.22.2/pnpm 10.34.9: all 318 focused cases
+passed (offline recovery, terminal journal/enrollment/enrollment files, Tauri
+preparation, native helper wire and arguments), plus full `pnpm lint`,
+`pnpm typecheck` and `git diff --check`. Full `pnpm test`, build/resources/Cargo,
+real ingestion and native/provider/real recovery acceptance were not run. No push,
+tag, package mutation or real recovery action was performed. Remaining disk space
+was 46 GiB; the isolated review worktree remains pending integration.

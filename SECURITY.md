@@ -1157,3 +1157,10 @@ identities and declared difference; a later device generation is refused as
 rename.
 See [the executable contract, research and pending acceptance](docs/research/offline-cross-boot-admission.md).
 No real-state use, native UI, build or provider acceptance is claimed here.
+
+The released physical generation pin covers snapshot files, the device pair and
+five ordered runtime identities per slot. Selected model-source metadata remains
+fully bound to each phase's RAW/review and repeated approval checks; it is not
+frozen across phases. The unchanged full historical preimage proof restricts the
+exception to its single selected inode on the projected device. No provider
+configuration content is read and no runtime authority is restored.

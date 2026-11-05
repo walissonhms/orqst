@@ -32,9 +32,10 @@ parsed manifest, exact manifest bytes, all five ordered identities and all order
 model-source identities. Its SHA must equal that slot's **signed historical**
 snapshot binding and its frozen intent/ready receipt where present. The optional
 historical candidate must independently satisfy its original context and exact
-one-model-inode preimage proof. Its captured current model metadata must match the
-new metadata except for the declared device. No search, guessed inode or current
-binding adoption is allowed. Extra inode drift on this path denies.
+one-model-inode preimage proof. The selected current model-source inode may change between phases on the declared
+projected device; its complete current metadata enters each fresh RAW review.
+All other model-source identities remain exact. No search, guessed historical
+inode or current binding adoption is allowed. Additional model-source drift denies.
 
 `physicalDifference` in the current snapshot contains:
 
@@ -60,7 +61,8 @@ binds the current RAW; final commit additionally binds its plan and current RAW.
 
 Before that final approval, and before the only namespace mutation, the current
 reservation records must still equal the released archive: every
-`snapshot.files` physical identity and the declared `physicalDifference` are
+`snapshot.files` physical identity, the declared device pair and the first five
+runtime identities in each `physicalDifference.bindings` entry are
 compared with `archive.current`, and any change is refused as
 `pre_commit_physical_source_changed` with no new consent and no rename. A later
 kernel reboot is therefore a new physical generation, not a renewed consent for
@@ -137,3 +139,43 @@ real ingestion and native/real-state acceptance were not run. Initial local chec
 exposed a TypeScript mock optional return and an abort-continuation regression;
 both were corrected before the passing focused run. The 291-case run belongs to
 the reviewed base commit; this increment adds four regressions.
+
+## Selected current inode correction — 2026-11-04
+
+Baseline `50c1aebe1ac738525fbbe2dd61e59677dad1f603` accidentally compared all
+projected current model metadata to the capture and pinned all model sources
+inside the release/finalize physical comparison. Remove only that redundant
+capture equality and limit the physical binding pin to the existing five ordered
+manifest/state/project/executable/Node identities. Keep model metadata in full RAW,
+review and repeated intra-phase checks. The unchanged `verifyHistoricalBinding`
+still reconstructs the entire evidence-v1 preimage and frozen SHA, permits exactly
+one selected inode on the projected device and rejects all other source drift.
+
+Re-inspected the existing pinned local Anywh architecture, agent-host/runtime
+READMEs, `instanceLock.ts` and `AgentHost.start`/`restore`, and Tucano `router.ts`
+listed above. The same takeover/sweep/restore contracts remain incompatible;
+keep ORQST's existing serializer/readers/transaction. Root LICENSE hashes still
+match the recorded Apache-2.0 evidence. No source, dependency, asset or authority
+is imported; no new NOTICE inference is made from partial reference copies.
+
+Three new positive combination fixtures failed at the extra equality on the
+unchanged baseline. They cover capsule + device difference + selected inode
+replacement before release, before finalize and both. Negative combinations
+replace it during review, signing, revalidation, durability and final commit;
+additional model drift remains denied. Existing held/future-owner, mixed mapping,
+metadata, SHA and second-device-generation negatives remain required.
+
+Before projection, model sources must use the declared current device for any
+historical source on the mapped device; sources originally on another device
+must retain that device. An unmoved historical device cannot masquerade as the
+current side of the pair. Invalid full historical proofs on this device-difference
+path use the existing allowlisted `inspection/enrollment_binding_changed` refusal;
+no raw exception, path, metadata or secret is added to the outcome protocol.
+
+Final follow-up verification on Node 24.22.2/pnpm 10.34.9: all 318 focused cases
+passed (offline recovery, terminal journal/enrollment/enrollment files, Tauri
+preparation, native helper wire and arguments), plus full `pnpm lint`,
+`pnpm typecheck` and `git diff --check`. Full `pnpm test`, build/resources/Cargo,
+real ingestion and native/provider/real recovery acceptance were not run. No push,
+tag, package mutation or real recovery action was performed. Remaining disk space
+was 46 GiB; the isolated review worktree remains pending integration.

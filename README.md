@@ -1,5 +1,10 @@
 # ORQST
 
+## Offline selected current inode correction — 2026-11-04
+
+Source corrects the combined historical capsule/device-difference path while preserving full preimage and fresh per-phase approval. No new package or real recovery attempt is included.
+See [contract and verification limits](docs/research/offline-cross-boot-admission.md).
+
 ## Final cross-boot source integration — 2026-11-04
 
 The reviewed physical-difference recovery and pre-commit generation pin are

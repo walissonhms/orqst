@@ -1,5 +1,10 @@
 # ORQST roadmap
 
+## Offline combined-path review gate — 2026-11-04
+
+The narrow capsule/device/current-inode source correction awaits independent review and separate packaging/native acceptance. The open Preview and real reservation are preserved.
+See [contract and verification limits](docs/research/offline-cross-boot-admission.md).
+
 ## Offline approval usability gate — 2026-11-04
 
 Source separates immutable full review from the short proof window and preserves

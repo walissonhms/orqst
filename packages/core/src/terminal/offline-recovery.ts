@@ -213,7 +213,17 @@ function physicalRecords(snapshot: OfflineReservationSnapshot) {
     files: [...snapshot.files]
       .sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))
       .map((file) => ({ path: file.path, identity: file.identity })),
-    physicalDifference: snapshot.physicalDifference ?? null,
+    physicalDifference: snapshot.physicalDifference
+      ? {
+          ...snapshot.physicalDifference,
+          bindings: snapshot.physicalDifference.bindings.map((binding) => ({
+            ...binding,
+            // Manifest/state/project/executable/Node pin the reservation generation.
+            // Model sources remain in RAW and are revalidated within each fresh approval.
+            identities: binding.identities.slice(0, 5),
+          })),
+        }
+      : null,
   });
 }
 
