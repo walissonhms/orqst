@@ -180,13 +180,21 @@ fn main() {
             if let tauri::RunEvent::Reopen { .. } = event { desktop::focus(app); }
             if let tauri::RunEvent::ExitRequested { ref api, .. } = event {
                 terminal_creation::invalidate(app);
-                if host_phase::consume_exit_evidence() {
-                    // The reviewed retirement evidence allows exactly this exit.
+                if host_phase::consume_exit_evidence()
+                    || host_phase::phase() == host_phase::Phase::ExitConsumed
+                {
+                    // Evidence stays consumed and admission stays closed across repeated exits.
                 } else if terminal::owned_host_started(app) {
                     api.prevent_exit();
                     desktop::request_quit(app);
                 } else if terminal::confirm_exit(app) || agents::confirm_exit(app) {
                     api.prevent_exit();
+                } else if host_phase::decide_quit(false, false, false)
+                    != host_phase::QuitDecision::ExitDirect
+                {
+                    // A start may have won admission while a native gate was being checked.
+                    api.prevent_exit();
+                    desktop::request_quit(app);
                 }
             }
             if let tauri::RunEvent::Exit = event {

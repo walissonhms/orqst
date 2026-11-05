@@ -2071,7 +2071,7 @@ async fn start_selected_inner(
     // native preparation or reuse a terminal window in this application lifetime.
     crate::terminal_creation::fence_selection(app);
     // Quit must see effects-possible before the child exists.
-    crate::host_phase::reserve_start();
+    crate::host_phase::reserve_start()?;
     let files = serde_json::to_string(&paths)?;
     let resources = app.path().resource_dir()?;
     let script = resources.join("core/tauri-terminal-host.cjs");

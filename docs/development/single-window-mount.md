@@ -79,3 +79,18 @@ Real WebKit/AppKit acceptance requires a new package and remains pending, so thi
 document does not claim visual or native interaction acceptance. The managed
 agent child reuses the previous 1200×900 document layout and now covers the main
 surface; its inner layout still needs native visual review.
+
+## Native Quit admission contract — 2026-11-05
+
+Start admission and a direct Quit now reserve the same phase mutex. Only
+`NotStarted -> Starting` admits a host. Direct Quit reserves `NotStarted -> Exiting`
+before requesting OS exit. If start wins, Quit blocks in `Starting`; if Quit wins,
+start fails before spawn. `Starting` and `LostUnknown` block before opening the
+agents gate and are revalidated after it.
+
+Consuming reviewed exit evidence moves to terminal `ExitConsumed`, never back to
+`NotStarted`. No host can be admitted again during this app lifetime. A repeated
+`ExitRequested` is permitted because owned exit/preservation was already proved;
+it does not consume evidence again or reopen admission. EOF after consumption
+leaves `ExitConsumed` unchanged. These are source contracts, not AppKit/WebKit
+acceptance.
