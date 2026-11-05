@@ -15,6 +15,7 @@ import {
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import { z } from 'zod';
+import type { V2CliBinding } from '../../../packages/core/src/terminal/cli-binding.js';
 import type { TerminalCliAuthorizationState } from '../../../packages/core/src/terminal/cli-authorization.js';
 import type {
   CliContractMode,
@@ -58,7 +59,12 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
 export interface TauriPreparationPorts {
   authorizeCli(
     candidate: PreparationCliCandidate,
-  ): Promise<{ status: TerminalCliAuthorizationState; version?: string; sha256?: string }>;
+  ): Promise<{
+    status: TerminalCliAuthorizationState;
+    version?: string;
+    sha256?: string;
+    binding?: V2CliBinding;
+  }>;
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
   confirm(
@@ -126,7 +132,10 @@ export async function prepareTauriTerminals(
       }
     };
     const authorizeCandidates = async (candidates: PreparationCliCandidate[]) => {
-      const evidence = new Map<string, { version: string; sha256: string }>();
+      const evidence = new Map<
+        string,
+        { version: string; sha256: string; binding?: V2CliBinding }
+      >();
       for (const candidate of candidates) {
         const key = JSON.stringify([candidate.provider, candidate.executable, candidate.mode]);
         if (evidence.has(key)) continue;
@@ -135,7 +144,11 @@ export async function prepareTauriTerminals(
         if (authorized.status === 'stale') fail('cli_authorization_stale');
         if (authorized.status !== 'allowed' || !authorized.version || !authorized.sha256)
           return fail('selection_blocked');
-        evidence.set(key, { version: authorized.version, sha256: authorized.sha256 });
+        evidence.set(key, {
+          version: authorized.version,
+          sha256: authorized.sha256,
+          ...(authorized.binding ? { binding: authorized.binding } : {}),
+        });
       }
       return evidence;
     };
@@ -224,6 +237,11 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
+        cliBindings: [...evidence.entries()].flatMap(([key, value]) =>
+          value.binding
+            ? [{ executable: JSON.parse(key)[1] as string, binding: value.binding }]
+            : [],
+        ),
         ...source,
         ...(companion ? { companion } : {}),
         count,
@@ -316,6 +334,11 @@ export async function prepareTauriTerminals(
       if (!evidence) return { status: 'cancelled', files: [] };
       const plan = prepareTerminalCreation({
         ...context,
+        cliBindings: [...evidence.entries()].flatMap(([key, value]) =>
+          value.binding
+            ? [{ executable: JSON.parse(key)[1] as string, binding: value.binding }]
+            : [],
+        ),
         provider: request.provider,
         count: request.count,
         limit: 8,

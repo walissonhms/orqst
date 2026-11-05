@@ -146,6 +146,7 @@ async function main() {
                 status: result.status,
                 version: result.profile.executableVersion,
                 sha256: result.profile.executableSha256,
+                binding: result.binding,
               }
             : { status: result.status };
         },

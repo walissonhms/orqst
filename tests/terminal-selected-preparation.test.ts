@@ -28,6 +28,8 @@ import { randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Store } from '../packages/database/src/index.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import { cliProviderIdentities } from '../packages/core/src/terminal/cli-signature.js';
+import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
@@ -164,6 +166,25 @@ function fixture(openCodeCopies = false) {
               ? '2.1.178'
               : '2.1.318',
       sha256: terminalExecutableSha256(candidate.executable),
+      binding: {
+        version: 2 as const,
+        provider: candidate.provider,
+        mode: candidate.mode,
+        ...cliProviderIdentities[candidate.provider],
+        contractRevision: findCliContract(
+          candidate.provider,
+          candidate.mode,
+          candidate.provider === 'codex'
+            ? '0.162.1'
+            : candidate.provider === 'opencode'
+              ? '2.2.5'
+              : candidate.mode === 'mcp'
+                ? '2.1.178'
+                : '2.1.318',
+        )!.revision,
+        authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+        policyRevision: 1,
+      },
     }),
     commit: async () => true,
   };

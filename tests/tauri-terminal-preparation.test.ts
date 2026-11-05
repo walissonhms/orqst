@@ -27,6 +27,8 @@ import {
   type TauriPreparationPorts,
 } from '../apps/desktop/src/tauri-terminal-preparation.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import { cliProviderIdentities } from '../packages/core/src/terminal/cli-signature.js';
+import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 
@@ -128,6 +130,25 @@ function fixture() {
               ? '2.1.178'
               : '2.1.318',
       sha256: terminalExecutableSha256(candidate.executable),
+      binding: {
+        version: 2 as const,
+        provider: candidate.provider,
+        mode: candidate.mode,
+        ...cliProviderIdentities[candidate.provider],
+        contractRevision: findCliContract(
+          candidate.provider,
+          candidate.mode,
+          candidate.provider === 'codex'
+            ? '0.162.1'
+            : candidate.provider === 'opencode'
+              ? '2.2.5'
+              : candidate.mode === 'mcp'
+                ? '2.1.178'
+                : '2.1.318',
+        )!.revision,
+        authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356',
+        policyRevision: 1,
+      },
     }),
     commit: async () => true,
   };
@@ -146,6 +167,12 @@ for (const provider of ['codex', 'claude']) {
           f.ports,
         );
         assert.equal(result.status, 'open');
+        for (const file of result.files) {
+          const manifest = JSON.parse(readFileSync(file, 'utf8'));
+          assert.equal(manifest.cliAuthorization.version, 2);
+          assert.equal(manifest.cliAuthorization.policyRevision, 1);
+          assert.deepEqual(Object.keys(manifest.executable), ['path']);
+        }
         const members = inspectManagedTerminalFiles(result.files, 8);
         assert.equal(members.length, count);
         assert.equal(new Set(members.map(({ config }) => config.identity!.terminalId)).size, count);

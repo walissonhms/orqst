@@ -1,3 +1,4 @@
+import type { V2CliBinding } from '../../../packages/core/src/terminal/cli-binding.js';
 import { terminalSlotLimit } from '@orqst/protocol';
 // Native provisioning only. No process, credential or captured session reads.
 import {
@@ -47,6 +48,7 @@ export const reviewedDesktopCodexBinary = Object.freeze({
 });
 
 export interface TerminalCreationInput {
+  cliBindings?: readonly { executable: string; binding: V2CliBinding }[];
   count?: number;
   limit?: number;
   provider: LocalCliProvider;
@@ -327,10 +329,21 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         if (stagedConfig.version === 1) validateManagedCodexConfig(stagedConfig);
         else if (stagedConfig.version === 2) validateManagedClaudeConfig(stagedConfig);
         else validateManagedOpenCodeConfig(stagedConfig);
-        writeFileSync(join(state, 'terminal.json'), serializeInteractiveTerminalConfig(config), {
-          flag: 'wx',
-          mode: 0o600,
-        });
+        writeFileSync(
+          join(state, 'terminal.json'),
+          serializeInteractiveTerminalConfig(
+            config,
+            input.cliBindings?.find(
+              (item) =>
+                item.executable === config.executable.path &&
+                item.binding.mode === (input.mcp ? 'mcp' : 'tui'),
+            )?.binding,
+          ),
+          {
+            flag: 'wx',
+            mode: 0o600,
+          },
+        );
         return join(config.state, 'terminal.json');
       });
       // Publish both completed slots together. Orphans point at the absent final root and fail validation.
