@@ -2688,7 +2688,15 @@ async fn start_selected_inner(
                 .envs(std::env::vars_os().filter(|(key, _)| {
                     matches!(
                         key.to_str(),
-                        Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
+                        Some(
+                            "HOME"
+                                | "USERPROFILE"
+                                | "PATH"
+                                | "TMPDIR"
+                                | "LANG"
+                                | "CODEX_HOME"
+                                | "ORQST_CODEX_SESSIONS"
+                        )
                     )
                 })))
         },

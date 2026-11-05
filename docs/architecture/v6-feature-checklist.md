@@ -1181,3 +1181,11 @@ acceptance pending.
       validate window geometry and retain existing presentation fences.
 - [ ] Renderer integration, real AppKit/WebKit acceptance and owner validation
       of full-window Studio and sidebar return remain pending.
+
+## Account limit evidence — 2026-11-05
+
+- [x] Default Codex profile projects bounded indexed rollout evidence only after
+      source identity/hash revalidation; unknown and contradictory readings do not
+      produce a fabricated percentage. Explicit locks persist as ORQST preferences.
+- [ ] Account profiles, locked-account exclusion in future suggestions, Claude and
+      OpenCode profile-bound sources, renderer action wiring and native acceptance.

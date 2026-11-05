@@ -30,6 +30,7 @@ import {
 } from '@orqst/protocol';
 import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
+import { terminalAccountLimits } from '../../../packages/core/src/terminal/account-limits.js';
 
 process.umask(0o077);
 let activeCore: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
@@ -122,6 +123,7 @@ async function start() {
     },
     () => {},
     (slot) => selection[slot]?.config.model?.value,
+    terminalAccountLimits(directory),
   );
   await features.initialize();
   const correlation = z.object({
