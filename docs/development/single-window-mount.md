@@ -94,3 +94,62 @@ Consuming reviewed exit evidence moves to terminal `ExitConsumed`, never back to
 it does not consume evidence again or reopen admission. EOF after consumption
 leaves `ExitConsumed` unchanged. These are source contracts, not AppKit/WebKit
 acceptance.
+
+## Deterministic native Quit circuit — 2026-11-05
+
+`quit_orchestration.rs::Coordinator` now owns the production `request_quit`,
+agents-approval reentry, `ExitRequested` decision, shutdown/retirement sequence,
+rollback and pipe deadline. `quit_native.rs::NativePorts` implements `AgentsGate`,
+`TerminalPipe`, `ExitPort` and `Timer` with the existing Tauri dialogs, private
+child pipe, runtime and OS exit request. `main.rs`, `desktop.rs` and the approved
+agents callback use that same coordinator. `host_phase.rs::HostPhase` retains the
+shared phase/admission lock; even a direct OS `ExitRequested` without an earlier
+`request_quit` reserves `Exiting` before being allowed.
+
+The private terminal reader and the test transport share
+`quit_orchestration.rs::PendingReplies`: only the existing private reply kinds
+with a currently registered request ID resolve a waiter. Timeout cancels that
+registration. The eight-second native timeout remains longer than Core's
+five-second deadline. A timeout, EOF or loss is never evidence; only an
+authenticated pre-fence `busy`/`denied` can roll back to `Active`.
+
+`quit_orchestration_tests.rs` integrates the real coordinator, phase transitions,
+reply router and oneshot channels through scripted effect ports. Its explicit
+callback queue and manually advanced timer cover:
+
+- Agents approval -> prevented `ExitRequested` -> `shutdownOwned` -> `retireOwned`
+  or `closePreservedOwned` -> one normal allowed exit, with asserted effect order.
+- Uncertain inventory, authenticated busy/denied rollback, write failure, invalid
+  final replies, and the exact 7,999/8,000 ms timeout boundary, including final-step
+  timeouts and late/old/swapped IDs.
+- Duplicate Quit before the async flow starts, gate cancellation and a fresh
+  attempt, loss before shutdown/final replies, EOF on both sides of the final
+  evidence transition, and `ExitRequested` without evidence.
+- `Starting`/`LostUnknown` before the agents gate, phase changes during the gate,
+  both start/Quit lock orderings, raw OS exit racing start, and permanently closed
+  admission in `Exiting`/`ExitConsumed`. Repeated exit after consumed evidence is
+  allowed, but cannot consume evidence twice, reopen admission or be changed by EOF.
+
+This replaces the two tests that only counted exit calls in source text. These
+are deterministic Rust circuit tests, not an AppKit/WebKit event-loop test. The
+ports do not launch an application, sheet, Core, PTY or provider; native dialog
+presentation/focus, actual pipe scheduling, OS process exit and descendant receipts
+still require the separate authorized native acceptance. No package or running
+Preview resources are rebuilt by these tests.
+
+### Reuse review for this extraction
+
+The existing [pinned lifecycle review](../research/owned-terminal-shutdown.md) was
+revalidated against Anywh `546f189c04415c3c5af5f40e3931a0a90b9aba31`:
+[`AgentHost.endProcess/onExit`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L1024-L1075),
+[`waitForTurns/close`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L1255-L1334),
+its architecture/Agent Host/runtime documents and
+[`LICENSE`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/LICENSE)
+(Apache-2.0; no root NOTICE at that commit). Decision: **keep and extract the
+existing ORQST circuit**. Anywh serializes owned shutdown and awaits process exit,
+but its TypeScript/Node runtime, hibernation, restoration and process-tree sweep
+are not the Rust native evidence/admission contract. Its relevant imports include
+Node filesystem/crypto, provider process drivers and the socket server; none are
+introduced here. The existing Tucano permission/routing review remains applicable
+without a new communication layer. No external source/assets or dependencies are
+incorporated, and no attribution or license metadata changes are needed.

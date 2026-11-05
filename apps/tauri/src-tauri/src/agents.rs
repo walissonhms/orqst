@@ -368,11 +368,17 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         tauri::LogicalSize::new(
             parent
                 .inner_size()
-                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).width)
+                .map(|size| {
+                    size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0))
+                        .width
+                })
                 .unwrap_or(1200.0),
             parent
                 .inner_size()
-                .map(|size| size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0)).height)
+                .map(|size| {
+                    size.to_logical::<f64>(parent.scale_factor().unwrap_or(1.0))
+                        .height
+                })
                 .unwrap_or(900.0),
         ),
     )?;
@@ -662,7 +668,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
                 if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
                     r.exit_authorized = true;
                 }
-                app.exit(0);
+                crate::quit_native::agents_approved(&app);
             } else {
                 reset_exit(&app);
                 crate::terminal::reset_exit(&app);

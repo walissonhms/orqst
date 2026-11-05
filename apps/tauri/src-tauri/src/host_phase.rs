@@ -108,40 +108,20 @@ impl HostPhase {
     }
 }
 
-pub static HOST: HostPhase = HostPhase::new();
-
 pub fn phase() -> Phase {
-    HOST.phase()
+    crate::quit_orchestration::QUIT.host.phase()
 }
 pub fn reserve_start() -> Result<(), &'static str> {
-    HOST.reserve_start()
+    crate::quit_orchestration::QUIT.host.reserve_start()
 }
 pub fn release_start() {
-    HOST.release_start();
+    crate::quit_orchestration::QUIT.host.release_start();
 }
 pub fn started() {
-    HOST.started();
+    crate::quit_orchestration::QUIT.host.started();
 }
 pub fn lost() {
-    HOST.lost();
-}
-pub fn shutdown_started() {
-    HOST.shutdown_started();
-}
-pub fn rollback_busy() -> bool {
-    HOST.rollback_busy()
-}
-pub fn exit_evidence() {
-    HOST.exit_evidence();
-}
-pub fn consume_exit_evidence() -> bool {
-    HOST.consume_exit_evidence()
-}
-pub fn owned() -> bool {
-    HOST.owned()
-}
-pub fn decide_quit(agents: bool, gate: bool, in_flight: bool) -> QuitDecision {
-    HOST.decide_quit(agents, gate, in_flight)
+    crate::quit_orchestration::QUIT.host.lost();
 }
 
 pub fn pre_gate_block(phase: Phase) -> Option<&'static str> {

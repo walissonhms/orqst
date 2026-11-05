@@ -1,15 +1,12 @@
 //! Native-only observer alerts and explicit window lifetime. No renderer capability.
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{TrayIcon, TrayIconBuilder};
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_notification::NotificationExt;
-
-static QUIT_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 
 const MAX_ATTEMPTS: usize = 20;
 const FRESHNESS: Duration = Duration::from_secs(10);
@@ -337,10 +334,8 @@ pub(crate) fn quit_parent(app: &tauri::AppHandle) -> Option<tauri::Window> {
 }
 
 fn quit_parent_valid(window: &tauri::Window) -> bool {
-    if !matches!(
-        window.label(),
-        "main" | "managed-agents"
-    ) || !window.is_visible().unwrap_or(false)
+    if !matches!(window.label(), "main" | "managed-agents")
+        || !window.is_visible().unwrap_or(false)
         || window.is_minimized().unwrap_or(true)
     {
         return false;
@@ -780,48 +775,7 @@ pub fn main_window_event(app: &tauri::AppHandle, event: &WindowEvent) {
 
 /// Every exit point uses this single latched entry. No direct exit with an owned host.
 pub fn request_quit(app: &tauri::AppHandle) {
-    // Never create the agents dialog when the exit is already impossible or in flight.
-    if let Some(reason) = crate::host_phase::pre_gate_block(crate::host_phase::phase()) {
-        crate::terminal::quit_blocked_public(app, reason);
-        return;
-    }
-    if QUIT_IN_FLIGHT.load(Ordering::SeqCst) {
-        return;
-    }
-    let agents = crate::agents::owned_active(app);
-    let gate = agents && crate::agents::confirm_exit(app);
-    // The gate may have taken time; a concurrent host loss invalidates the next step.
-    if let Some(reason) = crate::host_phase::pre_gate_block(crate::host_phase::phase()) {
-        crate::terminal::quit_blocked_public(app, reason);
-        return;
-    }
-    match crate::host_phase::decide_quit(agents, gate, false) {
-        crate::host_phase::QuitDecision::BlockedLost => {
-            crate::terminal::quit_blocked_public(app, "host_lost");
-        }
-        crate::host_phase::QuitDecision::BlockedStarting => {
-            crate::terminal::quit_blocked_public(app, "starting");
-        }
-        crate::host_phase::QuitDecision::AgentsGate => {
-            // The gate owns the next step; nothing is signaled and no latch is held.
-            quit_finished();
-        }
-        crate::host_phase::QuitDecision::ExitDirect => app.exit(0),
-        crate::host_phase::QuitDecision::AlreadyInFlight => {}
-        crate::host_phase::QuitDecision::TerminalFlow => {
-            if QUIT_IN_FLIGHT.swap(true, Ordering::SeqCst) {
-                return;
-            }
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                crate::terminal::quit_owned(app).await;
-            });
-        }
-    }
-}
-
-pub fn quit_finished() {
-    QUIT_IN_FLIGHT.store(false, Ordering::SeqCst);
+    crate::quit_native::request_quit(app);
 }
 
 pub fn stop(app: &tauri::AppHandle) {
@@ -840,17 +794,6 @@ pub fn stop(app: &tauri::AppHandle) {
     }
     // macOS/Windows cannot withdraw delivered notifications. Future callbacks are inert.
     let _ = app.notification().remove_all_active();
-}
-
-#[cfg(test)]
-mod quit_entry_tests {
-    #[test]
-    fn only_the_single_quit_entry_exits_without_an_owned_host() {
-        let source = include_str!("desktop.rs");
-        assert_eq!(source.matches(&concat!("app.", "exit(0)")).count(), 1);
-        let index = source.find("pub fn request_quit").unwrap();
-        assert!(source[index..].contains(&concat!("app.", "exit(0)")));
-    }
 }
 
 #[cfg(test)]
