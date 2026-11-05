@@ -226,18 +226,23 @@ pub(crate) fn valid_request(value: &Value) -> bool {
 }
 
 fn valid_arrangement_request(value: &Value) -> bool {
-    if !exact(
-        value,
-        &[
-            "contractVersion",
-            "generation",
-            "action",
-            "layoutVersion",
-            "mode",
-            "viewport",
-            "panes",
-        ],
-    ) || value["layoutVersion"] != 1
+    let versioned_chrome = value["layoutVersion"] == 2;
+    let fields = [
+        "contractVersion",
+        "generation",
+        "action",
+        "layoutVersion",
+        "mode",
+        "viewport",
+        "panes",
+    ];
+    let mut expected = fields.to_vec();
+    if versioned_chrome {
+        expected.push("chrome");
+    }
+    if !exact(value, &expected)
+        || !(value["layoutVersion"] == 1 || versioned_chrome)
+        || (versioned_chrome && !valid_chrome(&value["chrome"]))
         || !matches!(
             value["mode"].as_str(),
             Some("mosaic" | "columns" | "rows" | "focus" | "list" | "free")
@@ -314,6 +319,13 @@ fn valid_arrangement_request(value: &Value) -> bool {
         rects.push((x, y, w, h));
     }
     !(value["mode"] == "list" && count != 0 || value["mode"] == "focus" && count > 1)
+}
+
+fn valid_chrome(value: &Value) -> bool {
+    exact(value, &["sidebar", "top", "bottom"])
+        && matches!(value["sidebar"].as_u64(), Some(0 | 46 | 155))
+        && matches!(value["top"].as_u64(), Some(36 | 81))
+        && value["bottom"].as_u64() == Some(34)
 }
 pub(crate) fn valid_envelope(value: &Value) -> bool {
     exact(value, &["kind", "id", "document", "source", "request"])
@@ -2667,24 +2679,27 @@ pub(crate) fn valid_layout(
     generation: u64,
 ) -> bool {
     let custom = v["kind"] == "layout-v2";
+    let versioned_chrome = custom && v["arrangementVersion"] == 2;
     if !(if custom {
-        exact(
-            v,
-            &[
-                "kind",
-                "mode",
-                "generation",
-                "revision",
-                "viewport",
-                "insets",
-                "state",
-                "focus",
-                "bounds",
-            ],
-        ) && matches!(
-            v["mode"].as_str(),
-            Some("mosaic" | "columns" | "rows" | "focus" | "list" | "free")
-        )
+        let mut fields = vec![
+            "kind",
+            "mode",
+            "generation",
+            "revision",
+            "viewport",
+            "insets",
+            "state",
+            "focus",
+            "bounds",
+        ];
+        if versioned_chrome {
+            fields.push("arrangementVersion");
+        }
+        exact(v, &fields)
+            && matches!(
+                v["mode"].as_str(),
+                Some("mosaic" | "columns" | "rows" | "focus" | "list" | "free")
+            )
     } else {
         exact(
             v,
@@ -2779,7 +2794,7 @@ pub(crate) fn valid_layout(
         return false;
     }
     let chrome = s["workspaceChrome"] == true;
-    let left = if chrome {
+    let default_left = if chrome {
         if width <= 720 {
             46
         } else {
@@ -2788,8 +2803,23 @@ pub(crate) fn valid_layout(
     } else {
         0
     };
-    let top = if chrome { 81 } else { 0 };
-    let bottom = if chrome { 34 } else { 0 };
+    let (left, top, bottom) = if versioned_chrome {
+        let requested = json!({"sidebar":v["insets"]["left"],"top":v["insets"]["top"],"bottom":v["insets"]["bottom"]});
+        if !valid_chrome(&requested) {
+            return false;
+        }
+        (
+            v["insets"]["left"].as_u64().unwrap() as u32,
+            v["insets"]["top"].as_u64().unwrap() as u32,
+            34,
+        )
+    } else {
+        (
+            default_left,
+            if chrome { 81 } else { 0 },
+            if chrome { 34 } else { 0 },
+        )
+    };
     if width <= left
         || height <= top + bottom
         || v["insets"] != json!({"left":left,"top":top,"bottom":bottom})
@@ -2881,6 +2911,48 @@ mod layout_tests {
         assert!(!valid_request(&request));
         request["panes"][1]["rect"] = Value::Null;
         assert!(!valid_request(&request));
+    }
+
+    #[test]
+    fn v2_chrome_is_allowlisted_and_legacy_request_stays_strict() {
+        let mut request = json!({"contractVersion":1,"generation":3,"action":"arrange","layoutVersion":2,"chrome":{"sidebar":0,"top":36,"bottom":34},"mode":"list","viewport":{"width":1440,"height":830},"panes":[]});
+        assert!(valid_request(&request));
+        for sidebar in [0, 46, 155] {
+            request["chrome"]["sidebar"] = json!(sidebar);
+            assert!(valid_request(&request));
+        }
+        request["chrome"]["sidebar"] = json!(1);
+        assert!(!valid_request(&request));
+        request["chrome"]["sidebar"] = json!(0);
+        request["chrome"]["top"] = json!(37);
+        assert!(!valid_request(&request));
+        request["chrome"]["top"] = json!(36);
+        request["layoutVersion"] = json!(1);
+        assert!(!valid_request(&request));
+        request.as_object_mut().unwrap().remove("chrome");
+        assert!(valid_request(&request));
+    }
+
+    #[test]
+    fn v2_native_layout_checks_full_window_insets_and_bounds() {
+        let mut value = layout();
+        value["kind"] = json!("layout-v2");
+        value["mode"] = json!("columns");
+        value["arrangementVersion"] = json!(2);
+        value["insets"] = json!({"left":0,"top":36,"bottom":34});
+        value["bounds"] = json!([
+            {"slot":0,"z":0,"rect":{"x":0,"y":36,"width":720,"height":830}},
+            {"slot":1,"z":1,"rect":{"x":720,"y":36,"width":720,"height":830}}
+        ]);
+        assert!(valid_layout(&value, 2, 1440, 900, 2, 2));
+        value["insets"]["top"] = json!(37);
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
+        value["insets"]["top"] = json!(36);
+        value["bounds"][0]["rect"]["y"] = json!(35);
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
+        value["bounds"][0]["rect"]["y"] = json!(36);
+        value.as_object_mut().unwrap().remove("arrangementVersion");
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
     }
 
     #[test]

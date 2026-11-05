@@ -1173,3 +1173,11 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+## Studio native chrome insets — 2026-11-05
+
+- [x] Version-2 arrangement accepts only the documented sidebar/top/bottom
+      insets; version 1 keeps its existing automatic chrome. Node and Rust
+      validate window geometry and retain existing presentation fences.
+- [ ] Renderer integration, real AppKit/WebKit acceptance and owner validation
+      of full-window Studio and sidebar return remain pending.
