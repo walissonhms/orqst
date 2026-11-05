@@ -52,6 +52,13 @@ vocabulary!(Outcome {
     AdmissionInvalid => "admission_invalid", StartupFailed => "startup_failed",
     EnrollmentBindingChanged => "enrollment_binding_changed",
     StartupTimeout => "startup_timeout", StartupEof => "startup_eof", StartupProtocol => "startup_protocol",
+    StudioInvalidRequest => "studio_invalid_request", StudioIdentity => "studio_identity",
+    StudioFocus => "studio_focus", StudioContextChanged => "studio_context_changed",
+    StudioMainMissing => "studio_main_missing", StudioReviewEmpty => "studio_review_empty",
+    StudioLatchUnavailable => "studio_latch_unavailable", StudioPostIdentity => "studio_post_identity",
+    FeatureInvalidRequest => "feature_invalid_request", FeatureIdentity => "feature_identity",
+    FeatureMainMissing => "feature_main_missing", FeatureTargetIdentity => "feature_target_identity",
+    FeatureFocusOrContext => "feature_focus_or_context", FeaturePostContext => "feature_post_context",
     Uncertain => "uncertain", Unconfirmed => "unconfirmed",
 });
 vocabulary!(Effects {
@@ -319,6 +326,29 @@ mod disk {
 mod tests {
     use super::*;
     use std::fs;
+
+    #[test]
+    fn preparation_denial_reasons_are_closed_and_sanitized() {
+        for label in [
+            "studio_invalid_request",
+            "studio_identity",
+            "studio_focus",
+            "studio_context_changed",
+            "studio_main_missing",
+            "studio_review_empty",
+            "studio_latch_unavailable",
+            "studio_post_identity",
+            "feature_invalid_request",
+            "feature_identity",
+            "feature_main_missing",
+            "feature_target_identity",
+            "feature_focus_or_context",
+            "feature_post_context",
+        ] {
+            assert_eq!(Outcome::parse(label).name(), label);
+        }
+        assert_eq!(Outcome::parse("/private/sensitive").name(), "unconfirmed");
+    }
 
     fn temporary() -> PathBuf {
         let path = std::env::temp_dir()

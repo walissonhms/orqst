@@ -612,12 +612,15 @@ fn execute(
 }
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
-    let denied = || json!({"status":"denied"});
+    let denied = |reason| {
+        Attempt::begin().record(Stage::Request, reason, Effects::NotStarted);
+        json!({"status":"denied"})
+    };
     if !valid_request(&request) {
-        return denied();
+        return denied(Outcome::StudioInvalidRequest);
     }
     let Some((source, generation)) = identity(&window) else {
-        return denied();
+        return denied(Outcome::StudioIdentity);
     };
     let app = window.app_handle().clone();
     if request["action"] == "snapshot" {
@@ -625,15 +628,16 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
+        Attempt::begin().record(Stage::Request, Outcome::StudioFocus, Effects::NotStarted);
         return json!({"status":"focus_required"});
     }
     if identity(&window) != Some((source.clone(), generation))
         || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
     {
-        return denied();
+        return denied(Outcome::StudioContextChanged);
     }
     let Some(parent) = app.get_webview_window("main") else {
-        return denied();
+        return denied(Outcome::StudioMainMissing);
     };
     let native_request = if request["action"] == "review" {
         let files = app
@@ -644,7 +648,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
             .prepared
             .clone();
         if files.is_empty() {
-            return denied();
+            return denied(Outcome::StudioReviewEmpty);
         }
         json!({"action":"review", "files":files})
     } else if matches!(
@@ -659,6 +663,13 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     };
     if begin(&app, &native_request, Some(generation)).is_none() {
         let current = snapshot(&app);
+        if current["busy"] != true {
+            Attempt::begin().record(
+                Stage::Request,
+                Outcome::StudioLatchUnavailable,
+                Effects::NotStarted,
+            );
+        }
         return json!({"status":if current["busy"] == true { "busy" } else { "denied" }, "snapshot":current});
     }
     // Once admitted, the native task owns completion even if the JS invocation disappears.
@@ -676,7 +687,12 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     })
     .await;
     if identity(&window) != Some((source, generation)) {
-        return denied();
+        Attempt::begin().record(
+            Stage::Request,
+            Outcome::StudioPostIdentity,
+            Effects::Possible,
+        );
+        return json!({"status":"denied"});
     }
     match result {
         Ok(value) if value["status"] == "catalog" => value,

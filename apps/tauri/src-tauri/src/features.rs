@@ -725,12 +725,19 @@ fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
 /// View-only chrome → owned main handoff. Never forwarded to the Core metadata pipe.
 #[tauri::command]
 pub async fn feature_prepare(window: Webview, request: Value) -> Value {
-    let denied = || json!({"status":"denied"});
+    let denied = |reason| {
+        crate::local_diagnostics::Attempt::begin().record(
+            crate::local_diagnostics::Stage::Request,
+            reason,
+            crate::local_diagnostics::Effects::NotStarted,
+        );
+        json!({"status":"denied"})
+    };
     if window.label() != "feature-workspace" || !valid_preparation_request(&request) {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeatureInvalidRequest);
     }
     let Some(source) = identity(&window) else {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeatureIdentity);
     };
     let app = window.app_handle();
     let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
@@ -743,10 +750,10 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         return json!({"status":"busy"});
     }
     let Some(main) = app.get_webview("main") else {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeatureMainMissing);
     };
     let Some(target) = dashboard_identity(&main) else {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeatureTargetIdentity);
     };
     if !preparation_scope_current(
         &app.state::<Features>().0.lock().unwrap(),
@@ -771,7 +778,7 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     })
     .await
     {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeatureFocusOrContext);
     }
     // Changing windows revokes existing input through the existing native focus observer.
     // Only this authenticated target receives IDs; the drawer starts no execution on opening.
@@ -786,7 +793,7 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         || !crate::terminal::preparation_admission_current(app, &admission)
         || !crate::terminal_creation::navigation_available(app)
     {
-        return denied();
+        return denied(crate::local_diagnostics::Outcome::FeaturePostContext);
     }
     if main
         .eval(format!(

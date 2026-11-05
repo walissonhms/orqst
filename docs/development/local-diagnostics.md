@@ -178,3 +178,9 @@ Cargo target, app bundle or resource tree was created or cleaned.
 - [ ] Accept Windows/native/provider parity and establish any historical cause.
 
 See the [pinned reference and reuse review](../research/local-diagnostics.md).
+
+Preparation preflight denials now record closed, static `studio_*` and `feature_*`
+outcomes without request values. `studio_post_identity` reports possible effects;
+earlier native preparation guards report not started. `feature_focus_or_context`
+identifies the combined focus and context fence and does not distinguish its two
+causes. Renderer-only catalog scope mismatch is not recorded by this native sink.
