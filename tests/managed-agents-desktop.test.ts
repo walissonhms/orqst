@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
   chmodSync,
+  copyFileSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -972,9 +974,60 @@ test('production bootstrap refuses missing reader context, divergent IDs, foreig
     assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native), /binding mismatch/);
     assert.throws(
       () => f.service.prepareStart(0, 'synthetic-model'),
-      /Native pair identity changed/,
+      /Native Feature binding mismatch/,
     );
     assert.equal(f.transports.length, 0);
+  } finally {
+    f.close();
+  }
+});
+
+test('untrusted manifest roots are untouched at bootstrap, prepare and launch for both slots', () => {
+  const f = fixture(undefined, true);
+  try {
+    const alternate = join(f.native.preferencesDirectory, '..', 'alternate');
+    mkdirSync(alternate, { mode: 0o700 });
+    const alternateObserver = join(alternate, 'observer.sqlite');
+    copyFileSync(f.native.observerDatabase, alternateObserver);
+    const alternatePreferences = join(alternate, 'preferences');
+    mkdirSync(alternatePreferences, { mode: 0o700 });
+    writeFileSync(join(alternatePreferences, 'marker'), 'SYNTHETIC', { mode: 0o600 });
+    const snapshot = (directory: string): unknown =>
+      readdirSync(directory)
+        .sort()
+        .map((name) => {
+          const path = join(directory, name);
+          const info = lstatSync(path, { bigint: true });
+          return [
+            name,
+            info.mtimeNs,
+            info.size,
+            info.isDirectory() ? snapshot(path) : readFileSync(path),
+          ];
+        });
+    const admission = { claim() {}, assertOwner() {}, prepareRelease: () => () => {} };
+    for (const slot of [0, 1]) {
+      for (const field of ['observerDatabase', 'preferencesDirectory'] as const) {
+        const start = f.service.prepareStart(0, 'synthetic-model');
+        const original = readFileSync(f.files[slot]!, 'utf8');
+        const config = JSON.parse(original) as ManagedCodexConfig;
+        config.preparation![field] =
+          field === 'observerDatabase' ? alternateObserver : alternatePreferences;
+        writeFileSync(f.files[slot]!, JSON.stringify(config), { mode: 0o600 });
+        const before = [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)];
+        assert.throws(() => nativeManagedAgentsFeatureContext(f.files, f.native));
+        assert.throws(() => nativeManagedAgentsFeatureContext(f.files, undefined));
+        assert.throws(() => managedAgentsHostComposition(f.hostArgs, f.backend, admission));
+        assert.throws(() => f.service.prepareStart(0, 'synthetic-model'));
+        assert.throws(() => f.service.launch(0, f.proof(start.challenge)));
+        assert.deepEqual(
+          [lstatSync(alternate, { bigint: true }).mtimeNs, snapshot(alternate)],
+          before,
+        );
+        assert.equal(f.transports.length, 0);
+        writeFileSync(f.files[slot]!, original, { mode: 0o600 });
+      }
+    }
   } finally {
     f.close();
   }

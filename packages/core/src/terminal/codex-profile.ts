@@ -163,10 +163,14 @@ export function terminalExecutableSha256(path: string): string {
   }
 }
 
-export function readManagedCodexConfig(file: string): ManagedCodexConfig {
+export function parseManagedCodexConfigFile(file: string): ManagedCodexConfig {
   const bytes = terminalFile(file, true);
   if (bytes.length > 16 * 1024) throw new Error('Terminal config too large');
-  const config = managedCodexConfigSchema.parse(JSON.parse(bytes.toString('utf8')));
+  return managedCodexConfigSchema.parse(JSON.parse(bytes.toString('utf8')));
+}
+
+export function readManagedCodexConfig(file: string): ManagedCodexConfig {
+  const config = parseManagedCodexConfigFile(file);
   validateManagedCodexConfig(config);
   return config;
 }

@@ -174,3 +174,14 @@ reported a non-fatal toolchain `rust-objcopy`/missing `libLLVM.dylib` stripping
 warning. The `cargo fmt` shim could not find `cargo-fmt` for its default 1.99.0
 selection, so formatting was checked with the explicitly pinned 1.99.1 `rustfmt`.
 No full Node suite, application/provider, package or build was run for this wiring.
+
+### 2026-11-05: trusted-root validation order
+
+The structured host parses both private manifests before comparing their preparation
+bindings with the native-owned roots and scope. Only matching bindings may reach
+catalogue, preferences, executable and fence validation. The parent before fork,
+child composition and runtime revalidations use the same pair check; errors deny
+preparation rather than becoming neutral policy. A bound manifest without native
+context is refused, including a binding with no selected Feature. Legacy manifests
+without preparation bindings remain unscoped. Synthetic tests check alternate roots
+and do not establish native UI or provider acceptance.

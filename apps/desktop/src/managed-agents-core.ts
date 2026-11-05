@@ -1,12 +1,10 @@
 import { fork } from 'node:child_process';
 import { randomUUID, type KeyObject } from 'node:crypto';
 import { join } from 'node:path';
-import {
-  managedCodexEnvironment,
-  readManagedCodexConfig,
-} from '../../../packages/core/src/terminal/codex-profile.js';
+import { managedCodexEnvironment } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   managedAgentsFeatureContextSchema,
+  readManagedAgentsPair,
   type ManagedAgentsFeatureContext,
 } from '../../../packages/core/src/managed-codex/feature-context.js';
 import { agentsHostReplySchema, agentsHostRequestSchema } from './managed-agents-wire.js';
@@ -18,7 +16,14 @@ export async function connectManagedAgents(
   admissionDirectory: string,
   featureContext?: ManagedAgentsFeatureContext,
 ) {
-  const config = readManagedCodexConfig(files[0]);
+  const config = readManagedAgentsPair(
+    files,
+    featureContext && {
+      observerDatabase: featureContext.observerDatabase,
+      preferencesDirectory: featureContext.preferencesDirectory,
+    },
+    featureContext,
+  ).configs[0]!;
   const child = fork(
     join(__dirname, 'managed-agents-host.cjs'),
     [

@@ -13,7 +13,7 @@ import { featureConfigurationDatabase } from '../terminal/feature-configuration.
 import {
   managedAgentsFeatureContextSchema,
   managedAgentsWorkspaceIds,
-  resolveManagedAgentsFeatureContext,
+  readManagedAgentsPair,
   type ManagedAgentsFeatureContext,
 } from './feature-context.js';
 import { terminalIdentity } from '../terminal/identity.js';
@@ -21,7 +21,6 @@ import { terminalTeamDatabase } from '../terminal/team-database.js';
 import { teamRoutingProposal } from '../communication/team-configuration.js';
 import { PaneCommunication, type CommunicationContentScope } from '../communication/service.js';
 import { TerminalAuthority, terminalDigest } from '../terminal/authority.js';
-import { readManagedCodexConfig } from '../terminal/codex-profile.js';
 import { CodexStructuredRuntime, type CodexRuntimeBackend } from './runtime.js';
 
 /** Trusted native composition. Read-only observer catalogue, no session adoption or renderer paths. */
@@ -69,7 +68,17 @@ export class DesktopManagedAgents {
     private configurationDirectory?: string,
     trustedFeatureContext?: ManagedAgentsFeatureContext,
   ) {
-    const configs = files.map(readManagedCodexConfig);
+    const trusted = trustedFeatureContext
+      ? managedAgentsFeatureContextSchema.parse(trustedFeatureContext)
+      : undefined;
+    const { configs, context: resolved } = readManagedAgentsPair(
+      files,
+      trusted && {
+        observerDatabase: trusted.observerDatabase,
+        preferencesDirectory: trusted.preferencesDirectory,
+      },
+      trusted,
+    );
     const [a, b] = configs;
     if (
       !a ||
@@ -83,16 +92,6 @@ export class DesktopManagedAgents {
     )
       throw new Error('Two distinct existing-login slots for the same project are required');
     this.project = a.project;
-    const trusted = trustedFeatureContext
-      ? managedAgentsFeatureContextSchema.parse(trustedFeatureContext)
-      : undefined;
-    const resolved = resolveManagedAgentsFeatureContext(
-      configs,
-      trusted && {
-        observerDatabase: trusted.observerDatabase,
-        preferencesDirectory: trusted.preferencesDirectory,
-      },
-    );
     if (JSON.stringify(resolved) !== JSON.stringify(trusted))
       throw new Error('Native Feature scope mismatch');
     this.featureContext = resolved && Object.freeze(resolved);
@@ -140,6 +139,12 @@ export class DesktopManagedAgents {
       },
       backend,
       read,
+      (file) => {
+        const configs = this.assertPreparationContext();
+        const slot = this.files.indexOf(file);
+        if (slot < 0) throw new Error('Native pair identity changed');
+        return configs[slot]!;
+      },
     );
   }
 
@@ -150,7 +155,14 @@ export class DesktopManagedAgents {
       : undefined;
   }
   private assertPreparationContext() {
-    const configs = this.files.map(readManagedCodexConfig);
+    const { configs, context: resolved } = readManagedAgentsPair(
+      this.files,
+      this.featureContext && {
+        observerDatabase: this.featureContext.observerDatabase,
+        preferencesDirectory: this.featureContext.preferencesDirectory,
+      },
+      this.featureContext,
+    );
     if (
       configs.some(
         (config, slot) =>
@@ -160,15 +172,9 @@ export class DesktopManagedAgents {
       )
     )
       throw new Error('Native pair identity changed');
-    const resolved = resolveManagedAgentsFeatureContext(
-      configs,
-      this.featureContext && {
-        observerDatabase: this.featureContext.observerDatabase,
-        preferencesDirectory: this.featureContext.preferencesDirectory,
-      },
-    );
     if (JSON.stringify(resolved) !== JSON.stringify(this.featureContext))
       throw new Error('Native Feature scope changed');
+    return configs;
   }
   private teamDatabase() {
     if (!this.configurationDirectory) throw new Error('Team configuration unavailable');

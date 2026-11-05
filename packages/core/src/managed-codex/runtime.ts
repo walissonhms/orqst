@@ -278,13 +278,14 @@ export class CodexStructuredRuntime {
     private results: CodexResultWriter,
     private backend: CodexRuntimeBackend,
     private readContent?: CommunicationResolver,
+    private readConfig = readManagedCodexConfig,
   ) {}
 
   prepare(clientId: string, configFile: string, input: unknown) {
     if (this.closed || this.attempts.size >= codexRuntimePolicy.attempts)
       throw new Error('Codex runtime capacity unavailable');
     const options = startSchema.parse(input);
-    const config = readManagedCodexConfig(configFile);
+    const config = this.readConfig(configFile);
     const id = randomUUID();
     const sourceHash = terminalDigest(terminalFile(configFile, true));
     const manifest = {
@@ -787,7 +788,7 @@ export class CodexStructuredRuntime {
   private validate(a: Attempt): void {
     if (
       terminalDigest(terminalFile(a.file, true)) !== a.sourceHash ||
-      JSON.stringify(readManagedCodexConfig(a.file)) !== JSON.stringify(a.config)
+      JSON.stringify(this.readConfig(a.file)) !== JSON.stringify(a.config)
     )
       throw new Error('Codex manifest changed');
   }

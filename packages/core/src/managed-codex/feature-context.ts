@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { stableId } from '@orqst/shared';
 import { terminalDigest } from '../terminal/authority.js';
-import { type ManagedCodexConfig } from '../terminal/codex-profile.js';
+import {
+  parseManagedCodexConfigFile,
+  validateManagedCodexConfig,
+  type ManagedCodexConfig,
+} from '../terminal/codex-profile.js';
 import { terminalIdentity } from '../terminal/identity.js';
 import {
   resolveTerminalPreparationContext,
@@ -21,13 +25,13 @@ export function resolveManagedAgentsFeatureContext(
   configs: ManagedCodexConfig[],
   native?: TerminalPreparationContext,
 ): ManagedAgentsFeatureContext | undefined {
-  const scoped = configs.some((config) => config.preparation?.featureId != null);
-  if (!scoped) return undefined; // Selection alone never promotes a legacy manifest.
+  const bound = configs.some((config) => config.preparation != null);
+  if (!bound) return undefined; // Selection alone never promotes a legacy manifest.
   if (!native) throw new Error('Native Feature context unavailable');
   const trusted = terminalPreparationContextSchema.parse(native);
   const first = configs[0];
   const binding = first?.preparation;
-  if (!first || !binding?.featureId) throw new Error('Mixed Feature preparation denied');
+  if (!first || !binding) throw new Error('Mixed Feature preparation denied');
   const workspaceId = stableId('workspace', first.project);
   for (const config of configs) {
     const other = config.preparation;
@@ -43,6 +47,11 @@ export function resolveManagedAgentsFeatureContext(
       throw new Error('Native Feature binding mismatch');
   }
   const current = resolveTerminalPreparationContext(trusted, workspaceId, binding.featureId);
+  if (binding.featureId === null) {
+    if (current.project !== first.project || current.fence !== binding.fence)
+      throw new Error('Native Feature binding mismatch');
+    return undefined;
+  }
   const ids = configs.map((config) => terminalIdentity(config).terminalId);
   if (
     current.project !== first.project ||
@@ -65,4 +74,27 @@ export function managedAgentsWorkspaceIds(project: string) {
     canonicalWorkspaceId: stableId('workspace', project),
     legacyProjectDigest: terminalDigest(project),
   });
+}
+
+/** Parse both private manifests before any validation can access their embedded roots. */
+export function readManagedAgentsPair(
+  files: [string, string],
+  native?: TerminalPreparationContext,
+  expected?: ManagedAgentsFeatureContext,
+) {
+  const configs = files.map(parseManagedCodexConfigFile);
+  // Compare every binding, including the expected native scope, before opening databases.
+  const first = configs[0];
+  if (
+    expected &&
+    (!first?.preparation ||
+      stableId('workspace', first.project) !== expected.workspaceId ||
+      first.preparation.featureId !== expected.featureId)
+  )
+    throw new Error('Native Feature scope mismatch');
+  const context = resolveManagedAgentsFeatureContext(configs, native);
+  if (expected && JSON.stringify(context) !== JSON.stringify(expected))
+    throw new Error('Native Feature scope mismatch');
+  configs.forEach(validateManagedCodexConfig);
+  return { configs, context };
 }
