@@ -15,6 +15,7 @@ import {
 } from './interactive-profile.js';
 import { managedTerminalEventSchema } from './pty-channel.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
+import { ownedClaudeSession } from './owned-claude-session.js';
 
 export function managedTerminalBackend(
   file: string,
@@ -50,6 +51,10 @@ export function managedTerminalBackend(
       // Repeat at the last synchronous dispatch boundary. Same-user races remain disclosed.
       if (!this.validate(profile)) throw new Error('Managed profile changed');
       if (!identity) throw new Error('PTY lifecycle identity required');
+      const sessionEvidence =
+        config.version === 2
+          ? ownedClaudeSession(config, { ...identity, configDigest: terminalDigest(source) })
+          : undefined;
       // Native Claude/OpenCode manifests are single-dispatch, including failed starts.
       dispatched = true;
       const receipt = createLifecycleReceipt(config.state, {
@@ -113,6 +118,7 @@ export function managedTerminalBackend(
         }
       };
       return {
+        ...(sessionEvidence ? { sessionEvidence } : {}),
         write: (text) => send({ action: 'write', text }),
         resize: (columns, rows) => send({ action: 'resize', columns, rows }),
         signal: (signal) => send({ action: 'signal', signal }),

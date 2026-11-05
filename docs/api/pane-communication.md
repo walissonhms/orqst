@@ -44,7 +44,10 @@ session ID, observed session ID, PID, task, turn or attachment. This library can
 prove that a binding describes a real process: a future trusted composition must
 verify native enrollment/ownership before registering or re-enrolling an adapter.
 It must not derive bindings from logs, provider prose, a name or a guessed PID.
-Provider-native session references and durable terminal allocation are not yet wired.
+Provider-native session references and durable terminal allocation are not yet wired
+into this communication library. A separate read-only canvas projection can bind an
+owned Claude launch UUID to an exact matching transcript and receipt; it grants no
+communication authority and does not register a pane here.
 
 External panes must have no managed binding, control capability or adapter. They
 cannot send or receive delegated work. Hiding or detaching UI does not call

@@ -39,6 +39,7 @@ export const terminalRPCSchema = z.discriminatedUnion('operation', [
   ),
   action('launch', z.tuple([id, proof])),
   action('snapshot', z.tuple([id])),
+  action('canvasSessionEvidence', z.tuple([id])),
   action('requestAttach', z.tuple([client, id])),
   action('attach', z.tuple([id, proof])),
   action('requestInput', z.tuple([id, id])),

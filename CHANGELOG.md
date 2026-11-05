@@ -1,5 +1,12 @@
 # Changelog
 
+## Owned Claude session evidence — 2026-11-05
+
+- Bind a Claude session only after a fresh explicit launch UUID, owned lifecycle
+  receipt and matching new transcript record; keep a private durable binding.
+- Expose at most three validated, redacted tool names on the native canvas facade.
+  Codex/OpenCode session binding and native provider acceptance remain pending.
+
 ## Canvas native evidence — 2026-11-05
 
 - Expose the reviewed model selection and a separate read-only owned-PTY lifecycle

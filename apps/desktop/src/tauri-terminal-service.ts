@@ -2,7 +2,11 @@ import { OwnedTerminalShutdown } from '../../../packages/core/src/terminal/owned
 import type { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
-import { terminalNativeReplySchema, terminalNativeRequestSchema } from '@orqst/protocol';
+import {
+  featureCanvasSessionEvidenceSchema,
+  terminalNativeReplySchema,
+  terminalNativeRequestSchema,
+} from '@orqst/protocol';
 import {
   TerminalAuthority,
   terminalChallengeBytes,
@@ -362,11 +366,12 @@ export class TauriTerminalService {
 
   /** Passive display projection: only instances created by this document's broker. */
   async canvasEvidence(
-    identities: ReadonlyArray<{ slot: number; terminalId: string }>,
+    identities: ReadonlyArray<{ slot: number; terminalId: string; provider?: string }>,
     epoch: string,
   ) {
+    const observedAt = Date.now();
     const results = await Promise.all(
-      identities.map(async ({ slot, terminalId }) => {
+      identities.map(async ({ slot, terminalId, provider }) => {
         const pane = this.panes[slot];
         const id = pane?.state.instanceId;
         const unknown = { slot, terminalId, state: 'unknown' as const };
@@ -383,19 +388,39 @@ export class TauriTerminalService {
           )
             return unknown;
           const { startedAt, exitedAt } = snapshot.lifecycle;
-          if (startedAt > Date.now() || (exitedAt !== undefined && exitedAt > Date.now()))
+          if (startedAt > observedAt || (exitedAt !== undefined && exitedAt > observedAt))
             return unknown;
-          if (snapshot.state === 'running' && exitedAt === undefined)
-            return { slot, terminalId, state: 'running' as const, startedAt };
-          if (snapshot.state === 'exited' && exitedAt !== undefined)
-            return { slot, terminalId, state: 'exited' as const, startedAt, exitedAt };
+          const process =
+            snapshot.state === 'running' && exitedAt === undefined
+              ? { state: 'running' as const, startedAt }
+              : snapshot.state === 'exited' && exitedAt !== undefined
+                ? { state: 'exited' as const, startedAt, exitedAt }
+                : undefined;
+          if (!process) return unknown;
+          let sessionEvidence: z.infer<typeof featureCanvasSessionEvidenceSchema> | undefined;
+          if (provider === 'claude') {
+            try {
+              const parsed = featureCanvasSessionEvidenceSchema.safeParse(
+                await pane.supervisor.canvasSessionEvidence(id),
+              );
+              if (
+                parsed.success &&
+                parsed.data.activities.every((activity) => activity.at <= observedAt)
+              )
+                sessionEvidence = parsed.data;
+            } catch {
+              // Session evidence is optional; never guess or retry.
+            }
+          }
+          if (this.closed || pane.state.closed || pane.state.instanceId !== id) return unknown;
+          return { slot, terminalId, ...process, ...sessionEvidence };
         } catch {
           // A lost or inaccessible Core never becomes a confirmed state.
         }
         return unknown;
       }),
     );
-    return { observedAt: Date.now(), entries: results };
+    return { observedAt, entries: results };
   }
 
   /** Native main-window Quit only. No terminal focus assertion or renderer action is accepted. */
