@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { terminalDigest } from './authority.js';
 import { terminalDirectory, terminalExecutableSha256, terminalFile } from './codex-profile.js';
@@ -92,14 +92,21 @@ export class TerminalCliPolicyStore {
   private readonly inspected = new Map<string, string>();
 
   constructor(directory: string) {
-    terminalDirectory(directory, true);
+    if (!isAbsolute(directory) || join(dirname(directory), basename(directory)) !== directory)
+      throw new Error('Noncanonical CLI policy parent');
     this.parent = directory;
     this.directory = join(directory, 'cli-authorizations');
     this.directoryPresent();
   }
 
   private directoryPresent(): boolean {
-    terminalDirectory(this.parent, true);
+    try {
+      terminalDirectory(this.parent, true);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      terminalDirectory(dirname(this.parent), true);
+      return false;
+    }
     try {
       terminalDirectory(this.directory, true);
       return true;
@@ -532,6 +539,12 @@ export class TerminalCliPolicyStore {
       throw new Error('CLI policy revision exhausted');
     const base = this.file(profile);
     if (!this.directoryPresent()) {
+      try {
+        mkdirSync(this.parent, { mode: 0o700 });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      }
+      terminalDirectory(this.parent, true);
       try {
         mkdirSync(this.directory, { mode: 0o700 });
       } catch (error) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -14,7 +14,9 @@ test('candidate authorization probes once and repeats neither probe nor review f
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-candidate-')));
   const executable = join(root, 'synthetic');
   writeFileSync(executable, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
-  const store = new TerminalCliPolicyStore(root);
+  const policyParent = join(root, 'managed-agents');
+  const store = new TerminalCliPolicyStore(policyParent);
+  assert.equal(existsSync(policyParent), false);
   const signature = { valid: true, teamId: '2DC432GLL2', identifier: 'codex' };
   let valid = false;
   let reviews = 0;
@@ -64,8 +66,15 @@ test('candidate authorization probes once and repeats neither probe nor review f
     await assert.rejects(authorizeCliCandidate(input), /signature/);
     assert.equal(probes, 0);
     valid = true;
+    assert.equal(
+      (await authorizeCliCandidate({ ...input, review: async () => false })).status,
+      'blocked',
+    );
+    assert.equal(existsSync(policyParent), false);
+    probes = 0;
     const initial = await authorizeCliCandidate(input);
     assert.equal(initial.status, 'allowed');
+    assert.equal(existsSync(policyParent), true);
     if (initial.status !== 'allowed') throw new Error('Synthetic authorization failed');
     const binding = await store.verifiedBinding(initial.profile, 'codex', 'tui', input.verifier);
     assert.equal(binding?.policyRevision, 1);
