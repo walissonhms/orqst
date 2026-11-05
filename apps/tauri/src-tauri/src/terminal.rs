@@ -1132,7 +1132,13 @@ pub async fn quit_owned(app: tauri::AppHandle) {
                 }
             }
         }
-        crate::host_phase::QuitStep::Blocked(reason) => quit_blocked(&app, reason, uncertain),
+        crate::host_phase::QuitStep::Blocked(reason) => {
+            // Only an authenticated pre-fence refusal reopens presentation.
+            if reason == "busy" || reason == "denied" {
+                crate::host_phase::rollback_busy();
+            }
+            quit_blocked(&app, reason, uncertain)
+        }
     }
 }
 

@@ -56,6 +56,16 @@ pub fn shutdown_started() {
     }
 }
 
+/// An authenticated pre-fence busy/denied reply may release the fence; nothing was accepted.
+pub fn rollback_busy() -> bool {
+    let mut phase = PHASE.lock().unwrap();
+    if *phase == Phase::ShutdownInFlight {
+        *phase = Phase::Active;
+        return true;
+    }
+    false
+}
+
 /// The reviewed retirement evidence enables exactly one exit, never a second.
 pub fn exit_evidence() {
     let mut phase = PHASE.lock().unwrap();
@@ -234,6 +244,20 @@ mod tests {
         assert_eq!(close_step(Some("closed")), E::Exit);
         assert_eq!(close_step(Some("denied")), E::Blocked("transport"));
         assert_eq!(close_step(None), E::Blocked("transport"));
+    }
+
+    #[test]
+    fn only_a_busy_or_denied_pre_fence_reply_rolls_back() {
+        reset();
+        started();
+        shutdown_started();
+        assert!(rollback_busy());
+        assert_eq!(phase(), Phase::Active);
+        assert!(!rollback_busy());
+        // Unknown or lost keeps the fence and cannot roll back.
+        lost();
+        assert!(!rollback_busy());
+        assert!(lost_unknown());
     }
 
     #[test]
