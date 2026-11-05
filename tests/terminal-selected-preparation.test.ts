@@ -336,7 +336,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       );
       assert.deepEqual(
         discoverTerminalExecutable('claude', f.context.environment.PATH, f.home),
-        [],
+        [config.executable.path],
       );
       assert.throws(() => backend.validate(profile), /executable changed/);
     } finally {
@@ -345,7 +345,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
   });
 }
 
-test('OpenCode copies, hardlinks and aliases share one reviewed implementation, preserving raw discovery and PATH order', () => {
+test('OpenCode discovery keeps distinct candidates without asserting vendor identity', () => {
   const f = fixture(true);
   try {
     const first = join(f.root, 'bin/opencode');
@@ -363,14 +363,15 @@ test('OpenCode copies, hardlinks and aliases share one reviewed implementation, 
     const raw = discoverLocalClis(path, f.home).find((entry) => entry.provider === 'opencode')!;
     assert.equal(raw.candidates.length, 4);
     assert.equal(raw.execution, 'not_authorized');
-    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [first]);
+    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [
+      join(unreviewed, 'opencode'), first, join(hardlink, 'opencode'), installer,
+    ]);
     // A GUI-minimal PATH falls back to the installed reviewed binary, without a shell/Finder.
     assert.deepEqual(discoverTerminalExecutable('opencode', '/usr/bin:/bin', f.home), [installer]);
-    // Neither a matching name, unreviewed native bytes, an executable shim nor unsafe
-    // permissions can establish equivalence to the exact reviewed pin.
+    // Native discovery rejects unsafe files and shims but does not verify vendor identity.
     chmodSync(first, 0o777);
     writeFileSync(installer, '#!/bin/sh\nexit 99\n', { mode: 0o700 });
-    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), []);
+    assert.deepEqual(discoverTerminalExecutable('opencode', path, f.home), [join(unreviewed, 'opencode')]);
   } finally {
     f.close();
   }
