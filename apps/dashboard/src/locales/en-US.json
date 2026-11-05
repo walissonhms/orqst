@@ -530,6 +530,22 @@
       "context": "Selected observed session",
       "confirmed": "Last confirmed",
       "outdated": "Out of date"
+    },
+    "side": {
+      "search": "Search",
+      "newSession": "New session",
+      "needsYou": "Needs you",
+      "running": "Running",
+      "recent": "Recent",
+      "staleOnly": "{{count}} with no recent activity",
+      "stale": "+{{count}} with no recent activity",
+      "showAll": "Show all ({{count}} more)",
+      "showFewer": "Show fewer",
+      "status": "Status",
+      "runningCount_one": "{{count}} running",
+      "runningCount_other": "{{count}} running",
+      "needsYouCount_one": "{{count}} needs you",
+      "needsYouCount_other": "{{count}} need you"
     }
   },
   "settings": {
@@ -1435,5 +1451,10 @@
     },
     "openTerminal": "Open terminal",
     "noTerminalsYet": "No terminals open yet. Use New terminal to start."
+  },
+  "overviewPage": {
+    "title": "Overview",
+    "subtitle": "What is running, what needs you and what it costs, from observed sessions.",
+    "recentActivity": "With activity in the last 15 min"
   }
 }

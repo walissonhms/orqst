@@ -1,0 +1,284 @@
+/* Shell v2 (2026-11-05): compact working chrome shared with the Studio. Tokens only. */
+
+:root {
+  --orqst-topbar-height: 52px;
+  --orqst-statusbar-height: 28px;
+}
+
+/* Sidebar */
+.sidebar {
+  padding: 14px 10px 10px;
+  gap: 2px;
+}
+.brand {
+  width: 112px;
+  padding: 4px 6px 10px;
+}
+.sidebar .sidebar-collapse {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+}
+.side-actions {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 8px;
+}
+.side-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--orqst-text);
+  font-size: 13px;
+  text-align: left;
+}
+.side-row svg {
+  color: var(--orqst-muted);
+}
+.side-row:hover {
+  background: var(--orqst-elevated);
+}
+.side-row kbd {
+  margin-left: auto;
+  padding: 1px 5px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 4px;
+  color: var(--orqst-muted);
+  font-family: var(--orqst-font-mono);
+  font-size: 10px;
+}
+.workspace-link {
+  gap: 9px;
+  padding: 6px 10px;
+  margin: 1px 0;
+  font-size: 13px;
+}
+.workspace-link svg {
+  width: 15px;
+  height: 15px;
+}
+.nav-heading {
+  margin-top: 10px;
+  padding: 0 10px 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+.nav-heading .icon-button {
+  width: 24px;
+  height: 24px;
+}
+.side-more {
+  width: 100%;
+  padding: 4px 10px;
+  color: var(--orqst-lavender);
+  font-size: 12px;
+  text-align: left;
+}
+.side-more:hover {
+  text-decoration: underline;
+}
+
+/* Needs you / Running / Recent */
+.side-section {
+  margin-top: 6px;
+}
+.side-section summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: var(--orqst-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+.side-section summary::-webkit-details-marker {
+  display: none;
+}
+.side-section summary::before {
+  content: '▾';
+  font-size: 10px;
+  transition: transform var(--orqst-motion-fast);
+}
+.side-section:not([open]) summary::before {
+  transform: rotate(-90deg);
+}
+.side-section summary small {
+  margin-left: auto;
+  font-family: var(--orqst-font-mono);
+  letter-spacing: 0;
+}
+.side-empty {
+  padding: 2px 10px 4px 24px;
+  color: var(--orqst-subtle);
+  font-size: 12px;
+}
+.side-session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border-left: 2px solid transparent;
+  color: var(--orqst-text);
+  font-size: 13px;
+  text-align: left;
+}
+.side-session:hover {
+  background: var(--orqst-elevated);
+}
+.side-session.active {
+  background: var(--orqst-accent-soft);
+  border-left-color: var(--orqst-neon);
+}
+.side-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.side-session small {
+  color: var(--orqst-subtle);
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+}
+.side-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--orqst-subtle);
+}
+.side-running .side-dot,
+.status-running .side-dot {
+  background: var(--orqst-neon);
+  box-shadow: 0 0 6px var(--orqst-neon);
+}
+.side-waiting_for_user .side-dot {
+  background: var(--orqst-warning);
+}
+.side-completed .side-dot {
+  background: var(--orqst-success);
+}
+.side-failed .side-dot {
+  background: var(--orqst-danger);
+}
+.sidebar-bottom {
+  padding: 12px 10px 0;
+}
+.local-badge {
+  margin-top: 0;
+  padding-top: 10px;
+  font-size: 12px;
+}
+
+/* Topbar */
+.topbar {
+  padding: 0 24px;
+}
+.topbar-actions {
+  gap: 12px;
+}
+
+/* Page content */
+main {
+  padding: 24px 28px calc(var(--orqst-statusbar-height) + 24px);
+}
+main h1,
+main .page-heading h1,
+main .overview-heading h1 {
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+main .page-heading {
+  margin-bottom: 18px;
+}
+main .eyebrow {
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+/* Status bar */
+.status-bar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 240px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--orqst-statusbar-height);
+  padding: 0 16px;
+  border-top: 1px solid var(--orqst-border);
+  background: var(--orqst-surface);
+  color: var(--orqst-muted);
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+}
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-attention {
+  color: var(--orqst-warning);
+}
+.status-spacer {
+  flex: 1;
+}
+.sidebar-collapsed .status-bar {
+  left: 68px;
+}
+.sidebar-collapsed .side-section,
+.sidebar-collapsed .side-more,
+.sidebar-collapsed .side-row span,
+.sidebar-collapsed .side-row kbd {
+  display: none;
+}
+.sidebar-collapsed .side-row {
+  justify-content: center;
+  padding: 0;
+}
+.studio-shell .status-bar {
+  display: none;
+}
+@media (max-width: 900px) {
+  .status-bar {
+    left: 0;
+  }
+}
+
+/* Overview: compact KPI strip */
+main .stats {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+main .stat {
+  padding: 14px 16px;
+  border-radius: var(--orqst-radius-panel);
+}
+main .stat strong {
+  margin: 6px 0 2px;
+  font-size: 26px;
+}
+main .stat span,
+main .stat small {
+  font-size: 12px;
+}
+main .panel-heading {
+  padding: 12px 16px;
+}

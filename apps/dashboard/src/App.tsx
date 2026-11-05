@@ -70,6 +70,7 @@ import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
+import { isTemporaryWorkspace, shellSections, shortAge } from './shell-sections';
 import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
 
 function useFormatting() {
@@ -520,6 +521,12 @@ export function App() {
     });
   }
   const [shell, setShell] = useState(readShellPreferences);
+  const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
   const [view, setView] = useState<AppView>(
     viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
@@ -940,6 +947,16 @@ export function App() {
       />
     </>
   );
+  const sideSections = shellSections(snapshot?.sessions ?? [], now);
+  const overviewRunning = shellSections(sessions, now, Number.MAX_SAFE_INTEGER);
+  const hiddenWorkspaces = snapshot
+    ? snapshot.workspaces.filter(
+        (workspace) =>
+          !workspacePins.pins.includes(workspace.id) &&
+          workspace.id !== workspaceId &&
+          isTemporaryWorkspace(workspace),
+      ).length + Math.max(0, snapshot.workspaces.filter((w) => !isTemporaryWorkspace(w)).length - 8)
+    : 0;
   return (
     <div
       className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${view === 'studio' && window.orqstFeatures?.contractVersion === 1 ? ' studio-shell' : ''}`}
@@ -976,7 +993,6 @@ export function App() {
             alt={t('brand')}
           />
         </a>
-        <p className="brand-tagline">{t('tagline')}</p>
         <button
           className="icon-button sidebar-collapse"
           aria-label={t(shell.collapsed ? 'shell.expand' : 'shell.collapse')}
@@ -985,6 +1001,18 @@ export function App() {
         >
           {shell.collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
         </button>
+        <div className="side-actions">
+          <button className="side-row" onClick={() => setPaletteOpen(true)}>
+            <Search size={15} />
+            <span>{t('shell.side.search')}</span>
+            <kbd>⌘K</kbd>
+          </button>
+          <button className="side-row" onClick={() => navigate('studio')}>
+            <Plus size={15} />
+            <span>{t('shell.side.newSession')}</span>
+            <kbd>⌘N</kbd>
+          </button>
+        </div>
         <nav aria-label={t('analytics.navigation')}>
           {appViews.map((page) => (
             <a
@@ -1016,6 +1044,43 @@ export function App() {
             </a>
           ))}
         </nav>
+        {(
+          [
+            ['needsYou', sideSections.needsYou],
+            ['running', sideSections.running],
+            ['recent', sideSections.recent],
+          ] as const
+        ).map(([key, list]) => (
+          <details key={key} className="side-section" open>
+            <summary>
+              <span>{t(`shell.side.${key}`)}</span>
+              <small>{key === 'recent' ? list.length : list.length}</small>
+            </summary>
+            {list.length === 0 ? (
+              <p className="side-empty">
+                {key === 'running' && sideSections.stale > 0
+                  ? t('shell.side.staleOnly', { count: sideSections.stale })
+                  : '—'}
+              </p>
+            ) : (
+              list.map((session) => (
+                <button
+                  key={session.id}
+                  className={`side-session side-${key === 'recent' && session.status === 'running' ? 'stale' : session.status}${selected === session.id ? ' active' : ''}`}
+                  title={session.task ?? session.agentName}
+                  onClick={() => openSession(session.id)}
+                >
+                  <span className="side-dot" aria-hidden="true" />
+                  <span className="side-title">{session.task ?? session.agentName}</span>
+                  <small>{shortAge(session.lastActivity, now)}</small>
+                </button>
+              ))
+            )}
+            {key === 'running' && sideSections.stale > 0 && list.length > 0 && (
+              <p className="side-empty">{t('shell.side.stale', { count: sideSections.stale })}</p>
+            )}
+          </details>
+        ))}
         <div className="nav-heading">
           <span>{t('workspaceNav')}</span>
           <button
@@ -1040,29 +1105,45 @@ export function App() {
             <small>{snapshot?.sessions.length ?? 0}</small>
           </button>
           {snapshot &&
-            pinnedFirst(snapshot.workspaces, workspacePins.pins).map((workspace) => (
-              <button
-                key={workspace.id}
-                className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
-                title={workspace.path}
-                aria-label={
-                  workspacePins.pins.includes(workspace.id)
-                    ? t('shell.workspaces.pinnedName', { name: workspace.name })
-                    : workspace.name
-                }
-                onClick={() => {
-                  openWorkspace(workspace.id);
-                }}
-              >
-                {workspacePins.pins.includes(workspace.id) ? (
-                  <Pin size={16} aria-hidden="true" />
-                ) : (
-                  <Folder size={16} />
-                )}
-                <span>{workspace.name}</span>
-                <small>{workspace.sessions}</small>
-              </button>
-            ))}
+            pinnedFirst(snapshot.workspaces, workspacePins.pins)
+              .filter(
+                (workspace) =>
+                  showAllWorkspaces ||
+                  workspace.id === workspaceId ||
+                  workspacePins.pins.includes(workspace.id) ||
+                  !isTemporaryWorkspace(workspace),
+              )
+              .slice(0, showAllWorkspaces ? undefined : 8)
+              .map((workspace) => (
+                <button
+                  key={workspace.id}
+                  className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
+                  title={workspace.path}
+                  aria-label={
+                    workspacePins.pins.includes(workspace.id)
+                      ? t('shell.workspaces.pinnedName', { name: workspace.name })
+                      : workspace.name
+                  }
+                  onClick={() => {
+                    openWorkspace(workspace.id);
+                  }}
+                >
+                  {workspacePins.pins.includes(workspace.id) ? (
+                    <Pin size={16} aria-hidden="true" />
+                  ) : (
+                    <Folder size={16} />
+                  )}
+                  <span>{workspace.name}</span>
+                  <small>{workspace.sessions}</small>
+                </button>
+              ))}
+          {snapshot && hiddenWorkspaces > 0 && (
+            <button className="side-more" onClick={() => setShowAllWorkspaces((value) => !value)}>
+              {showAllWorkspaces
+                ? t('shell.side.showFewer')
+                : t('shell.side.showAll', { count: hiddenWorkspaces })}
+            </button>
+          )}
         </nav>
         {featureShell.snapshot && (
           <>
@@ -1101,19 +1182,10 @@ export function App() {
           </>
         )}
         <div className="sidebar-bottom">
-          <div className="integration-heading">{t('integration')}</div>
-          {snapshot?.adapters.map((adapter) => (
-            <div className="integration-item" key={adapter.id}>
-              <span className={`tiny-dot ${adapter.implemented ? 'green' : ''}`} />
-              <span>{t(`shell.adapters.${adapter.id}`, { defaultValue: adapter.id })}</span>
-              <small>{t(adapter.implemented ? 'implemented' : 'planned')}</small>
-            </div>
-          ))}
-          <div className="local-badge">
-            <ShieldCheck size={16} />
+          <div className="local-badge" title={t('localPrivacy')}>
+            <ShieldCheck size={14} />
             <span>{t('localEdition')}</span>
           </div>
-          <p>{t('localPrivacy')}</p>
         </div>
       </aside>
       <div className="main-shell">
@@ -1345,8 +1417,8 @@ export function App() {
                     <Radio size={12} />
                     {t('readOnly')}
                   </span>
-                  <h1>{t('heading')}</h1>
-                  <p>{t('description')}</p>
+                  <h1>{t('overviewPage.title')}</h1>
+                  <p>{t('overviewPage.subtitle')}</p>
                 </div>
                 <button ref={overviewLayoutTrigger} className="button" onClick={openOverviewLayout}>
                   <Settings2 size={16} />
@@ -1373,12 +1445,16 @@ export function App() {
                     <Activity size={15} />
                   </span>
                   <strong>
-                    {f.number(sessions.filter((session) => session.status === 'running').length)}
-                    {sessions.some((session) => session.status === 'running') && (
+                    {f.number(overviewRunning.running.length)}
+                    {overviewRunning.running.length > 0 && (
                       <i className="stat-live" aria-hidden="true" />
                     )}
                   </strong>
-                  <small>{t('latest')}</small>
+                  <small>
+                    {overviewRunning.stale > 0
+                      ? t('shell.side.staleOnly', { count: overviewRunning.stale })
+                      : t('overviewPage.recentActivity')}
+                  </small>
                 </div>
                 <div className="stat">
                   <span>
@@ -1647,6 +1723,23 @@ export function App() {
             </>
           )}
         </main>
+        <footer className="status-bar" aria-label={t('shell.side.status')}>
+          <span className="status-item status-running">
+            <span className="side-dot" aria-hidden="true" />
+            {t('shell.side.runningCount', { count: sideSections.running.length })}
+          </span>
+          {sideSections.needsYou.length > 0 && (
+            <span className="status-item status-attention">
+              {t('shell.side.needsYouCount', { count: sideSections.needsYou.length })}
+            </span>
+          )}
+          <span className="status-spacer" />
+          <span className={`status-item connection-${connection}`}>
+            <span className="tiny-dot" />
+            {t(connection)}
+          </span>
+          <span className="status-item">{t('localEdition')}</span>
+        </footer>
         <footer className="app-footer">
           <span>
             <span className="brand-dot" />
