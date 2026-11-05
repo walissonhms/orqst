@@ -23,6 +23,7 @@ import {
   managedClaudeConfigSchema,
   reviewedClaudeTuiBinary,
   readInteractiveTerminalConfig,
+  serializeInteractiveTerminalConfig,
   validateManagedClaudeConfig,
   type InteractiveTerminalConfig,
 } from '../../../packages/core/src/terminal/interactive-profile.js';
@@ -326,7 +327,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         if (stagedConfig.version === 1) validateManagedCodexConfig(stagedConfig);
         else if (stagedConfig.version === 2) validateManagedClaudeConfig(stagedConfig);
         else validateManagedOpenCodeConfig(stagedConfig);
-        writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\n', {
+        writeFileSync(join(state, 'terminal.json'), serializeInteractiveTerminalConfig(config), {
           flag: 'wx',
           mode: 0o600,
         });

@@ -133,8 +133,30 @@ export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
       throw new Error('Terminal executable changed');
 }
 
+/** New manifests omit the user CLI digest; legacy signed files remain unchanged and readable. */
+export function serializeInteractiveTerminalConfig(config: InteractiveTerminalConfig): string {
+  return (
+    JSON.stringify(
+      { ...config, executable: { path: config.executable.path }, cliAuthorization: 'local-v2' },
+      null,
+      2,
+    ) + '\n'
+  );
+}
+
 export function readInteractiveTerminalConfig(file: string): InteractiveTerminalConfig {
-  const raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
+  let raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
+  if (typeof raw === 'object' && raw !== null && 'cliAuthorization' in raw) {
+    const entry = raw as Record<string, unknown>;
+    if (entry.cliAuthorization !== 'local-v2')
+      throw new Error('Unknown CLI authorization manifest');
+    const executable = z.strictObject({ path }).parse(entry.executable);
+    const { cliAuthorization: _authorization, ...rest } = entry;
+    raw = {
+      ...rest,
+      executable: { path: executable.path, sha256: terminalExecutableSha256(executable.path) },
+    };
+  }
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 3) {
     const config = managedOpenCodeConfigSchema.parse(raw);
     validateManagedOpenCodeConfig(config);

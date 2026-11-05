@@ -105,7 +105,12 @@ test('creation plans without writes, publishes complete private A/B and reuses n
     assert.equal(readFileSync(f.marker, 'utf8'), 'SYNTHETIC-UNKNOWN-RESERVATION');
     assert.deepEqual(readdirSync(f.input.home), ['.codex']);
     assert.deepEqual(readdirSync(f.input.project), []);
-    for (const file of files) assert.equal(lstatSync(file).mode & 0o777, 0o600);
+    for (const file of files) {
+      assert.equal(lstatSync(file).mode & 0o777, 0o600);
+      const persisted = JSON.parse(readFileSync(file, 'utf8'));
+      assert.equal(persisted.cliAuthorization, 'local-v2');
+      assert.deepEqual(Object.keys(persisted.executable), ['path']);
+    }
     for (const { config } of inspected) {
       assert.equal(config.toolPath, review.toolPath);
       assert.equal(lstatSync(config.state).mode & 0o777, 0o700);

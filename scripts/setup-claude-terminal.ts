@@ -1,3 +1,4 @@
+import { serializeInteractiveTerminalConfig } from '../packages/core/src/terminal/interactive-profile.js';
 // Provisioning only; never executes a provider or reads native credentials/configuration/sessions.
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
@@ -84,7 +85,7 @@ assertSeparateTerminalState(project, state);
 mkdirSync(state, { mode: 0o700 }); // Never adopt/overwrite an existing directory.
 mkdirSync(join(state, 'tmp'), { mode: 0o700 });
 validateManagedClaudeConfig(config);
-writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\n', {
+writeFileSync(join(state, 'terminal.json'), serializeInteractiveTerminalConfig(config), {
   flag: 'wx',
   mode: 0o600,
 });

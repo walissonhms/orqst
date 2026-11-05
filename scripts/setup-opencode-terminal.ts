@@ -1,3 +1,4 @@
+import { serializeInteractiveTerminalConfig } from '../packages/core/src/terminal/interactive-profile.js';
 // Provisioning only: no provider execution, native DB/config/credential reads or global writes.
 import { mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -84,7 +85,7 @@ validateOpenCodeSelection(config); // All selection/acknowledgment checks preced
 mkdirSync(state, { mode: 0o700 }); // Never overwrite or adopt existing state.
 mkdirSync(join(state, 'tmp'), { mode: 0o700 });
 validateManagedOpenCodeConfig(config);
-writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\n', {
+writeFileSync(join(state, 'terminal.json'), serializeInteractiveTerminalConfig(config), {
   flag: 'wx',
   mode: 0o600,
 });
