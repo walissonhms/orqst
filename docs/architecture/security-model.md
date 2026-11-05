@@ -1693,3 +1693,29 @@ refresh performs a new native read with the same focus gate, without automatic r
 CSP is unchanged. Reset is not implemented; an empty allowlist denies all
 operations. Synthetic tests and source review do not establish native AppKit,
 real provider, package or platform acceptance.
+
+## Interactive CLI authorization — 2026-11-05
+
+Interactive CLI preparation uses the macOS system tool `/usr/bin/codesign` with
+an explicit Apple generic anchor, provider Team ID and code identifier, strict
+verification and all architectures. The system command is invoked directly
+without a shell; failure or an unsupported platform refuses authorization. This
+verifies a signature, not notarization. Discovery is passive; a path or directory
+name is not version evidence.
+
+Only the one-time authorization flow probes `--version`, after signature
+verification. The signed provider executable runs with a temporary HOME, minimal
+environment without inherited credentials, a short timeout and bounded output.
+The probe executes vendor code and does not sandbox network access. Unknown,
+prerelease or unreviewed versions are denied. The reviewed contracts currently
+cover Codex 0.162.1, OpenCode 2.2.5, Claude TUI 2.1.318 and Claude MCP 2.1.178
+and 2.1.318; equality bounds do not imply approval of intervening releases.
+
+The private local policy store records executable digest, signature identity,
+version, scope and epoch. A changed grant requires new native review; an unchanged
+grant is reused. The PTY host revalidates signature, policy epoch and digest
+immediately before spawn. A same-user adversary able to replace the path between
+that last check and `exec` can still win a residual TOCTOU race; this path-based
+implementation does not claim an atomic executable handle or a network sandbox.
+These controls are implemented for the interactive PTY path; native provider
+acceptance and structured-mode parity are separate.

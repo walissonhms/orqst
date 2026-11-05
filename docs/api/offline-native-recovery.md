@@ -151,3 +151,13 @@ renderer field. Evidence is data until the complete historical enrollment
 preimage matches frozen intent/receipt and native phase approval signs the full
 review. The new bundle retains exact private evidence bytes/metadata; all later
 phases use only that copy. [Contract, operator vector and current-content limits](../development/offline-historical-binding.md).
+
+## CLI enrollment binding v2 — 2026-11-05
+
+A v2 interactive manifest records the canonical CLI path, provider signature
+identity, contract revision, policy revision and authorization epoch. Its
+versioned enrollment preimage excludes the CLI digest and inode; Node identity,
+the manifest, state, project and model-source binding remain checked. Offline
+inspection reads the v2 manifest without opening the CLI. This does not grant
+execution: an updated executable still needs a current independently verified
+local CLI authorization before PTY spawn. Mixed v1/v2 reservations are supported.

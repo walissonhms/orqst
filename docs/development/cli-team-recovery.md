@@ -70,7 +70,7 @@ may resolve/refresh credentials after a separately authorized start; preservatio
 of the selector is not a claim of authentication or byte-immutable native state.
 
 All three creation choices require the passively reviewed binary hashes. The Codex
-candidate pin is `74c6a6d263f40d65f99c27a815275f5b4ed0bcc2baecc396b4cf3255498bdfc0`;
+candidate pin is `[historical CLI binary SHA-256 removed]`;
 Claude/OpenCode reuse existing reviewed pins. Codex's version label is the selected
 reviewed contract, not a fresh `--version` result. A hash identifies bytes; it does
 not prove installed-version protocol compatibility, login, model entitlement or
@@ -387,3 +387,6 @@ alone leaves both terminal predicates false, then requires the existing opener t
 recover the exact child. No focus predicate, original assertion or deadline is
 weakened, and no failed action is retried. Actual OS focus loss can still refuse a
 gesture and remains distinct from transport or process exit.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

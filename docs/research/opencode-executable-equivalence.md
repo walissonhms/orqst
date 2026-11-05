@@ -18,7 +18,7 @@ consequently disabled Model/Open and suggested Advanced, although Advanced's leg
 `create` contract accepts only Codex/Claude. Installing OpenCode again is not a fix.
 
 The existing OpenCode review is version `2.2.5`, SHA-256
-`abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
+`[historical CLI binary SHA-256 removed]`.
 A package version, basename, extension, Mach-O header or inode by itself does not
 establish equivalence to this pin. In particular `.exe` is not evidence of a
 Windows binary; the actual file's native header and digest are checked.
@@ -162,3 +162,6 @@ the Effect `ConfigModel.Selection` codec, full TUI, provider or native services.
 Full TypeScript and repository lint passed for this change. The full test
 suite/build, Cargo, resources and installation are intentionally excluded by the
 current coordination; they could run native/process fixtures or affect the Preview.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

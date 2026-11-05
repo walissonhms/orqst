@@ -23,7 +23,7 @@ The command hashes the selected native executable, validates directory metadata 
 prints a JSON candidate. It writes no state, does not execute a provider, and never
 opens native configuration, credentials or databases. Authentication remains unknown.
 Changed version/hash fails closed. The reviewed binary is 2.2.5 with SHA-256
-`abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
+`[historical CLI binary SHA-256 removed]`.
 The version argument identifies the reviewed hash; it does not run `--version`.
 Keep the printed report private: native HOME/XDG/database paths are operator
 metadata and must not be committed or attached to public issues. The JSON
@@ -173,3 +173,6 @@ Observer APIs, WebSocket/cookies/static serving, ingestion and schemas are uncha
 No credentials are exported, no global configuration is written, no native database
 is opened and no process/service is adopted. Existing native gestures, signatures,
 ownership checks, sticky admission and OpenCode real launch refusal for unapproved manifests is retained. The subsequent Desktop opt-in expands private RPC/profile composition only.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

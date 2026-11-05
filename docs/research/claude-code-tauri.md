@@ -8,10 +8,10 @@ configuration was read.
 
 ## Independent contracts
 
-| Contract                  | Version label | SHA-256                                                            |
-| ------------------------- | ------------- | ------------------------------------------------------------------ |
-| Normal TUI                | 2.1.318       | `677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d` |
-| Existing strict ORQST MCP | 2.1.178       | `473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309` |
+| Contract                  | Version label | SHA-256                                   |
+| ------------------------- | ------------- | ----------------------------------------- |
+| Normal TUI                | 2.1.318       | `[historical CLI binary SHA-256 removed]` |
+| Existing strict ORQST MCP | 2.1.178       | `[historical CLI binary SHA-256 removed]` |
 
 The new label comes from the canonical installation's version directory, not a
 version command. Passive SHA-256 was recomputed with 64 KiB reads. The file was
@@ -106,3 +106,6 @@ prepared argv, executable/configuration drift and the existing CLI authorization
 cache. No real binary is stored in fixtures. Provider/native acceptance, full test
 suite, packaging and build are separate gates; actual command counts are reported
 in the implementation handoff.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

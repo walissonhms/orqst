@@ -174,7 +174,7 @@ observation capability remain false; no server is started, scanned or attached.
 
 Passive canonical-path/hash inspection found multiple local launch paths with the
 same native binary bytes. Installed package metadata labels the binary `2.2.5`:
-`abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
+`[historical CLI binary SHA-256 removed]`.
 Embedded strings contain `OPENCODE_CONFIG_CONTENT` and local-MCP configuration
 descriptions for command, environment, enablement and request timeout. The installed
 description gives **5000 ms** as the default, while the current
@@ -238,3 +238,6 @@ The dynamic CLI catalogue requires a query such as `opencode models`, which reso
 (`ServerConnection.resolve`) and therefore has startup effects. That path stays
 unapproved and unimplemented; the source-backed incompatibilities are in
 [the catalogue reuse audit](../research/opencode-model-catalog.md).
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

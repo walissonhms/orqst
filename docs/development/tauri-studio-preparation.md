@@ -158,3 +158,25 @@ to the full workspace. No create/review mutation, picker selection, profile writ
 provider Start, login or task was performed in this check. The app remains open
 for owner testing. Native Settings reload → SPA Studio, the actual provisioning/
 opening flow, terminal input, provider behavior and final Quit remain unaccepted.
+
+## Interactive CLI discovery and authorization — 2026-11-05
+
+The catalogue passively selects the first canonical launcher in PATH order. If no
+PATH launcher exists, preparation examines fallback candidates in discovery order:
+a rejected signature or unsupported version advances to the next candidate;
+cancelling the native authorization stops the operation. Other candidates remain
+available to diagnostics. Manual selection among installations is pending.
+
+The system signature requirement binds the reviewed provider Team ID and code
+identifier. Only after it passes, the one-time authorization flow runs the signed
+CLI's bounded `--version` probe with a temporary HOME and minimal environment.
+This executes vendor code; it is not a network sandbox and does not establish
+notarization. Current exact version bounds are Codex 0.162.1, OpenCode 2.2.5,
+Claude TUI 2.1.318, and Claude MCP 2.1.178 or 2.1.318. Unknown and prerelease
+versions are refused. A changed binary, signer, authorization epoch or permission
+scope requires fresh native review; an unchanged grant is reused.
+
+The PTY host checks the signature, locally stored digest and authorized epoch
+immediately before spawning. A same-user replacement between that check and exec
+remains possible. No real CLI was executed as part of the synthetic tests; native
+UI and provider acceptance remain separate.

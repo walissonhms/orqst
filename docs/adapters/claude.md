@@ -175,7 +175,7 @@ grant. The descriptor above and every observation capability remain false.
 
 Passive inspection resolved the local native installation labeled `2.1.178` and
 hashed its canonical executable:
-`473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309`.
+`[historical CLI binary SHA-256 removed]`.
 Embedded CLI help strings confirm `--mcp-config` accepts inline JSON,
 `--strict-mcp-config` selects supplied MCP configuration, and `--session-id` accepts
 a UUID. The binary also contains `MCP_TIMEOUT`/`MCP_TOOL_TIMEOUT` names. This is
@@ -219,3 +219,6 @@ no-factory/session-collision gates. Optional strict MCP excludes other definitio
 project/enterprise approval can still block startup. This has synthetic process
 evidence only, with no native login, MCP or inference acceptance. The external
 observation descriptor above remains entirely false.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

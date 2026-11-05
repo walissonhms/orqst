@@ -33,14 +33,14 @@ OpenCode remains unavailable.
 
 Codex discovery resolved the native release path labeled
 `0.162.1-aarch64-apple-darwin`; passive hashing produced
-`74c6a6d263f40d65f99c27a815275f5b4ed0bcc2baecc396b4cf3255498bdfc0`.
+`[historical CLI binary SHA-256 removed]`.
 The [official 0.162.1 TUI source](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/tui/src/cli.rs)
 was reopened to check the separate foreground and resume/fork controls. Existing
 Codex flags/environment and acceptance limits remain unchanged; no version or
 provider command was executed to perform this inspection.
 
 Passive inspection rehashed the installed native Claude 2.1.178 binary to
-`473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309`.
+`[historical CLI binary SHA-256 removed]`.
 Embedded CLI code and the [official CLI reference](https://code.claude.com/docs/en/cli-reference)
 confirm interactive startup, inline `--mcp-config`, `--strict-mcp-config` and
 `--session-id`. The installed code validates the UUID and rejects an existing
@@ -137,7 +137,7 @@ database or suppress startup migrations. The passive candidate is implemented;
 native startup remains unauthorized; pending migrations have not been established.
 
 The installed 2.2.5 binary was rehashed to
-`abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e`.
+`[historical CLI binary SHA-256 removed]`.
 Its embedded `Mcp.LocalConfig` uses `disabled`, `codemode`, `protocol` and an object
 `timeout` with `startup`, `catalog`, `execution`. The earlier builder used a current
 documentation shape (`enabled` and numeric timeout), which is unsuitable as exact
@@ -196,3 +196,6 @@ Independent critical QA (pane-528) approved the native authorization/ownership a
 credential boundaries and passed 65 focused cases. Its UUID-uniqueness observation
 is enforced before Core creation by `inspectManagedTerminalFiles`; an explicit
 disposable two-manifest regression now checks rejection before journal creation.
+
+> 2026-11-05: The project owner directed removal of real CLI binary SHA-256
+> values from the repository. The historical findings above are otherwise unchanged.

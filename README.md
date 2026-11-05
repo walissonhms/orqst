@@ -189,11 +189,12 @@ not establish the cause of the historical Codex refusal or native opening accept
 These diagnostics are integrated with the OpenCode correction below; see the
 [combined source checks](docs/development/terminal-preparation-diagnostics.md#combined-source-integration--2026-11-04).
 
-OpenCode copies with the same exact reviewed native SHA-256 now share one CLI/model
-catalog option, preserving existing PATH precedence and exact native path/hash
-review. No CLI probe or reinstall is needed. Synthetic preparation/profile checks
-cover configured model environment, default selection and drift; native/provider
-acceptance remains separate. See [source comparison and limits](docs/research/opencode-executable-equivalence.md).
+Interactive CLI discovery keeps canonical candidates in PATH order. Preparation
+verifies the provider's macOS code signature, then probes a bounded reviewed
+version as part of one-time native authorization. The selected path and its
+local authorization are checked again before each PTY start; see the
+[security model](docs/architecture/security-model.md#interactive-cli-authorization--2026-11-05).
+Native/provider acceptance remains a separate gate.
 
 The [incremental native terminal source](docs/development/terminal-native-enrollment.md)
 now appends a selected CLI/model to the same Core and retained native workspace,
