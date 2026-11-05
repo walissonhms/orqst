@@ -217,6 +217,43 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
     }
 }
 
+/// Scheduling and installation must both succeed before any agents-only review.
+async fn observer_before_review(
+    schedule: impl FnOnce(Box<dyn FnOnce() + Send>) -> bool,
+    install: impl FnOnce() -> bool + Send + 'static,
+) -> bool {
+    let (sender, receiver) = oneshot::channel();
+    if !schedule(Box::new(move || {
+        let _ = sender.send(install());
+    })) {
+        return false;
+    }
+    receiver.await.unwrap_or(false)
+}
+
+async fn ensure_review_observer(app: &tauri::AppHandle) -> bool {
+    let handle = app.clone();
+    observer_before_review(
+        |callback| app.run_on_main_thread(callback).is_ok(),
+        move || {
+            #[cfg(target_os = "macos")]
+            {
+                crate::terminal::install_quit_observer(&handle)
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = handle;
+                true
+            }
+        },
+    )
+    .await
+}
+
+fn advance_review_epoch(epoch: &mut u64) {
+    *epoch = epoch.wrapping_add(1);
+}
+
 async fn confirm(app: &tauri::AppHandle, value: &Value) {
     if crate::terminal::presentation_blocked(app) {
         return;
@@ -224,6 +261,10 @@ async fn confirm(app: &tauri::AppHandle, value: &Value) {
     let (Some(id), Some(request)) = (value["id"].as_str(), value["requestId"].as_str()) else {
         return;
     };
+    if !ensure_review_observer(app).await {
+        send(app, json!({"kind": "confirm", "id": id, "accepted": false}));
+        return;
+    }
     let Some(window) = app.get_webview(LABEL) else {
         return;
     };
@@ -285,6 +326,9 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
     let paths: Vec<String> = serde_json::from_str(&files)?;
     if paths.len() != 2 || paths.iter().any(|p| p.is_empty() || p.len() > 2048) {
         return Err("Invalid explicit managed agents selection".into());
+    }
+    if !ensure_review_observer(app).await {
+        return Err("Managed agents focus observer unavailable".into());
     }
     let script = app
         .path()
@@ -529,7 +573,7 @@ pub fn stop_and_wait(app: &tauri::AppHandle) {
 pub fn hide_surface(app: &tauri::AppHandle) {
     if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
         r.presented = false;
-        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+        advance_review_epoch(&mut r.surface_epoch);
     }
     revoke(app, false);
     if let Some(view) = app.get_webview(LABEL) {
@@ -539,10 +583,16 @@ pub fn hide_surface(app: &tauri::AppHandle) {
 
 /// The agent document is the only visible child surface while it is shown.
 fn raise(app: &tauri::AppHandle) {
+    // Menu callbacks run on the UI thread. The installer independently enforces it.
+    #[cfg(target_os = "macos")]
+    if !crate::terminal::install_quit_observer(app) {
+        revoke(app, false);
+        return;
+    }
     crate::terminal::suspend_surface(app);
     if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
         r.presented = true;
-        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+        advance_review_epoch(&mut r.surface_epoch);
     }
     if let Some(view) = app.get_webview(LABEL) {
         let _ = view.show();
@@ -588,7 +638,19 @@ pub(crate) fn sheet_accepts(
 /// A deactivation invalidates the sheet token even if the parent was already unfocused.
 pub fn invalidate_review(app: &tauri::AppHandle) {
     if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
-        r.surface_epoch = r.surface_epoch.wrapping_add(1);
+        advance_review_epoch(&mut r.surface_epoch);
+    }
+}
+
+/// The observer also runs with no terminal host, including while a sheet has focus.
+#[cfg(target_os = "macos")]
+pub(crate) fn native_key_changed(app: &tauri::AppHandle) {
+    let owned = app
+        .get_window("main")
+        .and_then(|window| crate::terminal::quit_window_focus(&window))
+        .is_some_and(|(key, _)| key);
+    if !owned {
+        invalidate_review(app);
     }
 }
 
@@ -674,7 +736,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
                 if let Some(r) = app.state::<Agents>().0.lock().unwrap().as_mut() {
                     r.exit_authorized = true;
                 }
-                app.exit(0);
+                crate::quit_native::agents_approved(&app);
             } else {
                 reset_exit(&app);
                 crate::terminal::reset_exit(&app);
@@ -736,5 +798,64 @@ mod menu_tests {
         ] {
             assert_eq!(super::menu_target(unrelated), None);
         }
+    }
+}
+
+#[cfg(test)]
+mod observer_tests {
+    use super::*;
+    use std::future::Future;
+    use std::pin::pin;
+    use std::task::{Context, Poll, Waker};
+
+    #[test]
+    fn agents_only_review_waits_for_main_thread_install_and_rejects_late_yes_after_deactivation() {
+        // No terminal host, previous Quit, AppHandle or native process exists in this fixture.
+        let queue = Arc::new(Mutex::new(None));
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let log = order.clone();
+        let mut admission = pin!(observer_before_review(
+            |callback| {
+                *queue.lock().unwrap() = Some(callback);
+                true
+            },
+            move || {
+                log.lock().unwrap().push("installed");
+                true
+            },
+        ));
+        let mut cx = Context::from_waker(Waker::noop());
+        assert!(admission.as_mut().poll(&mut cx).is_pending());
+        assert!(order.lock().unwrap().is_empty());
+        queue.lock().unwrap().take().unwrap()(); // Explicit main-thread queue turn.
+        assert_eq!(admission.as_mut().poll(&mut cx), Poll::Ready(true));
+        order.lock().unwrap().push("review");
+        assert_eq!(*order.lock().unwrap(), ["installed", "review"]);
+        let mut epoch = 0;
+        let token = epoch;
+        assert!(sheet_accepts(token == epoch, true, true, true));
+        advance_review_epoch(&mut epoch); // Same function as NSApp deactivation invalidation.
+                                          // App reactivated and expected sheet key again; delayed Yes is still invalid.
+        assert!(!sheet_accepts(token == epoch, true, true, true));
+    }
+
+    #[test]
+    fn failed_main_thread_dispatch_or_installation_denies_review() {
+        let mut cx = Context::from_waker(Waker::noop());
+        let mut failed_dispatch = pin!(observer_before_review(
+            |_| false,
+            || panic!("must not install")
+        ));
+        assert_eq!(failed_dispatch.as_mut().poll(&mut cx), Poll::Ready(false));
+        let mut failed_install = pin!(observer_before_review(
+            |callback| {
+                callback();
+                true
+            },
+            || false
+        ));
+        assert_eq!(failed_install.as_mut().poll(&mut cx), Poll::Ready(false));
+        let mut dropped_dispatch = pin!(observer_before_review(|_| true, || true));
+        assert_eq!(dropped_dispatch.as_mut().poll(&mut cx), Poll::Ready(false));
     }
 }

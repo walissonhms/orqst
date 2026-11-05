@@ -79,3 +79,146 @@ Real WebKit/AppKit acceptance requires a new package and remains pending, so thi
 document does not claim visual or native interaction acceptance. The managed
 agent child reuses the previous 1200×900 document layout and now covers the main
 surface; its inner layout still needs native visual review.
+
+## Native Quit admission contract — 2026-11-05
+
+Start admission and a direct Quit now reserve the same phase mutex. Only
+`NotStarted -> Starting` admits a host. Direct Quit reserves `NotStarted -> Exiting`
+before requesting OS exit. If start wins, Quit blocks in `Starting`; if Quit wins,
+start fails before spawn. `Starting` and `LostUnknown` block before opening the
+agents gate and are revalidated after it.
+
+Consuming reviewed exit evidence moves to terminal `ExitConsumed`, never back to
+`NotStarted`. No host can be admitted again during this app lifetime. A repeated
+`ExitRequested` is permitted because owned exit/preservation was already proved;
+it does not consume evidence again or reopen admission. EOF after consumption
+leaves `ExitConsumed` unchanged. These are source contracts, not AppKit/WebKit
+acceptance.
+
+## Deterministic native Quit circuit — 2026-11-05
+
+`quit_orchestration.rs::Coordinator` now owns the production `request_quit`,
+agents-approval reentry, `ExitRequested` decision, shutdown/retirement sequence,
+rollback and pipe deadline. `quit_native.rs::NativePorts` implements `AgentsGate`,
+`TerminalPipe`, `ExitPort` and `Timer` with the existing Tauri dialogs, private
+child pipe, runtime and OS exit request. `main.rs`, `desktop.rs` and the approved
+agents callback use that same coordinator. `host_phase.rs::HostPhase` retains the
+shared phase/admission lock; even a direct OS `ExitRequested` without an earlier
+`request_quit` reserves `Exiting` before being allowed.
+
+The private terminal reader and the test transport share
+`quit_orchestration.rs::PendingReplies`: only the existing private reply kinds
+with a currently registered request ID resolve a waiter. Timeout cancels that
+registration. The eight-second native timeout remains longer than Core's
+five-second deadline. A timeout, EOF or loss is never evidence; only an
+authenticated pre-fence `busy`/`denied` can roll back to `Active`.
+
+`quit_orchestration_tests.rs` integrates the real coordinator, phase transitions,
+reply router and oneshot channels through scripted effect ports. Its explicit
+callback queue and manually advanced timer cover:
+
+- Agents approval -> prevented `ExitRequested` -> `shutdownOwned` -> `retireOwned`
+  or `closePreservedOwned` -> one normal allowed exit, with asserted effect order.
+- Uncertain inventory, authenticated busy/denied rollback, write failure, invalid
+  final replies, and the exact 7,999/8,000 ms timeout boundary, including final-step
+  timeouts and late/old/swapped IDs.
+- Duplicate Quit before the async flow starts, gate cancellation and a fresh
+  attempt, loss before shutdown/final replies, EOF on both sides of the final
+  evidence transition, and `ExitRequested` without evidence.
+- `Starting`/`LostUnknown` before the agents gate, phase changes during the gate,
+  both start/Quit lock orderings, raw OS exit racing start, and permanently closed
+  admission in `Exiting`/`ExitConsumed`. Repeated exit after consumed evidence is
+  allowed, but cannot consume evidence twice, reopen admission or be changed by EOF.
+
+This replaces the two tests that only counted exit calls in source text. These
+are deterministic Rust circuit tests, not an AppKit/WebKit event-loop test. The
+ports do not launch an application, sheet, Core, PTY or provider; native dialog
+presentation/focus, actual pipe scheduling, OS process exit and descendant receipts
+still require the separate authorized native acceptance. No package or running
+Preview resources are rebuilt by these tests.
+
+### Reuse review for this extraction
+
+The existing [pinned lifecycle review](../research/owned-terminal-shutdown.md) was
+revalidated against Anywh `546f189c04415c3c5af5f40e3931a0a90b9aba31`:
+[`AgentHost.endProcess/onExit`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L1024-L1075),
+[`waitForTurns/close`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L1255-L1334),
+its architecture/Agent Host/runtime documents and
+[`LICENSE`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/LICENSE)
+(Apache-2.0; no root NOTICE at that commit). Decision: **keep and extract the
+existing ORQST circuit**. Anywh serializes owned shutdown and awaits process exit,
+but its TypeScript/Node runtime, hibernation, restoration and process-tree sweep
+are not the Rust native evidence/admission contract. Its relevant imports include
+Node filesystem/crypto, provider process drivers and the socket server; none are
+introduced here. The existing Tucano permission/routing review remains applicable
+without a new communication layer. No external source/assets or dependencies are
+incorporated, and no attribution or license metadata changes are needed.
+
+## 2026-11-05 — Quit review corrections: refusal boundary
+
+`TauriTerminalService` emits `refused_prefence` only before its lifetime shutdown
+fence and before retirement is busy/fenced. The production Coordinator rolls back
+only for this explicit correlated status. The real Node service tests hold both
+retirement preparation and a possibly consumed proof, retry shutdown, then deny
+the held operation. They assert that the Node fence and one-signal latch survive.
+With `ORQST_QUIT_NODE_TRANSCRIPT` set to a disposable absolute file, the focused
+Node test records these real-service replies; the Rust circuit test replays them
+through the production Coordinator, advances its manual 8s deadline during retire
+and asserts `ShutdownInFlight` throughout. This is cross-language transcript
+integration with synthetic Core handles, not a live pipe/AppKit/provider test.
+The transcript test is explicitly ignored by default, never silently passed when
+its artifact is absent. Generate the artifact with `pnpm exec tsx --test
+tests/owned-terminal-shutdown.test.ts`, then run `cargo test
+real_node_service_transcripts -- --ignored` with the same transcript environment
+and the documented manifest/offline/locked/toolchain settings.
+
+The previous pinned Anywh review was revalidated against the same checkout SHA
+`546f189c04415c3c5af5f40e3931a0a90b9aba31`: architecture, Agent Host/runtime docs,
+`AgentHost.endProcess/onExit` and `waitForTurns/close`, Apache-2.0 LICENSE (no root
+NOTICE). Decision remains **keep the existing ORQST implementation**: Anywh's
+Node process/hibernation/tree-sweep lifecycle cannot supply native Rust proof or
+focus fences. No external code, assets or dependencies were incorporated.
+
+### Reply router correction
+
+`PendingReplies` now records ID, expected kind and host epoch and validates each
+step before removing its waiter. Tests exercise all six crossed kind pairs with
+the current ID (both the correct-stage status and the other kind's valid status),
+duplicate/late replies, unknown fields/statuses, missing evidence, foreign epoch,
+invalid uncertainty shape and retirement without a fence. Incorrect packets do
+not consume the waiter or generate exit evidence. Existing circuit fakes now emit
+the same required fields as the real service; invalid legacy busy/denied packets
+remain pending until timeout and preserve the native fence.
+
+### Agents-only observer correction
+
+Managed-agent startup and every consent request await main-thread observer
+installation before proceeding. Raising the agents surface rechecks installation
+on the UI thread; failure denies by default. The installer itself verifies
+`NSThread.isMainThread`, and its key-window callback now invalidates agents reviews
+as well as terminal reviews. App deactivation continues to advance the agents
+surface epoch even when the parent was already unfocused for its sheet.
+Deterministic tests use the production scheduling/admission helper with no terminal
+host or previous Quit, require installation before review, and reject a delayed
+Yes after deactivation/reactivation. Dispatch failure, installation failure and a
+dropped callback deny admission. Real NotificationCenter delivery and AppKit sheet
+focus remain separate native acceptance; no application was run here.
+
+### Pre-spawn reservation correction
+
+`host_start::prepare` reserves `Starting` before serialization, resource lookup,
+app-data lookup or sidecar construction. Its RAII guard releases on each proven
+pre-spawn failure, cancellation/drop or unwind. `Prepared::spawn` disables release
+**before** calling the shell plugin. Any returned spawn error, possible spawn,
+ready timeout or later loss remains conservatively blocked; only existing host
+ready/loss transitions can change it. No inferred process cleanup is added.
+
+The resolved `tauri-plugin-shell` 2.6.0 source was inspected at
+[`process::Command::spawn`](https://github.com/tauri-apps/plugins-workspace/blob/128190689dbe59b59d344e01bf07b00862aa3791/plugins/shell/src/process/mod.rs#L387-L470)
+(crate VCS SHA `128190689dbe59b59d344e01bf07b00862aa3791`; existing dependency,
+Apache-2.0 OR MIT, bundled LICENSE_APACHE-2.0/LICENSE_MIT and SPDX metadata;
+no source incorporation or dependency changes): `SharedChild::new(child)?` can fail after OS
+spawn. Therefore its generic error is not proof of non-dispatch and cannot safely
+release the reservation. Tests inject each of the four actual production preflight
+ports plus spawn success/error, pre/post-spawn unwind and dropped preparation.
+No host, provider or process is started by these fixtures.

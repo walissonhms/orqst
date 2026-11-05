@@ -388,17 +388,18 @@ export class TauriTerminalService {
       this.send({ kind: 'retirement', id: message.id, status, fenced: this.retirement.fenced });
       return;
     }
-    const refuse = (status: 'busy' | 'denied') =>
+    const refuse = (status: 'refused_prefence' | 'fenced') =>
       this.send({ kind: 'owned-shutdown', id: message.id, status, uncertain: [] });
-    if (!this.ownedShutdown || this.retirement?.fenced) return refuse('denied');
+    // Retirement may already have consumed a proof, even before this route ran.
+    if (this.retirement?.busy || this.retirement?.fenced) return refuse('fenced');
+    if (!this.ownedShutdown) return refuse(this.shutdownFence ? 'fenced' : 'refused_prefence');
     if (
       this.metadataBusy ||
       this.mcpBusy ||
-      this.retirement?.busy ||
       this.confirmations.size ||
       this.panes.some((p) => p.state.busy)
     )
-      return refuse('busy');
+      return refuse(this.shutdownFence ? 'fenced' : 'refused_prefence');
     this.shutdownFence = true;
     for (const pane of this.panes) pane.broker.revokeInput();
     const result = await this.ownedShutdown.run();

@@ -30,7 +30,12 @@ checks; native global Quit is separate release authority, never a grant to execu
 - `uncertain`: missing receipt, timeout, lost ownership/transport, invalid evidence or
   unconfirmed marker. Keep Core and the visible main window alive; show an inline error.
   Repeating the same native shutdown rechecks evidence without signalling twice.
-- `denied` / `busy`: show inline refusal and do not exit.
+- `refused_prefence`: this host lifetime has never enabled the shutdown fence and
+  this refusal began no shutdown effects. Only this reply with the pending shutdown
+  ID permits the native coordinator to roll back to `Active`.
+- `fenced`: shutdown has already fenced, or retirement is busy/fenced. Keep native
+  `ShutdownInFlight`; retries cannot reopen presentation or resend SIGTERM.
+- Legacy `denied` / `busy` or unknown replies never permit rollback.
 
 `evidence` is private Core `{epoch,attempts:[{slot,instanceId,epoch,state,exit?}]}`.
 `uncertain` contains `{slot,instanceId,reason}`; reason is `timeout`, `ownership_lost`,
@@ -116,3 +121,24 @@ remain intact. No content, credentials, keys or prompts enter the marker or diag
 Source and fixture checks do not accept native focus, provider exit/descendant containment,
 Quit presentation or the next-start warning UI. Combined independent security review and
 native/provider acceptance remain required before declaring the integrated flow complete.
+
+## 2026-11-05 — Refusal boundary correction
+
+The service now distinguishes lifetime pre-fence refusal from retirement busy or
+possibly consumed proof state. The native coordinator preserves its fence after
+transport timeout and all replies other than explicit `refused_prefence`. Private
+pipe authority, Core ownership and the existing per-instance SIGTERM latch remain
+unchanged. No renderer or observer API is added.
+
+### Reply correlation and validation
+
+The native `PendingReplies` entry binds its exact ID to the expected reply kind
+and current child Core epoch before writing a request. Each kind has a strict
+field/status schema. Ready/preserved replies require inventory with that epoch;
+uncertain identities, slots, exit fields and reasons are validated. Retirement
+requires a boolean `fenced`, and `retired` requires it to be true. Close accepts
+only `closed` or `denied`. A crossed kind, invalid field/status, unknown ID,
+duplicate or late reply cannot create evidence. Invalid replies preserve the
+current waiter until a valid reply or its eight-second timeout; cancellation
+removes only its exact pending ID. The child handle already scopes the pipe to
+the host lifetime; IDs never authorize another child or renderer operation.

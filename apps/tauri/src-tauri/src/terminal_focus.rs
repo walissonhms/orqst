@@ -78,6 +78,7 @@ extern "C-unwind" fn key_changed(_: &AnyObject, _: Sel, _: *mut AnyObject) {
     crate::desktop::quit_key_changed(app);
     crate::terminal_creation::native_key_changed(app);
     crate::offline_recovery::native_key_changed(app);
+    crate::agents::native_key_changed(app);
     let Some(window) = app.get_window("main") else {
         return;
     };
@@ -91,6 +92,15 @@ extern "C-unwind" fn key_changed(_: &AnyObject, _: Sel, _: *mut AnyObject) {
 // A sheet has no Tauri WindowEvent delegate: NSApp deactivation and another key window
 // must still revoke the pending review even while the parent is already unfocused.
 pub(super) fn install(app: &tauri::AppHandle) -> bool {
+    // Fail closed even if previously installed: AppKit access is UI-thread-only.
+    let Some(thread) = AnyClass::get(c"NSThread") else {
+        return false;
+    };
+    // SAFETY: class method has no borrowed native window pointers.
+    let main: bool = unsafe { msg_send![thread, isMainThread] };
+    if !main {
+        return false;
+    }
     if OBSERVING.get().is_some() {
         return true;
     }

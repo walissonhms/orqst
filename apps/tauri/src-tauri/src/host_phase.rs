@@ -5,94 +5,125 @@ use std::sync::Mutex;
 pub enum Phase {
     NotStarted,
     Starting,
+    Exiting,
+    ExitConsumed,
     Active,
     ShutdownInFlight,
     ExitEvidenceConfirmed,
     LostUnknown,
 }
 
-static PHASE: Mutex<Phase> = Mutex::new(Phase::NotStarted);
+/// One admission boundary shared by start and Quit; terminal exit phases never reopen it.
+pub struct HostPhase(Mutex<Phase>);
+
+impl HostPhase {
+    pub const fn new() -> Self {
+        Self(Mutex::new(Phase::NotStarted))
+    }
+
+    pub fn phase(&self) -> Phase {
+        *self.0.lock().unwrap()
+    }
+
+    pub fn reserve_start(&self) -> Result<(), &'static str> {
+        let mut phase = self.0.lock().unwrap();
+        if *phase != Phase::NotStarted {
+            return Err("Native terminal host admission is closed");
+        }
+        *phase = Phase::Starting;
+        Ok(())
+    }
+
+    pub fn release_start(&self) {
+        let mut phase = self.0.lock().unwrap();
+        if *phase == Phase::Starting {
+            *phase = Phase::NotStarted;
+        }
+    }
+
+    pub fn started(&self) {
+        let mut phase = self.0.lock().unwrap();
+        if *phase == Phase::Starting {
+            *phase = Phase::Active;
+        }
+    }
+
+    pub fn lost(&self) {
+        let mut phase = self.0.lock().unwrap();
+        if matches!(
+            *phase,
+            Phase::Starting | Phase::Active | Phase::ShutdownInFlight
+        ) {
+            *phase = Phase::LostUnknown;
+        }
+    }
+
+    pub fn shutdown_started(&self) {
+        let mut phase = self.0.lock().unwrap();
+        if *phase == Phase::Active {
+            *phase = Phase::ShutdownInFlight;
+        }
+    }
+
+    pub fn rollback_busy(&self) -> bool {
+        let mut phase = self.0.lock().unwrap();
+        if *phase != Phase::ShutdownInFlight {
+            return false;
+        }
+        *phase = Phase::Active;
+        true
+    }
+
+    pub fn exit_evidence(&self) {
+        let mut phase = self.0.lock().unwrap();
+        if *phase == Phase::ShutdownInFlight {
+            *phase = Phase::ExitEvidenceConfirmed;
+        }
+    }
+
+    pub fn consume_exit_evidence(&self) -> bool {
+        let mut phase = self.0.lock().unwrap();
+        if *phase != Phase::ExitEvidenceConfirmed {
+            return false;
+        }
+        *phase = Phase::ExitConsumed;
+        true
+    }
+
+    pub fn owned(&self) -> bool {
+        !matches!(
+            self.phase(),
+            Phase::NotStarted | Phase::Exiting | Phase::ExitConsumed
+        )
+    }
+
+    /// Reserve direct exit under the same lock as start admission, before calling the OS.
+    pub fn decide_quit(&self, agents: bool, gate: bool, in_flight: bool) -> QuitDecision {
+        let mut phase = self.0.lock().unwrap();
+        let decision = quit_decision(*phase, agents, gate, in_flight);
+        if decision == QuitDecision::ExitDirect && *phase == Phase::NotStarted {
+            *phase = Phase::Exiting;
+        }
+        decision
+    }
+}
 
 pub fn phase() -> Phase {
-    *PHASE.lock().unwrap()
+    crate::quit_orchestration::QUIT.host.phase()
 }
-
-/// Reserve effects before spawning the host. Quit consults the same boundary.
-pub fn reserve_start() {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::NotStarted {
-        *phase = Phase::Starting;
-    }
-}
-
-/// A spawn that produced no child may be released; a child that failed is unknown.
-pub fn release_start() {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::Starting {
-        *phase = Phase::NotStarted;
-    }
-}
-
-/// Only the first successful start becomes active; a lost host stays lost.
 pub fn started() {
-    let mut phase = PHASE.lock().unwrap();
-    if matches!(*phase, Phase::NotStarted | Phase::Starting) {
-        *phase = Phase::Active;
-    }
+    crate::quit_orchestration::QUIT.host.started();
 }
-
-/// A host that disappears after starting without exit evidence is unknown, never absent.
 pub fn lost() {
-    let mut phase = PHASE.lock().unwrap();
-    if matches!(
-        *phase,
-        Phase::Starting | Phase::Active | Phase::ShutdownInFlight
-    ) {
-        *phase = Phase::LostUnknown;
+    crate::quit_orchestration::QUIT.host.lost();
+}
+
+pub fn pre_gate_block(phase: Phase) -> Option<&'static str> {
+    match phase {
+        Phase::LostUnknown => Some("host_lost"),
+        Phase::Starting => Some("starting"),
+        _ => None,
     }
-}
-
-pub fn shutdown_started() {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::Active {
-        *phase = Phase::ShutdownInFlight;
-    }
-}
-
-/// An authenticated pre-fence busy/denied reply may release the fence; nothing was accepted.
-pub fn rollback_busy() -> bool {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::ShutdownInFlight {
-        *phase = Phase::Active;
-        return true;
-    }
-    false
-}
-
-/// The reviewed retirement evidence enables exactly one exit, never a second.
-pub fn exit_evidence() {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::ShutdownInFlight {
-        *phase = Phase::ExitEvidenceConfirmed;
-    }
-}
-
-pub fn consume_exit_evidence() -> bool {
-    let mut phase = PHASE.lock().unwrap();
-    if *phase == Phase::ExitEvidenceConfirmed {
-        *phase = Phase::NotStarted;
-        return true;
-    }
-    false
-}
-
-#[cfg(test)]
-pub fn lost_unknown() -> bool {
-    phase() == Phase::LostUnknown
-}
-
-pub fn owned() -> bool {
-    phase() != Phase::NotStarted
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -121,7 +152,10 @@ pub fn quit_decision(
     if agents_active && agents_gate_presented {
         return QuitDecision::AgentsGate;
     }
-    if phase == Phase::NotStarted {
+    if matches!(
+        phase,
+        Phase::NotStarted | Phase::Exiting | Phase::ExitConsumed
+    ) {
         return QuitDecision::ExitDirect;
     }
     if in_flight {
@@ -143,7 +177,8 @@ pub fn shutdown_step(status: Option<&str>) -> QuitStep {
         Some("ready") => QuitStep::Retire,
         Some("exited_retirement_unavailable") => QuitStep::ClosePreserved,
         Some("uncertain") => QuitStep::Blocked("uncertain"),
-        Some("busy") => QuitStep::Blocked("busy"),
+        Some("refused_prefence") => QuitStep::Blocked("refused_prefence"),
+        Some("fenced") => QuitStep::Blocked("fenced"),
         Some("denied") => QuitStep::Blocked("denied"),
         _ => QuitStep::Blocked("transport"),
     }
@@ -173,32 +208,44 @@ pub fn close_step(status: Option<&str>) -> EvidenceStep {
 mod tests {
     use super::*;
 
-    fn reset() {
-        *PHASE.lock().unwrap() = Phase::NotStarted;
+    fn active() -> HostPhase {
+        let host = HostPhase::new();
+        host.reserve_start().unwrap();
+        host.started();
+        host
     }
 
     #[test]
     fn absence_is_not_evidence_of_a_lost_host() {
-        reset();
-        started();
-        assert!(owned());
-        lost();
-        assert!(lost_unknown());
-        assert!(owned());
+        let host = active();
+        assert!(host.owned());
+        host.lost();
+        assert_eq!(host.phase(), Phase::LostUnknown);
+        assert!(host.owned());
         // A later start never clears the lost state.
-        started();
-        assert!(lost_unknown());
+        host.started();
+        assert_eq!(host.phase(), Phase::LostUnknown);
     }
 
     #[test]
     fn exit_evidence_is_consumed_once() {
-        reset();
-        started();
-        shutdown_started();
-        assert_eq!(phase(), Phase::ShutdownInFlight);
-        exit_evidence();
-        assert!(consume_exit_evidence());
-        assert!(!consume_exit_evidence());
+        let host = active();
+        host.shutdown_started();
+        assert_eq!(host.phase(), Phase::ShutdownInFlight);
+        host.exit_evidence();
+        assert!(host.consume_exit_evidence());
+        assert!(!host.consume_exit_evidence());
+        assert_eq!(host.phase(), Phase::ExitConsumed);
+        assert!(!host.owned());
+        host.lost();
+        assert_eq!(host.phase(), Phase::ExitConsumed);
+        assert!(host.reserve_start().is_err());
+        host.started();
+        assert_eq!(host.phase(), Phase::ExitConsumed);
+        assert_eq!(
+            host.decide_quit(false, false, false),
+            QuitDecision::ExitDirect
+        );
     }
 
     #[test]
@@ -241,7 +288,11 @@ mod tests {
             Q::ClosePreserved
         );
         assert_eq!(shutdown_step(Some("uncertain")), Q::Blocked("uncertain"));
-        assert_eq!(shutdown_step(Some("busy")), Q::Blocked("busy"));
+        assert_eq!(
+            shutdown_step(Some("refused_prefence")),
+            Q::Blocked("refused_prefence")
+        );
+        assert_eq!(shutdown_step(Some("fenced")), Q::Blocked("fenced"));
         assert_eq!(shutdown_step(Some("denied")), Q::Blocked("denied"));
         assert_eq!(shutdown_step(Some("made-up")), Q::Blocked("transport"));
         assert_eq!(shutdown_step(None), Q::Blocked("transport"));
@@ -254,29 +305,64 @@ mod tests {
     }
 
     #[test]
-    fn only_a_busy_or_denied_pre_fence_reply_rolls_back() {
-        reset();
-        started();
-        shutdown_started();
-        assert!(rollback_busy());
-        assert_eq!(phase(), Phase::Active);
-        assert!(!rollback_busy());
+    fn only_an_explicit_pre_fence_reply_rolls_back() {
+        let host = active();
+        host.shutdown_started();
+        assert!(host.rollback_busy());
+        assert_eq!(host.phase(), Phase::Active);
+        assert!(!host.rollback_busy());
         // Unknown or lost keeps the fence and cannot roll back.
-        lost();
-        assert!(!rollback_busy());
-        assert!(lost_unknown());
+        host.lost();
+        assert!(!host.rollback_busy());
+        assert_eq!(host.phase(), Phase::LostUnknown);
     }
 
     #[test]
     fn evidence_requires_the_reviewed_shutdown() {
-        reset();
-        started();
-        exit_evidence();
-        assert!(!consume_exit_evidence());
-        shutdown_started();
-        lost();
-        exit_evidence();
-        assert!(lost_unknown());
-        assert!(!consume_exit_evidence());
+        let host = active();
+        host.exit_evidence();
+        assert!(!host.consume_exit_evidence());
+        host.shutdown_started();
+        host.lost();
+        host.exit_evidence();
+        assert_eq!(host.phase(), Phase::LostUnknown);
+        assert!(!host.consume_exit_evidence());
+    }
+    #[test]
+    fn start_and_direct_quit_are_ordered_by_the_same_lock() {
+        let start_first = HostPhase::new();
+        start_first.reserve_start().unwrap();
+        assert_eq!(
+            start_first.decide_quit(false, false, false),
+            QuitDecision::BlockedStarting
+        );
+        assert_eq!(pre_gate_block(start_first.phase()), Some("starting"));
+        assert!(start_first.reserve_start().is_err());
+        start_first.release_start();
+        assert_eq!(start_first.phase(), Phase::NotStarted);
+
+        let quit_first = HostPhase::new();
+        assert_eq!(
+            quit_first.decide_quit(false, false, false),
+            QuitDecision::ExitDirect
+        );
+        assert_eq!(quit_first.phase(), Phase::Exiting);
+        assert!(quit_first.reserve_start().is_err());
+        quit_first.release_start();
+        quit_first.started();
+        quit_first.lost();
+        assert_eq!(quit_first.phase(), Phase::Exiting);
+        assert!(!quit_first.owned());
+    }
+
+    #[test]
+    fn starting_and_lost_are_rejected_before_and_after_the_agents_gate() {
+        assert_eq!(pre_gate_block(Phase::Starting), Some("starting"));
+        assert_eq!(pre_gate_block(Phase::LostUnknown), Some("host_lost"));
+        assert_eq!(pre_gate_block(Phase::Active), None);
+        assert_eq!(
+            quit_decision(Phase::Starting, true, true, false),
+            QuitDecision::BlockedStarting
+        );
     }
 }

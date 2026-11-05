@@ -54,7 +54,7 @@ struct Running {
     // Optional diagnostic correlation only; never consulted by an authority/lifecycle gate.
     opening_diagnostics: Vec<Option<Attempt>>,
     pending: HashMap<String, oneshot::Sender<Value>>,
-    quit_pending: HashMap<String, oneshot::Sender<Value>>,
+    quit_pending: crate::quit_orchestration::PendingReplies,
     metadata_pending: HashMap<String, MetadataPending>,
     metadata_mutating: Option<String>,
     layout_generation: u64,
@@ -537,31 +537,6 @@ mod presentation_phase_tests {
         assert!(!super::phase_blocks_presentation(
             Phase::ExitEvidenceConfirmed
         ));
-    }
-}
-
-#[cfg(test)]
-mod dock_restore_tests {
-    #[test]
-    fn dock_restore_only_accepts_existing_hidden_slots() {
-        assert!(super::restore_allowed(1, 2, &[0]));
-        assert!(!super::restore_allowed(0, 2, &[0]));
-        assert!(!super::restore_allowed(2, 2, &[0]));
-        assert!(!super::restore_allowed(0, 0, &[]));
-    }
-}
-
-#[cfg(test)]
-mod quit_exit_tests {
-    #[test]
-    fn only_the_reviewed_quit_flow_exits_the_app() {
-        let source = include_str!("terminal.rs");
-        let start = source.find("pub async fn quit_owned").unwrap();
-        assert!(!source[..start].contains(concat!("app.", "exit(0)")));
-        assert_eq!(
-            source[start..].matches(concat!("app.", "exit(0)")).count(),
-            2
-        );
     }
 }
 
@@ -1081,128 +1056,38 @@ pub fn suspend_surface(app: &tauri::AppHandle) {
     send(app, json!({"kind":"layout-suspend"}));
 }
 
-/// The service deadline is 5s; the native waiter is deliberately longer and documented.
-const QUIT_PIPE_TIMEOUT: Duration = Duration::from_secs(8);
-
-fn quit_request_id() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    let mut bytes = [0u8; 16];
-    for (index, chunk) in bytes.chunks_mut(8).enumerate() {
-        let mut hasher = RandomState::new().build_hasher();
-        hasher.write_u64(index as u64);
-        chunk.copy_from_slice(&hasher.finish().to_le_bytes());
+/// Register before writing so even an immediate private host reply has a waiter.
+pub(crate) fn quit_send(
+    app: &tauri::AppHandle,
+    id: &str,
+    kind: &str,
+) -> Option<oneshot::Receiver<Value>> {
+    let terminal = app.state::<Terminals>();
+    let mut guard = terminal.0.lock().unwrap();
+    let running = guard.as_mut()?;
+    let receiver = running
+        .quit_pending
+        .register(id.to_owned(), kind, &running.epoch)?;
+    let bytes = format!("{}\n", json!({"kind": kind, "id": id}));
+    if running.child.write(bytes.as_bytes()).is_err() {
+        running.quit_pending.cancel(id);
+        return None;
     }
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-    format!(
-        "{}-{}-{}-{}-{}",
-        &hex[0..8],
-        &hex[8..12],
-        &hex[12..16],
-        &hex[16..20],
-        &hex[20..32]
-    )
+    Some(receiver)
 }
 
-async fn quit_pipe(app: &tauri::AppHandle, kind: &str) -> Option<Value> {
-    let id = quit_request_id();
-    let (sender, receiver) = oneshot::channel();
-    {
-        let terminal = app.state::<Terminals>();
-        let mut guard = terminal.0.lock().unwrap();
-        let running = guard.as_mut()?;
-        running.quit_pending.insert(id.clone(), sender);
-        let bytes = format!("{}\n", json!({"kind": kind, "id": id}));
-        if running.child.write(bytes.as_bytes()).is_err() {
-            running.quit_pending.remove(&id);
-            return None;
-        }
+pub(crate) fn quit_cancel(app: &tauri::AppHandle, id: &str) {
+    if let Some(running) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+        running.quit_pending.cancel(id);
     }
-    let value = match tokio::time::timeout(QUIT_PIPE_TIMEOUT, receiver).await {
-        Ok(Ok(value)) => Some(value),
-        _ => None,
-    };
-    if value.is_none() {
-        if let Some(running) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
-            running.quit_pending.remove(&id);
-        }
-    }
-    value
 }
 
-pub fn owned_host_started(_app: &tauri::AppHandle) -> bool {
-    crate::host_phase::owned()
-}
-
-fn quit_event(app: &tauri::AppHandle, name: &str, detail: Value) {
+pub(crate) fn quit_event(app: &tauri::AppHandle, name: &str, detail: Value) {
     for label in ["main", "feature-workspace"] {
         if let Some(view) = app.get_webview(label) {
             let _ = view.eval(format!(
                 "window.dispatchEvent(new CustomEvent('{name}',{{detail:{detail}}}));"
             ));
-        }
-    }
-}
-
-pub fn quit_blocked_public(app: &tauri::AppHandle, reason: &str) {
-    quit_blocked(app, reason, json!([]));
-}
-
-fn quit_blocked(app: &tauri::AppHandle, reason: &str, uncertain: Value) {
-    crate::desktop::quit_finished();
-    quit_event(
-        app,
-        "orqst-quit-blocked",
-        json!({"reason": reason, "uncertain": uncertain}),
-    );
-}
-
-/// One reviewed Quit flow. Never signals twice and never fakes a clean exit.
-pub async fn quit_owned(app: tauri::AppHandle) {
-    crate::host_phase::shutdown_started();
-    let Some(shutdown) = quit_pipe(&app, "shutdownOwned").await else {
-        quit_blocked(&app, "transport", json!([]));
-        return;
-    };
-    let uncertain = shutdown["uncertain"].clone();
-    match crate::host_phase::shutdown_step(shutdown["status"].as_str()) {
-        crate::host_phase::QuitStep::Retire => {
-            quit_event(&app, "orqst-terminal-fence", json!({"fence": true}));
-            let reply = quit_pipe(&app, "retireOwned").await;
-            match crate::host_phase::retire_step(
-                reply.as_ref().and_then(|value| value["status"].as_str()),
-            ) {
-                crate::host_phase::EvidenceStep::Exit => {
-                    crate::host_phase::exit_evidence();
-                    app.exit(0);
-                }
-                crate::host_phase::EvidenceStep::Blocked(reason) => {
-                    quit_blocked(&app, reason, uncertain)
-                }
-            }
-        }
-        crate::host_phase::QuitStep::ClosePreserved => {
-            let reply = quit_pipe(&app, "closePreservedOwned").await;
-            match crate::host_phase::close_step(
-                reply.as_ref().and_then(|value| value["status"].as_str()),
-            ) {
-                crate::host_phase::EvidenceStep::Exit => {
-                    crate::host_phase::exit_evidence();
-                    app.exit(0);
-                }
-                crate::host_phase::EvidenceStep::Blocked(reason) => {
-                    quit_blocked(&app, reason, uncertain)
-                }
-            }
-        }
-        crate::host_phase::QuitStep::Blocked(reason) => {
-            // Only an authenticated pre-fence refusal reopens presentation.
-            if reason == "busy" || reason == "denied" {
-                crate::host_phase::rollback_busy();
-            }
-            quit_blocked(&app, reason, uncertain)
         }
     }
 }
@@ -2174,38 +2059,39 @@ async fn start_selected_inner(
     // Includes startup-environment selections: uncertain Core setup must never unlock
     // native preparation or reuse a terminal window in this application lifetime.
     crate::terminal_creation::fence_selection(app);
-    // Quit must see effects-possible before the child exists.
-    crate::host_phase::reserve_start();
-    let files = serde_json::to_string(&paths)?;
-    let resources = app.path().resource_dir()?;
-    let script = resources.join("core/tauri-terminal-host.cjs");
-    let admission = app.path().app_data_dir()?.join("managed-agents");
     static STARTUP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
     let startup_id = format!(
         "startup-{}",
         STARTUP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
     );
-    let (mut rx, child) = app
-        .shell()
-        .sidecar("orqst-node")?
-        .args([
-            script.as_os_str(),
-            std::ffi::OsStr::new(&files),
-            admission.as_os_str(),
-            std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
-            std::ffi::OsStr::new(&startup_id),
-        ])
-        .env_clear()
-        .envs(std::env::vars_os().filter(|(key, _)| {
-            matches!(
-                key.to_str(),
-                Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
-            )
-        }))
-        .spawn()
-        .inspect_err(|_| {
-            crate::host_phase::release_start();
-        })?;
+    // Every fallible preflight operation is inside the same reversible reservation.
+    let prepared = crate::host_start::prepare::<_, _, _, _, Box<dyn std::error::Error>>(
+        &crate::quit_orchestration::QUIT.host,
+        || Ok(serde_json::to_string(&paths)?),
+        || Ok(app.path().resource_dir()?),
+        || Ok(app.path().app_data_dir()?.join("managed-agents")),
+        |files, resources, admission| {
+            let script = resources.join("core/tauri-terminal-host.cjs");
+            Ok(app
+                .shell()
+                .sidecar("orqst-node")?
+                .args([
+                    script.as_os_str(),
+                    std::ffi::OsStr::new(&files),
+                    admission.as_os_str(),
+                    std::ffi::OsStr::new(if operational_open { "true" } else { "false" }),
+                    std::ffi::OsStr::new(&startup_id),
+                ])
+                .env_clear()
+                .envs(std::env::vars_os().filter(|(key, _)| {
+                    matches!(
+                        key.to_str(),
+                        Some("HOME" | "USERPROFILE" | "PATH" | "TMPDIR" | "LANG")
+                    )
+                })))
+        },
+    )?;
+    let (mut rx, child) = prepared.spawn(|command| command.spawn())?;
     diagnostic.record(Stage::HostSpawn, Outcome::Started, Effects::Possible);
     let ready = tokio::time::timeout(Duration::from_secs(15), async {
         while let Some(event) = rx.recv().await {
@@ -2306,7 +2192,7 @@ async fn start_selected_inner(
         pending_open: (0..count).map(|_| None).collect(),
         opening_diagnostics: (0..count).map(|_| Some(diagnostic.clone())).collect(),
         pending: HashMap::new(),
-        quit_pending: HashMap::new(),
+        quit_pending: crate::quit_orchestration::PendingReplies::default(),
         metadata_pending: HashMap::new(),
         metadata_mutating: None,
         layout_generation: 0,
@@ -2504,21 +2390,9 @@ async fn start_selected_inner(
                         ) {
                             let _ = pending.sender.send(value["value"].clone());
                         }
-                    } else if matches!(
-                        value["kind"].as_str(),
-                        Some("owned-shutdown" | "retirement" | "owned-shutdown-closed")
-                    ) {
-                        if let Some(id) = value["id"].as_str() {
-                            let sender = app
-                                .state::<Terminals>()
-                                .0
-                                .lock()
-                                .unwrap()
-                                .as_mut()
-                                .and_then(|r| r.quit_pending.remove(id));
-                            if let Some(sender) = sender {
-                                let _ = sender.send(value);
-                            }
+                    } else if crate::quit_orchestration::PendingReplies::is_reply(&value) {
+                        if let Some(running) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+                            running.quit_pending.deliver(value);
                         }
                     } else if value["kind"] == "enrollment-reply"
                         || value["kind"] == "enrollment-presented"
