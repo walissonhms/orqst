@@ -96,7 +96,7 @@ fn one(pid: u32) -> io::Result<Process> {
 }
 
 fn checked_inventory_size(size: usize, capacity: usize) -> io::Result<()> {
-    if size == 0 || size >= capacity || size % RECORD_SIZE != 0 {
+    if size == 0 || size >= capacity || !size.is_multiple_of(RECORD_SIZE) {
         return Err(io::Error::other("Truncated kernel inventory"));
     }
     Ok(())
