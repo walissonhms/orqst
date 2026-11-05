@@ -653,6 +653,148 @@ test('cross parent chain uses one snapshot and requires the parent bilateral vie
   }
 });
 
+test('local child checks every mixed-chain ancestor in one snapshot without changing local-only behavior', () => {
+  const { f, request: base, grant: baseGrant } = configured();
+  try {
+    const makePane = (featureId: string, revision: number, name: string) => {
+      const terminalId = randomUUID();
+      f.config.assignTerminal(featureId, terminalId, revision);
+      return f.local.registerPane({
+        workspaceId: 'synthetic',
+        featureId,
+        terminalId,
+        name,
+        routing: { handle: name, role: 'worker', allowedTargetPaneIds: [] },
+        provider: 'synthetic',
+        cliVersion: null,
+        model: null,
+        ownership: 'managed',
+        ownerId: 'synthetic',
+        creationReason: 'SYNTHETIC',
+        binding: { instanceId: randomUUID(), projectId: 'synthetic', terminalEpoch: randomUUID() },
+        capabilities: {
+          canSend: true,
+          canQueueWhileBusy: true,
+          canAcknowledge: true,
+          canReportTaskCompletion: true,
+          canCancel: true,
+        },
+        state: 'ready',
+      });
+    };
+    const a = makePane(f.source.featureId, f.source.revision, 'parent');
+    const d = makePane(f.target.featureId, f.target.revision, 'child');
+    const [b, c] = f.journal.transaction((tx) => [
+      tx.panes().find((p) => p.paneId === baseGrant.source.paneId)!,
+      tx.panes().find((p) => p.paneId === baseGrant.target.paneId)!,
+    ]);
+    const resolver = () => Buffer.from('SYNTHETIC local');
+    const plain = new PaneCommunication(f.journal, resolver, Date.now, f.config.permissionReader);
+    for (const [source, target] of [
+      [a, b!],
+      [c!, d],
+    ]) {
+      plain.configureRouting(source!.paneId, {
+        name: source!.name,
+        ...source!.routing!,
+        allowedTargetPaneIds: [target!.paneId],
+      });
+    }
+    const client = (service: PaneCommunication, source: typeof a, target: typeof a) =>
+      service.authorize({
+        actorId: 'SYNTHETIC_actor',
+        workspaceId: 'synthetic',
+        featureId: source.featureId,
+        sourcePaneId: source.paneId,
+        targetPaneIds: [target.paneId],
+        expiresAt: Date.now() + 300000,
+      });
+    const correlationId = randomUUID();
+    const send = (source: typeof a, target: typeof a, parentTaskId: string | null) => ({
+      schemaVersion: 1 as const,
+      messageId: randomUUID(),
+      taskId: randomUUID(),
+      correlationId,
+      workspaceId: 'synthetic',
+      featureId: source.featureId,
+      sourcePaneId: source.paneId,
+      targetPaneId: target.paneId,
+      parentTaskId,
+      kind: 'task.request' as const,
+      payload: ref('local', 'SYNTHETIC local'),
+      deliveryPolicy: 'queue-if-busy' as const,
+      idempotencyKey: randomUUID(),
+      deadline: Date.now() + 240000,
+    });
+    const parent = client(plain, a, b!).send(send(a, b!, null));
+    const cross = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      { verify: () => true },
+      Date.now,
+      undefined,
+      f.config.withPermissionSnapshot,
+    );
+    const request = { ...base, correlationId, parentTaskId: parent.taskId };
+    const grant = { ...baseGrant, intentDigest: crossFeatureIntentDigest(request) };
+    cross.configureRoute(grant, request, 'SYNTHETIC');
+    cross.admit(grant, request, 'SYNTHETIC');
+    let snapshots = 0;
+    const lock: typeof f.config.withPermissionSnapshot = (action) => {
+      snapshots++;
+      return f.config.withPermissionSnapshot(action);
+    };
+    let allowSeparateRead = true;
+    const gated = new PaneCommunication(
+      f.journal,
+      resolver,
+      Date.now,
+      (scope) => {
+        if (!allowSeparateRead) throw new Error('unexpected separate permission read');
+        return f.config.permissionReader(scope);
+      },
+      cross.crossParent,
+      lock,
+    );
+    const authorized = client(gated, c!, d);
+    allowSeparateRead = false;
+    snapshots = 0;
+    assert.equal(authorized.send(send(c!, d, request.taskId)).depth, 2);
+    assert.equal(snapshots, 1);
+    f.config.savePermissions(f.source.featureId, 'SYNTHETIC_actor', {
+      expectedRevision: 0,
+      configuration: { schemaVersion: 1, rules: [] },
+    });
+    snapshots = 0;
+    assert.throws(() => authorized.send(send(c!, d, request.taskId)), /permission/);
+    assert.equal(snapshots, 1);
+    // Without cross opt-in, a revoked local ancestor keeps its structural treatment.
+    const e = makePane(f.source.featureId, f.config.read(f.source.featureId).revision, 'last');
+    f.config.savePermissions(f.source.featureId, 'SYNTHETIC_actor', {
+      expectedRevision: 1,
+      configuration: {
+        schemaVersion: 1,
+        rules: [
+          {
+            sourceTerminalId: b!.terminalId!,
+            targetTerminalId: e.terminalId!,
+            operations: ['view', 'delegate', 'execute'],
+          },
+        ],
+      },
+    });
+    plain.configureRouting(b!.paneId, {
+      name: b!.name,
+      ...b!.routing!,
+      allowedTargetPaneIds: [e.paneId],
+    });
+    const localChild = client(plain, b!, e);
+    assert.equal(localChild.send(send(b!, e, parent.taskId)).depth, 1);
+  } finally {
+    f.close();
+  }
+});
+
 test('permission snapshot rejects an asynchronous callback', () => {
   const f = fixture();
   try {

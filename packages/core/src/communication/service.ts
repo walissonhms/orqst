@@ -670,6 +670,20 @@ export class PaneCommunication {
           terminalTask(previous)
         )
           throw new Error('Delegation parent denied');
+        if (this.crossParent) {
+          if (!this.activeParentReader || !this.activeParentSnapshot || !expectedFeature)
+            throw new Error('Delegation parent unavailable');
+          const source = this.pane(tx, previous.sourcePaneId);
+          const target = this.pane(tx, previous.targetPaneId);
+          if (
+            source.workspaceId !== grant.workspaceId ||
+            target.workspaceId !== grant.workspaceId ||
+            source.featureId !== expectedFeature ||
+            target.featureId !== expectedFeature
+          )
+            throw new Error('Delegation parent denied');
+          featurePermissionRevision(source, target, ['view'], this.activeParentReader);
+        }
         ancestry.push(expectedSource);
         expectedSource = previous.sourcePaneId;
         parent = previous.parentTaskId;
