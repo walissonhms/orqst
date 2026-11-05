@@ -136,6 +136,21 @@ test('one conditional review covers both candidates; cancellation and stale focu
       true,
     );
     assert.equal(probes, 2);
+    const first = result[0];
+    const second = result[1];
+    if (first?.status !== 'allowed' || second?.status !== 'allowed')
+      throw new Error('Missing grants');
+    store.revoke(second.profile);
+    const raced = await authorizeCliCandidates(
+      validInputs,
+      async () => {
+        store.revoke(first.profile);
+        return true;
+      },
+      async () => true,
+    );
+    assert.ok(raced.every((entry) => entry.status === 'stale'));
+    assert.equal(probes, 2);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

@@ -67,7 +67,7 @@ type Pending = {
   profile(version: string): TerminalProfile;
   disclosure: CliCandidateDisclosure;
 };
-type Candidate = { existing: Allowed } | { pending: Pending };
+type Candidate = { input: CliCandidateInput; existing: Allowed } | { pending: Pending };
 
 /** Capture all candidates before a single native conditional review. */
 export async function prepareCliCandidate(input: CliCandidateInput): Promise<Candidate> {
@@ -100,6 +100,7 @@ export async function prepareCliCandidate(input: CliCandidateInput): Promise<Can
       (!input.expectedVersion || input.expectedVersion === previousVersion)
     )
       return {
+        input,
         existing: {
           status: 'allowed',
           profile: existing,
@@ -249,10 +250,21 @@ export async function authorizePreparedGroup(
     return candidates.map(() => ({ status: 'blocked' as const }));
   const results = [];
   for (const candidate of candidates) {
-    const result =
-      'existing' in candidate
-        ? candidate.existing
-        : await authorizePreparedCli(candidate.pending, leaseCurrent);
+    let result: Allowed | { status: 'blocked' | 'revoked' | 'stale' };
+    if ('existing' in candidate) {
+      const { input, existing } = candidate;
+      const binding = await input.store.verifiedBinding(
+        existing.profile,
+        input.provider,
+        input.mode,
+        input.verifier,
+      );
+      if (!(await leaseCurrent()) || JSON.stringify(binding) !== JSON.stringify(existing.binding))
+        return candidates.map(() => ({ status: 'stale' as const }));
+      result = existing;
+    } else {
+      result = await authorizePreparedCli(candidate.pending, leaseCurrent);
+    }
     if (result.status !== 'allowed') return candidates.map(() => ({ status: result.status }));
     results.push(result);
   }
