@@ -1106,3 +1106,28 @@ focus/input suspends while minimized. Not implemented in this round.
 Validated on this machine after integration: `pnpm test` 1223/1223, `pnpm lint`,
 `pnpm typecheck`, `cargo test` 102 passed / 1 ignored. Native WebKit acceptance
 remains pending.
+
+## Quit review blockers — 2026-11-05 (source state)
+
+- [x] P0 host-loss phase latch survives the handle loss
+      (not-started/active/shutdown-in-flight/exit-evidence-confirmed/lost-unknown);
+      lost-unknown keeps Quit open with an honest inline error; no signal, retry,
+      adoption or PID inference (`a4d53ba`).
+- [x] P1a one-shot exit allowance tied to the reviewed retirement evidence,
+      consumed once by ExitRequested; a concurrent EOF cannot set it (`a4d53ba`).
+- [x] P1d managed-agents CloseRequested revokes temporarily; permanent only on
+      destruction (`f2029bf`).
+- [x] P2 Rust: a shutdown fence or lost host blocks presentation and layout
+      surfaces; only revocation, suspension and approved reads remain (`f2029bf`).
+- [ ] P1b two-gate order: the owned path still does not run the structured-agents
+      gate before the terminal shutdown when both hosts are active. Open.
+- [ ] P1c managed-agents focus: first-responder descendant validation with a
+      visibility epoch (hidden child, other child focused, delayed callback). Open.
+- [ ] P2 Node: `tauri-terminal-host.ts` still applies layout-open/action/focus
+      during the fence. Open.
+- [ ] Integrated native state-machine test for app.exit → ExitRequested → two
+      hosts; current tests are pure phase tests plus the existing static checks.
+- [ ] Native macOS acceptance.
+
+Validated on this machine: `cargo test` 106 passed / 1 ignored. Full `pnpm test`
+not run (awaiting release).
