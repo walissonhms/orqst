@@ -1102,30 +1102,37 @@ pub async fn quit_owned(app: tauri::AppHandle) {
         return;
     };
     let uncertain = shutdown["uncertain"].clone();
-    match shutdown["status"].as_str() {
-        Some("ready") => {
+    match crate::host_phase::shutdown_step(shutdown["status"].as_str()) {
+        crate::host_phase::QuitStep::Retire => {
             quit_event(&app, "orqst-terminal-fence", json!({"fence": true}));
-            match quit_pipe(&app, "retireOwned").await {
-                Some(retire) if retire["status"].as_str() == Some("retired") => {
+            let reply = quit_pipe(&app, "retireOwned").await;
+            match crate::host_phase::retire_step(
+                reply.as_ref().and_then(|value| value["status"].as_str()),
+            ) {
+                crate::host_phase::EvidenceStep::Exit => {
                     crate::host_phase::exit_evidence();
                     app.exit(0);
                 }
-                _ => quit_blocked(&app, "retirement", uncertain),
+                crate::host_phase::EvidenceStep::Blocked(reason) => {
+                    quit_blocked(&app, reason, uncertain)
+                }
             }
         }
-        Some("exited_retirement_unavailable") => {
-            match quit_pipe(&app, "closePreservedOwned").await {
-                Some(closed) if closed["status"].as_str() == Some("closed") => {
+        crate::host_phase::QuitStep::ClosePreserved => {
+            let reply = quit_pipe(&app, "closePreservedOwned").await;
+            match crate::host_phase::close_step(
+                reply.as_ref().and_then(|value| value["status"].as_str()),
+            ) {
+                crate::host_phase::EvidenceStep::Exit => {
                     crate::host_phase::exit_evidence();
                     app.exit(0);
                 }
-                _ => quit_blocked(&app, "transport", uncertain),
+                crate::host_phase::EvidenceStep::Blocked(reason) => {
+                    quit_blocked(&app, reason, uncertain)
+                }
             }
         }
-        Some("uncertain") => quit_blocked(&app, "uncertain", uncertain),
-        Some("busy") => quit_blocked(&app, "busy", uncertain),
-        Some("denied") => quit_blocked(&app, "denied", uncertain),
-        _ => quit_blocked(&app, "transport", uncertain),
+        crate::host_phase::QuitStep::Blocked(reason) => quit_blocked(&app, reason, uncertain),
     }
 }
 

@@ -95,6 +95,45 @@ pub fn quit_decision(
     QuitDecision::TerminalFlow
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum QuitStep {
+    Retire,
+    ClosePreserved,
+    Blocked(&'static str),
+}
+
+/// Map the private shutdown reply to the only allowed next step.
+pub fn shutdown_step(status: Option<&str>) -> QuitStep {
+    match status {
+        Some("ready") => QuitStep::Retire,
+        Some("exited_retirement_unavailable") => QuitStep::ClosePreserved,
+        Some("uncertain") => QuitStep::Blocked("uncertain"),
+        Some("busy") => QuitStep::Blocked("busy"),
+        Some("denied") => QuitStep::Blocked("denied"),
+        _ => QuitStep::Blocked("transport"),
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EvidenceStep {
+    Exit,
+    Blocked(&'static str),
+}
+
+pub fn retire_step(status: Option<&str>) -> EvidenceStep {
+    match status {
+        Some("retired") => EvidenceStep::Exit,
+        _ => EvidenceStep::Blocked("retirement"),
+    }
+}
+
+pub fn close_step(status: Option<&str>) -> EvidenceStep {
+    match status {
+        Some("closed") => EvidenceStep::Exit,
+        _ => EvidenceStep::Blocked("transport"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +187,28 @@ mod tests {
             quit_decision(Phase::NotStarted, false, false, false),
             ExitDirect
         );
+    }
+
+    #[test]
+    fn every_shutdown_and_evidence_branch_is_explicit() {
+        use EvidenceStep as E;
+        use QuitStep as Q;
+        assert_eq!(shutdown_step(Some("ready")), Q::Retire);
+        assert_eq!(
+            shutdown_step(Some("exited_retirement_unavailable")),
+            Q::ClosePreserved
+        );
+        assert_eq!(shutdown_step(Some("uncertain")), Q::Blocked("uncertain"));
+        assert_eq!(shutdown_step(Some("busy")), Q::Blocked("busy"));
+        assert_eq!(shutdown_step(Some("denied")), Q::Blocked("denied"));
+        assert_eq!(shutdown_step(Some("made-up")), Q::Blocked("transport"));
+        assert_eq!(shutdown_step(None), Q::Blocked("transport"));
+        assert_eq!(retire_step(Some("retired")), E::Exit);
+        assert_eq!(retire_step(Some("denied")), E::Blocked("retirement"));
+        assert_eq!(retire_step(None), E::Blocked("retirement"));
+        assert_eq!(close_step(Some("closed")), E::Exit);
+        assert_eq!(close_step(Some("denied")), E::Blocked("transport"));
+        assert_eq!(close_step(None), E::Blocked("transport"));
     }
 
     #[test]
