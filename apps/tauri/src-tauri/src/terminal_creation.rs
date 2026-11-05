@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{Menu, MenuItem, Submenu};
-use tauri::{Manager, Webview, WebviewWindow, Window, WindowEvent};
+use tauri::{Manager, Webview, Window, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -127,10 +127,12 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| {
         let id = event.id().as_ref();
-        let Some(window) = app.get_webview_window("main") else {
+        let Some(window) = app.get_webview("main") else {
             return;
         };
-        if !window.is_visible().unwrap_or(false) || !window.is_focused().unwrap_or(false) {
+        if !window.window().is_visible().unwrap_or(false)
+            || !window.window().is_focused().unwrap_or(false)
+        {
             return;
         }
         let request = if id == "prepare-open" {
@@ -552,7 +554,7 @@ pub(crate) fn record_failure(
 
 fn execute(
     app: &tauri::AppHandle,
-    window: &WebviewWindow,
+    window: &Webview,
     request: Value,
     source: &str,
     generation: u64,
@@ -587,8 +589,8 @@ fn execute(
     app.state::<Preparation>().0.lock().unwrap().busy = false;
     if native_notice
         && !succeeded
-        && window.is_visible().unwrap_or(false)
-        && window.is_focused().unwrap_or(false)
+        && window.window().is_visible().unwrap_or(false)
+        && window.window().is_focused().unwrap_or(false)
         && app.state::<Preparation>().0.lock().unwrap().generation == generation
     {
         app.dialog()
@@ -613,7 +615,7 @@ fn execute(
                     })
                     .unwrap_or_else(|| translate("tauriPreparation.denied")),
             )
-            .parent(window)
+            .parent(&window.window())
             .show(|_| {});
     }
     match result {
@@ -643,7 +645,10 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     {
         return denied();
     }
-    let Some(parent) = app.get_webview_window("main") else {
+    // The retained chrome/PTY siblings make main a multi-webview Window, so
+    // get_webview_window would refuse it. Keep the document handle for URL checks
+    // and use its owning Window only for native focus, visibility and dialogs.
+    let Some(parent) = app.get_webview("main") else {
         return denied();
     };
     let native_request = if request["action"] == "review" {
@@ -738,7 +743,7 @@ pub(crate) fn native_key_changed(app: &tauri::AppHandle) {
 
 fn run(
     app: &tauri::AppHandle,
-    window: &WebviewWindow,
+    window: &Webview,
     request: Value,
     source: &str,
     generation: u64,
@@ -752,7 +757,9 @@ fn run(
     // separate existing exact-document/focus/one-shot signed authorization.
     let current = || {
         Instant::now() < deadline
-            && window.is_visible().unwrap_or(false)
+            && window.label() == "main"
+            && window.window().label() == "main"
+            && window.window().is_visible().unwrap_or(false)
             && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
             && (!crate::terminal::is_running(app)
@@ -763,7 +770,7 @@ fn run(
             && !crate::terminal::presentation_blocked(app)
             && crate::terminal::preparation_admission_current(app, &admission)
     };
-    if !window.is_focused().unwrap_or(false) || !current() {
+    if !window.window().is_focused().unwrap_or(false) || !current() {
         return Err("Preparation document unavailable".into());
     }
     let script = app
@@ -875,7 +882,7 @@ fn run(
                         let picker = app
                             .dialog()
                             .file()
-                            .set_parent(window)
+                            .set_parent(&window.window())
                             .set_title(field(&value, "title", 1024)?);
                         let selected = if value["directory"] == true {
                             picker.blocking_pick_folder()
@@ -925,7 +932,7 @@ fn run(
                                 let result = app
                                     .dialog()
                                     .message(body)
-                                    .parent(window)
+                                    .parent(&window.window())
                                     .title(title)
                                     .buttons(buttons)
                                     .blocking_show_with_result();
@@ -955,7 +962,7 @@ fn run(
                             let result = app
                                 .dialog()
                                 .message(body)
-                                .parent(window)
+                                .parent(&window.window())
                                 .title(title)
                                 .buttons(MessageDialogButtons::YesNoCancelCustom(
                                     cancel.into(),

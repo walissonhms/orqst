@@ -1,5 +1,36 @@
 # Tauri Studio preparation reuse review — 2026-11-04
 
+## Multi-webview preparation lookup correction — 2026-11-05
+
+Reproduced the empty model selector in Preview `4ce9dbe` with retained Feature
+chrome present. Preparation returned `denied` before helper startup: it used
+`Manager::get_webview_window("main")`, which only returns windows whose webviews
+all have the window's label. Adding `feature-workspace` makes that lookup return
+`None`. The fixed path resolves the owned `main` Webview and separately uses its
+owning Window for native dialogs, visibility and focus. Exact document/origin,
+generation, admission, expiry and signed launch checks remain in place.
+
+Dependency source inspected: Tauri **2.12.5**, locked by `Cargo.lock`, at package
+VCS commit `993038c49185307dfc895ab7657d77ca0d5ed7c7`:
+[`Manager::get_webview_window`](https://github.com/tauri-apps/tauri/blob/993038c49185307dfc895ab7657d77ca0d5ed7c7/crates/tauri/src/lib.rs#L603-L613)
+and [`Window::is_webview_window`](https://github.com/tauri-apps/tauri/blob/993038c49185307dfc895ab7657d77ca0d5ed7c7/crates/tauri/src/window/mod.rs#L1257-L1259). Tauri's package
+declares `Apache-2.0 OR MIT`. This changes ORQST API use; no dependency source is
+copied and no dependency is added.
+
+Re-inspected Anywh at `546f189c04415c3c5af5f40e3931a0a90b9aba31`: architecture,
+Agent Host, runtime contract, root Apache-2.0 LICENSE and
+[`client/src-tauri/src/lib.rs`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/client/src-tauri/src/lib.rs#L183).
+Its main-window lookup also assumes `WebviewWindow`; it does not supply ORQST's
+retained sibling-Webview preparation boundary. Decision: keep the existing ORQST
+preparation, Core and PTY implementation and adapt only the native handle type.
+No upstream code or assets incorporated. Communication and provider drivers are
+unchanged, so the historical Tucano audit remains applicable and untouched.
+
+The native reproduction establishes the preparation refusal, not a provider
+startup failure. Actual corrected-package verification is separate from the
+existing synthetic protocol/identity tests and does not imply CLI/provider or
+full application acceptance.
+
 Baseline: `ad191d386f2293361a2bb44603f4b1691251b494`. This closes the
 Electron-only preparation composition in Studio without replacing the native wizard,
 Core, runtime, adapter, signed broker or retained terminal view. Shell/layout work

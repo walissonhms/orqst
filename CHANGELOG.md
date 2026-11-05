@@ -1,5 +1,12 @@
 # Changelog
 
+## Native preparation in a multi-Webview window — 2026-11-05
+
+- Resolve the dashboard Webview and its parent Window separately so retained
+  Feature chrome does not make model-catalog preparation fail before helper startup.
+- Preserve native document/origin, focus, generation, expiry, admission and CLI
+  launch checks. Provider execution and full native acceptance remain separate.
+
 ## Human-verified OpenCode interaction documentation — 2026-11-05
 
 - Record user/Root-confirmed native OpenCode startup, manual keyboard authorization,

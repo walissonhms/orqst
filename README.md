@@ -1,5 +1,12 @@
 # ORQST
 
+## Native model-selector correction — 2026-11-05
+
+Preparation now resolves the owned dashboard Webview independently of its native
+Window, preserving catalog access when retained Feature/terminal Webviews share
+that Window. No authorization check or provider contract is relaxed. See the
+[cause, corrected boundary and native verification scope](docs/development/studio-preparation.md#tauri-model-selector-with-retained-webviews--2026-11-05).
+
 ## Human-verified native progress — 2026-11-05
 
 The earlier administrative recovery is finalized, and the previous owned

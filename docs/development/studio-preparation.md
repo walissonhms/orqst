@@ -1,5 +1,20 @@
 # Studio preparation and reviewed mixed pair
 
+## Tauri model selector with retained Webviews — 2026-11-05
+
+The native preparation menu and Studio now resolve the owned dashboard Webview
+separately from its parent Window. Retained Feature chrome and terminal Webviews
+therefore no longer make `get_webview_window("main")` return `None` and refuse
+preparation before the catalog helper starts. Dialogs remain parented to the same
+native Window; URL/origin, generation, focus, expiry and admission checks are
+unchanged. No execution authority or supported CLI/model is added.
+
+See the [dependency and reference-source review](../research/tauri-studio-preparation.md#multi-webview-preparation-lookup-correction--2026-11-05).
+The regression must be checked in the actual native application with retained
+chrome present: open **+ Terminal**, verify the model choices for each provider,
+then cancel without provisioning or launching a provider. Source checks alone
+do not establish that native behavior.
+
 ## Where to click
 
 In an updated Desktop, choose **Terminals / Studio** in the sidebar (also searchable
