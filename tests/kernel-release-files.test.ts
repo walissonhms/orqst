@@ -40,6 +40,20 @@ test('the same marker cannot start two recoveries; interruption before rename ne
   }
 });
 
+test('a fresh fenced recovery preserves and references the previous marker lock', () => {
+  const f = fixture();
+  try {
+    const original = beginKernelRelease(f.directory);
+    const successor = beginKernelRelease(f.directory, { validate: () => {} });
+    assert.equal(successor.lock.previousRecovery, original.lock.id);
+    assert.notEqual(successor.name, original.name);
+    assert.deepEqual(verifyKernelReleaseSource(f.directory, original.name), original.lock);
+    assert.deepEqual(verifyKernelReleaseSource(f.directory, successor.name), successor.lock);
+  } finally {
+    f.close();
+  }
+});
+
 test('interrupted post-rename commit records uncertain durability and leaves a new marker alone', () => {
   const f = fixture();
   try {

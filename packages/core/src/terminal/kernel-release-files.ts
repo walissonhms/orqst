@@ -20,6 +20,7 @@ const releaseLockSchema = z.strictObject({
   id: z.uuid(),
   marker: identitySchema,
   destination: z.string().regex(/^released-marker-[0-9a-f-]{36}\.json$/),
+  previousRecovery: z.uuid().optional(),
 });
 export type KernelReleaseLock = z.infer<typeof releaseLockSchema>;
 const decisionSchema = z.strictObject({
@@ -32,6 +33,7 @@ const decisionSchema = z.strictObject({
     domain: z.literal('orqst.kernel-reservation-release'),
     version: z.literal(1),
     operationId: z.uuid(),
+    previousRecovery: z.uuid().nullable(),
     evidenceDigest: z.string().regex(/^[a-f0-9]{64}$/),
     marker: identitySchema,
     destination: z.string(),
@@ -72,8 +74,8 @@ function equal(left: z.infer<typeof identitySchema> | null, right: z.infer<typeo
     !!left && left.dev === right.dev && left.inode === right.inode && left.sha256 === right.sha256
   );
 }
-function lockName(identity: z.infer<typeof identitySchema>) {
-  return `release-${identity.dev}-${identity.inode}-${identity.sha256}.lock`;
+function lockName(identity: z.infer<typeof identitySchema>, previousRecovery?: string) {
+  return `release-${identity.dev}-${identity.inode}-${identity.sha256}${previousRecovery ? `-after-${previousRecovery}` : ''}.lock`;
 }
 function observationPath(directory: string, id: string) {
   return join(directory, `release-observation-${id}.json`);
@@ -85,23 +87,45 @@ function readLock(directory: string, file: string) {
       Buffer.from(readRecoveryFile(join(directory, file)).bytes, 'base64').toString('utf8'),
     ),
   );
-  if (lockName(lock.marker) !== file || lock.destination !== `released-marker-${lock.id}.json`)
+  if (
+    lockName(lock.marker, lock.previousRecovery) !== file ||
+    lock.destination !== `released-marker-${lock.id}.json`
+  )
     throw new Error('Release lock identity mismatch');
   return lock;
 }
 
 /** Lock one exact inode forever; an existing lock is never overwritten or removed. */
-export function beginKernelRelease(directory: string) {
+export function beginKernelRelease(directory: string, mutation?: { validate(): void }) {
   assertNoOfflineRecovery(directory);
   const marker = markerIdentity(join(directory, 'active-pair.json'));
+  let previousRecovery: string | undefined;
+  if (mutation) {
+    mutation.validate();
+    for (let depth = 0; depth < 128; depth++) {
+      const candidate = lockName(marker, previousRecovery);
+      let previous: KernelReleaseLock;
+      try {
+        previous = readLock(directory, candidate);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') break;
+        throw error;
+      }
+      if (previous.previousRecovery !== previousRecovery || !equal(previous.marker, marker))
+        throw new Error('Recovery predecessor mismatch');
+      previousRecovery = previous.id;
+      if (depth === 127) throw new Error('Recovery predecessor budget');
+    }
+  }
   const id = randomUUID();
   const lock = releaseLockSchema.parse({
     version: 1,
     id,
     marker,
     destination: `released-marker-${id}.json`,
+    ...(previousRecovery ? { previousRecovery } : {}),
   });
-  const name = lockName(marker);
+  const name = lockName(marker, previousRecovery);
   writeRecoveryFile(join(directory, name), JSON.stringify(lock) + '\n');
   if (!equal(markerIdentity(join(directory, 'active-pair.json')), marker))
     throw new Error('Release marker changed after locking');
@@ -127,6 +151,7 @@ export function reconcileKernelRelease(directory: string, name: string) {
     );
     if (
       decision.intent.operationId !== lock.id ||
+      decision.intent.previousRecovery !== (lock.previousRecovery ?? null) ||
       !equal(decision.intent.marker, lock.marker) ||
       decision.intent.destination !== lock.destination ||
       decision.archivedMarker !== lock.destination ||

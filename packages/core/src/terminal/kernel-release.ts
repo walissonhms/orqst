@@ -38,6 +38,7 @@ export interface KernelReleaseIntent {
   readonly domain: 'orqst.kernel-reservation-release';
   readonly version: 1;
   readonly operationId: string;
+  readonly previousRecovery: string | null;
   readonly evidenceDigest: string;
   readonly marker: Readonly<KernelReleaseLock['marker']>;
   readonly destination: string;
@@ -64,7 +65,7 @@ export async function releaseKernelReservation(
     executor.pid,
   );
   reconcileKernelReleases(directory);
-  const { name, lock } = beginKernelRelease(directory);
+  const { name, lock } = beginKernelRelease(directory, mutation);
   const first = snapshotKernelReservation(directory, firstScratch);
   if (
     first.snapshot.files[0]!.identity[0] !== lock.marker.dev ||
@@ -81,6 +82,7 @@ export async function releaseKernelReservation(
     domain: 'orqst.kernel-reservation-release',
     version: 1,
     operationId: lock.id,
+    previousRecovery: lock.previousRecovery ?? null,
     evidenceDigest: first.evidenceDigest,
     marker: Object.freeze({ ...lock.marker }),
     destination: lock.destination,
