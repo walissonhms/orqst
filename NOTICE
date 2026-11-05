@@ -4,6 +4,12 @@ Copyright 2026 the ORQST owner.
 Licensed under the Apache License, Version 2.0. See LICENSE.
 Third-party dependencies retain their own licenses and copyright notices.
 
+Tauri notification plugin 2.8.0
+Copyright (c) 2017 - Present Tauri Apps Contributors
+Apache-2.0 OR MIT; upstream revision 128190689dbe59b59d344e01bf07b00862aa3791.
+Source: https://github.com/tauri-apps/plugins-workspace/tree/128190689dbe59b59d344e01bf07b00862aa3791/plugins/notification
+License texts are included in the published crate as LICENSE_APACHE-2.0 and LICENSE_MIT.
+
 This product includes code adapted from Anywh (Apache License 2.0):
 https://github.com/anywh-sh/anywh
 Commit: 546f189c04415c3c5af5f40e3931a0a90b9aba31
