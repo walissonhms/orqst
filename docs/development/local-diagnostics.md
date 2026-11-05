@@ -295,3 +295,7 @@ Terminal replies include `rate_limited`; existing feature, file and boolean view
 contracts return their existing denial/failure form. No operation is retried by
 the native admission layer. This source inventory and synthetic tests do not
 prove live Webview behavior, provider behavior or package acceptance.
+
+## Accepted preparation availability charge — 2026-11-05
+
+Accepted limit: in the Studio preparation routes, identity, origin, focus and generation guards run before a token is charged. The availability check (preparation latch busy or unavailable) in begin() runs after the charge. A valid, authenticated, focused request that finds preparation busy therefore consumes one token of its own document bucket. This is bounded by that bucket, starts no host or native work, and cannot consume another document's quota.
