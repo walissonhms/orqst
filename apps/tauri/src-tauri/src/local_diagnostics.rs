@@ -838,6 +838,8 @@ mod tests {
         for _ in 0..1000 {
             if crate::renderer_admission::admit(
                 "main",
+                "synthetic",
+                1,
                 crate::renderer_admission::Action::Catalog,
                 RefusalSource::Studio,
             ) {
@@ -849,6 +851,8 @@ mod tests {
             }
             if crate::renderer_admission::admit(
                 "terminal-0",
+                "synthetic",
+                1,
                 crate::renderer_admission::Action::Open,
                 RefusalSource::Terminal,
             ) {

@@ -901,43 +901,8 @@ async fn dispatch_terminal_request(
     request: Value,
     expected: Option<(u64, u64, Instant)>,
 ) -> Value {
-    if expected.is_none() {
-        let action = match request["action"].as_str() {
-            Some("open") => Some(crate::renderer_admission::Action::Open),
-            Some("start") => Some(crate::renderer_admission::Action::Start),
-            _ => None,
-        };
-        if let Some(action) = action {
-            if slot(&window).is_none() {
-                return json!({"status":"denied"});
-            }
-            if !crate::renderer_admission::admit(window.label(), action, RefusalSource::Terminal) {
-                return json!({"status":"rate_limited"});
-            }
-        }
-    }
-    // Retain the originating preparation attempt for the first dispatch per member.
-    // Taking this optional tag cannot consume an intent, grant, pending reply or reservation.
-    let diagnostic = if request["action"] == "open" {
-        let diagnostic = slot(&window).and_then(|slot| {
-            let state = window.state::<Terminals>();
-            let mut guard = state.0.lock().unwrap();
-            guard
-                .as_mut()
-                .and_then(|r| r.opening_diagnostics.get_mut(slot))
-                .and_then(Option::take)
-        });
-        Some(match diagnostic {
-            Some(attempt) => attempt.into_renderer(RefusalSource::Terminal),
-            None => Attempt::renderer(RefusalSource::Terminal),
-        })
-    } else {
-        None
-    };
-    if let Some(diagnostic) = &diagnostic {
-        diagnostic.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
-    }
-    let value = dispatch_terminal_request_inner(window, request, expected).await;
+    let mut diagnostic = None;
+    let value = dispatch_terminal_request_inner(window, request, expected, &mut diagnostic).await;
     if let Some(diagnostic) = &diagnostic {
         let outcome = opening_outcome(value["status"].as_str(), value["opening"].as_str());
         diagnostic.record(Stage::CliOpening, outcome, Effects::Possible);
@@ -949,12 +914,24 @@ async fn dispatch_terminal_request_inner(
     window: Webview,
     request: Value,
     expected: Option<(u64, u64, Instant)>,
+    diagnostic: &mut Option<Attempt>,
 ) -> Value {
     let denied = || json!({"status": "denied"});
     let Some(slot) = slot(&window) else {
         return denied();
     };
     let app = window.app_handle().clone();
+    let document = {
+        let state = app.state::<Terminals>();
+        let guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else {
+            return denied();
+        };
+        let Some(generation) = r.generations.get(slot) else {
+            return denied();
+        };
+        (r.epoch.clone(), *generation)
+    };
     let passive = matches!(
         request["action"].as_str(),
         Some("read" | "snapshot" | "resize")
@@ -963,8 +940,8 @@ async fn dispatch_terminal_request_inner(
         return denied();
     }
     let focus = focused(&window).await;
-    if focus {
-        send(&app, json!({"kind":"layout-focus", "slot":slot}));
+    if self::slot(&window) != Some(slot) {
+        return denied();
     }
     let (id, generation, receiver) = {
         let state = app.state::<Terminals>();
@@ -994,6 +971,42 @@ async fn dispatch_terminal_request_inner(
         ) && !focus
         {
             return json!({"status": "focus_required"});
+        }
+        if (running.epoch.as_str(), running.generations[slot]) != (document.0.as_str(), document.1)
+        {
+            return denied();
+        }
+        if expected.is_none() {
+            let action = match request["action"].as_str() {
+                Some("open") => Some(crate::renderer_admission::Action::Open),
+                Some("start") => Some(crate::renderer_admission::Action::Start),
+                _ => None,
+            };
+            if let Some(action) = action {
+                if !crate::renderer_admission::admit(
+                    window.label(),
+                    &document.0,
+                    document.1,
+                    action,
+                    RefusalSource::Terminal,
+                ) {
+                    return json!({"status":"rate_limited"});
+                }
+            }
+        }
+        if request["action"] == "open" {
+            *diagnostic = Some(match running.opening_diagnostics[slot].take() {
+                Some(attempt) => attempt.into_renderer(RefusalSource::Terminal),
+                None => Attempt::renderer(RefusalSource::Terminal),
+            });
+            if let Some(attempt) = diagnostic.as_ref() {
+                attempt.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
+            }
+        }
+        if focus {
+            let _ = running
+                .child
+                .write(format!("{}\n", json!({"kind":"layout-focus", "slot":slot})).as_bytes());
         }
         running.sequence += 1;
         if request["action"] == "open" {
@@ -1100,15 +1113,13 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
             r.pending_open[slot] = None;
             return idle();
         }
-        (r.generations[slot], r.layout_generation, intent.expires)
+        (
+            r.generations[slot],
+            r.layout_generation,
+            intent.expires,
+            r.epoch.clone(),
+        )
     };
-    if !crate::renderer_admission::admit(
-        window.label(),
-        crate::renderer_admission::Action::Open,
-        RefusalSource::Terminal,
-    ) {
-        return json!({"attempted":true,"value":{"status":"rate_limited"}});
-    }
     if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
         return idle();
     }
@@ -1130,8 +1141,29 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         {
             return idle();
         }
+        if !r.pending_open[slot].as_ref().is_some_and(|intent| {
+            intent.current(r.generations[slot], r.layout_generation, Instant::now())
+        }) || (r.generations[slot], r.layout_generation) != (epoch.0, epoch.1)
+            || r.epoch != epoch.3
+        {
+            return idle();
+        }
+        if !crate::renderer_admission::admit(
+            window.label(),
+            &r.epoch,
+            r.generations[slot],
+            crate::renderer_admission::Action::Open,
+            RefusalSource::Terminal,
+        ) {
+            return json!({"attempted":true,"value":{"status":"rate_limited"}});
+        }
         let current = (r.generations[slot], r.layout_generation);
-        take_opening(&mut r.pending_open[slot], epoch, current, Instant::now())
+        take_opening(
+            &mut r.pending_open[slot],
+            (epoch.0, epoch.1, epoch.2),
+            current,
+            Instant::now(),
+        )
     };
     let Some(profile) = profile else {
         return idle();
@@ -1139,7 +1171,7 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     let value = dispatch_terminal_request(
         window,
         json!({"version":1,"action":"open","profileId":profile}),
-        Some(epoch),
+        Some((epoch.0, epoch.1, epoch.2)),
     )
     .await;
     json!({"attempted":true,"value":value})

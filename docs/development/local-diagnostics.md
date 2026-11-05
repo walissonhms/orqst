@@ -207,7 +207,7 @@ write a native diagnostic.
 
 ## Renderer admission and lock-test limitation
 
-Native admission limits each authenticated document label and action to 12 requests
+Native admission limits each authenticated document identity and action to 12 requests
 per fixed 60-second window. Catalog, creation, selection, preparation navigation,
 terminal open and terminal start (including managed-agent start) use separate buckets. A burst across a window edge
 can admit up to 24 operations. Exceeding a bucket returns `rate_limited` before the
@@ -215,7 +215,13 @@ helper, opening diagnostic or native dispatch; the UI displays a localized notic
 and does not retry that operation. Automatic catalog refresh on focus is suspended
 after a refusal until the user explicitly refreshes. A prepared open intent is not
 consumed by a refusal. Native menu actions and lifecycle records do not use this
-renderer admission path.
+renderer admission path. Buckets include native document generation and, for
+recreated hosts, an epoch. Identity, applicable focus, and generation guards run
+before charging; expired buckets are removed and storage is capped per label.
+A delayed call arriving after reload is either rejected by the guards without
+consuming a token or attributed to the current document and consumes at most one
+of its tokens. In the latter case the bucket itself bounds the worst case and no
+native work beyond its ceiling is started.
 
 Equal in-flight catalog requests for the same native generation, source URL,
 webview label, parent and exact request share the same helper and result, up to

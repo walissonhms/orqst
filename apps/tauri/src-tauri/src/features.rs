@@ -712,7 +712,7 @@ fn dashboard_document_matches(label: &str, parent: &str, source: &str, origin: &
         })
 }
 /// The existing owned dashboard may be on any approved SPA page. This grants no Studio capability.
-fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
+pub(crate) fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
     identity_from(
         &view.state::<Features>().0,
         true,
@@ -739,13 +739,6 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     let Some(source) = identity(&window) else {
         return denied(crate::local_diagnostics::Outcome::FeatureIdentity);
     };
-    if !crate::renderer_admission::admit(
-        window.label(),
-        crate::renderer_admission::Action::Navigate,
-        crate::local_diagnostics::RefusalSource::Feature,
-    ) {
-        return json!({"status":"rate_limited"});
-    }
     let app = window.app_handle();
     let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
@@ -780,7 +773,10 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
                 }
             };
         }
-        check!(identity(&window) == Some(source), FeatureSourceChanged);
+        check!(
+            identity(&window) == Some(source.clone()),
+            FeatureSourceChanged
+        );
         check!(
             dashboard_identity(&main) == Some(target.clone()),
             FeatureTargetChanged
@@ -811,6 +807,15 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     .await
     {
         return denied(*guard_reason.lock().unwrap());
+    }
+    if !crate::renderer_admission::admit(
+        window.label(),
+        "",
+        source.1,
+        crate::renderer_admission::Action::Navigate,
+        crate::local_diagnostics::RefusalSource::Feature,
+    ) {
+        return json!({"status":"rate_limited"});
     }
     // Changing windows revokes existing input through the existing native focus observer.
     // Only this authenticated target receives IDs; the drawer starts no execution on opening.

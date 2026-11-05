@@ -760,9 +760,9 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         Some("review") => crate::renderer_admission::Action::Selection,
         _ => crate::renderer_admission::Action::Create,
     };
-    if !crate::renderer_admission::admit(window.label(), action, RefusalSource::Studio) {
-        return json!({"status":"rate_limited"});
-    }
+    let Some(document) = crate::features::dashboard_identity(&window) else {
+        return denied(Outcome::StudioIdentity);
+    };
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
         refusal(
@@ -776,6 +776,20 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
     {
         return denied(Outcome::StudioContextChanged);
+    }
+    if identity(&window) != Some((source.clone(), generation))
+        || crate::features::dashboard_identity(&window) != Some(document.clone())
+    {
+        return denied(Outcome::StudioContextChanged);
+    }
+    if !crate::renderer_admission::admit(
+        window.label(),
+        "",
+        document.1,
+        action,
+        RefusalSource::Studio,
+    ) {
+        return json!({"status":"rate_limited"});
     }
     let Some(parent) = app.get_webview_window("main") else {
         return denied(Outcome::StudioMainMissing);

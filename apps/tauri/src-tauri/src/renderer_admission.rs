@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-// Per trusted webview label and action, allow twelve requests in sixty seconds.
+// Per native document identity and action, allow twelve requests in sixty seconds.
 // A fixed window is intentionally generous for human interaction and bounded at its edges.
 const WINDOW: Duration = Duration::from_secs(60);
 const LIMIT: u32 = 12;
@@ -21,10 +21,32 @@ struct Window {
     accepted: u32,
 }
 #[derive(Default)]
-struct Limiter(HashMap<(String, Action), Window>);
+struct Limiter(HashMap<(String, String, u64, Action), Window>);
 impl Limiter {
-    fn admit(&mut self, label: &str, action: Action, now: Instant) -> bool {
-        let window = self.0.entry((label.to_owned(), action)).or_insert(Window {
+    fn admit(
+        &mut self,
+        label: &str,
+        epoch: &str,
+        generation: u64,
+        action: Action,
+        now: Instant,
+    ) -> bool {
+        self.0
+            .retain(|_, window| now.saturating_duration_since(window.start) < WINDOW);
+        let key = (label.to_owned(), epoch.to_owned(), generation, action);
+        if !self.0.contains_key(&key) && self.0.keys().filter(|key| key.0 == label).count() >= 1024
+        {
+            if let Some(oldest) = self
+                .0
+                .iter()
+                .filter(|(key, _)| key.0 == label)
+                .min_by_key(|(_, window)| window.start)
+                .map(|(key, _)| key.clone())
+            {
+                self.0.remove(&oldest);
+            }
+        }
+        let window = self.0.entry(key).or_insert(Window {
             start: now,
             accepted: 0,
         });
@@ -41,12 +63,18 @@ impl Limiter {
 }
 static LIMITER: OnceLock<Mutex<Limiter>> = OnceLock::new();
 
-/// Only call after authenticating a fixed native-owned document label.
-pub fn admit(label: &str, action: Action, source: crate::local_diagnostics::RefusalSource) -> bool {
+/// Only call after validating the native document identity and applicable focus guards.
+pub fn admit(
+    label: &str,
+    epoch: &str,
+    generation: u64,
+    action: Action,
+    source: crate::local_diagnostics::RefusalSource,
+) -> bool {
     let accepted = LIMITER
         .get_or_init(|| Mutex::new(Limiter::default()))
         .lock()
-        .map(|mut limiter| limiter.admit(label, action, Instant::now()))
+        .map(|mut limiter| limiter.admit(label, epoch, generation, action, Instant::now()))
         .unwrap_or(false);
     if !accepted {
         crate::local_diagnostics::rate_limited(source);
@@ -63,25 +91,40 @@ mod tests {
         let mut limiter = Limiter::default();
         assert_eq!(
             (0..1000)
-                .filter(|_| limiter.admit("main", Action::Catalog, now))
+                .filter(|_| limiter.admit("main", "", 1, Action::Catalog, now))
                 .count(),
             LIMIT as usize
         );
-        assert!(limiter.admit("main", Action::Open, now));
-        assert!(limiter.admit("terminal-1", Action::Catalog, now));
+        assert_eq!(
+            (0..1000)
+                .filter(|_| limiter.admit("main", "", 2, Action::Catalog, now))
+                .count(),
+            LIMIT as usize
+        );
+        assert!(limiter.admit("main", "new-host", 1, Action::Catalog, now));
+        assert!(limiter.admit("main", "", 1, Action::Open, now));
+        assert!(limiter.admit("terminal-1", "", 1, Action::Catalog, now));
         assert!(!limiter.admit(
             "main",
+            "",
+            1,
             Action::Catalog,
             now + WINDOW - Duration::from_millis(1)
         ));
-        assert!(limiter.admit("main", Action::Catalog, now + WINDOW));
+        assert!(limiter.admit("main", "", 1, Action::Catalog, now + WINDOW));
     }
     #[test]
     fn spaced_human_requests_are_admitted() {
         let now = Instant::now();
         let mut limiter = Limiter::default();
         for i in 0..30 {
-            assert!(limiter.admit("main", Action::Create, now + Duration::from_secs(i * 10)));
+            assert!(limiter.admit(
+                "main",
+                "",
+                1,
+                Action::Create,
+                now + Duration::from_secs(i * 10)
+            ));
         }
     }
 }

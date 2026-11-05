@@ -2,7 +2,9 @@
 //! Reuses the terminal bridge's fixed sidecar, document fencing and Cancel-default review.
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+static ADMISSION_EPOCH: AtomicU64 = AtomicU64::new(1);
 use std::time::Duration;
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
@@ -20,6 +22,7 @@ struct Running {
     child: CommandChild,
     document: String,
     generation: u64,
+    admission_epoch: u64,
     loaded: bool,
     revoked: bool,
     busy: bool,
@@ -147,22 +150,24 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
     if !current(&window) {
         return denied();
     }
-    if request["action"] == "start"
-        && !crate::renderer_admission::admit(
-            window.label(),
-            crate::renderer_admission::Action::Start,
-            crate::local_diagnostics::RefusalSource::Agents,
-        )
-    {
-        return json!({"status":"rate_limited"});
-    }
     let app = window.app_handle().clone();
     if crate::terminal::presentation_blocked(&app) {
         return denied();
     }
+    let document = {
+        let state = app.state::<Agents>();
+        let guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_ref() else {
+            return denied();
+        };
+        (r.admission_epoch, r.generation)
+    };
     let mutation = request["action"] != "snapshot";
     // Verify the native first responder before taking the state lock (never across an await).
     let focus = focused(&window).await;
+    if !current(&window) {
+        return denied();
+    }
     let (id, generation, receiver) = {
         let state = app.state::<Agents>();
         let mut guard = state.0.lock().unwrap();
@@ -177,6 +182,20 @@ pub async fn agents_request(window: Webview, request: Value) -> Value {
         }
         if mutation && !focus {
             return json!({"status": "focus_required"});
+        }
+        if (r.admission_epoch, r.generation) != document {
+            return denied();
+        }
+        if request["action"] == "start"
+            && !crate::renderer_admission::admit(
+                window.label(),
+                &document.0.to_string(),
+                document.1,
+                crate::renderer_admission::Action::Start,
+                crate::local_diagnostics::RefusalSource::Agents,
+            )
+        {
+            return json!({"status":"rate_limited"});
         }
         r.sequence += 1;
         let id = format!("00000000-0000-4000-8000-{:012x}", r.sequence);
@@ -397,6 +416,7 @@ pub async fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Err
         child,
         document: ready["html"].as_str().unwrap_or("").into(),
         generation: 0,
+        admission_epoch: ADMISSION_EPOCH.fetch_add(1, Ordering::Relaxed),
         loaded: false,
         revoked: false,
         busy: false,
