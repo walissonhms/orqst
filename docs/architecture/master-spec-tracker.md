@@ -745,3 +745,45 @@ Open, not implemented:
 Validated on this machine: `pnpm test` 1190/1190, `pnpm lint`, `pnpm typecheck`,
 `cargo check` and `cargo test` 100 passed / 1 ignored on the shared target.
 Real WebKit/AppKit and provider acceptance remain pending.
+
+## Review round — 2026-11-05 (source state)
+
+### V6 conformance of the single window
+
+| V6 item                                    | State                                                                                                                                                                                 |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidebar Workspace → Feature                | Implemented inside the Studio Feature panel (workspace selector, Feature list with terminal counts, active state). Different placement: not the global left sidebar of the reference. |
+| Unique breadcrumb Workspace / Feature      | Different: the Feature panel shows the workspace name and the active Feature list; there is no separate top-bar breadcrumb.                                                           |
+| Docked terminals occupying the useful area | Implemented: terminal child webviews fill the main window and hide the dashboard chrome while shown.                                                                                  |
+| `+ Terminal` Feature chrome                | Implemented in code (pane-766 entry); native acceptance pending.                                                                                                                      |
+| Minimized dock / floating panes            | Different: pane chrome keeps hide and maximize; there is no global minimized dock or floating mode in the single window.                                                              |
+| One chrome, no second dashboard            | Implemented: the second top-level terminal window and its window chrome are gone.                                                                                                     |
+
+### Checklist
+
+- [x] Single ORQST window: terminals and managed agents as child webviews of
+      `main` — implemented in code + tests (`8cd94bd`, 1190/1190).
+- [ ] Native WebKit/AppKit acceptance for the single window.
+- [x] Managed agent document in `main`; child-webview focus gap documented —
+      implemented in code + tests (`57888a4`, `8994906`).
+- [ ] Native acceptance for the managed agent surface.
+- [x] Single local CLI authorization — implemented in code + tests
+      (`541ebf0`, integrated `f385074`).
+- [ ] Native acceptance for the single CLI authorization.
+- [x] Input by focus without a modal — implemented in code + tests (`24de3a7`).
+- [x] Feature `+ Terminal` entry — implemented in code + tests (`61eb2fd`,
+      integrated `ba32233`).
+- [ ] Native acceptance for the Feature terminal entry.
+- [x] Sidebar "Pedido recusado" resolves on newer authoritative state —
+      implemented in code + tests (this round).
+- [ ] Native acceptance for the refusal notice.
+- [ ] Quit / owned exit — open; human decision: exit preserving pending when the
+      exit receipt exists and retirement is unavailable; backend port in progress.
+- [ ] OpenCode plugin, Codex warning, effective models, mixed MCP, coexistence —
+      open, no owner.
+- [ ] Electron retirement — depends on proved parity.
+
+### Corrections in this round
+
+- corrigido: stale 2-minute/Start/Connect copy and the paste comment (this round).
+- corrigido: persistent refusal notice resolved by a newer snapshot (this round).
