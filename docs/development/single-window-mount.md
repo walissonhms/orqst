@@ -189,3 +189,17 @@ invalid uncertainty shape and retirement without a fence. Incorrect packets do
 not consume the waiter or generate exit evidence. Existing circuit fakes now emit
 the same required fields as the real service; invalid legacy busy/denied packets
 remain pending until timeout and preserve the native fence.
+
+### Agents-only observer correction
+
+Managed-agent startup and every consent request await main-thread observer
+installation before proceeding. Raising the agents surface rechecks installation
+on the UI thread; failure denies by default. The installer itself verifies
+`NSThread.isMainThread`, and its key-window callback now invalidates agents reviews
+as well as terminal reviews. App deactivation continues to advance the agents
+surface epoch even when the parent was already unfocused for its sheet.
+Deterministic tests use the production scheduling/admission helper with no terminal
+host or previous Quit, require installation before review, and reject a delayed
+Yes after deactivation/reactivation. Dispatch failure, installation failure and a
+dropped callback deny admission. Real NotificationCenter delivery and AppKit sheet
+focus remain separate native acceptance; no application was run here.
