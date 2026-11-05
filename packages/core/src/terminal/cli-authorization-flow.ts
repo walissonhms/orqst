@@ -69,6 +69,40 @@ type Pending = {
 };
 type Candidate = { input: CliCandidateInput; existing: Allowed } | { pending: Pending };
 
+export interface CliAuthorizedCandidate {
+  input: CliCandidateInput;
+  allowed: Allowed;
+}
+
+/** No awaits: repeat after the final native/signature await and at each provisioning guard. */
+export function cliBindingsCurrent(candidates: readonly CliAuthorizedCandidate[]): boolean {
+  return candidates.every(
+    ({ input, allowed }) =>
+      JSON.stringify(
+        input.store.cachedVerifiedBinding(allowed.profile, input.provider, input.mode),
+      ) === JSON.stringify(allowed.binding),
+  );
+}
+
+export async function revalidateCliBindings(
+  candidates: readonly CliAuthorizedCandidate[],
+  current: () => Promise<boolean>,
+): Promise<boolean> {
+  if (!(await current())) return false;
+  for (const { input, allowed } of candidates) {
+    const binding = await input.store.verifiedBinding(
+      allowed.profile,
+      input.provider,
+      input.mode,
+      input.verifier,
+    );
+    if (JSON.stringify(binding) !== JSON.stringify(allowed.binding)) return false;
+  }
+  // A later signature or native check can revoke an earlier member. Check the whole
+  // set synchronously after the last await; this is not a cross-process transaction.
+  return (await current()) && cliBindingsCurrent(candidates);
+}
+
 /** Capture all candidates before a single native conditional review. */
 export async function prepareCliCandidate(input: CliCandidateInput): Promise<Candidate> {
   const sha256 = terminalExecutableSha256(input.executable);
@@ -210,7 +244,7 @@ export async function authorizeCliCandidates(
   return authorizePreparedGroup(candidates, review, current, now);
 }
 
-/** The reviewed set and its ephemeral authority stay inside this transaction. */
+/** The reviewed set and its ephemeral authority stay inside this bounded flow. */
 export async function authorizePreparedGroup(
   candidates: readonly Candidate[],
   review: (
@@ -249,7 +283,8 @@ export async function authorizePreparedGroup(
       !(await leaseCurrent()))
   )
     return candidates.map(() => ({ status: 'blocked' as const }));
-  const results = [];
+  const results: Allowed[] = [];
+  const authorized: CliAuthorizedCandidate[] = [];
   for (const candidate of candidates) {
     let result: Allowed | { status: 'blocked' | 'revoked' | 'stale' };
     if ('existing' in candidate) {
@@ -268,7 +303,17 @@ export async function authorizePreparedGroup(
     }
     if (result.status !== 'allowed') return candidates.map(() => ({ status: result.status }));
     results.push(result);
+    authorized.push({
+      input: 'existing' in candidate ? candidate.input : candidate.pending.input,
+      allowed: result,
+    });
   }
+  if (
+    !(await revalidateCliBindings(authorized, leaseCurrent)) ||
+    now() >= expires ||
+    !cliBindingsCurrent(authorized)
+  )
+    return candidates.map(() => ({ status: 'stale' as const }));
   return results;
 }
 

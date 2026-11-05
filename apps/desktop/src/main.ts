@@ -20,7 +20,11 @@ import { createManagedTerminals } from './managed-terminal.js';
 import { createManagedAgents } from './managed-agents.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTerminalCreation } from './terminal-creation.js';
-import { authorizeCliCandidates } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
+import {
+  authorizeCliCandidates,
+  cliBindingsCurrent,
+  revalidateCliBindings,
+} from '../../../packages/core/src/terminal/cli-authorization-flow.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/cli-system-signature.js';
 import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
@@ -439,25 +443,26 @@ async function start(): Promise<void> {
           ? [{ provider: 'opencode' as const, executable: companionExecutable }]
           : []),
       ];
-      const results = await authorizeCliCandidates(
-        candidates.map((item) => ({
-          store: policy,
-          provider: item.provider,
-          mode,
+      const inputs = candidates.map((item) => ({
+        store: policy,
+        provider: item.provider,
+        mode,
+        executable: item.executable,
+        verifier: systemCliSignatureVerifier,
+        profile: (version: string, sha256: string) => ({
+          id: `${item.provider}-terminal-v1`,
+          projectId: terminalDigest(project),
           executable: item.executable,
-          verifier: systemCliSignatureVerifier,
-          profile: (version: string, sha256: string) => ({
-            id: `${item.provider}-terminal-v1`,
-            projectId: terminalDigest(project),
-            executable: item.executable,
-            executableSha256: sha256,
-            executableVersion: version,
-            argv: [],
-            cwd: project,
-            permissions: 'Native owned terminal CLI authorization',
-            ...cliAuthorizationScope(item.provider, mode),
-          }),
-        })),
+          executableSha256: sha256,
+          executableVersion: version,
+          argv: [],
+          cwd: project,
+          permissions: 'Native owned terminal CLI authorization',
+          ...cliAuthorizationScope(item.provider, mode),
+        }),
+      }));
+      const results = await authorizeCliCandidates(
+        inputs,
         async (details, existing) => {
           const detail = JSON.stringify(
             {
@@ -484,6 +489,9 @@ async function start(): Promise<void> {
         async () => current(),
       );
       if (results.some((result) => result.status !== 'allowed') || !current()) return;
+      const authorizedCli = results.flatMap((result, index) =>
+        result.status === 'allowed' ? [{ input: inputs[index]!, allowed: result }] : [],
+      );
       const cliEvidence = results.flatMap((result) =>
         result.status === 'allowed'
           ? [
@@ -565,8 +573,10 @@ async function start(): Promise<void> {
         });
         if (!reviewed() || result.response !== 1 || !result.checkboxChecked) return;
       }
+      if (!(await revalidateCliBindings(authorizedCli, async () => reviewed()))) return;
+      if (!reviewed() || !cliBindingsCurrent(authorizedCli)) return;
       terminalCreationAttempted = true;
-      files = plan.provision(reviewed);
+      files = plan.provision(() => reviewed() && cliBindingsCurrent(authorizedCli));
       terminalCreationCompleted = true;
       createdTerminalFiles = files;
     } catch {

@@ -88,6 +88,7 @@ export async function probeSignedCliVersion(
   const signature = await verifiedCliSignature(verifier, provider, executable);
   if (terminalExecutableSha256(executable) !== hash)
     throw new Error('CLI changed before version probe');
+  if (!(await beforeSpawn())) throw new Error('CLI probe authorization expired');
   const home = await mkdtemp(join(tmpdir(), 'orqst-cli-probe-'));
   try {
     if (!(await beforeSpawn())) throw new Error('CLI probe authorization expired');

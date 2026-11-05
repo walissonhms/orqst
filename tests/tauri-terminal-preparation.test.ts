@@ -55,7 +55,7 @@ await build({
           namespace: 'synthetic-flow',
         }));
         builder.onLoad({ filter: /.*/, namespace: 'synthetic-flow' }, () => ({
-          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function prepareCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); const existing = { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } }; return process.env.ORQST_SYNTHETIC_PENDING ? {pending:{disclosure:{synthetic:true}}, existingResult:existing} : { existing }; } export async function authorizePreparedGroup(candidates, review, current) { if (!(await current())) return candidates.map(() => ({status:'blocked'})); if (candidates.some((entry) => entry.pending) && (!(await review()) || !(await current()))) return candidates.map(() => ({status:'blocked'})); return candidates.map((entry) => entry.existing || entry.existingResult); }`,
+          contents: `import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; export async function prepareCliCandidate(input) { const hash = createHash('sha256').update(readFileSync(input.executable)).digest('hex'); const existing = { status: 'allowed', profile: input.profile('0.162.1', hash), epoch: 'synthetic', binding: { version: 2, provider: 'codex', mode: 'tui', teamId: '2DC432GLL2', identifier: 'codex', contractRevision: 'codex-tui-0.162.1', authorizationEpoch: '1c24dd25-839b-401b-9726-cee7fa38f356', policyRevision: 1 } }; return process.env.ORQST_SYNTHETIC_PENDING ? {pending:{disclosure:{synthetic:true}}, existingResult:existing} : { existing }; } export function cliBindingsCurrent() { return true; } export async function revalidateCliBindings(candidates, current) { return current(); } export async function authorizePreparedGroup(candidates, review, current) { if (!(await current())) return candidates.map(() => ({status:'blocked'})); if (candidates.some((entry) => entry.pending) && (!(await review()) || !(await current()))) return candidates.map(() => ({status:'blocked'})); return candidates.map((entry) => entry.existing || entry.existingResult); }`,
           loader: 'js',
         }));
       },
@@ -89,6 +89,8 @@ function fixture() {
   const confirmations: string[] = [];
   const ports: TauriPreparationPorts = {
     current: () => true,
+    revalidateCli: async () => true,
+    cliBindingsCurrent: () => true,
     choose: async (directory) => (directory ? project : executable),
     confirm: async (key, detail) => {
       confirmations.push(key);

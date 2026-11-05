@@ -196,6 +196,11 @@ version probe. The probe executes the signed CLI and is not a network sandbox.
 The detected version is shown in the subsequent manifest review. The selected path and its
 local authorization are checked again before each PTY start; see the
 [security model](docs/architecture/security-model.md#interactive-cli-authorization--2026-11-05).
+The whole group is revalidated after the last probe and after the separate manifest
+review/commit, before provisioning. Native authority is also checked before creating
+the probe HOME and immediately before spawn. These checks do not atomically prevent
+same-user revocation, focus loss or temporary-directory creation between a check
+and its effect; ephemeral HOME and durable grants are separate effects.
 Native/provider acceptance remains a separate gate.
 
 The [incremental native terminal source](docs/development/terminal-native-enrollment.md)

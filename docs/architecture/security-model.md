@@ -1731,3 +1731,27 @@ candidate or transport fails, an earlier policy grant may remain; this is not an
 atomic pair grant and does not establish that manifests were created or a CLI
 started. No automatic retry follows an uncertain operation. The native checks and
 the final path-based spawn still have a residual same-user replacement window.
+
+## CLI group continuity and temporary probe state — 2026-11-05
+
+The complete reviewed group, including reused and newly published grants, is
+reverified after the last probe/grant under the native current/30-second probe
+lease. After the last asynchronous signature/current check, one synchronous pass
+compares every binding, policy revision, epoch and inspected file identity. Any
+divergence refuses the entire group. Preparation repeats signature/current checks
+after the separate manifest review and commit latch, then checks all bindings
+without awaits before provisioning and at the provisioner's existing effect guards.
+Catalogue/admission guards and signature/hash/epoch checks before PTY remain intact.
+These checks do not form an atomic transaction with other policy writers, native
+focus changes or artifact publication. A later race can still leave partial
+artifacts; an individual earlier policy grant can remain, without establishing a
+prepared terminal or successful start. No rollback or automatic retry is inferred.
+
+The version probe checks authority before `mkdtemp` and again immediately before
+spawn. Failure at the first guard creates no probe HOME; failure at the second
+refuses execution and removes the ephemeral directory. Loss of authority between
+a successful check and directory creation remains a residual asynchronous window.
+This is not a guarantee of zero filesystem writes, and temporary HOME creation is
+not durable policy/grant publication. Synthetic race/guard tests do not accept
+native dialogs, installed packages or real providers. Observer HTTP/WS, cookies,
+CSP and read-only source access are unchanged.

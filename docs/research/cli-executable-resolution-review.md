@@ -24,3 +24,24 @@ and [Tucano](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f
 licenses are Apache-2.0; no NOTICE file was found in the inspected checkouts and
 no upstream code is copied by this note. Dependency license review would be
 required before incorporating any upstream dependencies. No real CLI was run.
+
+## Group revocation follow-up — 2026-11-05
+
+Re-read the exact pinned Anywh `resolveAgentBin` and Tucano `detect.ts` sources
+linked above for this race fix, alongside ORQST's `TerminalCliPolicyStore`,
+`authorizePreparedGroup`, native preparation and `prepareTerminalCreation` guards.
+The earlier reuse decisions remain: neither upstream resolver/probe implements
+ORQST's native informed contract-set review, per-executable policy CAS/epoch or
+whole-group grant continuity. Keep and narrowly adapt the existing ORQST flow;
+no upstream code, assets or dependencies are incorporated. The pinned license and
+NOTICE findings above remain the provenance for this unchanged use.
+
+The adaptation rechecks signatures and every existing/new binding after the last
+probe, then compares all cached bindings without awaits after the last native
+current check. The same helper is reused before Tauri/Electron provisioning, with
+synchronous continuity in existing provision guards. The probe checks authority
+before temporary HOME creation and again before spawn. These are separate checks,
+not cross-process policy/focus/filesystem atomicity: a successful check can precede
+revocation or ephemeral directory creation. Durable grants remain individual;
+partial artifacts and uncertain effects are not rolled back or retried. No actual
+provider, native acceptance, reservation recovery or package freeze is implied.

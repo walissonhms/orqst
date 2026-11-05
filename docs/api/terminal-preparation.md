@@ -17,6 +17,23 @@ identity are checked before probing and again before publishing each policy gran
 The detected version must match the disclosed set. Subsequent manifest/selection
 reviews and pre-PTY revalidation remain separate. Pair grants are individual: a
 later failure can leave an earlier grant, without establishing a created terminal.
+After the last probe/grant, every existing and newly issued binding is reverified
+under native current/lease checks. A final synchronous pass compares the complete
+binding (including epoch and policy revision) after the last asynchronous check;
+any mismatch refuses the whole group. After the separate manifest review and
+native commit latch, Tauri and Electron repeat signature/binding checks before
+provisioning and check binding continuity at the provisioner's existing guards.
+These are bounded checks, not a lock across policies, native focus and filesystem
+writes. Another process can still revoke or replace a path between a check and an
+effect; uncertain or partial artifacts are retained and pre-PTY guards still apply.
+
+The probe checks native authority before creating its ephemeral HOME and again
+immediately before spawn. Cancellation, lost focus or an expired lease detected at
+the first check creates neither that HOME nor a policy grant. Detection at the
+second check refuses spawn and removes the temporary HOME. Authority can change
+between a successful check and `mkdtemp`; zero filesystem writes are not atomic.
+An ephemeral directory is distinct from durable policy/grant publication.
+
 No automatic retry follows an uncertain effect. Native UI and real providers have
 not been accepted on the basis of synthetic tests.
 

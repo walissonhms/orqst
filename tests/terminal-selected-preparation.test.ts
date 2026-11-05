@@ -33,6 +33,15 @@ import { findCliContract } from '../packages/core/src/terminal/cli-contract.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
 import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
+import {
+  authorizeCliCandidates,
+  cliBindingsCurrent,
+  revalidateCliBindings,
+  type CliCandidateInput,
+  type CliAuthorizedCandidate,
+} from '../packages/core/src/terminal/cli-authorization-flow.js';
+import { TerminalCliPolicyStore } from '../packages/core/src/terminal/cli-authorization.js';
+import { cliAuthorizationScope } from '../packages/core/src/terminal/cli-authorization-scope.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-selected-bundle-')));
 after(() => rmSync(bundle, { recursive: true, force: true }));
@@ -118,6 +127,8 @@ function fixture(openCodeCopies = false) {
   const trusted = { observerDatabase, preferencesDirectory };
   const ports = {
     current: () => true,
+    revalidateCli: async () => true,
+    cliBindingsCurrent: () => true,
     choose: async () => {
       throw new Error('Finder must never participate');
     },
@@ -630,6 +641,179 @@ test('unknown model capabilities and changed source/view are refused before prov
     f.close();
   }
 });
+
+for (const fault of [
+  'existing-probe',
+  'new-probe',
+  'final-signature',
+  'final-native',
+  'manifest-review',
+  'commit',
+] as const) {
+  test(`real group policy rejects ${fault} revocation before any pair artifacts or start`, async () => {
+    const f = fixture();
+    try {
+      const store = new TerminalCliPolicyStore(f.trusted.preferencesDirectory);
+      let armed = false;
+      let finalCheck = false;
+      let reviews = 0;
+      const probes: string[] = [];
+      const inputs: CliCandidateInput[] = (['codex', 'opencode'] as const).map((provider) => {
+        const executable = join(f.root, 'bin', provider);
+        const version = provider === 'codex' ? '0.162.1' : '2.2.5';
+        const signature = { valid: true, ...cliProviderIdentities[provider] };
+        return {
+          store,
+          provider,
+          mode: 'mcp',
+          executable,
+          verifier: {
+            verify: async () => {
+              if (armed && finalCheck && fault === 'final-signature' && provider === 'opencode') {
+                armed = false;
+                store.revoke(firstProfile);
+              }
+              return signature;
+            },
+          },
+          profile: (detected, sha256) => ({
+            id: provider,
+            projectId: 'synthetic',
+            executable,
+            executableVersion: detected,
+            executableSha256: sha256,
+            cwd: f.project,
+            argv: [],
+            permissions: 'synthetic',
+            ...cliAuthorizationScope(provider, 'mcp'),
+          }),
+          probe: async () => {
+            probes.push(provider);
+            if (provider === 'opencode' && armed && fault.endsWith('-probe')) {
+              armed = false;
+              store.revoke(firstProfile);
+            }
+            return {
+              provider,
+              mode: 'mcp',
+              version,
+              contractRevision: `${provider}-mcp-${version}`,
+              sha256: terminalExecutableSha256(executable),
+              signature,
+            };
+          },
+        };
+      });
+      const firstProfile = inputs[0]!.profile(
+        '0.162.1',
+        terminalExecutableSha256(inputs[0]!.executable),
+      );
+      if (fault === 'existing-probe') {
+        const initial = await authorizeCliCandidates(
+          [inputs[0]!],
+          async () => true,
+          async () => true,
+        );
+        assert.equal(initial[0]?.status, 'allowed');
+        probes.length = 0;
+      }
+      let authorized: CliAuthorizedCandidate[] = [];
+      let nativeChecks = 0;
+      const current = async () => {
+        if (armed && finalCheck && fault === 'final-native' && ++nativeChecks === 2) {
+          armed = false;
+          store.revoke(firstProfile);
+        }
+        return true;
+      };
+      const ports: import('../apps/desktop/src/tauri-terminal-preparation.js').TauriPreparationPorts =
+        {
+          ...f.ports,
+        };
+      ports.authorizeCliGroup = async () => {
+        armed = true;
+        const results = await authorizeCliCandidates(
+          inputs,
+          async (details, existing) => {
+            reviews++;
+            assert.equal(details.length + existing.length, 2);
+            return true;
+          },
+          current,
+        );
+        if (fault.endsWith('-probe')) assert.ok(results.every((entry) => entry.status === 'stale'));
+        authorized = results.flatMap((result, index) =>
+          result.status === 'allowed' ? [{ input: inputs[index]!, allowed: result }] : [],
+        );
+        return results.map((result) =>
+          result.status === 'allowed'
+            ? {
+                status: 'allowed',
+                executable: result.profile.executable,
+                version: result.profile.executableVersion,
+                sha256: result.profile.executableSha256,
+                binding: result.binding,
+              }
+            : { status: result.status },
+        );
+      };
+      ports.revalidateCli = () => {
+        finalCheck = true;
+        return revalidateCliBindings(authorized, current);
+      };
+      ports.cliBindingsCurrent = () => cliBindingsCurrent(authorized);
+      ports.confirm = async () => {
+        if (fault === 'manifest-review') store.revoke(firstProfile);
+        return true;
+      };
+      ports.commit = async () => {
+        if (fault === 'commit') store.revoke(firstProfile);
+        return true;
+      };
+      const scope = { workspaceId: f.workspaceId, featureId: null };
+      const catalog = await prepareTauriTerminals(
+        { action: 'catalog', ...scope },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(catalog.status, 'catalog');
+      await assert.rejects(
+        prepareTauriTerminals(
+          {
+            action: 'create-mcp-pair',
+            ...scope,
+            catalogId: catalog.catalog.catalogId,
+            sourceProvider: 'codex',
+            codexModelId: catalog.catalog.providers.find((entry) => entry.provider === 'codex')!
+              .models[0]!.id,
+            openCodeModelId: catalog.catalog.providers.find(
+              (entry) => entry.provider === 'opencode',
+            )!.models[0]!.id,
+          },
+          f.context,
+          ports,
+          Date.now,
+          f.trusted,
+        ),
+        (error: unknown) => {
+          assert.equal(Reflect.get(error as object, 'failure').code, 'cli_authorization_stale');
+          assert.equal(Reflect.get(error as object, 'failure').effects, 'not_started');
+          return true;
+        },
+      );
+      assert.equal(reviews, 1);
+      assert.deepEqual(probes, fault === 'existing-probe' ? ['opencode'] : ['codex', 'opencode']);
+      // No manifest, pending tree, Core or start-capable selection exists. Policy grants
+      // remain separate durable effects; revocation never rolls them back or retries.
+      assert.deepEqual(readdirSync(f.context.parent), []);
+      assert.equal(store.currentVerified(firstProfile, 'codex', 'mcp'), 'revoked');
+    } finally {
+      f.close();
+    }
+  });
+}
 
 for (const sourceProvider of ['codex', 'opencode'] as const) {
   test(`product MCP pair with ${sourceProvider} source reviews both selected models and preserves bilateral opt-in without a session`, async () => {

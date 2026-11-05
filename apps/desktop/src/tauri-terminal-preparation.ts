@@ -74,6 +74,10 @@ export interface TauriPreparationPorts {
     }[]
   >;
   current(): boolean;
+  /** Recheck all signatures/bindings after native review and commit awaits. */
+  revalidateCli(): Promise<boolean>;
+  /** Synchronous binding continuity at each provisioning effect boundary. */
+  cliBindingsCurrent(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
   confirm(
     key: 'create' | 'acknowledge' | 'open' | 'selected' | 'mcpPair',
@@ -364,11 +368,13 @@ export async function prepareTauriTerminals(
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
       stage = 'revalidation';
+      if (!(await ports.revalidateCli())) fail('cli_authorization_stale');
       revalidate();
       preflight();
+      if (!reviewed() || !ports.cliBindingsCurrent()) fail('cli_authorization_stale');
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
-      files = plan.provision(reviewed);
+      files = plan.provision(() => reviewed() && ports.cliBindingsCurrent());
       stage = 'inspection';
       const selection = inspectManagedTerminalFiles(files, 8);
       if (selection.some((entry) => entry.blocker)) fail('selection_blocked');
@@ -433,10 +439,13 @@ export async function prepareTauriTerminals(
       if (!reviewed()) return { status: 'cancelled', files: [] };
       stage = 'commit';
       if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
+      stage = 'revalidation';
+      if (!(await ports.revalidateCli())) fail('cli_authorization_stale');
       preflight();
+      if (!reviewed() || !ports.cliBindingsCurrent()) fail('cli_authorization_stale');
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
-      files = plan.provision(reviewed);
+      files = plan.provision(() => reviewed() && ports.cliBindingsCurrent());
     } else files = request.files;
 
     // Selection is a second transaction. Cancelling it preserves the completed manifests.

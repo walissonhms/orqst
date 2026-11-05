@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -77,3 +77,64 @@ test('a synthetic descendant holding the version pipes cannot defeat the timeout
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+for (const fault of ['cancel', 'focus', 'deadline'] as const) {
+  for (const boundary of ['temporary-home', 'spawn'] as const) {
+    test(`${fault} at ${boundary} refuses the probe and cleans only ephemeral state`, async () => {
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'orqst-probe-guard-')));
+      const previousTmp = process.env.TMPDIR;
+      const executable = join(dir, 'synthetic-cli');
+      const marker = join(dir, 'executed');
+      try {
+        const source = join(dir, 'fixture.c');
+        await writeFile(
+          source,
+          `#include <stdio.h>\nint main(void) { FILE *f = fopen(${JSON.stringify(marker)}, "w"); if (f) fclose(f); puts("codex-cli 0.162.1"); return 0; }\n`,
+        );
+        execFileSync('cc', [source, '-o', executable]);
+        // Private temporary root makes absence/presence deterministic, independent
+        // of other test processes. The fixture itself is never a real provider.
+        process.env.TMPDIR = dir;
+        let checks = 0;
+        let cancelled = false;
+        let focused = true;
+        let time = 0;
+        await assert.rejects(
+          probeSignedCliVersion(
+            {
+              verify: async () => ({
+                valid: true,
+                teamId: '2DC432GLL2',
+                identifier: 'codex',
+              }),
+            },
+            'codex',
+            'tui',
+            executable,
+            async () => {
+              checks++;
+              const homes = (await readdir(dir)).filter((name) =>
+                name.startsWith('orqst-cli-probe-'),
+              );
+              assert.equal(homes.length, checks === 1 ? 0 : 1);
+              if (checks === (boundary === 'temporary-home' ? 1 : 2)) {
+                if (fault === 'cancel') cancelled = true;
+                if (fault === 'focus') focused = false;
+                if (fault === 'deadline') time = 30_000;
+              }
+              return !cancelled && focused && time < 30_000;
+            },
+          ),
+          /authorization expired/,
+        );
+        assert.equal(checks, boundary === 'temporary-home' ? 1 : 2);
+        await assert.rejects(readFile(marker), { code: 'ENOENT' });
+        assert.deepEqual((await readdir(dir)).sort(), ['fixture.c', 'synthetic-cli']);
+      } finally {
+        if (previousTmp === undefined) delete process.env.TMPDIR;
+        else process.env.TMPDIR = previousTmp;
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  }
+}

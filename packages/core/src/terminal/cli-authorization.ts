@@ -593,16 +593,21 @@ export class TerminalCliPolicyStore {
   ) {
     const epoch = await this.verifiedEpoch(profile, provider, mode, verifier);
     if (!epoch) return;
+    const binding = this.cachedVerifiedBinding(profile, provider, mode);
+    return binding?.authorizationEpoch === epoch ? binding : undefined;
+  }
+
+  /** Continuity only: callers must first verify signatures, then check all members without awaits. */
+  cachedVerifiedBinding(
+    profile: Readonly<TerminalProfile>,
+    provider: CliContractProvider,
+    mode: CliContractMode,
+  ) {
+    if (this.currentVerified(profile, provider, mode) !== 'allowed') return;
     try {
       const snapshot = this.loadSnapshot(profile);
       const record = snapshot.record;
-      if (
-        !record ||
-        record.version !== 2 ||
-        record.state !== 'allowed' ||
-        record.authorizationEpoch !== epoch ||
-        snapshot.revision < 1
-      )
+      if (!record || record.version !== 2 || record.state !== 'allowed' || snapshot.revision < 1)
         return;
       return {
         version: 2 as const,
@@ -611,7 +616,7 @@ export class TerminalCliPolicyStore {
         teamId: record.signature.teamId,
         identifier: record.signature.identifier,
         contractRevision: record.contractRevision,
-        authorizationEpoch: epoch,
+        authorizationEpoch: record.authorizationEpoch,
         policyRevision: snapshot.revision,
       };
     } catch {

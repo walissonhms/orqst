@@ -6,6 +6,9 @@ import { systemCliSignatureVerifier } from '../../../packages/core/src/terminal/
 import {
   prepareCliCandidate,
   authorizePreparedGroup,
+  cliBindingsCurrent,
+  revalidateCliBindings,
+  type CliAuthorizedCandidate,
 } from '../../../packages/core/src/terminal/cli-authorization-flow.js';
 import { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { cliAuthorizationScope } from '../../../packages/core/src/terminal/cli-authorization-scope.js';
@@ -75,6 +78,8 @@ async function main() {
     return committed && live;
   }
   let cliPolicy: TerminalCliPolicyStore | undefined;
+  let authorizedCli: CliAuthorizedCandidate[] = [];
+  const cliCurrent = async () => live && (await ask({ kind: 'cli-current' })) === true && live;
   const response = z.strictObject({
     id: z.number().int().positive(),
     value: z.union([z.string().min(1).max(2048), z.boolean(), z.null()]),
@@ -108,6 +113,8 @@ async function main() {
       { parent, home, node: process.execPath, environment: process.env },
       {
         current: () => live,
+        revalidateCli: () => revalidateCliBindings(authorizedCli, cliCurrent),
+        cliBindingsCurrent: () => cliBindingsCurrent(authorizedCli),
         authorizeCli: async () => ({ status: 'blocked' as const }),
         authorizeCliGroup: async (candidates: readonly PreparationCliCandidate[]) => {
           const prepared: Awaited<ReturnType<typeof prepareCliCandidate>>[] = [];
@@ -146,7 +153,6 @@ async function main() {
             if (!selected) return candidates.map(() => ({ status: 'ineligible' as const }));
             prepared.push(selected);
           }
-          const current = async () => live && (await ask({ kind: 'cli-current' })) === true && live;
           const results = await authorizePreparedGroup(
             prepared,
             async () => {
@@ -180,8 +186,18 @@ async function main() {
                 })) === true;
               return accepted && live && (await commit());
             },
-            current,
+            cliCurrent,
           );
+          authorizedCli = results.flatMap((result, index) => {
+            if (result.status !== 'allowed') return [];
+            const candidate = prepared[index]!;
+            return [
+              {
+                input: 'existing' in candidate ? candidate.input : candidate.pending.input,
+                allowed: result,
+              },
+            ];
+          });
           return results.map((result) =>
             result.status === 'allowed'
               ? {
