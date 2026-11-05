@@ -1235,7 +1235,7 @@
     "count": "{{visible}} de {{total}} visíveis",
     "restoreAll": "Restaurar todos",
     "newTerminal": "Novo terminal",
-    "empty": "Ainda não há terminais nesta Feature.",
+    "empty": "Nenhum terminal aberto ainda. Use Novo terminal para começar.",
     "allMinimized": "Todos os terminais estão minimizados.",
     "dragHint": "Arraste para mover · clique duplo para maximizar",
     "defaultModel": "Padrão da CLI",
@@ -1433,6 +1433,7 @@
       "continue": "Continuar",
       "notNow": "Agora não"
     },
-    "openTerminal": "Abrir terminal"
+    "openTerminal": "Abrir terminal",
+    "noTerminalsYet": "Nenhum terminal aberto ainda. Use Novo terminal para começar."
   }
 }

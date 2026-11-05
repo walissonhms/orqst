@@ -542,19 +542,21 @@ export function FeatureWorkspace({
           </div>
         )}
         <div className="feature-feedback" role="status" aria-live="polite">
-          {notice
-            ? t(`features.${notice}`)
-            : busy
-              ? t(
-                  operation === 'snapshot'
-                    ? 'features.loading'
-                    : operation === 'select'
-                      ? 'features.switching'
-                      : 'features.saving',
-                )
-              : snapshot && !snapshot.layoutSaved
-                ? t('features.layoutUnsaved')
-                : ''}
+          {notice === 'unavailable' && studio && !snapshot
+            ? t('terminalStudio.noTerminalsYet')
+            : notice
+              ? t(`features.${notice}`)
+              : busy
+                ? t(
+                    operation === 'snapshot'
+                      ? 'features.loading'
+                      : operation === 'select'
+                        ? 'features.switching'
+                        : 'features.saving',
+                  )
+                : snapshot && !snapshot.layoutSaved
+                  ? t('features.layoutUnsaved')
+                  : ''}
         </div>
         <button
           className="feature-refresh"

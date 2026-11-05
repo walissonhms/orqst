@@ -1235,7 +1235,7 @@
     "count": "{{visible}} of {{total}} visible",
     "restoreAll": "Restore all",
     "newTerminal": "New terminal",
-    "empty": "No terminals in this Feature yet.",
+    "empty": "No terminals open yet. Use New terminal to start.",
     "allMinimized": "All terminals are minimized.",
     "dragHint": "Drag to move · double-click to maximize",
     "defaultModel": "CLI default",
@@ -1433,6 +1433,7 @@
       "continue": "Continue",
       "notNow": "Not now"
     },
-    "openTerminal": "Open terminal"
+    "openTerminal": "Open terminal",
+    "noTerminalsYet": "No terminals open yet. Use New terminal to start."
   }
 }
