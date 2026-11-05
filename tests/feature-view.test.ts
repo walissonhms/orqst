@@ -1,7 +1,7 @@
 // SYNTHETIC metadata/view only; no agent, process, native window or input grant.
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -643,7 +643,18 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
       } as const;
     };
     const request = makeRequest(0);
-    assert.equal((await f.service.request(request)).status, 'denied');
+    const read = await f.service.request({
+      action: 'readPermissions',
+      contractVersion: 1,
+      generation: 0,
+      featureId: feature.featureId,
+    });
+    const denied = await f.service.request(request);
+    if (process.env.ORQST_FEATURE_NODE_TRANSCRIPT)
+      writeFileSync(process.env.ORQST_FEATURE_NODE_TRANSCRIPT, JSON.stringify({ read, denied }), {
+        mode: 0o600,
+      });
+    assert.equal(denied.status, 'denied');
     assert.equal(
       (await f.service.request({ ...request, reviewDigest: '0'.repeat(64) }, actor)).status,
       'denied',

@@ -1883,6 +1883,42 @@ mod tests {
     }
 
     #[test]
+    fn real_node_permission_replies_pass_the_native_validator() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .ancestors()
+            .nth(3)
+            .unwrap();
+        let transcript = std::env::temp_dir().join(format!(
+            "orqst-feature-contract-{}.json",
+            crate::local_diagnostics::Attempt::begin().id()
+        ));
+        let output = std::process::Command::new("node")
+            .args([
+                "--import",
+                "tsx",
+                "--test",
+                "--test-name-pattern",
+                "permission saves distinguish",
+                "tests/feature-view.test.ts",
+            ])
+            .env("ORQST_FEATURE_NODE_TRANSCRIPT", &transcript)
+            .current_dir(root)
+            .output()
+            .expect("Node feature contract must run");
+        assert!(
+            output.status.success(),
+            "Node test failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let data: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&transcript).unwrap()).unwrap();
+        std::fs::remove_file(transcript).unwrap();
+        assert_eq!(data["read"]["status"], "ok");
+        assert_eq!(data["denied"]["status"], "denied");
+        assert!(super::valid_permission_reply(&data["read"]));
+        assert!(super::valid_permission_reply(&data["denied"]));
+    }
+    #[test]
     fn permission_reply_requires_valid_scoped_permission_state() {
         let f = "e10636eb-3a12-4094-9123-49a4cdad27b8";
         let t = "a10636eb-3a12-4094-9123-49a4cdad27b8";
