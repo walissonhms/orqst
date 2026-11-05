@@ -293,3 +293,15 @@ loss, exit and invalidation remain terminal. No new network listener, credential
 exposure, renderer authority or PTY injection is introduced. The Tauri test and
 synthetic acceptance script split replay from a new native grant; the script and real
 provider acceptance were not run for this increment.
+
+## Claude 2.1.318 MCP pin — 2026-11-05
+
+The strict per-invocation Claude MCP builder and managed profile admit the exact
+2.1.318 SHA-256 `677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d`
+alongside the unchanged 2.1.178 pair. Crossed pairs and unreviewed binaries are
+refused. Configuration and relay checks are synthetic; the effective MCP client
+selected inside Claude and real acceptance remain unverified. See the
+[passive review and minimum human-authorized dynamic proof](../research/claude-code-tauri.md#passive-mcp-review--2026-11-05).
+Native policy and approval may block operation; the broker's 120-second deadline
+starts before native confirmation and includes subsequent approval and latency.
+No automatic retry or tool approval is introduced.

@@ -6,6 +6,7 @@ import {
   claudeInteractiveMcpConfiguration,
   opencodeInteractiveMcpConfiguration,
   reviewedProviderMcpBinaries,
+  reviewedClaudeMcpBinaries,
 } from '../packages/core/src/terminal/provider-mcp-config.js';
 import {
   interactiveCliAdapter,
@@ -52,6 +53,34 @@ test('Claude 2.1.178 configuration uses evidenced strict inline MCP/session flag
   assert.equal(plan.execution, 'blocked');
   assert.equal(plan.providerAcceptance, 'not_run');
   assert.throws(() => claudeInteractiveMcpConfiguration(fixture('claude')));
+});
+
+test('Claude MCP pins are exact pairs and share the reviewed configuration', () => {
+  const legacy = reviewedClaudeMcpBinaries[0]!;
+  const current = reviewedClaudeMcpBinaries[1]!;
+  const input = { ...fixture('claude'), sessionId: randomUUID() };
+  const oldPlan = claudeInteractiveMcpConfiguration(input);
+  const newPlan = claudeInteractiveMcpConfiguration({
+    ...input,
+    executableVersion: current.version,
+    executableSha256: current.sha256,
+  });
+  assert.deepEqual(newPlan.argv, oldPlan.argv);
+  assert.deepEqual(newPlan.environmentOverrides, oldPlan.environmentOverrides);
+  assert.ok(!newPlan.blockers.includes('strict_project_mcp_approval_can_still_block_2_1_178'));
+  for (const [version, sha256] of [
+    [legacy.version, current.sha256],
+    [current.version, legacy.sha256],
+  ])
+    assert.throws(
+      () =>
+        claudeInteractiveMcpConfiguration({
+          ...input,
+          executableVersion: version,
+          executableSha256: sha256,
+        }),
+      /exact provider binary/,
+    );
 });
 
 test('OpenCode 2.2.5 configuration uses a merged runtime environment document, no fictitious CLI flags or Codex roots', () => {

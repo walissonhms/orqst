@@ -14,6 +14,14 @@ export const reviewedProviderMcpBinaries = Object.freeze({
   }),
 });
 
+export const reviewedClaudeMcpBinaries = Object.freeze([
+  reviewedProviderMcpBinaries.claude,
+  Object.freeze({
+    version: '2.1.318',
+    sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
+  }),
+]);
+
 const inputSchema = z.strictObject({
   executableVersion: z.string().min(1).max(64),
   executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -39,8 +47,13 @@ function assertReviewed(
   provider: keyof typeof reviewedProviderMcpBinaries,
   input: z.infer<typeof inputSchema>,
 ) {
-  const reviewed = reviewedProviderMcpBinaries[provider];
-  if (input.executableVersion !== reviewed.version || input.executableSha256 !== reviewed.sha256)
+  const reviewed =
+    provider === 'claude' ? reviewedClaudeMcpBinaries : [reviewedProviderMcpBinaries.opencode];
+  if (
+    !reviewed.some(
+      (pin) => input.executableVersion === pin.version && input.executableSha256 === pin.sha256,
+    )
+  )
     throw new Error('No reviewed MCP configuration for this exact provider binary');
 }
 
@@ -77,7 +90,9 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
     blockers: [
       ...commonBlockers,
       'strict_mcp_exclusion_requires_acknowledgment',
-      'strict_project_mcp_approval_can_still_block_2_1_178',
+      ...(input.executableVersion === '2.1.178'
+        ? ['strict_project_mcp_approval_can_still_block_2_1_178']
+        : []),
     ],
   };
 }

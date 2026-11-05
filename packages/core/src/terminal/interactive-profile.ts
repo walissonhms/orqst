@@ -27,6 +27,7 @@ import { terminalDigest } from './authority.js';
 import {
   claudeInteractiveMcpConfiguration,
   reviewedProviderMcpBinaries,
+  reviewedClaudeMcpBinaries,
 } from './provider-mcp-config.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 import type { TerminalProfile } from './supervisor.js';
@@ -92,12 +93,14 @@ export function interactiveProvider(
 }
 
 function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
-  const pin = config.interactive.mcp
-    ? reviewedProviderMcpBinaries.claude
-    : config.executableVersion === reviewedClaudeTuiBinary.version
-      ? reviewedClaudeTuiBinary
-      : reviewedProviderMcpBinaries.claude;
-  if (config.executableVersion !== pin.version || config.executable.sha256 !== pin.sha256)
+  const pins = config.interactive.mcp
+    ? reviewedClaudeMcpBinaries
+    : [reviewedProviderMcpBinaries.claude, reviewedClaudeTuiBinary];
+  if (
+    !pins.some(
+      (pin) => config.executableVersion === pin.version && config.executable.sha256 === pin.sha256,
+    )
+  )
     throw new Error(
       config.interactive.mcp
         ? 'No reviewed Claude MCP launch contract for this version/hash'
@@ -191,7 +194,11 @@ export function interactiveTerminalProfiles(
         `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
         'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ' +
         (mcp
-          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude 2.1.178. ORQST task grant requires separate native authorization. '
+          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Native policy can block strict startup. ' +
+            (config.executableVersion === '2.1.178'
+              ? 'Strict startup/project approval can block Claude 2.1.178. '
+              : '') +
+            'ORQST task grant requires separate native authorization. '
           : 'Native MCP definitions may start. ') +
         'Login, native focus, MCP tool/timeout behavior and inference acceptance remain unvalidated.',
     },

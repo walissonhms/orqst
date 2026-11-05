@@ -37,7 +37,7 @@ function fixture() {
   });
 }
 
-test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched MCP pins', () => {
+test('reviewed Claude TUI keeps legacy manifests and rejects mismatched pins', () => {
   const legacy = fixture();
   assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.178');
   const config = managedClaudeConfigSchema.parse({
@@ -72,14 +72,11 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
   ])
     assert.throws(() => interactiveTerminalProfiles(mismatched), /version\/hash/);
   config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
-  assert.throws(
-    () => validateManagedClaudeConfig(config),
-    /No reviewed Claude MCP launch contract/,
-  );
-  assert.throws(
-    () => interactiveTerminalProfiles(config),
-    /No reviewed Claude MCP launch contract/,
-  );
+  for (const mismatched of [
+    { ...config, executable: legacy.executable },
+    { ...legacy, executable: config.executable, interactive: config.interactive },
+  ])
+    assert.throws(() => interactiveTerminalProfiles(mismatched), /MCP launch contract/);
   assert.equal(reviewedProviderMcpBinaries.claude.version, '2.1.178');
   assert.equal(
     reviewedProviderMcpBinaries.claude.sha256,
@@ -87,7 +84,7 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
   );
 });
 
-test('legacy Claude pin still composes the unchanged reviewed strict MCP launch', () => {
+test('both Claude pins compose the unchanged reviewed strict MCP launch', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-claude-mcp-')));
   try {
     const config = fixture();
@@ -112,10 +109,9 @@ test('legacy Claude pin still composes the unchanged reviewed strict MCP launch'
       executableVersion: reviewedClaudeTuiBinary.version,
       executable: { ...config.executable, sha256: reviewedClaudeTuiBinary.sha256 },
     };
-    assert.throws(
-      () => interactiveTerminalProfiles(current, launch),
-      /No reviewed Claude MCP launch contract/,
-    );
+    const currentProfile = interactiveTerminalProfiles(current, launch)[0]!;
+    assert.equal(currentProfile.executableVersion, '2.1.318');
+    assert.deepEqual(currentProfile.argv, profile.argv);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

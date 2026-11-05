@@ -8,10 +8,11 @@ configuration was read.
 
 ## Independent contracts
 
-| Contract                  | Version label | SHA-256                                                            |
-| ------------------------- | ------------- | ------------------------------------------------------------------ |
-| Normal TUI                | 2.1.318       | `677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d` |
-| Existing strict ORQST MCP | 2.1.178       | `473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309` |
+| Contract                | Version label | SHA-256                                                            |
+| ----------------------- | ------------- | ------------------------------------------------------------------ |
+| Normal TUI              | 2.1.318       | `677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d` |
+| Legacy strict ORQST MCP | 2.1.178       | `473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309` |
+| New strict ORQST MCP    | 2.1.318       | `677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d` |
 
 The new label comes from the canonical installation's version directory, not a
 version command. Passive SHA-256 was recomputed with 64 KiB reads. The file was
@@ -19,11 +20,37 @@ version command. Passive SHA-256 was recomputed with 64 KiB reads. The file was
 identify local bytes; public release metadata does not independently attest that
 local hash. No binary is incorporated in this repository.
 
-`interactive-profile.ts` pairs each admitted version with its exact hash. Historical
-2.1.178 manifests remain readable. Normal catalogue discovery/provisioning uses
-the new TUI pin. `provider-mcp-config.ts` remains unchanged: selecting MCP for the
-new binary is refused as an unreviewed MCP version/hash before composition. There
-is no fallback to another executable or an unreviewed launch contract.
+`interactive-profile.ts` and `provider-mcp-config.ts` admit the two exact version/hash
+pairs independently for their TUI and MCP contracts. Historical 2.1.178 manifests
+remain valid. Crossed pairs and unknown bytes are refused; no fallback is provided.
+
+## Passive MCP review — 2026-11-05
+
+The local 2.1.318 binary and official [CLI reference](https://code.claude.com/docs/en/cli-reference),
+[MCP guide](https://code.claude.com/docs/en/mcp) and [environment reference](https://code.claude.com/docs/en/env-vars)
+confirm the existing `--strict-mcp-config`, `--mcp-config`, `--session-id` interface,
+stdio `mcpServers` fields (`type`, `command`, `args`, `env`) and millisecond
+`MCP_TIMEOUT`/`MCP_TOOL_TIMEOUT` names. ORQST relay paths and environment names
+are ORQST values. Managed policy can conflict with strict configuration; actual
+startup, environment propagation, timeout precedence and tool approval remain
+unverified. The 2.1.178 project approval blocker is specific to that version.
+
+Embedded legacy MCP client code sends `2025-11-25` in initialize, which the relay
+supports. The executable also contains another protocol implementation; passive
+inspection did not establish which client is selected for this stdio configuration.
+For an unknown revision the relay returns `2025-11-25`; client acceptance of that
+response is unproven. Local binary identification is not independent vendor attestation.
+
+A future human-authorized minimum proof starts the pinned binary with the strict
+contract in an approved disposable project and state, with a stdio relay recording
+only initialize protocol versions and response, tool names and monotonic timings.
+Observe the real handshake and `/mcp` without fallback, payloads, credentials or
+private session content. Agree identity and native write effects in advance; isolated
+HOME may change authentication and behavior. A separate explicitly authorized,
+human-consented harmless test is needed for tool prompts and persistence; a real
+ORQST grant and inference require further separate authorization. The 120-second
+broker deadline starts at preparation, before native confirmation, so approval and
+provider latency consume it. Unknown outcomes are not retried.
 
 ## Passive flag/environment review
 
@@ -101,7 +128,7 @@ the historical Tucano audit is preserved.
 
 Synthetic checks cover a generated 320 MiB sparse native-header file hashed in
 64 KiB buffers, refusal above 512 MiB, permission/executable/symlink rejection,
-new/legacy version/hash pairing, new-pin MCP refusal, default/alias catalogue to
+new/legacy version/hash pairing, new/legacy MCP composition, default/alias catalogue to
 prepared argv, executable/configuration drift and the existing CLI authorization
 cache. No real binary is stored in fixtures. Provider/native acceptance, full test
 suite, packaging and build are separate gates; actual command counts are reported
