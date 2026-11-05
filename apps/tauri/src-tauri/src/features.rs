@@ -299,7 +299,7 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
 }
 fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
     if label == "feature-workspace" {
-        return parent == "terminal-workspace" && source == CHROME_URL;
+        return parent == "main" && source == CHROME_URL;
     }
     let Ok(url) = tauri::Url::parse(source) else {
         return false;
@@ -367,7 +367,7 @@ pub(crate) fn document_version_current(
         && document_version(&guard, main) == document
         && document_matches(
             if main { "main" } else { "feature-workspace" },
-            if main { "main" } else { "terminal-workspace" },
+            if main { "main" } else { "main" },
             source,
             &guard.origin,
         )
@@ -753,7 +753,7 @@ pub fn configure(
     Ok(format!("if(window.top===window.self && location.origin === {} && !location.search) {{\n{client}\n}}",json!(origin)))
 }
 pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(workspace) = app.get_window("terminal-workspace") else {
+    let Some(workspace) = app.get_window("main") else {
         return Ok(());
     };
     {
@@ -815,7 +815,7 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     result
 }
 pub fn on_window_event(window: &Window, event: &WindowEvent) {
-    if window.label() != "terminal-workspace" {
+    if window.label() != "main" {
         return;
     }
     match event {
@@ -954,7 +954,7 @@ mod tests {
         ));
         assert!(document_matches(
             "feature-workspace",
-            "terminal-workspace",
+            "main",
             CHROME_URL,
             "http://127.0.0.1:4319"
         ));
@@ -963,7 +963,7 @@ mod tests {
             ("main", "main", "http://127.0.0.1:4319/studio?x=1"),
             ("main", "main", "http://localhost:4319/studio"),
             ("terminal-0", "terminal-workspace", CHROME_URL),
-            ("feature-workspace", "main", CHROME_URL),
+            ("feature-workspace", "terminal-workspace", CHROME_URL),
             (
                 "feature-workspace",
                 "terminal-workspace",

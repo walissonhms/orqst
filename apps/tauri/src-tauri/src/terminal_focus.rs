@@ -67,7 +67,7 @@ extern "C-unwind" fn key_changed(_: &AnyObject, _: Sel, _: *mut AnyObject) {
     crate::desktop::quit_key_changed(app);
     crate::terminal_creation::native_key_changed(app);
     crate::offline_recovery::native_key_changed(app);
-    let Some(window) = app.get_window("terminal-workspace") else {
+    let Some(window) = app.get_window("main") else {
         return;
     };
     if !sample(&window).is_some_and(|focus| focus.owns_key(super::current_review(app))) {

@@ -336,7 +336,7 @@ pub(crate) fn quit_parent(app: &tauri::AppHandle) -> Option<tauri::Window> {
 fn quit_parent_valid(window: &tauri::Window) -> bool {
     if !matches!(
         window.label(),
-        "main" | "terminal-workspace" | "managed-agents"
+        "main" | "managed-agents"
     ) || !window.is_visible().unwrap_or(false)
         || window.is_minimized().unwrap_or(true)
     {

@@ -1006,7 +1006,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
         return;
     }
-    let Some(window) = app.get_window("terminal-workspace") else {
+    let Some(window) = app.get_window("main") else {
         return;
     };
     let (Ok(size), Ok(scale)) = (window.inner_size(), window.scale_factor()) else {
@@ -1038,7 +1038,6 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     let show = crate::features::workspace_visible(state);
     if !show {
         revoke_all(app);
-        let _ = window.hide();
     }
     if let Some(chrome) = app.get_webview("feature-workspace") {
         if show {
@@ -1079,9 +1078,6 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         && !presentation_blocked(app)
         && metadata_generation(app) == value["generation"].as_u64()
     {
-        if !window.is_visible().unwrap_or(false) {
-            let _ = window.show();
-        }
         if let Some(slot) = value["focus"].as_u64() {
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -1398,8 +1394,8 @@ async fn retire_selection(app: &tauri::AppHandle) {
     }
     if success {
         revoke_all(app);
-        if let Some(workspace) = app.get_window("terminal-workspace") {
-            let _ = workspace.hide();
+        if let Some(chrome) = app.get_webview("feature-workspace") {
+            let _ = chrome.hide();
         }
         // A fresh selection requires a new native application lifetime. Do not reset the
         // preparation latch or reuse old webviews, callbacks, journals or profile manifests.
@@ -1514,9 +1510,7 @@ fn create_terminal_view(
     app: &tauri::AppHandle,
     slot: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let workspace = app
-        .get_window("terminal-workspace")
-        .ok_or("Missing retained workspace")?;
+    let workspace = app.get_window("main").ok_or("Missing main window")?;
     let label = format!("terminal-{slot}");
     let handle = app.clone();
     let expected = url(slot);
@@ -2036,12 +2030,8 @@ async fn start_selected_inner(
         retire_denied: ready["retireDenied"].as_str().unwrap_or("").into(),
         retired_notice: ready["retired"].as_str().unwrap_or("").into(),
     });
-    let workspace = tauri::window::WindowBuilder::new(app, "terminal-workspace")
-        .title(ready["title"].as_str().unwrap_or("ORQST"))
-        .inner_size(1280.0, 860.0)
-        .min_inner_size(480.0, 400.0)
-        .visible(false)
-        .build()?;
+    // Single-window product: terminals are child webviews of the existing main window.
+    let workspace = app.get_window("main").ok_or("Missing main window")?;
     // Append to the current menu so independently implemented creation actions survive.
     let menu = match app.menu() {
         Some(menu) => menu,
@@ -2097,12 +2087,10 @@ async fn start_selected_inner(
         WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
             resize(&handle, &target)
         }
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
+        WindowEvent::CloseRequested { .. } => {
             metadata_invalidate(&handle);
             revoke_all(&handle);
             send(&handle, json!({"kind":"layout-suspend"}));
-            let _ = target.hide();
         }
         WindowEvent::Destroyed => {
             let count = handle
