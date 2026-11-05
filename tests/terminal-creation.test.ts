@@ -212,6 +212,17 @@ test('canonical selectors, private ancestry and exact provider pins are enforced
       /authorization evidence/,
     );
     assert.throws(
+      () =>
+        prepareProductionCreation({
+          ...f.input,
+          cliEvidence: f.input.cliEvidence!.map((entry) => ({
+            ...entry,
+            binding: { ...entry.binding, teamId: 'OTHERTEAM' },
+          })),
+        }),
+      /authorization evidence/,
+    );
+    assert.throws(
       () => prepareTerminalCreation({ ...f.input, openCodeStartupAuthorized: true }),
       /provider-specific/,
     );

@@ -242,6 +242,8 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
     const db = join(home, 'SYNTHETIC-UNREADABLE.db');
     writeFileSync(db, 'SYNTHETIC-NEVER-OPEN', { mode: 0o000 });
     const node = realpathSync(process.execPath);
+    const syntheticCli = join(root, 'synthetic-opencode');
+    writeFileSync(syntheticCli, Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 1, 2, 3, 4]), { mode: 0o700 });
     const setup = join(root, 'setup.cjs'),
       driver = join(root, 'driver.cjs'),
       selectionDriver = join(root, 'selection.cjs');
@@ -258,12 +260,32 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
         format: 'cjs',
         target: 'node24',
         logLevel: 'silent',
+        plugins:
+          entry === 'scripts/setup-opencode-terminal.ts'
+            ? [
+                {
+                  name: 'synthetic-cli-grant',
+                  setup(builder) {
+                    builder.onResolve({ filter: /require-cli-grant\.js$/ }, () => ({
+                      path: 'fake',
+                      namespace: 'synthetic-grant',
+                    }));
+                    builder.onLoad({ filter: /.*/, namespace: 'synthetic-grant' }, () => ({
+                      loader: 'js',
+                      contents: `export async function requireCliGrant(input) { return {version:2,provider:input.provider,mode:input.mode,teamId:'5NZ4Q7NXJ4',identifier:'opencode',contractRevision:'opencode-'+input.mode+'-2.2.5',authorizationEpoch:'1c24dd25-839b-401b-9726-cee7fa38f356',policyRevision:1}; }`,
+                    }));
+                  },
+                },
+              ]
+            : [],
       });
     const state = join(root, 'review');
     const args = [
       setup,
       '--executable',
-      node,
+      syntheticCli,
+      '--cli-policy-directory',
+      root,
       '--executable-version',
       '2.2.5',
       '--project',
@@ -275,6 +297,16 @@ test('OpenCode provisioning defaults to blocked review; rejects invalid grants b
     ];
     const env = { HOME: home, OPENCODE_DB: db };
     const before = readdirSync(root, { recursive: true });
+    assert.throws(() =>
+      execFileSync(
+        node,
+        args.filter(
+          (value, index) =>
+            value !== '--cli-policy-directory' && args[index - 1] !== '--cli-policy-directory',
+        ),
+        { env, stdio: 'pipe' },
+      ),
+    );
     for (const flags of [
       ['--authorize-native-startup'],
       ['--acknowledge-database-migrations'],

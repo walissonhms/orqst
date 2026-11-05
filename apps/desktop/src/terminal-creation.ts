@@ -1,5 +1,9 @@
 import { findCliContract } from '../../../packages/core/src/terminal/cli-contract.js';
-import type { V2CliBinding } from '../../../packages/core/src/terminal/cli-binding.js';
+import {
+  v2CliBindingSchema,
+  type V2CliBinding,
+} from '../../../packages/core/src/terminal/cli-binding.js';
+import { cliProviderIdentities } from '../../../packages/core/src/terminal/cli-signature.js';
 import { terminalSlotLimit } from '@orqst/protocol';
 // Native provisioning only. No process, credential or captured session reads.
 import {
@@ -142,10 +146,16 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         entry.binding.provider === provider &&
         entry.binding.mode === (input.mcp ? 'mcp' : 'tui'),
     );
+    const contract =
+      authorized && findCliContract(provider, authorized.binding.mode, authorized.version);
     if (
       !authorized ||
+      !v2CliBindingSchema.safeParse(authorized.binding).success ||
       authorized.sha256 !== executable.sha256 ||
-      !findCliContract(provider, authorized.binding.mode, authorized.version)
+      !contract ||
+      contract.revision !== authorized.binding.contractRevision ||
+      authorized.binding.teamId !== cliProviderIdentities[provider].teamId ||
+      authorized.binding.identifier !== cliProviderIdentities[provider].identifier
     )
       throw new Error('Missing or changed CLI authorization evidence');
     const common = {
@@ -235,6 +245,16 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
     validateOpenCodeSelection(config);
     return config;
+  });
+  const bindings = configs.map((config) => {
+    const evidence = input.cliEvidence?.find(
+      (item) =>
+        item.executable === config.executable.path &&
+        item.binding.provider === (config.version === 1 ? 'codex' : config.provider) &&
+        item.binding.mode === (input.mcp ? 'mcp' : 'tui'),
+    );
+    if (!evidence) throw new Error('CLI authorization evidence missing');
+    return structuredClone(evidence.binding);
   });
   assertSeparateTerminalState(input.project, root);
   for (const native of nativeRoots)
@@ -337,15 +357,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         else validateManagedOpenCodeConfig(stagedConfig);
         writeFileSync(
           join(state, 'terminal.json'),
-          serializeInteractiveTerminalConfig(
-            config,
-            input.cliEvidence?.find(
-              (item) =>
-                item.executable === config.executable.path &&
-                item.binding.provider === (config.version === 1 ? 'codex' : config.provider) &&
-                item.binding.mode === (input.mcp ? 'mcp' : 'tui'),
-            )?.binding,
-          ),
+          serializeInteractiveTerminalConfig(config, bindings[slot]!),
           {
             flag: 'wx',
             mode: 0o600,

@@ -128,14 +128,14 @@ export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
 /** New manifests omit the user CLI digest; legacy signed files remain unchanged and readable. */
 export function serializeInteractiveTerminalConfig(
   config: InteractiveTerminalConfig,
-  binding?: V2CliBinding,
+  binding: V2CliBinding,
 ): string {
   return (
     JSON.stringify(
       {
         ...config,
         executable: { path: config.executable.path },
-        cliAuthorization: binding ? v2CliBindingSchema.parse(binding) : 'local-v2',
+        cliAuthorization: v2CliBindingSchema.parse(binding),
       },
       null,
       2,

@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { requireCliGrant } from '../scripts/terminal/require-cli-grant.js';
+import { cliAuthorizationScope } from '../packages/core/src/terminal/cli-authorization-scope.js';
 import { authorizeCliCandidate } from '../packages/core/src/terminal/cli-authorization-flow.js';
 import {
   TerminalCliPolicyStore,
@@ -29,9 +31,8 @@ test('candidate authorization probes once and repeats neither probe nor review f
     executableVersion: version,
     cwd: root,
     argv: [],
-    environmentProfile: 'synthetic',
     permissions: 'synthetic',
-    cliAuthorizationScope: 'scope',
+    ...cliAuthorizationScope('codex', 'tui'),
   });
   const input = {
     store,
@@ -81,6 +82,30 @@ test('candidate authorization probes once and repeats neither probe nor review f
     assert.equal(binding?.authorizationEpoch, initial.epoch);
     assert.equal(binding?.teamId, signature.teamId);
     assert.equal('sha256' in binding!, false);
+    const reused = await requireCliGrant({
+      directory: policyParent,
+      provider: 'codex',
+      mode: 'tui',
+      executable,
+      version: initial.profile.executableVersion,
+      sha256: initial.profile.executableSha256,
+      project: root,
+      verifier: input.verifier,
+    });
+    assert.deepEqual(reused, binding);
+    await assert.rejects(
+      requireCliGrant({
+        directory: policyParent,
+        provider: 'codex',
+        mode: 'tui',
+        executable,
+        version: initial.profile.executableVersion,
+        sha256: '0'.repeat(64),
+        project: root,
+        verifier: input.verifier,
+      }),
+      /No current CLI authorization/,
+    );
     const second = await authorizeCliCandidate(input);
     assert.equal(second.status, 'allowed');
     assert.equal(probes, 1);
