@@ -21,6 +21,8 @@ macro_rules! vocabulary {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         pub enum $name { $($variant),+ }
         impl $name {
+            #[cfg(test)]
+            const ALL: &'static [Self] = &[$(Self::$variant),+];
             pub fn parse(value: &str) -> Self {
                 match value { $($label => Self::$variant,)+ _ => Self::Unconfirmed }
             }
@@ -68,7 +70,7 @@ vocabulary!(Effects {
     NotStarted => "not_started", Possible => "possible", Unconfirmed => "unconfirmed",
 });
 
-// Renderer-originated records never enter the operational queue. One fixed, bounded window
+// Only explicitly classified renderer requests enter the bounded request window. One fixed, bounded window
 // is drained by the existing writer; labels are closed and contain no document ID.
 const REFUSAL_WINDOW: Duration = Duration::from_secs(60);
 const REFUSAL_LIMIT: usize = 8;
@@ -129,7 +131,42 @@ impl RefusalWindow {
 }
 /// The caller supplies only a fixed source and an enumerated reason, never renderer data.
 pub fn refusal(source: RefusalSource, outcome: Outcome, effects: Effects) {
-    renderer_record(source, Stage::Request, outcome, effects);
+    if is_renderer_request(Stage::Request, outcome) {
+        renderer_record(source, Stage::Request, outcome, effects);
+    } else {
+        Attempt::begin().record_native(Stage::Request, outcome, effects);
+    }
+}
+
+// A closed request-event allowlist. Every other event is native by default,
+// including future enum variants and outcomes with possible transport effects.
+fn is_renderer_request(stage: Stage, outcome: Outcome) -> bool {
+    stage == Stage::Request
+        && matches!(
+            outcome,
+            Outcome::Requested
+                | Outcome::Succeeded
+                | Outcome::StudioInvalidRequest
+                | Outcome::StudioIdentity
+                | Outcome::StudioFocus
+                | Outcome::StudioContextChanged
+                | Outcome::StudioMainMissing
+                | Outcome::StudioReviewEmpty
+                | Outcome::StudioLatchUnavailable
+                | Outcome::StudioPostIdentity
+                | Outcome::FeatureInvalidRequest
+                | Outcome::FeatureIdentity
+                | Outcome::FeatureMainMissing
+                | Outcome::FeatureTargetIdentity
+                | Outcome::FeatureFocus
+                | Outcome::FeatureSourceChanged
+                | Outcome::FeatureTargetChanged
+                | Outcome::FeatureMetadataChanged
+                | Outcome::FeatureAdmissionChanged
+                | Outcome::FeatureNavigationChanged
+                | Outcome::FeatureScopeChanged
+                | Outcome::FeaturePostContext
+        )
 }
 
 fn renderer_record(source: RefusalSource, stage: Stage, outcome: Outcome, effects: Effects) {
@@ -229,7 +266,11 @@ impl Attempt {
             started: Instant::now(),
             renderer,
         };
-        attempt.record(Stage::Attempt, Outcome::Started, Effects::Unconfirmed);
+        if renderer.is_some() {
+            attempt.record(Stage::Request, Outcome::Requested, Effects::Unconfirmed);
+        } else {
+            attempt.record(Stage::Attempt, Outcome::Started, Effects::Unconfirmed);
+        }
         attempt
     }
 
@@ -239,7 +280,10 @@ impl Attempt {
 
     /// Does not await, lock an application mutex, touch disk or report errors to the caller.
     pub fn record(&self, stage: Stage, outcome: Outcome, effects: Effects) {
-        if let Some(source) = self.renderer {
+        if let Some(source) = self
+            .renderer
+            .filter(|_| is_renderer_request(stage, outcome))
+        {
             renderer_record(source, stage, outcome, effects);
             return;
         }
@@ -491,6 +535,44 @@ mod tests {
     use std::fs;
 
     #[test]
+    fn renderer_quota_is_a_closed_request_allowlist() {
+        let allowed = [
+            Outcome::Requested,
+            Outcome::Succeeded,
+            Outcome::StudioInvalidRequest,
+            Outcome::StudioIdentity,
+            Outcome::StudioFocus,
+            Outcome::StudioContextChanged,
+            Outcome::StudioMainMissing,
+            Outcome::StudioReviewEmpty,
+            Outcome::StudioLatchUnavailable,
+            Outcome::StudioPostIdentity,
+            Outcome::FeatureInvalidRequest,
+            Outcome::FeatureIdentity,
+            Outcome::FeatureMainMissing,
+            Outcome::FeatureTargetIdentity,
+            Outcome::FeatureFocus,
+            Outcome::FeatureSourceChanged,
+            Outcome::FeatureTargetChanged,
+            Outcome::FeatureMetadataChanged,
+            Outcome::FeatureAdmissionChanged,
+            Outcome::FeatureNavigationChanged,
+            Outcome::FeatureScopeChanged,
+            Outcome::FeaturePostContext,
+        ];
+        for &stage in Stage::ALL {
+            for &outcome in Outcome::ALL {
+                assert_eq!(
+                    is_renderer_request(stage, outcome),
+                    stage == Stage::Request && allowed.contains(&outcome),
+                    "{stage:?} {outcome:?}"
+                );
+            }
+        }
+        assert_eq!(Effects::ALL.len(), 3);
+    }
+
+    #[test]
     fn refusal_flood_is_deduplicated_bounded_and_renews() {
         let start = Instant::now();
         let mut window = RefusalWindow::new(start);
@@ -668,8 +750,34 @@ mod tests {
         for _ in 0..10_000 {
             let request = Attempt::renderer(RefusalSource::Studio);
             request.record(Stage::Request, Outcome::Requested, Effects::Unconfirmed);
-            request.record(Stage::Selection, Outcome::Succeeded, Effects::Possible);
+            request.record(Stage::Request, Outcome::Succeeded, Effects::Possible);
         }
+        for _ in 0..10_000 {
+            refusal(
+                RefusalSource::Feature,
+                Outcome::FeatureFocus,
+                Effects::NotStarted,
+            );
+        }
+        // Exercise the same transport error and timeout helpers used by enrollment.
+        let transport = Attempt::renderer(RefusalSource::Studio);
+        use std::io::Write;
+        let (mut pipe, peer) = std::os::unix::net::UnixStream::pair().unwrap();
+        drop(peer);
+        let failed = crate::terminal::enrollment_write(|| pipe.write_all(b"synthetic"), &transport);
+        assert!(failed.is_err());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        let (_tx, rx) = tokio::sync::oneshot::channel();
+        assert!(runtime
+            .block_on(crate::terminal::enrollment_receive(
+                rx,
+                Duration::ZERO,
+                &transport
+            ))
+            .is_err());
         // Synthetic lifecycle events carry a renderer-created attempt, as in the host path.
         let host = Attempt::renderer(RefusalSource::Studio);
         host.record_native(Stage::HostSpawn, Outcome::Requested, Effects::Unconfirmed);
@@ -690,7 +798,7 @@ mod tests {
             .drain(start + REFUSAL_WINDOW * 2)
             .unwrap();
         assert_eq!(entries.len(), 3);
-        assert_eq!(suppressed, 29_998);
+        assert_eq!(suppressed, 39_999);
         for line in format_refusals(entries, suppressed) {
             sink.append_refusal(line.as_bytes()).unwrap();
         }
@@ -700,12 +808,14 @@ mod tests {
             "host_spawn",
             "startup_timeout",
             "host_stream",
+            "transport_failed",
+            "timeout",
         ] {
             assert!(native_lines.contains(value), "missing {value}");
         }
         let requests = fs::read_to_string(parent.join("diagnostics/refusals.jsonl")).unwrap();
         assert_eq!(requests.lines().count(), 4);
-        assert!(requests.contains("\"suppressed\":29998"));
+        assert!(requests.contains("\"suppressed\":39999"));
         drop(sink);
         fs::remove_dir_all(parent).unwrap();
     }

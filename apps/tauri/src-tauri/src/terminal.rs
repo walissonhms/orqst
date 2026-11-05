@@ -2231,6 +2231,41 @@ fn fence_enrollment_presentation(
     }
 }
 
+pub(crate) fn enrollment_write<E>(
+    write: impl FnOnce() -> Result<(), E>,
+    diagnostic: &Attempt,
+) -> Result<(), E> {
+    write().inspect_err(|_| {
+        diagnostic.record(
+            Stage::Enrollment,
+            Outcome::TransportFailed,
+            Effects::Possible,
+        );
+    })
+}
+
+pub(crate) async fn enrollment_receive(
+    receiver: oneshot::Receiver<Value>,
+    deadline: Duration,
+    diagnostic: &Attempt,
+) -> Result<Value, ()> {
+    match tokio::time::timeout(deadline, receiver).await {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(_)) => {
+            diagnostic.record(
+                Stage::Enrollment,
+                Outcome::TransportFailed,
+                Effects::Possible,
+            );
+            Err(())
+        }
+        Err(_) => {
+            diagnostic.record(Stage::Enrollment, Outcome::Timeout, Effects::Possible);
+            Err(())
+        }
+    }
+}
+
 /// Private native provisioning result only. No renderer command accepts a manifest path.
 pub(crate) async fn enroll_selected(
     app: &tauri::AppHandle,
@@ -2284,7 +2319,12 @@ async fn enroll_selected_inner(
         r.enrollment_fenced = true;
         let message = json!({"kind":"enroll", "id":id, "epoch":r.epoch,
             "generation":r.layout_generation, "manifestFile":manifest, "previousLayout":previous_layout});
-        if r.child.write(format!("{message}\n").as_bytes()).is_err() {
+        if enrollment_write(
+            || r.child.write(format!("{message}\n").as_bytes()),
+            diagnostic,
+        )
+        .is_err()
+        {
             r.pending.remove(&id);
             r.enrollment_pending = false;
             return Err("Enrollment transport uncertain".into());
@@ -2298,7 +2338,7 @@ async fn enroll_selected_inner(
         )
     };
     // The Core's isolated deadline is 12s. This transport never closes old terminals on timeout.
-    let result = tokio::time::timeout(Duration::from_secs(14), receiver).await;
+    let result = enrollment_receive(receiver, Duration::from_secs(14), diagnostic).await;
     let value = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
@@ -2308,10 +2348,7 @@ async fn enroll_selected_inner(
         }
         r.pending.remove(&id); // Late ACK has no consumer and cannot materialize a document.
         r.enrollment_pending = false;
-        let value = result
-            .ok()
-            .and_then(Result::ok)
-            .ok_or("Enrollment result uncertain")?;
+        let value = result.map_err(|_| "Enrollment result uncertain")?;
         if value["kind"] == "enrollment-reply"
             && value["id"] == id
             && value["status"] == "rejected"
@@ -2429,7 +2466,12 @@ async fn enroll_selected_inner(
         let (sender, receiver) = oneshot::channel();
         r.pending.insert(id.clone(), sender);
         let message = json!({"kind":"enrollment-present", "id":id, "generation":generation});
-        if r.child.write(format!("{message}\n").as_bytes()).is_err() {
+        if enrollment_write(
+            || r.child.write(format!("{message}\n").as_bytes()),
+            diagnostic,
+        )
+        .is_err()
+        {
             r.pending.remove(&id);
             return Err("Enrollment presentation uncertain".into());
         }

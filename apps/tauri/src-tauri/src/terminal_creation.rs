@@ -596,7 +596,7 @@ fn execute(
     if let Some(failure) = &failure {
         record_failure(&diagnostic, failure, Stage::parse(stage));
     } else {
-        diagnostic.record(Stage::Attempt, Outcome::Succeeded, Effects::Unconfirmed);
+        diagnostic.record(Stage::Request, Outcome::Succeeded, Effects::Unconfirmed);
     }
     // Completion never waits for dismissal of an informational error sheet. Sticky
     // committed/opened and Core ownership remain untouched.

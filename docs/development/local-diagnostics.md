@@ -68,19 +68,19 @@ can enter a record. Prompts, CLI/session/terminal content, credentials, auth/con
 raw stderr, proofs, owner/epoch/manifest fields and private paths are excluded.
 There is no generic logger/redaction fallback and no exception handler.
 
-Renderer-originated Studio preparation records, including admitted catalog, selection,
-helper and guard refusals, Feature guard refusals, and renderer-triggered terminal open dispatches share one monotonic 60-second
-window. At most one entry per fixed source/stage/outcome and eight entries total
-are written at window end, followed by one aggregate `suppressed` count when
-nonzero. The existing `refusals.*` segments hold this entire bounded stream. Source,
-stage and outcome are closed labels; request data, paths and IDs are excluded.
-The shared window never enters the native operational queue or rotates its segments.
-Native setup, exit, host initialization, spawn, readiness, startup failure and
-subsequent host stream loss remain in the reserved native stream even when the host
-originated in a renderer request. Request outcomes and refusals before host
-initialization remain aggregated. A renderer stream write failure disables only
-that stream. Abrupt exit or sink failure can lose records;
-aggregation is best effort, not a security audit or proof of a request.
+Only explicitly enumerated renderer request receipt, success and guard refusal events
+share a monotonic 60-second window. All other stage/outcome combinations, including
+new vocabulary entries, are native by default. At most one entry per fixed
+source/stage/outcome and eight entries total are written at window end, followed by
+one aggregate `suppressed` count when nonzero. The existing `refusals.*` segments
+hold this bounded stream. Source, stage and outcome are closed labels; request data,
+paths and IDs are excluded. The window never enters the native operational queue or
+rotates its segments. Helper, host, enrollment transport failures and timeouts,
+startup, shutdown and lifecycle events use the reserved native stream regardless of
+what initiated them. This stream is itself bounded and best effort: queue saturation,
+rotation, abrupt exit or sink failure can still lose records. A renderer stream write
+failure disables only that stream. Aggregation is not a security audit or proof of a
+request.
 
 ## Instrumented boundaries and correlation
 
@@ -90,8 +90,8 @@ aggregation is best effort, not a security audit or proof of a request.
   diagnostic attempt and does not wait for a flush.
 - Preparation creates one attempt before the existing helper run. Its
   spawn, review choice, commit decision, helper exit/cancellation and final typed
-  failure are recorded. Renderer-originated attempts are aggregated without their
-  UUID, while native menu attempts use the operational stream. Validated `stage/code/effects` failures are projected into
+  failure are recorded in the native stream. Renderer request receipt and success
+  are aggregated without their UUID, while native menu attempts use the operational stream. Validated `stage/code/effects` failures are projected into
   closed enums; the actual error/result is preserved unchanged.
 - Opening dispatch, host startup/readiness/failure, enrollment and presentation
   receive the same attempt. Existing `startup-N` protocol correlation remains
@@ -99,8 +99,8 @@ aggregation is best effort, not a security audit or proof of a request.
   typed outcome against the independent diagnostic UUID. `startup-N` is never
   parsed as a UUID, persisted as `attempt`, or granted authority.
 - At most eight optional in-memory tags carry that attempt from prepared members
-  to their first `open` dispatch. Dispatch records use the renderer quota even
-  when the retained tag came from a native menu attempt. Consuming a tag changes diagnostic
+  to their first `open` dispatch. Dispatch lifecycle records use the native stream.
+  Consuming a tag changes diagnostic
   correlation only. Later manual opens get fresh attempts. Tags never participate
   in focus, grant, generation, ownership, intent or pending-reply decisions.
 - A dispatch logs only its projected public reply: explicit `opening:ready` is
@@ -124,7 +124,7 @@ reconstructed by this new sink. No reservation is reconciled, mutated or cleaned
 
 ## Failure isolation and filesystem controls
 
-Native `record` calls `try_send`; renderer-originated `record` takes only the
+Native `record` calls `try_send`; allowlisted renderer request `record` takes only the
 diagnostic aggregation mutex. Neither awaits, touches disk, takes an application
 mutex, calls a UI getter or returns a success/failure to operational code. One writer thread
 opens/appends/rotates fixed files, without a new app, agent or execution runtime.
