@@ -1211,3 +1211,11 @@ grants and microtask-time view checks prevent role escalation and stale authoriz
 Orchestrator has no privileges. The policy writer is trusted Core composition only;
 no administrative network/renderer/MCP endpoint or CLI approval bypass is added.
 See [Feature policy security and limitations](docs/development/v6-feature-permissions.md).
+
+The structured managed-agents production composition now resolves Feature scope
+from native-owned bootstrap roots and validated private preparation bindings,
+then injects the current policy reader. Missing context for a Feature-bound pair,
+foreign/mismatched identity, archived Feature and unavailable/corrupt/future policy
+fail closed. No renderer/agent policy writer or additional administrative transport
+is exposed. Native policy editing and interactive MCP enforcement remain pending;
+synthetic composition checks do not establish real-provider/native acceptance.

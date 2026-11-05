@@ -621,3 +621,13 @@ including reallow, require fresh native authority; persistence never restores a
 grant or adapter. Test-only transactional DDL rollback and removal of precisely the
 new tables in disposable fixtures preserve old data and observer `user_version`.
 There is no installed-database downgrade path. See [contract and limits](../development/v6-feature-permissions.md).
+
+### Feature production workspace mapping — 2026-11-05
+
+The structured managed-agents composition explicitly maps two existing ID domains
+from one validated canonical project: `stableId('workspace', project)` for
+Feature-scoped panes/policies/teams and `terminalDigest(project)` for historical
+execution journals and unscoped team/communication rows. Native preparation
+bindings and catalogue membership must prove the mapping before use. No stored
+identifier or row is rewritten, merged, copied or looked up by fallback. Legacy
+manifests remain unscoped; view selection does not assign them to a Feature.

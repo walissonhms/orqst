@@ -119,3 +119,58 @@ Native policy editing, interactive MCP enforcement, real-provider/native accepta
 and explicit cross-Feature authorization/audit are separate pending increments.
 No provider, application, Cargo, build or packaging acceptance is established here.
 See [pinned source decisions](../research/v6-feature-permissions-reuse.md).
+
+## Production composition wiring — 2026-11-05
+
+The Tauri managed-agents bootstrap now passes the fixed native app-data catalogue
+`core/orqst.db` and preferences root `managed-agents` to its existing Node host.
+`structured-agents` remains a separate admission directory. The native-owned Node
+host reads both private, validated manifests and resolves their stable workspace
+and Feature IDs through `resolveTerminalPreparationContext`; it then forwards a
+strict private bootstrap object to the existing Core IPC child. Renderer and
+operational IPC request schemas have no bootstrap fields and no policy writer.
+Rust does not parse a second copy of the manifest/catalogue contract.
+
+Both manifests must name the same project, canonical workspace, Feature and
+preparation fence, use the exact native paths and have distinct terminal UUIDs
+assigned to that unarchived Feature. A mixed pair, missing native context or
+mismatched IDs refuses composition. The captured pair IDs/fence are checked again
+before preparation and launch; runtime manifest validation/signing remains intact.
+A manifest without a Feature binding stays explicitly legacy even if the native
+view has selected a Feature. Existing processes retain their captured scope when
+the view changes; their delegation checks read current policy/membership without
+requiring the old Feature to remain selected.
+
+`DesktopManagedAgents` injects the Feature facade's real permission reader into
+`PaneCommunication`, passes workspace/Feature into runtime preparation and scoped
+mention resolution, and uses the Feature facade for team intent/proposals. A
+reader failure never becomes revision 0. Saved team intent still needs native
+routing review and exact task authorization, and cannot override policy denial.
+
+Workspace ID domains are mapped explicitly from the same validated project:
+`stableId('workspace', project)` identifies the catalogue/Feature communication
+scope; `terminalDigest(project)` retains the historical execution journal and
+unscoped team/communication domain. No IDs or stored rows are rewritten, copied,
+merged or searched under an alternate ID. Feature policy/team reads never fall
+back to legacy keys. Existing journals still require fresh private slots; this
+increment does not reopen, adopt or reconcile an old runtime.
+
+`tests/managed-agents-desktop.test.ts` executes the production argv parser/factory
+and real Desktop/Core/SQLite composition with in-process synthetic transports.
+It covers neutral absence, strict restrictions, stale plans, archive, malformed
+policy, future schema, foreign workspace, unavailable reader, divergent ID domains,
+legacy-row preservation, native-root mismatches, missing context and navigation.
+This is executable source/composition evidence, not real native/provider acceptance.
+Electron's legacy caller remains unscoped; it cannot launch Feature-bound manifests
+without an equivalent trusted bootstrap. Native policy editing and interactive MCP
+integration remain pending. No app/provider, full Node suite, build or packaging
+run is implied by these checks.
+
+Current source verification: 107 focused Node cases passed; `pnpm lint` and
+`pnpm typecheck` passed. Pinned offline Cargo check, test (149 passed, 2 existing
+fixture-dependent tests ignored) and all-target Clippy with `-D warnings` passed;
+direct pinned `rustfmt --check` passed for the changed Rust file. Cargo check/test
+reported a non-fatal toolchain `rust-objcopy`/missing `libLLVM.dylib` stripping
+warning. The `cargo fmt` shim could not find `cargo-fmt` for its default 1.99.0
+selection, so formatting was checked with the explicitly pinned 1.99.1 `rustfmt`.
+No full Node suite, application/provider, package or build was run for this wiring.

@@ -72,3 +72,34 @@ was found in this component. No source is copied or adapted.
 [Overclock](https://overclock.sh) remains a UX reference. No exact source repository
 and compatible source/asset license were established for this component; decision:
 **do not use source/assets**. No Overclock runtime or messaging integration is added.
+
+## Production wiring revalidation — 2026-11-05
+
+The wiring increment starts from ORQST `5db368b`. Revalidated the exact Anywh and
+Tucano SHAs above and their Apache-2.0 LICENSE files; neither checkout tracks a
+NOTICE. No external source, asset or dependency is incorporated.
+
+Anywh's pinned
+[Agent Host protocol](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/protocol.ts)
+(`parseClientMessage`, `AGENT_HOST_PROTOCOL_VERSION`) and
+[socket server](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/socketServer.ts)
+(`ensurePrivateDir`, `SocketServerOptions`) use a separate persistent agent host,
+Unix socket/handshake, generic request parameters and resumable logs. Dependencies
+include Node net/fs/path, its log reader and line splitter. This is not a trusted
+Feature-catalogue bootstrap and would replace ORQST's existing private IPC/native
+ownership contract. Decision: **keep ORQST**, no transport/session manager import.
+The permission bridge and Tucano channel/policy decisions above still apply.
+
+The exact ORQST components reused are
+`terminal/preparation-context.ts::resolveTerminalPreparationContext`,
+`terminal/codex-profile.ts::readManagedCodexConfig`,
+`terminal/identity.ts::terminalIdentity`,
+`terminal/feature-configuration.ts::featureConfigurationDatabase`,
+`managed-codex/runtime.ts::CodexStructuredRuntime` and the existing
+`managed-agents-core.ts`/`managed-agents-host.ts` fork/IPC chain.
+The narrow adaptation adds bootstrap validation and captured-scope checks,
+injects the existing permission reader, and routes Feature mentions/team proposals
+through existing facades. Rust `agents.rs` supplies the same native app-data roots
+as `terminal_creation.rs`; IDs are resolved inside the owned Node bootstrap from
+validated preparation bindings/catalogue, never taken from a renderer request.
+No external runtime, catalogue, database schema or administrative transport is added.

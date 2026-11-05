@@ -266,3 +266,13 @@ resend cannot retrieve a hidden completed result. Provider evidence after dispat
 continues to be persisted after revocation, without inventing cancellation.
 `delegationRevision(sourcePaneId,targetPaneId)` is a trusted root-plan policy/route
 check, not an agent tool or a native grant. See [details and pending integration](../development/v6-feature-permissions.md).
+
+### Production Feature composition — 2026-11-05
+
+The private managed-agents bootstrap now carries native-validated stable scope into
+`DesktopManagedAgents`; its real permission reader, runtime registration, mention
+resolution and team proposals use the captured Feature. Feature-scoped workspace
+IDs use the catalogue's `stableId('workspace', project)` domain. Legacy unscoped
+communication and execution journal project digests retain their historical
+identifiers; no stored IDs are migrated or used as policy fallbacks. There are no
+new renderer, agent, HTTP, operational RPC or MCP policy-management fields/endpoints.

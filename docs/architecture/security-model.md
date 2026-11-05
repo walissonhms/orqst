@@ -1656,3 +1656,20 @@ transport change is made. Only the trusted Core composition facade can save poli
 its host fixes Workspace and actor. Execute is no sandbox/CLI tool approval or human
 PTY authorization. UI editing, interactive MCP policy wiring and explicit cross-Feature
 approval/audit remain pending. See [the full boundary](../development/v6-feature-permissions.md).
+
+### Managed-agent Feature bootstrap — 2026-11-05
+
+Tauri passes only native app-data catalogue/preferences roots to the existing
+owned Node bootstrap; that host derives stable workspace/Feature IDs from private
+validated preparation bindings and the catalogue. Both manifests must agree on
+native roots, project, scope and fence, with distinct current member UUIDs. Core
+captures that scope and revalidates pair identity/fence before prepare/launch.
+Runtime native start proofs and manifest validation remain independently required.
+Renderer/operational IPC cannot override bootstrap context or save a policy.
+
+The production composition injects the existing Feature permission reader. Missing
+policy is neutral only after a valid read of an unarchived Feature and its members;
+missing/unsafe/unreadable storage, corrupt/future policy and foreign scope deny.
+Saved policy restricts existing routes/grants by AND. Navigation does not transfer
+running-process scope. Native editing, interactive MCP and cross-Feature authority
+remain separate pending work; this wiring establishes no provider/native acceptance.
