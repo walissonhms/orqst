@@ -94,3 +94,23 @@ export function findCliContract(
       compare(parsed, semver(contract.maximum)!) <= 0,
   );
 }
+
+/** Only exact reviewed releases can be disclosed as a finite authorization set. */
+export function exactCliContracts(
+  provider: CliContractProvider,
+  mode: CliContractMode,
+): readonly Readonly<{ version: string; contractRevision: string }>[] {
+  const selected = contracts.filter(
+    (contract) => contract.provider === provider && contract.mode === mode,
+  );
+  if (selected.some((contract) => contract.minimum !== contract.maximum))
+    throw new Error('CLI contract set is not finite');
+  return Object.freeze(
+    selected.map((contract) =>
+      Object.freeze({
+        version: contract.minimum,
+        contractRevision: contract.revision,
+      }),
+    ),
+  );
+}

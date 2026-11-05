@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   findCliContract,
+  exactCliContracts,
   type CliContractMode,
   type CliContractProvider,
 } from '../packages/core/src/terminal/cli-contract.js';
@@ -22,6 +23,19 @@ test('each reviewed CLI contract has bounded inclusive release versions', () => 
     assert.equal(findCliContract(provider, mode, after), undefined);
   }
   assert.equal(findCliContract('claude', 'tui', '2.1.178'), undefined);
+});
+
+test('disclosure enumerates immutable exact contracts from the launch source', () => {
+  const contracts = exactCliContracts('claude', 'mcp');
+  assert.deepEqual(contracts, [
+    { version: '2.1.178', contractRevision: 'claude-mcp-2.1.178' },
+    { version: '2.1.318', contractRevision: 'claude-mcp-2.1.318' },
+  ]);
+  assert.ok(Object.isFrozen(contracts));
+  for (const entry of contracts) {
+    assert.ok(Object.isFrozen(entry));
+    assert.equal(findCliContract('claude', 'mcp', entry.version)?.revision, entry.contractRevision);
+  }
 });
 
 test('versions with prerelease, metadata or noncanonical format are refused', () => {
