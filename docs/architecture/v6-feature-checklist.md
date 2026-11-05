@@ -1097,3 +1097,23 @@ Implemented in code and synthetic tests (native acceptance pending):
 - [ ] Native AppKit/WebKit acceptance of the matrix, the review sheet and the real
       ACL/transport round-trip.
 - [ ] Cross-Feature operations (pane-789) are not part of this increment.
+
+## Cross-Feature operations (Core synthetic) — 2026-11-05 (source state)
+
+Core synthetic implemented; native authority, picker, production route and native
+acceptance pending.
+
+- [x] SYNTHETIC Core cross-Feature owner fencing, one-use admission and claim
+      serialization verified, including the independent SQLite uniqueness defense
+      (`fbf5436`).
+- [x] Local communication without cross activation and honest fail-closed behavior
+      for damaged cross identity tables verified (`fbf5436`).
+- [x] Mixed chain validates every local ancestor's view permission under the same
+      snapshot; an unavailable reader or scope denies; the local path without
+      opt-in is unchanged (`b882527`).
+- [x] Documentation distinguishes the admission snapshot from the claim
+      revalidation, receipts after revocation, direct SQL between processes versus
+      the Core owner fence, synchronous in-instance serialization and corrupted
+      identity fail-closed behavior (`435e4be`).
+- [ ] Production native authority, picker, route, real provider and native UI
+      acceptance remain pending.
