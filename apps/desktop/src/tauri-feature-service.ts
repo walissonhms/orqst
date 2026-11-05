@@ -9,6 +9,7 @@ import {
   type FeatureNativeSnapshot,
   type FeatureViewState,
   type WorkspaceFeature,
+  type AccountLimits,
 } from '@orqst/protocol';
 import type { connectManagedTerminalCore } from './managed-terminal-core.js';
 import { FeaturePermissionUnavailable, FeatureRevisionConflict } from './managed-terminal-core.js';
@@ -24,6 +25,7 @@ export class TauriFeatureService {
   private view!: FeatureViewState;
   private activeFeatureId: string | null = null;
   private initialized = false;
+  private accountLimits?: AccountLimits;
 
   constructor(
     private readonly core: Pick<
@@ -36,6 +38,10 @@ export class TauriFeatureService {
     private readonly revoke: () => Promise<void>,
     private readonly changed: (snapshot: FeatureNativeSnapshot) => void,
     private readonly selectedModel: (slot: number) => string | null | undefined = () => undefined,
+    private readonly limits?: {
+      read(): AccountLimits;
+      update(id: string, locked: boolean): AccountLimits;
+    },
   ) {}
 
   async initialize(): Promise<void> {
@@ -166,9 +172,36 @@ export class TauriFeatureService {
       await this.refresh();
       if (request.action !== 'snapshot' && request.generation !== this.generation)
         return { status: 'stale', snapshot: this.snapshot() };
+      if (
+        (request.action === 'snapshot' || request.action === 'canvas') &&
+        this.limits &&
+        (!this.accountLimits ||
+          Date.now() < this.accountLimits.readAt ||
+          Date.now() - this.accountLimits.readAt > 5000)
+      ) {
+        try {
+          this.accountLimits = this.limits.read();
+        } catch {
+          this.accountLimits = undefined;
+        }
+      }
       switch (request.action) {
         case 'snapshot':
           break;
+        case 'accountLimits': {
+          if (!this.limits) return { status: 'unavailable' };
+          if (request.accountId !== 'codex-default') return { status: 'denied' };
+          try {
+            this.accountLimits =
+              request.command === 'refresh'
+                ? this.limits.read()
+                : this.limits.update(request.accountId, request.command === 'lock');
+          } catch {
+            this.accountLimits = undefined;
+            return { status: 'unavailable' };
+          }
+          return { status: 'ok', snapshot: this.snapshot(), accountLimits: this.accountLimits };
+        }
         case 'canvas':
           if (presentation !== this.layout.presentationRevision())
             throw new Error('Stale presentation');
@@ -345,7 +378,13 @@ export class TauriFeatureService {
       await this.refresh();
       const snapshot = this.snapshot();
       this.changed(snapshot);
-      return { status: 'ok', snapshot };
+      return {
+        status: 'ok',
+        snapshot,
+        ...((request.action === 'snapshot' || request.action === 'canvas') && this.accountLimits
+          ? { accountLimits: this.accountLimits }
+          : {}),
+      };
     } catch (error) {
       if (error instanceof FeatureRevisionConflict) return { status: 'stale' };
       // No automatic retry of a metadata command whose commit may have succeeded.

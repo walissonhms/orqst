@@ -14,6 +14,54 @@ import {
 const base = { contractVersion: z.literal(1), generation: z.number().int().nonnegative().safe() };
 const featureId = z.uuid();
 const logical = z.number().finite().min(0).max(32768);
+const accountLimitId = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/);
+const accountLimitTime = z.number().int().nonnegative().safe();
+export const accountLimitsSchema = z
+  .strictObject({
+    readAt: accountLimitTime,
+    accounts: z
+      .array(
+        z.strictObject({
+          id: accountLimitId,
+          provider: z.enum(['codex', 'claude', 'opencode']),
+          index: z.number().int().min(1).max(99),
+          plan: z
+            .string()
+            .min(1)
+            .max(16)
+            .regex(/^[a-zA-Z0-9 _.-]+$/)
+            .optional(),
+          updatedAt: accountLimitTime.optional(),
+          locked: z.boolean(),
+          windows: z
+            .array(
+              z.strictObject({
+                id: accountLimitId,
+                label: z
+                  .string()
+                  .min(1)
+                  .max(24)
+                  .regex(/^[a-zA-Z0-9 _.-]+$/),
+                usedPercent: z.number().finite().min(0).max(100).optional(),
+                resetsAt: accountLimitTime.optional(),
+              }),
+            )
+            .max(8)
+            .refine(
+              (windows) => new Set(windows.map((window) => window.id)).size === windows.length,
+            ),
+        }),
+      )
+      .max(32),
+  })
+  .refine(
+    (value) =>
+      new Set(value.accounts.map((account) => account.id)).size === value.accounts.length &&
+      value.accounts.every(
+        (account) => account.updatedAt === undefined || account.updatedAt <= value.readAt,
+      ),
+  );
+export type AccountLimits = z.infer<typeof accountLimitsSchema>;
 const arrangementPaneSchema = z
   .strictObject({
     slot: z.number().int().min(0).max(7),
@@ -34,6 +82,12 @@ const arrangementPaneSchema = z
 export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('snapshot') }),
   z.strictObject({ ...base, action: z.literal('canvas') }),
+  z.strictObject({
+    ...base,
+    action: z.literal('accountLimits'),
+    command: z.enum(['refresh', 'lock', 'unlock']),
+    accountId: accountLimitId,
+  }),
   z
     .strictObject({
       ...base,
@@ -272,6 +326,7 @@ export const featureNativeReplySchema = z
     snapshot: featureNativeSnapshotSchema.optional(),
     permissions: featurePermissionStateSchema.optional(),
     canvas: featureCanvasEvidenceSchema.optional(),
+    accountLimits: accountLimitsSchema.optional(),
   })
   .refine(
     (value) => value.status !== 'ok' || value.snapshot !== undefined,

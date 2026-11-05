@@ -31,6 +31,7 @@ export { FeaturePermissionRevisionConflict } from './feature-permissions.js';
 import { openCrossFeaturePermissions } from './cross-feature-permissions.js';
 import { openTerminalTeams } from './terminal-teams.js';
 import { openTerminalLayouts } from './terminal-layouts.js';
+import { openAccountLimitLocks } from './account-limit-locks.js';
 export { TERMINAL_LAYOUT_LIMITS } from './terminal-layouts.js';
 import { openTerminalJournal } from './terminal-journal.js';
 import { openCommunicationJournal } from './pane-communication.js';
@@ -235,6 +236,9 @@ export class Store {
 
   terminalLayouts(featureId?: string) {
     return openTerminalLayouts(this.db, (action) => this.transaction(action), featureId);
+  }
+  accountLimitLocks() {
+    return openAccountLimitLocks(this.db, (action) => this.transaction(action));
   }
   checkpoint(source: string): Checkpoint | undefined {
     return this.get(

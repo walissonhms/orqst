@@ -27,7 +27,10 @@ import {
 } from '../apps/desktop/src/managed-terminal-core.js';
 import { FeaturePermissionRevisionConflict } from '@orqst/database';
 
-function fixture(model: (slot: number) => string | null | undefined = () => undefined) {
+function fixture(
+  model: (slot: number) => string | null | undefined = () => undefined,
+  limits?: ConstructorParameters<typeof TauriFeatureService>[7],
+) {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-feature-view-'));
   const db = featureConfigurationDatabase(directory, 'synthetic-workspace');
   const identities = Array.from({ length: 6 }, (_, slot) => ({
@@ -90,6 +93,7 @@ function fixture(model: (slot: number) => string | null | undefined = () => unde
     },
     () => {},
     model,
+    limits,
   );
   let snapshot: FeatureNativeSnapshot;
   const request = async (input: Omit<FeatureNativeRequest, 'generation' | 'contractVersion'>) => {
@@ -115,6 +119,80 @@ function fixture(model: (slot: number) => string | null | undefined = () => unde
     close: () => rmSync(directory, { recursive: true, force: true }),
   };
 }
+
+test('account limits use the private facade, reject unknown accounts and persist explicit locks', async () => {
+  let locked = false;
+  const read = () => ({
+    readAt: Date.now(),
+    accounts: [
+      {
+        id: 'codex-default',
+        provider: 'codex' as const,
+        index: 1,
+        locked,
+        windows: [{ id: 'primary', label: '5h', usedPercent: 27 }],
+      },
+    ],
+  });
+  const f = fixture(undefined, {
+    read,
+    update(id, value) {
+      assert.equal(id, 'codex-default');
+      locked = value;
+      return read();
+    },
+  });
+  try {
+    await f.service.initialize();
+    const snapshot = await f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'snapshot',
+    });
+    assert.equal(snapshot.accountLimits?.accounts[0]?.locked, false);
+    const denied = await f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'accountLimits',
+      command: 'lock',
+      accountId: 'foreign',
+    });
+    assert.equal(denied.status, 'denied');
+    const changed = await f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'accountLimits',
+      command: 'lock',
+      accountId: 'codex-default',
+    });
+    assert.equal(changed.status, 'ok');
+    assert.equal(changed.accountLimits?.accounts[0]?.locked, true);
+    assert.equal(
+      (await f.service.request({ contractVersion: 1, generation: 0, action: 'snapshot' }))
+        .accountLimits?.accounts[0]?.locked,
+      true,
+    );
+    assert.equal(
+      (
+        await f.service.request({
+          contractVersion: 1,
+          generation: 0,
+          action: 'accountLimits',
+          command: 'unlock',
+          accountId: 'codex-default',
+        })
+      ).accountLimits?.accounts[0]?.locked,
+      false,
+    );
+    assert.equal(
+      (await f.service.request({ contractVersion: 1, generation: 0, action: 'canvas' }))
+        .accountLimits?.accounts[0]?.locked,
+      false,
+    );
+  } finally {
+    f.close();
+  }
+});
 
 test('selected model is bounded display metadata and does not expose preparation evidence', async () => {
   const f = fixture((slot) => (slot === 0 ? 'gpt-synthetic' : slot === 1 ? null : undefined));

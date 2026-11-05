@@ -527,3 +527,40 @@ See [migration and limits](../development/terminal-layout-sqlite.md).
 ## Native consent detail presentation — 2026-11-04
 
 The macOS private `confirm` review now keeps complete title/message/detail in a bounded native plain-text scroll view. Cancel remains default/Escape; only the distinct Authorize button response can approve, followed by existing focus/document/generation/revocation checks. The private payload, authority and deadlines are unchanged. See [source and acceptance limits](../research/native-consent-scroll.md).
+
+## Account limits — 2026-11-05
+
+Successful `snapshot` and `canvas` replies can include `accountLimits: { readAt, accounts }`.
+Each account is `{ id, provider: 'codex' | 'claude' | 'opencode', index,
+plan?, updatedAt?, locked, windows }`; each window is `{ id, label,
+usedPercent?, resetsAt? }`. Timestamps are epoch milliseconds and percentages
+are 0–100. `plan` is at most 16 characters and `label` at most 24. Empty or
+absent evidence never becomes zero. The native and protocol validators enforce
+bounded fields and lists.
+
+`{ contractVersion: 1, generation, action: 'accountLimits', command: 'refresh' |
+'lock' | 'unlock', accountId }` refreshes or updates a local ORQST preference.
+The only presently supported account ID is `codex-default`, index 1. Locked state
+is persisted in the private preferences database and must be excluded by any
+future account suggestion logic; suggestions and account profiles are not yet
+implemented. Unknown IDs are denied. A refresh rereads existing local evidence;
+it does not call or start any provider.
+
+Only the default `~/.codex/sessions` root is supported when it is also the active
+observer's configured root. The host consults up to 256 observed token events,
+then reopens at most 8 MiB of source bytes with existing containment, no-symlink,
+file identity, complete-line and SHA-256 checks. It shows an observed `codex`
+account bucket (or the legacy single bucket without an ID), with windows keyed
+by their evidenced duration. Equal-time contradictory readings are unavailable.
+The current observer indexes `token_count` only when its cumulative token usage is
+valid; a limit-only record with missing usage is not in this projection.
+The timestamp describes when Codex wrote the record, not current provider state.
+The directory identifies the ORQST profile, not the provider's current login;
+old rollouts can belong to a previous login. Other roots, managed profiles,
+Claude and OpenCode are omitted until a profile-bound local source is supported.
+The reader retains no transcript text or credentials. Source/provider/native UI
+acceptance and renderer refresh/lock button wiring remain separate checks.
+Security review: this extends the existing authenticated native Feature command;
+it adds no HTTP, WebSocket, network, credential-reading or renderer-supplied path
+capability. Account IDs are allowlisted before preference changes, and the native
+side validates the complete bounded reply before returning it to the renderer.

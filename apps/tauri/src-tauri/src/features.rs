@@ -89,6 +89,21 @@ pub(crate) fn valid_request(value: &Value) -> bool {
     }
     match value["action"].as_str() {
         Some("snapshot" | "canvas") => exact(value, &["contractVersion", "generation", "action"]),
+        Some("accountLimits") => {
+            exact(
+                value,
+                &[
+                    "contractVersion",
+                    "generation",
+                    "action",
+                    "command",
+                    "accountId",
+                ],
+            ) && matches!(
+                value["command"].as_str(),
+                Some("refresh" | "lock" | "unlock")
+            ) && account_limit_id(&value["accountId"])
+        }
         Some("arrange") => valid_arrangement_request(value),
         Some("create") => {
             exact(value, &["contractVersion", "generation", "action", "input"])
@@ -685,9 +700,13 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
 }
 pub(crate) fn valid_reply(value: &Value) -> bool {
     value.as_object().is_some_and(|o| {
-        o.keys()
-            .all(|key| matches!(key.as_str(), "status" | "snapshot" | "canvas"))
-            && o.contains_key("status")
+        o.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                "status" | "snapshot" | "canvas" | "accountLimits"
+            )
+        }) && o.contains_key("status")
+            && value.get("accountLimits").is_none_or(valid_account_limits)
             && matches!(
                 value["status"].as_str(),
                 Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
@@ -713,6 +732,86 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
                 })
             })
             && (value["status"] != "ok" || value.get("snapshot").is_some())
+    })
+}
+
+fn account_limit_id(value: &Value) -> bool {
+    value.as_str().is_some_and(|s| {
+        !s.is_empty()
+            && s.len() <= 64
+            && s.as_bytes()[0].is_ascii_alphanumeric()
+            && s.bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"._:-".contains(&c))
+    })
+}
+
+fn account_limit_label(value: &Value, limit: usize) -> bool {
+    value.as_str().is_some_and(|s| {
+        !s.is_empty()
+            && s.len() <= limit
+            && s.bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b" _.-".contains(&c))
+    })
+}
+
+fn valid_account_limits(value: &Value) -> bool {
+    if !exact(value, &["readAt", "accounts"]) {
+        return false;
+    }
+    let Some(read_at) = safe(&value["readAt"]) else {
+        return false;
+    };
+    let Some(accounts) = value["accounts"].as_array().filter(|a| a.len() <= 32) else {
+        return false;
+    };
+    let mut ids = HashSet::new();
+    accounts.iter().all(|account| {
+        let Some(fields) = account.as_object() else {
+            return false;
+        };
+        if !fields.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                "id" | "provider" | "index" | "plan" | "updatedAt" | "locked" | "windows"
+            )
+        }) || !account_limit_id(&account["id"])
+            || !ids.insert(account["id"].to_string())
+            || !matches!(
+                account["provider"].as_str(),
+                Some("codex" | "claude" | "opencode")
+            )
+            || !account["index"]
+                .as_u64()
+                .is_some_and(|n| (1..=99).contains(&n))
+            || !account["locked"].is_boolean()
+            || account
+                .get("plan")
+                .is_some_and(|plan| !account_limit_label(plan, 16))
+            || account
+                .get("updatedAt")
+                .is_some_and(|time| !safe(time).is_some_and(|t| t <= read_at))
+        {
+            return false;
+        }
+        let Some(windows) = account["windows"].as_array().filter(|a| a.len() <= 8) else {
+            return false;
+        };
+        let mut window_ids = HashSet::new();
+        windows.iter().all(|window| {
+            window.as_object().is_some_and(|w| {
+                w.keys()
+                    .all(|key| matches!(key.as_str(), "id" | "label" | "usedPercent" | "resetsAt"))
+            }) && account_limit_id(&window["id"])
+                && window_ids.insert(window["id"].to_string())
+                && account_limit_label(&window["label"], 24)
+                && window.get("usedPercent").is_none_or(|p| {
+                    p.as_f64()
+                        .is_some_and(|n| n.is_finite() && (0.0..=100.0).contains(&n))
+                })
+                && window
+                    .get("resetsAt")
+                    .is_none_or(|time| safe(time).is_some())
+        })
     })
 }
 fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
@@ -2889,6 +2988,27 @@ pub(crate) fn valid_layout(
 #[cfg(test)]
 mod layout_tests {
     use super::*;
+    #[test]
+    fn account_limits_validate_exact_actions_and_evidenced_bounds() {
+        let mut request = json!({"contractVersion":1,"generation":3,"action":"accountLimits","command":"lock","accountId":"codex-default"});
+        assert!(valid_request(&request));
+        request["accountId"] = json!("../outside");
+        assert!(!valid_request(&request));
+        request["accountId"] = json!("codex-default");
+        request["command"] = json!("delete");
+        assert!(!valid_request(&request));
+        let mut limits = json!({"readAt":100,"accounts":[{"id":"codex-default","provider":"codex","index":1,"plan":"pro","updatedAt":90,"locked":false,"windows":[{"id":"primary","label":"5h","usedPercent":0,"resetsAt":200}]}]});
+        assert!(valid_account_limits(&limits));
+        limits["accounts"][0]["windows"][0]["usedPercent"] = json!(101);
+        assert!(!valid_account_limits(&limits));
+        limits["accounts"][0]["windows"][0]["usedPercent"] = json!(0);
+        limits["accounts"][0]["updatedAt"] = json!(101);
+        assert!(!valid_account_limits(&limits));
+        limits["accounts"][0]["updatedAt"] = json!(90);
+        let duplicate = limits["accounts"][0].clone();
+        limits["accounts"].as_array_mut().unwrap().push(duplicate);
+        assert!(!valid_account_limits(&limits));
+    }
     #[test]
     fn versioned_arrangement_bounds_scope_and_overlap_are_strict() {
         let a = "e10636eb-3a12-4094-9123-49a4cdad27b8";
