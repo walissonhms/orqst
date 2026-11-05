@@ -518,7 +518,17 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
         return false;
     }
     for (i, s) in slots.iter().enumerate() {
-        if !exact(s, &["slot", "terminalId", "provider"])
+        if !(exact(s, &["slot", "terminalId", "provider"])
+            || (exact(s, &["slot", "terminalId", "provider", "selectedModel"])
+                && (s["selectedModel"].is_null()
+                    || s["selectedModel"].as_str().is_some_and(|model| {
+                        !model.is_empty()
+                            && model.len() <= 160
+                            && model.as_bytes()[0].is_ascii_alphanumeric()
+                            && model.bytes().all(|byte| {
+                                byte.is_ascii_alphanumeric() || b"._:/#@+-".contains(&byte)
+                            })
+                    }))))
             || s["slot"].as_u64() != Some(i as u64)
             || !uuid(&s["terminalId"])
             || !slot_ids.insert(s["terminalId"].to_string())
@@ -534,14 +544,64 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
 }
 pub(crate) fn valid_reply(value: &Value) -> bool {
     value.as_object().is_some_and(|o| {
-        (o.len() == 1 || (o.len() == 2 && o.contains_key("snapshot")))
+        o.keys()
+            .all(|key| matches!(key.as_str(), "status" | "snapshot" | "canvas"))
             && o.contains_key("status")
             && matches!(
                 value["status"].as_str(),
                 Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
             )
             && (value.get("snapshot").is_none() || valid_snapshot(&value["snapshot"]))
+            && (value.get("canvas").is_none()
+                || (value.get("snapshot").is_some()
+                    && valid_canvas(&value["canvas"], &value["snapshot"])))
             && (value["status"] != "ok" || value.get("snapshot").is_some())
+    })
+}
+fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
+    if !exact(value, &["observedAt", "entries"]) {
+        return false;
+    }
+    let Some(observed) = safe(&value["observedAt"]) else {
+        return false;
+    };
+    let Some(entries) = value["entries"].as_array() else {
+        return false;
+    };
+    let Some(slots) = snapshot["slots"].as_array() else {
+        return false;
+    };
+    if entries.len() > 8 {
+        return false;
+    }
+    let mut seen = HashSet::new();
+    entries.iter().all(|entry| {
+        let Some(slot) = entry["slot"].as_u64() else {
+            return false;
+        };
+        if !seen.insert(slot)
+            || !slots
+                .iter()
+                .any(|s| s["slot"] == slot && s["terminalId"] == entry["terminalId"])
+        {
+            return false;
+        }
+        match entry["state"].as_str() {
+            Some("unknown") => exact(entry, &["slot", "terminalId", "state"]),
+            Some("running") => {
+                exact(entry, &["slot", "terminalId", "state", "startedAt"])
+                    && safe(&entry["startedAt"]).is_some_and(|start| start <= observed)
+            }
+            Some("exited") => {
+                exact(
+                    entry,
+                    &["slot", "terminalId", "state", "startedAt", "exitedAt"],
+                ) && safe(&entry["startedAt"])
+                    .zip(safe(&entry["exitedAt"]))
+                    .is_some_and(|(start, end)| start <= end && end <= observed)
+            }
+            _ => false,
+        }
     })
 }
 fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
@@ -1981,6 +2041,21 @@ mod tests {
             "features":[{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"name":"Feature", "description":"", "status":"active", "revision":1,"terminalIds":[t],"createdAt":1,"updatedAt":1}],
             "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
             "activeFeatureId":f,"slots":[{"slot":0,"terminalId":t,"provider":"codex"}],"layoutSaved":true});
+        let mut displayed = snapshot.clone();
+        displayed["slots"][0]["selectedModel"] = json!("gpt-synthetic");
+        assert!(valid_snapshot(&displayed));
+        displayed["slots"][0]["selectedModel"] = json!("bad model");
+        assert!(!valid_snapshot(&displayed));
+        let mut canvas = json!({"observedAt": 200, "entries":[{"slot":0,"terminalId":t,"state":"exited","startedAt":100,"exitedAt":180}]});
+        assert!(valid_canvas(&canvas, &snapshot));
+        canvas["entries"][0]["terminalId"] = json!(f);
+        assert!(!valid_canvas(&canvas, &snapshot));
+        canvas["entries"][0]["terminalId"] = json!(t);
+        canvas["entries"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("exitedAt");
+        assert!(!valid_canvas(&canvas, &snapshot));
         let mut reply = json!({"status":"ok","snapshot":snapshot,"permissions":{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"revision":0,"configuration":null}});
         assert!(valid_permission_reply(&reply));
         reply["permissions"]["revision"] = json!(1);

@@ -116,7 +116,13 @@ export class TauriTerminalService {
 
   private pane(supervisor: TerminalNativeSupervisor, slot: number) {
     const document = Object.freeze({ slot });
-    const state = { focused: false, busy: false, reviewing: false, closed: false };
+    const state: {
+      focused: boolean;
+      busy: boolean;
+      reviewing: boolean;
+      closed: boolean;
+      instanceId?: string;
+    } = { focused: false, busy: false, reviewing: false, closed: false };
     const authority = new TerminalAuthority(
       new Map([['desktop-managed', this.keys.publicKey]]),
       Date.now,
@@ -335,6 +341,8 @@ export class TauriTerminalService {
     pane.state.focused = message.focused;
     try {
       const reply = await pane.broker.dispatch(pane.document, request.data);
+      if (reply.status === 'ok' && ['start', 'open'].includes(request.data.action))
+        pane.state.instanceId = reply.instanceId;
       const value = terminalNativeReplySchema.safeParse({
         ...reply,
         ...(reply.status === 'ok' && reply.output
@@ -350,6 +358,44 @@ export class TauriTerminalService {
       pane.state.busy = false;
       pane.state.reviewing = false;
     }
+  }
+
+  /** Passive display projection: only instances created by this document's broker. */
+  async canvasEvidence(
+    identities: ReadonlyArray<{ slot: number; terminalId: string }>,
+    epoch: string,
+  ) {
+    const results = await Promise.all(
+      identities.map(async ({ slot, terminalId }) => {
+        const pane = this.panes[slot];
+        const id = pane?.state.instanceId;
+        const unknown = { slot, terminalId, state: 'unknown' as const };
+        if (!pane || pane.state.closed || !id || this.closed) return unknown;
+        try {
+          const snapshot = await pane.supervisor.snapshot(id);
+          if (
+            this.closed ||
+            pane.state.closed ||
+            pane.state.instanceId !== id ||
+            snapshot.instanceId !== id ||
+            snapshot.epoch !== epoch ||
+            !snapshot.lifecycle
+          )
+            return unknown;
+          const { startedAt, exitedAt } = snapshot.lifecycle;
+          if (startedAt > Date.now() || (exitedAt !== undefined && exitedAt > Date.now()))
+            return unknown;
+          if (snapshot.state === 'running' && exitedAt === undefined)
+            return { slot, terminalId, state: 'running' as const, startedAt };
+          if (snapshot.state === 'exited' && exitedAt !== undefined)
+            return { slot, terminalId, state: 'exited' as const, startedAt, exitedAt };
+        } catch {
+          // A lost or inaccessible Core never becomes a confirmed state.
+        }
+        return unknown;
+      }),
+    );
+    return { observedAt: Date.now(), entries: results };
   }
 
   /** Native main-window Quit only. No terminal focus assertion or renderer action is accepted. */

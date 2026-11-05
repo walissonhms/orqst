@@ -25,7 +25,7 @@ import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/deskt
 import { ManagedTerminalPair } from '../packages/core/src/terminal/managed-pair.js';
 import type { TerminalEvents } from '../packages/core/src/terminal/supervisor.js';
 
-function fixture(count = 2) {
+function fixture(count = 2, evidenced = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-pair-')));
   const keys = generateKeyPairSync('ed25519');
   const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]));
@@ -59,7 +59,7 @@ function fixture(count = 2) {
           validate: () => true,
           start: (_profile, handlers: TerminalEvents) => {
             events[slot] = handlers;
-            handlers.started();
+            handlers.started(evidenced ? { startedAt: 100 } : undefined);
             return {
               write: (text: string) => writes[slot]!.push(text),
               resize() {},
@@ -106,6 +106,22 @@ function fixture(count = 2) {
     },
   };
 }
+
+test('display receipt timing does not alter signed retirement or shutdown inventory', () => {
+  const f = fixture(1, true);
+  try {
+    const id = f.launch(0);
+    const display = f.call(0, 'snapshot', [id]) as { lifecycle?: { startedAt: number } };
+    assert.equal(display.lifecycle?.startedAt, 100);
+    assert.equal('lifecycle' in f.pair.ownedShutdownInventory().attempts[0]!, false);
+    f.events[0]!.exit(0, undefined, { startedAt: 100, exitedAt: 150 });
+    const review = f.pair.prepareRetire();
+    assert.equal('lifecycle' in review.evidence.attempts[0]!, false);
+    f.pair.retire(f.proof(review.challenge));
+  } finally {
+    f.close();
+  }
+});
 
 test('pair runs two independent synthetic terminals in the same workspace, fences and archives only after exits', () => {
   const f = fixture();

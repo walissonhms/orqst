@@ -111,6 +111,14 @@ export const featureNativeSnapshotSchema = z
           slot: z.number().int().min(0).max(7),
           terminalId: z.uuid(),
           provider: z.enum(['codex', 'claude', 'opencode']),
+          // A recorded selection, not a claim about the model actually used by the CLI.
+          selectedModel: z
+            .string()
+            .min(1)
+            .max(160)
+            .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/#@+-]*$/)
+            .nullable()
+            .optional(),
         }),
       )
       .min(1)
@@ -133,15 +141,60 @@ export const featureNativeSnapshotSchema = z
     );
   }, 'Invalid Feature snapshot scope');
 export type FeatureNativeSnapshot = z.infer<typeof featureNativeSnapshotSchema>;
+/** Display-only owned PTY evidence, never a session status or execution grant. */
+export const featureCanvasEvidenceSchema = z
+  .strictObject({
+    observedAt: z.number().int().nonnegative().safe(),
+    entries: z
+      .array(
+        z.strictObject({
+          slot: z.number().int().min(0).max(7),
+          terminalId: z.uuid(),
+          state: z.enum(['running', 'exited', 'unknown']),
+          startedAt: z.number().int().nonnegative().safe().optional(),
+          exitedAt: z.number().int().nonnegative().safe().optional(),
+        }),
+      )
+      .max(8),
+  })
+  .refine(
+    (value) =>
+      new Set(value.entries.map((entry) => entry.slot)).size === value.entries.length &&
+      new Set(value.entries.map((entry) => entry.terminalId)).size === value.entries.length &&
+      value.entries.every((entry) =>
+        entry.state === 'unknown'
+          ? entry.startedAt === undefined && entry.exitedAt === undefined
+          : entry.startedAt !== undefined &&
+            entry.startedAt <= value.observedAt &&
+            (entry.state === 'running'
+              ? entry.exitedAt === undefined
+              : entry.exitedAt !== undefined &&
+                entry.exitedAt >= entry.startedAt &&
+                entry.exitedAt <= value.observedAt),
+      ),
+  );
+export type FeatureCanvasEvidence = z.infer<typeof featureCanvasEvidenceSchema>;
 export const featureNativeReplySchema = z
   .strictObject({
     status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'unknown', 'archive_blocked']),
     snapshot: featureNativeSnapshotSchema.optional(),
     permissions: featurePermissionStateSchema.optional(),
+    canvas: featureCanvasEvidenceSchema.optional(),
   })
   .refine(
     (value) => value.status !== 'ok' || value.snapshot !== undefined,
     'Missing Feature snapshot',
+  )
+  .refine(
+    (value) =>
+      !value.canvas ||
+      (!!value.snapshot &&
+        value.canvas.entries.every((entry) =>
+          value.snapshot!.slots.some(
+            (slot) => slot.slot === entry.slot && slot.terminalId === entry.terminalId,
+          ),
+        )),
+    'Canvas evidence outside snapshot scope',
   );
 export type FeatureNativeReply = z.infer<typeof featureNativeReplySchema>;
 

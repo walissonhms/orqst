@@ -5,7 +5,11 @@ summary DOM. `canvasMembers` projects current Feature membership from the existi
 Core snapshot and saved native pane names. It never associates observed sessions
 by title, slot number, provider, timing or working directory. The current facade
 does not supply an explicit owned CLI-session/event binding: real cards therefore
-show unavailable activity/status/model/duration and no delegation edges.
+show unavailable agent activity/status and no delegation edges. The separate native
+snapshot carries the selected model, and a display-only `canvas` reply carries owned
+PTY lifecycle timestamps when the bound receipt can be verified. Running/exited
+describes the PTY, not a model turn. Unknown, transport loss, or missing receipt
+remain unknown; consumers must expire stale liveness.
 
 The evidence-aware renderer accepts existing `SessionView`/validated source events.
 It shows at most three activities, source-relative timestamps and the observed

@@ -23,6 +23,13 @@ were checked in the current workspace and Cargo lock/registry sources.
 
 ## Native presentation prerequisite
 
+For the 2026-11-05 lifecycle projection, also inspected Anywh
+[`hostSessionDriver.ts`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/runtimes/hostSessionDriver.ts),
+`HostSessionDriver`, its explicit host agent/session binding and CLI end-of-turn
+events. That session/relay contract is distinct from ORQST's owned native PTY and
+durable lifecycle receipts. Keep the existing ORQST receipt/broker design; do not
+copy the driver or infer a session binding. License/NOTICE evidence is above.
+
 `features::install_workspace` explicitly sent the Feature chrome NSView behind
 every sibling. The retained opaque main dashboard then covered its DOM. Renderer
 captures and AX existence did not prove visible native chrome. Source now keeps the

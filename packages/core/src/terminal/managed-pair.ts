@@ -273,7 +273,7 @@ export class ManagedTerminalPair {
       throw new Error('Uncertain enrollment retains terminal capacity');
     for (const journal of this.journals) journal.assertOwner();
     const attempts = this.attempts.flatMap((ids, slot) =>
-      [...ids].map((id) => ({ slot, ...this.slots[slot]!.snapshot(id) })),
+      [...ids].map((id) => this.authoritySnapshot(slot, id)),
     );
     if (
       attempts.some(
@@ -287,6 +287,12 @@ export class ManagedTerminalPair {
     return { epoch: this.authority.epoch, attempts };
   }
 
+  /** Preserve the signed retirement/inventory contract; UI timing is not authority. */
+  private authoritySnapshot(slot: number, id: string) {
+    const { instanceId, epoch, state, exit } = this.slots[slot]!.snapshot(id);
+    return { slot, instanceId, epoch, state, exit };
+  }
+
   /** Native shutdown inventory only. Ownership is checked; this does not stop or release anything. */
   ownedShutdownInventory() {
     this.active();
@@ -295,7 +301,7 @@ export class ManagedTerminalPair {
     return {
       epoch: this.authority.epoch,
       attempts: this.attempts.flatMap((ids, slot) =>
-        [...ids].map((id) => ({ slot, ...this.slots[slot]!.snapshot(id) })),
+        [...ids].map((id) => this.authoritySnapshot(slot, id)),
       ),
     };
   }

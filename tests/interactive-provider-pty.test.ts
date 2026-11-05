@@ -228,17 +228,21 @@ for (const provider of ['claude', 'opencode'] as const)
         assert.equal(backend.validate(profile), true);
         assert.equal(backend.validate({ ...profile, argv: ['--resume'] }), false);
         let started = false;
+        let startEvidence: { startedAt: number } | undefined;
+        let exitEvidence: { startedAt: number; exitedAt: number } | undefined;
         let output = '';
         let exit: number | undefined;
         const events: TerminalEvents = {
-          started: () => {
+          started: (evidence) => {
             started = true;
+            startEvidence = evidence;
           },
           data: (text) => {
             output += text;
           },
-          exit: (code) => {
+          exit: (code, _signal, evidence) => {
             exit = code;
+            exitEvidence = evidence;
           },
           lost: () => {},
         };
@@ -254,6 +258,7 @@ for (const provider of ['claude', 'opencode'] as const)
           assert.ok(predicate(), 'Synthetic owned PTY did not reach expected state');
         };
         await until(() => started && output.includes('SYNTHETIC:OWNED_TUI'));
+        assert.ok(startEvidence?.startedAt);
         assert.equal(backend.validate(profile), false);
         assert.throws(
           () =>
@@ -268,6 +273,8 @@ for (const provider of ['claude', 'opencode'] as const)
         await until(() => output.includes('SYNTHETIC:PONG'));
         handle.write('exit\n');
         await until(() => exit === 0);
+        assert.equal(exitEvidence?.startedAt, startEvidence.startedAt);
+        assert.ok(exitEvidence && exitEvidence.exitedAt >= exitEvidence.startedAt);
         handle.dispose();
         handle = undefined;
         writeFileSync(file, JSON.stringify({ ...config, project: home }));

@@ -1,11 +1,19 @@
 # Changelog
 
+## Canvas native evidence — 2026-11-05
+
+- Expose the reviewed model selection and a separate read-only owned-PTY lifecycle
+  projection. Start/exit timestamps require the exact validated lifecycle receipt;
+  process state is not agent-turn status and stale data must expire.
+- Keep observed tool activity unavailable until an explicit terminal/session
+  binding exists. Native UI/provider acceptance remains pending.
+
 ## Owner-directed Feature canvas — 2026-11-05
 
 - Add dotted canvas, metadata groups, evidence-aware agent cards, orthogonal parent
   links, zoom/pan/fit/minimap, session sections and Feature tabs in EN/PT.
 - Keep unavailable agent evidence explicit; a running PTY is not an observed turn.
-  Current metadata-only production cards show no invented activities/models/links.
+  Cards show no invented activities, effective models or links.
 - Add generation-bound Canvas navigation and preserve retained PTYs, hidden pane
   preferences and input revocation. Physical Escape returns to the canvas.
 - Present chrome above the retained dashboard, with visible terminal siblings above

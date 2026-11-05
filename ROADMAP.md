@@ -2,6 +2,10 @@
 
 ## Feature canvas increment — 2026-11-05
 
+The native facade now exposes the reviewed selected model and receipt-backed owned
+PTY lifecycle as separate display evidence. Canonical session binding, observed
+tool activity, effective model verification and native/provider acceptance remain open.
+
 Implemented in source: the owner-amended canvas, summary cards, saved-Feature grouping,
 conditional Core-journal links, zoom/pan/fit/minimap, collapsible session sections,
 Feature tabs and native terminal view navigation. Correct the chrome layer previously

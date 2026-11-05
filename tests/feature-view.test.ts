@@ -9,6 +9,7 @@ import {
   featureNativeRequestSchema,
   featureNativeEnvelopeSchema,
   featureNativeReplyEnvelopeSchema,
+  featureNativeReplySchema,
   type FeatureNativeRequest,
   type FeatureNativeSnapshot,
 } from '@orqst/protocol';
@@ -26,7 +27,7 @@ import {
 } from '../apps/desktop/src/managed-terminal-core.js';
 import { FeaturePermissionRevisionConflict } from '@orqst/database';
 
-function fixture() {
+function fixture(model: (slot: number) => string | null | undefined = () => undefined) {
   const directory = mkdtempSync(join(tmpdir(), 'orqst-feature-view-'));
   const db = featureConfigurationDatabase(directory, 'synthetic-workspace');
   const identities = Array.from({ length: 6 }, (_, slot) => ({
@@ -88,6 +89,7 @@ function fixture() {
       revocations.push(...ids.map((_, i) => i));
     },
     () => {},
+    model,
   );
   let snapshot: FeatureNativeSnapshot;
   const request = async (input: Omit<FeatureNativeRequest, 'generation' | 'contractVersion'>) => {
@@ -113,6 +115,31 @@ function fixture() {
     close: () => rmSync(directory, { recursive: true, force: true }),
   };
 }
+
+test('selected model is bounded display metadata and does not expose preparation evidence', async () => {
+  const f = fixture((slot) => (slot === 0 ? 'gpt-synthetic' : slot === 1 ? null : undefined));
+  try {
+    await f.service.initialize();
+    const reply = await f.request({ action: 'snapshot' });
+    assert.equal(reply.snapshot?.slots[0]?.selectedModel, 'gpt-synthetic');
+    assert.equal(reply.snapshot?.slots[1]?.selectedModel, null);
+    assert.equal(reply.snapshot?.slots[2]?.selectedModel, undefined);
+    assert.ok(!JSON.stringify(reply).includes('sha256'));
+    assert.ok(!JSON.stringify(reply).includes('/synthetic/private'));
+    const evidence = {
+      observedAt: 200,
+      entries: [{ slot: 0, terminalId: f.ids[0], state: 'exited', startedAt: 100, exitedAt: 150 }],
+    };
+    assert.equal(featureNativeReplySchema.safeParse({ ...reply, canvas: evidence }).success, true);
+    evidence.entries[0]!.terminalId = randomUUID();
+    assert.equal(featureNativeReplySchema.safeParse({ ...reply, canvas: evidence }).success, false);
+    evidence.entries[0]!.terminalId = f.ids[0];
+    delete (evidence.entries[0] as { exitedAt?: number }).exitedAt;
+    assert.equal(featureNativeReplySchema.safeParse({ ...reply, canvas: evidence }).success, false);
+  } finally {
+    f.close();
+  }
+});
 
 test('workspace controls bind each off-page command to the current Feature and exact terminal UUID', async () => {
   const f = fixture();

@@ -47,6 +47,13 @@ export const terminalNativeReplySchema = z.union([
         instanceId: z.string().uuid(),
         epoch: z.string().uuid(),
         state: terminalStateSchema,
+        lifecycle: z
+          .strictObject({
+            startedAt: z.number().int().nonnegative().safe(),
+            exitedAt: z.number().int().nonnegative().safe().optional(),
+          })
+          .refine((value) => value.exitedAt === undefined || value.exitedAt >= value.startedAt)
+          .optional(),
         exit: z
           .strictObject({
             exitCode: z.number().int().safe(),

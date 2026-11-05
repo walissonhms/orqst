@@ -35,6 +35,7 @@ export class TauriFeatureService {
     private readonly project: string,
     private readonly revoke: () => Promise<void>,
     private readonly changed: (snapshot: FeatureNativeSnapshot) => void,
+    private readonly selectedModel: (slot: number) => string | null | undefined = () => undefined,
   ) {}
 
   async initialize(): Promise<void> {
@@ -126,11 +127,15 @@ export class TauriFeatureService {
       features: this.catalog,
       view: this.view,
       activeFeatureId: this.activeFeatureId,
-      slots: this.core.identities.map(({ slot, terminalId, provider }) => ({
-        slot,
-        terminalId,
-        provider,
-      })),
+      slots: this.core.identities.map(({ slot, terminalId, provider }) => {
+        const selectedModel = this.selectedModel(slot);
+        return {
+          slot,
+          terminalId,
+          provider,
+          ...(selectedModel === undefined ? {} : { selectedModel }),
+        };
+      }),
       layoutSaved:
         this.layout.snapshot().persisted &&
         (this.activeFeatureId !== null ||

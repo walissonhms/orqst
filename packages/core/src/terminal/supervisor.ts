@@ -42,9 +42,9 @@ export interface TerminalStartBinding {
   admissionRevision: number;
 }
 export interface TerminalEvents {
-  started(): void;
+  started(evidence?: { startedAt: number }): void;
   data(text: string): void;
-  exit(exitCode: number, signal?: number): void;
+  exit(exitCode: number, signal?: number, evidence?: { startedAt: number; exitedAt: number }): void;
   /** Private transport loss is uncertainty, never process exit evidence. */
   lost(): void;
 }
@@ -95,6 +95,7 @@ interface Attempt {
   attachment?: Attachment;
   startupTimer?: ReturnType<typeof setTimeout>;
   exit?: { exitCode: number; signal?: number };
+  lifecycle?: { startedAt: number; exitedAt?: number };
 }
 
 /** Owns only handles it creates. There is deliberately no PID/session adoption API. */
@@ -198,6 +199,7 @@ export class TerminalSupervisor {
       epoch: this.authority.epoch,
       state: attempt.state,
       exit: attempt.exit && { ...attempt.exit },
+      ...(attempt.lifecycle ? { lifecycle: { ...attempt.lifecycle } } : {}),
     };
   }
 
@@ -240,10 +242,12 @@ export class TerminalSupervisor {
           attempt.profile,
           {
             lost: () => this.lose(attempt),
-            started: () => {
+            started: (evidence) => {
               if (attempt.state === 'starting') {
                 if (!this.record(attempt, 'running')) return;
                 attempt.state = 'running';
+                if (evidence && Number.isSafeInteger(evidence.startedAt) && evidence.startedAt >= 0)
+                  attempt.lifecycle = { startedAt: evidence.startedAt };
                 clearTimeout(attempt.startupTimer);
               }
             },
@@ -258,7 +262,7 @@ export class TerminalSupervisor {
                 this.lose(attempt);
               }
             },
-            exit: (exitCode, signal) => {
+            exit: (exitCode, signal, evidence) => {
               if (!['starting', 'running'].includes(attempt.state)) return;
               if (
                 !Number.isSafeInteger(exitCode) ||
@@ -268,6 +272,14 @@ export class TerminalSupervisor {
               const exit = { exitCode, ...(signal === undefined ? {} : { signal }) };
               if (!this.record(attempt, 'exited', exit)) return;
               attempt.state = 'exited';
+              if (
+                evidence &&
+                Number.isSafeInteger(evidence.startedAt) &&
+                Number.isSafeInteger(evidence.exitedAt) &&
+                evidence.startedAt >= 0 &&
+                evidence.exitedAt >= evidence.startedAt
+              )
+                attempt.lifecycle = { ...evidence };
               attempt.exit = exit;
               clearTimeout(attempt.startupTimer);
               if (attempt.attachment) attempt.attachment.lease = undefined;

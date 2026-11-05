@@ -2,7 +2,10 @@ import { fork } from 'node:child_process';
 import { join } from 'node:path';
 import { closeSync, lstatSync } from 'node:fs';
 import { terminalDigest } from './authority.js';
-import { createLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
+import {
+  createLifecycleReceipt,
+  readLifecycleReceipt,
+} from '../managed-codex/lifecycle-receipt.js';
 import type { TerminalBackend, TerminalProfile } from './supervisor.js';
 import { terminalFile } from './codex-profile.js';
 import {
@@ -67,6 +70,16 @@ export function managedTerminalBackend(
       }
       let exited = false;
       let disposed = false;
+      const lifecycle = () => {
+        const receipt = readLifecycleReceipt(config.state, {
+          ...identity,
+          configDigest: terminalDigest(source),
+        });
+        if (!receipt.records) return undefined;
+        const start = receipt.records.find((record) => record.type === 'started');
+        const exit = receipt.records.find((record) => record.type === 'exit');
+        return start ? { startedAt: start.at, ...(exit ? { exitedAt: exit.at } : {}) } : undefined;
+      };
       const lost = () => {
         if (!disposed && !exited) events.lost();
       };
@@ -75,11 +88,18 @@ export function managedTerminalBackend(
         const parsed = managedTerminalEventSchema.safeParse(raw);
         if (!parsed.success) return lost();
         const value = parsed.data;
-        if (value.type === 'started') events.started();
+        if (value.type === 'started') events.started(lifecycle());
         if (value.type === 'data') events.data(value.text);
         if (value.type === 'exit') {
           exited = true;
-          events.exit(value.exitCode, value.signal);
+          const evidence = lifecycle();
+          events.exit(
+            value.exitCode,
+            value.signal,
+            evidence?.exitedAt === undefined
+              ? undefined
+              : { ...evidence, exitedAt: evidence.exitedAt },
+          );
         }
       };
       child.on('message', message);

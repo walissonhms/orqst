@@ -46,12 +46,29 @@ owned native dashboard/chrome only. `featureNativeRequestSchema` and
 Replies have `status: ok | denied | stale | busy | unavailable | archive_blocked`
 and optional `snapshot`; `ok` requires the snapshot. It contains
 `contractVersion: 1`, `storage: core`, `generation`, the fixed Workspace `{id,name}`,
-Feature records, the CAS preferred `view`, the actually presented `activeFeatureId`, reviewed `slots: [{slot,terminalId,provider}]` and
+Feature records, the CAS preferred `view`, the actually presented `activeFeatureId`, reviewed `slots: [{slot,terminalId,provider,selectedModel?}]` and
 `layoutSaved`. Names are presentation, never an address/identity. Null view means
 unassigned terminals. `activeFeatureId` changes only after a valid presentation commit;
 a preference saved after native invalidation may differ until the next explicit
 selection. Snapshot reads do not apply that late preference to the live view.
 Missing current-selection members remain metadata only.
+
+`selectedModel` is the model selection recorded in the reviewed preparation, not
+proof of the effective model. `null` means the CLI default was selected; an absent
+field means no model selection evidence exists. Neither the preparation files nor
+their hashes are sent to the dashboard.
+
+Snapshot replies may additionally carry a separate, display-only `canvas` object:
+`{observedAt,entries:[{slot,terminalId,state,startedAt?,exitedAt?}]}`. Times are
+Unix milliseconds. `state` is `running`, `exited`, or `unknown`; a running entry
+requires `startedAt`, an exited entry requires both timestamps from the exact owned
+lifecycle receipt, and unknown carries neither. This is PTY process evidence, not
+agent or task status. The host requests only its own broker-created attempt under
+the same Core epoch, and Rust checks the slot and terminal UUID against the reply's
+snapshot. Data is not part of a permission review or execution authorization.
+Consumers should discard stale readings and never extrapolate liveness indefinitely.
+No canonical owned terminal-to-observed-session binding is currently exposed, so
+tool activity and session state are unavailable in this facade.
 
 The Rust command derives label, parent window, URL, native document generation
 and wire UUID. Metadata requests/replies are bounded to 128 KiB with at most eight

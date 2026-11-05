@@ -6,14 +6,18 @@ import test from 'node:test';
 import { terminalNativeReplySchema, type TerminalNativeRequest } from '@orqst/protocol';
 import { TauriTerminalService } from '../apps/desktop/src/tauri-terminal-service.js';
 import { TerminalAuthority, terminalDigest } from '../packages/core/src/terminal/authority.js';
-import { TerminalSupervisor } from '../packages/core/src/terminal/supervisor.js';
+import {
+  TerminalSupervisor,
+  type TerminalEvents,
+} from '../packages/core/src/terminal/supervisor.js';
 
-function setup() {
+function setup(evidenced = false) {
   const keys = generateKeyPairSync('ed25519');
   const messages: Array<Record<string, unknown>> = [];
   const starts = [0, 0];
   const writes: string[][] = [[], []];
   const signals: string[] = [];
+  const capturedEvents: TerminalEvents[] = [];
   const supervisors = [0, 1].map(
     (slot) =>
       new TerminalSupervisor(
@@ -22,7 +26,9 @@ function setup() {
           validate: () => true,
           start: (_profile, events) => {
             starts[slot]!++;
-            events.started();
+            if (evidenced) events.started({ startedAt: Date.now() - 1000 });
+            else events.started();
+            capturedEvents[slot] = events;
             return {
               write: (text) => {
                 writes[slot]!.push(text);
@@ -66,8 +72,50 @@ function setup() {
     await pending;
     return terminalNativeReplySchema.parse(messages.findLast((m) => m.id === id)?.value);
   }
-  return { service, supervisors, messages, starts, writes, signals, request };
+  return { service, supervisors, messages, starts, writes, signals, request, capturedEvents };
 }
+
+test('canvas projection requires this broker instance, current epoch and lifecycle evidence', async () => {
+  const s = setup(true);
+  try {
+    const terminalId = randomUUID();
+    const ids = [{ slot: 0, terminalId }];
+    const start = await s.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    if (start.status !== 'ok' || !start.snapshot) throw new Error('Missing synthetic start');
+    const epoch = start.snapshot.epoch;
+    const running = await s.service.canvasEvidence(ids, epoch);
+    assert.equal(running.entries[0]?.state, 'running');
+    assert.equal(running.entries[0]?.terminalId, terminalId);
+    assert.equal((await s.service.canvasEvidence(ids, randomUUID())).entries[0]?.state, 'unknown');
+    s.capturedEvents[0]!.exit(0);
+    assert.equal((await s.service.canvasEvidence(ids, epoch)).entries[0]?.state, 'unknown');
+    assert.deepEqual(s.signals, []);
+  } finally {
+    s.service.close();
+  }
+  const exited = setup(true);
+  try {
+    const start = await exited.request(0, { version: 1, action: 'start', profileId: 'synthetic' });
+    if (start.status !== 'ok' || !start.snapshot?.lifecycle)
+      throw new Error('Missing synthetic start');
+    const ids = [{ slot: 0, terminalId: randomUUID() }];
+    exited.capturedEvents[0]!.exit(0, undefined, {
+      startedAt: start.snapshot.lifecycle.startedAt,
+      exitedAt: Date.now(),
+    });
+    assert.equal(
+      (await exited.service.canvasEvidence(ids, start.snapshot.epoch)).entries[0]?.state,
+      'exited',
+    );
+    await exited.service.receive({ kind: 'close', slot: 0 });
+    assert.equal(
+      (await exited.service.canvasEvidence(ids, start.snapshot.epoch)).entries[0]?.state,
+      'unknown',
+    );
+  } finally {
+    exited.service.close();
+  }
+});
 
 test('Tauri pipe reuses signed native start/attach/input and exposes only public replies', async () => {
   const s = setup();

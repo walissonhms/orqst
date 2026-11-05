@@ -22,6 +22,7 @@ import { appendTerminalLayout } from './terminal-layout-enrollment.js';
 import { TauriTerminalLayout } from './tauri-terminal-layout.js';
 import { visualAllowedDuringFence } from './terminal-fence.js';
 import {
+  featureCanvasEvidenceSchema,
   featureNativeReplySchema,
   featureNativeEnvelopeSchema,
   featurePermissionNativeEnvelopeSchema,
@@ -120,6 +121,7 @@ async function start() {
       );
     },
     () => {},
+    (slot) => selection[slot]?.config.model?.value,
   );
   await features.initialize();
   const correlation = z.object({
@@ -351,14 +353,30 @@ async function start() {
                   status: nativeActorMatches ? ('busy' as const) : ('denied' as const),
                 })
           )
-            .then((value) =>
+            .then(async (value) => {
+              // Display evidence is kept outside the permission-review snapshot.
+              let canvas: z.infer<typeof featureCanvasEvidenceSchema> | undefined;
+              if (
+                message.request.action === 'snapshot' &&
+                value.status === 'ok' &&
+                value.snapshot
+              ) {
+                try {
+                  const result = featureCanvasEvidenceSchema.safeParse(
+                    await service.canvasEvidence(value.snapshot.slots, core.epoch),
+                  );
+                  if (result.success) canvas = result.data;
+                } catch {
+                  // A display read cannot trigger shutdown or authorize a retry.
+                }
+              }
               send({
                 kind: 'feature-reply',
                 id: message.id,
                 document: message.document,
-                value: featureNativeReplySchema.parse(value),
-              }),
-            )
+                value: featureNativeReplySchema.parse({ ...value, ...(canvas ? { canvas } : {}) }),
+              });
+            })
             .catch(shutdown)
             .finally(() => {
               if (allowed && mutable) service.endMetadata();
