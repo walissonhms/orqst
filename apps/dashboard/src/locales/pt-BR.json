@@ -823,7 +823,8 @@
     "viewGroup": "Somente visão",
     "viewGroupHelp": "Estas ações nunca sinalizam nem param o processo próprio.",
     "processGroup": "Processo",
-    "processGroupHelp": "Estas ações sinalizam o processo próprio. Parar envia SIGTERM e o encerramento não é garantido; Terminar força SIGKILL e pode perder trabalho."
+    "processGroupHelp": "Estas ações sinalizam o processo próprio. Parar envia SIGTERM e o encerramento não é garantido; Terminar força SIGKILL e pode perder trabalho.",
+    "canvas": "Canvas"
   },
   "managedAgents": {
     "tauriSetup": "Dois perfis privados novos foram selecionados ao iniciar esta prévia. Informe um modelo e revise cada início separadamente. Rotas e tarefas exigem autorização nativa própria.",
@@ -1182,5 +1183,43 @@
     "retry": "Use Quit de novo; o mesmo encerramento é repetido sem segundo sinal.",
     "host_lost": "O host de terminal foi perdido sem recibo de saída. O estado foi preservado; o Quit não pode concluir.",
     "starting": "O host de terminal está iniciando. Tente Quit de novo quando estiver pronto."
+  },
+  "canvas": {
+    "title": "Canvas",
+    "openTerminal": "Abrir terminal",
+    "minimized": "Oculto",
+    "activityUnavailable": "Atividade indisponível",
+    "statusUnavailable": "Estado do agente indisponível",
+    "modelUnavailable": "Modelo indisponível",
+    "durationUnavailable": "Tempo indisponível",
+    "took": "levou {{duration}}",
+    "observed": "observado {{duration}}",
+    "reply": "Responder",
+    "evidencedLinks": "Delegação com evidência",
+    "agents_one": "{{count}} agente",
+    "agents_other": "{{count}} agentes",
+    "running": "{{count}} em execução",
+    "needs": "{{count}} precisam de você",
+    "unknown": "{{count}} indisponíveis",
+    "emptyTitle": "Sua Feature começa aqui",
+    "emptyBody": "Abra um terminal para ver seu card. Atividades e conexões aparecem somente com evidência de origem.",
+    "newSession": "Nova sessão",
+    "minimap": "Navegar pelo minimapa",
+    "tools": "Ferramentas do canvas",
+    "select": "Selecionar",
+    "pan": "Mover canvas",
+    "zoomOut": "Reduzir zoom",
+    "zoomIn": "Ampliar zoom",
+    "zoom": "Zoom",
+    "fit": "Ajustar à tela",
+    "search": "Buscar",
+    "needsSection": "Precisam de você",
+    "runningSection": "Em execução",
+    "recentSection": "Recentes",
+    "terminalsSection": "Terminais",
+    "sessions": "Sessões",
+    "metadataConnected": "Metadados do Core carregados",
+    "metadataUnavailable": "Metadados do Core indisponíveis",
+    "evidenceLimit": "Atividade CLI, modelo e parentesco estão indisponíveis neste contrato de metadados do terminal."
   }
 }

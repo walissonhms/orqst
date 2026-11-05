@@ -86,7 +86,7 @@ pub(crate) fn valid_request(value: &Value) -> bool {
         return false;
     }
     match value["action"].as_str() {
-        Some("snapshot") => exact(value, &["contractVersion", "generation", "action"]),
+        Some("snapshot" | "canvas") => exact(value, &["contractVersion", "generation", "action"]),
         Some("create") => {
             exact(value, &["contractVersion", "generation", "action", "input"])
                 && value["input"].as_object().is_some_and(|o| {
@@ -838,6 +838,13 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     {
         return denied();
     }
+    // Main's DOM dialog cannot cover sibling WKWebViews. End the current view presentation
+    // after the final source checks; keep every owned document/process retained.
+    crate::terminal::metadata_invalidate(app);
+    crate::terminal::suspend_surface(app);
+    if main.set_focus().is_err() {
+        return json!({"status":"unavailable"});
+    }
     if main
         .eval(format!(
             "window.dispatchEvent(new CustomEvent('orqst-show-preparation',{{detail:{request}}}));"
@@ -1321,7 +1328,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     };
     let presentation = if matches!(
         request["action"].as_str(),
-        Some("select" | "organize" | "pane" | "renamePane" | "movePane")
+        Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
     ) {
         crate::terminal::metadata_view_begin(app)
     } else {
@@ -1445,6 +1452,7 @@ fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &
             }
         }
     }
+    crate::terminal::publish_workspace_projection(app);
 }
 pub fn invalidate(app: &tauri::AppHandle, label: &str) {
     let state = app.state::<Features>();
@@ -1533,12 +1541,15 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
             tauri::LogicalPosition::new(0.0, 0.0),
             size,
         )?;
-        // Chrome is the background. Retained PTY webviews remain above its central surface.
-        #[cfg(target_os="macos")]
-        view.with_webview(|native| unsafe {
-            use objc2::runtime::AnyObject; use objc2::msg_send;
-            let view = native.inner().cast::<AnyObject>(); let parent:*mut AnyObject = msg_send![view,superview];
-            if !parent.is_null() { let _:() = msg_send![parent, addSubview: view, positioned: -1_isize, relativeTo: std::ptr::null_mut::<AnyObject>()]; }
+        // Installing the view is not a request to cover the dashboard/preparation drawer.
+        view.hide()?;
+        // inner_size changes to the parent-window viewport after the first child is installed.
+        view.set_bounds(tauri::Rect {
+            position: tauri::LogicalPosition::new(0.0, 0.0).into(),
+            size: workspace
+                .inner_size()?
+                .to_logical::<f64>(workspace.scale_factor()?)
+                .into(),
         })?;
         Ok(())
     })();
@@ -1564,7 +1575,10 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
                 window.inner_size(),
                 window.scale_factor(),
             ) {
-                let _ = view.set_size(size.to_logical::<f64>(scale));
+                let _ = view.set_bounds(tauri::Rect {
+                    position: tauri::LogicalPosition::new(0.0, 0.0).into(),
+                    size: size.to_logical::<f64>(scale).into(),
+                });
             }
         }
         WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
@@ -2333,6 +2347,7 @@ pub(crate) fn valid_layout(
             "persisted",
             "suspended",
             "workspaceChrome",
+            "canvas",
         ],
     ) || !matches!(s["axis"].as_str(), Some("columns" | "rows"))
         || !s["percent"]
@@ -2343,6 +2358,7 @@ pub(crate) fn valid_layout(
         || !s["persisted"].is_boolean()
         || !s["suspended"].is_boolean()
         || !s["workspaceChrome"].is_boolean()
+        || !s["canvas"].is_boolean()
     {
         return false;
     }
@@ -2362,6 +2378,7 @@ pub(crate) fn valid_layout(
     if !shown.iter().all(|n| order.contains(n))
         || !visible.iter().all(|n| shown.contains(n))
         || (s["suspended"] == true && !visible.is_empty())
+        || (s["canvas"] == true && !visible.is_empty())
         || (order.is_empty() && s["active"].as_i64() != Some(-1))
         || (!order.is_empty() && !s["active"].as_u64().is_some_and(|n| order.contains(&n)))
         || !(s["maximized"].is_null()
@@ -2446,9 +2463,24 @@ mod layout_tests {
         json!({
             "kind":"layout","generation":2,"revision":3,
             "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":81,"bottom":34},
-            "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true},
+            "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true,"canvas":false},
             "focus":null,"bounds":[{"slot":0,"rect":{"x":155,"y":81,"width":642,"height":785}},{"slot":1,"rect":{"x":797,"y":81,"width":643,"height":785}}]
         })
+    }
+    #[test]
+    fn canvas_keeps_members_and_hidden_preferences_but_accepts_no_pty_bounds_or_focus() {
+        let mut value = layout();
+        value["state"]["canvas"] = json!(true);
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
+        value["state"]["visible"] = json!([]);
+        value["bounds"][0]["rect"] = Value::Null;
+        value["bounds"][1]["rect"] = Value::Null;
+        assert!(valid_layout(&value, 2, 1440, 900, 2, 2));
+        assert!(workspace_visible(&value["state"]));
+        assert_eq!(value["state"]["order"], json!([0, 1]));
+        assert_eq!(value["state"]["shown"], json!([0, 1]));
+        value["focus"] = json!(0);
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
     }
     #[test]
     fn layout_rejects_stale_generation_viewport_and_whole_invalid_geometry() {

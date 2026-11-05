@@ -103,7 +103,7 @@ export class TerminalPanels {
   /** Sender/activation checks belong to the dedicated native document binding. */
   act(slot: number, raw: unknown): boolean {
     const action = parseTerminalViewAction(raw);
-    if (!action || this.closed || !this.displayed.has(slot)) return false;
+    if (!action || action === 'canvas' || this.closed || !this.displayed.has(slot)) return false;
     if (action === 'dashboard') this.showDashboard();
     else if (action === 'hide') this.hide(slot);
     else if (action === 'focus-other') {

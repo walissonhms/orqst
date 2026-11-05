@@ -56,6 +56,7 @@ export class TauriFeatureService {
     featureId: string | null,
     open: boolean,
     presentation: number,
+    canvas = false,
   ): Promise<void> {
     const feature = this.catalog.find((entry) => entry.featureId === featureId);
     if (featureId !== null && !feature) throw new Error('Feature view unavailable');
@@ -80,6 +81,7 @@ export class TauriFeatureService {
           await this.core.features.saveLayout(feature.featureId, mapping.record(state));
         },
         open,
+        canvas,
       );
     } else {
       // Legacy preferences are never imported into a Feature. Partial unassigned views stay ephemeral.
@@ -91,6 +93,7 @@ export class TauriFeatureService {
         initial ?? mapping.initial,
         assigned.length ? () => {} : this.legacy.save,
         open,
+        canvas,
       );
     }
     this.activeFeatureId = featureId;
@@ -149,13 +152,21 @@ export class TauriFeatureService {
     const request = parsed.data;
     const presentation = this.layout.presentationRevision();
     try {
-      if (['select', 'organize', 'pane', 'renamePane', 'movePane'].includes(request.action))
+      if (
+        ['canvas', 'select', 'organize', 'pane', 'renamePane', 'movePane'].includes(request.action)
+      )
         await this.revoke();
       await this.refresh();
       if (request.action !== 'snapshot' && request.generation !== this.generation)
         return { status: 'stale', snapshot: this.snapshot() };
       switch (request.action) {
         case 'snapshot':
+          break;
+        case 'canvas':
+          if (presentation !== this.layout.presentationRevision())
+            throw new Error('Stale presentation');
+          this.layout.showCanvas();
+          this.generation++;
           break;
         case 'create':
           await this.core.features.create(request.input);
@@ -188,7 +199,12 @@ export class TauriFeatureService {
           this.generation++;
           await this.refresh();
           if (this.activeFeatureId === request.featureId || this.activeFeatureId === null)
-            await this.present(this.activeFeatureId, open, presentation);
+            await this.present(
+              this.activeFeatureId,
+              open,
+              presentation,
+              this.layout.snapshot().canvas === true,
+            );
           break;
         }
         case 'select': {
@@ -206,7 +222,7 @@ export class TauriFeatureService {
           });
           this.generation++;
           await this.refresh();
-          await this.present(request.featureId, true, presentation);
+          await this.present(request.featureId, true, presentation, true);
           break;
         }
         case 'readPermissions': {
@@ -283,6 +299,8 @@ export class TauriFeatureService {
               : request.action === 'movePane'
                 ? { moveTo: request.beforeSlot }
                 : request.command;
+          if (request.action === 'pane' && request.command === 'focus' && state.suspended)
+            this.layout.showCanvas();
           if (!this.layout.workspaceAct(request.slot, action)) return { status: 'denied' };
           await this.layout.flush();
           this.generation++;

@@ -1,5 +1,15 @@
 # ORQST
 
+## Feature canvas — 2026-11-05 (source candidate)
+
+The owner-directed canvas replaces the tab-strip-only presentation: dotted canvas,
+summary cards, metadata groups, zoom/pan/fit/minimap and a session sidebar. Cards open
+retained native terminals; the Canvas button returns without stopping them. Current
+owned terminal metadata lacks a canonical CLI-session/event binding, so production
+activity/status/model/duration remain unavailable and no delegation links are fabricated.
+See [behavior, captures and native gates](docs/development/feature-canvas.md). Native
+acceptance, interactive MCP, mentions and actual orchestration remain pending.
+
 ## Retained terminal tabs — 2026-11-05
 
 Studio source now exposes persistent-view terminal tabs, direct rename/reorder/

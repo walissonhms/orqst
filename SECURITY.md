@@ -1237,3 +1237,15 @@ conflicts return `stale`; an unconfirmed save returns `unknown` without retry.
 CSP is unchanged. Reset is not implemented; an empty allowlist denies all
 operations. Synthetic tests and source review do not establish native AppKit,
 real provider, package or platform acceptance.
+
+## Feature canvas native view boundary — 2026-11-05
+
+The new `canvas` action is metadata/view-only on the existing exact native
+dashboard/chrome facade. Current document, presentation generation, real native
+focus, mutation/review exclusion and Quit fences remain mandatory. It revokes
+input and cannot launch, stop, write, grant or recover any process. Card navigation
+binds current Feature membership and exact terminal UUID before resuming a view.
+Native sibling ordering changes no focus/input authority. Preparation uncovers the
+retained main dialog only after source revalidation and revokes the old presentation.
+No HTTP/WS endpoint or observed-session execution is added; all captured activity
+continues to render as plain text. Native acceptance remains pending.

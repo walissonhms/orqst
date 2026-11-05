@@ -12,6 +12,7 @@ export function terminalDocument(options: {
   version: string;
   startProfile: string;
   operationalOpen?: boolean;
+  canvasNavigation?: boolean;
   nativeAuthentication: boolean;
   scope: string;
   blocker?: string;
@@ -39,7 +40,7 @@ export function terminalDocument(options: {
   <span class="pane-identity" title="${identity}">${identity}</span>
   <h1 id="pane-title" data-provider="${escapeHTML(options.provider)}" data-slot-name="${slotName(options.slot)}" title="${alias}" draggable="true">${slotName(options.slot)}</h1>
   <p id="lifecycle" class="lifecycle" ${['prepared', 'starting', 'running', 'exited', 'start_failed', 'ownership_lost'].map((state) => `data-${state}="${text(state)}" data-short-${state}="${text(`state_${state}`)}"`).join(' ')} title="${text('prepared')}">${text('state_prepared')}</p>
-  <div class="pane-primary">${iconButton('hide-pane', 'minimize', '−')}${iconButton('maximize', 'maximize', '□')}${iconButton('restore', 'restore', '❐')}</div>
+  <div class="pane-primary">${options.canvasNavigation ? iconButton('canvas', 'canvas', '◈') : ''}${iconButton('hide-pane', 'minimize', '−')}${iconButton('maximize', 'maximize', '□')}${iconButton('restore', 'restore', '❐')}</div>
   <details id="pane-menu" class="pane-menu">
     <summary id="pane-menu-toggle" aria-label="${text('paneMenu')}" title="${text('paneMenu')}" aria-expanded="false"><span aria-hidden="true">⋯</span></summary>
     <div class="pane-menu-panel">

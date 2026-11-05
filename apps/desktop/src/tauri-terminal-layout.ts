@@ -17,6 +17,7 @@ export class TauriTerminalLayout {
   private saveRevision = 0;
   private firstOpen = true;
   private chrome = false;
+  private canvas = false;
   private readonly pendingSaves = new Set<Promise<void>>();
   private presentation = 0;
   private layoutRevision = 0;
@@ -69,11 +70,12 @@ export class TauriTerminalLayout {
       order: [...this.state.order],
       shown: [...this.state.shown],
       names: [...this.state.names],
-      visible: this.suspended ? [] : page.visible,
+      visible: this.suspended || this.canvas ? [] : page.visible,
       count: this.count,
       persisted: this.persisted,
       suspended: this.suspended,
       workspaceChrome: this.chrome,
+      canvas: this.canvas,
     };
   }
 
@@ -180,11 +182,20 @@ export class TauriTerminalLayout {
     return this.presentation;
   }
 
+  /** A summary view never changes pane membership, hidden preferences or process state. */
+  showCanvas(): void {
+    this.suspended = false;
+    this.canvas = true;
+    for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
+    this.publish();
+  }
+
   /** Replaces only visual metadata. Documents, supervisors and input authority stay external. */
   context(
     initial: TerminalLayoutPreferences,
     save: (state: TerminalLayoutPreferences) => void | Promise<void>,
     open = true,
+    canvas = false,
   ): void {
     for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
     this.presentation++;
@@ -195,6 +206,7 @@ export class TauriTerminalLayout {
     this.persisted = true;
     this.firstOpen = false;
     this.chrome = true;
+    this.canvas = canvas;
     this.suspended = !open;
     this.publish();
   }
@@ -227,6 +239,7 @@ export class TauriTerminalLayout {
     if (!this.state.order.includes(slot)) return false;
     this.firstOpen = false;
     this.suspended = false;
+    this.canvas = false;
     this.state.active = slot;
     if (!this.state.shown.includes(slot)) this.state.shown.push(slot);
     if (this.state.maximized !== null) this.state.maximized = slot;
@@ -259,6 +272,7 @@ export class TauriTerminalLayout {
   workspaceAct(slot: number, raw: unknown): boolean {
     if (this.suspended || !this.state.order.includes(slot)) return false;
     if (raw === 'focus') {
+      this.canvas = false;
       this.state.active = slot;
       this.state.maximized = slot;
       if (!this.state.shown.includes(slot)) this.state.shown.push(slot);
@@ -282,12 +296,22 @@ export class TauriTerminalLayout {
       return false;
     // Maximizing an explicitly selected tab restores only that pane, not other minimized panes.
     if (action === 'maximize' && !this.state.shown.includes(slot)) this.state.shown.push(slot);
+    if (
+      action === 'maximize' ||
+      action === 'restore' ||
+      action === 'show-all' ||
+      (typeof action === 'object' && 'columns' in action)
+    )
+      this.canvas = false;
     return this.apply(slot, action, false);
   }
 
   private apply(slot: number, action: TerminalViewAction, nativeFocus = true): boolean {
     const state = this.state;
-    if (action === 'dashboard') {
+    if (action === 'canvas') {
+      this.showCanvas();
+      return true;
+    } else if (action === 'dashboard') {
       this.presentation++;
       this.suspended = true;
     } else if (action === 'hide') {

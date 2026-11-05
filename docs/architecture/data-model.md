@@ -640,3 +640,12 @@ optional field remain valid. The private save also supplies expected Feature and
 active-view revisions; the same SQLite transaction checks both and the policy
 revision before writing. No table or column is added. A digest alone grants no
 permission and is not proof of native or provider acceptance.
+
+### Ephemeral Feature canvas — 2026-11-05
+
+The canvas camera and native layout `canvas` flag are in-memory presentation only.
+No table, migration, observer event, lifecycle receipt or saved authority is added.
+Current groups use persisted Feature membership. Unknown CLI-session correlation
+remains unknown; terminal IDs are not matched to observer sessions by slot, title,
+provider, time or project path. Canvas navigation leaves saved names/order/hidden
+preferences unchanged. See [display contracts](../development/feature-canvas.md).

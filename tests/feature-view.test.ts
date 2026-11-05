@@ -275,7 +275,8 @@ test('Feature service creates/edits/assigns and repeatedly filters six reviewed 
         const expected = feature.terminalIds.map((id) => f.ids.indexOf(id));
         assert.deepEqual(f.layout.snapshot().order, expected);
         assert.equal(f.layout.snapshot().suspended, false);
-        assert.equal(f.layout.act(expected[0]!, { columns: index + 1 }), true);
+        assert.equal(f.layout.snapshot().canvas, true);
+        assert.equal(f.layout.workspaceAct(expected[0]!, { columns: index + 1 }), true);
         await f.layout.flush();
         assert.equal(f.db.readLayout(feature.featureId)?.columns, index + 1);
         const before = f.db.readView();
@@ -592,6 +593,7 @@ test('live Feature append preserves saved order/names and uses membership CAS be
       ).status,
       'ok',
     );
+    assert.equal(f.layout.workspaceAct(0, 'focus'), true);
     f.layout.act(0, { name: 'SYNTHETIC retained' });
     f.layout.act(0, 'move-later');
     f.layout.act(0, { columns: 1 });

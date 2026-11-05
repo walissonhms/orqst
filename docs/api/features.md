@@ -122,3 +122,24 @@ transactional Feature/membership/policy snapshot for `PaneCommunication` composi
 A valid absent row is neutral; a saved policy only restricts existing route/grant
 checks. `routingProposal` filters denied delegate/execute edges and never installs a
 route or grant. See [the complete contract](../development/v6-feature-permissions.md).
+
+## Canvas view action — 2026-11-05
+
+The closed `canvas` request carries only `contractVersion: 1`, current `generation`
+and `action: canvas`. It uses the same native document/focus/presentation/review/Quit
+guards as view mutations. It revokes input and presents summary chrome with empty
+PTY bounds while retaining saved `shown`, names and order. A current UUID-bound
+`pane/focus` may resume the current view from the dashboard; foreign or stale
+membership is denied before resumption. This grants no keyboard or process authority.
+
+The inherited layout envelope now requires boolean `state.canvas`. When true,
+`visible` is empty, all bounds are null and focus is null. It is ephemeral view
+state, absent from SQLite layout preferences. Old/new native and host resources
+must be packaged together; mixed strict envelopes are rejected. The display-only
+Dock projection adds `canvas` and is also delivered to the owned dashboard. A
+metadata snapshot republishes the current native display projection without
+applying a late saved preference or changing process/input authority.
+
+Session activities, effective models, durations and parentage are not added to the
+native snapshot. The renderer explicitly displays their absence. No HTTP/WebSocket
+endpoint, cookie, Host/Origin/CSP or observer control surface is added or relaxed.

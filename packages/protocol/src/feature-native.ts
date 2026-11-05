@@ -16,6 +16,7 @@ const featureId = z.uuid();
 /** Metadata/view only. No process bindings, paths, execution proofs, team grants or generic RPC. */
 export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('snapshot') }),
+  z.strictObject({ ...base, action: z.literal('canvas') }),
   z.strictObject({
     ...base,
     action: z.literal('create'),

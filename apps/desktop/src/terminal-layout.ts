@@ -2,6 +2,7 @@ import { TERMINAL_SLOT_CEILING } from '@orqst/protocol';
 /** Layout-only messages carry no process identity, command or authorization proof. */
 export const terminalViewActions = [
   'dashboard',
+  'canvas',
   'hide',
   'tab-a',
   'tab-b',
@@ -39,6 +40,7 @@ export interface TerminalLayoutState extends TerminalLayoutPreferences {
   persisted: boolean;
   suspended?: boolean;
   workspaceChrome?: boolean;
+  canvas?: boolean;
 }
 export function terminalDisplayName(value: unknown): value is string {
   return (

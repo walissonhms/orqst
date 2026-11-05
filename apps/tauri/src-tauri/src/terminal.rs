@@ -460,8 +460,10 @@ async fn metadata_request_inner(
         }
         if matches!(
             envelope["request"]["action"].as_str(),
-            Some("select" | "organize")
-        ) {
+            Some("canvas" | "select" | "organize")
+        ) || (envelope["request"]["action"] == "pane"
+            && envelope["request"]["command"] == "focus")
+        {
             r.presentation_suspended = false;
         }
         receiver
@@ -1563,10 +1565,19 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
 }
 
 /// Minimal dock state only: hidden slot, label and provider. No ids, proofs or epochs.
+pub(crate) fn publish_workspace_projection(app: &tauri::AppHandle) {
+    let value = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| (r.layout.clone(), r.layout_generation));
+    if let Some((state, generation)) = value {
+        emit_dock(app, &state, true, generation);
+    }
+}
 fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64) {
-    let Some(chrome) = app.get_webview("feature-workspace") else {
-        return;
-    };
     let (labels, providers) = {
         let terminal = app.state::<Terminals>();
         let guard = terminal.0.lock().unwrap();
@@ -1576,9 +1587,13 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64)
             .unwrap_or_default()
     };
     let detail = workspace_detail(state, show, &labels, &providers, generation);
-    let _ = chrome.eval(format!(
-        "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
-    ));
+    for label in ["main", "feature-workspace"] {
+        if let Some(view) = app.get_webview(label) {
+            let _ = view.eval(format!(
+                "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
+            ));
+        }
+    }
 }
 
 /// Closed presentation projection of current Feature members only; no runtime authority.
@@ -1609,7 +1624,7 @@ fn workspace_detail(
         .filter(|pane| pane["minimized"] == true)
         .map(|pane| json!({"slot":pane["slot"],"label":pane["label"],"provider":pane["provider"]}))
         .collect();
-    json!({"panes":panes,"hidden":hidden,"count":members.len(),"generation":generation})
+    json!({"panes":panes,"hidden":hidden,"count":members.len(),"generation":generation,"canvas":state["canvas"] == true})
 }
 
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
@@ -1618,6 +1633,23 @@ fn apply_layout(app: &tauri::AppHandle, value: &Value) {
     let _ = app.run_on_main_thread(move || {
         crate::renderer::present(|| apply_layout_current(&handle, &value));
     });
+}
+
+/// Compose only retained owned surfaces; ordering does not focus or grant input.
+fn raise_surface(view: &Webview) {
+    #[cfg(target_os = "macos")]
+    let _ = view.with_webview(|native| unsafe {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+        // Tauri keeps this NSView alive for this AppKit-thread callback.
+        let view = native.inner().cast::<AnyObject>();
+        let parent: *mut AnyObject = msg_send![view, superview];
+        if !parent.is_null() {
+            let _: () = msg_send![parent, addSubview: view, positioned: 1_isize, relativeTo: std::ptr::null_mut::<AnyObject>()];
+        }
+    });
+    #[cfg(not(target_os = "macos"))]
+    let _ = view;
 }
 fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
@@ -1661,6 +1693,13 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     emit_dock(app, state, show, value["generation"].as_u64().unwrap_or(0));
     if let Some(chrome) = app.get_webview("feature-workspace") {
         if show {
+            let _ = chrome.set_bounds(tauri::Rect {
+                position: tauri::LogicalPosition::new(0.0, 0.0).into(),
+                size: tauri::LogicalSize::new(logical.width as f64, logical.height as f64).into(),
+            });
+            // Dashboard remains mounted. Chrome must be above its opaque Webview.
+            // Visible terminals are raised afterwards, outside the summary canvas transform.
+            raise_surface(&chrome);
             let _ = chrome.show();
         } else {
             let _ = chrome.hide();
@@ -1688,6 +1727,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
                 )
                 .into(),
             });
+            raise_surface(&view);
             let _ = view.show();
         }
         let _ = view.eval(format!(
@@ -3408,7 +3448,7 @@ mod enrollment_tests {
         let late = json!({
             "kind":"layout","generation":2,"revision":3,
             "viewport":{"width":1440,"height":900},"insets":{"left":155,"top":81,"bottom":34},
-            "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true},
+            "state":{"axis":"columns","percent":50,"columns":2,"order":[0,1],"shown":[0,1],"active":0,"maximized":null,"names":["", ""],"visible":[0,1],"count":2,"persisted":true,"suspended":false,"workspaceChrome":true,"canvas":false},
             "focus":1,"bounds":[{"slot":0,"rect":{"x":155,"y":81,"width":642,"height":785}},{"slot":1,"rect":{"x":797,"y":81,"width":643,"height":785}}]
         });
         let mut generation = 2;

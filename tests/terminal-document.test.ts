@@ -42,6 +42,13 @@ test('trusted chrome escapes project, version, provider and identity with no exe
   assert.match(html, /name="viewport"/);
 });
 
+test('only the native canvas composition exposes Canvas navigation; legacy chrome stays compatible', () => {
+  assert.ok(!document().includes('id="canvas"'));
+  const html = document({ canvasNavigation: true });
+  assert.equal(html.match(/id="canvas"/g)?.length, 1);
+  assert.ok(html.indexOf('id="canvas"') < html.indexOf('id="pane-menu"'));
+});
+
 test('compact chrome keeps stop visible and advanced controls in the pane disclosure', () => {
   const html = document();
   const menu = html.indexOf('id="pane-menu"');

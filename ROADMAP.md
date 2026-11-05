@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Feature canvas increment — 2026-11-05
+
+Implemented in source: the owner-amended canvas, summary cards, saved-Feature grouping,
+conditional source-event links, zoom/pan/fit/minimap, collapsible session sections,
+Feature tabs and native terminal view navigation. Correct the chrome layer previously
+covered by the opaque retained dashboard. Renderer evidence/captures are separate from
+native acceptance. Canonical owned CLI-session telemetry, role editing, N-member MCP,
+mentions and delegated execution/result delivery remain open. See
+[implementation and acceptance](docs/development/feature-canvas.md).
+
 ## Studio workspace correction — 2026-11-05
 
 Retained terminal tabs, explicit view controls, Feature-scoped minimized projection

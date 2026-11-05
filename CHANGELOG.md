@@ -1,5 +1,18 @@
 # Changelog
 
+## Owner-directed Feature canvas — 2026-11-05
+
+- Add dotted canvas, metadata groups, evidence-aware agent cards, orthogonal parent
+  links, zoom/pan/fit/minimap, session sections and Feature tabs in EN/PT.
+- Keep unavailable agent evidence explicit; a running PTY is not an observed turn.
+  Current metadata-only production cards show no invented activities/models/links.
+- Add generation-bound Canvas navigation and preserve retained PTYs, hidden pane
+  preferences and input revocation. Escape preserves CLI use while input is enabled.
+- Present chrome above the retained dashboard, with visible terminal siblings above
+  chrome, and uncover the main preparation dialog only after native source checks.
+- Add opt-in labelled renderer captures at 1440×900 and 390×900. Native/provider
+  acceptance and real communication/orchestration remain separate gates.
+
 ## Studio workspace tabs and minimized-state correction — 2026-11-05
 
 - Expose retained terminal tabs with focus, rename, drag/keyboard reorder and direct

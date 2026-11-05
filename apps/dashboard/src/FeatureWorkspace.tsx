@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type {
   FeatureNativeRequest,
@@ -21,6 +21,9 @@ import {
 } from './feature-notice.js';
 import { FeaturePermissions } from './FeaturePermissions.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
+import { FeatureCanvas } from './FeatureCanvas.js';
+import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
+import { canvasMembers } from './feature-canvas.js';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -53,6 +56,9 @@ export function FeatureWorkspace({
   const [dock, setDock] = useState<DockPane[]>([]);
   const [dockEpoch, setDockEpoch] = useState(0);
   const [panes, setPanes] = useState<WorkspacePane[]>([]);
+  const [canvas, setCanvas] = useState(!nativeWorkspace);
+  const [search, setSearch] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
   const [renamePane, setRenamePane] = useState<{
     slot: number;
     terminalId: string;
@@ -81,6 +87,13 @@ export function FeatureWorkspace({
   const unassigned = snapshot?.slots.filter((slot) => !assigned.includes(slot.terminalId)) ?? [];
   const members = selected ? selected.terminalIds : unassigned.map((slot) => slot.terminalId);
   const available = snapshot?.slots.filter((slot) => members.includes(slot.terminalId)) ?? [];
+  const canvasAgents = useMemo(() => canvasMembers(snapshot, panes), [snapshot, panes]);
+  const canvasGroups = useMemo(
+    () => [
+      { id: selected?.featureId ?? 'unassigned', name: selected?.name ?? t('features.unassigned') },
+    ],
+    [selected, t],
+  );
 
   const request = useCallback(
     async (action: Action) => {
@@ -158,12 +171,12 @@ export function FeatureWorkspace({
   }, [editor]);
 
   useEffect(() => {
-    if (!nativeWorkspace) return;
     const update = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
       setDock(dockPanes(detail));
       setDockEpoch(dockGeneration(detail));
       setPanes(workspacePanes(detail));
+      if (nativeWorkspace) setCanvas((detail as { canvas?: boolean } | null)?.canvas === true);
     };
     window.addEventListener('orqst-terminal-dock', update);
     return () => window.removeEventListener('orqst-terminal-dock', update);
@@ -257,9 +270,24 @@ export function FeatureWorkspace({
       if (live.current) setBusy(false);
     }
   }
+  useEffect(() => {
+    const shortcuts = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
+      if (event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        searchInput.current?.focus();
+      }
+      if (event.key.toLowerCase() === 'n' && canPrepare) {
+        event.preventDefault();
+        void prepare();
+      }
+    };
+    window.addEventListener('keydown', shortcuts);
+    return () => window.removeEventListener('keydown', shortcuts);
+  });
   return (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}`}
       aria-label={t('features.workspace')}
       aria-busy={busy}
     >
@@ -295,6 +323,30 @@ export function FeatureWorkspace({
             </select>
           </label>
         ) : null}
+        <label className="canvas-search">
+          <span>
+            {t('canvas.search')} <kbd>⌘K</kbd>
+          </span>
+          <input
+            ref={searchInput}
+            aria-label={t('canvas.search')}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <button
+          className="feature-create"
+          disabled={busy || !canPrepare}
+          onClick={() => void prepare()}
+        >
+          ＋ {t('canvas.newSession')} <kbd>⌘N</kbd>
+        </button>
+        <CanvasSessionList
+          agents={canvasAgents}
+          query={search}
+          busy={busy || quitFence}
+          onOpen={(agent) => paneCommand(agent.slot, 'focus')}
+        />
         <button
           ref={createTrigger}
           className="feature-create"
@@ -493,6 +545,13 @@ export function FeatureWorkspace({
             ⋯
           </button>
           <button
+            aria-pressed={canvas}
+            disabled={busy || !native || !snapshot}
+            onClick={() => void request({ action: 'canvas' })}
+          >
+            {t('canvas.title')}
+          </button>
+          <button
             disabled={busy || !available.length}
             onClick={() => void request({ action: 'organize', command: 'columns-2' })}
           >
@@ -516,7 +575,42 @@ export function FeatureWorkspace({
           </button>
         </div>
       </header>
-      {nativeWorkspace ? (
+      {canvas ? (
+        <nav className="feature-terminalbar canvas-feature-tabs" aria-label={t('features.heading')}>
+          {snapshot?.features.map((feature) => (
+            <button
+              key={feature.featureId}
+              className={snapshot.activeFeatureId === feature.featureId ? 'active' : ''}
+              aria-pressed={snapshot.activeFeatureId === feature.featureId}
+              disabled={busy}
+              onClick={() =>
+                void request({
+                  action: 'select',
+                  featureId: feature.featureId,
+                  expectedRevision: snapshot.view.revision,
+                })
+              }
+            >
+              {feature.name}
+            </button>
+          ))}
+          <button
+            className={!selected ? 'active' : ''}
+            disabled={busy || !snapshot}
+            aria-pressed={!selected}
+            onClick={() =>
+              snapshot &&
+              void request({
+                action: 'select',
+                featureId: null,
+                expectedRevision: snapshot.view.revision,
+              })
+            }
+          >
+            {t('features.unassigned')}
+          </button>
+        </nav>
+      ) : nativeWorkspace ? (
         <TerminalWorkspaceBar
           panes={panes.filter((pane) => available.some((entry) => entry.slot === pane.slot))}
           busy={busy || quitFence}
@@ -529,7 +623,18 @@ export function FeatureWorkspace({
         <div className="feature-terminalbar" />
       )}
       <div className="feature-surface">
-        {canPrepare && !available.length ? (
+        {canvas ? (
+          <FeatureCanvas
+            key={selected?.featureId ?? 'unassigned'}
+            agents={canvasAgents.filter((agent) =>
+              agent.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
+            )}
+            groups={canvasGroups}
+            busy={busy || quitFence}
+            onOpen={(agent) => paneCommand(agent.slot, 'focus')}
+            onPrepare={canPrepare ? () => void prepare() : undefined}
+          />
+        ) : canPrepare && !available.length ? (
           <div className="feature-empty">
             <h1>{t('studio.setupTitle')}</h1>
             <p>{t('features.noUnassigned')}</p>
@@ -548,7 +653,7 @@ export function FeatureWorkspace({
             )}
           </p>
         ) : null}
-        {!nativeWorkspace && available.length > 0 && (
+        {!canvas && !nativeWorkspace && available.length > 0 && (
           <div>
             <p>{t('features.nativeView')}</p>
             <ul>
@@ -565,7 +670,9 @@ export function FeatureWorkspace({
         )}
       </div>
       <footer className="feature-bottom">
-        {nativeWorkspace && dock.length > 0 ? (
+        {canvas ? (
+          <CanvasStatusBar agents={canvasAgents} connected={!!snapshot && !notice && !busy} />
+        ) : nativeWorkspace && dock.length > 0 ? (
           <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
             <span className="feature-dock-label">{t('features.dockLabel')}</span>
             {dock

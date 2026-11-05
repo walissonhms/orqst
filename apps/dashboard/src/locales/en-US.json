@@ -823,7 +823,8 @@
     "viewGroup": "View only",
     "viewGroupHelp": "These actions never signal or stop the owned process.",
     "processGroup": "Process",
-    "processGroupHelp": "These actions signal the owned process. Stop sends SIGTERM and exit is not guaranteed; Terminate forces SIGKILL and can lose work."
+    "processGroupHelp": "These actions signal the owned process. Stop sends SIGTERM and exit is not guaranteed; Terminate forces SIGKILL and can lose work.",
+    "canvas": "Canvas"
   },
   "managedAgents": {
     "tauriSetup": "Two fresh private profiles were selected when this preview started. Enter a model and review each start separately. Routes and tasks require their own native authorization.",
@@ -1182,5 +1183,43 @@
     "retry": "Use Quit again; the same shutdown is retried without a second signal.",
     "host_lost": "The terminal host was lost without an exit receipt. The state is preserved; Quit cannot finish.",
     "starting": "The terminal host is starting. Try Quit again when it is ready."
+  },
+  "canvas": {
+    "title": "Canvas",
+    "openTerminal": "Open terminal",
+    "minimized": "Hidden",
+    "activityUnavailable": "Activity unavailable",
+    "statusUnavailable": "Agent status unavailable",
+    "modelUnavailable": "Model unavailable",
+    "durationUnavailable": "Time unavailable",
+    "took": "took {{duration}}",
+    "observed": "observed {{duration}}",
+    "reply": "Reply",
+    "evidencedLinks": "Evidenced delegation",
+    "agents_one": "{{count}} agent",
+    "agents_other": "{{count}} agents",
+    "running": "{{count}} running",
+    "needs": "{{count}} need you",
+    "unknown": "{{count}} unavailable",
+    "emptyTitle": "Your Feature starts here",
+    "emptyBody": "Open a terminal to see its card. Activities and links appear only with source evidence.",
+    "newSession": "New session",
+    "minimap": "Navigate minimap",
+    "tools": "Canvas tools",
+    "select": "Select",
+    "pan": "Pan",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoom": "Zoom",
+    "fit": "Fit to screen",
+    "search": "Search",
+    "needsSection": "Needs you",
+    "runningSection": "Running",
+    "recentSection": "Recent",
+    "terminalsSection": "Terminals",
+    "sessions": "Sessions",
+    "metadataConnected": "Core metadata loaded",
+    "metadataUnavailable": "Core metadata unavailable",
+    "evidenceLimit": "CLI activity, model and parentage are unavailable in this terminal metadata contract."
   }
 }

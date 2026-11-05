@@ -180,6 +180,7 @@ test('eight retained documents form a grid and survive hide, maximize, reorder a
     ) as import('../apps/desktop/src/terminal-layout.js').TerminalLayoutState;
   try {
     f.panels.open(0);
+    assert.equal(f.panels.act(0, 'canvas'), false);
     assert.equal(f.panels.act(0, 'show-all'), true);
     assert.equal(visible().length, 8);
     assert.equal(f.panels.act(0, { name: 'Frontend' }), true);

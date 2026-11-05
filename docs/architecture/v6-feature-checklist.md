@@ -1,5 +1,24 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Owner-amended Feature canvas — 2026-11-05
+
+- [x] Dated design amendment; preserved original V6 sources remain unchanged.
+- [x] Dotted summary canvas, zoom/pan/fit toolbar, minimap and compact status bar.
+- [x] Evidence-aware cards, last three validated activities, observed intervals and
+      conditional explicit-parent links; no prose-derived relationships.
+- [x] Saved-Feature groups, collapsible session sections, Search and New session shortcuts.
+- [x] Metadata-only canvas/card navigation preserving native PTYs, minimized preferences
+      and generation/document/focus/input/permission/Quit fences.
+- [x] Opt-in EN/PT renderer captures at 1440×900 and 390×900, separately labelled
+      synthetic evidence preview and actual metadata-only FeatureWorkspace.
+- [ ] Canonical owned CLI-session/event binding in the native facade; production
+      activity/state/effective model/duration/parentage remain unavailable.
+- [ ] Native visibility/geometry, drawer, real-terminal navigation and normal Quit acceptance.
+- [ ] Real delegation, N-member interactive MCP, mentions, role/group editing and results.
+
+See [dated design decision](../design/feature-canvas-2026-11-05.md) and
+[checks, captures and limitations](../development/feature-canvas.md).
+
 ## Terminal workspace controls — 2026-11-05 (source)
 
 - [x] Persistent native tab strip with direct focus, rename, move, minimize and maximize/restore.

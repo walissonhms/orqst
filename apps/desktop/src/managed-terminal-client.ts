@@ -443,6 +443,7 @@ const pane = (
   }
 ).orqstTerminalPane;
 const layoutActions = [
+  ['canvas', 'canvas'],
   ['dashboard', 'dashboard'],
   ['hide-pane', 'hide'],
   ['hide-pane-menu', 'hide'],
@@ -573,6 +574,20 @@ window.addEventListener('pagehide', unsubscribeLayout, { once: true });
 
 // Native disclosure semantics retain keyboard navigation without intercepting xterm keys.
 const paneMenu = document.getElementById('pane-menu') as HTMLDetailsElement;
+// Preserve CLI Escape while keyboard authority is enabled; the Canvas button always remains.
+document.addEventListener('keydown', (event) => {
+  if (
+    event.key !== 'Escape' ||
+    !document.getElementById('canvas') ||
+    input ||
+    paneMenu.open ||
+    event.target instanceof HTMLInputElement ||
+    event.target instanceof HTMLTextAreaElement
+  )
+    return;
+  event.preventDefault();
+  changeLayout('canvas');
+});
 const menuToggle = document.getElementById('pane-menu-toggle')!;
 paneMenu.addEventListener('toggle', () => {
   menuToggle.setAttribute('aria-expanded', String(paneMenu.open));
