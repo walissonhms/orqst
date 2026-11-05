@@ -173,6 +173,21 @@ export class TauriFeatureService {
           this.layout.showCanvas();
           this.generation++;
           break;
+        case 'arrange': {
+          if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
+          const state = this.layout.snapshot();
+          if (
+            request.panes.length !== state.order.length ||
+            request.panes.some(
+              (pane) =>
+                !state.order.includes(pane.slot) ||
+                this.core.identities[pane.slot]?.terminalId !== pane.terminalId,
+            )
+          )
+            return { status: 'denied' };
+          if (!this.layout.arrange(request)) return { status: 'denied' };
+          break;
+        }
         case 'create':
           await this.core.features.create(request.input);
           this.generation++;

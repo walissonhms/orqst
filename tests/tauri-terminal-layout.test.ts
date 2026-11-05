@@ -12,6 +12,7 @@ import type {
   TerminalLayoutPreferences,
   TerminalLayoutState,
 } from '../apps/desktop/src/terminal-layout.js';
+import type { FeatureNativeRequest } from '@orqst/protocol';
 
 function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
   const messages: Array<{
@@ -38,6 +39,86 @@ function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
   );
   return { layout, messages, revoked, saved: () => saved };
 }
+
+test('versioned arrangement permits free overlap, preserves PTYs, validates viewport and raises real focus', () => {
+  const f = fixture(2);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  const arrange: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    action: 'arrange',
+    generation: 0,
+    layoutVersion: 1,
+    mode: 'free',
+    viewport: { width: 1285, height: 785 },
+    panes: [
+      {
+        slot: 0,
+        terminalId: randomUUID(),
+        visible: true,
+        z: 0,
+        rect: { x: 20.2, y: 30.2, width: 400.4, height: 300.4 },
+      },
+      {
+        slot: 1,
+        terminalId: randomUUID(),
+        visible: true,
+        z: 1,
+        rect: { x: 100, y: 80, width: 400, height: 300 },
+      },
+    ],
+  };
+  assert.equal(f.layout.arrange(arrange), true);
+  assert.deepEqual(f.layout.snapshot().visible, [0, 1]);
+  const packet = f.messages.at(-1)!;
+  assert.deepEqual(packet.bounds[0]!.rect, { x: 175, y: 111, width: 401, height: 301 });
+  assert.equal((packet.bounds[1] as { z?: number }).z, 1);
+  assert.ok(f.revoked.includes(0) && f.revoked.includes(1));
+  const oldCount = f.messages.length;
+  assert.equal(f.layout.arrange({ ...arrange, mode: 'columns' }), false);
+  assert.equal(f.layout.arrange({ ...arrange, viewport: { width: 1, height: 1 } }), false);
+  assert.equal(
+    f.layout.arrange({ ...arrange, panes: [arrange.panes[0]!, arrange.panes[0]!] }),
+    false,
+  );
+  assert.equal(f.messages.length, oldCount);
+  const tied = { ...arrange, panes: [{ ...arrange.panes[1]!, z: 0 }, arrange.panes[0]!] };
+  assert.equal(f.layout.arrange(tied), true);
+  assert.deepEqual(f.layout.snapshot().visible, [1, 0]);
+  assert.equal((f.messages.at(-1)!.bounds[0] as { z?: number }).z, 1);
+  assert.equal(f.layout.arrange(arrange), true);
+  f.layout.focus(0);
+  assert.deepEqual(f.layout.snapshot().visible, [1, 0]);
+  assert.equal((f.messages.at(-1)!.bounds[0] as { z?: number }).z, 1);
+  f.layout.resize(800, 600);
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.ok(f.messages.at(-1)!.bounds.every((entry) => entry.rect === null));
+});
+
+test('list mode hides webviews without marking panes minimized and leaves restore to a new arrangement', () => {
+  const f = fixture(2);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  const request: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    action: 'arrange',
+    generation: 0,
+    layoutVersion: 1,
+    mode: 'list',
+    viewport: { width: 1285, height: 785 },
+    panes: [0, 1].map((slot) => ({
+      slot,
+      terminalId: randomUUID(),
+      visible: false,
+      z: slot,
+      rect: null,
+    })),
+  };
+  assert.equal(f.layout.arrange(request), true);
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.deepEqual(f.layout.snapshot().shown, [0, 1]);
+  assert.equal(f.messages.at(-1)!.focus, null);
+});
 
 test('one to eight retained Tauri documents use shared grid geometry and compact paging', () => {
   for (const count of [1, 2, 3, 4, 8]) {

@@ -5,6 +5,10 @@ exact newly created transcript and owned lifecycle receipt, with a private bindi
 record and at most three redacted tool names. Codex/OpenCode binding, broader
 Claude observation, provider verification and native UI acceptance remain open.
 
+2026-11-05 Studio layout increment: versioned native bounds and z-order support
+are implemented in source; renderer integration and actual native drag/focus
+acceptance remain pending. Canonical Codex/OpenCode session binding remains open.
+
 ## Owner-amended Feature canvas — 2026-11-05
 
 - [x] Dated design amendment; preserved original V6 sources remain unchanged.

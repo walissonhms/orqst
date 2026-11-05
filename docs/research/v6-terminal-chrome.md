@@ -1,5 +1,15 @@
 # V6 terminal chrome reuse review — 2026-11-04
 
+## Versioned Studio geometry — 2026-11-05
+
+Re-inspected Anywh [TerminalPanel](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/client/src/components/terminal/TerminalPanel.tsx)
+and its existing ResizeObserver/FitAddon adaptation below. Its React terminal panels
+and relay-close semantics do not implement ORQST's retained sibling native Webview
+ownership. Keep ORQST's native layout, focus and lifecycle code; extend its
+generation-validated geometry with bounded renderer layout and AppKit sibling
+ordering. No new upstream code or dependencies are copied. The pinned Apache-2.0
+license and NOTICE findings remain as documented below.
+
 ## Incremental minimization correction — 2026-11-05
 
 Native inspection of package `a414585` reproduced a hidden newly enrolled pane

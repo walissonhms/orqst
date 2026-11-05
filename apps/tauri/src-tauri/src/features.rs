@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::webview::{NewWindowResponse, WebviewBuilder};
 use tauri::{Manager, Webview, WebviewUrl, Window, WindowEvent};
 
@@ -22,6 +23,7 @@ struct State {
     workspace_id: Option<String>,
     feature_revisions: HashMap<String, u64>,
     preparation_scope: Option<(Value, String, u64)>,
+    last_arrangement: Option<Instant>,
 }
 fn exact(value: &Value, keys: &[&str]) -> bool {
     value
@@ -87,6 +89,7 @@ pub(crate) fn valid_request(value: &Value) -> bool {
     }
     match value["action"].as_str() {
         Some("snapshot" | "canvas") => exact(value, &["contractVersion", "generation", "action"]),
+        Some("arrange") => valid_arrangement_request(value),
         Some("create") => {
             exact(value, &["contractVersion", "generation", "action", "input"])
                 && value["input"].as_object().is_some_and(|o| {
@@ -211,6 +214,97 @@ pub(crate) fn valid_request(value: &Value) -> bool {
         }
         _ => false,
     }
+}
+
+fn valid_arrangement_request(value: &Value) -> bool {
+    if !exact(
+        value,
+        &[
+            "contractVersion",
+            "generation",
+            "action",
+            "layoutVersion",
+            "mode",
+            "viewport",
+            "panes",
+        ],
+    ) || value["layoutVersion"] != 1
+        || !matches!(
+            value["mode"].as_str(),
+            Some("mosaic" | "columns" | "rows" | "focus" | "list" | "free")
+        )
+        || !exact(&value["viewport"], &["width", "height"])
+        || !["width", "height"].iter().all(|key| {
+            value["viewport"][*key]
+                .as_u64()
+                .is_some_and(|n| (1..=32768).contains(&n))
+        })
+    {
+        return false;
+    }
+    let Some(panes) = value["panes"].as_array().filter(|panes| panes.len() <= 8) else {
+        return false;
+    };
+    let mut slots = HashSet::new();
+    let mut ids = HashSet::new();
+    let mut count = 0;
+    let (width, height) = (
+        value["viewport"]["width"].as_f64().unwrap(),
+        value["viewport"]["height"].as_f64().unwrap(),
+    );
+    let mut rects: Vec<(f64, f64, f64, f64)> = Vec::new();
+    for pane in panes {
+        if !exact(pane, &["slot", "terminalId", "visible", "z", "rect"])
+            || !pane["slot"]
+                .as_u64()
+                .is_some_and(|n| n < 8 && slots.insert(n))
+            || !uuid(&pane["terminalId"])
+            || !ids.insert(pane["terminalId"].to_string())
+            || !pane["z"].as_u64().is_some_and(|n| n <= 255)
+            || !pane["visible"].is_boolean()
+        {
+            return false;
+        }
+        if pane["visible"] == false {
+            if !pane["rect"].is_null() {
+                return false;
+            }
+            continue;
+        }
+        count += 1;
+        if !exact(&pane["rect"], &["x", "y", "width", "height"]) {
+            return false;
+        }
+        let Some(values) = ["x", "y", "width", "height"]
+            .iter()
+            .map(|key| pane["rect"][*key].as_f64())
+            .collect::<Option<Vec<_>>>()
+        else {
+            return false;
+        };
+        let (x, y, w, h) = (values[0], values[1], values[2], values[3]);
+        if values
+            .iter()
+            .any(|n| !n.is_finite() || *n < 0.0 || *n > 32768.0)
+            || w <= 0.0
+            || h <= 0.0
+            || x + w > width
+            || y + h > height
+            || (x + w).round() <= x.round()
+            || (y + h).round() <= y.round()
+        {
+            return false;
+        }
+        if value["mode"] != "free"
+            && rects
+                .iter()
+                .any(|(px, py, pw, ph)| x < px + pw && *px < x + w && y < py + ph && *py < y + h)
+        {
+            return false;
+        }
+        rects.push((x, y, w, h));
+    }
+    !(value["mode"] == "list" && count != 0 || value["mode"] == "focus" && count > 1)
 }
 pub(crate) fn valid_envelope(value: &Value) -> bool {
     exact(value, &["kind", "id", "document", "source", "request"])
@@ -1431,6 +1525,9 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((source, document)) = identity(&window) else {
         return denied();
     };
+    if request["action"] == "arrange" && source != CHROME_URL {
+        return denied();
+    }
     let app = window.app_handle();
     if crate::terminal::presentation_blocked(app) {
         return denied();
@@ -1458,6 +1555,18 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         || crate::terminal::metadata_context(app) != Some((epoch.clone(), presentation))
     {
         return denied();
+    }
+    if request["action"] == "arrange" {
+        let state = app.state::<Features>();
+        let mut guard = state.0.lock().unwrap();
+        let now = Instant::now();
+        if guard
+            .last_arrangement
+            .is_some_and(|last| now.saturating_duration_since(last) < Duration::from_millis(16))
+        {
+            return json!({"status":"busy"});
+        }
+        guard.last_arrangement = Some(now);
     }
     let _ = install_workspace(app);
     let id = {
@@ -2442,20 +2551,40 @@ pub(crate) fn valid_layout(
     last_revision: u64,
     generation: u64,
 ) -> bool {
-    if !exact(
-        v,
-        &[
-            "kind",
-            "generation",
-            "revision",
-            "viewport",
-            "insets",
-            "state",
-            "focus",
-            "bounds",
-        ],
-    ) || v["kind"] != "layout"
-        || safe(&v["generation"]) != Some(generation)
+    let custom = v["kind"] == "layout-v2";
+    if !(if custom {
+        exact(
+            v,
+            &[
+                "kind",
+                "mode",
+                "generation",
+                "revision",
+                "viewport",
+                "insets",
+                "state",
+                "focus",
+                "bounds",
+            ],
+        ) && matches!(
+            v["mode"].as_str(),
+            Some("mosaic" | "columns" | "rows" | "focus" | "list" | "free")
+        )
+    } else {
+        exact(
+            v,
+            &[
+                "kind",
+                "generation",
+                "revision",
+                "viewport",
+                "insets",
+                "state",
+                "focus",
+                "bounds",
+            ],
+        ) && v["kind"] == "layout"
+    }) || safe(&v["generation"]) != Some(generation)
         || !safe(&v["revision"]).is_some_and(|n| n > last_revision)
         || !exact(&v["viewport"], &["width", "height"])
         || v["viewport"]["width"].as_u64() != Some(width as u64)
@@ -2524,6 +2653,16 @@ pub(crate) fn valid_layout(
     {
         return false;
     }
+    if custom
+        && (s["workspaceChrome"] != true
+            || s["suspended"] != false
+            || s["canvas"] != false
+            || !v["focus"].is_null()
+            || (v["mode"] == "list" && !visible.is_empty())
+            || (v["mode"] == "focus" && visible.len() > 1))
+    {
+        return false;
+    }
     let chrome = s["workspaceChrome"] == true;
     let left = if chrome {
         if width <= 720 {
@@ -2546,15 +2685,22 @@ pub(crate) fn valid_layout(
         return false;
     };
     let mut rectangles = Vec::new();
+    let mut z_order = HashSet::new();
     for (slot, b) in bounds.iter().enumerate() {
-        if !exact(b, &["slot", "rect"])
-            || b["slot"].as_u64() != Some(slot as u64)
+        if !(if custom {
+            exact(b, &["slot", "rect", "z"]) && b["z"].as_u64().is_some_and(|n| n <= 255)
+        } else {
+            exact(b, &["slot", "rect"])
+        }) || b["slot"].as_u64() != Some(slot as u64)
             || b["rect"].is_null() == visible.contains(&(slot as u64))
         {
             return false;
         }
         if b["rect"].is_null() {
             continue;
+        }
+        if custom && !z_order.insert(b["z"].as_u64().unwrap()) {
+            return false;
         }
         let r = &b["rect"];
         if !exact(r, &["x", "y", "width", "height"]) {
@@ -2581,7 +2727,12 @@ pub(crate) fn valid_layout(
             return false;
         }
         for &(px, py, pw, ph) in &rectangles {
-            if x < px + pw && px < x + w && y < py + ph && py < y + h {
+            if x < px + pw
+                && px < x + w
+                && y < py + ph
+                && py < y + h
+                && (!custom || v["mode"] != "free")
+            {
                 return false;
             }
         }
@@ -2593,6 +2744,46 @@ pub(crate) fn valid_layout(
 #[cfg(test)]
 mod layout_tests {
     use super::*;
+    #[test]
+    fn versioned_arrangement_bounds_scope_and_overlap_are_strict() {
+        let a = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let b = "a10636eb-3a12-4094-9123-49a4cdad27b8";
+        let mut request = json!({"contractVersion":1,"generation":3,"action":"arrange","layoutVersion":1,"mode":"free","viewport":{"width":1285,"height":785},"panes":[
+            {"slot":0,"terminalId":a,"visible":true,"z":0,"rect":{"x":0.5,"y":10,"width":300,"height":200}},
+            {"slot":1,"terminalId":b,"visible":true,"z":1,"rect":{"x":100,"y":20,"width":300,"height":200}}
+        ]});
+        assert!(valid_request(&request));
+        request["mode"] = json!("columns");
+        assert!(!valid_request(&request));
+        request["mode"] = json!("free");
+        request["panes"][1]["z"] = json!(0);
+        assert!(valid_request(&request)); // Equal z uses the submitted stable pane order.
+        request["panes"][1]["terminalId"] = json!(a);
+        assert!(!valid_request(&request));
+        request["panes"][1]["terminalId"] = json!(b);
+        request["panes"][1]["z"] = json!(1);
+        request["panes"][1]["rect"]["x"] = json!(1280);
+        assert!(!valid_request(&request));
+        request["panes"][1]["rect"] = Value::Null;
+        assert!(!valid_request(&request));
+    }
+
+    #[test]
+    fn native_v2_accepts_free_overlap_only_and_rejects_duplicate_z_or_stale_generation() {
+        let mut value = layout();
+        value["kind"] = json!("layout-v2");
+        value["mode"] = json!("free");
+        value["bounds"][0]["z"] = json!(0);
+        value["bounds"][1]["z"] = json!(1);
+        value["bounds"][1]["rect"]["x"] = json!(400);
+        assert!(valid_layout(&value, 2, 1440, 900, 2, 2));
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 3));
+        value["mode"] = json!("rows");
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
+        value["mode"] = json!("free");
+        value["bounds"][1]["z"] = json!(0);
+        assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
+    }
     fn layout() -> Value {
         json!({
             "kind":"layout","generation":2,"revision":3,

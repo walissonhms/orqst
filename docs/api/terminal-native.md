@@ -1,5 +1,53 @@
 # Native terminal client boundary
 
+## Versioned Studio arrangement — 2026-11-05
+
+Only the authenticated `feature-workspace` document gets
+`window.orqstFeatures.arrange(request)`. It accepts:
+
+```ts
+{
+  contractVersion: 1, generation: snapshot.generation,
+  action: 'arrange', layoutVersion: 1,
+  mode: 'mosaic' | 'columns' | 'rows' | 'focus' | 'list' | 'free',
+  viewport: { width: number, height: number },
+  panes: [{ slot: number, terminalId: string, visible: boolean, z: number,
+            rect: { x: number, y: number, width: number, height: number } | null }]
+}
+```
+
+Supply every current Feature member exactly once, using its current slot and UUID.
+The viewport is the native content area in integer logical pixels: whole window
+less left 155px (46px when window width ≤720px), top 81px and bottom 34px. Rects
+are logical pixels relative to that content area's top-left, and must be finite,
+positive in size and fully inside it. The rectangle is the native **terminal
+content** region; account for the Studio card header and toolbar in the renderer.
+`visible:false` requires `rect:null` and hides the retained Webview without stopping
+or terminating its process. In `list` all Webviews are hidden; `focus` accepts at
+most one visible pane. Only `free` permits overlap. Lower z is behind; ties preserve
+the submitted pane order. z is an integer 0–255. Geometry is rounded at edges for
+native presentation. Out-of-bounds, duplicate/foreign membership, stale generation,
+stale viewport, and subpixel rectangles rounding to zero are refused as a whole.
+The pure renderer's mosaic can exceed the viewport when its minimum rows do not fit;
+the renderer must fit or hide those regions before sending them.
+
+The bridge limits dispatch to at most one request per 17ms and one in flight; a
+newer queued frame replaces an older queued frame, which resolves `busy`. It retries
+only an explicit `busy` refusal at most twice, never an uncertain transport. The
+native endpoint separately limits accepted attempts to one per 16ms. Layout changes
+are ephemeral; on window resize all arranged child views hide until the renderer
+sends a fresh viewport and frame. Existing metadata/document/epoch/presentation,
+Quit and input-revocation fences remain in force. The actual focused child can move
+to the front; its native first-responder status is checked, and focus does not
+grant an input lease. `orqst-terminal-dock` exposes the current active pane so the
+renderer can keep its own free-mode stack synchronized. No Webview is recreated.
+An `ok` reply confirms host acceptance; native application is asynchronous and a
+concurrent viewport or presentation change may still fence that frame. The renderer
+must react to resize/context changes and send a fresh frame, not infer a paint ACK.
+
+Rust/Node contract tests do not establish AppKit visibility, drag behavior, or
+native keyboard acceptance. Those remain separate owner/provider tests.
+
 ## Workspace view commands — 2026-11-05
 
 The existing `feature_request` metadata channel adds strict version-1 requests:

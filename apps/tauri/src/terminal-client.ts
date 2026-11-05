@@ -18,6 +18,10 @@ const removeCanvasEscape = installCanvasEscape(() => {
     .catch(() => window.dispatchEvent(new Event('orqst-canvas-escape-denied')));
 });
 window.addEventListener('pagehide', removeCanvasEscape, { once: true });
+// Native checks the actual first responder and slot; no renderer focus claim grants input.
+window.addEventListener('focus', () => {
+  void invoke<boolean>('terminal_view', { action: 'note-focus' }).catch(() => {});
+});
 let state: TerminalLayoutState | undefined;
 window.addEventListener('orqst-terminal-layout', (event) => {
   state = (event as CustomEvent<TerminalLayoutState>).detail;
