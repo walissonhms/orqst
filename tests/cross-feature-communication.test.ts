@@ -20,6 +20,52 @@ const run = (fn: (f: ReturnType<typeof fixture>) => void) => () => {
   }
 };
 
+test('concurrent calls on one service consume one grant and claim one message', async () => {
+  const f = fixture();
+  try {
+    f.save('source', 0, f.policy('outbound'));
+    f.save('target', 0, f.policy('inbound'));
+    const admissions = await Promise.all(
+      [0, 1].map(() =>
+        Promise.resolve().then(() => {
+          try {
+            return { message: f.service.admit(f.grant, f.request, 'SYNTHETIC-proof') };
+          } catch (error) {
+            return { error };
+          }
+        }),
+      ),
+    );
+    assert.equal(admissions.filter((result) => result.message?.state === 'queued').length, 1);
+    assert.equal(admissions.filter((result) => result.error instanceof Error).length, 1);
+    const other = new CrossFeatureCommunication(
+      f.journal,
+      f.config.crossFeatureSnapshot,
+      f.authority,
+    );
+    assert.equal(other.claim(f.request.messageId), undefined);
+    const claims = await Promise.all(
+      [0, 1].map(() => Promise.resolve().then(() => f.service.claim(f.request.messageId))),
+    );
+    assert.equal(claims.filter((message) => message?.state === 'dispatching').length, 1);
+    assert.equal(claims.filter((message) => message === undefined).length, 1);
+    f.journal.transaction((tx) => {
+      assert.equal(tx.crossMessages().length, 1);
+      assert.equal(tx.crossMessages()[0]?.state, 'dispatching');
+      assert.deepEqual(
+        tx.crossAuthorityEvents().map((event) => event.outcome),
+        ['grant_issued', 'denied'],
+      );
+      assert.deepEqual(
+        tx.crossEvents().map((event) => event.outcome),
+        ['admitted', 'dispatch_claimed'],
+      );
+    });
+  } finally {
+    f.close();
+  }
+});
+
 test(
   'SYNTHETIC bilateral policy requires both explicit rules and exact authority',
   run((f) => {

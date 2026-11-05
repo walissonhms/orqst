@@ -34,6 +34,16 @@ admission; after it the journal retains the admission even if in-memory grant
 state disappears. A fresh service does not restore a grant. Recovery marks a
 previously claimed message `outcome_unknown`; it does not retry it.
 
+The communication owner fence prevents another process from opening the same
+journal and epoch while it is owned. Within the owner, journal transactions are
+synchronous and serialize calls on the same event loop; Promise-scheduled Core
+calls therefore cannot overlap inside a transaction. SQLite UNIQUE constraints
+on grant, intent, nonce, message, task and scoped idempotency identities provide
+an additional storage-level defense. The admitted grant proof is private to the
+service instance that admitted it and cannot be used for claim by another instance.
+These layers do not authorize bypassing the owner fence or restoring grants after
+restart.
+
 Both Stores configure `busy_timeout=5000` milliseconds. A failed snapshot/lock
 acquisition denies the operation; there is no automatic retry. Existing readers
 of local policies already acquire journal before preferences. The policy and
