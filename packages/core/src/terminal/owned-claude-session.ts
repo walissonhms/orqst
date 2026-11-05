@@ -30,6 +30,19 @@ const toolSchema = z.object({
   type: z.literal('tool_use'),
   name: z.string().regex(/^[A-Za-z][A-Za-z0-9_.-]{0,63}$/),
 });
+const turnRecord = z.object({
+  sessionId: z.string(),
+  cwd: z.string(),
+  type: z.enum(['user', 'assistant']),
+  uuid: z.uuid().optional(),
+  isMeta: z.boolean().optional(),
+  isSidechain: z.boolean().optional(),
+  isApiErrorMessage: z.boolean().optional(),
+  message: z.object({
+    content: z.unknown(),
+    stop_reason: z.string().nullable().optional(),
+  }),
+});
 
 /**
  * Create a passive reader only when the exact random Claude session path was absent
@@ -146,16 +159,81 @@ export function ownedClaudeSession(
         if (count > maximum) return undefined;
         const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, count));
         const lines = text.split('\n');
-        lines.pop(); // Never interpret a partial last record.
+        const partial = lines.pop(); // Never interpret a partial last record.
         const activities: Array<{ at: number; kind: 'tool'; label: string }> = [];
+        let agentState: 'running' | 'completed' | 'failed' | 'unknown' = 'unknown';
+        let turnId: string | undefined;
         let matched: string | undefined;
         for (const line of lines.slice(-512)) {
-          if (!line || line.length > lineMaximum) continue;
+          if (!line) continue;
+          if (line.length > lineMaximum) {
+            agentState = 'unknown';
+            turnId = undefined;
+            continue;
+          }
           let raw: unknown;
           try {
             raw = JSON.parse(line);
           } catch {
+            agentState = 'unknown';
+            turnId = undefined;
             continue;
+          }
+          const turn = turnRecord.safeParse(raw);
+          if (
+            !turn.success &&
+            raw &&
+            typeof raw === 'object' &&
+            Reflect.get(raw, 'sessionId') === config.sessionId &&
+            Reflect.get(raw, 'cwd') === project &&
+            ['user', 'assistant'].includes(Reflect.get(raw, 'type'))
+          ) {
+            agentState = 'unknown';
+            turnId = undefined;
+          }
+          if (
+            turn.success &&
+            turn.data.sessionId === config.sessionId &&
+            turn.data.cwd === project
+          ) {
+            const record = turn.data;
+            if (record.isSidechain) continue;
+            if (record.type === 'user' && !record.isMeta) {
+              const content = record.message.content;
+              const isPrompt =
+                typeof content === 'string' ||
+                (Array.isArray(content) &&
+                  content.some(
+                    (item: unknown) =>
+                      z.object({ type: z.literal('text') }).safeParse(item).success,
+                  ) &&
+                  !content.some(
+                    (item: unknown) =>
+                      z.object({ type: z.literal('tool_result') }).safeParse(item).success,
+                  ));
+              if (isPrompt) {
+                turnId = record.uuid;
+                agentState = turnId ? 'running' : 'unknown';
+              } else if (agentState === 'completed' || agentState === 'failed') {
+                agentState = 'unknown';
+              }
+            } else if (record.type === 'assistant' && turnId) {
+              if (record.isApiErrorMessage) agentState = 'failed';
+              else if (record.message.stop_reason === 'end_turn') agentState = 'completed';
+              else if (record.message.stop_reason === 'tool_use') {
+                const content = record.message.content;
+                agentState =
+                  Array.isArray(content) &&
+                  content.some(
+                    (block: unknown) =>
+                      z
+                        .object({ type: z.literal('tool_use'), name: z.literal('AskUserQuestion') })
+                        .safeParse(block).success,
+                  )
+                    ? 'unknown'
+                    : 'running';
+              }
+            }
           }
           const parsed = lineSchema.safeParse(raw);
           if (
@@ -173,6 +251,10 @@ export function ownedClaudeSession(
               activities.push({ at, kind: 'tool', label: tool.data.name });
           }
         }
+        if (partial) {
+          agentState = 'unknown';
+          turnId = undefined;
+        }
         if (!matched || !persist({ ...identity, recordSha256: matched })) return undefined;
         return {
           session: {
@@ -181,6 +263,8 @@ export function ownedClaudeSession(
             bindingEvidence: 'claude-argv-receipt-transcript' as const,
           },
           activities: activities.slice(-3),
+          agentState,
+          ...(turnId ? { turnId } : {}),
         };
       } catch {
         if (identity) invalidated = true;

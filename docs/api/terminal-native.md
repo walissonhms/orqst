@@ -13,7 +13,7 @@ The native document, focus, generation and mutation fences remain in force.
 ## Slot scope and unknown agent state — 2026-11-05
 
 The version-1 Feature snapshot now emits `slots[].workspace: {id, name}` and
-`slots[].agentState: 'unknown'`. Both fields are optional in the schema for
+`slots[].agentState`. Both fields are optional in the schema for
 compatibility with older hosts. On this single-workspace host Rust and Node
 require the slot workspace to equal the enclosing workspace. `unknown` is not a
 process status: neither a live PTY nor an exited receipt proves an agent turn.
@@ -22,6 +22,23 @@ turn notifications. The native host's pool capacity is eight slots.
 
 Security review: these are bounded display metadata, not a request, path or
 execution capability. No HTTP/WS route, origin policy or native authority changes.
+
+### Owned Claude turn projection
+
+On a current, receipt-backed owned Claude session, the existing exact transcript
+binding may additionally expose `canvas.entries[].agentState` and `turnId` (the
+UUID of a validated user record). A matching `snapshot.slots[].agentState` is
+`running` after a user record or a `tool_use` response, `completed` only after
+an assistant `stop_reason: end_turn`, and `failed` only for an assistant record
+marked `isApiErrorMessage`. These are turn observations, not process or task
+outcomes. Missing, malformed, partial, unsupported or unbound evidence is
+`unknown`; Codex and OpenCode remain `unknown`. Neither a process exit nor tool
+execution establishes completion. No raw prompt or assistant text is sent.
+
+The transcript does not reliably expose a pending permission/question prompt;
+`waiting_for_user` is not emitted by this reader. Notifications and provider or
+native acceptance are pending. Claude hooks would need a separate owned
+`--settings` design and must never edit the user's settings.
 
 ## Versioned Studio arrangement — 2026-11-05
 

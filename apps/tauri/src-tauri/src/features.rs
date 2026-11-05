@@ -643,7 +643,11 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
                 && o.contains_key("terminalId")
                 && o.contains_key("provider")
         }) || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
-            || (s.get("agentState").is_some() && s["agentState"] != "unknown")
+            || (s.get("agentState").is_some()
+                && !matches!(
+                    s["agentState"].as_str(),
+                    Some("running" | "waiting_for_user" | "completed" | "failed" | "unknown")
+                ))
             || (s.get("selectedModel").is_some()
                 && !(s["selectedModel"].is_null()
                     || s["selectedModel"].as_str().is_some_and(|model| {
@@ -680,6 +684,22 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
             && (value.get("canvas").is_none()
                 || (value.get("snapshot").is_some()
                     && valid_canvas(&value["canvas"], &value["snapshot"])))
+            && value["snapshot"]["slots"].as_array().is_none_or(|slots| {
+                slots.iter().all(|slot| {
+                    slot.get("agentState").is_none_or(|state| {
+                        state == "unknown"
+                            || value["canvas"]["entries"]
+                                .as_array()
+                                .is_some_and(|entries| {
+                                    entries.iter().any(|entry| {
+                                        entry["slot"] == slot["slot"]
+                                            && entry["terminalId"] == slot["terminalId"]
+                                            && entry["agentState"] == *state
+                                    })
+                                })
+                    })
+                })
+            })
             && (value["status"] != "ok" || value.get("snapshot").is_some())
     })
 }
@@ -721,6 +741,15 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
                 || session["provider"] != "claude"
                 || !uuid(&session["sessionId"])
                 || session["bindingEvidence"] != "claude-argv-receipt-transcript"
+                || !matches!(
+                    entry["agentState"].as_str(),
+                    Some("running" | "completed" | "failed" | "unknown")
+                )
+                || (entry["agentState"] != "unknown" && !uuid(&entry["turnId"]))
+                || (entry.get("turnId").is_some() && !uuid(&entry["turnId"]))
+                || member
+                    .get("agentState")
+                    .is_some_and(|state| *state != entry["agentState"])
                 || !entry["activities"].as_array().is_some_and(|activities| {
                     activities.len() <= 3
                         && activities.iter().all(|item| {
@@ -754,6 +783,20 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
                             "startedAt",
                             "session",
                             "activities",
+                            "agentState",
+                        ],
+                    )
+                    || exact(
+                        entry,
+                        &[
+                            "slot",
+                            "terminalId",
+                            "state",
+                            "startedAt",
+                            "session",
+                            "activities",
+                            "agentState",
+                            "turnId",
                         ],
                     ))
                     && safe(&entry["startedAt"]).is_some_and(|start| start <= observed)
@@ -772,6 +815,20 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
                         "exitedAt",
                         "session",
                         "activities",
+                        "agentState",
+                    ],
+                ) || exact(
+                    entry,
+                    &[
+                        "slot",
+                        "terminalId",
+                        "state",
+                        "startedAt",
+                        "exitedAt",
+                        "session",
+                        "activities",
+                        "agentState",
+                        "turnId",
                     ],
                 )) && safe(&entry["startedAt"])
                     .zip(safe(&entry["exitedAt"]))
@@ -2249,7 +2306,7 @@ mod tests {
         owned["slots"][0]["agentState"] = json!("unknown");
         assert!(valid_snapshot(&owned));
         owned["slots"][0]["agentState"] = json!("completed");
-        assert!(!valid_snapshot(&owned));
+        assert!(!valid_reply(&json!({"status":"ok","snapshot":owned})));
         owned["slots"][0]["agentState"] = json!("unknown");
         owned["slots"][0]["workspace"]["id"] = json!("different");
         assert!(!valid_snapshot(&owned));
@@ -2259,9 +2316,21 @@ mod tests {
         assert!(!valid_canvas(&canvas, &snapshot));
         let mut scoped = snapshot.clone();
         scoped["slots"][0]["provider"] = json!("claude");
-        let mut activity = json!({"observedAt":200,"entries":[{"slot":0,"terminalId":t,"state":"running","startedAt":100,"session":{"provider":"claude","sessionId":f,"bindingEvidence":"claude-argv-receipt-transcript"},"activities":[{"at":150,"kind":"tool","label":"Read"}]}]});
+        let mut activity = json!({"observedAt":200,"entries":[{"slot":0,"terminalId":t,"state":"running","startedAt":100,"session":{"provider":"claude","sessionId":f,"bindingEvidence":"claude-argv-receipt-transcript"},"activities":[{"at":150,"kind":"tool","label":"Read"}],"agentState":"unknown"}]});
         assert!(valid_canvas(&activity, &scoped));
         assert!(!valid_canvas(&activity, &snapshot));
+        scoped["slots"][0]["agentState"] = json!("completed");
+        activity["entries"][0]["agentState"] = json!("completed");
+        activity["entries"][0]["turnId"] = json!(f);
+        assert!(valid_reply(
+            &json!({"status":"ok","snapshot":scoped,"canvas":activity})
+        ));
+        activity["entries"][0]["agentState"] = json!("running");
+        assert!(!valid_reply(
+            &json!({"status":"ok","snapshot":scoped,"canvas":activity})
+        ));
+        scoped["slots"][0]["agentState"] = json!("unknown");
+        activity["entries"][0]["agentState"] = json!("unknown");
         activity["entries"][0]["activities"][0]["label"] = json!("raw secret input");
         assert!(!valid_canvas(&activity, &scoped));
         canvas["entries"][0]["terminalId"] = json!(t);
