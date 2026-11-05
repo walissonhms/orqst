@@ -10,6 +10,7 @@ import { chromium, expect, type Browser } from '@playwright/test';
 import { managedAgentsRequestSchema, type ManagedAgentsReply } from '@orqst/protocol';
 import { managedAgentsDocument } from '../apps/desktop/src/managed-agents-document.js';
 import en from '../apps/dashboard/src/locales/en-US.json';
+import { buildSharedTestHosts, buildSharedTestRenderer } from './helpers/shared-test-resources.js';
 import { DesktopManagedAgents } from '../packages/core/src/managed-codex/desktop.js';
 import { desktopAgentsAdmission } from '../packages/core/src/managed-codex/desktop-admission.js';
 import { nativeCodexBackend } from '../packages/core/src/managed-codex/runtime.js';
@@ -28,6 +29,9 @@ const run = promisify(execFile);
 let service: DesktopManagedAgents | undefined;
 let browser: Browser | undefined;
 try {
+  const resources = join(root, 'resources');
+  await buildSharedTestHosts(resources, 'agents');
+  const { script } = await buildSharedTestRenderer('agents');
   const fake = join(root, 'SYNTHETIC-not-codex');
   const project = join(root, 'synthetic-project');
   const home = join(root, 'synthetic-home');
@@ -69,7 +73,7 @@ try {
   const agents = (service = new DesktopManagedAgents(
     [files[0]!, files[1]!],
     keys.publicKey,
-    nativeCodexBackend(resolve('apps/desktop/dist/codex-structured-host.cjs')),
+    nativeCodexBackend(join(resources, 'codex-structured-host.cjs')),
     desktopAgentsAdmission(directory, files),
   ));
   for (const slot of [0, 1]) {
@@ -120,7 +124,7 @@ try {
   await page.evaluate(`window.orqstManagedAgentsClient = {
     request: (raw) => window.syntheticManagedRequest(raw)
   }`);
-  await page.addScriptTag({ path: resolve('apps/desktop/dist/managed-agents-client.js') });
+  await page.addScriptTag({ content: script });
   await expect(page.locator('#delegate')).toBeDisabled();
   await expect(page.locator('#name-0')).toHaveValue('A');
   await page.locator('#name-0').fill('Synthetic coordinator');
