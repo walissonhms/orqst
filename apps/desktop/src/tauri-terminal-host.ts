@@ -31,6 +31,9 @@ import {
 import { TauriFeatureService } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 import { terminalAccountLimits } from '../../../packages/core/src/terminal/account-limits.js';
+import { OwnedTurnPoller } from '../../../packages/core/src/terminal/owned-turn-poller.js';
+import { ownedNotificationPreferences } from '../../../packages/core/src/terminal/owned-notification-preferences.js';
+import { ownedTurnAlertSchema } from '@orqst/protocol';
 
 process.umask(0o077);
 let activeCore: Awaited<ReturnType<typeof connectManagedTerminalCore>> | undefined;
@@ -74,6 +77,7 @@ async function start() {
   const translate = (key: string) => String(i18n.t(key));
   let closed = false;
   let readySent = false;
+  const turnWatch: { poller?: OwnedTurnPoller; timer?: ReturnType<typeof setInterval> } = {};
   const send = (value: object) => {
     if (!readySent && 'kind' in value && value.kind === 'layout') return;
     const line = JSON.stringify(value) + '\n';
@@ -126,6 +130,34 @@ async function start() {
     terminalAccountLimits(directory),
   );
   await features.initialize();
+  if (closed) return;
+  turnWatch.poller = new OwnedTurnPoller(
+    async () => (await service.canvasEvidence([...core.identities], core.epoch)).entries,
+    ownedNotificationPreferences(directory),
+    (alert) => {
+      if (closed || !readySent) return;
+      const identity = core.identities.find((entry) => entry.terminalId === alert.terminalId);
+      if (!identity) return;
+      send(
+        ownedTurnAlertSchema.parse({
+          contractVersion: 1,
+          kind: 'owned-turn-alert',
+          epoch: core.epoch,
+          slot: identity.slot,
+          observedAt: Date.now(),
+          ...alert,
+        }),
+      );
+    },
+  );
+  turnWatch.timer = setInterval(() => void turnWatch.poller?.poll(), 2000);
+  turnWatch.timer.unref();
+  const notificationFocus = z.strictObject({
+    kind: z.literal('owned-notification-focus'),
+    epoch: z.literal(core.epoch),
+    terminalId: z.uuid(),
+    generation: z.number().int().nonnegative().safe(),
+  });
   const correlation = z.object({
     id: featureNativeEnvelopeSchema.shape.id,
     document: featureNativeEnvelopeSchema.shape.document,
@@ -133,6 +165,8 @@ async function start() {
   function shutdown() {
     if (closed) return;
     closed = true;
+    clearInterval(turnWatch.timer);
+    turnWatch.poller?.stop();
     service.close();
     process.stdin.destroy();
     void core.closeAndWait().catch(() => {
@@ -300,6 +334,12 @@ async function start() {
       if (line === 'shutdown') return shutdown();
       try {
         const raw: unknown = JSON.parse(line);
+        const clicked = notificationFocus.safeParse(raw);
+        if (clicked.success) {
+          if (clicked.data.generation === nativeGeneration && !enrollmentBusy && !service.fenced())
+            void features.focusOwned(clicked.data.terminalId);
+          continue;
+        }
         const enrollment = enrollmentMessage.safeParse(raw);
         if (enrollment.success) {
           void enroll(enrollment.data);

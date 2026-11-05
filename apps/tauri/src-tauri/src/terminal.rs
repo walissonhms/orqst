@@ -270,6 +270,53 @@ pub(crate) fn metadata_view_begin(app: &tauri::AppHandle) -> Option<u64> {
     Some(r.layout_generation)
 }
 
+pub(crate) fn owned_notification_current(
+    app: &tauri::AppHandle,
+    route: &crate::desktop::OwnedRoute,
+) -> bool {
+    if presentation_blocked(app) {
+        return false;
+    }
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|running| {
+            running.epoch == route.epoch
+                && route.slot < running.documents.len()
+                && !running.retiring
+                && !running.exit_authorized
+                && !running.confirming_quit
+                && !running.enrollment_pending
+                && !running.enrollment_fenced
+                && running.metadata_mutating.is_none()
+                && running.native_dialog.is_none()
+        })
+}
+
+/// A click selects an exact owned member; it cannot start a CLI or grant keyboard input.
+pub(crate) fn focus_owned_notification(app: &tauri::AppHandle, route: &crate::desktop::OwnedRoute) {
+    if !owned_notification_current(app, route) || presentation_blocked(app) {
+        return;
+    }
+    crate::desktop::focus(app);
+    let Some(generation) = metadata_view_begin(app) else {
+        return;
+    };
+    if !owned_notification_current(app, route) {
+        return;
+    }
+    if let Some(running) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+        running.presentation_suspended = false;
+    }
+    send(
+        app,
+        json!({"kind":"owned-notification-focus", "epoch":route.epoch,
+        "terminalId":route.terminal_id,"generation":generation}),
+    );
+}
+
 pub(crate) fn metadata_invalidate(app: &tauri::AppHandle) {
     revoke_all(app);
     let state = app.state::<Terminals>();
@@ -2975,7 +3022,19 @@ async fn start_selected_inner(
                         stream_outcome = Outcome::ProtocolRejected;
                         break;
                     };
-                    if value["kind"] == "feature-reply" {
+                    if value["kind"] == "owned-turn-alert" {
+                        let now_ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .ok()
+                            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
+                        let Some(alert) = now_ms.and_then(|now| {
+                            crate::desktop::parse_owned_alert(&value, &host_epoch, now)
+                        }) else {
+                            stream_outcome = Outcome::ProtocolRejected;
+                            break;
+                        };
+                        crate::desktop::notify_owned(&app, alert);
+                    } else if value["kind"] == "feature-reply" {
                         if presentation_blocked(&app) {
                             continue;
                         }

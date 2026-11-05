@@ -46,3 +46,28 @@ a turn status. It does not supply that channel to the existing interactive PTY.
 server; neither proves the session created by the current standalone PTY. A
 separate server or app-server would change the launch contract and must not be
 silently introduced. Codex/OpenCode binding remains unproven here.
+
+## Owned notification wiring — 2026-11-05
+
+Revalidated Anywh's pinned
+[`notify_turn_complete`](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/client/src-tauri/src/notifications.rs)
+and its root Apache-2.0 LICENSE; the exact tree has no NOTICE. The function accepts
+renderer title/body/session/profile data and relies on an older plugin's platform
+behavior. Decision: keep ORQST's fixed native category text, private owned-host pipe
+and existing callback instead of copying the command or its captured-content payload.
+No Anywh source or assets are incorporated by this increment.
+
+The installed `tauri-plugin-notification 2.8.0` crate's `.cargo_vcs_info.json` proves
+revision `128190689dbe59b59d344e01bf07b00862aa3791`. Re-inspected
+[`NotificationBuilder::show`, `Notification::on_action`, `imp::show_tracked`, `wait`](https://github.com/tauri-apps/plugins-workspace/blob/128190689dbe59b59d344e01bf07b00862aa3791/plugins/notification/src/desktop.rs):
+macOS click responses are reported by a waiting thread, not by the observer DOM.
+The Apache-2.0 OR MIT license and existing NOTICE entry remain applicable; no new
+dependency or version change. Delivery is asynchronous and OS suppression/errors
+are not an acceptance receipt. Keep the existing twenty-attempt native run cap.
+
+The new Core poller consumes only `TauriTerminalService.canvasEvidence` for exact
+owned identities. It rereads the existing private observer notification preferences
+through a bounded read-only SQLite query. Missing/corrupt settings, lost or stale
+samples, and shutdown clear the transition baseline. A native click returns through
+the current host epoch and layout generation and resolves exact Feature membership
+in Core; it never starts a CLI, types into a PTY, or restores an input grant.

@@ -1,6 +1,6 @@
 //! Native-only observer alerts and explicit window lifetime. No renderer capability.
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
@@ -30,6 +30,9 @@ struct State {
     origin: Option<String>,
     notification_id: i32,
     routes: HashMap<i32, String>,
+    owned_routes: HashMap<i32, OwnedRoute>,
+    owned_seen: HashSet<(String, String)>,
+    owned_frames_queued: usize,
     ui: Option<Ui>,
 }
 
@@ -73,6 +76,55 @@ struct Alert {
     category: &'static str,
     silent: bool,
     session_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct OwnedRoute {
+    pub epoch: String,
+    pub terminal_id: String,
+    pub slot: usize,
+}
+
+#[derive(Debug, PartialEq)]
+pub(crate) struct OwnedAlert {
+    route: OwnedRoute,
+    turn_id: String,
+    category: &'static str,
+    silent: bool,
+}
+
+pub(crate) fn parse_owned_alert(value: &Value, epoch: &str, now_ms: u64) -> Option<OwnedAlert> {
+    let fields = value.as_object()?;
+    let observed_at = value["observedAt"].as_u64()?;
+    let age = now_ms.checked_sub(observed_at)?;
+    let slot = value["slot"].as_u64()?;
+    if fields.len() != 9
+        || value["kind"] != "owned-turn-alert"
+        || value["contractVersion"] != 1
+        || value["epoch"] != epoch
+        || !crate::features::uuid(&value["epoch"])
+        || !crate::features::uuid(&value["terminalId"])
+        || !crate::features::uuid(&value["turnId"])
+        || slot > 7
+        || age > 10_000
+    {
+        return None;
+    }
+    let category = match value["category"].as_str()? {
+        "completed" => "completed",
+        "failed" => "failed",
+        _ => return None,
+    };
+    Some(OwnedAlert {
+        route: OwnedRoute {
+            epoch: epoch.to_owned(),
+            terminal_id: value["terminalId"].as_str()?.to_owned(),
+            slot: slot as usize,
+        },
+        turn_id: value["turnId"].as_str()?.to_owned(),
+        category,
+        silent: value["silent"].as_bool()?,
+    })
 }
 
 fn session_id_valid(id: &str) -> bool {
@@ -150,6 +202,7 @@ impl State {
     fn revoke_routes(&mut self) {
         self.generation = self.generation.wrapping_add(1);
         self.routes.clear();
+        self.owned_routes.clear();
     }
 
     fn disconnect(&mut self) {
@@ -210,6 +263,21 @@ impl State {
         (self.enabled && !self.failed && self.connected(now) && self.origin.is_some())
             .then_some((session, self.generation))
     }
+
+    fn register_owned(&mut self, alert: &OwnedAlert, now: Instant) -> Option<i32> {
+        let key = (alert.route.terminal_id.clone(), alert.turn_id.clone());
+        if self.owned_seen.len() >= 128 || !self.owned_seen.insert(key) {
+            return None;
+        }
+        if !self.enabled || self.failed || !self.connected(now) || self.attempts >= MAX_ATTEMPTS {
+            return None;
+        }
+        self.attempts += 1;
+        self.notification_id = self.notification_id.checked_add(1)?;
+        let id = self.notification_id;
+        self.owned_routes.insert(id, alert.route.clone());
+        Some(id)
+    }
 }
 
 // Called only with the owned Core's ready origin, never a renderer-provided URL.
@@ -236,6 +304,32 @@ fn notification_action(
         return;
     };
     let received = Instant::now();
+    let owned = {
+        let state = app.state::<Desktop>();
+        let mut state = state.0.lock().unwrap();
+        state
+            .owned_routes
+            .remove(&id)
+            .map(|route| (route, state.generation))
+    };
+    if let Some((route, generation)) = owned {
+        let app = app.clone();
+        let _ = app.clone().run_on_main_thread(move || {
+            let valid = {
+                let desktop = app.state::<Desktop>();
+                let state = desktop.0.lock().unwrap();
+                received.elapsed() <= FRESHNESS
+                    && state.generation == generation
+                    && state.enabled
+                    && !state.failed
+                    && state.connected(Instant::now())
+            };
+            if valid {
+                crate::terminal::focus_owned_notification(&app, &route);
+            }
+        });
+        return;
+    }
     let route = app
         .state::<Desktop>()
         .0
@@ -595,6 +689,66 @@ fn apply_frame(app: &tauri::AppHandle, frame: Option<Frame>) {
     refresh(app);
 }
 
+/// Private owned-terminal pipe only; no renderer command can reach this boundary.
+pub(crate) fn notify_owned(app: &tauri::AppHandle, alert: OwnedAlert) {
+    let received = Instant::now();
+    let generation = {
+        let desktop = app.state::<Desktop>();
+        let mut state = desktop.0.lock().unwrap();
+        if state.stopped || state.owned_frames_queued >= 8 {
+            return;
+        }
+        state.owned_frames_queued += 1;
+        state.generation
+    };
+    let native = app.clone();
+    if app
+        .run_on_main_thread(move || {
+            let current = {
+                let desktop = native.state::<Desktop>();
+                let mut state = desktop.0.lock().unwrap();
+                state.owned_frames_queued -= 1;
+                state.generation == generation
+            };
+            if !current
+                || received.elapsed() > FRESHNESS
+                || !crate::terminal::owned_notification_current(&native, &alert.route)
+            {
+                return;
+            }
+            let id = native
+                .state::<Desktop>()
+                .0
+                .lock()
+                .unwrap()
+                .register_owned(&alert, Instant::now());
+            let Some(id) = id else { return };
+            let mut notification = native
+                .notification()
+                .builder()
+                .id(id)
+                .title("ORQST")
+                .body(translate(&format!("desktopShell.alert.{}", alert.category)));
+            if !alert.silent {
+                notification = notification.sound(if cfg!(target_os = "macos") {
+                    "NSUserNotificationDefaultSoundName"
+                } else {
+                    "default"
+                });
+            }
+            if notification.show().is_err() {
+                let desktop = native.state::<Desktop>();
+                let mut state = desktop.0.lock().unwrap();
+                state.failed = true;
+                state.revoke_routes();
+            }
+        })
+        .is_err()
+    {
+        app.state::<Desktop>().0.lock().unwrap().owned_frames_queued -= 1;
+    }
+}
+
 pub fn disconnected(app: &tauri::AppHandle) {
     app.state::<Desktop>().0.lock().unwrap().disconnect();
     // Never block the owned-child drain on a menu update during Exit cleanup.
@@ -800,6 +954,59 @@ pub fn stop(app: &tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn owned_alert() -> Value {
+        serde_json::json!({"contractVersion":1,"kind":"owned-turn-alert",
+            "epoch":"00000000-0000-4000-8000-000000000001","slot":2,
+            "terminalId":"00000000-0000-4000-8000-000000000002",
+            "turnId":"00000000-0000-4000-8000-000000000003",
+            "category":"completed","silent":true,"observedAt":1000})
+    }
+
+    #[test]
+    fn owned_alert_pipe_rejects_wrong_epoch_content_future_stale_and_unproven_states() {
+        let value = owned_alert();
+        let epoch = value["epoch"].as_str().unwrap();
+        assert!(parse_owned_alert(&value, epoch, 1000).is_some());
+        assert!(parse_owned_alert(&value, "other", 1000).is_none());
+        assert!(parse_owned_alert(&value, epoch, 999).is_none());
+        assert!(parse_owned_alert(&value, epoch, 11001).is_none());
+        for (key, field) in [
+            ("body", serde_json::json!("private content")),
+            ("slot", serde_json::json!(8)),
+            ("category", serde_json::json!("waiting_for_user")),
+            ("terminalId", serde_json::json!("nearby")),
+            ("contractVersion", serde_json::json!(2)),
+        ] {
+            let mut candidate = value.clone();
+            candidate[key] = field;
+            assert!(parse_owned_alert(&candidate, epoch, 1000).is_none());
+        }
+    }
+
+    #[test]
+    fn owned_notifications_share_the_native_budget_and_consume_disabled_transitions() {
+        let now = Instant::now();
+        let value = owned_alert();
+        let mut alert = parse_owned_alert(&value, value["epoch"].as_str().unwrap(), 1000).unwrap();
+        let mut state = State {
+            last_frame: Some(now),
+            ..State::default()
+        };
+        assert!(state.register_owned(&alert, now).is_none());
+        state.enabled = true;
+        assert!(state.register_owned(&alert, now).is_none());
+        alert.turn_id = "00000000-0000-4000-8000-000000000004".into();
+        let id = state.register_owned(&alert, now).unwrap();
+        assert_eq!(state.owned_routes[&id], alert.route);
+        assert!(state.register_owned(&alert, now).is_none());
+        state.revoke_routes();
+        assert!(state.owned_routes.is_empty());
+        assert!(state.register_owned(&alert, now).is_none());
+        alert.turn_id = "00000000-0000-4000-8000-000000000005".into();
+        state.attempts = MAX_ATTEMPTS;
+        assert!(state.register_owned(&alert, now).is_none());
+    }
+
     fn frame() -> Option<Frame> {
         Some(Frame {
             pending: 1,

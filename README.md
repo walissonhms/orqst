@@ -1,5 +1,14 @@
 # ORQST
 
+## Owned turn notifications — 2026-11-05 (source increment)
+
+The owned terminal host now samples Claude turn evidence in the background and
+requests fixed native completed/failed alerts through the existing preferences,
+opt-in and dedupe gates. Click navigation resolves the exact retained terminal
+without starting a CLI or granting input. Native OS/provider acceptance, Claude
+hooks, batch creation and structured mentions remain pending. See the
+[contract and limits](docs/api/terminal-native.md#owned-turn-os-notifications--2026-11-05).
+
 ## Feature canvas — 2026-11-05 (source candidate)
 
 The owner-directed canvas replaces the tab-strip-only presentation: dotted canvas,
