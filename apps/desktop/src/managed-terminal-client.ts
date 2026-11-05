@@ -445,6 +445,7 @@ const pane = (
 const layoutActions = [
   ['dashboard', 'dashboard'],
   ['hide-pane', 'hide'],
+  ['hide-pane-menu', 'hide'],
   ['split-columns', 'split-columns'],
   ['split-rows', 'split-rows'],
   ['maximize', 'maximize'],

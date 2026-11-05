@@ -1,5 +1,23 @@
 # Studio terminal workflow
 
+## Incremental pane minimization — 2026-11-05
+
+Native enrollment now retains each appended pane's bounded label and provider
+alongside its document, so the minimized-pane dock includes terminals added after
+the initial selection. The private native host emits these display fields for both
+initial and appended panes. The header and menu hide controls have distinct IDs
+and both reuse the same layout-only action. Existing process, input and document
+authority is unchanged; minimizing never stops a CLI.
+
+Ordinary individually prepared terminals omit ORQST MCP. Their successful opening
+does not connect them or enable `@handle` delegation. Experimental explicitly
+reviewed MCP pair preparation and structured managed-agent mentions remain separate
+compositions; a saved Feature role or policy alone grants no task authority.
+
+The current correction requires a matching native executable and private host
+resource build. The already open package and running processes remain unchanged;
+corrected native minimize/restore acceptance is pending.
+
 ## N-member navigation update — 2026-11-03
 
 The preceding A/B workflow is preserved as a preset. A configured maximum of 1–8

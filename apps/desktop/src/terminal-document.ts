@@ -59,7 +59,7 @@ export function terminalDocument(options: {
       <div class="pane-actions" aria-label="${text('paneActions')}">
         <div class="pane-view-actions" role="group" aria-label="${text('viewGroup')}">
           <p class="muted">${text('viewGroupHelp')}</p>
-          <button id="hide-pane">${text('hideView')}</button>${button('detach')}
+          <button id="hide-pane-menu">${text('hideView')}</button>${button('detach')}
         </div>
         <div class="pane-process-actions" role="group" aria-label="${text('processGroup')}">
           <p class="muted">${text('processGroupHelp')}</p>

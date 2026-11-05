@@ -1,5 +1,12 @@
 # ORQST
 
+## Incremental terminal dock correction — 2026-11-05
+
+Source now keeps appended terminal documents, display labels and provider labels
+aligned, and gives the menu hide control its own event binding. See the
+[minimize/restore boundary and communication limits](docs/development/studio-terminal-ux.md#incremental-pane-minimization--2026-11-05).
+This source correction does not replace the running package or enable MCP.
+
 ## Native model-selector correction — 2026-11-05
 
 Preparation now resolves the owned dashboard Webview independently of its native

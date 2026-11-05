@@ -90,6 +90,14 @@ test('every emitted native chrome key exists in both shipped locales', () => {
   }
 });
 
+test('retained terminal chrome has unique element ids for every supported slot count', () => {
+  for (let count = 1; count <= 8; count++) {
+    const html = document({ providers: Array.from({ length: count }, () => 'SYNTHETIC') });
+    const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(new Set(ids).size, ids.length, `Duplicate element id with ${count} slots`);
+  }
+});
+
 test('only explicitly selected terminal documents opt into operational Open; legacy Start is unchanged', () => {
   const legacy = document();
   const selected = document({ operationalOpen: true });

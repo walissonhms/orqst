@@ -189,6 +189,7 @@ async function start() {
     return {
       profileId: `${interactiveProvider(config)}-terminal-v1`,
       title: `${slot + 1} · ${providers[slot]}`,
+      provider: providers[slot]!,
       html: terminalDocument({
         language,
         slot,
@@ -416,6 +417,7 @@ async function start() {
     panes: selection.map(({ config }, slot) => ({
       profileId: `${interactiveProvider(config)}-terminal-v1`,
       title: `${slot + 1} · ${providers[slot]}`,
+      provider: providers[slot]!,
       html: terminalDocument({
         language,
         slot,

@@ -1,5 +1,12 @@
 # Changelog
 
+## Incremental terminal minimization — 2026-11-05
+
+- Keep dock labels/providers aligned when native enrollment appends a terminal,
+  so newly hidden panes remain discoverable. Validate bounded private display metadata.
+- Bind the menu hide action separately from the header minimize control, preserving
+  processes and the existing native focus/document/restore checks.
+
 ## Native preparation in a multi-Webview window — 2026-11-05
 
 - Resolve the dashboard Webview and its parent Window separately so retained

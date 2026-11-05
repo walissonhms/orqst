@@ -1583,6 +1583,13 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64)
     } else {
         Vec::new()
     };
+    let detail = dock_detail(&visible, &labels, &providers, generation);
+    let _ = chrome.eval(format!(
+        "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
+    ));
+}
+
+fn dock_detail(visible: &[u64], labels: &[String], providers: &[String], generation: u64) -> Value {
     let hidden: Vec<Value> = (0..labels.len())
         .filter(|slot| !visible.contains(&(*slot as u64)))
         .map(|slot| {
@@ -1593,10 +1600,7 @@ fn emit_dock(app: &tauri::AppHandle, state: &Value, show: bool, generation: u64)
             })
         })
         .collect();
-    let detail = json!({"hidden": hidden, "count": labels.len(), "generation": generation});
-    let _ = chrome.eval(format!(
-        "window.dispatchEvent(new CustomEvent('orqst-terminal-dock',{{detail:{detail}}}));"
-    ));
+    json!({"hidden": hidden, "count": labels.len(), "generation": generation})
 }
 
 fn apply_layout(app: &tauri::AppHandle, value: &Value) {
@@ -2153,10 +2157,42 @@ fn create_terminal_view(
     Ok(())
 }
 
+fn valid_pane_metadata(pane: &Value) -> bool {
+    [("title", 48), ("provider", 32)]
+        .iter()
+        .all(|(key, limit)| {
+            pane[*key].as_str().is_some_and(|text| {
+                !text.is_empty() && text.len() <= *limit && !text.chars().any(char::is_control)
+            })
+        })
+}
+
+fn append_pane(
+    documents: &mut Vec<String>,
+    labels: &mut Vec<String>,
+    providers: &mut Vec<String>,
+    pane: &Value,
+) -> Result<(), &'static str> {
+    if documents.len() != labels.len()
+        || documents.len() != providers.len()
+        || !valid_pane_metadata(pane)
+    {
+        return Err("Native pane metadata unavailable");
+    }
+    let html = pane["html"]
+        .as_str()
+        .ok_or("Native pane document unavailable")?;
+    documents.push(html.into());
+    labels.push(pane["title"].as_str().unwrap().into());
+    providers.push(pane["provider"].as_str().unwrap().into());
+    Ok(())
+}
+
 fn valid_enrollment(value: &Value, id: &str, epoch: &str, slot: usize, capacity: usize) -> bool {
     let receipt = &value["receipt"];
     let member = &receipt["member"];
     value["status"] == "ready"
+        && valid_pane_metadata(&value["pane"])
         && receipt["version"] == 1
         && receipt["status"] == "ready"
         && receipt["reason"] == "admitted"
@@ -2332,8 +2368,12 @@ async fn enroll_selected_inner(
             return Err("Enrollment result incomplete or uncertain".into());
         }
         // Append only. Existing documents, generations, busy state and opening intents are retained.
-        r.documents
-            .push(value["pane"]["html"].as_str().unwrap().into());
+        append_pane(
+            &mut r.documents,
+            &mut r.labels,
+            &mut r.providers,
+            &value["pane"],
+        )?;
         r.generations.push(0);
         r.loaded.push(false);
         r.revoked.push(false);
@@ -3211,7 +3251,8 @@ mod opening_tests {
 #[cfg(test)]
 mod enrollment_tests {
     use super::{
-        enrollment_creation_allowed, invalidate_presentation_state, valid_enrollment, OpeningIntent,
+        append_pane, dock_detail, enrollment_creation_allowed, invalidate_presentation_state,
+        valid_enrollment, OpeningIntent,
     };
     use serde_json::json;
     use std::time::{Duration, Instant};
@@ -3222,7 +3263,8 @@ mod enrollment_tests {
         let ready = json!({"status":"ready","receipt":{"version":1,"status":"ready",
             "reason":"admitted","epoch":epoch,"opId":id,"revision":1,"member":{
             "slot":2,"status":"ready","terminalId":"00000000-0000-4000-8000-000000000012",
-            "admissionRevision":1}},"pane":{"profileId":"claude-terminal-v1","html":"SYNTHETIC"}});
+            "admissionRevision":1}},"pane":{"profileId":"claude-terminal-v1","html":"SYNTHETIC",
+            "title":"3 · SYNTHETIC Claude", "provider":"SYNTHETIC Claude"}});
         assert!(valid_enrollment(&ready, id, epoch, 2, 8));
         for status in ["rejected", "uncertain"] {
             let mut value = ready.clone();
@@ -3239,6 +3281,53 @@ mod enrollment_tests {
         let mut value = ready;
         value["receipt"]["member"]["admissionRevision"] = json!(2);
         assert!(!valid_enrollment(&value, id, epoch, 2, 8));
+    }
+
+    #[test]
+    fn appended_panes_remain_addressable_in_the_hidden_pane_dock() {
+        let mut documents = Vec::new();
+        let mut labels = Vec::new();
+        let mut providers = Vec::new();
+        for (slot, provider) in ["Codex", "Claude", "OpenCode"].iter().enumerate() {
+            append_pane(
+                &mut documents,
+                &mut labels,
+                &mut providers,
+                &json!({"html":"SYNTHETIC", "title":format!("{} · {provider}", slot + 1),
+                    "provider":provider}),
+            )
+            .unwrap();
+            assert_eq!(documents.len(), labels.len());
+            assert_eq!(documents.len(), providers.len());
+        }
+        assert_eq!(
+            dock_detail(&[0, 1], &labels, &providers, 7),
+            json!({"hidden":[{"slot":2,"label":"3 · OpenCode","provider":"OpenCode"}],
+                "count":3,"generation":7})
+        );
+        assert_eq!(
+            dock_detail(&[0, 1, 2], &labels, &providers, 8)["hidden"],
+            json!([])
+        );
+    }
+
+    #[test]
+    fn invalid_pane_metadata_cannot_partially_append_a_document() {
+        for pane in [
+            json!({"html":"SYNTHETIC","title":"3 · SYNTHETIC"}),
+            json!({"html":"SYNTHETIC","title":"","provider":"SYNTHETIC"}),
+            json!({"html":"SYNTHETIC","title":"SYNTHETIC\n","provider":"SYNTHETIC"}),
+            json!({"html":"SYNTHETIC","title":"SYNTHETIC","provider":"x".repeat(33)}),
+            json!({"title":"SYNTHETIC","provider":"SYNTHETIC"}),
+        ] {
+            let mut documents = vec!["original".into()];
+            let mut labels = vec!["original".into()];
+            let mut providers = vec!["original".into()];
+            assert!(append_pane(&mut documents, &mut labels, &mut providers, &pane).is_err());
+            assert_eq!(documents, vec!["original"]);
+            assert_eq!(labels, vec!["original"]);
+            assert_eq!(providers, vec!["original"]);
+        }
     }
     #[test]
     fn expired_or_cancelled_ui_creation_cannot_materialize_a_webview_after_its_wait() {

@@ -1,5 +1,27 @@
 # V6 terminal chrome reuse review — 2026-11-04
 
+## Incremental minimization correction — 2026-11-05
+
+Native inspection of package `a414585` reproduced a hidden newly enrolled pane
+missing from the dock. `enroll_selected_inner` appended the document but omitted
+the corresponding native label/provider entries used by `emit_dock`. Enrollment
+now validates bounded display metadata and appends all three collections together;
+the private Node producer includes the provider label for both initial and appended
+panes. Existing document/receipt/owner/generation gates remain authoritative.
+
+The pane menu also reused the header's `hide-pane` element ID, while the client
+bound only the first element. The menu has its own unique ID and invokes the same
+existing layout-only hide action. Hide remains independent of Stop and termination.
+
+Re-inspected pinned Anywh `TerminalPanel`/`handleCloseTerminal` at
+`546f189c04415c3c5af5f40e3931a0a90b9aba31` using the source linked below: sibling
+views remain mounted, but close invokes the Relay terminal API. Keep ORQST's
+retained native Webviews and existing Core layout implementation; no upstream code,
+assets or dependencies copied. License/NOTICE and communication decisions below
+remain unchanged. This fix neither enables MCP nor implements mention routing in
+ordinary independent terminal panels. Native corrected-package acceptance remains
+separate from synthetic source tests.
+
 Baseline: ORQST `9d7abfc3aa2f7ff52656b482df586c55dfbdca4f`.
 The owner-approved five Markdown files, HTML and intake paste were read along
 with current repository rules, README, ROADMAP, design system and V6 checklist.

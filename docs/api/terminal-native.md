@@ -1,5 +1,18 @@
 # Native terminal client boundary
 
+## Tauri incremental dock metadata — 2026-11-05
+
+The private Node host's initial and enrollment `pane` values include a `title`
+and localized `provider` label. Native enrollment requires nonempty strings of
+at most 48 and 32 UTF-8 bytes respectively, without control characters, before
+appending the document, label and provider vectors together. The dock projects
+only hidden slot, label, provider, count and native generation; these display
+fields grant no process, input, routing or restore authority. The existing exact
+receipt, document, owner, generation and restore checks remain unchanged.
+
+Native and private host resources must be packaged together. This does not add
+an observer HTTP/WebSocket route or change the public terminal request schema.
+
 ## Tauri native client — 2026-11-04
 
 An opt-in Tauri client reuses this request/reply contract, `TerminalNativeBroker`,
