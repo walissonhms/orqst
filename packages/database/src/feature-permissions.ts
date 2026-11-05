@@ -122,9 +122,21 @@ export function openFeaturePermissions(
     read: (scope: FeatureScope) => transaction(() => read(scope)),
     save: (scope: FeatureScope, actorId: string, raw: unknown) =>
       transaction(() => {
-        const { expectedRevision, configuration, reviewDigest } =
-          featurePermissionSaveSchema.parse(raw);
+        const {
+          expectedRevision,
+          expectedFeatureRevision,
+          expectedViewRevision,
+          configuration,
+          reviewDigest,
+        } = featurePermissionSaveSchema.parse(raw);
         const feature = scopeFeature(scope);
+        if (expectedFeatureRevision !== undefined && feature.revision !== expectedFeatureRevision)
+          throw new FeaturePermissionRevisionConflict('Stale Feature permission scope');
+        if (expectedViewRevision !== undefined) {
+          const view = features.readView(feature.workspaceId);
+          if (view.revision !== expectedViewRevision || view.featureId !== feature.featureId)
+            throw new FeaturePermissionRevisionConflict('Stale active Feature view');
+        }
         members(feature.terminalIds, configuration);
         const before = read(scope);
         if (before.revision !== expectedRevision)

@@ -53,6 +53,8 @@ export const featurePermissionNativeRequestSchema = z.discriminatedUnion('action
     action: z.literal('savePermissions'),
     featureId,
     expectedRevision: z.number().int().nonnegative().safe(),
+    expectedFeatureRevision: z.number().int().positive().safe(),
+    expectedViewRevision: z.number().int().nonnegative().safe(),
     configuration: featurePermissionConfigurationSchema,
     reviewPlan: z.string().min(1).max(131072),
     reviewDigest: z.string().regex(/^[0-9a-f]{64}$/),

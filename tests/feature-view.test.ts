@@ -614,11 +614,17 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
     f.db.saveView({ featureId: feature.featureId, expectedRevision: 0 });
     await f.service.initialize();
     const actor = 'native-e10636eb-3a12-4094-9123-49a4cdad27b8';
+    const snapshot = (
+      await f.service.request({ action: 'snapshot', contractVersion: 1, generation: 0 })
+    ).snapshot!;
     const makeRequest = (expectedRevision: number) => {
       const configuration = { schemaVersion: 1 as const, rules: [] };
       const reviewPlan = JSON.stringify({
         featureId: feature.featureId,
         expectedRevision,
+        expectedFeatureRevision: feature.revision,
+        expectedViewRevision: snapshot.view.revision,
+        snapshot,
         generation: 0,
         epoch: actor.slice(7),
         configuration,
@@ -629,6 +635,8 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
         action: 'savePermissions',
         featureId: feature.featureId,
         expectedRevision,
+        expectedFeatureRevision: feature.revision,
+        expectedViewRevision: snapshot.view.revision,
         configuration,
         reviewPlan,
         reviewDigest: createHash('sha256').update(reviewPlan).digest('hex'),

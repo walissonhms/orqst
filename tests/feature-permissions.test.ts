@@ -143,6 +143,48 @@ test(
 );
 
 test(
+  'reviewed Feature revision participates in the same permission transaction',
+  withFixture((f) => {
+    const reviewed = f.feature.revision;
+    f.features.update(f.scope, { expectedRevision: reviewed, name: 'SYNTHETIC changed' });
+    assert.throws(
+      () =>
+        f.permissions.save(f.scope, 'native-owner', {
+          expectedRevision: 0,
+          expectedFeatureRevision: reviewed,
+          configuration: f.policy(),
+        }),
+      FeaturePermissionRevisionConflict,
+    );
+    assert.equal(f.permissions.read(f.scope).revision, 0);
+    assert.equal(f.permissions.events(f.scope).length, 0);
+  }),
+);
+
+test(
+  'reviewed active view revision is checked inside the policy transaction',
+  withFixture((f) => {
+    const view = f.features.saveView(f.scope.workspaceId, {
+      featureId: f.scope.featureId,
+      expectedRevision: 0,
+    });
+    f.features.saveView(f.scope.workspaceId, { featureId: null, expectedRevision: view.revision });
+    assert.throws(
+      () =>
+        f.permissions.save(f.scope, 'native-owner', {
+          expectedRevision: 0,
+          expectedFeatureRevision: f.feature.revision,
+          expectedViewRevision: view.revision,
+          configuration: f.policy(),
+        }),
+      FeaturePermissionRevisionConflict,
+    );
+    assert.equal(f.permissions.read(f.scope).revision, 0);
+    assert.equal(f.permissions.events(f.scope).length, 0);
+  }),
+);
+
+test(
   'audit insertion failure atomically rolls back policy and revision',
   withFixture((f) => {
     f.permissions.save(f.scope, 'native-owner', { expectedRevision: 0, configuration: f.policy() });

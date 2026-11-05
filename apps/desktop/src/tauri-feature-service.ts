@@ -1,5 +1,6 @@
 import { basename } from 'node:path';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import {
   featureNativeRequestSchema,
   featurePermissionNativeRequestSchema,
@@ -226,6 +227,9 @@ export class TauriFeatureService {
               request.reviewDigest ||
             Reflect.get(plan, 'featureId') !== request.featureId ||
             Reflect.get(plan, 'expectedRevision') !== request.expectedRevision ||
+            Reflect.get(plan, 'expectedFeatureRevision') !== request.expectedFeatureRevision ||
+            Reflect.get(plan, 'expectedViewRevision') !== request.expectedViewRevision ||
+            !isDeepStrictEqual(Reflect.get(plan, 'snapshot'), this.snapshot()) ||
             Reflect.get(plan, 'generation') !== request.generation ||
             `native-${Reflect.get(plan, 'epoch')}` !== actorId ||
             JSON.stringify(Reflect.get(plan, 'configuration')) !==
@@ -237,6 +241,8 @@ export class TauriFeatureService {
           try {
             permissions = await this.core.features.savePermissions(request.featureId, actorId, {
               expectedRevision: request.expectedRevision,
+              expectedFeatureRevision: request.expectedFeatureRevision,
+              expectedViewRevision: request.expectedViewRevision,
               configuration: request.configuration,
               reviewDigest: request.reviewDigest,
             });

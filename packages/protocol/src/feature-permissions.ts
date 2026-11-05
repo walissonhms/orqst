@@ -63,6 +63,8 @@ export const featurePermissionStateSchema = featureScopeSchema
 export type FeaturePermissionState = z.infer<typeof featurePermissionStateSchema>;
 export const featurePermissionSaveSchema = z.strictObject({
   expectedRevision: z.number().int().nonnegative().safe(),
+  expectedFeatureRevision: z.number().int().positive().safe().optional(),
+  expectedViewRevision: z.number().int().nonnegative().safe().optional(),
   configuration: featurePermissionConfigurationSchema,
   reviewDigest: z
     .string()

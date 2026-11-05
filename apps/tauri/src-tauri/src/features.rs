@@ -279,11 +279,15 @@ pub(crate) fn valid_permission_envelope(value: &Value) -> bool {
                     "generation",
                     "featureId",
                     "expectedRevision",
+                    "expectedFeatureRevision",
+                    "expectedViewRevision",
                     "configuration",
                     "reviewPlan",
                     "reviewDigest",
                 ],
             ) && safe(&request["expectedRevision"]).is_some()
+                && safe(&request["expectedFeatureRevision"]).is_some_and(|n| n > 0)
+                && safe(&request["expectedViewRevision"]).is_some()
                 && valid_policy(&request["configuration"])
                 && request["reviewPlan"]
                     .as_str()
@@ -1159,6 +1163,7 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
         return denied();
     };
     if snapshot["activeFeatureId"] != feature_id
+        || snapshot["view"]["featureId"] != feature_id
         || snapshot["generation"].as_u64() != Some(generation)
         || current["featureId"] != feature_id
         || feature["status"] == "archived"
@@ -1187,7 +1192,7 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
         );
     }
     let feature_name = format!("{} ({})", feature["name"].as_str().unwrap(), feature_id);
-    let plan = json!({"featureId":feature_id,"expectedRevision":expected,"generation":generation,
+    let plan = json!({"featureId":feature_id,"expectedRevision":expected,"expectedFeatureRevision":feature["revision"],"expectedViewRevision":snapshot["view"]["revision"],"generation":generation,
         "document":document,"epoch":epoch,"snapshot":snapshot,"permissions":current,"configuration":request["configuration"]});
     let plan_text = plan.to_string();
     let digest = format!("{:x}", Sha256::digest(plan_text.as_bytes()));
@@ -1234,7 +1239,7 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
             && crate::terminal::permission_review_current(app, &epoch, presentation, &review_id)
             && !crate::terminal::presentation_blocked(app)).await { return denied(); }
         let save = json!({"action":"savePermissions","contractVersion":1,"generation":generation,
-            "featureId":feature_id,"expectedRevision":expected,"configuration":plan["configuration"],
+            "featureId":feature_id,"expectedRevision":expected,"expectedFeatureRevision":plan["expectedFeatureRevision"],"expectedViewRevision":plan["expectedViewRevision"],"configuration":plan["configuration"],
             "reviewPlan":plan_text,"reviewDigest":digest});
         let result = permission_metadata_request(app, &source, document, presentation, &epoch, save, Some((&window, &review_id))).await;
         if result["status"] == "unavailable" || result["status"] == "denied" { return json!({"status":"unknown"}); }
