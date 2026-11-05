@@ -1,3 +1,4 @@
+import { OwnedTerminalShutdown } from '../../../packages/core/src/terminal/owned-shutdown.js';
 import type { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
@@ -27,6 +28,10 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
     focused: z.boolean(),
   }),
   z.strictObject({ kind: z.literal('retire'), id: z.uuid(), slot, focused: z.boolean() }),
+  // Native Quit/CloseRequested private pipe only. Neither action is in terminalNativeRequestSchema.
+  z.strictObject({ kind: z.literal('shutdownOwned'), id: z.uuid() }),
+  z.strictObject({ kind: z.literal('retireOwned'), id: z.uuid() }),
+  z.strictObject({ kind: z.literal('closePreservedOwned'), id: z.uuid() }),
   z.strictObject({ kind: z.literal('revoke'), slot }),
   z.strictObject({ kind: z.literal('suspend-input'), slot }),
   z.strictObject({ kind: z.literal('close'), slot }),
@@ -52,6 +57,10 @@ export class TauriTerminalService {
   private mcpBusy = false;
   private metadataBusy = false;
   private readonly retirement?: TauriTerminalRetirement;
+  private readonly ownedShutdown?: OwnedTerminalShutdown;
+  private shutdownFence = false;
+  private shutdownReady = false;
+  private shutdownPreserved = false;
 
   constructor(
     supervisors: TerminalNativeSupervisor[],
@@ -59,11 +68,45 @@ export class TauriTerminalService {
     private readonly send: (value: object) => void,
     private readonly translate: (key: string) => string,
     private readonly mcp?: TauriTerminalMcp,
-    core?: TauriTerminalRetirementCore,
+    private readonly core?: TauriTerminalRetirementCore,
     private readonly cliPolicy?: TerminalCliPolicyStore,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
     this.panes = supervisors.map((supervisor, slot) => this.pane(supervisor, slot));
+    if (core?.beginOwnedShutdown)
+      this.ownedShutdown = new OwnedTerminalShutdown({
+        current: () => !this.closed && this.shutdownFence,
+        inventory: () => core.beginOwnedShutdown!(),
+        owns: (attempt) => core.epoch === attempt.epoch && this.panes[attempt.slot] !== undefined,
+        stop: async (attempt, current) => {
+          const supervisor = this.panes[attempt.slot]?.supervisor;
+          if (!supervisor || !current()) throw new Error('Shutdown ownership unavailable');
+          const challenge = await supervisor.requestStop(
+            'desktop-managed',
+            attempt.instanceId,
+            'SIGTERM',
+          );
+          if (
+            !current() ||
+            challenge.operation !== 'stop' ||
+            challenge.target !== attempt.instanceId ||
+            challenge.epoch !== attempt.epoch ||
+            challenge.clientId !== 'desktop-managed' ||
+            Date.now() >= challenge.expiresAt
+          )
+            throw new Error('Shutdown stop proof is stale');
+          await supervisor.stop(attempt.instanceId, 'SIGTERM', {
+            challengeId: challenge.challengeId,
+            signature: sign(null, terminalChallengeBytes(challenge), this.keys.privateKey).toString(
+              'base64url',
+            ),
+          });
+        },
+        prepareRetirement: () => core.prepareRetire(),
+        ...(core.preserveOwnedShutdown
+          ? { preserveExit: () => core.preserveOwnedShutdown!() }
+          : {}),
+      });
   }
 
   private pane(supervisor: TerminalNativeSupervisor, slot: number) {
@@ -132,7 +175,7 @@ export class TauriTerminalService {
         },
       },
     );
-    return { document, state, broker };
+    return { document, state, broker, supervisor };
   }
 
   /** Confirmed native enrollment only; previous document/broker/grants remain the same objects. */
@@ -146,6 +189,7 @@ export class TauriTerminalService {
   beginMetadata(): boolean {
     if (
       this.closed ||
+      this.shutdownFence ||
       this.metadataBusy ||
       this.mcpBusy ||
       this.retirement?.busy ||
@@ -168,6 +212,14 @@ export class TauriTerminalService {
     const message = parsed.data;
     if (message.kind === 'confirm') {
       this.confirmations.get(message.id)?.resolve(message.accepted);
+      return;
+    }
+    if (
+      message.kind === 'shutdownOwned' ||
+      message.kind === 'retireOwned' ||
+      message.kind === 'closePreservedOwned'
+    ) {
+      await this.nativeOwnedShutdown(message);
       return;
     }
     const pane = this.panes[message.slot];
@@ -197,7 +249,10 @@ export class TauriTerminalService {
         const request = terminalNativeRequestSchema.safeParse(message.request);
         return request.success && ['read', 'snapshot', 'resize'].includes(request.data.action);
       })();
-    if (this.metadataBusy && !passive) {
+    if (
+      (this.metadataBusy && !passive) ||
+      (this.shutdownFence && !passive && message.kind !== 'retire')
+    ) {
       this.send({
         kind: message.kind === 'retire' ? 'retirement' : 'reply',
         id: message.id,
@@ -241,11 +296,9 @@ export class TauriTerminalService {
         ...(this.cliPolicy
           ? {
               authorizeOwnedRetirement: (evidence: OwnedTerminalRetirementEvidence) =>
-                evidence.attempts.every(
-                  (attempt) =>
-                    this.panes[attempt.slot]?.broker.ownsRetirementAttempt(attempt.instanceId) ===
-                    true,
-                ),
+                evidence.attempts.length > 0 &&
+                evidence.epoch === this.core?.epoch &&
+                evidence.attempts.every((attempt) => this.panes[attempt.slot] !== undefined),
             }
           : {}),
         closeBrokers: () => {
@@ -292,6 +345,61 @@ export class TauriTerminalService {
       pane.state.busy = false;
       pane.state.reviewing = false;
     }
+  }
+
+  /** Native main-window Quit only. No terminal focus assertion or renderer action is accepted. */
+  private async nativeOwnedShutdown(message: {
+    kind: 'shutdownOwned' | 'retireOwned' | 'closePreservedOwned';
+    id: string;
+  }): Promise<void> {
+    if (message.kind === 'closePreservedOwned') {
+      let status: 'closed' | 'denied' = 'denied';
+      if (this.shutdownPreserved && this.shutdownFence && this.core) {
+        try {
+          await this.core.closeAndWait();
+          status = 'closed';
+        } catch {
+          /* Keep unknown honest. */
+        }
+      }
+      this.send({ kind: 'owned-shutdown-closed', id: message.id, status });
+      return;
+    }
+    if (message.kind === 'retireOwned') {
+      if (!this.retirement || !this.shutdownReady || !this.shutdownFence) {
+        this.send({ kind: 'retirement', id: message.id, status: 'denied', fenced: false });
+        return;
+      }
+      const status = await this.retirement.run({
+        current: () => !this.closed && this.shutdownReady && this.shutdownFence,
+        authorizeOwnedRetirement: (evidence) =>
+          evidence.attempts.length > 0 &&
+          evidence.epoch === this.core?.epoch &&
+          evidence.attempts.every((attempt) => this.panes[attempt.slot] !== undefined),
+        closeBrokers: () => {
+          for (const pane of this.panes) pane.broker.close();
+        },
+      });
+      this.send({ kind: 'retirement', id: message.id, status, fenced: this.retirement.fenced });
+      return;
+    }
+    const refuse = (status: 'busy' | 'denied') =>
+      this.send({ kind: 'owned-shutdown', id: message.id, status, uncertain: [] });
+    if (!this.ownedShutdown || this.retirement?.fenced) return refuse('denied');
+    if (
+      this.metadataBusy ||
+      this.mcpBusy ||
+      this.retirement?.busy ||
+      this.confirmations.size ||
+      this.panes.some((p) => p.state.busy)
+    )
+      return refuse('busy');
+    this.shutdownFence = true;
+    for (const pane of this.panes) pane.broker.revokeInput();
+    const result = await this.ownedShutdown.run();
+    this.shutdownReady = result.status === 'ready';
+    this.shutdownPreserved = result.status === 'exited_retirement_unavailable';
+    this.send({ kind: 'owned-shutdown', id: message.id, ...result });
   }
 
   /** Only the native menu can enter here; the public terminal request schema has no MCP action. */

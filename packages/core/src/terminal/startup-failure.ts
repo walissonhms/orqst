@@ -15,6 +15,7 @@ export const terminalStartupFailureSchema = z.strictObject({
       failure.effects === 'possible' &&
       [
         'capacity_reserved',
+        'owned_exit_pending',
         'admission_invalid',
         'startup_failed',
         'startup_timeout',

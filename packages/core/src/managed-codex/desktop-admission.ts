@@ -1,3 +1,4 @@
+import { detachOwnedExitPending } from '../terminal/exit-pending.js';
 import { randomUUID } from 'node:crypto';
 import {
   closeSync,
@@ -56,6 +57,10 @@ export function desktopAgentsAdmission(
   };
   return {
     owner: identity,
+    preservePendingExit() {
+      if (!epoch) throw new Error('Owned Core epoch required');
+      detachOwnedExitPending(directory, owner, assertOwner);
+    },
     assertOwner,
     preflight() {
       terminalDirectory(directory, true);

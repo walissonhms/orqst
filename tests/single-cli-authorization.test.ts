@@ -650,3 +650,20 @@ test('lease reacquisition rechecks native focus after asynchronous Core preparat
     s.broker.close();
   }
 });
+
+test('trusted CLI Stop still requires the current native document and focus, and never signals in background', async () => {
+  const s = brokerFixture();
+  try {
+    const id = await s.open();
+    s.focus(false);
+    s.broker.revokeInput();
+    assert.equal((await s.send('stop', { instanceId: id, signal: 'SIGTERM' })).status, 'denied');
+    assert.deepEqual(s.signals, []);
+    s.focus(true);
+    assert.equal((await s.send('stop', { instanceId: id, signal: 'SIGTERM' })).status, 'ok');
+    assert.deepEqual(s.signals, ['SIGTERM']);
+    assert.equal(s.reviews(), 1);
+  } finally {
+    s.broker.close();
+  }
+});
