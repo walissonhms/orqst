@@ -319,13 +319,13 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Item                                                                                                                      | Owner    | Blocked by                                       |
 | ------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                                              | owner    | new package                                      |
-| MCP pair delegation/result projection: metadata-only audit + facade/Rust guards implemented                               | pane-817 | native/provider exchange and UI acceptance       |
-| Studio v2 chrome contract: candidate `1401ee8` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
-| Native OS notifications on completed/failed: packaged in `1401ee8`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
-| Claude "needs you": independent-review fixes implemented; native acceptance pending                                       | pane-817 | review A–F addressed; owner provider test        |
-| Studio native membership hide barrier and hosted-document chrome implemented                                              | pane-817 | empty-Feature/header native acceptance           |
+| MCP pair delegation/result projection: audited facade + Rust guards packaged in `467c400`                                 | pane-817 | native/provider exchange and UI acceptance       |
+| Studio v2 chrome contract: candidate `467c400` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
+| Native OS notifications on completed/failed: packaged in `467c400`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
+| Claude "needs you": hook review fixes packaged in `467c400`; native acceptance pending                                    | pane-817 | owner provider/OS test                           |
+| Studio native membership hide barrier and hosted-document chrome packaged in `467c400`                                    | pane-817 | empty-Feature/header native acceptance           |
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
-| Current-workspace batch create: renderer wired in `1401ee8`, native acceptance pending                                    | pane-817 | owner native/provider acceptance                 |
+| Current-workspace batch create (pool 8): renderer/native candidate `467c400` packaged                                     | pane-817 | native/provider acceptance                       |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |
 | Mentions v1: recorded and answered unsupported/denied (no delivery route); communication events from the MCP pair journal | pane-768 | v2 authorized route design                       |
 | Account limits: default Codex evidence and refresh/lock wired; native acceptance pending                                  | pane-817 | native test; other profile/provider sources      |

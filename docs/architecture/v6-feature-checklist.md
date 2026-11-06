@@ -1266,3 +1266,29 @@ acceptance pending.
       retaining the separate process authorization controls and legacy documents.
 - [ ] Accept the new isolated package against the owner's empty-Feature and
       duplicate-header report. Synthetic scope/HTML tests do not prove AppKit behavior.
+
+### Integrated Studio native candidate — pane-817, 2026-11-05
+
+- [x] Package exact integrated source `467c400a959fe7e3b0b6bc041bf700ee9df117d3`
+      in `dist/native-preview-studio-467c400/ORQST Preview.app`, using a separate
+      worktree and coordinated Cargo target. Preserve all earlier packages.
+- [x] Run the complete integrated Node suite with file concurrency 2: 1473 passed,
+      zero failed/cancelled/skipped; lint and typecheck passed. The earlier
+      coexistence-fixture failure was not reproduced on this integrated source.
+- [x] Run Rust custom-protocol tests: 177 passed, 2 ignored; Clippy all-targets
+      with `-D warnings`, filtered dashboard build, staging, Cargo build and
+      isolated Tauri app bundle passed. No root `pnpm build` was run.
+- [x] Ad-hoc sign and verify deep/strict; compare all seven resource groups to
+      staging, check spawn-helper 0700 and verify every regular app-file SHA-256.
+      Record exact hashes and commands in the package's `package-verification.json`
+      and `SHA256SUMS`. This verifies payload/signature, not native UI/provider use.
+- [x] Include owned hook review fixes, separate response-completed notification
+      copy, per-category native/Node dedupe, proved MCP communication projection,
+      snapshot-based native non-member hiding and Studio hosted-document chrome.
+- [ ] Owner native/provider acceptance remains pending. The app was never opened
+      during this delivery, as requested. No notarization, main merge or release tag.
+
+The build used approximately 24 GiB free beforehand and reported 26.08 GiB free
+after packaging; this is a filesystem observation, not attribution of reclaimed
+space to this delivery. Known nonfatal debug-strip/chunk-size advisories remain in
+its logs. Captures, logs, generated bundles and hashes remain local artifacts.
