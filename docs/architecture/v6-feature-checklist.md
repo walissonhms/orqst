@@ -1244,3 +1244,13 @@ acceptance pending.
       preferences, dedupe and native ownership/input fences.
 - [ ] Independent source review and actual pinned-provider/OS hook acceptance.
 - [ ] Owner native batch test; existing processes/packages remain preserved.
+
+### Owned Claude hook independent-review fixes — pane-817, 2026-11-05
+
+- [x] Separate waiting/completed/failed dedupe keys in both Node and Rust.
+- [x] Record metadata-only unmatched evidence; coalesce repeated post-tool progress
+      under the existing 128 KiB channel bound and document Esc/idle limitations.
+- [x] Cover MCP/version refusal, changed writer script, FIFO/hardlinks and tool
+      failure callbacks; distinguish response completion from delegated task success.
+- [ ] Accept with actual Claude Code 2.1.318 and macOS notifications. No provider
+      launch is part of the automatic tests; this work changes no user settings.

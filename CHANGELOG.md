@@ -1505,4 +1505,8 @@ acceptance pending.
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
 
+<<<<<<< HEAD
 - Added a Feature-scoped optional delegation/result feed from the owned MCP pair audit, with metadata-only persistence, exact identity binding and Node/Rust validation. Unsupported mention attempts remain separate.
+=======
+- Fixed owned Claude hook notification dedupe per category in Node/Rust, unmatched metadata invalidation and repeated progress coalescing. Added refusal coverage and explicit response/idle/interruption limits.
+>>>>>>> 095a3563ed272d668fda4476eb9304fce3e33d0d

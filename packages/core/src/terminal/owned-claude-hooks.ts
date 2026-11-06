@@ -12,7 +12,15 @@ const hookRecord = z.strictObject({
   version: z.literal(1),
   sessionId: z.uuid(),
   promptId: z.uuid(),
-  event: z.enum(['prompt', 'progress', 'permission_prompt', 'idle_prompt', 'stop', 'failure']),
+  event: z.enum([
+    'prompt',
+    'progress',
+    'permission_prompt',
+    'idle_prompt',
+    'stop',
+    'failure',
+    'unmatched',
+  ]),
   at: z.number().int().nonnegative().safe(),
 });
 
@@ -51,9 +59,9 @@ process.stdin.on('end', () => {
     const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
     chunks = [];
     if (!raw || Array.isArray(raw) || typeof raw !== 'object' || raw.agent_id !== undefined ||
-        raw.session_id !== expected.sessionId || !uuid.test(raw.prompt_id ?? '') ||
-        raw.cwd !== expected.project || raw.transcript_path !== expected.transcript) return;
-    const event = raw.hook_event_name === 'UserPromptSubmit' ? 'prompt' :
+        raw.session_id !== expected.sessionId || !uuid.test(raw.prompt_id ?? '')) return;
+    const matched = raw.cwd === expected.project && raw.transcript_path === expected.transcript;
+    const event = !matched ? 'unmatched' : raw.hook_event_name === 'UserPromptSubmit' ? 'prompt' :
       ['PostToolUse', 'PostToolUseFailure'].includes(raw.hook_event_name) ? 'progress' :
       raw.hook_event_name === 'Stop' ? 'stop' :
       raw.hook_event_name === 'StopFailure' ? 'failure' :
@@ -62,12 +70,23 @@ process.stdin.on('end', () => {
     if (fs.realpathSync(expected.state) !== expected.state || fs.realpathSync(expected.channel) !== expected.channel) return;
     const directory = fs.lstatSync(expected.state);
     if (!directory.isDirectory() || directory.uid !== process.getuid() || (directory.mode & 63)) return;
-    fd = fs.openSync(expected.channel, fs.constants.O_WRONLY | fs.constants.O_APPEND | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    fd = fs.openSync(expected.channel, fs.constants.O_RDWR | fs.constants.O_APPEND | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
     const file = fs.fstatSync(fd);
     const selected = fs.lstatSync(expected.channel);
     const line = JSON.stringify({ version: 1, sessionId: expected.sessionId, promptId: raw.prompt_id, event, at: Date.now() }) + String.fromCharCode(10);
     if (!file.isFile() || file.uid !== process.getuid() || (file.mode & 63) || file.nlink !== 1 ||
         file.ino !== selected.ino || file.dev !== selected.dev) return;
+    if (event === 'progress' && file.size > 0 && file.size < ${channelMaximum}) {
+      const tail = Buffer.alloc(Math.min(file.size, 512));
+      if (fs.readSync(fd, tail, 0, tail.length, file.size - tail.length) !== tail.length) return;
+      const lines = tail.toString('utf8').split(String.fromCharCode(10));
+      const last = lines.at(-2);
+      if (lines.at(-1) === '' && last) {
+        const prior = JSON.parse(last);
+        if (prior.version === 1 && prior.sessionId === expected.sessionId &&
+            prior.promptId === raw.prompt_id && ['prompt', 'progress'].includes(prior.event)) return;
+      }
+    }
     if (file.size + Buffer.byteLength(line) > ${channelMaximum}) {
       if (file.size < ${channelMaximum}) fs.writeSync(fd, "!");
       return;
@@ -175,11 +194,17 @@ export function ownedClaudeHookEvidence(config: ManagedClaudeConfig) {
         if (line.length > 512) return unknown;
         const event = hookRecord.parse(JSON.parse(line));
         if (event.sessionId !== config.sessionId) return unknown;
+        if (event.event === 'unmatched') {
+          closed.add(event.promptId);
+          state = unknown;
+          continue;
+        }
         if (event.event === 'prompt') {
           if (closed.has(event.promptId)) return unknown;
           if (state.turnId && state.turnId !== event.promptId) closed.add(state.turnId);
           state = { agentState: 'running', turnId: event.promptId };
         } else {
+          if (!state.turnId) continue;
           if (state.turnId !== event.promptId) return unknown;
           state = {
             agentState:
