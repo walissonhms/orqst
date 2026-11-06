@@ -42,7 +42,8 @@ interface Props {
   onAction: (action: PaneAction) => void;
   onToggleMaximize: () => void;
   onTogglePin: () => void;
-  onFullScreen: () => void;
+  /** Omitted for native PTY views, which cannot follow a chrome-less layout yet. */
+  onFullScreen?: () => void;
   /** Lets a native host hide terminal views while the menu covers them. */
   onOpenChange?: (open: boolean) => void;
 }
@@ -219,7 +220,8 @@ export function PaneMenu({
             {item('detach', <ExternalLink size={15} />, t('terminalStudio.menu.detach'), () =>
               onAction({ type: 'detach' }),
             )}
-            {item(null, <Maximize size={15} />, t('terminalStudio.menu.fullScreen'), onFullScreen)}
+            {onFullScreen &&
+              item(null, <Maximize size={15} />, t('terminalStudio.menu.fullScreen'), onFullScreen)}
             <hr />
             <div className="pm-section">{t('terminalStudio.menu.migrate')}</div>
             {others.length === 0 ? (

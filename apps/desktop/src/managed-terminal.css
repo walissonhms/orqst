@@ -395,3 +395,18 @@ main[data-chrome='studio'] {
 main[data-chrome='studio'] .pane-header {
   display: none;
 }
+/* Studio card body: the terminal fills the card like the approved preview. Controls show
+   only while a step is still needed, and only the next action; status only on errors. */
+:root:has(main[data-chrome='studio']),
+main[data-chrome='studio'] {
+  background: var(--orqst-terminal);
+}
+main[data-chrome='studio'] #terminal {
+  padding: 10px 12px;
+}
+main[data-chrome='studio'][data-next='typing'] .process-controls,
+main[data-chrome='studio'] #status:not([data-feedback='error']):not([data-blocked='true']),
+main[data-chrome='studio'] .process-controls .guidance,
+main[data-chrome='studio'] .action-row button:disabled {
+  display: none;
+}

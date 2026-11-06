@@ -15,15 +15,19 @@ const container = document.querySelector<HTMLElement>('#terminal')!;
 Terminal.strings.promptLabel = container.dataset.keyboard ?? '';
 Terminal.strings.tooMuchOutput = container.dataset.toomuch ?? '';
 const palette = getComputedStyle(document.documentElement);
+// Inside the Studio card the body matches the approved preview: 12px on the card tone.
+const studioChrome = document.querySelector<HTMLElement>('main')?.dataset.chrome === 'studio';
 const terminal = new Terminal({
   allowProposedApi: false,
   scrollback: 2000,
-  fontSize: 14,
+  fontSize: studioChrome ? 12 : 14,
   screenReaderMode: true,
   linkHandler: { activate: () => {} },
   windowOptions: {},
   theme: {
-    background: palette.getPropertyValue('--orqst-background').trim(),
+    background: palette
+      .getPropertyValue(studioChrome ? '--orqst-terminal' : '--orqst-background')
+      .trim(),
     foreground: palette.getPropertyValue('--orqst-text').trim(),
     cursor: palette.getPropertyValue('--orqst-neon').trim(),
   },

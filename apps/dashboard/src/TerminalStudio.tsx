@@ -1125,10 +1125,14 @@ export function TerminalStudio({
                     onOpenChange={(open) =>
                       setMenuOpen((count) => Math.max(0, count + (open ? 1 : -1)))
                     }
-                    onFullScreen={() => {
-                      setState((current) => ({ ...current, maximized: pane.id }));
-                      setFullScreen(true);
-                    }}
+                    onFullScreen={
+                      native
+                        ? undefined
+                        : () => {
+                            setState((current) => ({ ...current, maximized: pane.id }));
+                            setFullScreen(true);
+                          }
+                    }
                   />
                   <button
                     type="button"
