@@ -65,6 +65,24 @@ export function FeatureWorkspace({
   // Provider-reported limits only; the panel stays hidden until the host reports some.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
   const [limitsOpen, setLimitsOpen] = useState(false);
+  // Proven pair communication only; events older than the view are history, not new effects.
+  const [communication, setCommunication] = useState<
+    {
+      id: string;
+      from: string;
+      to: string;
+      kind: 'message' | 'delegation' | 'result';
+      at: number;
+    }[]
+  >([]);
+  const [openedAt] = useState(() => Date.now() - 10_000);
+  const messages = useMemo(
+    () =>
+      communication
+        .filter((event) => event.at >= openedAt)
+        .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
+    [communication, openedAt],
+  );
   const lastMention = useRef<{ id: string; outcomes: { delivery: string }[] } | null>(null);
   const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
@@ -233,6 +251,7 @@ export function FeatureWorkspace({
         if (reply.canvas) setEvidence(reply.canvas);
         if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
         if (reply.mention) lastMention.current = reply.mention;
+        if (reply.communication) setCommunication(reply.communication.events);
         if (reply.snapshot) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
@@ -734,7 +753,7 @@ export function FeatureWorkspace({
           <TerminalStudio
             storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
             terminals={terminals}
-            messages={[]}
+            messages={messages}
             renderBody={(terminal) =>
               nativeWorkspace ? (
                 <div className="ts-hole" aria-hidden="true" />
