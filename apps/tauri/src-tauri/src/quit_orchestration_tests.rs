@@ -144,8 +144,12 @@ impl ExitPort for FakePorts {
         script.blocked.push((reason.into(), uncertain));
     }
 
-    fn fence(&self) {
-        self.script.lock().unwrap().log.push("fence".into());
+    fn fence(&self, active: bool) {
+        self.script
+            .lock()
+            .unwrap()
+            .log
+            .push(if active { "fence" } else { "unfence" }.into());
     }
 }
 
@@ -451,6 +455,16 @@ fn explicit_prefence_refusal_rolls_back_and_all_other_refusals_keep_the_fence() 
             }
         );
         assert!(!h.in_flight());
+        assert_eq!(
+            h.ports
+                .script
+                .lock()
+                .unwrap()
+                .log
+                .iter()
+                .any(|entry| entry == "unfence"),
+            status == "refused_prefence"
+        );
         h.quit();
         assert_eq!(h.sent_kinds(), ["shutdownOwned", "shutdownOwned"]);
     }

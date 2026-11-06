@@ -16,7 +16,10 @@ import {
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 import { terminalLayoutDatabase } from '../packages/core/src/terminal/layout-database.js';
 import { TauriTerminalLayout } from '../apps/desktop/src/tauri-terminal-layout.js';
-import { TauriFeatureService } from '../apps/desktop/src/tauri-feature-service.js';
+import {
+  TauriFeatureService,
+  featureStatePublisher,
+} from '../apps/desktop/src/tauri-feature-service.js';
 import { terminalLayoutStore } from '../apps/desktop/src/terminal-layout-store.js';
 import { appendTerminalLayout } from '../apps/desktop/src/terminal-layout-enrollment.js';
 import { featureLayout } from '../apps/desktop/src/feature-layout.js';
@@ -80,6 +83,7 @@ function fixture(
   });
   const messages: Array<Record<string, unknown>> = [];
   const revocations: number[] = [];
+  const changes: FeatureNativeSnapshot[] = [];
   const layout = new TauriTerminalLayout(
     6,
     { save: legacy.save },
@@ -94,7 +98,7 @@ function fixture(
     async () => {
       revocations.push(...ids.map((_, i) => i));
     },
-    () => {},
+    (snapshot) => changes.push(snapshot),
     model,
     limits,
   );
@@ -117,6 +121,7 @@ function fixture(
     layout,
     messages,
     revocations,
+    changes,
     request,
     snapshot: () => snapshot,
     close: () => rmSync(directory, { recursive: true, force: true }),
@@ -1185,6 +1190,97 @@ test('arrange invalidated during metadata read returns stale with the current sn
     );
     assert.ok(featureNativeReplySchema.safeParse(reply).success);
     assert.equal(f.messages.length, messageCount);
+  } finally {
+    f.close();
+  }
+});
+
+for (const invalidated of [false, true]) {
+  test(`enrollment waits for an in-flight snapshot and ${invalidated ? 'rejects its obsolete presentation' : 'publishes the new membership immediately'}`, async () => {
+    const f = fixture();
+    try {
+      await f.service.initialize();
+      f.layout.open(0);
+      const list = f.core.features.list;
+      let release!: () => void;
+      let entered!: () => void;
+      const started = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let first = true;
+      f.core.features.list = async () => {
+        if (first) {
+          first = false;
+          entered();
+          await gate;
+        }
+        return list();
+      };
+      const snapshot = f.request({ action: 'snapshot' });
+      await started;
+      const terminalId = randomUUID();
+      f.ids.push(terminalId);
+      f.core.identities.push({ slot: 6, terminalId, provider: 'codex' });
+      f.layout.append(6);
+      const presentation = f.layout.presentationRevision();
+      const enrolled = f.service.enrolled(6, presentation);
+      assert.equal((await f.request({ action: 'snapshot' })).status, 'busy');
+      if (invalidated) {
+        f.layout.setNativeGeneration(5);
+        f.layout.suspend();
+      }
+      release();
+      assert.equal((await snapshot).status, 'ok');
+      assert.equal(await enrolled, !invalidated);
+      if (invalidated) {
+        assert.equal(f.layout.snapshot().suspended, true);
+        assert.equal(f.layout.snapshot().visible.length, 0);
+      } else {
+        assert.equal(f.layout.snapshot().order.length, 7);
+        assert.equal(f.changes.at(-1)?.generation, 1);
+        assert.equal(f.changes.at(-1)?.slots[6]?.terminalId, terminalId);
+      }
+    } finally {
+      f.close();
+    }
+  });
+}
+
+test('native Feature push advances once per metadata change, never per poll or arrange', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    const snapshot = (await f.request({ action: 'snapshot' })).snapshot!;
+    const messages: object[] = [];
+    let ready = false;
+    let generation = 3;
+    const push = featureStatePublisher(
+      randomUUID(),
+      () => generation,
+      () => ready,
+      (message) => messages.push(message),
+    );
+    push(snapshot);
+    assert.equal(messages.length, 0);
+    ready = true;
+    push(snapshot);
+    for (let i = 0; i < 50; i++) push(structuredClone(snapshot));
+    assert.equal(messages.length, 1);
+    generation = 4;
+    push({ ...snapshot, generation: snapshot.generation + 1 });
+    assert.equal(messages.length, 2);
+    assert.equal(Reflect.get(messages[1]!, 'generation'), 4);
+    const { featureNativeStateEnvelopeSchema } = await import('@orqst/protocol');
+    assert.equal(featureNativeStateEnvelopeSchema.safeParse(messages[1]).success, true);
+    assert.equal(featureNativeRequestSchema.safeParse(messages[1]).success, false);
+    for (const field of ['source', 'document', 'proof', 'path', 'task'])
+      assert.equal(
+        featureNativeStateEnvelopeSchema.safeParse({ ...messages[1], [field]: 'forged' }).success,
+        false,
+      );
   } finally {
     f.close();
   }

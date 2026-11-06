@@ -30,7 +30,7 @@ pub trait ExitPort {
     fn request_exit(&self);
     fn start_owned_shutdown(&self);
     fn blocked(&self, reason: &str, uncertain: Value);
-    fn fence(&self);
+    fn fence(&self, active: bool);
 }
 
 pub trait Timer {
@@ -281,6 +281,13 @@ impl Coordinator {
 
     fn blocked(&self, exit: &impl ExitPort, reason: &str, uncertain: Value) {
         self.in_flight.store(false, Ordering::SeqCst);
+        // Only an authenticated pre-effect rollback is Active again. Unknown
+        // shutdown/retirement never gains execution or presentation authority.
+        match self.host.phase() {
+            Phase::Active => exit.fence(false),
+            Phase::ShutdownInFlight | Phase::LostUnknown => exit.fence(true),
+            _ => {}
+        }
         exit.blocked(reason, uncertain);
     }
 
@@ -385,7 +392,7 @@ impl Coordinator {
         let uncertain = shutdown["uncertain"].clone();
         match host_phase::shutdown_step(shutdown["status"].as_str()) {
             QuitStep::Retire => {
-                exit.fence();
+                exit.fence(true);
                 let reply = self.pipe(terminal, timer, "retireOwned").await;
                 match host_phase::retire_step(
                     reply.as_ref().and_then(|value| value["status"].as_str()),

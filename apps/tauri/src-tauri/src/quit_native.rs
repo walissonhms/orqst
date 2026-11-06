@@ -76,8 +76,13 @@ impl ExitPort for NativePorts {
         );
     }
 
-    fn fence(&self) {
-        crate::terminal::quit_event(&self.0, "orqst-terminal-fence", json!({"fence": true}));
+    fn fence(&self, active: bool) {
+        if !active {
+            crate::agents::reset_exit(&self.0);
+            crate::terminal::reset_exit(&self.0);
+        } else {
+            crate::terminal::quit_event(&self.0, "orqst-terminal-fence", json!({"fence": true}));
+        }
     }
 }
 

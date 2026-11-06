@@ -537,6 +537,11 @@ async fn metadata_request_inner(
                     .as_ref()
                     .is_some_and(|(id, _)| id == owner)
         });
+        if r.enrollment_fenced
+            && resumes_presentation(&envelope["request"], envelope["source"].as_str().unwrap())
+        {
+            return json!({"status":"denied"});
+        }
         if (review_owner.is_some() && !owns_review)
             || r.metadata_pending.len() >= 8
             || r.metadata_pending.contains_key(&id)
@@ -577,12 +582,7 @@ async fn metadata_request_inner(
             }
             return unavailable();
         }
-        if matches!(
-            envelope["request"]["action"].as_str(),
-            Some("canvas" | "select" | "organize")
-        ) || (envelope["request"]["action"] == "pane"
-            && envelope["request"]["command"] == "focus")
-        {
+        if resumes_presentation(&envelope["request"], envelope["source"].as_str().unwrap()) {
             r.presentation_suspended = false;
         }
         receiver
@@ -631,6 +631,16 @@ async fn metadata_request_inner(
         Ok(Ok(value)) if valid_reply(&value) => value,
         _ => unavailable(),
     }
+}
+
+fn resumes_presentation(request: &Value, source: &str) -> bool {
+    matches!(
+        request["action"].as_str(),
+        Some("canvas" | "select" | "organize")
+    ) || (request["action"] == "pane" && request["command"] == "focus")
+        || (request["action"] == "arrange"
+            && request["layoutVersion"] == 2
+            && source == "orqst-features://local/index.html")
 }
 
 pub(crate) fn permission_review_begin(
@@ -3005,6 +3015,14 @@ pub(crate) fn pool_available_slots(app: &tauri::AppHandle) -> Option<usize> {
         .as_ref()
         .map(|running| running.capacity.saturating_sub(running.documents.len()))
 }
+pub(crate) fn pool_count(app: &tauri::AppHandle) -> Option<usize> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.documents.len())
+}
 
 /// Paths originate only from startup configuration or the native provisioning review.
 pub async fn start_selected(
@@ -3385,6 +3403,33 @@ async fn start_selected_inner(
                             break;
                         };
                         crate::desktop::notify_owned(&app, alert);
+                    } else if value["kind"] == "feature-state" {
+                        if !crate::features::valid_state_push(&value) {
+                            stream_outcome = Outcome::ProtocolRejected;
+                            break;
+                        }
+                        let generation = value["generation"].as_u64().unwrap();
+                        let current = {
+                            let state = app.state::<Terminals>();
+                            let guard = state.0.lock().unwrap();
+                            guard.as_ref().is_some_and(|r| {
+                                r.epoch == host_epoch
+                                    && crate::features::state_push_current(
+                                        &value,
+                                        &r.epoch,
+                                        r.layout_generation,
+                                        r.documents.len(),
+                                    )
+                            })
+                        };
+                        if current {
+                            crate::features::state_changed(
+                                &app,
+                                &value["snapshot"],
+                                generation,
+                                &host_epoch,
+                            );
+                        }
                     } else if value["kind"] == "feature-reply" {
                         if presentation_blocked(&app) {
                             continue;
@@ -3647,6 +3692,9 @@ pub fn reset_exit(app: &tauri::AppHandle) {
             advance_layout(app, r);
         }
     }
+    if !presentation_blocked(app) {
+        quit_event(app, "orqst-terminal-fence", json!({"fence":false}));
+    }
 }
 
 pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
@@ -3680,13 +3728,13 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
     revoke_all(app);
     crate::agents::revoke_for_quit(app);
     let Some(parent) = crate::desktop::quit_parent(app) else {
-        reset_exit(app);
         crate::agents::reset_exit(app);
+        reset_exit(app);
         return true;
     };
     let Some(token) = crate::desktop::begin_quit_review(app, &parent) else {
-        reset_exit(app);
         crate::agents::reset_exit(app);
+        reset_exit(app);
         return true;
     };
     let app = app.clone();
@@ -3718,8 +3766,8 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
                 }
                 crate::desktop::request_quit(&app);
             } else {
-                reset_exit(&app);
                 crate::agents::reset_exit(&app);
+                reset_exit(&app);
             }
         });
     true
@@ -3727,6 +3775,31 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
 
 #[cfg(test)]
 mod opening_tests {
+    #[test]
+    fn only_current_studio_v2_arrange_can_resume_geometry_without_an_execution_operation() {
+        let chrome = "orqst-features://local/index.html";
+        let request = serde_json::json!({"action":"arrange","layoutVersion":2});
+        assert!(super::resumes_presentation(&request, chrome));
+        assert!(!super::resumes_presentation(&request, "http://127.0.0.1/"));
+        assert!(!super::resumes_presentation(
+            &serde_json::json!({"action":"arrange","layoutVersion":1}),
+            chrome
+        ));
+        for action in [
+            "snapshot",
+            "start",
+            "write",
+            "retire",
+            "mention",
+            "readPermissions",
+        ] {
+            assert!(!super::resumes_presentation(
+                &serde_json::json!({"action":action}),
+                chrome
+            ));
+        }
+    }
+
     use super::{
         incomplete_open, invalidate_opening, native_request_message, take_opening, OpeningIntent,
     };

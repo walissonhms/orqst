@@ -1966,49 +1966,15 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                 return json!({"status":"unavailable"});
             }
             if let Some(snapshot) = value.get("snapshot") {
-                let state = app.state::<Features>();
-                let mut guard = state.0.lock().unwrap();
-                let generation = snapshot["generation"].as_u64().unwrap();
-                let revision = snapshot["view"]["revision"].as_u64().unwrap();
-                let workspace = snapshot["workspace"]["id"].as_str().unwrap();
-                if generation < guard.snapshot_generation
-                    || revision < guard.view_revision
-                    || guard
-                        .workspace_id
-                        .as_ref()
-                        .is_some_and(|id| id != workspace)
-                {
+                let accepted = cache_snapshot(
+                    &mut app.state::<Features>().0.lock().unwrap(),
+                    snapshot,
+                    presentation,
+                    &epoch,
+                );
+                if !accepted {
                     return json!({"status":"stale"});
                 }
-                for feature in snapshot["features"].as_array().unwrap() {
-                    let id = feature["featureId"].as_str().unwrap();
-                    let revision = feature["revision"].as_u64().unwrap();
-                    if guard
-                        .feature_revisions
-                        .get(id)
-                        .is_some_and(|known| revision < *known)
-                    {
-                        return json!({"status":"stale"});
-                    }
-                }
-                for feature in snapshot["features"].as_array().unwrap() {
-                    guard.feature_revisions.insert(
-                        feature["featureId"].as_str().unwrap().into(),
-                        feature["revision"].as_u64().unwrap(),
-                    );
-                }
-                guard.snapshot_generation = generation;
-                guard.view_revision = revision;
-                guard.workspace_id = Some(workspace.into());
-                guard.preparation_scope = Some((
-                    json!({
-                        "contractVersion":1, "generation":generation, "workspaceId":workspace,
-                        "featureId":snapshot["activeFeatureId"], "expectedRevision":revision,
-                    }),
-                    epoch.clone(),
-                    presentation,
-                ));
-                drop(guard);
                 publish(app, snapshot, presentation, &epoch);
             }
             value
@@ -2017,6 +1983,94 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     )
     .await
 }
+fn cache_snapshot(guard: &mut State, snapshot: &Value, presentation: u64, epoch: &str) -> bool {
+    if !valid_snapshot(snapshot) {
+        return false;
+    }
+    let generation = snapshot["generation"].as_u64().unwrap();
+    let revision = snapshot["view"]["revision"].as_u64().unwrap();
+    let workspace = snapshot["workspace"]["id"].as_str().unwrap();
+    if generation < guard.snapshot_generation
+        || revision < guard.view_revision
+        || guard
+            .workspace_id
+            .as_ref()
+            .is_some_and(|id| id != workspace)
+    {
+        return false;
+    }
+    for feature in snapshot["features"].as_array().unwrap() {
+        let id = feature["featureId"].as_str().unwrap();
+        let revision = feature["revision"].as_u64().unwrap();
+        if guard
+            .feature_revisions
+            .get(id)
+            .is_some_and(|known| revision < *known)
+        {
+            return false;
+        }
+    }
+    for feature in snapshot["features"].as_array().unwrap() {
+        guard.feature_revisions.insert(
+            feature["featureId"].as_str().unwrap().into(),
+            feature["revision"].as_u64().unwrap(),
+        );
+    }
+    guard.snapshot_generation = generation;
+    guard.view_revision = revision;
+    guard.workspace_id = Some(workspace.into());
+    guard.preparation_scope = Some((
+        json!({
+            "contractVersion":1, "generation":generation, "workspaceId":workspace,
+            "featureId":snapshot["activeFeatureId"], "expectedRevision":revision,
+        }),
+        epoch.into(),
+        presentation,
+    ));
+    true
+}
+
+pub(crate) fn valid_state_push(value: &Value) -> bool {
+    exact(value, &["kind", "epoch", "generation", "snapshot"])
+        && value["kind"] == "feature-state"
+        && uuid(&value["epoch"])
+        && safe(&value["generation"]).is_some()
+        && valid_snapshot(&value["snapshot"])
+}
+pub(crate) fn state_push_current(
+    value: &Value,
+    epoch: &str,
+    generation: u64,
+    count: usize,
+) -> bool {
+    valid_state_push(value)
+        && value["epoch"] == epoch
+        && value["generation"].as_u64() == Some(generation)
+        && value["snapshot"]["slots"].as_array().unwrap().len() == count
+}
+
+pub(crate) fn state_changed(
+    app: &tauri::AppHandle,
+    snapshot: &Value,
+    presentation: u64,
+    epoch: &str,
+) {
+    if crate::terminal::presentation_blocked(app)
+        || crate::terminal::metadata_context(app) != Some((epoch.into(), presentation))
+    {
+        return;
+    }
+    if !cache_snapshot(
+        &mut app.state::<Features>().0.lock().unwrap(),
+        snapshot,
+        presentation,
+        epoch,
+    ) {
+        return;
+    }
+    publish(app, snapshot, presentation, epoch);
+}
+
 fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &str) {
     // Snapshot carries metadata only. It never shows/focuses a window or enables input.
     if crate::terminal::presentation_blocked(app)
@@ -2191,6 +2245,37 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn pushed_snapshot_is_epoch_generation_and_pool_bound_and_never_rolls_cache_back() {
+        let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let snapshot = serde_json::json!({"contractVersion":1,"storage":"core","generation":2,
+            "workspace":{"id":"synthetic-workspace","name":"Synthetic"},"features":[],
+            "view":{"contractVersion":1,"storage":"core","workspaceId":"synthetic-workspace","featureId":null,"revision":1},
+            "activeFeatureId":null,"slots":[{"slot":0,"terminalId":id,"provider":"codex"}],"layoutSaved":true});
+        let push = serde_json::json!({"kind":"feature-state","epoch":id,"generation":3,"snapshot":snapshot});
+        assert!(super::state_push_current(&push, id, 3, 1));
+        assert!(!super::state_push_current(&push, "foreign", 3, 1));
+        assert!(!super::state_push_current(&push, id, 4, 1));
+        assert!(!super::state_push_current(&push, id, 3, 2));
+        let mut bad = push.clone();
+        bad["proof"] = serde_json::json!("forged");
+        assert!(!super::valid_state_push(&bad));
+        let mut state = super::State::default();
+        assert!(super::cache_snapshot(&mut state, &snapshot, 3, id));
+        assert_eq!(state.snapshot_generation, 2);
+        let mut old = snapshot.clone();
+        old["generation"] = serde_json::json!(1);
+        assert!(!super::cache_snapshot(&mut state, &old, 3, id));
+        old = snapshot.clone();
+        old["view"]["revision"] = serde_json::json!(0);
+        assert!(!super::cache_snapshot(&mut state, &old, 3, id));
+        old = snapshot.clone();
+        old["workspace"]["id"] = serde_json::json!("foreign");
+        old["view"]["workspaceId"] = serde_json::json!("foreign");
+        assert!(!super::cache_snapshot(&mut state, &old, 3, id));
+        assert_eq!(state.snapshot_generation, 2);
+    }
+
     #[test]
     fn owned_terminal_focus_is_layout_only_and_never_permission_or_execution_authority() {
         for action in [

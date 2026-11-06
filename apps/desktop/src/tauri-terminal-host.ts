@@ -29,7 +29,7 @@ import {
   terminalLayoutRecordSchema,
   terminalDisplayNameSchema,
 } from '@orqst/protocol';
-import { TauriFeatureService } from './tauri-feature-service.js';
+import { TauriFeatureService, featureStatePublisher } from './tauri-feature-service.js';
 import { TauriTerminalService } from './tauri-terminal-service.js';
 import { terminalAccountLimits } from '../../../packages/core/src/terminal/account-limits.js';
 import { OwnedTurnPoller } from '../../../packages/core/src/terminal/owned-turn-poller.js';
@@ -117,6 +117,7 @@ async function start() {
     },
     true, // Studio PTYs remain hidden until a current renderer arrange v2.
   );
+  let nativeGeneration = 0;
   const features = new TauriFeatureService(
     core,
     layout,
@@ -127,7 +128,12 @@ async function start() {
         core.identities.map((_, slot) => service.receive({ kind: 'revoke', slot })),
       );
     },
-    () => {},
+    featureStatePublisher(
+      core.epoch,
+      () => nativeGeneration,
+      () => readySent,
+      send,
+    ),
     (slot) => selection[slot]?.config.model?.value,
     terminalAccountLimits(directory),
   );
@@ -216,7 +222,6 @@ async function start() {
     }),
   ]);
 
-  let nativeGeneration = 0;
   let enrollmentBusy = false;
   const enrollmentOperations = new Set<string>();
   const presentations = new Map<

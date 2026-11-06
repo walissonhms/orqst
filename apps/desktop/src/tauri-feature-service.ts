@@ -5,6 +5,7 @@ import {
   featureNativeRequestSchema,
   featurePermissionNativeRequestSchema,
   featureNativeSnapshotSchema,
+  featureNativeStateEnvelopeSchema,
   type FeatureNativeReply,
   type FeatureNativeSnapshot,
   type FeatureViewState,
@@ -17,6 +18,27 @@ import { featureLayout } from './feature-layout.js';
 import type { TauriTerminalLayout } from './tauri-terminal-layout.js';
 import type { terminalLayoutStore } from './terminal-layout-store.js';
 
+/** One push per real metadata generation. Polling/arrange cannot form a feedback loop. */
+export function featureStatePublisher(
+  epoch: string,
+  presentation: () => number,
+  ready: () => boolean,
+  send: (value: object) => void,
+): (snapshot: FeatureNativeSnapshot) => void {
+  let published = -1;
+  return (snapshot) => {
+    if (!ready() || snapshot.generation <= published) return;
+    const value = featureNativeStateEnvelopeSchema.parse({
+      kind: 'feature-state',
+      epoch,
+      generation: presentation(),
+      snapshot,
+    });
+    send(value);
+    published = snapshot.generation;
+  };
+}
+
 /** Private metadata/view facade. The existing Core still owns all processes and SQLite. */
 export class TauriFeatureService {
   private busy = false;
@@ -25,6 +47,8 @@ export class TauriFeatureService {
   private view!: FeatureViewState;
   private activeFeatureId: string | null = null;
   private initialized = false;
+  private enrollmentWaiting = false;
+  private idleWaiter?: () => void;
   private accountLimits?: AccountLimits;
 
   constructor(
@@ -51,6 +75,13 @@ export class TauriFeatureService {
       update(id: string, locked: boolean): AccountLimits;
     },
   ) {}
+
+  private releaseBusy(): void {
+    this.busy = false;
+    const wake = this.idleWaiter;
+    this.idleWaiter = undefined;
+    wake?.();
+  }
 
   async initialize(): Promise<void> {
     await this.refresh();
@@ -116,7 +147,16 @@ export class TauriFeatureService {
 
   /** Refresh the retained view after native creation, fenced by the original presentation. */
   async enrolled(slot: number, presentation: number): Promise<boolean> {
-    if (this.busy || !this.initialized) return false;
+    if (!this.initialized || this.enrollmentWaiting) return false;
+    // A passive snapshot may already hold the facade while native enrollment owns
+    // the execution metadata latch. Give its single presentation ACK priority.
+    this.enrollmentWaiting = true;
+    if (this.busy)
+      await new Promise<void>((resolve) => {
+        this.idleWaiter = resolve;
+      });
+    this.enrollmentWaiting = false;
+    if (presentation !== this.layout.presentationRevision()) return false;
     this.busy = true;
     try {
       await this.refresh();
@@ -128,13 +168,13 @@ export class TauriFeatureService {
     } catch {
       return false;
     } finally {
-      this.busy = false;
+      this.releaseBusy();
     }
   }
 
   /** Native notification click only: metadata navigation, never input/start authority. */
   async focusOwned(terminalId: string): Promise<boolean> {
-    if (this.busy || !this.initialized) return false;
+    if (this.busy || this.enrollmentWaiting || !this.initialized) return false;
     this.busy = true;
     const presentation = this.layout.presentationRevision();
     try {
@@ -159,7 +199,7 @@ export class TauriFeatureService {
     } catch {
       return false;
     } finally {
-      this.busy = false;
+      this.releaseBusy();
     }
   }
 
@@ -199,7 +239,7 @@ export class TauriFeatureService {
       .safeParse(raw);
     if (!parsed.success) return { status: 'denied' };
     if (!this.initialized) return { status: 'unavailable' };
-    if (this.busy) return { status: 'busy' };
+    if (this.busy || this.enrollmentWaiting) return { status: 'busy' };
     this.busy = true;
     const request = parsed.data;
     const presentation = this.layout.presentationRevision();
@@ -457,7 +497,7 @@ export class TauriFeatureService {
       // No automatic retry of a metadata command whose commit may have succeeded.
       return { status: 'unavailable' };
     } finally {
-      this.busy = false;
+      this.releaseBusy();
     }
   }
 }

@@ -546,5 +546,12 @@ test('Studio hides before arrange v2 and after native/context fences without los
   f.layout.context(f.layout.snapshot(), () => {});
   assert.deepEqual(f.layout.snapshot().visible, []);
   assert.deepEqual(f.layout.snapshot().shown, [0]);
+  f.layout.suspend();
+  assert.equal(f.layout.arrange({ ...input, viewport: { width: 1, height: 1 } }), false);
+  assert.equal(f.layout.snapshot().suspended, true);
+  assert.equal(f.layout.arrange(input), true);
+  assert.equal(f.layout.snapshot().suspended, false);
+  assert.deepEqual(f.layout.snapshot().visible, [0]);
+  assert.equal(f.messages.at(-1)!.focus, null);
   assert.ok(f.revoked.includes(0));
 });
