@@ -1301,3 +1301,23 @@ its logs. Captures, logs, generated bundles and hashes remain local artifacts.
 - [ ] Owner native/provider acceptance of opening, tabs and full-window Studio geometry.
 
 See [source investigation and research](../research/v6-terminal-chrome.md#studio-first-snapshot-and-geometry-barrier--2026-11-05).
+
+### Isolated Studio package `784b10b` — 2026-11-05
+
+Frozen integrated source `784b10b2f15690df508795bd6cdcc4ecbde17041` produced
+`dist/native-preview-studio-784b10b/ORQST Preview.app`. Full Node concurrency-2
+suite passed 1,475/1,475 with no failures, cancellations or skips; Rust passed
+178 with two existing ignored tests. Lint, types, filtered dashboard build,
+resource staging, all-target Clippy with warnings denied, custom-protocol build,
+app bundle, ad-hoc signing, deep/strict signature verification and all 99 file
+hashes passed. Seven resource groups match staging. The app was not opened;
+existing packages are preserved. Manifest and exact logs stay in the generated
+package, outside Git. Remaining disk after packaging: 25.60 GiB.
+
+This validates source/packaging only. The first-snapshot mechanism is documented
+in the research note; no old invocation's exact status is reconstructed. Check
+native startup/tabs, v2 geometry, click/focus, provider opening and Quit with the
+owner. PTYs receive no focus while waiting for arrange: the owned Open intent
+still requires actual PTY first responder and expires after 60 seconds; a click
+on the shown terminal may be needed. No input, admission or generation guard was
+relaxed to bypass that requirement.
