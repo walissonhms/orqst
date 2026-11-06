@@ -1223,3 +1223,13 @@ acceptance pending.
 - [x] Preserve explicit names through initial and incremental native admission.
 - [ ] Renderer wiring and real native mixed-provider batch acceptance.
 - [ ] Multi-workspace design review and account-profile creation remain separate.
+
+### Studio native membership/chrome corrections — pane-817, 2026-11-05
+
+- [x] Bind hide-only native visibility to the accepted Feature snapshot independently
+      of subsequent geometry success; retain global processes/documents and reject
+      stale same-generation membership in layout frames.
+- [x] Mark initial/enrolled Studio documents with `data-chrome="studio"` while
+      retaining the separate process authorization controls and legacy documents.
+- [ ] Accept the new isolated package against the owner's empty-Feature and
+      duplicate-header report. Synthetic scope/HTML tests do not prove AppKit behavior.

@@ -115,3 +115,15 @@ test('only explicitly selected terminal documents opt into operational Open; leg
   assert.ok(selected.includes(en.managedTerminal.openingIncomplete));
   assert.ok(selected.includes(en.managedTerminal.guide_openingIncomplete));
 });
+
+test('Studio chrome opts in without removing process authorization controls or changing legacy documents', () => {
+  assert.doesNotMatch(document(), /data-chrome="studio"/);
+  const html = document({ studioChrome: true, operationalOpen: true });
+  assert.match(html, /<main data-chrome="studio"/);
+  const end = html.indexOf('</header>');
+  for (const id of ['start', 'attach', 'input']) {
+    assert.ok(html.indexOf(`id="${id}"`) > end);
+    assert.equal(html.match(new RegExp(`id="${id}"`, 'g'))?.length, 1);
+  }
+  assert.ok(html.includes(en.managedTerminal.open));
+});

@@ -680,3 +680,21 @@ private evidence. Partial results are not an all-or-nothing transaction.
 See [source/reuse and security review](../research/current-workspace-terminal-batch.md).
 Renderer integration, actual native mixed-provider batch acceptance and the
 separately reviewed multi-workspace design remain pending.
+
+### Studio hosted-document membership barrier — 2026-11-05
+
+An accepted Feature snapshot also establishes a hide-only native member set for
+its current Core epoch/presentation. Selected Feature membership is resolved by
+exact terminal UUIDs to current slots; the unassigned view excludes every assigned
+terminal. Non-members are hidden and their input revoked without stopping any
+process. The native retained dock projection excludes those slots even if the next
+geometry frame is refused. Later frames in that generation must carry exactly the
+same member set; viewport, revision, ordering and input fences remain required.
+A fresh native generation clears the prior display constraint for the next owned
+context operation; it does not restore input, grants or processes.
+
+Tauri Studio documents (initial and enrolled) additionally use
+`main[data-chrome="studio"]` to activate the existing compact CSS. Open terminal,
+Connect output and Enable keyboard input remain outside the hidden duplicate
+header and keep their existing native authorization. Legacy/Electron documents
+retain their existing header. No renderer request or runtime authority is added.

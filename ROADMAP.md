@@ -1384,3 +1384,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Implemented the native Feature-membership hide barrier and Studio document chrome marker; owner native acceptance and isolated package verification remain required.

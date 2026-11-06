@@ -1532,3 +1532,5 @@ Real-state use, native acceptance and CLI/provider operation remain unvalidated.
 Feature permission policy reads can be retried explicitly with Refresh through the native
 focus gate. If a proposal outcome is uncertain, the revision is invalidated until a
 fresh read; no proposal is retried automatically. Native UI acceptance remains pending.
+
+Studio-hosted native terminal documents use the shared Studio header while keeping process authorization controls. Accepted Feature snapshots independently hide non-members; hiding retains owned processes and never grants input.

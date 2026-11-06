@@ -1907,6 +1907,7 @@ fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &
     {
         return;
     }
+    crate::terminal::restrict_feature_members(app, snapshot, presentation, epoch);
     for label in ["main", "feature-workspace"] {
         if let Some(view) = app.get_webview(label) {
             if identity(&view).is_some()

@@ -109,3 +109,28 @@ The supplied V6 HTML, rather than guessed product behavior, determines density.
 Its four simulated agents, localStorage persistence, fake model fields and flow
 animations remain outside application runtime. No Overclock API dependency is
 introduced into ORQST.
+
+## Studio host visibility and chrome follow-up — 2026-11-05
+
+Re-inspected the existing ORQST `TauriFeatureService.present`, `TauriTerminalLayout`,
+`features::publish`, `terminal::apply_layout_current` and `terminalDocument`.
+A Feature metadata reply did not independently hide old native surfaces: hiding
+only happened when the next full layout envelope passed viewport/revision checks.
+A refused geometry frame could therefore retain a previous Feature's presentation.
+The fix adds a hide-only membership barrier from the already validated private
+snapshot, preserves global documents/processes and rejects later same-generation
+frames containing a different member set. Native generation changes clear only
+that presentation constraint; existing epoch/revocation/input fences still apply.
+
+The same pinned Anywh `TerminalPanel` / `useTerminalTabs` source reviewed above
+keeps React views and tab/process metadata separate, but supplies no retained
+native child-Webview membership boundary. Its Apache-2.0 source/NOTICE findings
+are unchanged; no implementation/dependency is copied. ORQST's original native
+hide/revoke and existing trusted HTML generator are reused. Actual AppKit behavior
+and the exact refusal that occurred in the owner's screenshot remain native
+acceptance; the rejected-frame case is covered synthetically.
+
+The Tauri Studio host marks initial and enrolled terminal documents with
+`main[data-chrome="studio"]`, activating the frontend owner's existing CSS.
+The process authorization section remains outside the hidden pane header. Legacy
+and Electron documents do not opt in. No process is stopped or replaced.

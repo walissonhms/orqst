@@ -1494,3 +1494,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Fixed retained native terminal visibility across Feature changes even when geometry is refused, and enabled Studio chrome for initial/enrolled terminal documents without hiding process authorization controls.
