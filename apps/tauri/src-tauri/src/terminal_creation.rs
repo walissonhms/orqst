@@ -1124,11 +1124,9 @@ fn run(
     .iter()
     .any(|key| std::env::var_os(key).is_some());
     let opencode_pair = request["action"] == "create-mcp-pair"
-        && mcp_pair_members(&request).is_none_or(|(source, worker)| {
-            source == "opencode" || worker == "opencode"
-        });
-    if (request["provider"] == "opencode" || opencode_pair) && unsupported_opencode
-    {
+        && mcp_pair_members(&request)
+            .is_none_or(|(source, worker)| source == "opencode" || worker == "opencode");
+    if (request["provider"] == "opencode" || opencode_pair) && unsupported_opencode {
         return Err("Unsupported native OpenCode configuration selector".into());
     }
     diagnostic.record(Stage::HelperSpawn, Outcome::Requested, Effects::Unconfirmed);
