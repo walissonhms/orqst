@@ -1,5 +1,5 @@
 // Writes the Store migration SQL for the Rust terminal Core (apps/tauri/terminal-core).
-// `tests/rust-store-migrations.test.ts` fails when the committed copy is stale.
+// `tests/rust-terminal-core-contract.test.ts` fails when the committed copy is stale.
 import { writeFileSync } from 'node:fs';
 import { storeMigrations } from '../packages/database/src/index.js';
 

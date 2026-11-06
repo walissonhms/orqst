@@ -11,4 +11,5 @@ pub mod output;
 pub mod profiles;
 pub mod pty;
 pub mod store;
+pub mod supervisor;
 pub mod types;
