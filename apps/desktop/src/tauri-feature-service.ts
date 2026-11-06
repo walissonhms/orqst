@@ -30,8 +30,16 @@ export class TauriFeatureService {
   constructor(
     private readonly core: Pick<
       Awaited<ReturnType<typeof connectManagedTerminalCore>>,
-      'features' | 'identities'
-    >,
+      'identities'
+    > & {
+      features: Omit<
+        Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'],
+        'communication'
+      > &
+        Partial<
+          Pick<Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'], 'communication'>
+        >;
+    },
     private readonly layout: TauriTerminalLayout,
     private readonly legacy: ReturnType<typeof terminalLayoutStore>,
     private readonly project: string,
@@ -423,9 +431,22 @@ export class TauriFeatureService {
       await this.refresh();
       const snapshot = this.snapshot();
       this.changed(snapshot);
+      let communication: FeatureNativeReply['communication'];
+      if (request.action === 'snapshot' || request.action === 'canvas') {
+        try {
+          communication = await this.core.features.communication?.(snapshot.activeFeatureId);
+          // Membership can change while the private read is in flight. Re-snapshot instead of
+          // attaching stale cross-context evidence; this read grants no mutation authority.
+          await this.refresh();
+          if (!isDeepStrictEqual(snapshot, this.snapshot())) communication = undefined;
+        } catch {
+          // Missing/unsafe audit is unavailable, never a synthetic communication event.
+        }
+      }
       return {
         status: 'ok',
         snapshot,
+        ...(communication ? { communication } : {}),
         ...((request.action === 'snapshot' || request.action === 'canvas') && this.accountLimits
           ? { accountLimits: this.accountLimits }
           : {}),

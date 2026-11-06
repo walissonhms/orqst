@@ -123,6 +123,52 @@ function fixture(
   };
 }
 
+test('snapshot/canvas attach only current Feature communication and omit failed/stale reads', async () => {
+  const f = fixture();
+  try {
+    let feature = f.db.create({ name: 'SYNTHETIC MCP projection' });
+    feature = f.db.assignTerminal(feature.featureId, f.ids[0]!, feature.revision);
+    feature = f.db.assignTerminal(feature.featureId, f.ids[1]!, feature.revision);
+    await f.service.initialize();
+    await f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'select',
+      featureId: feature.featureId,
+      expectedRevision: 0,
+    });
+    const projection = {
+      events: [
+        { id: randomUUID(), from: f.ids[0]!, to: f.ids[1]!, kind: 'delegation' as const, at: 1000 },
+      ],
+    };
+    let read = async (id: string | null) => {
+      assert.equal(id, feature.featureId);
+      return projection;
+    };
+    Object.assign(f.core.features, { communication: (id: string | null) => read(id) });
+    for (const action of ['snapshot', 'canvas'] as const) {
+      const reply = await f.request({ action });
+      assert.deepEqual(reply.communication, projection);
+      assert.ok(featureNativeReplySchema.safeParse(reply).success);
+    }
+    read = async () => {
+      throw new Error('SYNTHETIC unavailable audit');
+    };
+    assert.equal((await f.request({ action: 'snapshot' })).communication, undefined);
+    read = async () => {
+      f.db.update(feature.featureId, {
+        expectedRevision: feature.revision,
+        name: 'SYNTHETIC concurrent change',
+      });
+      return projection;
+    };
+    assert.equal((await f.request({ action: 'snapshot' })).communication, undefined);
+  } finally {
+    f.close();
+  }
+});
+
 test('owned notification navigation selects exact membership without starting or granting input', async () => {
   const f = fixture();
   try {

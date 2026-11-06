@@ -1728,3 +1728,12 @@ with launch digests and a hash of the matching source record; uncertain creation
 is never retried or removed. Input, output and transcript contents never enter the
 facade. The function grants no control over observed sessions or communication.
 Same-user malicious filesystem races remain outside the existing terminal contract.
+
+The owned MCP pair's communication display audit is private metadata (epoch,
+launch instances, grant/task and Feature IDs), with no task/result bodies or new
+network listener. Exclusive per-epoch creation, 0700/0600 modes, no-follow and
+nonblocking file opens, pinned inode/device and single-link verification prevent
+unsafe files from establishing display evidence. A read failure omits the feed;
+it does not retry or cancel an accepted exchange. The native facade independently
+checks exact endpoints against active Feature membership and owned slots. Old
+epochs and the separate structured-agents host are never implicitly adopted.

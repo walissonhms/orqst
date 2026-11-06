@@ -1223,3 +1223,14 @@ acceptance pending.
 - [x] Preserve explicit names through initial and incremental native admission.
 - [ ] Renderer wiring and real native mixed-provider batch acceptance.
 - [ ] Multi-workspace design review and account-profile creation remain separate.
+
+### Owned MCP pair communication evidence — pane-817, 2026-11-05
+
+- [x] Add metadata-only current-pair audit at exact broker delivery/result acceptance;
+      capture Feature/revision, terminal IDs, grant/task IDs, epoch and launch IDs.
+- [x] Expose optional bounded communication feed for snapshot/canvas; validate
+      metadata, active Feature membership, owned slots and duplicate IDs in Node/Rust.
+- [x] Keep composer unsupported attempts, raw PTY/prose, disconnects, old epochs and
+      the separate structured-agents host outside this projection.
+- [ ] Accept native rendering and a real provider MCP exchange. Normal CLI terminal
+      preparation still has MCP disabled; this increment creates no new route.

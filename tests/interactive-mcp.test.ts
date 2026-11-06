@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Store } from '@orqst/database';
+import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
+import { mcpCommunicationJournal } from '../packages/core/src/terminal/mcp-communication.js';
 import {
   TerminalAuthority,
   terminalChallengeBytes,
@@ -29,14 +31,31 @@ async function fixture(
   const events: TerminalEvents[] = [];
   const writes: string[] = [];
   const admission = desktopAgentsAdmission(join(root, 'admission'));
-  const session = new InteractiveMcpSession(authority, 'synthetic-workspace', (slot, id) => {
-    try {
-      admission.assertOwner();
-      return (call(slot, 'snapshot', [id]) as { state: string }).state === 'running';
-    } catch {
-      return false;
-    }
-  });
+  const metadata = featureConfigurationDatabase(root, 'synthetic-workspace');
+  const terminalIds: [string, string] = [randomUUID(), randomUUID()];
+  let feature = metadata.create({ name: 'SYNTHETIC MCP evidence' });
+  for (const id of terminalIds)
+    feature = metadata.assignTerminal(feature.featureId, id, feature.revision);
+  const communication = mcpCommunicationJournal(
+    root,
+    authority.epoch,
+    'synthetic-workspace',
+    terminalIds,
+    metadata.list,
+  );
+  const session = new InteractiveMcpSession(
+    authority,
+    'synthetic-workspace',
+    (slot, id) => {
+      try {
+        admission.assertOwner();
+        return (call(slot, 'snapshot', [id]) as { state: string }).state === 'running';
+      } catch {
+        return false;
+      }
+    },
+    communication,
+  );
   const endpoints = await session.open();
   const pair: ManagedTerminalPair = new ManagedTerminalPair(
     authority,
@@ -106,6 +125,9 @@ async function fixture(
     clients,
     events,
     writes,
+    communication,
+    feature,
+    terminalIds,
     async close() {
       for (const client of clients) client.close();
       await session.close();
@@ -182,6 +204,16 @@ test('at most 16 separately authorized grants are available on one pair', async 
       });
       assert.equal(((await outcome) as { state: string }).state, 'completed');
     }
+    const projected = f.communication.project(f.feature.featureId)!;
+    assert.equal(projected.events.length, 32);
+    assert.equal(new Set(projected.events.map((event) => event.id)).size, 32);
+    assert.ok(
+      projected.events.every(
+        (event, index) => event.kind === (index % 2 ? 'result' : 'delegation'),
+      ),
+    );
+    assert.equal(projected.events[0]!.from, f.terminalIds[0]);
+    assert.equal(projected.events[1]!.from, f.terminalIds[1]);
     assert.throws(() => f.session.prepare(), /grant limit/);
     assert.equal(f.session.snapshot().state, 'completed');
     assert.deepEqual(f.writes, []);

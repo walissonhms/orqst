@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { TerminalAuthority } from './authority.js';
-import { McpTaskBroker, type McpRole } from './mcp-task.js';
+import { McpTaskBroker, type McpRole, type McpTaskEvidence } from './mcp-task.js';
 import { openMcpInstanceSockets } from './mcp-socket.js';
 import type { TerminalBackend } from './supervisor.js';
 
@@ -21,6 +21,9 @@ export class InteractiveMcpSession {
     private authority: TerminalAuthority,
     private workspaceId: string,
     private owned: (slot: number, instanceId: string) => boolean,
+    private readonly evidence?: {
+      bind(source: string, target: string): ((event: McpTaskEvidence) => void) | undefined;
+    },
   ) {}
 
   async open(parent = '/tmp') {
@@ -113,6 +116,8 @@ export class InteractiveMcpSession {
         workspaceId: this.workspaceId,
       },
       () => !this.closed && this.ownedForGrant(),
+      120_000,
+      this.evidence?.bind(this.instances.get(0)!, this.instances.get(1)!),
     );
     return this.candidate.prepare();
   }

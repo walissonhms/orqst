@@ -1249,3 +1249,8 @@ Native sibling ordering changes no focus/input authority. Preparation uncovers t
 retained main dialog only after source revalidation and revokes the old presentation.
 No HTTP/WS endpoint or observed-session execution is added; all captured activity
 continues to render as plain text. Native acceptance remains pending.
+
+Owned MCP communication projections contain metadata only. An unsafe/private audit
+failure makes the optional feed unavailable; it never authorizes a delivery,
+changes a provider process or grants PTY input. Exact active Feature membership
+and owned slot endpoints are validated in both the protocol facade and Rust.

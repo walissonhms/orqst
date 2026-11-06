@@ -418,3 +418,9 @@ requires them and binds the digest to its immutable plan; audit events may carry
 not have to supply these optional fields. These fields do not expose a renderer
 or network policy writer. A lost or unconfirmed save reply is `unknown`, not a
 confirmed CAS conflict.
+
+The owned Feature facade's optional `communication.events` display feed is limited
+to 50 metadata-only, unique-ID `delegation` / `result` records from the current MCP
+pair audit. Both exact terminal endpoints must be distinct current owned slots and
+members of the active Feature. It is separate from a composer attempt or delivery
+outcome and confers no authority. See [terminal-native](terminal-native.md#owned-mcp-communication-projection--2026-11-05).

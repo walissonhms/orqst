@@ -1494,3 +1494,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Added a Feature-scoped optional delegation/result feed from the owned MCP pair audit, with metadata-only persistence, exact identity binding and Node/Rust validation. Unsupported mention attempts remain separate.

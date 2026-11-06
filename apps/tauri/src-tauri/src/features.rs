@@ -719,11 +719,14 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
         o.keys().all(|key| {
             matches!(
                 key.as_str(),
-                "status" | "snapshot" | "canvas" | "accountLimits" | "mention"
+                "status" | "snapshot" | "canvas" | "accountLimits" | "mention" | "communication"
             )
         }) && o.contains_key("status")
             && value.get("accountLimits").is_none_or(valid_account_limits)
             && value.get("mention").is_none_or(valid_mention_reply)
+            && value.get("communication").is_none_or(|communication| {
+                value["status"] == "ok" && valid_communication(communication, &value["snapshot"])
+            })
             && matches!(
                 value["status"].as_str(),
                 Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
@@ -749,6 +752,49 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
                 })
             })
             && (value["status"] != "ok" || value.get("snapshot").is_some())
+    })
+}
+
+fn valid_communication(value: &Value, snapshot: &Value) -> bool {
+    if !exact(value, &["events"]) || !valid_snapshot(snapshot) {
+        return false;
+    }
+    let Some(events) = value["events"].as_array() else {
+        return false;
+    };
+    if events.len() > 50 {
+        return false;
+    }
+    let feature = snapshot["features"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|feature| {
+            feature["featureId"] == snapshot["activeFeatureId"] && feature["status"] != "archived"
+        });
+    let mut ids = HashSet::new();
+    events.iter().all(|event| {
+        exact(event, &["id", "from", "to", "kind", "at"])
+            && uuid(&event["id"])
+            && uuid(&event["from"])
+            && uuid(&event["to"])
+            && ids.insert(event["id"].as_str().unwrap())
+            && event["from"] != event["to"]
+            && safe(&event["at"]).is_some()
+            && matches!(event["kind"].as_str(), Some("delegation" | "result"))
+            && feature.is_some_and(|feature| {
+                ["from", "to"].iter().all(|key| {
+                    feature["terminalIds"]
+                        .as_array()
+                        .unwrap()
+                        .contains(&event[*key])
+                        && snapshot["slots"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|slot| slot["terminalId"] == event[*key])
+                })
+            })
     })
 }
 
@@ -2435,6 +2481,56 @@ mod tests {
             permission_scope_generation(&state, "feature-a", "epoch-a", 10),
             None
         );
+    }
+
+    #[test]
+    fn communication_requires_active_feature_members_owned_slots_and_bounded_metadata() {
+        let f = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let a = "a10636eb-3a12-4094-9123-49a4cdad27b8";
+        let b = "b10636eb-3a12-4094-9123-49a4cdad27b8";
+        let id = "c10636eb-3a12-4094-9123-49a4cdad27b8";
+        let snapshot = json!({"contractVersion":1,"storage":"core","generation":2,
+            "workspace":{"id":"workspace","name":"Workspace"},
+            "features":[{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"name":"Feature", "description":"", "status":"active", "revision":1,"terminalIds":[a,b],"createdAt":1,"updatedAt":1}],
+            "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
+            "activeFeatureId":f,"slots":[{"slot":0,"terminalId":a,"provider":"codex"},{"slot":1,"terminalId":b,"provider":"claude"}],"layoutSaved":true});
+        let event = json!({"id":id,"from":a,"to":b,"kind":"delegation","at":1000});
+        let reply = json!({"status":"ok","snapshot":snapshot,"communication":{"events":[event]}});
+        assert!(valid_reply(&reply));
+        let mut result = reply.clone();
+        result["communication"]["events"][0]["kind"] = json!("result");
+        assert!(valid_reply(&result));
+        for (key, value) in [
+            ("kind", json!("message")),
+            ("from", json!(f)),
+            ("to", json!(a)),
+            ("at", json!(-1)),
+            ("body", json!("SYNTHETIC")),
+        ] {
+            let mut bad = reply.clone();
+            bad["communication"]["events"][0][key] = value;
+            assert!(!valid_reply(&bad));
+        }
+        let mut bad = reply.clone();
+        bad["communication"]["events"] = json!([event, event]);
+        assert!(!valid_reply(&bad));
+        bad["communication"]["events"] = json!(vec![event; 51]);
+        assert!(!valid_reply(&bad));
+        let mut bad = reply.clone();
+        bad["snapshot"]["activeFeatureId"] = Value::Null;
+        bad["snapshot"]["view"]["featureId"] = Value::Null;
+        assert!(!valid_reply(&bad));
+        bad["communication"]["events"] = json!([]);
+        assert!(valid_reply(&bad));
+        let mut bad = reply.clone();
+        bad["snapshot"]["slots"] = json!([]);
+        assert!(!valid_reply(&bad));
+        let mut bad = reply.clone();
+        bad["snapshot"]["features"][0]["status"] = json!("archived");
+        assert!(!valid_reply(&bad));
+        assert!(!valid_reply(
+            &json!({"status":"denied","communication":{"events":[]}})
+        ));
     }
 
     #[test]

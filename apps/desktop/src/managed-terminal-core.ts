@@ -1,4 +1,8 @@
-import { composerMentionReplySchema, type ComposerMentionInput } from '@orqst/protocol';
+import {
+  communicationProjectionSchema,
+  composerMentionReplySchema,
+  type ComposerMentionInput,
+} from '@orqst/protocol';
 import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit-pending.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
@@ -363,6 +367,10 @@ export async function connectManagedTerminalCore(
       return receipt;
     },
     features: {
+      communication: async (featureId: string | null) => {
+        const reply = await call({ kind: 'communicationProjection', featureId });
+        return reply === null ? undefined : communicationProjectionSchema.parse(reply);
+      },
       mention: async (featureId: string | null, input: ComposerMentionInput) =>
         composerMentionReplySchema.parse(await call({ kind: 'composerMention', featureId, input })),
       list: async () => workspaceFeatureSchema.array().parse(await call({ kind: 'featureList' })),

@@ -1,3 +1,4 @@
+import { mcpCommunicationJournal } from './mcp-communication.js';
 import { recordComposerMention } from './composer-mentions.js';
 import {
   preserveOwnedExitPending,
@@ -86,6 +87,19 @@ async function start() {
   startupStage = 'core_startup';
   const stores: Store[] = [];
   let pair!: ManagedTerminalPair;
+  const communication = selection[0]!.config.interactive?.mcp
+    ? mcpCommunicationJournal(
+        process.argv[4]!,
+        authority.epoch,
+        stableId('workspace', selection[0]!.config.project),
+        [initialMembers[0]!.terminalId, initialMembers[1]!.terminalId],
+        () =>
+          featureConfigurationDatabase(
+            process.argv[4]!,
+            stableId('workspace', selection[0]!.config.project),
+          ).list(),
+      )
+    : undefined;
   const mcp = selection[0]!.config.interactive?.mcp
     ? new InteractiveMcpSession(
         authority,
@@ -103,6 +117,7 @@ async function start() {
             return false;
           }
         },
+        communication,
       )
     : undefined;
   try {
@@ -293,6 +308,10 @@ async function start() {
               selection.map(({ config }) => terminalIdentity(config).terminalId),
               request.input,
             );
+            break;
+          case 'communicationProjection':
+            if (communication) admission.assertOwner();
+            value = communication?.project(request.featureId) ?? null;
             break;
           case 'featureList':
             value = features().list();

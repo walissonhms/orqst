@@ -680,3 +680,41 @@ private evidence. Partial results are not an all-or-nothing transaction.
 See [source/reuse and security review](../research/current-workspace-terminal-batch.md).
 Renderer integration, actual native mixed-provider batch acceptance and the
 separately reviewed multi-workspace design remain pending.
+
+### Owned MCP communication projection — 2026-11-05
+
+Successful `snapshot` and `canvas` replies may include:
+
+```ts
+communication?: {
+  events: Array<{
+    id: string; // UUID, stable for the same recorded transition
+    from: string; // exact stable terminal UUID
+    to: string; // exact stable terminal UUID
+    kind: 'delegation' | 'result';
+    at: number; // Core event epoch milliseconds
+  }>; // at most 50, oldest first within the bounded current-pair audit
+};
+```
+
+Both endpoints must be distinct members of the active Feature and present in the
+owned snapshot slots. Duplicate IDs, other Features, raw bodies and `message`
+events are refused by the Feature reply schema and Rust validator. The generic
+composer projection schema still permits `message` for compatibility; this facade
+only exposes the two journal-proven MCP transition kinds. Permission-review
+snapshots stay free of this optional display evidence.
+
+No pair/audit proof means the field is absent. An initialized safe pair with no
+matching events returns `{events:[]}`. Queued tasks and unsupported/denied mention
+attempts do not animate as deliveries. Disconnect never produces a result.
+`delegation` proves broker handoff to the waiting worker; `result` proves exact
+result submission, not provider/task success. Feature revision changes after grant
+preparation suppress further audit records for that grant. Past records are shown
+only while both terminals remain current members. Existing native input,
+ownership, admission, grants, revocation and process fences are unchanged.
+
+The Core stores a private metadata-only current-epoch audit in
+`mcp-communication/<epoch>.jsonl` under its admission directory. It does not read a
+separate structured-agents host journal or restore an old epoch. Pair capacity is
+16 grants / 32 events; unsafe files or the 64 KiB read budget omit evidence without
+changing accepted MCP operations. See the [reference review](../research/mcp-pair-communication-projection.md).

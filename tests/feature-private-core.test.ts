@@ -129,6 +129,10 @@ test('owned Core private Feature RPC persists metadata for six terminals without
       }),
     ]);
     assert.deepEqual((await call({ kind: 'featureList' })).value, []);
+    assert.deepEqual(await call({ kind: 'communicationProjection', featureId: null }), {
+      ok: true,
+      value: null,
+    });
     const created = await call({ kind: 'featureCreate', input: { name: 'SYNTHETIC Feature' } });
     assert.equal(created.ok, true);
     let feature = workspaceFeatureSchema.parse(created.value);
