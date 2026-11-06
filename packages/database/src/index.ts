@@ -103,6 +103,9 @@ CREATE TABLE synchronization_state (source TEXT PRIMARY KEY, offset INTEGER NOT 
   analyticsEvidenceMigration,
 ];
 
+/** Exact migration SQL, shared with the Rust terminal Core (generated fixture, sync-tested). */
+export const storeMigrations: readonly string[] = Object.freeze([...migrations]);
+
 export class Store {
   private db: DatabaseSync;
   private statements = new Map<string, StatementSync>();
