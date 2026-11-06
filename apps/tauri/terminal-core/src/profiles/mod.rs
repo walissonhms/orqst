@@ -104,3 +104,5 @@ pub(crate) fn pin_now(value: Option<f64>) {
     NOW.with(|n| n.set(value));
 }
 
+#[cfg(test)]
+mod golden;
