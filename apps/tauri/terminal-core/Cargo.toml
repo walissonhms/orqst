@@ -1,0 +1,24 @@
+[package]
+name = "orqst-terminal-core"
+version = "0.1.0"
+description = "ORQST managed terminal Core (Rust port of packages/core/src/terminal)"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "orqst-terminal-core"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10.9"
+ed25519-dalek = "2"
+base64 = "0.22"
+libc = "0.2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
