@@ -1,0 +1,821 @@
+{
+ "terminalIds": [
+  "00000000-0000-4000-8000-0000000000a1",
+  "00000000-0000-4000-8000-0000000000b1",
+  "00000000-0000-4000-8000-0000000000c1"
+ ],
+ "project": "/synthetic/orqst-project",
+ "ops": [
+  {
+   "kind": "featureList",
+   "id": "00000000-0000-4000-8000-000000000001"
+  },
+  {
+   "kind": "featureViewRead",
+   "id": "00000000-0000-4000-8000-000000000002"
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000003",
+   "input": {
+    "name": "Alpha",
+    "description": "synthetic fixture"
+   }
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000004",
+   "input": {
+    "name": "Beta"
+   }
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000005",
+   "input": {
+    "name": "   "
+   }
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000006",
+   "input": {
+    "name": "Zero​Width"
+   }
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000007",
+   "input": {
+    "name": "Ação ✓",
+    "status": "blocked"
+   }
+  },
+  {
+   "kind": "featureCreate",
+   "id": "00000000-0000-4000-8000-000000000008",
+   "input": {
+    "name": "Gamma",
+    "workspaceId": "x"
+   }
+  },
+  {
+   "kind": "featureAssign",
+   "id": "00000000-0000-4000-8000-000000000009",
+   "featureId": "$F1",
+   "slot": 0,
+   "expectedRevision": 1
+  },
+  {
+   "kind": "featureAssign",
+   "id": "00000000-0000-4000-8000-00000000000a",
+   "featureId": "$F1",
+   "slot": 1,
+   "expectedRevision": 2
+  },
+  {
+   "kind": "featureAssign",
+   "id": "00000000-0000-4000-8000-00000000000b",
+   "featureId": "$F2",
+   "slot": 0,
+   "expectedRevision": 1
+  },
+  {
+   "kind": "featureAssign",
+   "id": "00000000-0000-4000-8000-00000000000c",
+   "featureId": "$F1",
+   "slot": 5,
+   "expectedRevision": 3
+  },
+  {
+   "kind": "featureAssign",
+   "id": "00000000-0000-4000-8000-00000000000d",
+   "featureId": "$F1",
+   "slot": 2,
+   "expectedRevision": 9
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-00000000000e",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 3,
+    "orchestratorTerminalId": "00000000-0000-4000-8000-0000000000a1",
+    "status": "active"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-00000000000f",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 3,
+    "name": "Stale"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000010",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000011",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4,
+    "name": null
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000012",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4,
+    "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000013",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4,
+    "orchestratorTerminalId": "00000000-0000-4000-8000-0000000000c1"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000014",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4,
+    "status": "archived"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000015",
+   "featureId": "$F2",
+   "input": {
+    "expectedRevision": 1,
+    "status": "archived"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000016",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 4,
+    "orchestratorTerminalId": null,
+    "description": "cleared"
+   }
+  },
+  {
+   "kind": "featureUpdate",
+   "id": "00000000-0000-4000-8000-000000000017",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 5,
+    "orchestratorTerminalId": "00000000-0000-4000-8000-0000000000b1"
+   }
+  },
+  {
+   "kind": "featureViewSave",
+   "id": "00000000-0000-4000-8000-000000000018",
+   "input": {
+    "expectedRevision": 0,
+    "featureId": "$F1"
+   }
+  },
+  {
+   "kind": "featureViewSave",
+   "id": "00000000-0000-4000-8000-000000000019",
+   "input": {
+    "expectedRevision": 0,
+    "featureId": null
+   }
+  },
+  {
+   "kind": "featureViewSave",
+   "id": "00000000-0000-4000-8000-00000000001a",
+   "input": {
+    "expectedRevision": 1
+   }
+  },
+  {
+   "kind": "featureViewSave",
+   "id": "00000000-0000-4000-8000-00000000001b",
+   "input": {
+    "expectedRevision": 1,
+    "featureId": "00000000-0000-4000-8000-0000000000ff"
+   }
+  },
+  {
+   "kind": "featureViewRead",
+   "id": "00000000-0000-4000-8000-00000000001c"
+  },
+  {
+   "kind": "featurePermissionsRead",
+   "id": "00000000-0000-4000-8000-00000000001d",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-00000000001e",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 0,
+    "expectedViewRevision": 1,
+    "expectedFeatureRevision": 6,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": [
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "operations": [
+        "delegate",
+        "view"
+       ]
+      }
+     ]
+    },
+    "reviewDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-00000000001f",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 0,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": []
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000020",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 1,
+    "expectedFeatureRevision": 1,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": []
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000021",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 1,
+    "expectedViewRevision": 0,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": []
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000022",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": [
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "operations": [
+        "delegate"
+       ]
+      },
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "operations": [
+        "delegate"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000023",
+   "featureId": "$F1",
+   "actorId": "owner",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": [
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000c1",
+       "operations": [
+        "view"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000024",
+   "featureId": "$F1",
+   "actorId": "bad actor",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": [
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "operations": [
+        "execute"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsSave",
+   "id": "00000000-0000-4000-8000-000000000025",
+   "featureId": "$F1",
+   "actorId": "owner-2",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "schemaVersion": 1,
+     "rules": [
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "operations": [
+        "execute",
+        "view"
+       ]
+      },
+      {
+       "sourceTerminalId": "00000000-0000-4000-8000-0000000000a1",
+       "targetTerminalId": "00000000-0000-4000-8000-0000000000b1",
+       "operations": [
+        "delegate"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featurePermissionsRead",
+   "id": "00000000-0000-4000-8000-000000000026",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featurePermissionsRead",
+   "id": "00000000-0000-4000-8000-000000000027",
+   "featureId": "$F2"
+  },
+  {
+   "kind": "featurePermissionsRead",
+   "id": "00000000-0000-4000-8000-000000000028",
+   "featureId": "00000000-0000-4000-8000-0000000000ff"
+  },
+  {
+   "kind": "featureTeamRead",
+   "id": "00000000-0000-4000-8000-000000000029",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featureTeamRead",
+   "id": "00000000-0000-4000-8000-00000000002a",
+   "featureId": "$F3"
+  },
+  {
+   "kind": "featureTeamSave",
+   "id": "00000000-0000-4000-8000-00000000002b",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 0,
+    "configuration": {
+     "version": 1,
+     "name": "Team",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "Lead",
+       "handle": "lead",
+       "role": "orchestrator",
+       "allowedTargetTerminalIds": [
+        "00000000-0000-4000-8000-0000000000b1"
+       ]
+      },
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000b1",
+       "name": "Worker",
+       "handle": "worker-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featureTeamSave",
+   "id": "00000000-0000-4000-8000-00000000002c",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 0,
+    "configuration": {
+     "version": 1,
+     "name": "Team",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "Lead",
+       "handle": "lead",
+       "role": "orchestrator",
+       "allowedTargetTerminalIds": []
+      },
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000b1",
+       "name": "Worker",
+       "handle": "worker-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featureTeamSave",
+   "id": "00000000-0000-4000-8000-00000000002d",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "version": 1,
+     "name": "Team",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "Lead",
+       "handle": "lead",
+       "role": "orchestrator",
+       "allowedTargetTerminalIds": [
+        "00000000-0000-4000-8000-0000000000b1"
+       ]
+      },
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000b1",
+       "name": "Worker",
+       "handle": "worker-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": [
+        "00000000-0000-4000-8000-0000000000a1"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featureTeamSave",
+   "id": "00000000-0000-4000-8000-00000000002e",
+   "featureId": "$F1",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "version": 1,
+     "name": "Team",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "Lead",
+       "handle": "lead",
+       "role": "orchestrator",
+       "allowedTargetTerminalIds": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "featureTeamRead",
+   "id": "00000000-0000-4000-8000-00000000002f",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featureLayoutRead",
+   "id": "00000000-0000-4000-8000-000000000030",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featureLayoutSave",
+   "id": "00000000-0000-4000-8000-000000000031",
+   "featureId": "$F1",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000a1",
+     "00000000-0000-4000-8000-0000000000b1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000a1",
+    "maximized": null,
+    "axis": "columns",
+    "columns": 2,
+    "percent": 50,
+    "names": [
+     {
+      "id": "00000000-0000-4000-8000-0000000000a1",
+      "name": "Ação"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "featureLayoutSave",
+   "id": "00000000-0000-4000-8000-000000000032",
+   "featureId": "$F1",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000b1",
+    "maximized": null,
+    "axis": "columns",
+    "columns": 2,
+    "percent": 50,
+    "names": []
+   }
+  },
+  {
+   "kind": "featureLayoutSave",
+   "id": "00000000-0000-4000-8000-000000000033",
+   "featureId": "$F1",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000a1",
+    "maximized": null,
+    "axis": "columns",
+    "columns": 2,
+    "percent": 50,
+    "names": []
+   }
+  },
+  {
+   "kind": "featureLayoutRead",
+   "id": "00000000-0000-4000-8000-000000000034",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "teamRead",
+   "id": "00000000-0000-4000-8000-000000000035"
+  },
+  {
+   "kind": "teamSave",
+   "id": "00000000-0000-4000-8000-000000000036",
+   "input": {
+    "expectedRevision": 0,
+    "configuration": {
+     "version": 1,
+     "name": "Selection",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000c1",
+       "name": "C",
+       "handle": "c-1",
+       "role": "reviewer",
+       "allowedTargetTerminalIds": []
+      },
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "A",
+       "handle": "a-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": [
+        "00000000-0000-4000-8000-0000000000c1"
+       ]
+      },
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000b1",
+       "name": "B",
+       "handle": "b-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": [
+        "00000000-0000-4000-8000-0000000000c1"
+       ]
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "teamSave",
+   "id": "00000000-0000-4000-8000-000000000037",
+   "input": {
+    "expectedRevision": 1,
+    "configuration": {
+     "version": 1,
+     "name": "Selection",
+     "members": [
+      {
+       "terminalId": "00000000-0000-4000-8000-0000000000a1",
+       "name": "A",
+       "handle": "a-1",
+       "role": "worker",
+       "allowedTargetTerminalIds": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "teamRead",
+   "id": "00000000-0000-4000-8000-000000000038"
+  },
+  {
+   "kind": "layoutRead",
+   "id": "00000000-0000-4000-8000-000000000039"
+  },
+  {
+   "kind": "layoutImport",
+   "id": "00000000-0000-4000-8000-00000000003a",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000a1",
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000c1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000a1",
+     "00000000-0000-4000-8000-0000000000b1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000b1",
+    "maximized": "00000000-0000-4000-8000-0000000000b1",
+    "axis": "rows",
+    "columns": 3,
+    "percent": 75,
+    "names": [
+     {
+      "id": "00000000-0000-4000-8000-0000000000c1",
+      "name": "Terminal ✓ 3"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "layoutImport",
+   "id": "00000000-0000-4000-8000-00000000003b",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000c1",
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [],
+    "active": "00000000-0000-4000-8000-0000000000a1",
+    "maximized": null,
+    "axis": "columns",
+    "columns": 2,
+    "percent": 50,
+    "names": []
+   }
+  },
+  {
+   "kind": "layoutSave",
+   "id": "00000000-0000-4000-8000-00000000003c",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000c1",
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000c1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000c1",
+    "maximized": "00000000-0000-4000-8000-0000000000c1",
+    "axis": "columns",
+    "columns": 0,
+    "percent": 25,
+    "names": []
+   }
+  },
+  {
+   "kind": "layoutSave",
+   "id": "00000000-0000-4000-8000-00000000003d",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000c1",
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000c1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000c1",
+    "maximized": "00000000-0000-4000-8000-0000000000c1",
+    "axis": "columns",
+    "columns": 4,
+    "percent": 25,
+    "names": []
+   }
+  },
+  {
+   "kind": "layoutSave",
+   "id": "00000000-0000-4000-8000-00000000003e",
+   "record": {
+    "version": 1,
+    "order": [
+     "00000000-0000-4000-8000-0000000000c1",
+     "00000000-0000-4000-8000-0000000000b1",
+     "00000000-0000-4000-8000-0000000000a1"
+    ],
+    "shown": [
+     "00000000-0000-4000-8000-0000000000c1"
+    ],
+    "active": "00000000-0000-4000-8000-0000000000c1",
+    "maximized": "00000000-0000-4000-8000-0000000000c1",
+    "axis": "columns",
+    "columns": 1,
+    "percent": 80,
+    "names": []
+   }
+  },
+  {
+   "kind": "layoutRead",
+   "id": "00000000-0000-4000-8000-00000000003f"
+  },
+  {
+   "kind": "featureRead",
+   "id": "00000000-0000-4000-8000-000000000040",
+   "featureId": "$F1"
+  },
+  {
+   "kind": "featureRead",
+   "id": "00000000-0000-4000-8000-000000000041",
+   "featureId": "00000000-0000-4000-8000-0000000000ff"
+  },
+  {
+   "kind": "featureRead",
+   "id": "00000000-0000-4000-8000-000000000042",
+   "featureId": "not-a-uuid"
+  },
+  {
+   "kind": "featureRead",
+   "id": "00000000-0000-4000-8000-000000000043",
+   "featureId": "$F1",
+   "extra": 1
+  },
+  {
+   "kind": "featureList",
+   "id": "00000000-0000-4000-8000-000000000044"
+  }
+ ]
+}
