@@ -90,8 +90,7 @@ function materialize(list: Fixture[]) {
 
 // ---- Synthetic tree -------------------------------------------------------------------
 const pendingModes: [string, number][] = [];
-for (const d of ['bin', 'bin2', 'bin-open', 'project', 'project/.codex', 'project/.claude'])
-  dir(d);
+for (const d of ['bin', 'bin2', 'bin-open', 'project', 'project/.codex', 'project/.claude']) dir(d);
 chmodLater('bin-open', 0o777);
 for (const name of ['node', 'codex', 'claude', 'opencode']) file(`bin/${name}`, macho(name), 0o755);
 file('bin2/codex', macho('codex-2'), 0o755);
@@ -100,12 +99,24 @@ file('bin/relay.cjs', '// SYNTHETIC ORQST golden relay fixture\n');
 file('bin/shim', '#!/bin/sh\n# SYNTHETIC shim\n', 0o755);
 file('project/.codex/config.toml', 'model = "gpt-synthetic-project"\n');
 file('project/.claude/settings.json', '{"model":"claude-synthetic-project"}');
-file('project/opencode.json', JSON.stringify({
-  model: { providerID: 'synthetic', model: 'model-a', variant: 'high' },
-  provider: { synthetic: { models: { 'model-b': {}, 'model-c': { disabled: true } } } },
-  providers: { other: { models: { m1: {} } } },
-}));
-for (const d of ['home', 'home/.codex', 'home/.claude', 'home/.config', 'home/.config/opencode', 'home/.local', 'home/.local/state', 'home/.local/state/opencode'])
+file(
+  'project/opencode.json',
+  JSON.stringify({
+    model: { providerID: 'synthetic', model: 'model-a', variant: 'high' },
+    provider: { synthetic: { models: { 'model-b': {}, 'model-c': { disabled: true } } } },
+    providers: { other: { models: { m1: {} } } },
+  }),
+);
+for (const d of [
+  'home',
+  'home/.codex',
+  'home/.claude',
+  'home/.config',
+  'home/.config/opencode',
+  'home/.local',
+  'home/.local/state',
+  'home/.local/state/opencode',
+])
   dir(d);
 const CODEX_TOML =
   '# SYNTHETIC\nmodel = "gpt-synthetic-a" # chosen\n\n  model="gpt-synthetic-\\u0062"\nmodel = "bad\ttab"\nmodel = "gpt-after-bad"\n';
@@ -135,7 +146,15 @@ file(
     variant: { 'synthetic/fav-1': 'max', 'synthetic/other': 'default' },
   }),
 );
-for (const s of ['state-codex', 'state-codex2', 'state-native', 'state-claude', 'state-claude2', 'state-opencode', 'manifests'])
+for (const s of [
+  'state-codex',
+  'state-codex2',
+  'state-native',
+  'state-claude',
+  'state-claude2',
+  'state-opencode',
+  'manifests',
+])
   dir(s, 0o700);
 for (const s of ['state-codex', 'state-codex2', 'state-native'])
   for (const d of ['home', 'codex', 'tmp']) dir(`${s}/${d}`, 0o700);
@@ -149,7 +168,10 @@ function chmodLater(path: string, mode: number) {
 // Pass 1: materialize executables to learn their hashes.
 materialize(fixtures);
 const sha = (name: string) => terminalExecutableSha256(join(ROOT, 'bin', name));
-const relay = { path: join(ROOT, 'bin/relay.cjs'), sha256: terminalDigest('// SYNTHETIC ORQST golden relay fixture\n') };
+const relay = {
+  path: join(ROOT, 'bin/relay.cjs'),
+  sha256: terminalDigest('// SYNTHETIC ORQST golden relay fixture\n'),
+};
 const mcp = {
   serverName: 'orqst_0123456789abcdef0123456789abcdef',
   socketPath: join(ROOT, 'state-native/mcp.sock'),
@@ -180,9 +202,18 @@ const codexNative = {
   },
 };
 const codexMcp = { ...codexNative, interactive: { sharedNativeSessions: true, mcp: true } };
-const codexHub = { ...codexNative, interactive: { sharedNativeSessions: true, mcp: true, hub: true } };
-const TUI = { version: '2.1.318', sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d' };
-const MCP178 = { version: '2.1.178', sha256: '473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309' };
+const codexHub = {
+  ...codexNative,
+  interactive: { sharedNativeSessions: true, mcp: true, hub: true },
+};
+const TUI = {
+  version: '2.1.318',
+  sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
+};
+const MCP178 = {
+  version: '2.1.178',
+  sha256: '473495d0c15d6616cd0870480db5eb8aa0402fe4f8ead3277a1b521e94110309',
+};
 const claudeBase = {
   version: 2,
   provider: 'claude',
@@ -193,7 +224,11 @@ const claudeBase = {
   project: join(ROOT, 'project'),
   state: join(ROOT, 'state-claude'),
   sessionId: '2f1c7a9e-3b4d-4c5e-8f60-718293a4b5c6',
-  authentication: { mode: 'reuse-existing', home: join(ROOT, 'home'), sharedNativeConfiguration: true },
+  authentication: {
+    mode: 'reuse-existing',
+    home: join(ROOT, 'home'),
+    sharedNativeConfiguration: true,
+  },
   interactive: { sharedNativeSessions: true },
 };
 const claudeHooks = { ...claudeBase, ownedHooks: true };
@@ -201,7 +236,10 @@ const claudeHubHooks = {
   ...claudeBase,
   ownedHooks: true,
   state: join(ROOT, 'state-claude2'),
-  authentication: { ...claudeBase.authentication, claudeConfigDirectory: join(ROOT, 'home/.claude') },
+  authentication: {
+    ...claudeBase.authentication,
+    claudeConfigDirectory: join(ROOT, 'home/.claude'),
+  },
   interactive: { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true, hub: true },
 };
 const claudeMcp178 = {
@@ -248,14 +286,28 @@ const parse = (config: object) =>
     : 'version' in config && config.version === 2
       ? managedClaudeConfigSchema.parse(config)
       : managedCodexConfigSchema.parse(config)) as InteractiveTerminalConfig;
-for (const [config, state] of [[codexSeparate, 'state-codex'], [codexSeparate2, 'state-codex2'], [codexNative, 'state-native']] as const)
-  file(`${state}/codex/config.toml`, managedCodexSettings(managedCodexConfigSchema.parse(config)), 0o600);
-for (const [config, state] of [[claudeHooks, 'state-claude'], [claudeHubHooks, 'state-claude2']] as const) {
-  for (const [name, content] of Object.entries(claudeOwnedHookFiles(managedClaudeConfigSchema.parse(config))))
+for (const [config, state] of [
+  [codexSeparate, 'state-codex'],
+  [codexSeparate2, 'state-codex2'],
+  [codexNative, 'state-native'],
+] as const)
+  file(
+    `${state}/codex/config.toml`,
+    managedCodexSettings(managedCodexConfigSchema.parse(config)),
+    0o600,
+  );
+for (const [config, state] of [
+  [claudeHooks, 'state-claude'],
+  [claudeHubHooks, 'state-claude2'],
+] as const) {
+  for (const [name, content] of Object.entries(
+    claudeOwnedHookFiles(managedClaudeConfigSchema.parse(config)),
+  ))
     file(`${state}/${name}`, content, 0o600);
   file(`${state}/claude-hook-events.jsonl`, '', 0o600);
 }
-const manifest = (name: string, value: unknown) => file(`manifests/${name}`, typeof value === 'string' ? value : JSON.stringify(value), 0o600);
+const manifest = (name: string, value: unknown) =>
+  file(`manifests/${name}`, typeof value === 'string' ? value : JSON.stringify(value), 0o600);
 manifest('codex.json', codexSeparate);
 manifest('codex2.json', codexSeparate2);
 manifest('native.json', codexNative);
@@ -265,7 +317,8 @@ manifest('unknown-key.json', { ...codexSeparate, extra: true });
 manifest('public.json', codexSeparate);
 fixtures.at(-1)!.mode = 0o644;
 manifest('opencode.json', opencodeBase);
-for (const [path, mode] of pendingModes) fixtures.find((f) => f.path === join(ROOT, path))!.mode = mode;
+for (const [path, mode] of pendingModes)
+  fixtures.find((f) => f.path === join(ROOT, path))!.mode = mode;
 materialize(fixtures);
 
 // ---- Cases -----------------------------------------------------------------------------
@@ -275,7 +328,8 @@ function outcome(run: () => unknown): Outcome {
     const value = run();
     return { ok: value === undefined ? null : value };
   } catch (error) {
-    if (error instanceof ZodError || error instanceof SyntaxError) return { error: { kind: 'schema' } };
+    if (error instanceof ZodError || error instanceof SyntaxError)
+      return { error: { kind: 'schema' } };
     const code = (error as NodeJS.ErrnoException).code;
     if (typeof code === 'string') return { error: { kind: 'io', code } };
     return { error: { kind: 'refused', message: (error as Error).message } };
@@ -285,11 +339,28 @@ const cases: { name: string; fn: string; input: Record<string, unknown>; output:
 const add = (name: string, fn: string, input: Record<string, unknown>, run: () => unknown) =>
   cases.push({ name, fn, input, output: outcome(run) });
 
-add('identity legacy', 'identity', { state: '/x/"state"\n' }, () => terminalIdentity({ state: '/x/"state"\n' }));
-add('identity explicit', 'identity', { state: '/x', identity: 'f81d4fae-7dec-41d0-a765-00a0c91e6bf6' }, () =>
-  terminalIdentity({ state: '/x', identity: { terminalId: 'f81d4fae-7dec-41d0-a765-00a0c91e6bf6' } }));
-add('codex settings', 'codexSettings', { config: { ...codexSeparate, project: '/p/"quoted"\\é' } }, () =>
-  managedCodexSettings(managedCodexConfigSchema.parse({ ...codexSeparate, project: '/p/"quoted"\\é' })));
+add('identity legacy', 'identity', { state: '/x/"state"\n' }, () =>
+  terminalIdentity({ state: '/x/"state"\n' }),
+);
+add(
+  'identity explicit',
+  'identity',
+  { state: '/x', identity: 'f81d4fae-7dec-41d0-a765-00a0c91e6bf6' },
+  () =>
+    terminalIdentity({
+      state: '/x',
+      identity: { terminalId: 'f81d4fae-7dec-41d0-a765-00a0c91e6bf6' },
+    }),
+);
+add(
+  'codex settings',
+  'codexSettings',
+  { config: { ...codexSeparate, project: '/p/"quoted"\\é' } },
+  () =>
+    managedCodexSettings(
+      managedCodexConfigSchema.parse({ ...codexSeparate, project: '/p/"quoted"\\é' }),
+    ),
+);
 const profiles = (config: object, withMcp?: boolean) =>
   interactiveTerminalProfiles(parse(config), withMcp ? mcp : undefined);
 for (const [name, config, withMcp] of [
@@ -302,87 +373,251 @@ for (const [name, config, withMcp] of [
   ['codex auth without interactive', { ...codexNative, interactive: undefined }, false],
   ['codex mcp unreviewed version', { ...codexMcp, executableVersion: '0.163.0' }, true],
   ['codex mcp relay changed', codexMcp, 'relay'],
-  ['codex native model stale', { ...codexNative, model: { value: 'gpt-synthetic-a', source: 'native-config', files: [{ path: join(ROOT, 'home/.codex/config.toml'), sha256: null }] } }, false],
-  ['codex native model', { ...codexNative, model: { value: 'gpt-synthetic-a', source: 'native-config', files: [{ path: join(ROOT, 'home/.codex/config.toml'), sha256: terminalDigest(CODEX_TOML) }, { path: join(ROOT, 'missing.toml'), sha256: null }] } }, false],
+  [
+    'codex native model stale',
+    {
+      ...codexNative,
+      model: {
+        value: 'gpt-synthetic-a',
+        source: 'native-config',
+        files: [{ path: join(ROOT, 'home/.codex/config.toml'), sha256: null }],
+      },
+    },
+    false,
+  ],
+  [
+    'codex native model',
+    {
+      ...codexNative,
+      model: {
+        value: 'gpt-synthetic-a',
+        source: 'native-config',
+        files: [
+          { path: join(ROOT, 'home/.codex/config.toml'), sha256: terminalDigest(CODEX_TOML) },
+          { path: join(ROOT, 'missing.toml'), sha256: null },
+        ],
+      },
+    },
+    false,
+  ],
   ['codex bad tool path', { ...codexNative, toolPath: join(ROOT, 'bin-open') }, false],
   ['claude tui', claudeBase, false],
   ['claude owned hooks', claudeHooks, false],
   ['claude hub hooks', claudeHubHooks, true],
   ['claude mcp 2.1.178', claudeMcp178, true],
   ['claude mcp mismatch', claudeMcp178, false],
-  ['claude unreviewed hash', { ...claudeBase, executable: { path: join(ROOT, 'bin/claude'), sha256: sha('claude') } }, false],
-  ['claude mcp unreviewed hash', { ...claudeMcp178, executable: { path: join(ROOT, 'bin/claude'), sha256: sha('claude') } }, true],
-  ['claude hooks with pair mcp', { ...claudeMcp178, executableVersion: TUI.version, executable: { path: join(ROOT, 'bin/claude'), sha256: TUI.sha256 }, ownedHooks: true }, true],
+  [
+    'claude unreviewed hash',
+    { ...claudeBase, executable: { path: join(ROOT, 'bin/claude'), sha256: sha('claude') } },
+    false,
+  ],
+  [
+    'claude mcp unreviewed hash',
+    { ...claudeMcp178, executable: { path: join(ROOT, 'bin/claude'), sha256: sha('claude') } },
+    true,
+  ],
+  [
+    'claude hooks with pair mcp',
+    {
+      ...claudeMcp178,
+      executableVersion: TUI.version,
+      executable: { path: join(ROOT, 'bin/claude'), sha256: TUI.sha256 },
+      ownedHooks: true,
+    },
+    true,
+  ],
   ['claude hooks changed', { ...claudeHooks, node: binary('codex') }, false],
   ['opencode', opencodeBase, false],
   ['opencode mcp', opencodeMcp, true],
   ['opencode hub', opencodeHub, true],
-  ['opencode model', { ...opencodeBase, model: { value: 'synthetic/fav-1#max', source: 'native-state', files: [{ path: join(ROOT, 'home/.local/state/opencode/model.json'), openCodeModel: 'synthetic/fav-1#max', sha256: terminalDigest(JSON.stringify(['opencode-model-state', 'synthetic', 'fav-1', 'max'])) }] } }, false],
-  ['opencode startup not authorized', { ...opencodeBase, interactive: { sharedNativeSessions: true, nativeStartupAuthorized: false } }, false],
+  [
+    'opencode model',
+    {
+      ...opencodeBase,
+      model: {
+        value: 'synthetic/fav-1#max',
+        source: 'native-state',
+        files: [
+          {
+            path: join(ROOT, 'home/.local/state/opencode/model.json'),
+            openCodeModel: 'synthetic/fav-1#max',
+            sha256: terminalDigest(
+              JSON.stringify(['opencode-model-state', 'synthetic', 'fav-1', 'max']),
+            ),
+          },
+        ],
+      },
+    },
+    false,
+  ],
+  [
+    'opencode startup not authorized',
+    {
+      ...opencodeBase,
+      interactive: { sharedNativeSessions: true, nativeStartupAuthorized: false },
+    },
+    false,
+  ],
   ['opencode mcp mismatch', opencodeMcp, false],
 ] as const) {
-  const useMcp = withMcp === 'relay' ? { ...mcp, relay: { ...relay, sha256: '0'.repeat(64) } } : withMcp ? mcp : undefined;
+  const useMcp =
+    withMcp === 'relay'
+      ? { ...mcp, relay: { ...relay, sha256: '0'.repeat(64) } }
+      : withMcp
+        ? mcp
+        : undefined;
   add(name, 'interactiveProfiles', { config, ...(useMcp ? { mcp: useMcp } : {}) }, () =>
-    interactiveTerminalProfiles(parse(config), useMcp));
-  add(`${name} environment`, 'interactiveEnvironment', { config, ...(useMcp ? { mcp: useMcp } : {}) }, () =>
-    Object.entries(interactiveTerminalEnvironment(parse(config), useMcp)));
+    interactiveTerminalProfiles(parse(config), useMcp),
+  );
+  add(
+    `${name} environment`,
+    'interactiveEnvironment',
+    { config, ...(useMcp ? { mcp: useMcp } : {}) },
+    () => Object.entries(interactiveTerminalEnvironment(parse(config), useMcp)),
+  );
 }
 void profiles;
 for (const config of [codexSeparate, codexNative])
   add('structured codex arguments', 'structuredCodexArguments', { config }, () =>
-    structuredCodexArguments(managedCodexConfigSchema.parse(config)));
+    structuredCodexArguments(managedCodexConfigSchema.parse(config)),
+  );
 add('codex environment direct', 'codexEnvironment', { config: codexSeparate }, () =>
-  Object.entries(managedCodexEnvironment(managedCodexConfigSchema.parse(codexSeparate))));
+  Object.entries(managedCodexEnvironment(managedCodexConfigSchema.parse(codexSeparate))),
+);
 add('codex profiles direct', 'codexProfiles', { config: codexMcp, mcp }, () =>
-  managedCodexProfiles(managedCodexConfigSchema.parse(codexMcp), mcp));
+  managedCodexProfiles(managedCodexConfigSchema.parse(codexMcp), mcp),
+);
 
-for (const name of ['codex.json', 'native.json', 'claude.json', 'broken.json', 'unknown-key.json', 'public.json', 'opencode.json', 'missing.json'])
+for (const name of [
+  'codex.json',
+  'native.json',
+  'claude.json',
+  'broken.json',
+  'unknown-key.json',
+  'public.json',
+  'opencode.json',
+  'missing.json',
+])
   add(`read ${name}`, 'readProfiles', { file: join(ROOT, 'manifests', name) }, () =>
-    interactiveTerminalProfiles(readInteractiveTerminalConfig(join(ROOT, 'manifests', name))));
+    interactiveTerminalProfiles(readInteractiveTerminalConfig(join(ROOT, 'manifests', name))),
+  );
 
 const sid = claudeBase.sessionId;
 for (const [name, raw] of [
-  ['claude mcp review', { executableVersion: MCP178.version, executableSha256: MCP178.sha256, nodePath: '/n', sessionId: sid, mcp }],
-  ['claude mcp review 318', { executableVersion: TUI.version, executableSha256: TUI.sha256, nodePath: '/n', sessionId: sid, mcp }],
-  ['claude mcp review unreviewed', { executableVersion: '9', executableSha256: TUI.sha256, nodePath: '/n', sessionId: sid, mcp }],
-  ['claude mcp review bad uuid', { executableVersion: TUI.version, executableSha256: TUI.sha256, nodePath: '/n', sessionId: 'x', mcp }],
+  [
+    'claude mcp review',
+    {
+      executableVersion: MCP178.version,
+      executableSha256: MCP178.sha256,
+      nodePath: '/n',
+      sessionId: sid,
+      mcp,
+    },
+  ],
+  [
+    'claude mcp review 318',
+    {
+      executableVersion: TUI.version,
+      executableSha256: TUI.sha256,
+      nodePath: '/n',
+      sessionId: sid,
+      mcp,
+    },
+  ],
+  [
+    'claude mcp review unreviewed',
+    { executableVersion: '9', executableSha256: TUI.sha256, nodePath: '/n', sessionId: sid, mcp },
+  ],
+  [
+    'claude mcp review bad uuid',
+    {
+      executableVersion: TUI.version,
+      executableSha256: TUI.sha256,
+      nodePath: '/n',
+      sessionId: 'x',
+      mcp,
+    },
+  ],
 ] as const)
   add(name, 'claudeMcp', { raw }, () => claudeInteractiveMcpConfiguration(raw));
 for (const [name, raw] of [
-  ['opencode mcp review', { executableVersion: '2.2.5', executableSha256: OPENCODE_SHA, nodePath: '/n', mcp }],
-  ['opencode mcp review unreviewed', { executableVersion: '2.2.6', executableSha256: OPENCODE_SHA, nodePath: '/n', mcp }],
+  [
+    'opencode mcp review',
+    { executableVersion: '2.2.5', executableSha256: OPENCODE_SHA, nodePath: '/n', mcp },
+  ],
+  [
+    'opencode mcp review unreviewed',
+    { executableVersion: '2.2.6', executableSha256: OPENCODE_SHA, nodePath: '/n', mcp },
+  ],
 ] as const)
   add(name, 'opencodeMcp', { raw }, () => opencodeInteractiveMcpConfiguration(raw));
 const identity = { HOME: '/h', XDG_CONFIG_HOME: '/h/c', OPENCODE_DB: '/h/db/x.db' };
 for (const withMcp of [false, true]) {
-  const raw = { executable: '/bin/oc', executableVersion: '2.2.5', executableSha256: OPENCODE_SHA, project: '/p', nativeIdentity: identity, nodePath: '/n', ...(withMcp ? { mcp } : {}) };
-  add(`opencode launch plan ${withMcp}`, 'opencodeLaunchPlan', { raw }, () => opencodeInteractiveLaunchPlan(raw));
+  const raw = {
+    executable: '/bin/oc',
+    executableVersion: '2.2.5',
+    executableSha256: OPENCODE_SHA,
+    project: '/p',
+    nativeIdentity: identity,
+    nodePath: '/n',
+    ...(withMcp ? { mcp } : {}),
+  };
+  add(`opencode launch plan ${withMcp}`, 'opencodeLaunchPlan', { raw }, () =>
+    opencodeInteractiveLaunchPlan(raw),
+  );
 }
 
 const bin = join(ROOT, 'bin');
 const bin2 = join(ROOT, 'bin2');
 const open = join(ROOT, 'bin-open');
 for (const [name, searchPath, home, selected] of [
-  ['path explicit env', `${bin}:relative:${open}:${bin}/:${join(ROOT, 'missing')}:${bin2}`, undefined, []],
+  [
+    'path explicit env',
+    `${bin}:relative:${open}:${bin}/:${join(ROOT, 'missing')}:${bin2}`,
+    undefined,
+    [],
+  ],
   ['path gui minimal', '/usr/bin:/bin/', undefined, [bin2]],
   ['path selected unsafe', '', undefined, [open]],
   ['path selected noncanonical', '', undefined, [`${bin}/`]],
   ['path home relative', '', 'relative-home', []],
 ] as const) {
-  add(name, 'pathDirectories', { searchPath, home, selected }, () => localCliPathDirectories(searchPath, home, selected));
+  add(name, 'pathDirectories', { searchPath, home, selected }, () =>
+    localCliPathDirectories(searchPath, home, selected),
+  );
   add(`${name} discovery`, 'discoverClis', { searchPath, home, selected }, () =>
-    discoverLocalClis(searchPath, home, selected).map((d) => [d, localCliIntegrationPlan(d)]));
+    discoverLocalClis(searchPath, home, selected).map((d) => [d, localCliIntegrationPlan(d)]),
+  );
 }
-for (const reviewed of [undefined, bin, `${bin}:${bin2}`, `${bin}:${bin}`, `${bin}/`, open, '/', 'relative', `${bin}::${bin2}`, join(ROOT, 'missing'), ''])
-  add(`tool path ${String(reviewed)}`, 'toolPath', reviewed === undefined ? {} : { reviewed }, () => terminalToolPath(reviewed));
+for (const reviewed of [
+  undefined,
+  bin,
+  `${bin}:${bin2}`,
+  `${bin}:${bin}`,
+  `${bin}/`,
+  open,
+  '/',
+  'relative',
+  `${bin}::${bin2}`,
+  join(ROOT, 'missing'),
+  '',
+])
+  add(`tool path ${String(reviewed)}`, 'toolPath', reviewed === undefined ? {} : { reviewed }, () =>
+    terminalToolPath(reviewed),
+  );
 for (const provider of ['codex', 'claude', 'opencode'] as const) {
   add(`status ${provider}`, 'cliStatus', { provider }, () => interactiveCliStatus(provider));
   for (const authentication of ['reuse-existing', 'separate-login'] as const)
     for (const ack of [false, true])
-      add(`adapter ${provider} ${authentication} ${ack}`, 'adapter', { provider, authentication, ack }, () => {
-        interactiveCliAdapter(provider, authentication, ack);
-        return null;
-      });
+      add(
+        `adapter ${provider} ${authentication} ${ack}`,
+        'adapter',
+        { provider, authentication, ack },
+        () => {
+          interactiveCliAdapter(provider, authentication, ack);
+          return null;
+        },
+      );
 }
 
 const home = join(ROOT, 'home');
@@ -391,30 +626,67 @@ for (const [provider, environment] of [
   ['codex', {}],
   ['claude', {}],
   ['opencode', {}],
-  ['opencode', { OPENCODE_CONFIG_DIR: join(ROOT, 'project'), XDG_STATE_HOME: join(ROOT, 'missing') }],
+  [
+    'opencode',
+    { OPENCODE_CONFIG_DIR: join(ROOT, 'project'), XDG_STATE_HOME: join(ROOT, 'missing') },
+  ],
   ['codex', { CODEX_HOME: 'relative' }],
 ] as const) {
   const name = `models ${provider} ${JSON.stringify(environment)}`;
   add(name, 'discoverModels', { provider, project, home, environment }, () =>
-    discoverTerminalModels(provider, project, home, environment));
+    discoverTerminalModels(provider, project, home, environment),
+  );
   const discovered = outcome(() => discoverTerminalModels(provider, project, home, environment));
   if ('ok' in discovered)
     for (const option of (discovered.ok as { options: { selection: unknown }[] }).options) {
       const selection = terminalModelSelectionSchema.parse(option.selection);
-      add(`${name} validate`, 'validateModel', { selection }, () => validateTerminalModelSelection(selection));
-      add(`${name} arguments`, 'modelArguments', { selection }, () => terminalModelArguments(selection));
-      add(`${name} opencode`, 'openCodeModel', { selection }, () => openCodeModelConfiguration(selection));
+      add(`${name} validate`, 'validateModel', { selection }, () =>
+        validateTerminalModelSelection(selection),
+      );
+      add(`${name} arguments`, 'modelArguments', { selection }, () =>
+        terminalModelArguments(selection),
+      );
+      add(`${name} opencode`, 'openCodeModel', { selection }, () =>
+        openCodeModelConfiguration(selection),
+      );
     }
 }
-const cacheSelection = { value: 'gpt-synthetic-list', source: 'cli-cache', expiresAt: NOW - 1, files: [{ path: join(ROOT, 'home/.codex/models_cache.json'), codexModel: 'gpt-synthetic-list', sha256: null }] };
-add('model expired', 'validateModel', { selection: cacheSelection }, () => validateTerminalModelSelection(cacheSelection as never));
-const wrongSha = { value: null, source: 'cli-default', files: [{ path: join(ROOT, 'home/.claude/settings.json'), sha256: '0'.repeat(64) }] };
-add('model changed', 'validateModel', { selection: wrongSha }, () => validateTerminalModelSelection(wrongSha as never));
-const badValue = { value: 'synthetic-no-slash', source: 'cli-default', files: [{ path: join(ROOT, 'missing'), sha256: null }] };
-add('opencode bad value', 'openCodeModel', { selection: badValue }, () => openCodeModelConfiguration(badValue as never));
+const cacheSelection = {
+  value: 'gpt-synthetic-list',
+  source: 'cli-cache',
+  expiresAt: NOW - 1,
+  files: [
+    {
+      path: join(ROOT, 'home/.codex/models_cache.json'),
+      codexModel: 'gpt-synthetic-list',
+      sha256: null,
+    },
+  ],
+};
+add('model expired', 'validateModel', { selection: cacheSelection }, () =>
+  validateTerminalModelSelection(cacheSelection as never),
+);
+const wrongSha = {
+  value: null,
+  source: 'cli-default',
+  files: [{ path: join(ROOT, 'home/.claude/settings.json'), sha256: '0'.repeat(64) }],
+};
+add('model changed', 'validateModel', { selection: wrongSha }, () =>
+  validateTerminalModelSelection(wrongSha as never),
+);
+const badValue = {
+  value: 'synthetic-no-slash',
+  source: 'cli-default',
+  files: [{ path: join(ROOT, 'missing'), sha256: null }],
+};
+add('opencode bad value', 'openCodeModel', { selection: badValue }, () =>
+  openCodeModelConfiguration(badValue as never),
+);
 
 for (const config of [claudeHooks, claudeHubHooks])
-  add('hook files', 'hookFiles', { config }, () => Object.entries(claudeOwnedHookFiles(managedClaudeConfigSchema.parse(config))));
+  add('hook files', 'hookFiles', { config }, () =>
+    Object.entries(claudeOwnedHookFiles(managedClaudeConfigSchema.parse(config))),
+  );
 
 for (const [name, list, limit] of [
   ['inspect pair', ['codex.json', 'codex2.json'], undefined],
@@ -430,7 +702,8 @@ for (const [name, list, limit] of [
       provider: interactiveProvider(config),
       terminalId: terminalIdentity(config).terminalId,
       blocker: blocker ?? null,
-    })));
+    })),
+  );
 }
 
 // Stateful readers: both languages write the same step contents, then poll.
@@ -444,8 +717,16 @@ const hookSteps = [
   record(p1, 'prompt'),
   record(p1, 'prompt') + record(p1, 'progress'),
   record(p1, 'prompt') + record(p1, 'progress') + record(p1, 'permission_prompt'),
-  record(p1, 'prompt') + record(p1, 'progress') + record(p1, 'permission_prompt') + record(p1, 'stop'),
-  record(p1, 'prompt') + record(p1, 'progress') + record(p1, 'permission_prompt') + record(p1, 'stop') + record(p2, 'prompt') + '{"partial',
+  record(p1, 'prompt') +
+    record(p1, 'progress') +
+    record(p1, 'permission_prompt') +
+    record(p1, 'stop'),
+  record(p1, 'prompt') +
+    record(p1, 'progress') +
+    record(p1, 'permission_prompt') +
+    record(p1, 'stop') +
+    record(p2, 'prompt') +
+    '{"partial',
 ];
 {
   const results: unknown[] = [];
@@ -459,16 +740,34 @@ const hookSteps = [
     }
   }
   writeFileSync(channel, '');
-  cases.push({ name: 'hook evidence', fn: 'hookEvidence', input: { config: claudeHooks, steps: hookSteps }, output: { ok: results } });
+  cases.push({
+    name: 'hook evidence',
+    fn: 'hookEvidence',
+    input: { config: claudeHooks, steps: hookSteps },
+    output: { ok: results },
+  });
 }
 {
   const transcriptDir = join(home, '.claude/projects', project.replace(/[^a-zA-Z0-9-]/g, '-'));
   const line = (value: object) => JSON.stringify({ sessionId: sid, cwd: project, ...value }) + '\n';
   const u1 = 'c1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
   const assistant = (content: unknown[], stop: string | null, extra = {}) =>
-    line({ type: 'assistant', timestamp: '2026-11-06T09:59:00.123Z', message: { content, stop_reason: stop }, ...extra });
+    line({
+      type: 'assistant',
+      timestamp: '2026-11-06T09:59:00.123Z',
+      message: { content, stop_reason: stop },
+      ...extra,
+    });
   const s1 = line({ type: 'user', uuid: u1, message: { content: 'SYNTHETIC prompt' } });
-  const s2 = s1 + assistant([{ type: 'tool_use', name: 'Read' }, { type: 'tool_use', name: 'sk-abcdefghijklmnop' }], 'tool_use');
+  const s2 =
+    s1 +
+    assistant(
+      [
+        { type: 'tool_use', name: 'Read' },
+        { type: 'tool_use', name: 'sk-abcdefghijklmnop' },
+      ],
+      'tool_use',
+    );
   const s3 = s2 + assistant([{ type: 'tool_use', name: 'AskUserQuestion' }], 'tool_use');
   const s4 = s3 + assistant([{ type: 'text', text: 'SYNTHETIC done' }], 'end_turn') + '{"partial';
   const s5 = s3 + assistant([{ type: 'text', text: 'SYNTHETIC done' }], 'end_turn');
@@ -488,7 +787,12 @@ const hookSteps = [
   }
   rmSync(join(home, '.claude/projects'), { recursive: true, force: true });
   rmSync(join(ROOT, `state-claude/session-binding-${binding.instanceId}.json`), { force: true });
-  cases.push({ name: 'claude session', fn: 'claudeSession', input: { config: claudeBase, binding, steps }, output: { ok: results } });
+  cases.push({
+    name: 'claude session',
+    fn: 'claudeSession',
+    input: { config: claudeBase, binding, steps },
+    output: { ok: results },
+  });
 }
 
 for (const [name, manifestName, index, mutate] of [
@@ -502,7 +806,9 @@ for (const [name, manifestName, index, mutate] of [
   const backend = managedTerminalBackend(path, '/nonexistent-host');
   const expected = interactiveTerminalProfiles(readInteractiveTerminalConfig(path));
   const profile = mutate ? { ...expected[index]!, argv: [] } : expected[index]!;
-  add(name, 'backendValidate', { file: path, profile: JSON.stringify(profile) }, () => backend.validate(profile));
+  add(name, 'backendValidate', { file: path, profile: JSON.stringify(profile) }, () =>
+    backend.validate(profile),
+  );
 }
 
 mkdirSync(dirname(OUT), { recursive: true });

@@ -3253,6 +3253,8 @@ async fn start_selected_inner(
                                 | "LANG"
                                 | "CODEX_HOME"
                                 | "ORQST_CODEX_SESSIONS"
+                                // Rust terminal Core pilot selector (docs/design/rust-terminal-core.md).
+                                | "ORQST_RUST_TERMINALS"
                         )
                     )
                 })))

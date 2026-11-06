@@ -27,18 +27,18 @@ Today: Tauri (`terminal.rs`) → Node host (`tauri-terminal-host.cjs`) → Node 
 
 `apps/tauri/terminal-core` (lib + bin `orqst-terminal-core`), Apache-2.0. Modules:
 
-| Module         | Ports                                                                    | Lane |
-| -------------- | ------------------------------------------------------------------------ | ---- |
-| `ipc`          | Node IPC framing, startup args, `ready` / `startup-failure`              | L1   |
-| `authority`    | `authority.ts` challenge bytes, ed25519 verify, digests                  | L1   |
-| `supervisor`   | `supervisor.ts` state machine, leases, rates, limits                     | L1   |
-| `output`       | `output.ts` 1 MiB ring, cursor/gap                                       | L1   |
-| `pty`          | `pty-host.ts` + node-pty: openpty, setsid/TIOCSCTTY, exact signals       | L1   |
-| `journal`      | `terminal-journal.ts` (rusqlite, same schema), lifecycle receipts        | L1   |
-| `profiles`     | interactive/codex/opencode profiles, adapters, model selection, CLI path | L2   |
-| `admission`    | desktop admission marker, exit-pending, enrollment files, retirement     | L3   |
-| `features`     | Feature/permission/team/layout tables in the main Store (no migrations)  | L4   |
-| `hub`          | MCP hub, endpoints, hub journal, communication projection, mentions      | L4   |
+| Module       | Ports                                                                    | Lane |
+| ------------ | ------------------------------------------------------------------------ | ---- |
+| `ipc`        | Node IPC framing, startup args, `ready` / `startup-failure`              | L1   |
+| `authority`  | `authority.ts` challenge bytes, ed25519 verify, digests                  | L1   |
+| `supervisor` | `supervisor.ts` state machine, leases, rates, limits                     | L1   |
+| `output`     | `output.ts` 1 MiB ring, cursor/gap                                       | L1   |
+| `pty`        | `pty-host.ts` + node-pty: openpty, setsid/TIOCSCTTY, exact signals       | L1   |
+| `journal`    | `terminal-journal.ts` (rusqlite, same schema), lifecycle receipts        | L1   |
+| `profiles`   | interactive/codex/opencode profiles, adapters, model selection, CLI path | L2   |
+| `admission`  | desktop admission marker, exit-pending, enrollment files, retirement     | L3   |
+| `features`   | Feature/permission/team/layout tables in the main Store (no migrations)  | L4   |
+| `hub`        | MCP hub, endpoints, hub journal, communication projection, mentions      | L4   |
 
 ## Invariants (must hold byte for byte)
 

@@ -2,7 +2,14 @@
 // Drives the TypeScript functions on disposable temp directories and prints JSON results.
 // Usage: tsx admission.ts <scenario> <dir>. Never point <dir> at real Application Support data.
 import { createRequire, syncBuiltinESMExports } from 'node:module';
-import { mkdirSync, readdirSync, readFileSync, writeFileSync, symlinkSync, chmodSync } from 'node:fs';
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  symlinkSync,
+  chmodSync,
+} from 'node:fs';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -40,7 +47,8 @@ export const ids = {
 const manifests = ['/synthetic/a.json', '/synthetic/b.json'];
 
 function classify(error: unknown): string {
-  if (error instanceof inspection.DesktopAdmissionRefused) return `refused:${error.code}`;
+  if (error instanceof inspection.DesktopAdmissionRefused)
+    return `refused:${(error as { code: string }).code}`;
   const e = error as { code?: unknown; name?: string; message?: string };
   if (typeof e.code === 'string' && /^E[A-Z]+$/.test(e.code)) return e.code;
   if (e.name === 'ZodError' || e.name === 'SyntaxError' || e.name === '$ZodError') return 'invalid';
@@ -77,7 +85,11 @@ function files(dir: string): Record<string, string> {
 }
 const shape = (value: unknown) =>
   typeof value === 'string'
-    ? JSON.stringify((JSON.parse(value) as unknown[]).map((v) => (typeof v === 'string' && /^-?\d+$/.test(v) ? 'N' : v)))
+    ? JSON.stringify(
+        (JSON.parse(value) as unknown[]).map((v) =>
+          typeof v === 'string' && /^-?\d+$/.test(v) ? 'N' : v,
+        ),
+      )
     : value;
 
 const [scenario, base] = [process.argv[2]!, process.argv[3]!];
@@ -144,7 +156,13 @@ if (scenario === 'marker') {
     finish = admission!.reserveEnrollment!({ input, manifestFile: '/synthetic/c.json', member });
   });
   step('finishEnrollment', () =>
-    finish!({ ...input, revision: 1, status: 'ready', reason: 'admitted', member: { ...member, status: 'ready' } }),
+    finish!({
+      ...input,
+      revision: 1,
+      status: 'ready',
+      reason: 'admitted',
+      member: { ...member, status: 'ready' },
+    }),
   );
   step('reserveDuplicate', () =>
     admission!.reserveEnrollment!({ input, manifestFile: '/synthetic/c.json', member }),
@@ -164,12 +182,20 @@ if (scenario === 'marker') {
   step('inspectAbsent', () => shape(inspection.inspectDesktopAdmission(absent)));
   step('inspectAbsentTrailing', () => inspection.inspectDesktopAdmission(absent + '/'));
   step('inspectAbsentWithContext', () =>
-    inspection.inspectDesktopAdmission(absent, { owner: ids.owner, epoch: ids.epoch, initialFiles: manifests }),
+    inspection.inspectDesktopAdmission(absent, {
+      owner: ids.owner,
+      epoch: ids.epoch,
+      initialFiles: manifests,
+    }),
   );
   mkdirSync(dir, { mode: 0o700 });
   step('inspectEmpty', () => shape(inspection.inspectDesktopAdmission(dir)));
   step('badContext', () =>
-    inspection.inspectDesktopAdmission(dir, { owner: 'x', epoch: ids.epoch, initialFiles: manifests }),
+    inspection.inspectDesktopAdmission(dir, {
+      owner: 'x',
+      epoch: ids.epoch,
+      initialFiles: manifests,
+    }),
   );
   const marker = join(dir, 'active-pair.json');
   const cases: Array<[string, string, number?]> = [
@@ -214,7 +240,13 @@ if (scenario === 'marker') {
   const record = {
     evidence: {
       attempts: [
-        { exit: { signal: 15, exitCode: -1.0 }, state: 'exited', epoch: ids.epoch, instanceId: ids.a, slot: 0 },
+        {
+          exit: { signal: 15, exitCode: -1.0 },
+          state: 'exited',
+          epoch: ids.epoch,
+          instanceId: ids.a,
+          slot: 0,
+        },
         { slot: 1, instanceId: ids.b, epoch: ids.epoch, state: 'start_failed' },
       ],
       epoch: ids.epoch,
@@ -226,14 +258,22 @@ if (scenario === 'marker') {
   step('invalidRunning', () =>
     exitPending.preserveOwnedExitPending(
       dir,
-      { ...record, evidence: { ...record.evidence, attempts: [{ slot: 0, instanceId: ids.a, epoch: ids.epoch, state: 'running' }] } },
+      {
+        ...record,
+        evidence: {
+          ...record.evidence,
+          attempts: [{ slot: 0, instanceId: ids.a, epoch: ids.epoch, state: 'running' }],
+        },
+      },
       admission.assertOwner,
     ),
   );
   step('readMissing', () => exitPending.readOwnedExitPending(dir, ids.owner, ids.epoch));
   step('detachWithoutMarker', () => admission.preservePendingExit());
   step('preserve', () => exitPending.preserveOwnedExitPending(dir, record, admission.assertOwner));
-  step('preserveSame', () => exitPending.preserveOwnedExitPending(dir, record, admission.assertOwner));
+  step('preserveSame', () =>
+    exitPending.preserveOwnedExitPending(dir, record, admission.assertOwner),
+  );
   step('preserveChanged', () =>
     exitPending.preserveOwnedExitPending(
       dir,
@@ -275,7 +315,9 @@ if (scenario === 'marker') {
   });
   step('armAgain', () => receipts.armLifecycleReceipt(fd, 'e'.repeat(64)));
   clock += 30;
-  await stepAsync('exitBeforeStart', () => recorder!.record({ type: 'exit', code: 1, signal: null }));
+  await stepAsync('exitBeforeStart', () =>
+    recorder!.record({ type: 'exit', code: 1, signal: null }),
+  );
   await stepAsync('started', () => recorder!.record({ type: 'started' }));
   await stepAsync('badExit', () => recorder!.record({ type: 'exit', code: null, signal: null }));
   clock += 1;
@@ -293,8 +335,12 @@ if (scenario === 'marker') {
   step('readOtherBinding', () =>
     receipts.readLifecycleReceipt(state, { ...binding(ids.b), configDigest: '1'.repeat(64) }),
   );
-  step('readBadBinding', () => receipts.readLifecycleReceipt(state, { ...binding(ids.b), epoch: 'x' }));
-  writeFileSync(join(state, `lifecycle-${ids.owner}.jsonl`), '{"type":"prepared"}', { mode: 0o600 });
+  step('readBadBinding', () =>
+    receipts.readLifecycleReceipt(state, { ...binding(ids.b), epoch: 'x' }),
+  );
+  writeFileSync(join(state, `lifecycle-${ids.owner}.jsonl`), '{"type":"prepared"}', {
+    mode: 0o600,
+  });
   step('readPartial', () => read(ids.owner));
   step('readMissingState', () =>
     receipts.readLifecycleReceipt(join(base, 'absent'), binding(ids.a)),
@@ -311,9 +357,17 @@ if (scenario === 'marker') {
     [ids.a, undefined],
   ] as const)
     step(`host:${id}:${failure?.code}`, () =>
-      startup.terminalStartupHostFailure(id, failure ? new startup.TerminalStartupError(failure) : new Error('x')),
+      startup.terminalStartupHostFailure(
+        id,
+        failure ? new startup.TerminalStartupError(failure) : new Error('x'),
+      ),
     );
-  for (const code of ['capacity_reserved', 'owned_exit_pending', 'admission_invalid', 'startup_failed'])
+  for (const code of [
+    'capacity_reserved',
+    'owned_exit_pending',
+    'admission_invalid',
+    'startup_failed',
+  ])
     step(`core:${code}`, () =>
       startup.terminalStartupFailureSchema.parse({
         type: 'startup-failure',
@@ -341,7 +395,15 @@ if (scenario === 'marker') {
   step('inventoryOrder', () =>
     JSON.stringify(
       shutdown.ownedShutdownInventorySchema.parse({
-        attempts: [{ exit: { signal: 9, exitCode: 2 }, state: 'exited', epoch: ids.epoch, instanceId: ids.a, slot: 7 }],
+        attempts: [
+          {
+            exit: { signal: 9, exitCode: 2 },
+            state: 'exited',
+            epoch: ids.epoch,
+            instanceId: ids.a,
+            slot: 7,
+          },
+        ],
         epoch: ids.epoch,
       }),
     ),
@@ -364,11 +426,26 @@ if (scenario === 'marker') {
     owns?: boolean;
   };
   const plans: Record<string, Plan> = {
-    ready: { inventories: [[attempt('running')], [attempt('exited', { exitCode: 0 })]], prepare: 'ok' },
+    ready: {
+      inventories: [[attempt('running')], [attempt('exited', { exitCode: 0 })]],
+      prepare: 'ok',
+    },
     stopTransport: { inventories: [[attempt('running')]], stopFails: true },
-    preserved: { inventories: [[attempt('exited', { exitCode: 0 })]], prepare: 'fail', preserve: 'ok' },
-    retirementUnavailable: { inventories: [[attempt('exited', { exitCode: 0 })]], prepare: 'fail', preserve: 'absent' },
-    preserveFails: { inventories: [[attempt('exited', { exitCode: 0 })]], prepare: 'fail', preserve: 'fail' },
+    preserved: {
+      inventories: [[attempt('exited', { exitCode: 0 })]],
+      prepare: 'fail',
+      preserve: 'ok',
+    },
+    retirementUnavailable: {
+      inventories: [[attempt('exited', { exitCode: 0 })]],
+      prepare: 'fail',
+      preserve: 'absent',
+    },
+    preserveFails: {
+      inventories: [[attempt('exited', { exitCode: 0 })]],
+      prepare: 'fail',
+      preserve: 'fail',
+    },
     ownershipLost: { inventories: [[attempt('ownership_lost')]] },
     inventoryFails: { inventories: [], inventoryFails: true },
     notOwned: { inventories: [[attempt('running')]], owns: false },
