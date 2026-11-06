@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import en from '../apps/dashboard/src/locales/en-US.json';
+import pt from '../apps/dashboard/src/locales/pt-BR.json';
 import { tauriStudioRequestSchema, tauriStudioReplySchema } from '@orqst/protocol';
 import { createTauriStudioClient } from '../apps/tauri/src/studio-bridge.js';
 
@@ -380,4 +382,41 @@ test('batch contracts preserve exact per-item results and reject forged admissio
   const previous = sent;
   assert.deepEqual(await client.request(request), { status: 'focus_required' });
   assert.equal(sent, previous);
+});
+
+// SYNTHETIC admission diagnostics; no real reservation is changed.
+test('batch admission reasons survive protocol validation, client delivery and both locales', async () => {
+  for (const reason of ['capacity_reserved', 'owned_exit_pending', 'admission_invalid'] as const) {
+    const item = {
+      id: '11111111-1111-4111-8111-111111111111',
+      status: 'refused',
+      reason,
+      effects: 'not_started',
+    };
+    const reply = { status: 'batch', items: [item] };
+    assert.ok(tauriStudioReplySchema.safeParse(reply).success);
+    const client = createTauriStudioClient(
+      async () => reply,
+      () => true,
+    );
+    const result = await client.request({
+      action: 'create-batch',
+      generation: 1,
+      workspaceId: 'synthetic-workspace',
+      featureId: null,
+      catalogId: 'a'.repeat(64),
+      requests: [
+        {
+          id: item.id,
+          workspaceId: 'synthetic-workspace',
+          provider: 'codex',
+          modelId: null,
+          name: 'Synthetic',
+        },
+      ],
+    });
+    assert.deepEqual(result, reply);
+    assert.ok(en.terminalStudio.batch.reason[reason]);
+    assert.ok(pt.terminalStudio.batch.reason[reason]);
+  }
 });

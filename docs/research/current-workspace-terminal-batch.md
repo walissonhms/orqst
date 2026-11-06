@@ -46,3 +46,16 @@ private file modes, CLI startup authorization and incomplete-admission latches s
 in place. There is no new HTTP/WebSocket surface or network call. Tests use labeled
 synthetic files only; actual AppKit/provider acceptance and renderer wiring are
 separate. Multi-workspace creation and account profiles are explicitly unsupported.
+
+## Admission failure projection — 2026-11-06
+
+Owner diagnosis of package d840e3c identified a legitimate capacity_reserved
+preflight refusal masked by native create-batch's generic preparation_failed.
+Reuse existing validated PreparationFailure and per-request batch_failure; project
+only capacity_reserved/owned_exit_pending/admission_invalid when not_started is
+proven. Malformed or possible-effect replies stay uncertain. No admission guard
+or reservation data changes. Re-inspected the pinned Anywh Agent Host architecture
+and AgentHost.close/serialize/launch handling referenced above: its HostError and
+agent forgetting/hibernation do not match ORQST's durable reservation authority.
+Keep the existing ORQST mapping; no upstream code/dependency/assets copied.
+Apache-2.0/NOTICE findings above remain unchanged.

@@ -1350,3 +1350,9 @@ report; transient admission refusal and absent-bridge/advanced UI paths remain
 separate possibilities. Both native fence increment paths now publish the dock
 notification independently of host layout acceptance; passive polling does not
 advance either generation. No authority guard is relaxed.
+
+## Batch admission reasons — 2026-11-06
+
+- [x] Preserve validated preflight capacity_reserved/owned_exit_pending/admission_invalid per request ID.
+- [x] Add protocol reasons and EN/PT translations without relaxing admission or uncertain effects.
+- [ ] Native owner acceptance; source/synthetic checks do not release a reservation.

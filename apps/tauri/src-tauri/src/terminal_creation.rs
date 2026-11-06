@@ -769,16 +769,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     match result {
         Ok(value) if value["status"] == "batch" => value,
         Ok(value) if requested["action"] == "create-batch" => {
-            let possible = value["failure"]["effects"] != "not_started";
-            batch_failure(
-                &requested,
-                if possible {
-                    "opening_uncertain"
-                } else {
-                    "preparation_failed"
-                },
-                possible,
-            )
+            batch_helper_failure(&requested, &value)
         }
         Err(_) if requested["action"] == "create-batch" => {
             batch_failure(&requested, "opening_uncertain", true)
@@ -790,6 +781,24 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         Ok(_) => json!({"status":"ok", "snapshot":snapshot(&app)}),
         _ => json!({"status":"unavailable", "snapshot":snapshot(&app)}),
     }
+}
+
+fn batch_helper_failure(request: &Value, value: &Value) -> Value {
+    let failure = preparation_failure(&value["failure"], false);
+    let not_started = failure
+        .as_ref()
+        .is_some_and(|f| f.0["effects"] == "not_started");
+    let reason = if not_started {
+        match value["failure"]["code"].as_str() {
+            Some("capacity_reserved") => "capacity_reserved",
+            Some("owned_exit_pending") => "owned_exit_pending",
+            Some("admission_invalid") => "admission_invalid",
+            _ => "preparation_failed",
+        }
+    } else {
+        "opening_uncertain"
+    };
+    batch_failure(request, reason, !not_started)
 }
 
 fn batch_failure(request: &Value, reason: &str, possible: bool) -> Value {
@@ -843,6 +852,9 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
                         | "review_cancelled"
                         | "context_changed"
                         | "preparation_failed"
+                        | "capacity_reserved"
+                        | "owned_exit_pending"
+                        | "admission_invalid"
                 )
             )
             || !matches!(item["effects"].as_str(), Some("not_started" | "possible"))
@@ -1741,6 +1753,46 @@ mod tests {
 
 #[cfg(test)]
 mod catalog_tests {
+    #[test]
+    fn batch_admission_failure_preserves_exact_safe_reason_and_each_request_id() {
+        use serde_json::json;
+        let request = json!({"requests":[{"id":"11111111-1111-4111-8111-111111111111"},
+            {"id":"22222222-2222-4222-8222-222222222222"}]});
+        for code in [
+            "capacity_reserved",
+            "owned_exit_pending",
+            "admission_invalid",
+        ] {
+            let mut value = json!({"failure":{"stage":"admission_preflight","code":code,"effects":"not_started"}});
+            let reply = super::batch_helper_failure(&request, &value);
+            for (index, item) in reply["items"].as_array().unwrap().iter().enumerate() {
+                assert_eq!(item["id"], request["requests"][index]["id"]);
+                assert_eq!(item["reason"], code);
+                assert_eq!(item["status"], "refused");
+                assert_eq!(item["effects"], "not_started");
+            }
+            value["failure"]["effects"] = json!("possible");
+            let reply = super::batch_helper_failure(&request, &value);
+            assert_eq!(reply["items"][0]["reason"], "opening_uncertain");
+            assert_eq!(reply["items"][0]["status"], "unknown");
+        }
+        for failure in [
+            json!({"stage":"selection","code":"failed","effects":"not_started"}),
+            json!({"stage":"admission_preflight","code":"forged","effects":"not_started"}),
+            json!({"stage":"admission_preflight","code":"capacity_reserved","effects":"not_started","secret":"rejected"}),
+        ] {
+            let expected = if failure["code"] == "failed" {
+                "preparation_failed"
+            } else {
+                "opening_uncertain"
+            };
+            assert_eq!(
+                super::batch_helper_failure(&request, &json!({"failure":failure}))["items"][0]
+                    ["reason"],
+                expected
+            );
+        }
+    }
     use super::{valid_catalog, valid_request};
     use serde_json::json;
     #[test]

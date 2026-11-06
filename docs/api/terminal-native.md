@@ -1,5 +1,16 @@
 # Native terminal client boundary
 
+## Batch admission diagnostics — 2026-11-06
+
+`terminalBatchItemSchema.reason` additionally accepts `capacity_reserved`,
+`owned_exit_pending` and `admission_invalid`. A validated helper preflight refusal
+with `effects: not_started` maps to per-item `status: refused`, preserving every
+request ID and the exact allowlisted reason. Generic known pre-effect errors stay
+`preparation_failed`; possible effects or malformed/untrusted diagnostics remain
+`status: unknown`, `reason: opening_uncertain`, `effects: possible`. No retry,
+rollback, reservation release, paths or raw errors are added. EN/PT keys are
+`terminalStudio.batch.reason.<reason>`; the existing UI can render them.
+
 ## Studio generation notifications and polling — 2026-11-05
 
 `FeatureNativeSnapshot.generation` is the Core metadata/view revision counter;
