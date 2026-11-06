@@ -605,11 +605,11 @@
 }
 
 /* Full-window Studio (like the preview): no Feature panel or header. */
-.feature-native.studio-immersive .feature-sidebar,
-.feature-native.studio-immersive .feature-topbar {
+.studio-immersive .feature-sidebar,
+.studio-immersive .feature-topbar {
   display: none;
 }
-.feature-native.studio-immersive .feature-studio {
+.studio-immersive .feature-studio {
   grid-column: 1 / -1;
   grid-row: 1 / -1;
 }
@@ -657,4 +657,21 @@
   color: var(--orqst-subtle);
   font-family: var(--orqst-font-mono);
   font-size: 11px;
+}
+
+.ts-loading {
+  color: var(--orqst-subtle);
+  font-size: 12px;
+}
+.ts-toolbar .studio-overview {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--orqst-radius-control);
+  color: var(--orqst-muted);
+}
+.ts-toolbar .studio-overview:hover {
+  background: var(--orqst-elevated);
+  color: var(--orqst-text);
 }

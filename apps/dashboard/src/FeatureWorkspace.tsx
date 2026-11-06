@@ -298,17 +298,22 @@ export function FeatureWorkspace({
     };
   }, [request]);
   useEffect(() => {
-    if (!(canvas || (nativeWorkspace && hasSnapshot)) || !native) return;
+    // Native and Studio views keep asking: the first read can arrive before the host is
+    // ready, and without a snapshot no layout reaches the native terminal views.
+    if (!(canvas || nativeWorkspace || studio) || !native) return;
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    const refresh = window.setInterval(() => {
-      void request({ action: 'snapshot' });
-    }, 4000);
+    const refresh = window.setInterval(
+      () => {
+        void request({ action: 'snapshot' });
+      },
+      hasSnapshot ? 4000 : 1500,
+    );
     void request({ action: 'snapshot' });
     return () => {
       window.clearInterval(clock);
       window.clearInterval(refresh);
     };
-  }, [canvas, native, request, nativeWorkspace, hasSnapshot]);
+  }, [canvas, native, request, nativeWorkspace, studio, hasSnapshot]);
   useEffect(() => {
     const blocked = (event: Event) =>
       setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));
@@ -446,7 +451,7 @@ export function FeatureWorkspace({
   });
   return (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}${studio && nativeWorkspace && immersive ? ' studio-immersive' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}${studio && immersive ? ' studio-immersive' : ''}`}
       aria-label={t('features.workspace')}
       aria-busy={busy}
     >
@@ -776,21 +781,26 @@ export function FeatureWorkspace({
               )
             }
             onNewTerminal={canPrepare ? () => void prepare() : undefined}
-            {...(nativeWorkspace
+            {...(studio
               ? {
                   toolbarStart: (
-                    <button
-                      type="button"
-                      className="ts-panel-toggle"
-                      aria-pressed={!immersive}
-                      title={t(immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel')}
-                      aria-label={t(
-                        immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel',
-                      )}
-                      onClick={() => setImmersive((value) => !value)}
-                    >
-                      {immersive ? '☰' : '⟨'}
-                    </button>
+                    <>
+                      {navigation}
+                      <button
+                        type="button"
+                        className="ts-panel-toggle"
+                        aria-pressed={!immersive}
+                        title={t(
+                          immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel',
+                        )}
+                        aria-label={t(
+                          immersive ? 'terminalStudio.showPanel' : 'terminalStudio.hidePanel',
+                        )}
+                        onClick={() => setImmersive((value) => !value)}
+                      >
+                        {immersive ? '☰' : '⟨'}
+                      </button>
+                    </>
                   ),
                   toolbarScopes:
                     immersive && snapshot ? (
@@ -840,7 +850,11 @@ export function FeatureWorkspace({
                 }
               : {})}
             emptyHint={
-              selected && unassigned.length > 0 && snapshot ? (
+              !snapshot ? (
+                <span className="ts-loading">
+                  {notice ? t(`features.${notice}`) : t('features.loading')}
+                </span>
+              ) : selected && unassigned.length > 0 ? (
                 <button
                   type="button"
                   className="ts-ghost"
