@@ -871,3 +871,13 @@ intent remain single-use and generation-bound. The consumed intent marks only th
 private host envelope `openingAuthorized: true`; no public request changes. MCP
 pair grants, explicit revocation and manual legacy reviews remain separate. See
 [decision/security review](../research/studio-open-gesture.md).
+
+## Arrange with an owned PTY first responder — 2026-11-06
+
+`arrange` keeps the existing schema and validates only the feature-workspace
+source. Its focus allowance includes loaded, non-revoked PTY siblings of visible,
+focused main, revalidated against document generation/Core epoch/presentation.
+It grants geometry only. Other mutable actions keep exact-document focus.
+Frames inside 16 ms are delayed and coalesced to the latest waiting request;
+superseded frames and bilateral metadata conflicts can still return `busy`.
+See [source diagnosis, research and limits](../research/studio-arrangement-focus.md).

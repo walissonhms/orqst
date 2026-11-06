@@ -320,7 +320,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | ------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                                              | owner    | new package                                      |
 | MCP pair delegation/result projection: audited facade + Rust guards packaged in `d840e3c`                                 | pane-817 | native/provider exchange and UI acceptance       |
-| Studio v2 chrome contract: candidate `d840e3c` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
+| Studio v2 chrome: owned PTY focus and trailing-frame fixes in source                                                      | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `d840e3c`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you": hook review fixes packaged in `d840e3c`; native acceptance pending                                    | pane-817 | owner provider/OS test                           |
 | Studio membership/chrome: native fence notifications packaged in `d840e3c`                                                | pane-817 | empty-Feature/header native acceptance           |

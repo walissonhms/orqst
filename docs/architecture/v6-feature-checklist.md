@@ -1377,3 +1377,10 @@ reservation operation, provider stop or native acceptance was performed.
 - [x] Private consumed-intent mark only; revoked/expanded policies still refuse.
 - [x] Pinned Anywh/Tucano research; synthetic provisioning and broker refusal coverage.
 - [ ] Native/provider one-click acceptance remains pending.
+
+## Studio layout with PTY focus — 2026-11-06
+
+- [x] Layout-only native focus allowance for exact owned PTY siblings, with epoch/document/presentation revalidation.
+- [x] Trailing 16 ms frame retained; pending frames coalesce without recreating webviews.
+- [x] Rust refusal and frame-boundary tests; source-level cause documented.
+- [ ] Native owner acceptance of black-PTY regression fix.
