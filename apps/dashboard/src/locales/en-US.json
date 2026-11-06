@@ -786,6 +786,8 @@
     "retired": "Terminal pair retired; create or review fresh manifests in this window",
     "retireConfirm": "Release this selection only after every owned process has exited. The metadata archive will be preserved.",
     "retireDenied": "Pair cannot retire. Every dispatched process needs a confirmed owned exit; lost ownership and changed reservations remain blocked.",
+    "retireQuitNotice": "Stop ORQST-owned terminals, review safe reservation release and quit? This interrupts running work. ORQST attempts retirement after confirmed exits. If retirement is unavailable, it quits only after safely preserving the exit records; unverified child processes may remain. Uncertain evidence keeps the app open.",
+    "retireQuit": "Stop, review release and quit",
     "quitNotice": "Disconnect Desktop? Terminal processes may continue until their authorized deadline. Unresolved reservations remain blocked after restart.",
     "reuse_unavailable": "Blocked: existing native login reuse has not been validated for interactive PTY. No Core, journal or provider was started.",
     "existing_state": "Blocked: this state already has a journal. Existing reservations will not be adopted, reset or removed.",

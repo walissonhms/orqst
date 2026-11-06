@@ -3557,11 +3557,16 @@ pub(crate) fn phase_blocks_presentation(phase: crate::host_phase::Phase) -> bool
     )
 }
 
-/// Closing the application requires explicit consent to disconnect owned tasks.
+/// Closing owned terminals requires explicit consent to Stop/Retire before Quit.
 pub fn reset_exit(app: &tauri::AppHandle) {
     if let Some(r) = app.state::<Terminals>().0.lock().unwrap().as_mut() {
+        let reviewed = r.exit_authorized || r.confirming_quit;
         r.exit_authorized = false;
         r.confirming_quit = false;
+        // Cancelling native review restores a new presentation, never an old input grant.
+        if reviewed {
+            advance_layout(app, r);
+        }
     }
 }
 

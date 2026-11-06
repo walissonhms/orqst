@@ -1356,3 +1356,16 @@ advance either generation. No authority guard is relaxed.
 - [x] Preserve validated preflight capacity_reserved/owned_exit_pending/admission_invalid per request ID.
 - [x] Add protocol reasons and EN/PT translations without relaxing admission or uncertain effects.
 - [ ] Native owner acceptance; source/synthetic checks do not release a reservation.
+
+## Native Stop/Retire/Quit — 2026-11-06
+
+- [x] Fresh native review before owned Stop/Retire, retaining agents-first review ordering.
+- [x] Cancel/pending review has no signal or retirement effect; a fresh presentation redraw follows cancel.
+- [x] Exit requires retirement or the authorized durable preserved handoff/close ACK; uncertainty stays fenced.
+- [ ] Native owner/provider acceptance; cross-launch kernel recovery remains separate.
+
+Source checks for the combined batch/Quit increment: full Node concurrency-2
+suite 1,478/1,478 (zero failures/cancellations/skips); Rust 182 passed with two
+existing ignored tests; lint, types, filtered dashboard build, isolated staging
+and all-target Clippy with warnings denied passed. No new app bundle, live
+reservation operation, provider stop or native acceptance was performed.

@@ -25,6 +25,8 @@ pub trait TerminalPipe {
 }
 
 pub trait ExitPort {
+    /// True means an owned Stop/Retire/Quit review is pending; no signal may be sent yet.
+    fn confirm_owned_quit(&self) -> bool;
     fn request_exit(&self);
     fn start_owned_shutdown(&self);
     fn blocked(&self, reason: &str, uncertain: Value);
@@ -294,6 +296,14 @@ impl Coordinator {
         let active = agents.active();
         let gate = active && agents.confirm_exit();
         // A native review may have allowed a concurrent start/loss. Revalidate its boundary.
+        if let Some(reason) = host_phase::pre_gate_block(self.host.phase()) {
+            self.blocked(exit, reason, json!([]));
+            return;
+        }
+        if !gate && self.host.owned() && exit.confirm_owned_quit() {
+            return;
+        }
+        // A native terminal review can outlive a host start/loss as well.
         if let Some(reason) = host_phase::pre_gate_block(self.host.phase()) {
             self.blocked(exit, reason, json!([]));
             return;

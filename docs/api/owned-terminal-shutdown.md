@@ -142,3 +142,27 @@ duplicate or late reply cannot create evidence. Invalid replies preserve the
 current waiter until a valid reply or its eight-second timeout; cancellation
 removes only its exact pending ID. The child handle already scopes the pipe to
 the host lifetime; IDs never authorize another child or renderer operation.
+
+## 2026-11-06 — Explicit Stop/Retire/Quit review
+
+The owner's native-Quit alternative now presents a fresh attached-window review
+before the owned shutdown circuit sends any signal. It discloses interruption,
+attempted retirement and the previously authorized durable preserved-exit fallback.
+Cancel, loss of valid review or pending review sends neither shutdown nor Retire.
+Agents review still precedes terminal review when both are needed. Menu, Cmd+Q,
+Dock and ExitRequested share the coordinator; approval re-enters the circuit and
+is not exit evidence. Cancelling review publishes a fresh native fence/dock for
+Studio redraw without restoring keyboard authority or starting a process.
+
+The existing retirement and preserved-exit proofs are unchanged: exit requires
+`retireOwned: retired` or a durable, owner/epoch-bound preserved handoff followed
+by `closePreservedOwned: closed`. Principal exit alone, a missing ACK, timeout,
+transport loss or foreign/malformed/crossed replies never permits exit. The
+2026-11-05 preserved-exit decision remains effective; it is not an automatic
+unverified disconnect and must not be replaced with unconditional refusal for
+OpenCode's documented descendant boundary. All incomplete evidence stays fenced.
+
+No cross-launch kernel recovery, process adoption, marker deletion or administrative
+override is implemented or executed here. Force Quit/crash and earlier unresolved
+reservations can still require evidence-backed recovery. Source/synthetic tests
+are separate from native dialog/provider/Quit acceptance.

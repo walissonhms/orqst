@@ -1,5 +1,14 @@
 # Native terminal client boundary
 
+## Native Stop/Retire/Quit — 2026-11-06
+
+The native owned terminal Quit action now reviews interruption, attempted safe
+reservation release and the authorized durable preserved-exit alternative before signaling. Exit still requires the
+existing retirement or complete preserved-handoff/close proofs. Cancellation
+publishes a fresh native presentation fence so Studio can redraw while old keyboard grants remain revoked.
+The batch admission reasons above/below do not grant recovery authority. See the
+[private shutdown contract](owned-terminal-shutdown.md#2026-11-06--explicit-stopretirequit-review).
+
 ## Batch admission diagnostics — 2026-11-06
 
 `terminalBatchItemSchema.reason` additionally accepts `capacity_reserved`,
