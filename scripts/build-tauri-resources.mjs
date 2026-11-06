@@ -174,7 +174,16 @@ const rustAllowed = (expression) =>
 const metadata = JSON.parse(
   execFileSync(
     'cargo',
-    ['metadata', '--format-version', '1', '--locked', '--manifest-path', rustCore],
+    [
+      'metadata',
+      '--format-version',
+      '1',
+      '--locked',
+      '--filter-platform',
+      target,
+      '--manifest-path',
+      rustCore,
+    ],
     { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   ),
 );
