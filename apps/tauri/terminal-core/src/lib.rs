@@ -8,4 +8,5 @@ pub mod hub;
 pub mod ipc;
 pub mod output;
 pub mod profiles;
+pub mod pty;
 pub mod types;
