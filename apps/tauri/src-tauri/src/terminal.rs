@@ -1294,7 +1294,10 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         }
         (r.generations[slot], r.layout_generation, intent.expires)
     };
-    if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
+    if presentation_blocked(&app)
+        || !opening_focused(&app, &window).await
+        || self::slot(&window) != Some(slot)
+    {
         return idle();
     }
     let profile = {
@@ -1328,6 +1331,29 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     )
     .await;
     json!({"attempted":true,"value":value})
+}
+
+/// Whether the one-use opening intent may be consumed for this view.
+/// The Studio "Open" gesture happens in the exact chrome document of main, while the
+/// new PTY view is still hidden by the presentation barrier and cannot be focused.
+/// Either owned document may therefore hold focus; the intent itself stays one-use,
+/// expiring and bound to the slot document and presentation generations.
+fn opening_focus_allowed(terminal: bool, chrome: bool) -> bool {
+    terminal || chrome
+}
+
+async fn opening_focused(app: &tauri::AppHandle, window: &Webview) -> bool {
+    let terminal = focused(window).await;
+    let chrome = !terminal
+        && window.window().label() == "main"
+        && match app.get_webview("feature-workspace") {
+            Some(view) => {
+                crate::features::chrome_identity(&view).is_some()
+                    && crate::features::focused(&view).await
+            }
+            None => false,
+        };
+    opening_focus_allowed(terminal, chrome)
 }
 
 /// A dock restore only re-shows an existing hidden slot; it grants no process authority.
@@ -3801,10 +3827,19 @@ mod opening_tests {
     }
 
     use super::{
-        incomplete_open, invalidate_opening, native_request_message, take_opening, OpeningIntent,
+        incomplete_open, invalidate_opening, native_request_message, opening_focus_allowed,
+        take_opening, OpeningIntent,
     };
     use serde_json::json;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn studio_open_gesture_focus_or_owned_terminal_focus_may_consume_the_intent() {
+        // The hidden new PTY cannot be focused; the chrome document holds the gesture.
+        assert!(opening_focus_allowed(false, true));
+        assert!(opening_focus_allowed(true, false));
+        assert!(!opening_focus_allowed(false, false));
+    }
     #[test]
     fn layout_responder_requires_the_same_owned_epoch_presentation_and_loaded_document() {
         let expected = ("owned-epoch", 9, 3);

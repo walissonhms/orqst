@@ -872,6 +872,17 @@ private host envelope `openingAuthorized: true`; no public request changes. MCP
 pair grants, explicit revocation and manual legacy reviews remain separate. See
 [decision/security review](../research/studio-open-gesture.md).
 
+## Opening intent consumed from the Studio gesture focus — 2026-11-06
+
+A new Studio terminal view stays hidden by the presentation barrier until its first
+accepted frame, so its own WKWebView cannot be first responder when the document asks
+`terminal_open_prepared` on load. The one-use opening intent may now be consumed when
+either that owned PTY view or the exact feature-workspace chrome child of visible,
+focused `main` is first responder (the Open gesture happens there). The intent stays
+single-use, expires after 60 s and remains bound to the slot document and presentation
+generations; no request, profile or authority comes from the renderer. Implemented in
+`terminal.rs` (`opening_focused`), unit-tested; native acceptance is pending.
+
 ## Arrange with an owned PTY first responder — 2026-11-06
 
 `arrange` keeps the existing schema and validates only the feature-workspace
