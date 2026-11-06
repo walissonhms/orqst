@@ -33,3 +33,19 @@ AppData/session access is needed for these backend source checks. The open Previ
 application and its executable/resources must remain intact. Legacy hosts without
 `cliAuthorization` retain the prior confirmation behavior; this increment does not
 claim that Electron or every native lifecycle path has migrated.
+
+## Note 2026-11-06: MCP permission expansion
+
+Adding the ORQST MCP hub to every terminal changed each profile's
+`cliAuthorizationScope` (`native-mcp` → `orqst-mcp-configured`). The policy refused any
+expansion without a review, so every previously allowed CLI failed to open. An expansion
+now requires its own native dialog (`terminalNative.cliScopeExpansion`) that names the new
+scope; the consumed Studio opening intent never stands in for it, declining keeps the old
+record, and a revoked record still blocks. Synthetic tests:
+`tests/single-cli-authorization.test.ts`. Native check on the owner's Mac (diag18,
+2026-11-06): expansion dialog approved, two terminals opened, and Quit completed.
+
+Known limit: once the owned Quit shutdown has begun, the host's `closeAndWait` refuses to
+close the Core without retirement or preserved-exit evidence. If that Quit stalls, a later
+Force Quit leaves the terminal host and Core running. Env-gated `ORQST_QUIT_FLOW` and
+`ORQST_SHUTDOWN` diagnostics now trace each step.
