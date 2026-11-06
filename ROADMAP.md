@@ -1,5 +1,15 @@
 # ORQST roadmap
 
+## Owned Claude metadata hooks — 2026-11-05 (source candidate)
+
+New owned Claude TUI manifests add a private additional settings file for prompt,
+notification and response/failure metadata. Explicit hook prompt IDs and existing
+canonical session proof drive turn state, including waiting for input. Existing
+notification preferences and ownership guards apply. User settings are unchanged;
+legacy/MCP manifests remain separate. Independent review and native/provider
+acceptance remain pending. See the
+[contract and limits](docs/api/terminal-native.md#claude-owned-hook-state--2026-11-05-source-candidate).
+
 ## Current-workspace terminal batch — 2026-11-05 (source increment)
 
 The native Studio facade prepares up to eight independently identified requests

@@ -313,15 +313,31 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       if (config.version !== 2) throw new Error('Expected Claude manifest');
       assert.equal(config.executableVersion, reviewedClaudeTuiBinary.version);
       assert.equal(config.interactive.mcp, undefined);
+      assert.equal(config.ownedHooks, true);
       assert.ok(config.sessionId);
       assert.equal(config.model!.value, choice);
       const profile = interactiveTerminalProfiles(config)[0]!;
       assert.deepEqual(profile.argv, [
         '--session-id',
         config.sessionId,
+        '--settings',
+        join(config.state, 'claude-hooks-settings.json'),
         ...(choice ? ['--model', choice] : []),
       ]);
-      assert.equal(profile.cliAuthorizationScope, 'claude-native-v1:native-mcp');
+      assert.equal(
+        profile.cliAuthorizationScope,
+        'claude-native-v1:native-mcp:orqst-owned-hooks-v1',
+      );
+      for (const name of [
+        'claude-hooks-settings.json',
+        'claude-hooks.cjs',
+        'claude-hook-events.jsonl',
+      ])
+        assert.equal(statSync(join(config.state, name)).mode & 0o777, 0o600);
+      assert.equal(
+        readFileSync(join(f.home, '.claude/settings.json'), 'utf8'),
+        '{"model":"synthetic-model"}',
+      );
       const backend = managedTerminalBackend(prepared.files[0]!, 'SYNTHETIC-NEVER-EXECUTED');
       assert.equal(backend.validate(profile), true);
       // The same selected path with different native bytes is never substituted or admitted.

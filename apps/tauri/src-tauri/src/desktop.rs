@@ -968,6 +968,12 @@ mod tests {
         let value = owned_alert();
         let epoch = value["epoch"].as_str().unwrap();
         assert!(parse_owned_alert(&value, epoch, 1000).is_some());
+        let mut waiting = value.clone();
+        waiting["category"] = serde_json::json!("waiting_for_user");
+        assert_eq!(
+            parse_owned_alert(&waiting, epoch, 1000).unwrap().category,
+            "intervention"
+        );
         assert!(parse_owned_alert(&value, "other", 1000).is_none());
         assert!(parse_owned_alert(&value, epoch, 999).is_none());
         assert!(parse_owned_alert(&value, epoch, 11001).is_none());

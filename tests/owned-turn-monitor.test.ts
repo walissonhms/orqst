@@ -39,3 +39,26 @@ test('only a same-turn running transition alerts once, with preference and recon
   assert.throws(() => monitor.accept([item('completed', fourth)], {}), /Invalid/);
   assert.deepEqual(monitor.accept([item('completed', fourth)], preferences), []);
 });
+
+test('proved owned waiting state uses intervention preference and never replays within the turn', () => {
+  const monitor = new OwnedTurnMonitor();
+  const terminalId = randomUUID();
+  const turnId = randomUUID();
+  const item = (agentState: string, turn = turnId) => ({ terminalId, turnId: turn, agentState });
+  monitor.accept([item('waiting_for_user')], preferences);
+  assert.deepEqual(monitor.accept([item('waiting_for_user')], preferences), []);
+  monitor.accept([item('running')], preferences);
+  assert.deepEqual(monitor.accept([item('waiting_for_user')], preferences), [
+    { terminalId, turnId, category: 'waiting_for_user', silent: true },
+  ]);
+  monitor.accept([item('running')], preferences);
+  assert.deepEqual(monitor.accept([item('completed')], preferences), []);
+  const next = randomUUID();
+  monitor.accept([item('running', next)], preferences);
+  assert.deepEqual(
+    monitor.accept([item('waiting_for_user', next)], { ...preferences, intervention: false }),
+    [],
+  );
+  monitor.accept([item('running', next)], preferences);
+  assert.deepEqual(monitor.accept([item('waiting_for_user', next)], preferences), []);
+});

@@ -128,10 +128,14 @@ test('private native turn alert allows only fixed categories and bounded owned i
     observedAt: 1000,
   };
   assert.equal(ownedTurnAlertSchema.safeParse(alert).success, true);
+  assert.equal(
+    ownedTurnAlertSchema.safeParse({ ...alert, category: 'waiting_for_user' }).success,
+    true,
+  );
   for (const patch of [
     { slot: 8 },
     { terminalId: 'nearby' },
-    { category: 'waiting_for_user' },
+    { category: 'SYNTHETIC-unsupported' },
     { body: 'captured secret content' },
   ])
     assert.equal(ownedTurnAlertSchema.safeParse({ ...alert, ...patch }).success, false);

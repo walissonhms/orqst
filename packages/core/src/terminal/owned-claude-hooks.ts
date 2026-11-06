@@ -12,7 +12,7 @@ const hookRecord = z.strictObject({
   version: z.literal(1),
   sessionId: z.uuid(),
   promptId: z.uuid(),
-  event: z.enum(['prompt', 'permission_prompt', 'idle_prompt', 'stop', 'failure']),
+  event: z.enum(['prompt', 'progress', 'permission_prompt', 'idle_prompt', 'stop', 'failure']),
   at: z.number().int().nonnegative().safe(),
 });
 
@@ -54,6 +54,7 @@ process.stdin.on('end', () => {
         raw.session_id !== expected.sessionId || !uuid.test(raw.prompt_id ?? '') ||
         raw.cwd !== expected.project || raw.transcript_path !== expected.transcript) return;
     const event = raw.hook_event_name === 'UserPromptSubmit' ? 'prompt' :
+      ['PostToolUse', 'PostToolUseFailure'].includes(raw.hook_event_name) ? 'progress' :
       raw.hook_event_name === 'Stop' ? 'stop' :
       raw.hook_event_name === 'StopFailure' ? 'failure' :
       raw.hook_event_name === 'Notification' && ['permission_prompt', 'idle_prompt'].includes(raw.notification_type) ? raw.notification_type : undefined;
@@ -66,11 +67,15 @@ process.stdin.on('end', () => {
     const selected = fs.lstatSync(expected.channel);
     const line = JSON.stringify({ version: 1, sessionId: expected.sessionId, promptId: raw.prompt_id, event, at: Date.now() }) + String.fromCharCode(10);
     if (!file.isFile() || file.uid !== process.getuid() || (file.mode & 63) || file.nlink !== 1 ||
-        file.ino !== selected.ino || file.dev !== selected.dev || file.size + Buffer.byteLength(line) > ${channelMaximum}) return;
+        file.ino !== selected.ino || file.dev !== selected.dev) return;
+    if (file.size + Buffer.byteLength(line) > ${channelMaximum}) {
+      if (file.size < ${channelMaximum}) fs.writeSync(fd, "!");
+      return;
+    }
     if (fs.writeSync(fd, line) !== Buffer.byteLength(line)) return;
     fs.fsyncSync(fd);
   } catch { /* Missing/unsafe evidence does not control the CLI. */ }
-  finally { if (fd !== undefined) fs.closeSync(fd); }
+  finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
 });
 `;
   const quote = (word: string) => "'" + word.replaceAll("'", `'"'"'`) + "'";
@@ -80,6 +85,8 @@ process.stdin.on('end', () => {
     JSON.stringify({
       hooks: {
         UserPromptSubmit: [{ hooks: [handler] }],
+        PostToolUse: [{ hooks: [handler] }],
+        PostToolUseFailure: [{ hooks: [handler] }],
         Notification: [{ matcher: 'permission_prompt|idle_prompt', hooks: [handler] }],
         Stop: [{ hooks: [handler] }],
         StopFailure: [{ hooks: [handler] }],
@@ -115,7 +122,7 @@ export function ownedClaudeHookEvidence(config: ManagedClaudeConfig) {
         info.uid !== process.getuid?.() ||
         info.mode & 0o077 ||
         info.nlink !== 1 ||
-        info.size > channelMaximum
+        info.size >= channelMaximum
       )
         throw new Error('Owned hook channel unavailable');
       const bytes = Buffer.alloc(info.size);
@@ -176,11 +183,13 @@ export function ownedClaudeHookEvidence(config: ManagedClaudeConfig) {
           if (state.turnId !== event.promptId) return unknown;
           state = {
             agentState:
-              event.event === 'stop'
-                ? 'completed'
-                : event.event === 'failure'
-                  ? 'failed'
-                  : 'waiting_for_user',
+              event.event === 'progress'
+                ? 'running'
+                : event.event === 'stop'
+                  ? 'completed'
+                  : event.event === 'failure'
+                    ? 'failed'
+                    : 'waiting_for_user',
             turnId: event.promptId,
           };
         }

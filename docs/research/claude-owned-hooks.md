@@ -16,7 +16,7 @@ Read-only inspection of the installed 2.1.318 native distribution, SHA-256
 confirmed its additional-settings flag and default source list includes user,
 project, local, flag and policy settings. Its `NBn`/`MB` implementation merges flag
 settings and concatenates ordinary arrays; hook schemas include common `prompt_id`,
-Notification and Stop. No CLI was executed during inspection. Distribution identity:
+Notification, Stop and StopFailure. No CLI was executed during inspection. Distribution identity:
 [official npm version metadata](https://registry.npmjs.org/@anthropic-ai/claude-code/2.1.318).
 The distribution publishes no source commit; the exact binary digest identifies
 this inspection. Its license is proprietary (SEE LICENSE IN README.md); no binary
@@ -38,9 +38,11 @@ entry is required (the pinned Anywh LICENSE is Apache-2.0, no root NOTICE).
 ## Evidence boundary
 
 A UserPromptSubmit metadata hook supplies the exact common prompt UUID as the
-running baseline; Notification and Stop use that same explicit UUID. This avoids
+running baseline; Notification, Stop and StopFailure use that same explicit UUID. This avoids
 mapping a hook to a transcript turn by time, text or proximity. Transcript binding
 must still prove the exact preselected Claude session before hook state is exposed.
+Post-tool metadata clears a waiting state only after an explicit callback.
+StopFailure preserves explicit failure signals without matching a transcript error to a different prompt UUID.
 Subagent events, missing IDs, changed files, malformed/partial data and unavailable
 proof do not establish a state. Stop means Claude invoked its finished-response
 hook; other configured hooks may continue work. It does not establish process exit
