@@ -763,6 +763,7 @@ export function TerminalStudio({
   // Native host: report each PTY hole after layout; hide all while an overlay is open.
   const covered = !!native && (menuOpen > 0 || !!details || !!native.overlayOpen);
   const lastLayout = useRef('');
+  const lastRects = useRef(new Map<string, NonNullable<NativePaneLayout['rect']>>());
   const nativeLayout = useRef(native?.onLayout);
   nativeLayout.current = native?.onLayout;
   useLayoutEffect(() => {
@@ -785,21 +786,23 @@ export function TerminalStudio({
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
       );
       const box = hole?.getBoundingClientRect();
-      // Tiled modes may not overlap natively: hide the dragged view until it drops.
-      const dragging = drag?.id === pane.id && scoped.mode !== 'free';
-      return {
-        id: pane.id,
-        z: drag?.id === pane.id ? 255 : pane.z,
-        rect:
-          covered || dragging || !box || box.width < 1 || box.height < 1
-            ? null
-            : {
-                x: box.left - origin.left,
-                y: box.top - origin.top,
-                width: box.width,
-                height: box.height,
-              },
-      };
+      // Tiled modes may not overlap natively, and a null rect revokes the view (and its
+      // pending opening). Keep the dragged view at its last sent place until it drops.
+      if (drag?.id === pane.id && scoped.mode !== 'free' && !covered) {
+        const kept = lastRects.current.get(pane.id);
+        if (kept) return { id: pane.id, z: pane.z, rect: kept };
+      }
+      const rect =
+        covered || !box || box.width < 1 || box.height < 1
+          ? null
+          : {
+              x: box.left - origin.left,
+              y: box.top - origin.top,
+              width: box.width,
+              height: box.height,
+            };
+      if (rect) lastRects.current.set(pane.id, rect);
+      return { id: pane.id, z: drag?.id === pane.id ? 255 : pane.z, rect };
     });
     const key = JSON.stringify([scoped.mode, layout]);
     if (key === lastLayout.current) return;

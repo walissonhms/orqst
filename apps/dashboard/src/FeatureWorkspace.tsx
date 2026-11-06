@@ -271,8 +271,11 @@ export function FeatureWorkspace({
                 })
                 .catch(() => undefined);
             }
-            const attempt = Math.min(arrangeRetry.current.attempt++, 4);
-            resendLatest([300, 600, 1200, 2500, 5000][attempt]!);
+            // Bounded: after 8 timed retries only focus, a click or a new generation resend.
+            const attempt = arrangeRetry.current.attempt;
+            if (attempt >= 8) return;
+            arrangeRetry.current.attempt = attempt + 1;
+            resendLatest([300, 600, 1200, 2500, 5000][Math.min(attempt, 4)]!);
           })
           .catch(() => {
             setArrangeIssue('unavailable');

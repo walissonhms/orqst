@@ -880,7 +880,9 @@ accepted frame, so its own WKWebView cannot be first responder when the document
 either that owned PTY view or the exact feature-workspace chrome child of visible,
 focused `main` is first responder (the Open gesture happens there). The intent stays
 single-use, expires after 60 s and remains bound to the slot document and presentation
-generations; no request, profile or authority comes from the renderer. Implemented in
+generations; no request, profile or authority comes from the renderer. The proof of
+intent is therefore the approved Studio creation gesture within the 60 s window, not a
+separate click inside the new card. Implemented in
 `terminal.rs` (`opening_focused`), unit-tested; native acceptance is pending.
 
 ## Quit retirement wait and opening retry — 2026-11-06
@@ -889,7 +891,7 @@ generations; no request, profile or authority comes from the renderer. Implement
   quit requests keep 8 s. Host retirement spends up to 12 s + 12 s + 5 s, so the former
   8 s wait abandoned retirements that could still succeed and left the host fenced, which
   refused every later Quit. A refused or uncertain retirement still never exits.
-- A prepared Studio terminal document asks `terminal_open_prepared` again every 500 ms
+- A prepared Studio terminal document asks `terminal_open_prepared` again every second
   for up to 60 s (the intent lifetime) besides on focus. An idle answer consumes nothing;
   native still validates the intent, focus and generations.
 

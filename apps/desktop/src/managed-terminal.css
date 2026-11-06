@@ -405,8 +405,17 @@ main[data-chrome='studio'] #terminal {
   padding: 10px 12px;
 }
 main[data-chrome='studio'][data-next='typing'] .process-controls,
-main[data-chrome='studio'] #status:not([data-feedback='error']):not([data-blocked='true']),
-main[data-chrome='studio'] .process-controls .guidance,
-main[data-chrome='studio'] .action-row button:disabled {
+main[data-chrome='studio'][data-next='typing']
+  #status:not([data-feedback='error']):not([data-blocked='true']),
+main[data-chrome='studio']:is([data-next='start'], [data-next='attach'], [data-next='input'])
+  .process-controls
+  .guidance {
+  display: none;
+}
+/* Routine steps show only the next action. Exited, uncertain, gap, blocked and incomplete
+   openings keep every control, the guidance and the status so the owner sees why. */
+main[data-chrome='studio']:is([data-next='start'], [data-next='attach'], [data-next='input'])
+  .action-row
+  button:disabled:not([aria-busy='true']) {
   display: none;
 }
