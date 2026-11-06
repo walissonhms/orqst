@@ -13,6 +13,7 @@ pub mod output;
 pub mod pair;
 pub mod profiles;
 pub mod pty;
+pub mod recovery;
 pub mod rpc;
 pub mod store;
 pub mod supervisor;
