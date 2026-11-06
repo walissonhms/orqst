@@ -1,5 +1,14 @@
 # ORQST
 
+## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
+
+Batch refusals retain exact admission reasons. Native owned terminal Quit now
+reviews interruption, attempted retirement and the authorized durable preserved
+exit before any signal. Cancel has no process effect; incomplete evidence keeps
+the app/reservation fenced. No cross-launch recovery or real marker operation is
+included. Native/provider acceptance remains pending. See the
+[contract](docs/api/owned-terminal-shutdown.md#2026-11-06--explicit-stopretirequit-review).
+
 ## Studio native fence reconciliation — 2026-11-05 (source)
 
 Native generation changes notify the Studio directly instead of depending on a

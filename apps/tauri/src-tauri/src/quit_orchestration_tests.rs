@@ -123,6 +123,9 @@ impl TerminalPipe for FakePorts {
 }
 
 impl ExitPort for FakePorts {
+    fn confirm_owned_quit(&self) -> bool {
+        TerminalPipe::confirm_exit(self)
+    }
     fn request_exit(&self) {
         let mut script = self.script.lock().unwrap();
         script.log.push("exit:request".into());
@@ -389,6 +392,28 @@ fn preserved_close_requires_closed_and_exits_once() {
         .log
         .iter()
         .any(|item| item == "fence"));
+}
+
+#[test]
+fn owned_quit_review_and_cancel_never_start_shutdown_or_retirement() {
+    let mut h = Harness::new(true, false);
+    h.ports.script.lock().unwrap().terminal_gate = true;
+    h.quit();
+    h.dispatch(Event::ExitRequested);
+    h.drain();
+    assert!(h.sent_kinds().is_empty());
+    assert_eq!(h.allowed(), 0);
+    assert_eq!(h.phase(), Phase::Active);
+    assert!(!h.in_flight());
+    // A later native approval re-enters the same circuit; it is not exit evidence.
+    h.ports.script.lock().unwrap().terminal_gate = false;
+    h.quit();
+    assert_eq!(h.sent_kinds(), ["shutdownOwned"]);
+    assert_eq!(h.allowed(), 0);
+    h.reply("owned-shutdown", "ready");
+    h.reply("retirement", "retired");
+    assert_eq!(h.allowed(), 1);
+    assert_eq!(h.phase(), Phase::ExitConsumed);
 }
 
 #[test]

@@ -57,3 +57,30 @@ Tests use synthetic handles, fake inherited IPC peers and disposable real SQLite
 receipt files. Native Quit/Dock/Cmd+Q/CloseRequested wiring, inline warning presentation,
 real provider/descendant behavior and packaging require separate coordinated acceptance.
 No Cargo/build/resources or running Preview files are changed by this source increment.
+
+## Native Retire-before-Quit alternative — 2026-11-06
+
+The owner requested in-app evidence-backed release or a native offer to Retire
+before Quit. Reuse ORQST's existing attached-window Quit review, coordinator,
+OwnedTerminalShutdown, signed retirement transaction and receipts. The native
+review precedes SIGTERM and discloses attempted retirement plus the
+already owner-authorized durable preserved-exit fallback. Retirement or the full
+preserved handoff/close ACK is required; incomplete evidence stays fenced/open.
+The 2026-11-05 decision remains effective and is not silently revoked.
+The successful old protocol moves active-pair into pending-pair with exact bytes
+and directory fsync. A residual active-pair alone therefore does not identify the
+actual failing Quit stage in the owner's old package. No real marker/recovery or
+running app was touched during source work.
+
+Pinned Anywh `546f189c04415c3c5af5f40e3931a0a90b9aba31` re-inspected:
+[Agent Host architecture](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/docs/agent-host.md),
+[AgentHost.close/serialize/endProcess](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/agentHost/agentHost.ts#L1286)
+and [LICENSE](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/LICENSE).
+The host drains/intercepts turns, hibernates or stops owned agents and closes its
+socket; relay restart intentionally preserves host processes. Its lifecycle can
+use group/SIGKILL cleanup and different descendant assumptions. Dependencies are
+its agent queues/runtime drivers/registry/process handles. These do not satisfy
+ORQST's signed durable reservation retirement or kernel-recovery policy. Decision:
+keep the existing ORQST proof circuit and adapt only native consent/exit policy.
+Apache-2.0; no root NOTICE, new copied code/assets or dependencies. Prior research
+of Tucano communication and Overclock UX adds no reusable native retirement proof.

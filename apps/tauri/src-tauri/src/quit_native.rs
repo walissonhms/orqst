@@ -53,6 +53,10 @@ impl TerminalPipe for NativePorts {
 }
 
 impl ExitPort for NativePorts {
+    fn confirm_owned_quit(&self) -> bool {
+        crate::terminal::confirm_exit(&self.0)
+    }
+
     fn request_exit(&self) {
         self.0.exit(0);
     }
