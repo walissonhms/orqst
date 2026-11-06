@@ -1384,3 +1384,10 @@ reservation operation, provider stop or native acceptance was performed.
 - [x] Trailing 16 ms frame retained; pending frames coalesce without recreating webviews.
 - [x] Rust refusal and frame-boundary tests; source-level cause documented.
 - [ ] Native owner acceptance of black-PTY regression fix.
+
+The combined Studio Open/layout/Quit source is packaged from integrated frontend
+`3948fb6645aa46888e4417474c337007770fcc99`. Full Node concurrency-2: 1,485/1,485;
+Rust: 186 passed, two existing ignored. Lint, types, isolated dashboard/staging,
+Clippy with warnings denied, build, ad-hoc signature verification and packaged
+resource hashes passed. The application was not opened; native/provider acceptance
+remains pending. Detailed local evidence is generated under `dist/`, outside Git.

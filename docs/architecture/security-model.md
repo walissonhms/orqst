@@ -1737,3 +1737,24 @@ unsafe files from establishing display evidence. A read failure omits the feed;
 it does not retry or cancel an accepted exchange. The native facade independently
 checks exact endpoints against active Feature membership and owned slots. Old
 epochs and the separate structured-agents host are never implicitly adopted.
+
+## Studio gesture and owned layout responder — 2026-11-06
+
+The owner decision replaces ordinary selected/batch creation sheets with the
+focused main Studio Open gesture. A consumed native opening intent marks only
+the private parent-pipe `open` envelope; public renderer schemas accept no such
+authority. The flag lasts for that request. Policy revocation/scope, concurrent
+policy changes, binary/hash/path inspection, document/focus/generation fences,
+commit latches, journal ownership and signed one-shot Core proofs are retained.
+Legacy manual opening and explicit MCP grants retain their existing reviews.
+
+Geometry-only arrange may recognize a current owned PTY first responder in visible,
+focused main, including a barrier-hidden sibling. Exact label/URL, loaded state,
+non-revocation, document generation, Core epoch and presentation are revalidated
+after AppKit inspection and before publication. All other mutable actions keep
+exact originating-webview focus. Trailing-frame delay rechecks native context;
+no input lease, process authority, observer endpoint or provider permission mode
+is added. Native owner/provider acceptance remains distinct from source checks.
+
+See [pinned research/owner decision](../research/studio-open-gesture.md) and
+[layout cause and boundaries](../research/studio-arrangement-focus.md).

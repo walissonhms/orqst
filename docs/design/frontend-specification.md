@@ -320,12 +320,12 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | ------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------ |
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                                              | owner    | new package                                      |
 | MCP pair delegation/result projection: audited facade + Rust guards packaged in `d840e3c`                                 | pane-817 | native/provider exchange and UI acceptance       |
-| Studio v2 chrome: owned PTY focus and trailing-frame fixes in source                                                      | pane-817 | owner native test                                |
+| Studio v2 chrome: owned PTY focus/trailing frame packaged `3948fb6`                                                       | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `d840e3c`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you": hook review fixes packaged in `d840e3c`; native acceptance pending                                    | pane-817 | owner provider/OS test                           |
 | Studio membership/chrome: native fence notifications packaged in `d840e3c`                                                | pane-817 | empty-Feature/header native acceptance           |
-| Studio Open gesture: redundant selected/batch dialogs removed in source                                                   | pane-817 | native/provider acceptance                       |
-| Native Stop/Retire/Quit review and proved exit: source implemented                                                        | pane-817 | native/provider acceptance                       |
+| Studio Open gesture: redundant dialogs removed; packaged `3948fb6`                                                        | pane-817 | native/provider acceptance                       |
+| Native Stop/Retire/Quit review and proved exit: packaged `3948fb6`                                                        | pane-817 | native/provider acceptance                       |
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
 | Current-workspace batch: exact admission reasons in source; pool 8                                                        | pane-817 | native/provider acceptance                       |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |

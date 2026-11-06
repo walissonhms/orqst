@@ -1254,3 +1254,18 @@ Owned MCP communication projections contain metadata only. An unsafe/private aud
 failure makes the optional feed unavailable; it never authorizes a delivery,
 changes a provider process or grants PTY input. Exact active Feature membership
 and owned slot endpoints are validated in both the protocol facade and Rust.
+
+## Studio Open and layout focus review — 2026-11-06
+
+Owner-authorized ordinary Studio opening uses the existing focused main Open
+gesture instead of redundant application consent sheets. Only a consumed native
+prepared intent marks the private host Open request. Canonical binary/hash/path,
+policy scope/revocation/CAS, source/document/generation/focus and signed one-shot
+Core challenges remain enforced. The observer and provider approval modes are
+unchanged. MCP and destructive-operation reviews remain separate.
+
+Only geometry-only `arrange` may accept an exact loaded, non-revoked owned PTY
+sibling as main's native first responder, rechecking its Core epoch, presentation
+and document generation. This does not authorize input or execution. See the
+[decision](docs/research/studio-open-gesture.md) and
+[layout review](docs/research/studio-arrangement-focus.md). Native acceptance is pending.
