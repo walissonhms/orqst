@@ -911,6 +911,29 @@ Implemented in `terminal.rs`, unit-tested (`hide_document`); native acceptance p
   for up to 60 s (the intent lifetime) besides on focus. An idle answer consumes nothing;
   native still validates the intent, focus and generations.
 
+## Studio terminals visible and opened end to end — 2026-11-06
+
+Native diagnostics (`ORQST_TAURI_FOCUS_DIAGNOSTICS=1`) on the owner's Mac showed three
+causes of black, never-started Studio terminals:
+
+- **Title-bar safe area.** The Studio document starts 32px below the window top (macOS
+  insets the child view under the title bar), so its viewport was 32px shorter than the
+  host expected and every `arrange` was refused (`viewport`). The host now accepts a
+  viewport up to 64px shorter, with the exact width, and offsets the placed views by that
+  inset; reported insets stay the contract values.
+- **Gesture focus.** Right after Open, focus is in the main document (the New terminal
+  dialog). `arrange` now also accepts the focused main document of the same window
+  (geometry only).
+- **Opening race.** `launch` returns while the attempt is still `starting`, and
+  `requestAttach` requires `running`, so the combined Open always ended `incomplete`.
+  The broker now waits for `running` (bounded by 10 s and the review deadline) before
+  attaching and enabling input. A client fallback completes an interrupted opening once
+  through the regular attach/input requests.
+
+With diagnostics on, native prints `ORQST_ARRANGE` refusals and forwards host
+`ORQST_*` reason lines (numbers and step messages only). Native-verified on the owner's
+Mac with the diagnostic build; packaged acceptance pending.
+
 ## Studio chrome sizes from the approved preview — 2026-11-06
 
 `arrange` layoutVersion 2 `chrome` now also accepts `top` 47 (full window) or 92 (45px

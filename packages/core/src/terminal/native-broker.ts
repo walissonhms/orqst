@@ -117,6 +117,14 @@ export class TerminalNativeBroker<Document extends object> {
               prepared.attemptId,
               this.proof(prepared.challenge, generation),
             );
+            // Attach needs a running (or exited) attempt; launch returns while it is still
+            // starting. Wait briefly, bounded by the combined review's deadline.
+            const startedBy = Math.min(prepared.challenge.expiresAt, Date.now() + 10_000);
+            while (
+              (await this.supervisor.snapshot(prepared.attemptId)).state === 'starting' &&
+              Date.now() < startedBy
+            )
+              await new Promise((resolve) => setTimeout(resolve, 100));
             const attach = await this.supervisor.requestAttach(this.clientId, prepared.attemptId);
             view.attachment = await this.supervisor.attach(
               prepared.attemptId,
@@ -135,7 +143,11 @@ export class TerminalNativeBroker<Document extends object> {
             this.assertCurrent(input, generation, prepared.challenge.expiresAt);
             if (!view.attachment || !view.lease) throw new Error('Native grants revoked');
             return { ...result, opening: 'ready' };
-          } catch {
+          } catch (error) {
+            // Diagnostics only: the failed step's message (no content or credentials).
+            process.stderr.write(
+              `ORQST_OPEN_HOST incomplete ${String((error as Error)?.message ?? error).slice(0, 160)}\n`,
+            );
             // Launch may have succeeded. Keep its identity/receipt; never retry,
             // signal, or adopt it. Remove only this document's output/input grants.
             view.lease = undefined;

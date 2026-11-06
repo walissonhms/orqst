@@ -137,9 +137,11 @@ export class TauriTerminalLayout {
                 height: Math.round(rect.y + rect.height) - Math.round(rect.y),
               }
             : null;
+          // Same bounded title-bar inset accepted in arrange(): the document starts below it.
+          const inset = Math.min(64, Math.max(0, height - custom.viewport.height));
           return {
             slot,
-            rect: rounded ? this.offset(rounded, left, top) : null,
+            rect: rounded ? this.offset(rounded, left, top + inset) : null,
             z: position < 0 ? 0 : position,
           };
         }
@@ -182,30 +184,43 @@ export class TauriTerminalLayout {
 
   /** Apply geometry only, keeping the retained PTYs and their process ownership unchanged. */
   arrange(input: Arrangement): boolean {
-    if (
-      (this.suspended && !(this.studio && input.layoutVersion === 2)) ||
-      !this.chrome ||
-      (this.studio && input.layoutVersion !== 2) ||
-      !featureNativeRequestSchema.safeParse(input).success
-    )
+    // Diagnostics only (stderr is shown by native with ORQST_TAURI_FOCUS_DIAGNOSTICS=1):
+    // the refused condition and geometry numbers, never content or paths.
+    const refuse = (reason: string) => {
+      process.stderr.write(
+        `ORQST_ARRANGE_HOST ${reason} window=${this.width}x${this.height} viewport=${input.viewport?.width}x${input.viewport?.height} panes=${input.panes?.length} order=${this.state.order.length}\n`,
+      );
       return false;
+    };
+    if (this.suspended && !(this.studio && input.layoutVersion === 2)) return refuse('suspended');
+    if (!this.chrome) return refuse('no_chrome');
+    if (this.studio && input.layoutVersion !== 2) return refuse('layout_version');
+    if (!featureNativeRequestSchema.safeParse(input).success) return refuse('schema');
     const requestedChrome = input.layoutVersion === 2 ? input.chrome : undefined;
     const left = requestedChrome?.sidebar ?? (this.width <= 720 ? 46 : 155);
     const width = this.width - left;
     const height = this.height - (requestedChrome?.top ?? 81) - (requestedChrome?.bottom ?? 34);
+    if (width <= 0 || height <= 0) return refuse('window_size');
+    // The Studio document can start below a native title-bar safe area (macOS insets the
+    // child view's top), so its viewport may be shorter than the window by that inset.
+    // Width must match exactly; the inset is bounded and offsets the placed views.
+    const titleInset = height - input.viewport.height;
     if (
-      width <= 0 ||
-      height <= 0 ||
       input.viewport.width !== width ||
-      input.viewport.height !== height ||
+      !Number.isInteger(titleInset) ||
+      titleInset < 0 ||
+      titleInset > 64
+    )
+      return refuse('viewport');
+    if (
       input.panes.length !== this.state.order.length ||
       new Set(input.panes.map((pane) => pane.slot)).size !== input.panes.length ||
       input.panes.some((pane) => !this.state.order.includes(pane.slot))
     )
-      return false;
+      return refuse('members');
     const visible = input.panes.filter((pane) => pane.visible);
     if ((input.mode === 'list' && visible.length) || (input.mode === 'focus' && visible.length > 1))
-      return false;
+      return refuse('mode');
     for (const pane of input.panes) {
       const rect = pane.rect;
       if (
@@ -214,7 +229,7 @@ export class TauriTerminalLayout {
         pane.z < 0 ||
         pane.z > 255
       )
-        return false;
+        return refuse('pane');
       if (!rect) continue;
       if (
         ![rect.x, rect.y, rect.width, rect.height].every(Number.isFinite) ||
@@ -227,7 +242,7 @@ export class TauriTerminalLayout {
         Math.round(rect.x + rect.width) <= Math.round(rect.x) ||
         Math.round(rect.y + rect.height) <= Math.round(rect.y)
       )
-        return false;
+        return refuse('rect');
     }
     const overlaps = (a: NonNullable<Arrangement['panes'][number]['rect']>, b: typeof a) =>
       a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
@@ -235,7 +250,7 @@ export class TauriTerminalLayout {
       input.mode !== 'free' &&
       visible.some((a, i) => visible.slice(i + 1).some((b) => overlaps(a.rect!, b.rect!)))
     )
-      return false;
+      return refuse('overlap');
     const prior = this.arrangement;
     const topology = (value: Arrangement | undefined) =>
       JSON.stringify(

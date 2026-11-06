@@ -1218,8 +1218,21 @@ async fn request_focused(view: &Webview, action: &str, epoch: &str, presentation
     let direct = focused(view).await;
     let terminal = !direct
         && action == "arrange"
-        && crate::terminal::arrangement_focused(view.app_handle(), epoch, presentation).await;
+        && (crate::terminal::arrangement_focused(view.app_handle(), epoch, presentation).await
+            || main_document_focused(view).await);
     request_focus_allowed(action, direct, terminal)
+}
+
+/// Geometry only: the New terminal dialog and its Open button live in the main document
+/// of the same window, so focus is there right after creating a terminal.
+async fn main_document_focused(view: &Webview) -> bool {
+    if view.window().label() != "main" {
+        return false;
+    }
+    match view.app_handle().get_webview("main") {
+        Some(main) => main.window().label() == "main" && focused(&main).await,
+        None => false,
+    }
 }
 struct MetadataCompletion<F: FnOnce(bool)> {
     finish: Option<F>,
@@ -1848,18 +1861,30 @@ fn changes_presentation(request: &Value) -> bool {
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
+    // ORQST_TAURI_FOCUS_DIAGNOSTICS=1: why an arrange was refused (action, geometry, reason).
+    let diagnose = std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1")
+        && request["action"] == "arrange";
+    let deny = |reason: &str| {
+        if diagnose {
+            eprintln!(
+                "ORQST_ARRANGE denied {reason} chrome={} viewport={} panes={}",
+                request["chrome"], request["viewport"], request["panes"]
+            );
+        }
+        denied()
+    };
     if !valid_request(&request) {
-        return denied();
+        return deny("invalid_request");
     }
     let Some((source, document)) = identity(&window) else {
-        return denied();
+        return deny("identity");
     };
     if request["action"] == "arrange" && source != CHROME_URL {
-        return denied();
+        return deny("source");
     }
     let app = window.app_handle();
     if crate::terminal::presentation_blocked(app) {
-        return denied();
+        return deny("presentation_blocked");
     }
     let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
@@ -1882,13 +1907,13 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         )
         .await
     {
-        return denied();
+        return deny("focus");
     }
     if identity(&window) != Some((source.clone(), document))
         || crate::terminal::presentation_blocked(app)
         || crate::terminal::metadata_context(app) != Some((epoch.clone(), presentation))
     {
-        return denied();
+        return deny("context_changed");
     }
     if request["action"] == "arrange" {
         let (ticket, delay) = {
@@ -1909,7 +1934,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         )
         .await
         {
-            return denied();
+            return deny("focus_after_wait");
         }
         let state = app.state::<Features>();
         let mut guard = state.0.lock().unwrap();
@@ -1922,7 +1947,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         let state = app.state::<Features>();
         let mut guard = state.0.lock().unwrap();
         if guard.sequence >= 0xffffffffffff {
-            return denied();
+            return deny("sequence");
         }
         guard.sequence += 1;
         format!("00000000-6990-4000-8000-{:012x}", guard.sequence)
@@ -1961,7 +1986,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
             )
             .await
             {
-                return denied();
+                return deny("focus_or_context_after_reply");
             }
             if !valid_reply(&value) {
                 return json!({"status":"unavailable"});
@@ -1977,6 +2002,9 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                     return json!({"status":"stale"});
                 }
                 publish(app, snapshot, presentation, &epoch);
+            }
+            if diagnose {
+                eprintln!("ORQST_ARRANGE reply {}", value["status"]);
             }
             value
         },

@@ -3244,7 +3244,14 @@ async fn start_selected_inner(
                 CommandEvent::Stdout(bytes) if bytes.len() <= 512 * 1024 => {
                     return serde_json::from_slice::<Value>(&bytes).map_err(|_| "startup_protocol")
                 }
-                CommandEvent::Stderr(_) => {}
+                CommandEvent::Stderr(line) => {
+                    if focus_diagnostics() {
+                        let text = String::from_utf8_lossy(&line);
+                        if text.starts_with("ORQST_") {
+                            eprintln!("{}", text.trim_end());
+                        }
+                    }
+                }
                 CommandEvent::Terminated(_) => return Err("startup_eof"),
                 _ => return Err("startup_protocol"),
             }
@@ -3642,7 +3649,14 @@ async fn start_selected_inner(
                         break;
                     }
                 }
-                CommandEvent::Stderr(_) => {}
+                CommandEvent::Stderr(line) => {
+                    if focus_diagnostics() {
+                        let text = String::from_utf8_lossy(&line);
+                        if text.starts_with("ORQST_") {
+                            eprintln!("{}", text.trim_end());
+                        }
+                    }
+                }
                 CommandEvent::Terminated(_) => {
                     exited.notify_one();
                     break;

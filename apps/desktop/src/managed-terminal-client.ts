@@ -44,6 +44,8 @@ let instanceId: string | undefined;
 let cursor = 0;
 let sequence = 0;
 let attached = false;
+// One automatic completion per document for an opening the native view change interrupted.
+let completingOpen = false;
 let input = false;
 // Local focus suspension only. The owned lease stays a native policy decision.
 let suspended = false;
@@ -198,8 +200,24 @@ async function send(
     if (request.action === 'open') {
       openingIncomplete = reply.opening !== 'ready';
       attached = input = reply.opening === 'ready';
-      if (openingIncomplete) show('openingIncomplete');
-      else {
+      if (openingIncomplete) {
+        show('openingIncomplete');
+        // The Open gesture authorizes startup, output and keyboard together. When a view
+        // change revoked the grants mid-opening, finish the same opening once through the
+        // regular attach and input requests; native still checks focus and every grant.
+        const target = reply.instanceId;
+        if (target && !completingOpen) {
+          completingOpen = true;
+          window.setTimeout(() => {
+            void (async () => {
+              if (instanceId !== target) return;
+              if (!attached) await send({ version: 1, action: 'attach', instanceId: target });
+              if (instanceId === target && attached && live && !input)
+                await send({ version: 1, action: 'input', instanceId: target });
+            })();
+          }, 400);
+        }
+      } else {
         fit.fit();
         container.scrollIntoView({ block: 'nearest' });
         terminal.focus();

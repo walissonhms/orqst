@@ -122,6 +122,46 @@ test('list mode hides webviews without marking panes minimized and leaves restor
   assert.equal(f.messages.at(-1)!.focus, null);
 });
 
+test('a title-bar safe area above the Studio document offsets the views, within 64px', () => {
+  const f = fixture(1);
+  f.layout.resize(1280, 860);
+  f.layout.context(f.layout.snapshot(), () => {});
+  // The document sees 828px (860 minus a 32px title bar): viewport 828 - 47 - 38.
+  const frame: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    action: 'arrange',
+    generation: 0,
+    layoutVersion: 2,
+    chrome: { sidebar: 0, top: 47, bottom: 38 },
+    mode: 'mosaic',
+    viewport: { width: 1280, height: 743 },
+    panes: [
+      {
+        slot: 0,
+        terminalId: randomUUID(),
+        visible: true,
+        z: 0,
+        rect: { x: 13, y: 46, width: 1254, height: 684 },
+      },
+    ],
+  };
+  assert.equal(f.layout.arrange(frame), true);
+  assert.deepEqual(f.messages.at(-1)!.bounds[0]!.rect, {
+    x: 13,
+    y: 32 + 47 + 46,
+    width: 1254,
+    height: 684,
+  });
+  assert.deepEqual(f.messages.at(-1)!.insets, { left: 0, top: 47, bottom: 38 });
+  // More than a title bar, a taller viewport than the window or another width is refused.
+  for (const viewport of [
+    { width: 1280, height: 775 - 65 },
+    { width: 1280, height: 776 },
+    { width: 1279, height: 743 },
+  ])
+    assert.equal(f.layout.arrange({ ...frame, viewport }), false);
+});
+
 test('v2 chrome derives and validates the full-window content area and revokes on chrome change', () => {
   const f = fixture(1);
   f.layout.resize(1440, 900);
