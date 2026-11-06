@@ -160,6 +160,60 @@ fn exact(value: &Value, keys: &[&str]) -> bool {
         .as_object()
         .is_some_and(|v| v.len() == keys.len() && keys.iter().all(|k| v.contains_key(*k)))
 }
+/// The two pair members, source first. Without workerProvider (the original shape) the pair
+/// is Codex/OpenCode in either direction; Claude needs an explicit worker.
+fn mcp_pair_members(value: &Value) -> Option<(&'static str, &'static str)> {
+    let provider = |key: &str| match value[key].as_str() {
+        Some("codex") => Some("codex"),
+        Some("opencode") => Some("opencode"),
+        Some("claude") => Some("claude"),
+        _ => None,
+    };
+    let source = provider("sourceProvider")?;
+    let worker = if value.get("workerProvider").is_some() {
+        provider("workerProvider")?
+    } else {
+        match source {
+            "codex" => "opencode",
+            "opencode" => "codex",
+            _ => return None,
+        }
+    };
+    (source != worker).then_some((source, worker))
+}
+
+fn mcp_pair_model_key(provider: &str) -> &'static str {
+    match provider {
+        "codex" => "codexModelId",
+        "opencode" => "openCodeModelId",
+        _ => "claudeModelId",
+    }
+}
+
+/// Exact keys only: each member carries its own model id and no other model id is accepted.
+fn valid_mcp_pair(value: &Value) -> bool {
+    let Some((source, worker)) = mcp_pair_members(value) else {
+        return false;
+    };
+    let mut keys = vec![
+        "action",
+        "generation",
+        "workspaceId",
+        "featureId",
+        "catalogId",
+        "sourceProvider",
+        mcp_pair_model_key(source),
+        mcp_pair_model_key(worker),
+    ];
+    if value.get("workerProvider").is_some() {
+        keys.push("workerProvider");
+    }
+    exact(value, &keys)
+        && digest(&value["catalogId"])
+        && digest(&value[mcp_pair_model_key(source)])
+        && digest(&value[mcp_pair_model_key(worker)])
+}
+
 fn valid_request(value: &Value) -> bool {
     let generation = value["generation"]
         .as_u64()
@@ -167,26 +221,7 @@ fn valid_request(value: &Value) -> bool {
     match value["action"].as_str() {
         Some("snapshot") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
-        Some("create-mcp-pair") => {
-            exact(
-                value,
-                &[
-                    "action",
-                    "generation",
-                    "workspaceId",
-                    "featureId",
-                    "catalogId",
-                    "sourceProvider",
-                    "codexModelId",
-                    "openCodeModelId",
-                ],
-            ) && generation
-                && scope(value)
-                && digest(&value["catalogId"])
-                && digest(&value["codexModelId"])
-                && digest(&value["openCodeModelId"])
-                && matches!(value["sourceProvider"].as_str(), Some("codex" | "opencode"))
-        }
+        Some("create-mcp-pair") => generation && scope(value) && valid_mcp_pair(value),
         Some("create-selected") => {
             exact(
                 value,
@@ -1088,8 +1123,11 @@ fn run(
     ]
     .iter()
     .any(|key| std::env::var_os(key).is_some());
-    if (request["provider"] == "opencode" || request["action"] == "create-mcp-pair")
-        && unsupported_opencode
+    let opencode_pair = request["action"] == "create-mcp-pair"
+        && mcp_pair_members(&request).is_none_or(|(source, worker)| {
+            source == "opencode" || worker == "opencode"
+        });
+    if (request["provider"] == "opencode" || opencode_pair) && unsupported_opencode
     {
         return Err("Unsupported native OpenCode configuration selector".into());
     }
@@ -1878,6 +1916,21 @@ mod catalog_tests {
             extra[key] = json!("SYNTHETIC");
             assert!(!valid_request(&extra));
         }
+        // Claude joins only with an explicit worker and exactly the members' model ids.
+        let claude = json!({"action":"create-mcp-pair","generation":3,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"sourceProvider":"claude","workerProvider":"codex","claudeModelId":"d".repeat(64),"codexModelId":"b".repeat(64)});
+        assert!(valid_request(&claude));
+        let mut same = claude.clone();
+        same["workerProvider"] = json!("claude");
+        assert!(!valid_request(&same));
+        let mut stray = claude.clone();
+        stray["openCodeModelId"] = json!("c".repeat(64));
+        assert!(!valid_request(&stray));
+        let mut missing = claude.clone();
+        missing.as_object_mut().unwrap().remove("claudeModelId");
+        assert!(!valid_request(&missing));
+        let mut unknown = claude.clone();
+        unknown["workerProvider"] = json!("shell");
+        assert!(!valid_request(&unknown));
     }
     #[test]
     fn selected_requests_bind_scope_and_opaque_models_without_native_paths() {

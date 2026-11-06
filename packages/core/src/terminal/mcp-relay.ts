@@ -84,12 +84,12 @@ async function start() {
       if (!parsed.success) return stop();
       const request = parsed.data;
       if (request.id === undefined) {
-        if (request.method === 'notifications/initialized' && initialized && !ready) {
-          ready = true;
-          return;
-        }
-        // Cancellation/unsupported notifications revoke delivery; no implicit replay.
-        stop();
+        // notifications/initialized marks this child ready once, after a valid initialize.
+        if (request.method === 'notifications/initialized' && initialized && !ready) ready = true;
+        // Every other notification (cancelled, progress, roots/list_changed, a duplicate
+        // initialized) is ignored: no response, no relay stop and no implicit replay of a
+        // delivered task. Only an explicit tools/call can change a task; a cancelled or
+        // unknown notification never grants, revokes or repeats one.
         return;
       }
       const key = `${typeof request.id}:${request.id}`;

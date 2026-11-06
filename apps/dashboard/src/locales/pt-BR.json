@@ -1020,6 +1020,7 @@
       "enrollmentLimit": "Novos terminais selecionados entram no mesmo Core em execução. Rejeição ou incerteza preserva os anteriores; resultado incerto bloqueia novas adições.",
       "mcpPairOptIn": "Preparar par experimental Codex/OpenCode com comunicação",
       "mcpPairHelp": "{{source}} é a origem; {{worker}} é o executor. Escolha ambos os modelos e revise as duas configurações nativas. Depois autorize uma tarefa MCP no menu nativo Terminal gerenciado. Peça ao executor para usar wait_task e submit_result e à origem para usar delegate_task. Abrir não envia tarefa; suporte às ferramentas CLI e modelos efetivos seguem sem validação. Delegação N-membros e por Feature continua pendente.",
+      "mcpWorkerProvider": "CLI de destino",
       "mcpWorkerModel": "Modelo do executor {{provider}}",
       "mcpInitialOnly": "Pares com comunicação exigem uma seleção inicial nova. Adicionar MCP a um Core existente está indisponível.",
       "openMcpPair": "Revisar e abrir par com comunicação"

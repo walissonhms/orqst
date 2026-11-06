@@ -14,6 +14,24 @@ export const reviewedProviderMcpBinaries = Object.freeze({
   }),
 });
 
+/**
+ * Claude binaries reviewed for the strict per-invocation MCP launch. 2.1.318 offers the
+ * same `--strict-mcp-config`, `--mcp-config <configs...>` and `--session-id <uuid>` options
+ * (checked in its `--help`, 2026-11-06); provider acceptance is still not run.
+ */
+export const reviewedClaudeMcpBinaries = Object.freeze([
+  reviewedProviderMcpBinaries.claude,
+  Object.freeze({
+    version: '2.1.318',
+    sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
+  }),
+]);
+export function reviewedClaudeMcpBinary(version: string, sha256: string) {
+  return reviewedClaudeMcpBinaries.find(
+    (binary) => binary.version === version && binary.sha256 === sha256,
+  );
+}
+
 const inputSchema = z.strictObject({
   executableVersion: z.string().min(1).max(64),
   executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
@@ -40,8 +58,11 @@ function assertReviewed(
   input: z.infer<typeof inputSchema>,
 ) {
   const reviewed = reviewedProviderMcpBinaries[provider];
-  if (input.executableVersion !== reviewed.version || input.executableSha256 !== reviewed.sha256)
-    throw new Error('No reviewed MCP configuration for this exact provider binary');
+  const exact =
+    provider === 'claude'
+      ? !!reviewedClaudeMcpBinary(input.executableVersion, input.executableSha256)
+      : input.executableVersion === reviewed.version && input.executableSha256 === reviewed.sha256;
+  if (!exact) throw new Error('No reviewed MCP configuration for this exact provider binary');
 }
 
 /** Offline argv candidate only; HOME/CLAUDE_CONFIG_DIR and native Keychain identity stay untouched. */

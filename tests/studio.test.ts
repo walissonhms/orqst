@@ -108,10 +108,13 @@ test('mixed provisioning reviews both identities and keeps OpenCode consent prov
 test('mixed creation rejects other combinations, wrong count and changed companion binary before writes', () => {
   const f = fixture();
   try {
-    assert.throws(() => prepareTerminalCreation({ ...f, count: 3, limit: 8 }), /Only the reviewed/);
+    assert.throws(
+      () => prepareTerminalCreation({ ...f, count: 3, limit: 8 }),
+      /Only an explicit MCP pair/,
+    );
     assert.throws(
       () => prepareTerminalCreation({ ...f, companion: { ...f.companion, provider: 'claude' } }),
-      /Only the reviewed/,
+      /Only an explicit MCP pair/,
     );
     const companion = join(f.root, 'synthetic-native-copy');
     copyFileSync(node, companion);

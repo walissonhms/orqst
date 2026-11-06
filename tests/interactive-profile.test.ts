@@ -37,7 +37,7 @@ function fixture() {
   });
 }
 
-test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched MCP pins', () => {
+test('reviewed Claude TUI keeps legacy manifests and rejects mismatched MCP pins', () => {
   const legacy = fixture();
   assert.equal(interactiveTerminalProfiles(legacy)[0]!.executableVersion, '2.1.178');
   const config = managedClaudeConfigSchema.parse({
@@ -71,13 +71,15 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
     { ...legacy, executable: config.executable },
   ])
     assert.throws(() => interactiveTerminalProfiles(mismatched), /version\/hash/);
+  // Owner decision 2026-11-06: the reviewed 2.1.318 TUI binary may also take the strict
+  // MCP launch. Any other hash for that version is still rejected.
   config.interactive = { sharedNativeSessions: true, mcp: true, strictMcpAcknowledged: true };
   assert.throws(
-    () => validateManagedClaudeConfig(config),
-    /No reviewed Claude MCP launch contract/,
-  );
-  assert.throws(
-    () => interactiveTerminalProfiles(config),
+    () =>
+      validateManagedClaudeConfig({
+        ...config,
+        executable: { ...config.executable, sha256: 'f'.repeat(64) },
+      }),
     /No reviewed Claude MCP launch contract/,
   );
   assert.equal(reviewedProviderMcpBinaries.claude.version, '2.1.178');
@@ -87,7 +89,7 @@ test('reviewed Claude TUI keeps legacy manifests and rejects new or mismatched M
   );
 });
 
-test('legacy Claude pin still composes the unchanged reviewed strict MCP launch', () => {
+test('legacy and current Claude pins compose the reviewed strict MCP launch', () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-claude-mcp-')));
   try {
     const config = fixture();
@@ -112,8 +114,18 @@ test('legacy Claude pin still composes the unchanged reviewed strict MCP launch'
       executableVersion: reviewedClaudeTuiBinary.version,
       executable: { ...config.executable, sha256: reviewedClaudeTuiBinary.sha256 },
     };
+    // 2.1.318 composes the same strict per-invocation MCP launch (owner decision 2026-11-06).
+    const currentProfile = interactiveTerminalProfiles(current, launch)[0]!;
+    assert.equal(currentProfile.executableVersion, '2.1.318');
+    assert.ok(currentProfile.argv.includes('--strict-mcp-config'));
+    assert.ok(currentProfile.argv.includes('--mcp-config'));
+    assert.equal(currentProfile.cliAuthorizationScope, 'claude-native-v1:orqst-mcp-configured');
     assert.throws(
-      () => interactiveTerminalProfiles(current, launch),
+      () =>
+        interactiveTerminalProfiles(
+          { ...current, executable: { ...current.executable, sha256: 'f'.repeat(64) } },
+          launch,
+        ),
       /No reviewed Claude MCP launch contract/,
     );
   } finally {

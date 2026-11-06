@@ -13,6 +13,12 @@ type Scope = { workspaceId: string; featureId: string | null };
 type Provider = TerminalPreparationCatalog['providers'][number]['provider'];
 
 /** Core catalog + native review. The renderer never supplies executable or project paths. */
+const pairModelKey = {
+  codex: 'codexModelId',
+  opencode: 'openCodeModelId',
+  claude: 'claudeModelId',
+} as const;
+
 export function TauriStudioPreparation({
   native,
   context,
@@ -36,7 +42,17 @@ export function TauriStudioPreparation({
   const inFlight = useRef(false);
   const chosen = catalog?.providers.find((entry) => entry.provider === provider);
   const model = chosen?.models.find((entry) => entry.id === modelId);
-  const companionProvider = provider === 'codex' ? 'opencode' : 'codex';
+  // The pair worker is any other reviewed CLI; Codex/OpenCode keep their original pairing.
+  const [workerChoice, setWorkerChoice] = useState<Provider | ''>('');
+  const workerOptions = (['codex', 'opencode', 'claude'] as const).filter(
+    (entry) => entry !== provider,
+  );
+  const companionProvider: Provider =
+    workerChoice && workerChoice !== provider
+      ? workerChoice
+      : provider === 'codex'
+        ? 'opencode'
+        : 'codex';
   const companion = catalog?.providers.find((entry) => entry.provider === companionProvider);
   const companionModel = companion?.models.find((entry) => entry.id === companionModelId);
   const workspaceId = context?.workspaceId ?? '';
@@ -192,7 +208,7 @@ export function TauriStudioPreparation({
         </p>
       )}
       {model && <p className="studio-next">{t('studio.tauri.modelUnverified')}</p>}
-      {provider !== 'claude' && (
+      {
         <div className="studio-members">
           <label>
             <input
@@ -214,6 +230,24 @@ export function TauriStudioPreparation({
                   worker: t(`shell.adapters.${companionProvider}`),
                 })}
               </p>
+              <label>
+                {t('studio.tauri.mcpWorkerProvider')}
+                <select
+                  aria-label={t('studio.tauri.mcpWorkerProvider')}
+                  disabled={disabled || !snapshot?.canCreate}
+                  value={companionProvider}
+                  onChange={(event) => {
+                    setWorkerChoice(event.target.value as Provider);
+                    setCompanionModelId('');
+                  }}
+                >
+                  {workerOptions.map((entry) => (
+                    <option key={entry} value={entry}>
+                      {t(`shell.adapters.${entry}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label>
                 {t('studio.tauri.mcpWorkerModel', {
                   provider: t(`shell.adapters.${companionProvider}`),
@@ -249,7 +283,7 @@ export function TauriStudioPreparation({
             <p className="studio-next">{t('studio.tauri.mcpInitialOnly')}</p>
           )}
         </div>
-      )}
+      }
       <div className="studio-actions">
         <button
           className="button primary"
@@ -267,7 +301,7 @@ export function TauriStudioPreparation({
             catalog &&
             model &&
             void request(
-              mcpPair && provider !== 'claude' && companionModel
+              mcpPair && companionModel
                 ? {
                     action: 'create-mcp-pair',
                     generation: snapshot.generation,
@@ -275,8 +309,9 @@ export function TauriStudioPreparation({
                     featureId,
                     catalogId: catalog.catalogId,
                     sourceProvider: provider,
-                    codexModelId: provider === 'codex' ? model.id : companionModel.id,
-                    openCodeModelId: provider === 'opencode' ? model.id : companionModel.id,
+                    workerProvider: companionProvider,
+                    [pairModelKey[provider]]: model.id,
+                    [pairModelKey[companionProvider]]: companionModel.id,
                   }
                 : {
                     action: 'create-selected',

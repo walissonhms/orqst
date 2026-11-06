@@ -27,6 +27,7 @@ import { terminalDigest } from './authority.js';
 import {
   claudeInteractiveMcpConfiguration,
   reviewedProviderMcpBinaries,
+  reviewedClaudeMcpBinary,
 } from './provider-mcp-config.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 import type { TerminalProfile } from './supervisor.js';
@@ -95,7 +96,8 @@ export function interactiveProvider(
 
 function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
   const pin = config.interactive.mcp
-    ? reviewedProviderMcpBinaries.claude
+    ? (reviewedClaudeMcpBinary(config.executableVersion, config.executable.sha256) ??
+      reviewedProviderMcpBinaries.claude)
     : config.executableVersion === reviewedClaudeTuiBinary.version
       ? reviewedClaudeTuiBinary
       : reviewedProviderMcpBinaries.claude;
@@ -201,7 +203,7 @@ export function interactiveTerminalProfiles(
           ? 'ORQST adds private metadata-only prompt/notification/stop hooks through an additional owned settings file; existing settings and policy remain effective. '
           : '') +
         (mcp
-          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude 2.1.178. ORQST task grant requires separate native authorization. '
+          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude. ORQST task grant requires separate native authorization. '
           : 'Native MCP definitions may start. ') +
         'Login, native focus, MCP tool/timeout behavior and inference acceptance remain unvalidated.',
     },

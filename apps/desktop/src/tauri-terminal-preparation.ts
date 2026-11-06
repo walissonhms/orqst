@@ -5,6 +5,8 @@ import {
   terminalCatalogRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
+  terminalMcpPairMembers,
+  terminalMcpPairModelId,
   terminalBatchRequestSchema,
   type TerminalPreparationCatalog,
   type TerminalLayoutRecord,
@@ -163,24 +165,22 @@ export async function prepareTauriTerminals(
       const pair = request.action === 'create-mcp-pair';
       const count = pair ? 2 : request.count;
       const sourceProvider = pair ? request.sourceProvider : request.provider;
-      const select = (name: typeof sourceProvider, modelId: string) => {
-        const selected = resolveCatalogSelection(discovered, name, modelId);
+      const select = (name: typeof sourceProvider, modelId: string | undefined) => {
+        const selected =
+          modelId === undefined ? undefined : resolveCatalogSelection(discovered, name, modelId);
         if (!selected) return fail('selection_unavailable');
         return selected;
       };
+      const members = pair ? terminalMcpPairMembers(request) : null;
+      if (pair && !members) fail('selection_unavailable');
       const source = select(
         sourceProvider,
-        pair
-          ? sourceProvider === 'codex'
-            ? request.codexModelId
-            : request.openCodeModelId
-          : request.modelId,
+        pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,
       );
-      const companion = pair
-        ? sourceProvider === 'codex'
-          ? select('opencode', request.openCodeModelId)
-          : select('codex', request.codexModelId)
-        : undefined;
+      const companion =
+        pair && members
+          ? select(members[1], terminalMcpPairModelId(request, members[1]))
+          : undefined;
       if ((discovered.workspace.feature?.terminalIds.length ?? 0) + count > 8)
         fail('capacity_exceeded');
       stage = 'plan';
@@ -199,7 +199,9 @@ export async function prepareTauriTerminals(
         project: discovered.workspace.project,
         preparation,
         mcp: pair,
-        ...(pair || sourceProvider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
+        ...((members ?? [sourceProvider]).includes('opencode')
+          ? { openCodeStartupAuthorized: true }
+          : {}),
       });
       // Studio's focused, generation-bound Open gesture authorizes the exact selection.
       // MCP pairs retain their separate bilateral consent; ordinary creation has no sheet.
@@ -221,23 +223,15 @@ export async function prepareTauriTerminals(
           trusted,
           context,
         );
+        const still = (provider: typeof sourceProvider, modelId: string | undefined) =>
+          modelId !== undefined && !!resolveCatalogSelection(rechecked, provider, modelId);
         if (
           rechecked.catalog.catalogId !== request.catalogId ||
-          !resolveCatalogSelection(
-            rechecked,
+          !still(
             sourceProvider,
-            pair
-              ? sourceProvider === 'codex'
-                ? request.codexModelId
-                : request.openCodeModelId
-              : request.modelId,
+            pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,
           ) ||
-          (pair &&
-            !resolveCatalogSelection(
-              rechecked,
-              sourceProvider === 'codex' ? 'opencode' : 'codex',
-              sourceProvider === 'codex' ? request.openCodeModelId : request.codexModelId,
-            ))
+          (pair && (!members || !still(members[1], terminalMcpPairModelId(request, members[1]))))
         )
           fail('catalog_changed');
       };

@@ -95,15 +95,58 @@ export const terminalBatchReplySchema = z
   });
 export type TerminalBatchRequest = z.infer<typeof terminalBatchRequestSchema>;
 export type TerminalBatchItem = z.infer<typeof terminalBatchItemSchema>;
-// Fresh bilateral opt-in only. Neither member, model nor direction is inferred.
-export const terminalMcpPairRequestSchema = z.strictObject({
-  action: z.literal('create-mcp-pair'),
-  ...scope,
-  catalogId: digest,
-  sourceProvider: z.enum(['codex', 'opencode']),
-  codexModelId: digest,
-  openCodeModelId: digest,
-});
+const mcpPairModelKeys = {
+  codex: 'codexModelId',
+  opencode: 'openCodeModelId',
+  claude: 'claudeModelId',
+} as const;
+/** The two members of an MCP pair: source first. Without workerProvider (the original
+ * shape) the pair is Codex/OpenCode in either direction. */
+export function terminalMcpPairMembers(request: {
+  sourceProvider: 'codex' | 'opencode' | 'claude';
+  workerProvider?: 'codex' | 'opencode' | 'claude' | undefined;
+}): ['codex' | 'opencode' | 'claude', 'codex' | 'opencode' | 'claude'] | null {
+  const worker =
+    request.workerProvider ??
+    (request.sourceProvider === 'codex'
+      ? 'opencode'
+      : request.sourceProvider === 'opencode'
+        ? 'codex'
+        : undefined);
+  if (!worker || worker === request.sourceProvider) return null;
+  return [request.sourceProvider, worker];
+}
+export function terminalMcpPairModelId(
+  request: { codexModelId?: string; openCodeModelId?: string; claudeModelId?: string },
+  provider: 'codex' | 'opencode' | 'claude',
+): string | undefined {
+  return request[mcpPairModelKeys[provider]];
+}
+// Fresh bilateral opt-in only. Neither member, model nor direction is inferred: each
+// member carries exactly its own model id, and no other model id is accepted.
+export const terminalMcpPairRequestSchema = z
+  .strictObject({
+    action: z.literal('create-mcp-pair'),
+    ...scope,
+    catalogId: digest,
+    sourceProvider: z.enum(['codex', 'opencode', 'claude']),
+    workerProvider: z.enum(['codex', 'opencode', 'claude']).optional(),
+    codexModelId: digest.optional(),
+    openCodeModelId: digest.optional(),
+    claudeModelId: digest.optional(),
+  })
+  .superRefine((request, context) => {
+    const members = terminalMcpPairMembers(request);
+    if (!members) {
+      context.addIssue({ code: 'custom', message: 'Two distinct pair members required' });
+      return;
+    }
+    for (const provider of ['codex', 'opencode', 'claude'] as const) {
+      const member = members.includes(provider);
+      if (member !== (terminalMcpPairModelId(request, provider) !== undefined))
+        context.addIssue({ code: 'custom', message: 'Exactly one model id per member' });
+    }
+  });
 export const terminalPreparationCatalogSchema = z.strictObject({
   contractVersion: z.literal(1),
   pendingOwnedExits: z

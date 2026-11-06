@@ -219,3 +219,15 @@ no-factory/session-collision gates. Optional strict MCP excludes other definitio
 project/enterprise approval can still block startup. This has synthetic process
 evidence only, with no native login, MCP or inference acceptance. The external
 observation descriptor above remains entirely false.
+
+## Claude 2.1.318 strict MCP launch — 2026-11-06
+
+Owner decision: the reviewed Claude 2.1.318 TUI binary
+(`677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d`) may also take the
+strict per-invocation MCP launch, beside the 2.1.178 pin. Its local `--help` lists the same
+`--strict-mcp-config` ("Only use MCP servers from --mcp-config, ignoring all other MCP
+configurations"), `--mcp-config <configs...>` and `--session-id <uuid>` options. Owned hooks
+remain exclusive with MCP. The MCP pair request accepts Claude only with an explicit
+`workerProvider` and `claudeModelId`; the original Codex/OpenCode shape is unchanged.
+Implemented and unit-tested (`reviewedClaudeMcpBinaries`, pair contract); provider and
+native acceptance are not run.

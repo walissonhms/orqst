@@ -31,7 +31,10 @@ import {
   validateOpenCodeSelection,
   validateManagedOpenCodeConfig,
 } from '../../../packages/core/src/terminal/opencode-profile.js';
-import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
+import {
+  reviewedClaudeMcpBinaries,
+  reviewedProviderMcpBinaries,
+} from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import {
   localCliPathDirectories,
   legacyTerminalPath,
@@ -93,12 +96,15 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   const members = Array.from({ length: count }, (_, index) =>
     index === 1 && input.companion ? input.companion : input,
   );
+  // Mixed providers exist only as the explicit MCP pair: two distinct reviewed CLIs.
   if (
     input.companion &&
     (count !== 2 ||
-      [input.provider, input.companion.provider].sort().join(',') !== 'codex,opencode')
+      input.provider === input.companion.provider ||
+      (!input.mcp &&
+        [input.provider, input.companion.provider].sort().join(',') !== 'codex,opencode'))
   )
-    throw new Error('Only the reviewed Codex/OpenCode pair can mix providers');
+    throw new Error('Only an explicit MCP pair of two distinct CLIs can mix providers');
   if (input.openCodeStartupAuthorized && !members.some(({ provider }) => provider === 'opencode'))
     throw new Error('OpenCode startup consent is provider-specific');
   terminalDirectory(input.project);
@@ -165,7 +171,10 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       });
     }
     if (provider === 'claude') {
-      const pin = input.mcp ? reviewedProviderMcpBinaries.claude : reviewedClaudeTuiBinary;
+      const pin = input.mcp
+        ? (reviewedClaudeMcpBinaries.find((binary) => binary.sha256 === executable.sha256) ??
+          reviewedProviderMcpBinaries.claude)
+        : reviewedClaudeTuiBinary;
       if (executable.sha256 !== pin.sha256)
         throw new Error(
           input.mcp

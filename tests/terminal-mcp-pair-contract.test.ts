@@ -2,7 +2,11 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import test from 'node:test';
-import { terminalMcpPairRequestSchema, tauriStudioRequestSchema } from '@orqst/protocol';
+import {
+  terminalMcpPairMembers,
+  terminalMcpPairRequestSchema,
+  tauriStudioRequestSchema,
+} from '@orqst/protocol';
 import { createTauriStudioClient } from '../apps/tauri/src/studio-bridge.js';
 import { McpTaskBroker } from '../packages/core/src/terminal/mcp-task.js';
 import {
@@ -174,3 +178,38 @@ for (const fault of ['expiry', 'ownership', 'disconnect'] as const) {
     }
   });
 }
+
+test('MCP pair contract: Claude joins only with an explicit worker and its own model id', () => {
+  const base = {
+    action: 'create-mcp-pair' as const,
+    workspaceId: 'a'.repeat(64),
+    featureId: null,
+    catalogId: 'b'.repeat(64),
+  };
+  const claude = {
+    ...base,
+    sourceProvider: 'claude' as const,
+    workerProvider: 'codex' as const,
+    claudeModelId: 'c'.repeat(64),
+    codexModelId: 'd'.repeat(64),
+  };
+  assert.ok(terminalMcpPairRequestSchema.safeParse(claude).success);
+  assert.deepEqual(terminalMcpPairMembers(claude), ['claude', 'codex']);
+  // The original Codex/OpenCode shape stays valid in both directions.
+  const legacy = {
+    ...base,
+    sourceProvider: 'opencode' as const,
+    codexModelId: 'd'.repeat(64),
+    openCodeModelId: 'e'.repeat(64),
+  };
+  assert.ok(terminalMcpPairRequestSchema.safeParse(legacy).success);
+  assert.deepEqual(terminalMcpPairMembers(legacy), ['opencode', 'codex']);
+  for (const invalid of [
+    { ...claude, workerProvider: undefined },
+    { ...claude, workerProvider: 'claude' },
+    { ...claude, openCodeModelId: 'e'.repeat(64) },
+    { ...claude, claudeModelId: undefined },
+    { ...legacy, claudeModelId: 'c'.repeat(64) },
+  ])
+    assert.equal(terminalMcpPairRequestSchema.safeParse(invalid).success, false);
+});

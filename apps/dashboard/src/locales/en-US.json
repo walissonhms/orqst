@@ -1020,6 +1020,7 @@
       "enrollmentLimit": "Additional selected terminals join the same running Core. A rejected or uncertain addition preserves earlier terminals; an uncertain result blocks further additions.",
       "mcpPairOptIn": "Prepare an experimental Codex/OpenCode communication pair",
       "mcpPairHelp": "{{source}} is the source; {{worker}} is the worker. Choose both models and review both native configurations. Then authorize one MCP task in the native Managed Terminal menu. Ask the worker to use wait_task and submit_result, and the source to use delegate_task. Opening sends no task; CLI tool support and effective models remain unverified. N-member and Feature delegation remain pending.",
+      "mcpWorkerProvider": "Worker CLI",
       "mcpWorkerModel": "{{provider}} worker model",
       "mcpInitialOnly": "Communication pairs require a fresh initial selection. Adding MCP to an existing Core is unavailable.",
       "openMcpPair": "Review and open communication pair"

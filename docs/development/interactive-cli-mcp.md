@@ -43,6 +43,12 @@ notification, ping, tools/list and tools/call. Other versions/extensions are not
 accepted as compatible. It supports neither resources, prompts, sampling, roots,
 elicitation, task extensions, push channels nor reconnection.
 
+Update 2026-11-06: notifications other than the first `notifications/initialized`
+(for example `notifications/cancelled`, progress or a repeated initialized) are ignored:
+no response, no relay stop and no replay. Malformed frames, broken JSON, repeated ids and
+size limits still stop the relay. `tools/list` still lists the role's tools without a
+grant (the relay receives no grant state); calls without a grant keep failing closed.
+
 ## Grant and task lifecycle
 
 A trusted native composition must supply distinct owned instance UUIDs, a workspace
