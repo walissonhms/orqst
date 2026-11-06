@@ -65,6 +65,8 @@ export function FeatureWorkspace({
   // Provider-reported limits only; the panel stays hidden until the host reports some.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
   const [limitsOpen, setLimitsOpen] = useState(false);
+  /** Last refused native frame, shown so a hidden terminal is never silent. */
+  const [arrangeIssue, setArrangeIssue] = useState('');
   // Proven pair communication only; events older than the view are history, not new effects.
   const [communication, setCommunication] = useState<
     {
@@ -213,16 +215,38 @@ export function FeatureWorkspace({
       const memberIds = live.slots
         .filter((slot) => terminals.some((terminal) => terminal.id === slot.terminalId))
         .map((slot) => slot.terminalId);
-      void native
-        .arrange({
-          ...arrangeRequest(live, memberIds, layout, mode, viewport, chrome),
+      const send = (snapshotNow: FeatureNativeSnapshot, retry: boolean) =>
+        native.arrange!({
+          ...arrangeRequest(snapshotNow, memberIds, layout, mode, viewport, chrome),
           contractVersion: 1,
-          generation: live.generation,
+          generation: snapshotNow.generation,
         })
-        .catch(() => setNotice('unavailable'));
+          .then((reply) => {
+            if (reply.status === 'ok') {
+              setArrangeIssue('');
+              return;
+            }
+            // A newer generation hides the views until a matching frame: resend once with it.
+            if (retry && reply.snapshot && reply.snapshot.generation !== snapshotNow.generation) {
+              current.current = reply.snapshot;
+              setSnapshot(reply.snapshot);
+              void send(reply.snapshot, false);
+              return;
+            }
+            if (reply.status !== 'busy') setArrangeIssue(reply.status);
+          })
+          .catch(() => setArrangeIssue('unavailable'));
+      void send(live, true);
     },
     [native, terminals],
   );
+  // Native hides terminal views on every new generation until a matching frame arrives,
+  // so the last arrangement is sent again whenever the generation changes.
+  const generation = snapshot?.generation;
+  useEffect(() => {
+    if (generation === undefined || !arranging.current) return;
+    arrange(arranging.current.layout, arranging.current.mode);
+  }, [generation, arrange]);
 
   useEffect(() => {
     try {
@@ -872,30 +896,37 @@ export function FeatureWorkspace({
               ) : undefined
             }
             toolbarEnd={
-              limits.length > 0 ? (
-                <AccountLimits
-                  accounts={limits}
-                  shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
-                  caps={limitPrefs.caps}
-                  now={now}
-                  source={t('accountLimits.sourceApp')}
-                  onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
-                  onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
-                  onOpenChange={setLimitsOpen}
-                  onRefresh={(accountId) =>
-                    void request({ action: 'accountLimits', command: 'refresh', accountId })
-                  }
-                  onToggleLock={(accountId) =>
-                    void request({
-                      action: 'accountLimits',
-                      command: limits.find((entry) => entry.id === accountId)?.locked
-                        ? 'unlock'
-                        : 'lock',
-                      accountId,
-                    })
-                  }
-                />
-              ) : undefined
+              <>
+                {arrangeIssue && (
+                  <span className="ts-arrange-issue" role="status">
+                    {t('terminalStudio.arrangeIssue', { status: arrangeIssue })}
+                  </span>
+                )}
+                {limits.length > 0 ? (
+                  <AccountLimits
+                    accounts={limits}
+                    shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
+                    caps={limitPrefs.caps}
+                    now={now}
+                    source={t('accountLimits.sourceApp')}
+                    onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
+                    onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
+                    onOpenChange={setLimitsOpen}
+                    onRefresh={(accountId) =>
+                      void request({ action: 'accountLimits', command: 'refresh', accountId })
+                    }
+                    onToggleLock={(accountId) =>
+                      void request({
+                        action: 'accountLimits',
+                        command: limits.find((entry) => entry.id === accountId)?.locked
+                          ? 'unlock'
+                          : 'lock',
+                        accountId,
+                      })
+                    }
+                  />
+                ) : null}
+              </>
             }
             // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
             onClose={() => 'minimize' as const}

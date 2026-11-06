@@ -675,3 +675,12 @@
   background: var(--orqst-elevated);
   color: var(--orqst-text);
 }
+
+.ts-arrange-issue {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--orqst-warning-soft);
+  color: var(--orqst-warning);
+  font-size: 11px;
+  white-space: nowrap;
+}

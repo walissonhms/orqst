@@ -1492,7 +1492,8 @@
       "possibleEffects": "Confira a área de terminais antes de tentar de novo."
     },
     "showUnassigned_one": "Mostrar o {{count}} terminal sem Feature",
-    "showUnassigned_other": "Mostrar os {{count}} terminais sem Feature"
+    "showUnassigned_other": "Mostrar os {{count}} terminais sem Feature",
+    "arrangeIssue": "Terminal não exibido ({{status}}); tentando de novo"
   },
   "overviewPage": {
     "title": "Visão geral",

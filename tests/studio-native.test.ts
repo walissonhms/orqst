@@ -164,9 +164,11 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
         import en from './src/locales/en-US.json';
         window.startFixture = async (snapshot) => {
           window.arrangeFrames = [];
+          window.generation = snapshot.generation;
           window.orqstFeatures = {
             contractVersion: 1,
-            request: async () => ({ status: 'ok', snapshot }),
+            // Each read may carry a newer generation, as the native host does.
+            request: async () => ({ status: 'ok', snapshot: { ...snapshot, generation: window.generation } }),
             arrange: async (input) => { window.arrangeFrames.push(input); return { status: 'ok', snapshot }; },
           };
           const i18n = createInstance();
@@ -262,6 +264,17 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
       const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
       return list.at(-1)!.panes.every((pane) => pane.visible);
     });
+    // A new native generation hides the views; the Studio must resend its frame with it.
+    await page.evaluate(() => Reflect.set(window, 'generation', 9));
+    await page.waitForFunction(
+      () => {
+        const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
+        const last = list.at(-1)!;
+        return last.generation === 9 && last.panes.every((pane) => pane.visible);
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
     await page.close();
   } finally {
     await browser.close();
