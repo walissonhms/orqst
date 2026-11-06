@@ -1211,6 +1211,7 @@
     "busy": "Another owned operation is busy. Try Quit again.",
     "denied": "The owned shutdown was denied. The app stays open.",
     "retirement": "The owned retirement was not confirmed. The app stays open.",
+    "closing": "Closing the owned terminals… this can take up to a minute.",
     "fence": "Shutting down: terminals are read-only. Try Quit again to finish.",
     "retry": "Use Quit again; the same shutdown is retried without a second signal.",
     "host_lost": "The terminal host was lost without an exit receipt. The state is preserved; Quit cannot finish.",

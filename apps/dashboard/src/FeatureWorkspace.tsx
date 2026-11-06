@@ -135,6 +135,8 @@ export function FeatureWorkspace({
   } | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
+  // Native announces Quit as soon as it starts closing the owned terminals.
+  const [quitClosing, setQuitClosing] = useState(false);
   const [quitFence, setQuitFence] = useState(false);
   const [editor, setEditor] = useState<WorkspaceFeature | 'new' | null>(null);
   const [name, setName] = useState('');
@@ -415,15 +417,26 @@ export function FeatureWorkspace({
     };
   }, [canvas, native, request, nativeWorkspace, studio, hasSnapshot]);
   useEffect(() => {
-    const blocked = (event: Event) =>
+    const blocked = (event: Event) => {
+      setQuitClosing(false);
       setQuitWait(quitBlocked((event as CustomEvent<unknown>).detail));
-    const fenced = (event: Event) =>
-      setQuitFence(Boolean((event as CustomEvent<{ fence?: boolean }>).detail?.fence));
+    };
+    const fenced = (event: Event) => {
+      const fence = Boolean((event as CustomEvent<{ fence?: boolean }>).detail?.fence);
+      if (!fence) setQuitClosing(false);
+      setQuitFence(fence);
+    };
+    const closing = () => {
+      setQuitWait(null);
+      setQuitClosing(true);
+    };
     window.addEventListener('orqst-quit-blocked', blocked);
     window.addEventListener('orqst-terminal-fence', fenced);
+    window.addEventListener('orqst-quit-closing', closing);
     return () => {
       window.removeEventListener('orqst-quit-blocked', blocked);
       window.removeEventListener('orqst-terminal-fence', fenced);
+      window.removeEventListener('orqst-quit-closing', closing);
     };
   }, []);
   useEffect(() => {
@@ -1186,9 +1199,17 @@ export function FeatureWorkspace({
           </footer>
         </>
       )}
-      {(quitWait || quitFence) && (
+      {(quitWait || quitFence || quitClosing) && (
         <div className="quit-blocked" role="alert">
-          <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
+          <strong>
+            {t(
+              quitFence
+                ? 'quitBlocked.fence'
+                : quitWait
+                  ? 'quitBlocked.title'
+                  : 'quitBlocked.closing',
+            )}
+          </strong>
           {quitWait && (
             <>
               <span>{t(`quitBlocked.${quitWait.reason}`)}</span>

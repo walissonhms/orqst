@@ -62,6 +62,8 @@ impl ExitPort for NativePorts {
     }
 
     fn start_owned_shutdown(&self) {
+        // Feedback only: the owner sees at once that Quit is closing the owned terminals.
+        crate::terminal::quit_event(&self.0, "orqst-quit-closing", json!({}));
         let ports = Self(self.0.clone());
         tauri::async_runtime::spawn(async move {
             QUIT.quit_owned(&ports, &ports, &ports).await;
