@@ -1,5 +1,23 @@
 # Native terminal client boundary
 
+## Studio readiness and hidden geometry — 2026-11-05
+
+A snapshot can return `unavailable` before a terminal Core exists, `busy` during
+metadata/enrollment, or be invalidated by a native generation change. Callers must
+refresh read-only snapshots after those states; this is not permission to replay
+creation or any mutation. The native host initializes the facade before ready.
+
+The native Studio requires the existing `arrange` with `layoutVersion: 2` and
+validated chrome, viewport, exact owned slots and current generation. Before the
+first valid arrangement, or after context/generation invalidation, PTY views are
+hidden with no keyboard focus request. Rejected arrangements never reveal default
+v1 rectangles. Rust enforces this independently of Node. The full-window chrome
+can remain visible while loading and receives focus only in the already-focused
+main window, so arrange still passes the actual first-responder check. No PTY
+input is granted; hiding does not stop or terminate a process.
+Standalone legacy layout producers retain their existing behavior. No API shape
+or authority is added. Native/provider acceptance remains separate.
+
 ## Feature orchestrator label — 2026-11-05
 
 Feature snapshots may include `features[].orchestratorTerminalId: UUID | null`.

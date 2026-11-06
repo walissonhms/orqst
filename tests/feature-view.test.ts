@@ -1052,3 +1052,39 @@ test('permission saves distinguish real CAS conflict, confirmed refusal and post
     f.close();
   }
 });
+
+// SYNTHETIC startup/opening contention, not acceptance of a native provider.
+test('initial unavailable and busy snapshots recover once owned initialization/presentation ends', async () => {
+  const f = fixture();
+  try {
+    assert.equal((await f.request({ action: 'snapshot' })).status, 'unavailable');
+    await f.service.initialize();
+    assert.equal((await f.request({ action: 'snapshot' })).status, 'ok');
+    const list = f.core.features.list;
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    f.core.features.list = async () => {
+      entered();
+      await blocked;
+      return list();
+    };
+    const enrolled = f.service.enrolled(0, f.layout.presentationRevision());
+    await waiting;
+    assert.equal((await f.request({ action: 'snapshot' })).status, 'busy');
+    release();
+    assert.equal(await enrolled, true);
+    f.core.features.list = list;
+    const reply = await f.request({ action: 'snapshot' });
+    assert.equal(reply.status, 'ok');
+    assert.equal(reply.snapshot!.slots.length, 6);
+    assert.equal(reply.snapshot!.generation, 1);
+  } finally {
+    f.close();
+  }
+});

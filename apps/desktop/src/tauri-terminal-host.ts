@@ -115,6 +115,7 @@ async function start() {
     (slot) => {
       void service.receive({ kind: 'revoke', slot }).catch(shutdown);
     },
+    true, // Studio PTYs remain hidden until a current renderer arrange v2.
   );
   const features = new TauriFeatureService(
     core,

@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Studio readiness barrier — 2026-11-05 (source increment)
+
+Native Studio panes stay hidden until a valid renderer arrange v2, including
+startup and context/generation changes. A first unavailable snapshot before Core
+startup is expected; the renderer retries read-only snapshots. Native/provider
+acceptance remains pending. See the [contract](docs/api/terminal-native.md#studio-readiness-and-hidden-geometry--2026-11-05).
+
 ## Owned Claude metadata hooks — 2026-11-05 (source candidate)
 
 New owned Claude TUI manifests add a private additional settings file for prompt,

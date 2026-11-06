@@ -1,5 +1,44 @@
 # V6 terminal chrome reuse review — 2026-11-04
 
+## Studio first-snapshot and geometry barrier — 2026-11-05
+
+Source investigation of owner-tested `467c400` and renderer correction `d46e2dd`:
+`main.rs` installs `feature-workspace` even when there is no selected terminal
+Core. `features::feature_request` returns `unavailable` at `metadata_context(None)`
+in that state. The first read is therefore not a readiness signal. During owned
+creation, enrollment/metadata contention can also return `busy`, and generation
+changes invalidate in-flight reads. `tauri-terminal-host.ts` awaits
+`features.initialize()` before sending ready and reading requests; an ordinary
+post-ready snapshot is not blocked by `initialized=false`. The renderer previously
+started refresh only after a successful snapshot; its owner-supplied retry fixes
+that liveness defect. A synthetic test reproduces unavailable-before-initialize,
+busy-during-enrollment, and a valid snapshot after presentation completes.
+
+The old native path independently let `context()`/`open()` clear arrangement and
+publish default 155/81 grid rectangles. Rust accepted those before any snapshot,
+so the PTY covered the waiting Studio. The native Studio producer now withholds
+all PTY rectangles/focus until an arrange v2 for its current context. Generation
+changes publish hidden geometry immediately; Rust additionally suppresses legacy
+Studio bounds and hides retained panes at native view-generation transitions.
+Processes, membership, saved shown preferences, admission and input fences stay
+owned by the existing services. The whole frame is still validated before use.
+
+This is a source-backed mechanism and synthetic regression, not a reconstruction
+of the exact old invocation: the retained diagnostics lack snapshot status traces,
+and app_observe/app_diag are unavailable in this tool session. No app/provider was
+opened for this investigation. Native owner acceptance remains required.
+
+Re-inspected pinned Anywh `TerminalPanel.tsx` (`TerminalPanel`, conditional mount
+and retained tabs), `TabGroupLayout.tsx`, architecture/Agent Host/runtime docs and
+LICENSE at `546f189c04415c3c5af5f40e3931a0a90b9aba31` (permanent links below).
+It uses React panel mounting, relay/WS detach and tmux retention, not retained
+Tauri sibling NSViews or ORQST's native presentation generations. Dependencies
+include React, relayClient, SessionPanel and PaneTabStrip. Apache-2.0, no root
+NOTICE; no code/assets/dependencies incorporated. Decision: keep and narrowly fix
+ORQST's existing generation-fenced layout; copying the panel would not enforce
+native hiding. Tucano communication and Overclock visual references introduce no
+applicable native geometry implementation or new reuse in this fix.
+
 ## Versioned Studio geometry — 2026-11-05
 
 Re-inspected Anywh [TerminalPanel](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/client/src/components/terminal/TerminalPanel.tsx)

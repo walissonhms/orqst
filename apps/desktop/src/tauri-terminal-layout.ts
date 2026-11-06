@@ -40,6 +40,7 @@ export class TauriTerminalLayout {
     },
     private readonly send: (value: object) => void,
     private readonly revoke: (slot: number) => void,
+    private readonly studio = false,
   ) {
     this.state = preferences.initial ?? {
       axis: 'columns',
@@ -79,7 +80,7 @@ export class TauriTerminalLayout {
       shown: [...this.state.shown],
       names: [...this.state.names],
       visible:
-        this.suspended || this.canvas
+        this.suspended || this.canvas || (this.studio && this.chrome && !this.arrangement)
           ? []
           : this.arrangement
             ? this.arrangement.panes
@@ -122,7 +123,7 @@ export class TauriTerminalLayout {
       viewport: { width: this.width, height: this.height },
       state,
       insets: { left, top, bottom },
-      focus,
+      focus: focus !== null && state.visible.includes(focus) ? focus : null,
       bounds: Array.from({ length: this.count }, (_, slot) => {
         const position = state.visible.indexOf(slot);
         const placement = custom?.panes.find((pane) => pane.slot === slot);
@@ -181,7 +182,12 @@ export class TauriTerminalLayout {
 
   /** Apply geometry only, keeping the retained PTYs and their process ownership unchanged. */
   arrange(input: Arrangement): boolean {
-    if (this.suspended || !this.chrome || !featureNativeRequestSchema.safeParse(input).success)
+    if (
+      this.suspended ||
+      !this.chrome ||
+      (this.studio && input.layoutVersion !== 2) ||
+      !featureNativeRequestSchema.safeParse(input).success
+    )
       return false;
     const requestedChrome = input.layoutVersion === 2 ? input.chrome : undefined;
     const left = requestedChrome?.sidebar ?? (this.width <= 720 ? 46 : 155);
@@ -296,6 +302,11 @@ export class TauriTerminalLayout {
     this.nativeGeneration = generation;
     this.arrangement = undefined;
     this.presentation++;
+    // A new native fence invalidates every old Studio rectangle immediately.
+    if (this.studio && this.chrome) {
+      for (let slot = 0; slot < this.count; slot++) this.revoke(slot);
+      this.publish();
+    }
   }
 
   presentationRevision(): number {

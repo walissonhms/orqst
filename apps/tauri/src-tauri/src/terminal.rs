@@ -270,7 +270,35 @@ pub(crate) fn metadata_view_begin(app: &tauri::AppHandle) -> Option<u64> {
     let mut guard = state.0.lock().unwrap();
     let r = guard.as_mut()?;
     advance_layout(r);
-    Some(r.layout_generation)
+    let generation = r.layout_generation;
+    let epoch = r.epoch.clone();
+    let revision = r.layout_revision;
+    r.layout["visible"] = json!([]);
+    drop(guard);
+    // Do not leave old sibling PTYs above a Studio waiting for its first snapshot.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        crate::renderer::present(|| {
+            let count = {
+                let state = handle.state::<Terminals>();
+                let guard = state.0.lock().unwrap();
+                let Some(r) = guard.as_ref().filter(|r| {
+                    r.epoch == epoch
+                        && r.layout_generation == generation
+                        && r.layout_revision == revision
+                }) else {
+                    return;
+                };
+                r.documents.len()
+            };
+            for slot in 0..count {
+                if let Some(view) = handle.get_webview(&format!("terminal-{slot}")) {
+                    let _ = view.hide();
+                }
+            }
+        });
+    });
+    Some(generation)
 }
 
 pub(crate) fn owned_notification_current(
@@ -1905,6 +1933,12 @@ mod arrangement_order_tests {
         );
     }
 }
+// Retained native Studio documents must never fall back to the old 155/81 grid.
+fn studio_geometry_ready(value: &Value) -> bool {
+    value["state"]["workspaceChrome"] != true
+        || (value["kind"] == "layout-v2" && value["arrangementVersion"] == 2)
+}
+
 fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     if presentation_blocked(app) {
         return;
@@ -1916,7 +1950,12 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         return;
     };
     let logical = size.to_logical::<u32>(scale);
-    let state = &value["state"];
+    let geometry_ready = studio_geometry_ready(value);
+    let mut state = value["state"].clone();
+    if !geometry_ready {
+        state["visible"] = json!([]);
+    }
+    let state = &state;
     {
         let terminal = app.state::<Terminals>();
         let mut guard = terminal.0.lock().unwrap();
@@ -1956,6 +1995,15 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             // Visible terminals are raised afterwards, outside the summary canvas transform.
             raise_surface(&chrome);
             let _ = chrome.show();
+            // Arrange still requires the actual chrome first responder. When native
+            // opening has only hidden PTYs, focus the visible Studio, never a PTY.
+            if !geometry_ready
+                && window.is_focused().unwrap_or(false)
+                && !presentation_blocked(app)
+                && metadata_generation(app) == value["generation"].as_u64()
+            {
+                let _ = chrome.set_focus();
+            }
         } else {
             let _ = chrome.hide();
         }
@@ -1965,7 +2013,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
             continue;
         };
-        if bound["rect"].is_null() || !show {
+        if bound["rect"].is_null() || !show || !geometry_ready {
             revoke(app, slot as usize, false);
             let _ = view.hide();
         } else {
@@ -1990,6 +2038,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         ));
     }
     if show
+        && geometry_ready
         && !presentation_blocked(app)
         && metadata_generation(app) == value["generation"].as_u64()
     {
@@ -3803,6 +3852,19 @@ mod feature_membership_tests {
             "features":[{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"name":"Feature", "description":"", "status":"active", "revision":1,"terminalIds":[a],"createdAt":1,"updatedAt":1}],
             "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
             "activeFeatureId":f,"slots":[{"slot":0,"terminalId":a,"provider":"codex"},{"slot":1,"terminalId":b,"provider":"opencode"}],"layoutSaved":true})
+    }
+    #[test]
+    fn studio_never_shows_legacy_geometry_while_snapshot_or_arrange_is_missing() {
+        let mut value = json!({"kind":"layout", "state":{"workspaceChrome":true}});
+        assert!(!studio_geometry_ready(&value));
+        value["kind"] = json!("layout-v2");
+        assert!(!studio_geometry_ready(&value)); // Explicit v1 is still not Studio v2.
+        value["arrangementVersion"] = json!(2);
+        assert!(studio_geometry_ready(&value)); // Full validation is separate and still required.
+        value["kind"] = json!("layout");
+        assert!(!studio_geometry_ready(&value));
+        value["state"]["workspaceChrome"] = json!(false);
+        assert!(studio_geometry_ready(&value)); // Standalone legacy documents retain compatibility.
     }
     #[test]
     fn selected_empty_and_unassigned_contexts_do_not_adopt_other_terminals() {

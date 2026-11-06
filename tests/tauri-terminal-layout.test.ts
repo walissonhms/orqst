@@ -15,7 +15,7 @@ import type {
 import type { FeatureNativeRequest } from '@orqst/protocol';
 import { featureNativeRequestSchema } from '@orqst/protocol';
 
-function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
+function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false, studio = false) {
   const messages: Array<{
     state: TerminalLayoutState;
     focus: number | null;
@@ -37,6 +37,7 @@ function fixture(count = 8, initial?: TerminalLayoutPreferences, fail = false) {
     },
     (value) => messages.push(value as (typeof messages)[number]),
     (slot) => revoked.push(slot),
+    studio,
   );
   return { layout, messages, revoked, saved: () => saved };
 }
@@ -499,4 +500,51 @@ test('private owned names persist while hidden without opening or focusing a pan
   assert.equal(f.layout.nameOwned(0, 'bad\nname'), false);
   assert.equal(f.layout.nameOwned(0, 'x'.repeat(49)), false);
   assert.equal(f.messages.at(-1)!.focus, null);
+});
+
+// SYNTHETIC Studio startup: no Core launch or real child webview.
+test('Studio hides before arrange v2 and after native/context fences without losing panes', () => {
+  const f = fixture(1, undefined, false, true);
+  f.layout.resize(1440, 900);
+  f.layout.context(f.layout.snapshot(), () => {});
+  assert.equal(f.layout.open(0), true);
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.deepEqual(f.layout.snapshot().order, [0]);
+  assert.deepEqual(f.layout.snapshot().shown, [0]);
+  assert.equal(f.messages.at(-1)!.focus, null);
+  assert.ok(f.messages.at(-1)!.bounds.every((bound) => bound.rect === null));
+  const input: Extract<FeatureNativeRequest, { action: 'arrange' }> = {
+    contractVersion: 1,
+    action: 'arrange',
+    generation: 0,
+    layoutVersion: 2,
+    chrome: { sidebar: 0, top: 36, bottom: 34 },
+    mode: 'mosaic',
+    viewport: { width: 1440, height: 830 },
+    panes: [
+      {
+        slot: 0,
+        terminalId: randomUUID(),
+        visible: true,
+        z: 0,
+        rect: { x: 0, y: 0, width: 1440, height: 830 },
+      },
+    ],
+  };
+  assert.equal(f.layout.arrange({ ...input, viewport: { width: 1, height: 1 } }), false);
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.equal(f.layout.arrange({ ...input, layoutVersion: 1, chrome: undefined }), false);
+  assert.equal(f.layout.arrange(input), true);
+  assert.deepEqual(f.layout.snapshot().visible, [0]);
+  assert.deepEqual(f.messages.at(-1)!.bounds[0]!.rect, { x: 0, y: 36, width: 1440, height: 830 });
+  const before = f.messages.length;
+  f.layout.setNativeGeneration(1);
+  assert.ok(f.messages.length > before);
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.ok(f.messages.at(-1)!.bounds.every((bound) => bound.rect === null));
+  assert.equal(f.layout.arrange(input), true);
+  f.layout.context(f.layout.snapshot(), () => {});
+  assert.deepEqual(f.layout.snapshot().visible, []);
+  assert.deepEqual(f.layout.snapshot().shown, [0]);
+  assert.ok(f.revoked.includes(0));
 });

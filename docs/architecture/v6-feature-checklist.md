@@ -1292,3 +1292,12 @@ The build used approximately 24 GiB free beforehand and reported 26.08 GiB free
 after packaging; this is a filesystem observation, not attribution of reclaimed
 space to this delivery. Known nonfatal debug-strip/chunk-size advisories remain in
 its logs. Captures, logs, generated bundles and hashes remain local artifacts.
+
+## Studio first-arrange barrier — 2026-11-05
+
+- [x] Reproduce initial unavailable/busy snapshots and recovery in synthetic facade tests.
+- [x] Preserve Studio PTYs hidden before arrange v2 and after context/generation changes.
+- [x] Native fallback guard, immediate view-transition hide, unchanged ownership/input fences.
+- [ ] Owner native/provider acceptance of opening, tabs and full-window Studio geometry.
+
+See [source investigation and research](../research/v6-terminal-chrome.md#studio-first-snapshot-and-geometry-barrier--2026-11-05).
