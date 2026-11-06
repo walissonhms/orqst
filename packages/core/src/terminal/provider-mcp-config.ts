@@ -98,7 +98,7 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
     blockers: [
       ...commonBlockers,
       'strict_mcp_exclusion_requires_acknowledgment',
-      'strict_project_mcp_approval_can_still_block_2_1_178',
+      'strict_project_mcp_approval_can_still_block_claude',
     ],
   };
 }

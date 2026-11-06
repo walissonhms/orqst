@@ -48,7 +48,7 @@ test('Claude 2.1.178 configuration uses evidenced strict inline MCP/session flag
     'ORQST_SOCKET_PATH',
   ]);
   assert.deepEqual(plan.environmentOverrides, { MCP_TIMEOUT: '10000', MCP_TOOL_TIMEOUT: '125000' });
-  assert.ok(plan.blockers.includes('strict_project_mcp_approval_can_still_block_2_1_178'));
+  assert.ok(plan.blockers.includes('strict_project_mcp_approval_can_still_block_claude'));
   assert.equal(plan.execution, 'blocked');
   assert.equal(plan.providerAcceptance, 'not_run');
   assert.throws(() => claudeInteractiveMcpConfiguration(fixture('claude')));

@@ -3279,7 +3279,7 @@ pub(crate) fn valid_layout(
         (
             v["insets"]["left"].as_u64().unwrap() as u32,
             v["insets"]["top"].as_u64().unwrap() as u32,
-            34,
+            v["insets"]["bottom"].as_u64().unwrap() as u32,
         )
     } else {
         (
@@ -3471,6 +3471,14 @@ mod layout_tests {
             {"slot":1,"z":1,"rect":{"x":720,"y":36,"width":720,"height":830}}
         ]);
         assert!(valid_layout(&value, 2, 1440, 900, 2, 2));
+        // Preview sizes: 47px toolbar and 38px dock (viewport 900 - 85).
+        let mut preview = value.clone();
+        preview["insets"] = json!({"left":0,"top":47,"bottom":38});
+        preview["bounds"] = json!([
+            {"slot":0,"z":0,"rect":{"x":0,"y":47,"width":720,"height":815}},
+            {"slot":1,"z":1,"rect":{"x":720,"y":47,"width":720,"height":815}}
+        ]);
+        assert!(valid_layout(&preview, 2, 1440, 900, 2, 2));
         value["insets"]["top"] = json!(37);
         assert!(!valid_layout(&value, 2, 1440, 900, 2, 2));
         value["insets"]["top"] = json!(36);
