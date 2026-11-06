@@ -1,5 +1,37 @@
 # Native terminal client boundary
 
+## Studio generation notifications and polling — 2026-11-05
+
+`FeatureNativeSnapshot.generation` is the Core metadata/view revision counter;
+the existing `orqst-terminal-dock` DOM event has a separate `detail.generation`,
+the native layout/input presentation fence. Neither an ordinary `snapshot` poll
+nor a successful `arrange` advances either counter. A cancelled/invalidated native
+mutation may still advance the fence without changing SQLite; this revocation
+must not be relaxed to eliminate a visual retry.
+
+Every native fence advance/invalidation now schedules a dock notification directly
+for main and feature-workspace, independently of a later host layout frame being
+accepted. Its generation is current; geometry is hidden while waiting for a valid
+Studio arrangement. Obsolete epoch/generation callbacks are dropped. A callback
+that runs after a newer accepted layout in the same generation publishes current
+state without hiding that layout again. Metadata-only notification does not
+focus, resume, grant input, change membership or start a process. If a document is
+not yet loaded it still needs its initial snapshot/reconciliation; no event
+replay or native acceptance is claimed.
+
+An arrange whose facade generation is stale returns a validated snapshot. The
+Node presentation-change branch now also includes its current snapshot. Native
+security refusals and rejection of an obsolete out-of-order reply cannot promise
+a current snapshot: callers may re-read a passive snapshot and retry geometry
+once, under all existing document/focus/generation guards. Never replay creation.
+
+The preparation `catalog` uses the separate Studio helper, not the selected Core's
+feature facade. No Core is valid (`preparation_admission = None`); an active Core
+may cause `busy`/refusal during preparation, enrollment, review, full pool or
+changed admission identity/presentation/revision. Reading the catalog does not
+bypass those checks. A catalog failure is distinct from feature snapshot startup
+unavailability; the exact owner-reported invocation remains untraced.
+
 ## Studio readiness and hidden geometry — 2026-11-05
 
 A snapshot can return `unavailable` before a terminal Core exists, `busy` during

@@ -1321,3 +1321,13 @@ owner. PTYs receive no focus while waiting for arrange: the owned Open intent
 still requires actual PTY first responder and expires after 60 seconds; a click
 on the shown terminal may be needed. No input, admission or generation guard was
 relaxed to bypass that requirement.
+
+## Studio native fence reconciliation — 2026-11-05
+
+- [x] Source/test check: passive snapshot polling preserves both revision domains and geometry.
+- [x] Current native fence dock notification independent of host layout acceptance.
+- [x] Node stale arrange after presentation invalidation includes validated snapshot.
+- [x] Catalog path and transient refusal guards researched; no-Core catalog differs from facade startup.
+- [ ] Owner acceptance of retained PTY visibility, native event timing and guided new-terminal modal.
+
+See [polling/fence/catalog research](../research/v6-terminal-chrome.md#polling-native-fence-wake-up-and-catalog-review--2026-11-05).

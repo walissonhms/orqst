@@ -1,5 +1,13 @@
 # ORQST roadmap
 
+## Studio native fence reconciliation — 2026-11-05 (source)
+
+Native generation changes notify the Studio directly instead of depending on a
+later accepted host frame. Snapshot polling preserves generation/geometry; stale
+arrange recovery keeps existing authority checks. Catalog startup is a separate
+preparation flow with its own admission guards. Native/provider acceptance remains
+pending; see the [contract](docs/api/terminal-native.md#studio-generation-notifications-and-polling--2026-11-05).
+
 ## Studio readiness barrier — 2026-11-05 (source increment)
 
 Native Studio panes stay hidden until a valid renderer arrange v2, including

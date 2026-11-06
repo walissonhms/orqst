@@ -1088,3 +1088,104 @@ test('initial unavailable and busy snapshots recover once owned initialization/p
     f.close();
   }
 });
+
+// SYNTHETIC polling and stale-frame recovery; no native/provider acceptance.
+test('snapshot polling preserves metadata generation, presentation and accepted geometry', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    f.layout.resize(1440, 900);
+    f.layout.showCanvas();
+    const initial = await f.request({ action: 'snapshot' });
+    const frame = {
+      contractVersion: 1,
+      generation: initial.snapshot!.generation,
+      action: 'arrange',
+      layoutVersion: 2,
+      chrome: { sidebar: 0, top: 36, bottom: 34 },
+      mode: 'mosaic',
+      viewport: { width: 1440, height: 830 },
+      panes: f.ids.map((terminalId, slot) => ({
+        slot,
+        terminalId,
+        visible: slot === 0,
+        z: slot,
+        rect: slot === 0 ? { x: 0, y: 0, width: 1440, height: 830 } : null,
+      })),
+    };
+    const arranged = await f.service.request(frame);
+    assert.equal(arranged.status, 'ok');
+    assert.equal(arranged.snapshot!.generation, initial.snapshot!.generation);
+    const presentation = f.layout.presentationRevision();
+    const layout = f.layout.snapshot();
+    const messages = f.messages.length;
+    for (let index = 0; index < 8; index++) {
+      const reply = await f.request({ action: 'snapshot' });
+      assert.equal(reply.status, 'ok');
+      assert.equal(reply.snapshot!.generation, initial.snapshot!.generation);
+      assert.equal(f.layout.presentationRevision(), presentation);
+      assert.deepEqual(f.layout.snapshot(), layout);
+      assert.equal(f.messages.length, messages);
+    }
+    const stale = await f.service.request({ ...frame, generation: frame.generation + 1 });
+    assert.equal(stale.status, 'stale');
+    assert.equal(stale.snapshot!.generation, initial.snapshot!.generation);
+    assert.ok(featureNativeReplySchema.safeParse(stale).success);
+    assert.equal(f.messages.length, messages);
+  } finally {
+    f.close();
+  }
+});
+
+test('arrange invalidated during metadata read returns stale with the current snapshot, no geometry', async () => {
+  const f = fixture();
+  try {
+    await f.service.initialize();
+    f.layout.showCanvas();
+    const list = f.core.features.list;
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    f.core.features.list = async () => {
+      entered();
+      await blocked;
+      return list();
+    };
+    const pending = f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'arrange',
+      layoutVersion: 2,
+      chrome: { sidebar: 0, top: 36, bottom: 34 },
+      mode: 'list',
+      viewport: { width: 1280, height: 790 },
+      panes: f.ids.map((terminalId, slot) => ({
+        slot,
+        terminalId,
+        visible: false,
+        z: slot,
+        rect: null,
+      })),
+    });
+    await waiting;
+    f.layout.setNativeGeneration(1);
+    const messageCount = f.messages.length;
+    release();
+    const reply = await pending;
+    assert.equal(reply.status, 'stale');
+    assert.equal(reply.snapshot!.generation, 0);
+    assert.deepEqual(
+      reply.snapshot!.slots.map((slot) => slot.terminalId),
+      f.ids,
+    );
+    assert.ok(featureNativeReplySchema.safeParse(reply).success);
+    assert.equal(f.messages.length, messageCount);
+  } finally {
+    f.close();
+  }
+});

@@ -147,7 +147,7 @@ pub(crate) fn metadata_finish(app: &tauri::AppHandle, epoch: &str, id: &str, can
             id,
             cancelled,
         ) {
-            advance_layout(r);
+            advance_layout(app, r);
         }
     }
 }
@@ -223,7 +223,7 @@ pub(crate) fn metadata_context(app: &tauri::AppHandle) -> Option<(String, u64)> 
         .map(|r| (r.epoch.clone(), r.layout_generation))
 }
 
-fn publish_layout_generation(r: &mut Running) {
+fn publish_layout_generation(app: &tauri::AppHandle, r: &mut Running) {
     let _ = r.child.write(
         format!(
             "{}\n",
@@ -231,12 +231,80 @@ fn publish_layout_generation(r: &mut Running) {
         )
         .as_bytes(),
     );
+    r.layout = hidden_presentation(&r.layout, r.presentation_suspended);
+    let epoch = r.epoch.clone();
+    let generation = r.layout_generation;
+    let revision = r.layout_revision;
+    let handle = app.clone();
+    // Callers hold Terminals and can be on AppKit. Schedule from the runtime so
+    // an inline main-thread dispatch cannot re-enter that mutex.
+    tauri::async_runtime::spawn(async move {
+        let app = handle.clone();
+        let _ = handle.run_on_main_thread(move || {
+            crate::renderer::present(|| {
+                let Some((layout, count, hide)) = ({
+                    let state = app.state::<Terminals>();
+                    let guard = state.0.lock().unwrap();
+                    guard
+                        .as_ref()
+                        .filter(|r| {
+                            generation_notice_current(
+                                &epoch,
+                                generation,
+                                &r.epoch,
+                                r.layout_generation,
+                            )
+                        })
+                        .map(|r| {
+                            (
+                                r.layout.clone(),
+                                r.documents.len(),
+                                r.layout_revision == revision,
+                            )
+                        })
+                }) else {
+                    return;
+                };
+                // A newer accepted arrangement in this generation must not be hidden again.
+                if hide {
+                    for slot in 0..count {
+                        if let Some(view) = app.get_webview(&format!("terminal-{slot}")) {
+                            let _ = view.hide();
+                        }
+                    }
+                }
+                emit_dock(
+                    &app,
+                    &layout,
+                    crate::features::workspace_visible(&layout),
+                    generation,
+                );
+            });
+        });
+    });
 }
 
-fn advance_layout(r: &mut Running) {
+fn generation_notice_current(
+    expected_epoch: &str,
+    expected: u64,
+    epoch: &str,
+    current: u64,
+) -> bool {
+    expected_epoch == epoch && expected == current
+}
+fn hidden_presentation(layout: &Value, suspended: bool) -> Value {
+    let mut layout = layout.clone();
+    if layout.is_object() {
+        layout["visible"] = json!([]);
+        layout["suspended"] = json!(suspended);
+    }
+    layout
+}
+
+fn advance_layout(app: &tauri::AppHandle, r: &mut Running) {
     r.feature_members = None;
     r.layout_generation = r.layout_generation.saturating_add(1);
-    publish_layout_generation(r);
+    publish_layout_generation(app, r);
 }
 
 fn invalidate_presentation_state(generation: &mut u64, suspended: &mut bool) {
@@ -244,13 +312,13 @@ fn invalidate_presentation_state(generation: &mut u64, suspended: &mut bool) {
     *suspended = true;
 }
 
-fn invalidate_layout(r: &mut Running) {
+fn invalidate_layout(app: &tauri::AppHandle, r: &mut Running) {
     r.feature_members = None;
     r.metadata_pending.clear();
     r.metadata_mutating = None;
     r.permission_review = None;
     invalidate_presentation_state(&mut r.layout_generation, &mut r.presentation_suspended);
-    publish_layout_generation(r);
+    publish_layout_generation(app, r);
     let _ = r.child.write(b"{\"kind\":\"layout-suspend\"}\n");
 }
 
@@ -269,36 +337,8 @@ pub(crate) fn metadata_view_begin(app: &tauri::AppHandle) -> Option<u64> {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
     let r = guard.as_mut()?;
-    advance_layout(r);
-    let generation = r.layout_generation;
-    let epoch = r.epoch.clone();
-    let revision = r.layout_revision;
-    r.layout["visible"] = json!([]);
-    drop(guard);
-    // Do not leave old sibling PTYs above a Studio waiting for its first snapshot.
-    let handle = app.clone();
-    let _ = app.run_on_main_thread(move || {
-        crate::renderer::present(|| {
-            let count = {
-                let state = handle.state::<Terminals>();
-                let guard = state.0.lock().unwrap();
-                let Some(r) = guard.as_ref().filter(|r| {
-                    r.epoch == epoch
-                        && r.layout_generation == generation
-                        && r.layout_revision == revision
-                }) else {
-                    return;
-                };
-                r.documents.len()
-            };
-            for slot in 0..count {
-                if let Some(view) = handle.get_webview(&format!("terminal-{slot}")) {
-                    let _ = view.hide();
-                }
-            }
-        });
-    });
-    Some(generation)
+    advance_layout(app, r);
+    Some(r.layout_generation)
 }
 
 pub(crate) fn owned_notification_current(
@@ -353,7 +393,7 @@ pub(crate) fn metadata_invalidate(app: &tauri::AppHandle) {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
     if let Some(r) = guard.as_mut() {
-        invalidate_layout(r);
+        invalidate_layout(app, r);
     }
 }
 
@@ -533,7 +573,7 @@ async fn metadata_request_inner(
         if r.child.write(bytes.as_bytes()).is_err() {
             r.metadata_pending.remove(&id);
             if r.metadata_mutating.as_deref() == Some(&id) || owns_review {
-                advance_layout(r);
+                advance_layout(app, r);
             }
             return unavailable();
         }
@@ -580,7 +620,7 @@ async fn metadata_request_inner(
         let owner = r.metadata_mutating.as_ref() == Some(&id)
             || review_owner.is_some_and(|owner| r.metadata_mutating.as_deref() == Some(owner));
         if valid && !received && owner {
-            advance_layout(r);
+            advance_layout(app, r);
         }
         valid
     };
@@ -662,7 +702,7 @@ pub(crate) fn permission_review_finish(
             id,
             cancelled,
         ) {
-            advance_layout(r);
+            advance_layout(app, r);
         }
     }
 }
@@ -1493,7 +1533,7 @@ fn native_focus_lost(app: &tauri::AppHandle, reason: &str) {
     let state = app.state::<Terminals>();
     let mut guard = state.0.lock().unwrap();
     if let Some(r) = guard.as_mut().filter(|r| r.permission_review.is_some()) {
-        invalidate_layout(r);
+        invalidate_layout(app, r);
     }
     drop(guard);
     revoke_all(app);
@@ -2621,7 +2661,7 @@ fn fence_enrollment_presentation(
     }
     r.enrollment_fenced = true;
     if r.layout_generation == generation {
-        invalidate_layout(r);
+        invalidate_layout(app, r);
     }
 }
 
@@ -3537,7 +3577,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         };
         if r.metadata_mutating.is_some() || r.enrollment_pending {
             // Admission and the Quit latch share the same lock; no review can race a mutation.
-            advance_layout(r);
+            advance_layout(app, r);
             drop(guard);
             revoke_all(app);
             return true;
@@ -3550,7 +3590,7 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
         }
         r.confirming_quit = true;
         r.metadata_pending.clear();
-        advance_layout(r);
+        advance_layout(app, r);
         (r.quit_notice.clone(), r.cancel.clone(), r.quit.clone())
     };
     revoke_all(app);
@@ -3843,6 +3883,35 @@ mod enrollment_tests {
 #[cfg(test)]
 mod feature_membership_tests {
     use super::*;
+    #[test]
+    fn fence_notice_hides_only_geometry_and_rejects_old_epoch_or_generation() {
+        let state = json!({"order":[0,1],"shown":[0,1],"visible":[0,1],"active":1,
+            "count":2,"names":["A","B"],"suspended":false,"workspaceChrome":true,"canvas":false});
+        let hidden = hidden_presentation(&state, true);
+        assert_eq!(hidden["visible"], json!([]));
+        assert_eq!(hidden["shown"], state["shown"]);
+        assert_eq!(hidden["order"], state["order"]);
+        assert_eq!(hidden["active"], state["active"]);
+        assert_eq!(hidden["suspended"], json!(true));
+        assert!(generation_notice_current("owned", 2, "owned", 2));
+        assert!(!generation_notice_current("owned", 1, "owned", 2));
+        assert!(!generation_notice_current("old", 2, "owned", 2));
+        let detail = workspace_detail(
+            &hidden,
+            true,
+            &["A".into(), "B".into()],
+            &["Codex".into(), "Claude".into()],
+            2,
+        );
+        assert_eq!(detail["generation"], json!(2));
+        assert_eq!(detail["count"], json!(2));
+        assert!(detail["panes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|pane| pane["visible"] == false));
+    }
+
     fn snapshot() -> Value {
         let f = "e10636eb-3a12-4094-9123-49a4cdad27b8";
         let a = "a10636eb-3a12-4094-9123-49a4cdad27b8";

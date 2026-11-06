@@ -323,7 +323,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Studio v2 chrome contract: candidate `784b10b` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `784b10b`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you": hook review fixes packaged in `784b10b`; native acceptance pending                                    | pane-817 | owner provider/OS test                           |
-| Studio membership/chrome: first-arrange hide barrier packaged in `784b10b`                                                | pane-817 | empty-Feature/header native acceptance           |
+| Studio membership/chrome: native fence notification fix in source; `784b10b` tested                                       | pane-817 | empty-Feature/header native acceptance           |
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
 | Current-workspace batch create (pool 8): renderer/native candidate `784b10b` packaged                                     | pane-817 | native/provider acceptance                       |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |

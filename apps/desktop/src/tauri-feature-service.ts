@@ -262,7 +262,8 @@ export class TauriFeatureService {
           this.generation++;
           break;
         case 'arrange': {
-          if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
+          if (presentation !== this.layout.presentationRevision())
+            return { status: 'stale', snapshot: this.snapshot() };
           const state = this.layout.snapshot();
           if (
             request.panes.length !== state.order.length ||

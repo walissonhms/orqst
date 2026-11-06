@@ -1,5 +1,51 @@
 # V6 terminal chrome reuse review — 2026-11-04
 
+## Polling, native fence wake-up and catalog review — 2026-11-05
+
+For owner-tested `784b10b`, the owner reports working tabs/layout controls/model
+labels/account limits but black retained PTY surfaces. Renderer fixes `a8efa7c`
+and `a9079b9` resend arrangement on metadata/native fence changes and retry one
+stale reply. Source inspection confirms `TauriFeatureService.request(snapshot)`
+does not increment generation or alter layout; Rust snapshot requests bypass
+`metadata_view_begin`, and finishing a read cannot own a cancelled mutation latch.
+Successful arrange likewise leaves both counters unchanged. Repeated synthetic
+polls preserve generation, presentation, accepted geometry and message count.
+
+The remaining silent path was native `publish_layout_generation`: it only wrote
+to the Node pipe, while the dock event depended on a subsequent layout passing
+viewport/presentation guards. It now also schedules a current-epoch/generation
+AppKit callback to hide obsolete geometry and publish the dock generation directly.
+The callback uses current state and never re-hides a newer accepted layout in that
+generation. Dispatch starts off the AppKit thread because callers hold Terminals;
+no getter or re-entrant main-thread callback may acquire that same lock inline.
+Existing cancellation, input, current-document and membership guards are retained.
+
+Normal facade-generation stale already included snapshot. The Node
+presentation-changed arrange branch did not; it now includes its validated
+snapshot and has a deterministic blocked-read regression. Native security/context
+loss and out-of-order guards may still omit snapshot rather than fabricate current
+metadata; the renderer's bounded passive re-read is required for those cases.
+
+Catalog inspection: `feature_prepare` hides retained siblings before focusing
+main and dispatching `orqst-show-preparation`; `StudioWorkspace` opens
+`NativeTerminalCreator` when the native Studio bridge exists. Catalog errors
+show its loading/error Modal; the old form opens through advanced choice or when
+the Studio bridge is absent, not through an automatic catalog-error fallback.
+`terminal_creation::studio_request(catalog)` uses its own helper and accepts no
+active Core. Its begin/current guards can refuse busy/full/review/enrollment or
+changed admission, including layout revision during helper execution. Existing
+Rust-to-real-Node-helper synthetic tests exercise empty/populated catalogs without
+a launched Core/provider. No current native trace proves which condition the owner
+hit. Diagnostics MCP is unavailable here; no app was opened to reproduce it.
+
+Re-inspected Anywh `TerminalPanel` conditional mounts/retained sibling tabs and
+root LICENSE at pinned `546f189c04415c3c5af5f40e3931a0a90b9aba31` (links below),
+Apache-2.0, no root NOTICE. React/relay/tmux visibility does not implement native
+AppKit generation notifications, signed input or ORQST catalog admission fences.
+Decision: keep/narrowly adapt ORQST, no copied upstream code/assets/dependencies.
+The existing Tucano communication and Overclock UX audits add no native fence
+implementation for reuse; their existing decisions remain unchanged.
+
 ## Studio first-snapshot and geometry barrier — 2026-11-05
 
 Source investigation of owner-tested `467c400` and renderer correction `d46e2dd`:

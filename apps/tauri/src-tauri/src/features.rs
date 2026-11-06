@@ -1806,6 +1806,13 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     }, |cancelled| crate::terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
 }
 
+fn changes_presentation(request: &Value) -> bool {
+    matches!(
+        request["action"].as_str(),
+        Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
+    )
+}
+
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
@@ -1825,10 +1832,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((epoch, _)) = crate::terminal::metadata_context(app) else {
         return json!({"status":"unavailable"});
     };
-    let presentation = if matches!(
-        request["action"].as_str(),
-        Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
-    ) {
+    let presentation = if changes_presentation(&request) {
         crate::terminal::metadata_view_begin(app)
     } else {
         crate::terminal::metadata_generation(app)
@@ -2120,6 +2124,23 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn polling_and_arrangement_do_not_advance_native_presentation() {
+        use serde_json::json;
+        for action in ["snapshot", "arrange", "accountLimits", "mention"] {
+            assert!(!super::changes_presentation(&json!({"action":action})));
+        }
+        for action in [
+            "canvas",
+            "select",
+            "organize",
+            "pane",
+            "renamePane",
+            "movePane",
+        ] {
+            assert!(super::changes_presentation(&json!({"action":action})));
+        }
+    }
     #[test]
     fn pane_view_requests_are_closed_uuid_bound_data_without_process_operations() {
         use serde_json::json;
