@@ -14,6 +14,7 @@ pub mod pair;
 pub mod preparation;
 pub mod profiles;
 pub mod pty;
+pub mod recovery;
 pub mod rpc;
 pub mod startup;
 pub mod store;
