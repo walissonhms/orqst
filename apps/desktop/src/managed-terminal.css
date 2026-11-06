@@ -369,3 +369,29 @@ main[data-next='typing'] #status[data-feedback='info'] {
   margin: 0;
   font-size: 11px;
 }
+
+/* Studio look (2026-11-05): the next step is one clear primary button. */
+main[data-next='start'] #start:enabled,
+main[data-next='attach'] #attach:enabled,
+main[data-next='input'] #input:enabled {
+  border-color: var(--orqst-primary);
+  background: var(--orqst-primary);
+  color: var(--orqst-on-primary);
+  font-weight: 600;
+}
+.process-controls button {
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: var(--orqst-radius-control);
+}
+.guidance,
+#status {
+  color: var(--orqst-subtle);
+}
+/* Inside the Studio the pane frame already draws the border. */
+main[data-chrome='studio'] {
+  border: 0;
+}
+main[data-chrome='studio'] .pane-header {
+  display: none;
+}

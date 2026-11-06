@@ -325,7 +325,8 @@
     "alert": {
       "completed": "Turno observado concluído",
       "failed": "Falha observada na execução",
-      "intervention": "Sessão observada solicita sua resposta"
+      "intervention": "Sessão observada solicita sua resposta",
+      "responseCompleted": "Resposta concluída"
     }
   },
   "artifacts": {
@@ -1489,7 +1490,9 @@
         "busy": "Outra operação está em andamento"
       },
       "possibleEffects": "Confira a área de terminais antes de tentar de novo."
-    }
+    },
+    "showUnassigned_one": "Mostrar o {{count}} terminal sem Feature",
+    "showUnassigned_other": "Mostrar os {{count}} terminais sem Feature"
   },
   "overviewPage": {
     "title": "Visão geral",

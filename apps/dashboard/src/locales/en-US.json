@@ -325,7 +325,8 @@
     "alert": {
       "completed": "Observed turn completed",
       "failed": "Observed execution failed",
-      "intervention": "Observed session requests your input"
+      "intervention": "Observed session requests your input",
+      "responseCompleted": "Response completed"
     }
   },
   "artifacts": {
@@ -1489,7 +1490,9 @@
         "busy": "Another operation is running"
       },
       "possibleEffects": "Check the terminal area before trying again."
-    }
+    },
+    "showUnassigned_one": "Show the {{count}} terminal without a Feature",
+    "showUnassigned_other": "Show the {{count}} terminals without a Feature"
   },
   "overviewPage": {
     "title": "Overview",

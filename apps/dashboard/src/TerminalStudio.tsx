@@ -145,6 +145,10 @@ interface Props {
   };
   /** Host controls shown at the start of the toolbar (e.g. the Feature panel toggle). */
   toolbarStart?: ReactNode;
+  /** Extra guidance under the empty state (e.g. terminals in another Feature). */
+  emptyHint?: ReactNode;
+  /** Host scope switcher shown after the start controls (e.g. Feature tabs). */
+  toolbarScopes?: ReactNode;
   /** Host controls shown just before New terminal (e.g. account limits). */
   toolbarEnd?: ReactNode;
   /** CLI accounts available for switching. */
@@ -360,7 +364,9 @@ export function TerminalStudio({
   accountSuggestions = [],
   native,
   toolbarStart,
+  toolbarScopes,
   toolbarEnd,
+  emptyHint,
 }: Props) {
   const { t } = useTranslation();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -828,6 +834,7 @@ export function TerminalStudio({
     >
       <header className="ts-toolbar">
         {toolbarStart}
+        {toolbarScopes}
         <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
           {arrangementModes.map((mode) => {
             const Icon = modeIcons[mode];
@@ -939,6 +946,7 @@ export function TerminalStudio({
         {terminals.length === 0 && (
           <div className="ts-empty">
             <p>{t('terminalStudio.empty')}</p>
+            {emptyHint}
             {onNewTerminal && (
               <button type="button" className="ts-primary" onClick={onNewTerminal}>
                 <Plus size={15} />

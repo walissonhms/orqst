@@ -1,0 +1,46 @@
+/* Base for the native Feature workspace document (it does not load the dashboard CSS). */
+@import './tokens.css';
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}

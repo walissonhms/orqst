@@ -773,8 +773,71 @@ export function FeatureWorkspace({
                       {immersive ? '☰' : '⟨'}
                     </button>
                   ),
+                  toolbarScopes:
+                    immersive && snapshot ? (
+                      <nav className="ts-features" aria-label={t('features.heading')}>
+                        {snapshot.features.map((feature) => (
+                          <button
+                            key={feature.featureId}
+                            type="button"
+                            className={
+                              snapshot.activeFeatureId === feature.featureId ? 'active' : ''
+                            }
+                            aria-pressed={snapshot.activeFeatureId === feature.featureId}
+                            disabled={busy}
+                            title={feature.description || feature.name}
+                            onClick={() =>
+                              void request({
+                                action: 'select',
+                                featureId: feature.featureId,
+                                expectedRevision: snapshot.view.revision,
+                              })
+                            }
+                          >
+                            {feature.name}
+                            <small>{feature.terminalIds.length}</small>
+                          </button>
+                        ))}
+                        {(unassigned.length > 0 || !snapshot.features.length) && (
+                          <button
+                            type="button"
+                            className={!snapshot.activeFeatureId ? 'active' : ''}
+                            aria-pressed={!snapshot.activeFeatureId}
+                            disabled={busy}
+                            onClick={() =>
+                              void request({
+                                action: 'select',
+                                featureId: null,
+                                expectedRevision: snapshot.view.revision,
+                              })
+                            }
+                          >
+                            {t('features.unassigned')}
+                            <small>{unassigned.length}</small>
+                          </button>
+                        )}
+                      </nav>
+                    ) : undefined,
                 }
               : {})}
+            emptyHint={
+              selected && unassigned.length > 0 && snapshot ? (
+                <button
+                  type="button"
+                  className="ts-ghost"
+                  disabled={busy}
+                  onClick={() =>
+                    void request({
+                      action: 'select',
+                      featureId: null,
+                      expectedRevision: snapshot.view.revision,
+                    })
+                  }
+                >
+                  {t('terminalStudio.showUnassigned', { count: unassigned.length })}
+                </button>
+              ) : undefined
+            }
             toolbarEnd={
               limits.length > 0 ? (
                 <AccountLimits

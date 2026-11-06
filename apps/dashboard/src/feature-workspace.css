@@ -626,3 +626,35 @@
   background: var(--orqst-elevated);
   color: var(--orqst-text);
 }
+
+/* Feature tabs in the full-window Studio toolbar */
+.ts-features {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.ts-features button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--orqst-radius-control);
+  color: var(--orqst-muted);
+  white-space: nowrap;
+}
+.ts-features button:hover {
+  background: var(--orqst-elevated);
+  color: var(--orqst-text);
+}
+.ts-features button.active {
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-text);
+  box-shadow: inset 0 -2px var(--orqst-neon);
+}
+.ts-features small {
+  color: var(--orqst-subtle);
+  font-family: var(--orqst-font-mono);
+  font-size: 11px;
+}
