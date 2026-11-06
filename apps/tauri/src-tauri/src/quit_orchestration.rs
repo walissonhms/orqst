@@ -23,6 +23,13 @@ pub fn pipe_timeout(kind: &str) -> Duration {
     }
 }
 
+/// Diagnostics only (env-gated): Quit circuit step names and statuses, never content.
+fn diag(step: &str) {
+    if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+        eprintln!("ORQST_QUIT_FLOW {step}");
+    }
+}
+
 pub trait AgentsGate {
     fn active(&self) -> bool;
     /// True means a native review is pending; false means absent or already authorized.
@@ -271,6 +278,11 @@ impl PendingReplies {
         };
         // Invalid replies never consume the waiter, including another allowed kind.
         if !pending.kind.valid(&value, &pending.epoch) {
+            diag(&format!(
+                "reply invalid kind={} status={}",
+                pending.kind.name(),
+                value["status"].as_str().unwrap_or("none")
+            ));
             return false;
         }
         self.0
@@ -294,6 +306,7 @@ impl Coordinator {
 
     fn blocked(&self, exit: &impl ExitPort, reason: &str, uncertain: Value) {
         self.in_flight.store(false, Ordering::SeqCst);
+        diag(&format!("blocked reason={reason} phase={:?}", self.host.phase()));
         // Only an authenticated pre-effect rollback is Active again. Unknown
         // shutdown/retirement never gains execution or presentation authority.
         match self.host.phase() {
@@ -311,6 +324,7 @@ impl Coordinator {
             return;
         }
         if self.in_flight.load(Ordering::SeqCst) {
+            diag("already_in_flight");
             return;
         }
         let active = agents.active();
@@ -328,7 +342,9 @@ impl Coordinator {
             self.blocked(exit, reason, json!([]));
             return;
         }
-        match self.host.decide_quit(active, gate, false) {
+        let decision = self.host.decide_quit(active, gate, false);
+        diag(&format!("decision={decision:?} phase={:?}", self.host.phase()));
+        match decision {
             QuitDecision::BlockedLost => self.blocked(exit, "host_lost", json!([])),
             QuitDecision::BlockedStarting => self.blocked(exit, "starting", json!([])),
             QuitDecision::AgentsGate => {
@@ -383,11 +399,21 @@ impl Coordinator {
         kind: &str,
     ) -> Option<Value> {
         let id = terminal.request_id();
-        let receiver = terminal.send(&id, kind)?;
+        let Some(receiver) = terminal.send(&id, kind) else {
+            diag(&format!("pipe {kind} unsent"));
+            return None;
+        };
         let value = timer.wait(pipe_timeout(kind), receiver).await;
         if value.is_none() {
             terminal.cancel(&id);
         }
+        diag(&format!(
+            "pipe {kind} status={}",
+            value
+                .as_ref()
+                .and_then(|v| v["status"].as_str())
+                .unwrap_or("none")
+        ));
         value
     }
 

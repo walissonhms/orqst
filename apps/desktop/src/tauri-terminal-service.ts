@@ -332,6 +332,9 @@ export class TauriTerminalService {
           for (const p of this.panes) p.broker.close();
         },
       });
+      process.stderr.write(
+        `ORQST_SHUTDOWN retirement ${status} fenced=${this.retirement.fenced}\n`,
+      );
       this.send({ kind: 'retirement', id: message.id, status, fenced: this.retirement.fenced });
       return;
     }
@@ -477,21 +480,25 @@ export class TauriTerminalService {
       this.send({ kind: 'retirement', id: message.id, status, fenced: this.retirement.fenced });
       return;
     }
-    const refuse = (status: 'refused_prefence' | 'fenced') =>
+    const refuse = (status: 'refused_prefence' | 'fenced', why: string) => {
+      // Diagnostics only: which gate refused (forwarded only with native diagnostics on).
+      process.stderr.write(`ORQST_SHUTDOWN refused ${status} ${why}\n`);
       this.send({ kind: 'owned-shutdown', id: message.id, status, uncertain: [] });
+    };
     // Retirement may already have consumed a proof, even before this route ran.
-    if (this.retirement?.busy || this.retirement?.fenced) return refuse('fenced');
-    if (!this.ownedShutdown) return refuse(this.shutdownFence ? 'fenced' : 'refused_prefence');
-    if (
-      this.metadataBusy ||
-      this.mcpBusy ||
-      this.confirmations.size ||
-      this.panes.some((p) => p.state.busy)
-    )
-      return refuse(this.shutdownFence ? 'fenced' : 'refused_prefence');
+    if (this.retirement?.busy || this.retirement?.fenced) return refuse('fenced', 'retirement');
+    const fenceOr = this.shutdownFence ? 'fenced' : 'refused_prefence';
+    if (!this.ownedShutdown) return refuse(fenceOr, 'unavailable');
+    if (this.metadataBusy) return refuse(fenceOr, 'metadata');
+    if (this.mcpBusy) return refuse(fenceOr, 'mcp');
+    if (this.confirmations.size) return refuse(fenceOr, 'confirmations');
+    if (this.panes.some((p) => p.state.busy)) return refuse(fenceOr, 'pane_busy');
     this.shutdownFence = true;
     for (const pane of this.panes) pane.broker.revokeInput();
     const result = await this.ownedShutdown.run();
+    process.stderr.write(
+      `ORQST_SHUTDOWN result ${result.status} ${result.reason ?? ''} uncertain=${result.uncertain.length}\n`,
+    );
     this.shutdownReady = result.status === 'ready';
     this.shutdownPreserved = result.status === 'exited_retirement_unavailable';
     this.send({ kind: 'owned-shutdown', id: message.id, ...result });

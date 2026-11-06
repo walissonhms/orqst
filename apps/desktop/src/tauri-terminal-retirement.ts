@@ -60,6 +60,12 @@ export class TauriTerminalRetirement {
     private readonly key: KeyObject,
   ) {}
 
+  private deny(why: string): 'denied' {
+    // Diagnostics only: which retirement gate refused (forwarded only with diagnostics on).
+    process.stderr.write(`ORQST_SHUTDOWN retirement_denied ${why}\n`);
+    return 'denied';
+  }
+
   async run(ports: {
     current(): boolean;
     /** Legacy hosts only. Never called or used as fallback when authorizeOwnedRetirement is installed. */
@@ -68,7 +74,7 @@ export class TauriTerminalRetirement {
     authorizeOwnedRetirement?(evidence: OwnedTerminalRetirementEvidence): boolean;
     closeBrokers(): void;
   }): Promise<'retired' | 'cancelled' | 'denied' | 'busy'> {
-    if (this.fenced || !ports.current()) return 'denied';
+    if (this.fenced || !ports.current()) return this.deny('fence_or_stale');
     if (this.busy) return 'busy';
     this.busy = true;
     try {
@@ -79,13 +85,13 @@ export class TauriTerminalRetirement {
         review.challenge.target !== review.challenge.epoch ||
         review.challenge.digest !== terminalDigest(JSON.stringify(review.evidence))
       )
-        return 'denied';
+        return this.deny('challenge');
       const detail = JSON.stringify(review.evidence, null, 2).replace(
         /\p{Cf}/gu,
         (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`,
       );
       if ((!ports.authorizeOwnedRetirement && detail.length > 4096) || !ports.current())
-        return 'denied';
+        return this.deny('detail_or_stale');
       if (ports.authorizeOwnedRetirement) {
         const evidence = ownedRetirementEvidenceSchema.parse(review.evidence);
         if (
@@ -96,9 +102,9 @@ export class TauriTerminalRetirement {
           ) ||
           !ports.authorizeOwnedRetirement(evidence)
         )
-          return 'denied';
+          return this.deny('evidence');
       } else if (!(await ports.confirm?.(detail))) return 'cancelled';
-      if (!ports.current()) return 'denied';
+      if (!ports.current()) return this.deny('stale');
       const proof = {
         challengeId: review.challenge.challengeId,
         signature: sign(null, terminalChallengeBytes(review.challenge), this.key).toString(
@@ -110,7 +116,11 @@ export class TauriTerminalRetirement {
       await this.core.retire(proof);
       await this.core.closeAndWait();
       return 'retired';
-    } catch {
+    } catch (error) {
+      // Diagnostics only: the failed step's message, never content or credentials.
+      process.stderr.write(
+        `ORQST_SHUTDOWN retirement_error ${String((error as Error)?.message ?? error).slice(0, 160)}\n`,
+      );
       return 'denied';
     } finally {
       // The fenced flag already blocks every pane. Broker teardown can send detach RPCs;
