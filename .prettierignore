@@ -9,3 +9,7 @@ test-results
 
 # Preserve owner-approved V6 reference bytes and hashes.
 docs/design/v6/source
+
+# Generated, byte-compared fixtures of the Rust terminal Core
+apps/tauri/terminal-core/src/store-migrations.json
+apps/tauri/terminal-core/tests/golden/*.json

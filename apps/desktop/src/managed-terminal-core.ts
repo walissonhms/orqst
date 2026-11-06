@@ -30,7 +30,9 @@ import {
   type TerminalEnrollmentInput,
   type TerminalEnrollmentReceipt,
 } from '@orqst/protocol';
-import { fork } from 'node:child_process';
+import { fork, spawn } from 'node:child_process';
+import { lstatSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { randomUUID, type KeyObject } from 'node:crypto';
 import type { TerminalNativeSupervisor } from '../../../packages/core/src/terminal/native-broker.js';
 import {
@@ -44,6 +46,20 @@ import {
   terminalRPCOutputSchema,
   terminalRPCSchema,
 } from '../../../packages/core/src/terminal/rpc.js';
+
+/** `ORQST_RUST_TERMINALS=1` selects the Rust terminal Core (pilot; Node is the default). */
+export function rustTerminalCore(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.ORQST_RUST_TERMINALS === '1';
+}
+
+/** The bundled Rust Core next to the Node Core bundle: a regular, owner-only file. */
+export function rustCoreBinary(host: string): string {
+  const binary = join(dirname(host), 'orqst-terminal-core');
+  const info = lstatSync(binary);
+  if (!info.isFile() || info.uid !== process.getuid?.() || info.mode & 0o022)
+    throw new Error('Rust terminal Core unavailable');
+  return binary;
+}
 
 class CoreOperationDenied extends Error {}
 export class FeatureRevisionConflict extends Error {}
@@ -71,24 +87,30 @@ export async function connectManagedTerminalCore(
     });
   }
   const config = readInteractiveTerminalConfig(files[0]!);
-  const child = fork(
-    host,
-    [
-      JSON.stringify(files),
-      publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
-      admissionDirectory,
-      String(terminalSlotLimit(limit)),
-      startupId,
-    ],
-    {
-      execPath: config.node.path,
-      execArgv: [],
-      cwd: config.state,
-      env: interactiveTerminalEnvironment(config),
-      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-      serialization: 'json',
-    },
-  );
+  const coreArgs = [
+    JSON.stringify(files),
+    publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+    admissionDirectory,
+    String(terminalSlotLimit(limit)),
+    startupId,
+  ];
+  // Owner decision 2026-11-06 (docs/design/rust-terminal-core.md): behind the flag, the
+  // Rust Core binary next to this host speaks the same private IPC; Node stays the default.
+  const child = rustTerminalCore()
+    ? spawn(rustCoreBinary(host), coreArgs, {
+        cwd: config.state,
+        env: interactiveTerminalEnvironment(config),
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        serialization: 'json',
+      })
+    : fork(host, coreArgs, {
+        execPath: config.node.path,
+        execArgv: [],
+        cwd: config.state,
+        env: interactiveTerminalEnvironment(config),
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        serialization: 'json',
+      });
   let exited = false;
   const exit = new Promise<void>((resolve) =>
     child.once('exit', () => {

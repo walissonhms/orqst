@@ -143,6 +143,63 @@ if (process.platform === 'darwin' && process.arch === 'arm64') {
     );
   await chmod(join(destination, 'prebuilds/darwin-arm64/spawn-helper'), 0o700);
 }
+// Rust terminal Core (ORQST_RUST_TERMINALS=1 pilot). Always staged; Node stays the default.
+const rustCore = join(root, 'apps/tauri/terminal-core/Cargo.toml');
+execFileSync('cargo', ['build', '--release', '--locked', '--manifest-path', rustCore], {
+  stdio: 'inherit',
+});
+const rustTarget = process.env.CARGO_TARGET_DIR ?? join(root, 'apps/tauri/terminal-core/target');
+await cp(join(rustTarget, 'release/orqst-terminal-core'), join(output, 'core/orqst-terminal-core'));
+await chmod(join(output, 'core/orqst-terminal-core'), 0o700);
+// Rust dependency notices: only reviewed licenses; every package ships its license text.
+const rustLicenses = new Set([
+  'MIT',
+  'Apache-2.0',
+  'BSD-3-Clause',
+  'BSD-2-Clause',
+  'ISC',
+  'Zlib',
+  'Unicode-3.0',
+  'Unlicense',
+  'CC0-1.0',
+  'Apache-2.0 WITH LLVM-exception',
+]);
+const rustAllowed = (expression) =>
+  expression
+    .replace(/[()]/g, '')
+    .split(/\s+OR\s+|\//)
+    .some((alternative) =>
+      alternative.split(/\s+AND\s+/).every((part) => rustLicenses.has(part.trim())),
+    );
+const metadata = JSON.parse(
+  execFileSync(
+    'cargo',
+    ['metadata', '--format-version', '1', '--locked', '--manifest-path', rustCore],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  ),
+);
+const rustPackages = [];
+const resolved = new Set(metadata.resolve.nodes.map((node) => node.id));
+for (const item of metadata.packages) {
+  if (!resolved.has(item.id) || item.name === 'orqst-terminal-core') continue;
+  if (!item.license || !rustAllowed(item.license))
+    throw new Error(`Unreviewed Rust dependency license: ${item.name} ${item.license}`);
+  const directory = dirname(item.manifest_path);
+  const notices = (await readdir(directory)).filter((name) =>
+    /^(licen[cs]e|notice|copying|unlicense)([.-]|$)/i.test(name),
+  );
+  if (notices.length === 0) throw new Error(`Missing Rust license text: ${item.name}`);
+  const key = `rust-${item.name}-${item.version}`;
+  await mkdir(join(output, 'licenses', key), { recursive: true });
+  for (const name of notices)
+    if ((await stat(join(directory, name))).isFile())
+      await cp(join(directory, name), join(output, 'licenses', key, name));
+  rustPackages.push({ name: item.name, version: item.version, license: item.license, notices });
+}
+await writeFile(
+  join(output, 'licenses/rust-terminal-core.json'),
+  JSON.stringify(rustPackages, null, 2) + '\n',
+);
 await cp(join(root, 'apps/dashboard/dist'), join(output, 'dashboard'), { recursive: true });
 for (const file of ['LICENSE', 'NOTICE'])
   await cp(join(root, file), join(output, 'licenses', file));
