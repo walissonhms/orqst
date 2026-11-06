@@ -424,3 +424,13 @@ to 50 metadata-only, unique-ID `delegation` / `result` records from the current 
 pair audit. Both exact terminal endpoints must be distinct current owned slots and
 members of the active Feature. It is separate from a composer attempt or delivery
 outcome and confers no authority. See [terminal-native](terminal-native.md#owned-mcp-communication-projection--2026-11-05).
+## Owned Claude hook turn identity — 2026-11-05
+
+The private native Feature projection accepts `waiting_for_user` only with a proved
+owned Claude session and explicit turn UUID. New owned-hook manifests use the
+provider hook's `prompt_id` for this UUID; legacy transcript-only manifests continue
+to use the exact user-record UUID. No cross-source UUID equivalence is asserted.
+Activities remain transcript tool-name evidence. Private hook records are bounded
+source metadata, not normalized observer events or a new public ingestion endpoint.
+The native alert pipe additionally accepts waiting-for-user events through the
+existing intervention preference and all current ownership/freshness guards.

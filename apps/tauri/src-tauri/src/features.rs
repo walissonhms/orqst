@@ -945,7 +945,7 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
                 || session["bindingEvidence"] != "claude-argv-receipt-transcript"
                 || !matches!(
                     entry["agentState"].as_str(),
-                    Some("running" | "completed" | "failed" | "unknown")
+                    Some("running" | "waiting_for_user" | "completed" | "failed" | "unknown")
                 )
                 || (entry["agentState"] != "unknown" && !uuid(&entry["turnId"]))
                 || (entry.get("turnId").is_some() && !uuid(&entry["turnId"]))

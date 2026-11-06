@@ -1234,3 +1234,13 @@ acceptance pending.
       the separate structured-agents host outside this projection.
 - [ ] Accept native rendering and a real provider MCP exchange. Normal CLI terminal
       preparation still has MCP disabled; this increment creates no new route.
+## Owned Claude hooks and integrated batch candidate — 2026-11-05
+- [x] Package exact frontend `1401ee8` with batch UI and per-item results; full
+      Node 1443/1443, Rust 173 passed + 2 ignored, lint/types/Clippy/build passed.
+      The package is signed and verified separately and is not opened during delivery.
+- [x] Implement additional owned Claude 2.1.318 settings, private metadata-only
+      channel, canonical session prerequisite and explicit hook prompt IDs.
+- [x] Wire permission/idle waiting state and intervention alerts through existing
+      preferences, dedupe and native ownership/input fences.
+- [ ] Independent source review and actual pinned-provider/OS hook acceptance.
+- [ ] Owner native batch test; existing processes/packages remain preserved.

@@ -718,3 +718,37 @@ The Core stores a private metadata-only current-epoch audit in
 separate structured-agents host journal or restore an old epoch. Pair capacity is
 16 grants / 32 events; unsafe files or the 64 KiB read budget omit evidence without
 changing accepted MCP operations. See the [reference review](../research/mcp-pair-communication-projection.md).
+## Claude owned hook state — 2026-11-05 (source candidate)
+New native-prepared Claude TUI 2.1.318 manifests opt into `ownedHooks: true`.
+Their reviewed launch adds `--settings <state>/claude-hooks-settings.json`; the
+settings and original ORQST writer script are immutable private 0600 files, and
+the CLI authorization scope explicitly includes `orqst-owned-hooks-v1`. Nothing
+writes to user/project Claude settings. Existing manifests and 2.1.178 MCP retain
+their previous launch shape. Managed/user settings may disable hooks; ORQST does
+not override that policy.
+Only after the existing exact owned session/transcript proof, canvas entries may
+project `agentState: 'waiting_for_user'` as well as running/completed/failed/unknown.
+For these new manifests `turnId` is the explicit hook `prompt_id` UUID. It is not
+mapped to a transcript user-record UUID by time, text or proximity. Session binding
+and the three activity labels still use the existing canonical transcript evidence.
+The private channel `claude-hook-events.jsonl` is selected empty before dispatch,
+pins its file identity and append-only prefix, and reads at most 128 KiB. Its records
+contain only `{version:1,sessionId,promptId,event,at}`. UserPromptSubmit and explicit post-tool callbacks establish
+running; Notification permission/idle events establish waiting; Stop establishes a
+finished-response signal; StopFailure establishes failed. Subagent events, mismatched
+session/cwd/transcript paths, missing prompt IDs and unrelated notifications are
+ignored by the writer. Malformed/partial/replaced/rewritten/unsafe files establish
+no state. Hook input is limited to 64 KiB, consumed in memory and never copied to
+the channel; prompts, tool inputs, notification/response/error bodies and credentials
+are not persisted or sent to the facade by this route.
+Stop is a response hook, not an exit receipt or proof that a delegated task is done;
+other configured hooks may continue work. Policies disabling hooks, exhausted read
+budgets or missing exact-session proof remain unavailable. No CLI is probed or
+started by the observer. Actual pinned-provider behavior remains native acceptance.
+Waiting transitions from a previously sampled running state use the existing
+`intervention` preference and fixed localized native body. Native pipe category
+`waiting_for_user` maps internally to intervention; epoch/slot/generation/input
+revocation and click-routing guards are unchanged. Dedupe remains terminal+turn,
+including disabled transitions, so an idle notification cannot replay a completed
+turn alert. No notification is inferred solely from initial/missing evidence.
+See [pinned merge/source review](../research/claude-owned-hooks.md).
