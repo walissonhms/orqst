@@ -84,4 +84,15 @@ void import('../../desktop/src/managed-terminal-client.js').then(() => {
   };
   window.addEventListener('focus', () => void open());
   void open();
+  // The view may already hold focus, or the focusing layout may be replaced, so no focus
+  // event arrives. Ask again briefly until native consumes the intent (it expires in 60 s).
+  // An idle answer consumes nothing; native still checks the intent, focus and generation.
+  const started = Date.now();
+  const retry = window.setInterval(() => {
+    if (attempted || Date.now() - started > 60_000) {
+      window.clearInterval(retry);
+      return;
+    }
+    void open();
+  }, 500);
 });

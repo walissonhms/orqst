@@ -755,7 +755,14 @@ fn final_step_refusal_and_timeout_never_exit_or_release_the_fence() {
                 },
             );
             if timeout {
-                h.dispatch(Event::Advance(8_000));
+                let kind = if preserved {
+                    "closePreservedOwned"
+                } else {
+                    "retireOwned"
+                };
+                h.dispatch(Event::Advance(
+                    u64::try_from(pipe_timeout(kind).as_millis()).unwrap(),
+                ));
             } else {
                 h.reply(
                     if preserved {
@@ -1003,4 +1010,12 @@ fn malformed_step_schemas_and_foreign_epochs_do_not_consume_waiters_or_create_ev
     assert_eq!(h.phase(), Phase::ShutdownInFlight);
     h.dispatch(Event::Advance(8_000));
     assert_eq!(h.phase(), Phase::ShutdownInFlight);
+}
+
+#[test]
+fn retirement_pipe_waits_for_the_full_host_retirement_budget() {
+    // Host retirement: prepareRetire 12 s + retire 12 s + closeAndWait 5 s.
+    assert!(pipe_timeout("retireOwned") >= Duration::from_secs(29));
+    assert_eq!(pipe_timeout("shutdownOwned"), PIPE_TIMEOUT);
+    assert_eq!(pipe_timeout("closePreservedOwned"), PIPE_TIMEOUT);
 }

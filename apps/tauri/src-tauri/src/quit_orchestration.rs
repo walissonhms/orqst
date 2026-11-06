@@ -9,6 +9,19 @@ use tokio::sync::oneshot;
 
 /// Core's deadline is 5s; the native pipe deliberately waits longer.
 pub const PIPE_TIMEOUT: Duration = Duration::from_secs(8);
+/// Retirement runs prepareRetire (12 s), retire (12 s) and closeAndWait (5 s) in the
+/// host. A shorter pipe wait abandoned a retirement that could still succeed and left
+/// the host fenced, so every later Quit stayed blocked.
+pub const RETIRE_PIPE_TIMEOUT: Duration = Duration::from_secs(35);
+
+/// The bounded wait for one private host quit request.
+pub fn pipe_timeout(kind: &str) -> Duration {
+    if kind == "retireOwned" {
+        RETIRE_PIPE_TIMEOUT
+    } else {
+        PIPE_TIMEOUT
+    }
+}
 
 pub trait AgentsGate {
     fn active(&self) -> bool;
@@ -371,7 +384,7 @@ impl Coordinator {
     ) -> Option<Value> {
         let id = terminal.request_id();
         let receiver = terminal.send(&id, kind)?;
-        let value = timer.wait(PIPE_TIMEOUT, receiver).await;
+        let value = timer.wait(pipe_timeout(kind), receiver).await;
         if value.is_none() {
             terminal.cancel(&id);
         }
