@@ -40,7 +40,8 @@ interface Props {
   featureId: string | null;
   /** Open the previous detailed form (MCP pair, path review). */
   onAdvanced?: () => void;
-  onClose: () => void;
+  /** opened: every requested terminal was accepted (no view restore may follow). */
+  onClose: (opened?: boolean) => void;
 }
 
 /**
@@ -176,6 +177,10 @@ export function NativeTerminalCreator({
       );
       if (lead?.terminalId && featureId) void labelOrchestrator(featureId, lead.terminalId);
       setState('done');
+      // Every terminal opened: go back to the live terminal views. Refusals keep the dialog
+      // open with their reasons.
+      if (reply.items.length > 0 && reply.items.every((result) => result.status === 'accepted'))
+        onClose(true);
     } catch {
       setState('error');
       setMessage(t('studio.unavailable'));
@@ -191,13 +196,13 @@ export function NativeTerminalCreator({
         max={Math.max(0, (snapshot?.limit ?? 8) - (snapshot?.count ?? 0))}
         allowOrchestrator={featureId !== null && !!window.orqstFeatures}
         busy={state === 'opening'}
-        onCancel={onClose}
+        onCancel={() => onClose()}
         onAdvanced={onAdvanced}
         onConfirm={(requests) => void open(requests)}
       />
     );
   return (
-    <Modal label={t('terminalStudio.create.title')} className="ntd" onClose={onClose}>
+    <Modal label={t('terminalStudio.create.title')} className="ntd" onClose={() => onClose()}>
       <div className="ntd-form ntd-status">
         <header className="ntd-head">
           <div>
@@ -249,7 +254,7 @@ export function NativeTerminalCreator({
               {t('studio.refresh')}
             </button>
           )}
-          <button type="button" className="ntd-primary" onClick={onClose}>
+          <button type="button" className="ntd-primary" onClick={() => onClose()}>
             {t('terminalStudio.mention.close')}
           </button>
         </footer>

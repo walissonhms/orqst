@@ -147,6 +147,16 @@ export function FeatureWorkspace({
   const createTrigger = useRef<HTMLButtonElement>(null);
   const live = useRef(true);
   const working = useRef(false);
+  // When the shared latch was taken; a request without an answer for 20 s releases it.
+  const workingSince = useRef(0);
+  const latchBusy = () => working.current && Date.now() - workingSince.current < 20_000;
+  // New terminal feedback that snapshot polling does not clear.
+  const [prepareIssue, setPrepareIssue] = useState('');
+  const preparing = useRef(false);
+  // While the New terminal dialog shows in the main document, this hidden document must not
+  // resend frames: an accepted frame resumes the native views over the dialog.
+  const drawerOpenAt = useRef(0);
+  const drawerOpen = () => drawerOpenAt.current > 0 && Date.now() - drawerOpenAt.current < 60_000;
   const editorVersion = useRef(0);
   const current = useRef<FeatureNativeSnapshot | undefined>(undefined);
   const noticeContext = useRef<FeatureNoticeContext | null>(null);
@@ -170,6 +180,22 @@ export function FeatureWorkspace({
 
   const studio = !canvas && (nativeWorkspace || !!native);
   const hasSnapshot = !!snapshot;
+  // Main document: when the New terminal dialog closes, return to the live terminal views
+  // with the same restore used to leave the summary canvas (a reviewed presentation change).
+  useEffect(() => {
+    const closed = () => {
+      const first = current.current?.slots.find((slot) => members.includes(slot.terminalId));
+      if (!first) return;
+      void request({
+        action: 'pane',
+        slot: first.slot,
+        terminalId: first.terminalId,
+        command: 'restore',
+      });
+    };
+    window.addEventListener('orqst-terminal-creator-closed', closed);
+    return () => window.removeEventListener('orqst-terminal-creator-closed', closed);
+  });
   const leftCanvas = useRef(false);
   const canvasShown = useRef(false);
   const restoreTimer = useRef<number>(undefined);
@@ -224,7 +250,7 @@ export function FeatureWorkspace({
     (layout: NativePaneLayout[], mode: ArrangementMode) => {
       arranging.current = { layout, mode };
       const live = current.current;
-      if (!native?.arrange || !live) return;
+      if (!native?.arrange || !live || drawerOpen()) return;
       const resendLatest = (delay: number) => {
         window.clearTimeout(arrangeRetry.current.timer);
         arrangeRetry.current.timer = window.setTimeout(() => {
@@ -309,6 +335,32 @@ export function FeatureWorkspace({
     if (generation === undefined || !arranging.current) return;
     arrange(arranging.current.layout, arranging.current.mode);
   }, [generation, dockEpoch, arrange]);
+  // A new terminal joined while the dialog was open: its frame brings the views back.
+  const memberCount = snapshot?.slots.length ?? 0;
+  const lastMemberCount = useRef(memberCount);
+  useEffect(() => {
+    if (memberCount > lastMemberCount.current && drawerOpenAt.current) {
+      drawerOpenAt.current = 0;
+      const latest = arranging.current;
+      if (latest) arrangeRef.current?.(latest.layout, latest.mode);
+    }
+    lastMemberCount.current = memberCount;
+  }, [memberCount]);
+  // The dialog closed and native shows this document again (or the owner is back in it).
+  useEffect(() => {
+    const back = () => {
+      if (!drawerOpenAt.current || document.visibilityState === 'hidden') return;
+      drawerOpenAt.current = 0;
+      const latest = arranging.current;
+      if (latest) arrangeRef.current?.(latest.layout, latest.mode);
+    };
+    document.addEventListener('visibilitychange', back);
+    window.addEventListener('pointerdown', back, true);
+    return () => {
+      document.removeEventListener('visibilitychange', back);
+      window.removeEventListener('pointerdown', back, true);
+    };
+  }, []);
   // Native refuses a frame while this document lacks keyboard focus ('denied').
   // Resend the latest frame as soon as focus or a click comes back here.
   useEffect(() => {
@@ -337,8 +389,9 @@ export function FeatureWorkspace({
 
   const request = useCallback(
     async (action: Action) => {
-      if (!native || working.current) return;
+      if (!native || latchBusy()) return;
       working.current = true;
+      workingSince.current = Date.now();
       setBusy(true);
       setOperation(action.action);
       setNotice('');
@@ -517,8 +570,13 @@ export function FeatureWorkspace({
   const unavailable = !native || !snapshot;
   const canPrepare =
     !!onPrepare || (nativeWorkspace && !!native?.showPreparationDrawer && !!snapshot);
+  // The New terminal dialog has its own latch: snapshot polling must not refuse the click.
   async function prepare() {
-    if (working.current) return;
+    if (preparing.current) {
+      setPrepareIssue('busy');
+      return;
+    }
+    setPrepareIssue('');
     if (onPrepare) {
       onPrepare({
         workspaceId: snapshot?.workspace.id ?? workspaceId,
@@ -526,9 +584,11 @@ export function FeatureWorkspace({
       });
       return;
     }
-    if (!nativeWorkspace || !native?.showPreparationDrawer || !snapshot) return;
-    working.current = true;
-    setBusy(true);
+    if (!nativeWorkspace || !native?.showPreparationDrawer || !snapshot) {
+      setPrepareIssue('unavailable');
+      return;
+    }
+    preparing.current = true;
     setNotice('');
     try {
       const reply = await native.showPreparationDrawer({
@@ -538,12 +598,18 @@ export function FeatureWorkspace({
         featureId: snapshot.activeFeatureId,
         expectedRevision: snapshot.view.revision,
       });
-      if (live.current && reply.status !== 'ok') setNotice(reply.status);
+      if (live.current && reply.status === 'ok') drawerOpenAt.current = Date.now();
+      if (live.current && reply.status !== 'ok') {
+        setNotice(reply.status);
+        setPrepareIssue(reply.status);
+      }
     } catch {
-      if (live.current) setNotice('unavailable');
+      if (live.current) {
+        setNotice('unavailable');
+        setPrepareIssue('unavailable');
+      }
     } finally {
-      working.current = false;
-      if (live.current) setBusy(false);
+      preparing.current = false;
     }
   }
   useEffect(() => {
@@ -985,6 +1051,13 @@ export function FeatureWorkspace({
             }
             toolbarEnd={
               <>
+                {/* The Feature panel (and its feedback line) is hidden in the full-window
+                    Studio: show refusals such as a New terminal request here. */}
+                {immersive && (prepareIssue || (notice && snapshot)) && (
+                  <span className="ts-arrange-issue" role="status">
+                    {t(`features.${prepareIssue || notice}`)}
+                  </span>
+                )}
                 {arrangeIssue && (
                   <span className="ts-arrange-issue" role="status">
                     {arrangeIssue === 'denied'

@@ -15,6 +15,9 @@ if (
         ? (request) => invoke('feature_prepare', { request })
         : undefined,
       location.href === 'orqst-features://local/index.html',
+      location.href === 'orqst-features://local/index.html'
+        ? (code) => void invoke('diagnostic_note', { code }).catch(() => {})
+        : undefined,
     ),
   });
   if (location.href === 'orqst-features://local/index.html') {

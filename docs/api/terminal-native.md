@@ -911,6 +911,27 @@ Implemented in `terminal.rs`, unit-tested (`hide_document`); native acceptance p
   for up to 60 s (the intent lifetime) besides on focus. An idle answer consumes nothing;
   native still validates the intent, focus and generations.
 
+## Second terminal, dialog lifetime and keyboard resume — 2026-11-06
+
+- `feature_prepare` accepts an owned PTY of `main` as gesture focus (AppKit keeps it first
+  responder after a terminal opens); the bridge still requires the document's activation.
+- The New terminal dialog has its own latch in the bridge and the Studio: a background
+  snapshot read no longer refuses it, while metadata requests stay refused during it.
+- While the dialog shows, the hidden Studio document sends no automatic frames (an accepted
+  frame resumes the views over the dialog). It resumes when it is visible again, on a click,
+  after 60 s, or when a new terminal joins. A fully accepted batch closes the dialog without
+  a view restore (a restore would end the new terminal's pending opening); a cancelled
+  dialog returns with the existing pane restore. Each New terminal opens a fresh dialog.
+- Clicking or typing back into a running, attached terminal re-enables keyboard input
+  through the regular `input` request, retried briefly and quietly; the button remains only
+  if it keeps failing. Native still checks this view's focus and the grant.
+- Diagnostics: `diagnostic_note` (feature-workspace only, allowlisted short codes, ignored
+  unless `ORQST_TAURI_FOCUS_DIAGNOSTICS=1`) prints `ORQST_UI` bridge refusals; prepare logs
+  `ORQST_PREPARE` refusals per check and success.
+
+Native-verified on the owner's Mac with diagnostic builds (two terminals opened);
+packaged acceptance pending.
+
 ## Studio terminals visible and opened end to end — 2026-11-06
 
 Native diagnostics (`ORQST_TAURI_FOCUS_DIAGNOSTICS=1`) on the owner's Mac showed three

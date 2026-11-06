@@ -161,3 +161,24 @@ test('only the exact top-level chrome receives passive navigation; Studio author
     } else assert.deepEqual(calls, []);
   }
 });
+
+test('a background snapshot read in flight does not refuse the New terminal dialog', async () => {
+  let finishSnapshot!: (reply: unknown) => void;
+  const sent: unknown[] = [];
+  const client = createFeatureClient(
+    () =>
+      new Promise((resolve) => {
+        finishSnapshot = resolve;
+      }),
+    () => true,
+    async (request) => {
+      sent.push(request);
+      return { status: 'ok' };
+    },
+  );
+  const snapshot = client.request({ contractVersion: 1, generation: 0, action: 'snapshot' });
+  assert.equal((await client.showPreparationDrawer!(scope)).status, 'ok');
+  assert.deepEqual(sent, [scope]);
+  finishSnapshot({ status: 'denied' });
+  await snapshot;
+});

@@ -1314,30 +1314,57 @@ fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
     )
 }
 /// View-only chrome → owned main handoff. Never forwarded to the Core metadata pipe.
+/// Diagnostics only (`ORQST_TAURI_FOCUS_DIAGNOSTICS=1`): the Studio document reports why a
+/// request stopped before reaching native code. A short allowlisted code, nothing else; it
+/// grants nothing and is ignored otherwise.
+#[tauri::command]
+pub fn diagnostic_note(window: Webview, code: String) {
+    if window.label() == "feature-workspace"
+        && std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1")
+        && diagnostic_code(&code)
+    {
+        eprintln!("ORQST_UI {code}");
+    }
+}
+
+fn diagnostic_code(code: &str) -> bool {
+    (1..=64).contains(&code.len())
+        && code
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_:.-".contains(&b))
+}
+
 #[tauri::command]
 pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
+    // ORQST_TAURI_FOCUS_DIAGNOSTICS=1: why opening the New terminal dialog was refused.
+    let refused = |reason: &str, value: Value| {
+        if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+            eprintln!("ORQST_PREPARE refused {reason} {}", value["status"]);
+        }
+        value
+    };
     if window.label() != "feature-workspace" || !valid_preparation_request(&request) {
-        return denied();
+        return refused("p1", denied());
     }
     let Some(source) = identity(&window) else {
-        return denied();
+        return refused("p2", denied());
     };
     let app = window.app_handle();
     let Some((epoch, presentation)) = crate::terminal::metadata_context(app) else {
-        return json!({"status":"unavailable"});
+        return refused("p3", json!({"status":"unavailable"}));
     };
     let Ok(admission) = crate::terminal::preparation_admission(app) else {
-        return json!({"status":"busy"});
+        return refused("p4", json!({"status":"busy"}));
     };
     if !crate::terminal_creation::navigation_available(app) {
-        return json!({"status":"busy"});
+        return refused("p5", json!({"status":"busy"}));
     }
     let Some(main) = app.get_webview("main") else {
-        return denied();
+        return refused("p6", denied());
     };
     let Some(target) = dashboard_identity(&main) else {
-        return denied();
+        return refused("p7", denied());
     };
     if !preparation_scope_current(
         &app.state::<Features>().0.lock().unwrap(),
@@ -1345,24 +1372,46 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         &epoch,
         presentation,
     ) {
-        return json!({"status":"stale"});
+        return refused("p8", json!({"status":"stale"}));
     }
-    if !focus_then_current(focused(&window), || {
-        identity(&window) == Some(source)
-            && dashboard_identity(&main) == Some(target.clone())
-            && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
-            && crate::terminal::preparation_admission_current(app, &admission)
-            && crate::terminal_creation::navigation_available(app)
-            && preparation_scope_current(
+    // The click happens in this document (the bridge requires its user activation), but
+    // after a terminal opened, AppKit can keep the owned PTY view as first responder.
+    let gesture_focus = async {
+        focused(&window).await
+            || crate::terminal::arrangement_focused(app, &epoch, presentation).await
+    };
+    let focus_ok = gesture_focus.await;
+    let checks = [
+        ("focus", focus_ok),
+        ("identity", identity(&window) == Some(source.clone())),
+        (
+            "dashboard",
+            dashboard_identity(&main) == Some(target.clone()),
+        ),
+        (
+            "context",
+            crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation)),
+        ),
+        (
+            "admission",
+            crate::terminal::preparation_admission_current(app, &admission),
+        ),
+        (
+            "navigation",
+            crate::terminal_creation::navigation_available(app),
+        ),
+        (
+            "scope",
+            preparation_scope_current(
                 &app.state::<Features>().0.lock().unwrap(),
                 &request,
                 &epoch,
                 presentation,
-            )
-    })
-    .await
-    {
-        return denied();
+            ),
+        ),
+    ];
+    if let Some((reason, _)) = checks.iter().find(|(_, ok)| !ok) {
+        return refused(&format!("p9:{reason}"), denied());
     }
     // Changing windows revokes existing input through the existing native focus observer.
     // Only this authenticated target receives IDs; the drawer starts no execution on opening.
@@ -1370,21 +1419,21 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         || main.window().show().is_err()
         || main.window().set_focus().is_err()
     {
-        return json!({"status":"unavailable"});
+        return refused("p10", json!({"status":"unavailable"}));
     }
     if dashboard_identity(&main) != Some(target)
         || crate::terminal::metadata_context(app) != Some((epoch.clone(), presentation))
         || !crate::terminal::preparation_admission_current(app, &admission)
         || !crate::terminal_creation::navigation_available(app)
     {
-        return denied();
+        return refused("p11", denied());
     }
     // Main's DOM dialog cannot cover sibling WKWebViews. End the current view presentation
     // after the final source checks; keep every owned document/process retained.
     crate::terminal::metadata_invalidate(app);
     crate::terminal::suspend_surface(app);
     if main.set_focus().is_err() {
-        return json!({"status":"unavailable"});
+        return refused("p12", json!({"status":"unavailable"}));
     }
     if main
         .eval(format!(
@@ -1392,7 +1441,10 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         ))
         .is_err()
     {
-        return json!({"status":"unavailable"});
+        return refused("p13", json!({"status":"unavailable"}));
+    }
+    if std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() == Ok("1") {
+        eprintln!("ORQST_PREPARE ok drawer-dispatched");
     }
     json!({"status":"ok"})
 }
@@ -2166,6 +2218,7 @@ fn workspace_capability() -> tauri::ipc::CapabilityBuilder {
         .permission("allow-feature-prepare")
         .permission("allow-terminal-restore")
         .permission("allow-feature-permissions")
+        .permission("allow-diagnostic-note")
 }
 
 pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -2274,6 +2327,13 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn diagnostic_codes_are_short_plain_identifiers() {
+        assert!(super::diagnostic_code("bridge:prepare:busy"));
+        for bad in ["", "Bridge", "a b", "x\n", &"a".repeat(65)] {
+            assert!(!super::diagnostic_code(bad));
+        }
+    }
     #[test]
     fn chrome_accepts_preview_and_original_insets_only() {
         for (top, bottom) in [(36, 34), (47, 38), (81, 34), (92, 38)] {

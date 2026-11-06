@@ -12,8 +12,13 @@ export function createFeatureClient(
   activated: () => boolean,
   showPreparation?: (request: unknown) => Promise<unknown>,
   allowArrangement = false,
+  /** Diagnostics only: why a request stopped here, before reaching native code. */
+  note: (code: string) => void = () => {},
 ): DesktopFeatures {
   let busy = false;
+  // The New terminal dialog has its own latch: a slow snapshot poll must not refuse it.
+  let preparing = false;
+  let busyAction = '';
   let arrangement:
     | {
         input: Extract<Parameters<DesktopFeatures['request']>[0], { action: 'arrange' }>;
@@ -33,13 +38,14 @@ export function createFeatureClient(
       () => {
         timer = undefined;
         if (!arrangement) return;
-        if (busy) {
+        if (busy || preparing) {
           schedule();
           return;
         }
         const current = arrangement;
         arrangement = undefined;
         busy = true;
+        busyAction = 'arrange';
         last = Date.now();
         void Promise.resolve()
           .then(() => invoke(current.input))
@@ -90,22 +96,32 @@ export function createFeatureClient(
           async showPreparationDrawer(
             input: Parameters<NonNullable<DesktopFeatures['showPreparationDrawer']>>[0],
           ) {
-            if (
-              !featurePreparationRequestSchema.safeParse(input, { jitless: true }).success ||
-              !activated()
-            )
+            if (!featurePreparationRequestSchema.safeParse(input, { jitless: true }).success) {
+              note('bridge:prepare:invalid');
               return { status: 'denied' as const };
-            if (busy) return { status: 'busy' as const };
-            busy = true;
+            }
+            if (!activated()) {
+              note('bridge:prepare:inactive');
+              return { status: 'denied' as const };
+            }
+            // Serialized with metadata, except a background snapshot read: it never edits,
+            // so it must not refuse the owner's click.
+            if (preparing || (busy && busyAction !== 'snapshot')) {
+              note('bridge:prepare:busy');
+              return { status: 'busy' as const };
+            }
+            preparing = true;
             try {
               const reply = featurePreparationReplySchema.safeParse(await showPreparation(input), {
                 jitless: true,
               });
+              if (!reply.success) note('bridge:prepare:reply-invalid');
               return reply.success ? reply.data : { status: 'unavailable' as const };
             } catch {
+              note('bridge:prepare:invoke-failed');
               return { status: 'unavailable' as const };
             } finally {
-              busy = false;
+              preparing = false;
             }
           },
         }
@@ -113,9 +129,16 @@ export function createFeatureClient(
     async request(input: Parameters<DesktopFeatures['request']>[0]) {
       if (!featureNativeRequestSchema.safeParse(input, { jitless: true }).success)
         return { status: 'denied' as const };
-      if (input.action !== 'snapshot' && !activated()) return { status: 'denied' as const };
-      if (busy) return { status: 'busy' as const };
+      if (input.action !== 'snapshot' && !activated()) {
+        note(`bridge:${input.action.toLowerCase()}:inactive`);
+        return { status: 'denied' as const };
+      }
+      if (busy || preparing) {
+        if (input.action !== 'snapshot') note(`bridge:${input.action.toLowerCase()}:busy`);
+        return { status: 'busy' as const };
+      }
       busy = true;
+      busyAction = input.action;
       try {
         const reply = featureNativeReplySchema.safeParse(await invoke(input), { jitless: true });
         return reply.success ? reply.data : { status: 'unavailable' as const };

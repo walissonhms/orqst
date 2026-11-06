@@ -31,6 +31,7 @@ export function StudioWorkspace({
   });
   const native =
     window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const [creatorKey, setCreatorKey] = useState(0);
   const [creating, setCreating] = useState<{
     workspaceId: string;
     featureId: string | null;
@@ -39,6 +40,8 @@ export function StudioWorkspace({
   function openPreparation(scope: { workspaceId: string; featureId: string | null }) {
     setContext(scope);
     if (native) {
+      // A fresh dialog each time: a finished one must not reappear with old results.
+      setCreatorKey((key) => key + 1);
       setCreating(scope);
       return;
     }
@@ -76,6 +79,7 @@ export function StudioWorkspace({
       />
       {native && creating && (
         <NativeTerminalCreator
+          key={creatorKey}
           native={native}
           workspace={{
             id: creating.workspaceId,
@@ -89,7 +93,13 @@ export function StudioWorkspace({
             setCreating(null);
             openAdvanced(scope);
           }}
-          onClose={() => setCreating(null)}
+          onClose={(opened) => {
+            setCreating(null);
+            // A cancelled dialog returns to the live views (the click is the owner's gesture).
+            // After a creation the new terminal's own frame returns: a restore here would
+            // end its pending opening.
+            if (!opened) window.dispatchEvent(new Event('orqst-terminal-creator-closed'));
+          }}
         />
       )}
       <dialog

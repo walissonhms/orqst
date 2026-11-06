@@ -11,6 +11,7 @@ fn main() {
             "feature_prepare",
             "feature_permissions",
             "studio_request",
+            "diagnostic_note",
         ]),
     ))
     .expect("native permission manifest");

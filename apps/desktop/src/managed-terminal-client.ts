@@ -158,6 +158,7 @@ const revoke = () => {
 async function send(
   request: TerminalNativeRequest,
   suppliedReply?: TerminalNativeWireReply,
+  quiet = false,
 ): Promise<TerminalNativeWireReply | undefined> {
   if (busy) return;
   busy = true;
@@ -168,7 +169,8 @@ async function send(
     if (reply.status !== 'ok') {
       if (request.action === 'write' || request.action === 'paste') revoke();
       // The single local CLI review is the only way forward; never bypass it here.
-      show(reply.authorization ? 'authorization' : reply.status);
+      // An automatic keyboard re-enable stays quiet: it retries, then the button remains.
+      if (!quiet) show(reply.authorization ? 'authorization' : reply.status);
       return reply;
     }
     if (request.action !== 'read' && request.action !== 'snapshot' && request.action !== 'resize')
@@ -288,6 +290,7 @@ async function flush(): Promise<void> {
 
 // onData also contains automatic emulator replies. Forward only a trusted keyboard event.
 terminal.onKey(({ key, domEvent }) => {
+  if (domEvent.isTrusted && !input && attached && live && !gap && !suspended) resumeKeyboard();
   if (!domEvent.isTrusted || !input || suspended || !attached || gap) return;
   if (byteLength(pending + key) > 4096) {
     revoke();
@@ -383,7 +386,38 @@ window.addEventListener('blur', () => {
 window.addEventListener('focus', () => {
   suspended = false;
   updateGuidance();
+  resumeKeyboard();
 });
+/**
+ * Clicking or typing back into a running, attached terminal is the owner's gesture: enable
+ * the keyboard again without the button. Native still checks this view's focus and the
+ * grant; focus can land a moment after the event, so retry briefly and quietly.
+ */
+let resuming = false;
+function resumeKeyboard(attempt = 0): void {
+  if (resuming && attempt === 0) return;
+  if (!instanceId || !attached || !live || input || gap || suspended) {
+    resuming = false;
+    return;
+  }
+  if (busy || actionPending) {
+    if (attempt < 6) {
+      resuming = true;
+      window.setTimeout(() => resumeKeyboard(attempt + 1), 150);
+    } else resuming = false;
+    return;
+  }
+  resuming = true;
+  const target = instanceId;
+  void send({ version: 1, action: 'input', instanceId: target }, undefined, true).then((reply) => {
+    if (input || instanceId !== target || !reply || reply.status === 'ok' || attempt >= 4) {
+      resuming = false;
+      return;
+    }
+    window.setTimeout(() => resumeKeyboard(attempt + 1), 150 * (attempt + 1));
+  });
+}
+container.addEventListener('pointerdown', () => resumeKeyboard(), true);
 // Only Tauri's selected-flow bootstrap produces this result. It contains no
 // proof/lease and all later operations still pass the native broker's authority.
 window.addEventListener('orqst-terminal-open', (event) => {
