@@ -1166,6 +1166,9 @@ async fn dispatch_terminal_request_inner(
         Some("read" | "snapshot" | "resize")
     );
     if presentation_blocked(&app) {
+        if focus_diagnostics() && request["action"] == "open" {
+            eprintln!("ORQST_DISPATCH open slot={slot} presentation_blocked");
+        }
         return denied();
     }
     let focus = focused(&window).await;
@@ -1178,6 +1181,23 @@ async fn dispatch_terminal_request_inner(
         let Some(running) = guard.as_mut() else {
             return denied();
         };
+        if focus_diagnostics() && request["action"] == "open" {
+            eprintln!(
+                "ORQST_DISPATCH open slot={slot} quit={} exit={} retiring={} mcp={} loaded={} revoked={} busy={} metadata={} focus={focus} expected={:?} now=(doc={},layout={}) expired={}",
+                running.confirming_quit,
+                running.exit_authorized,
+                running.retiring,
+                running.mcp_request.is_some(),
+                running.loaded.get(slot).copied().unwrap_or(false),
+                running.revoked[slot],
+                running.busy[slot],
+                running.metadata_mutating.is_some(),
+                expected.map(|(document, presentation, _)| (document, presentation)),
+                running.generations[slot],
+                running.layout_generation,
+                expected.is_some_and(|(_, _, expires)| Instant::now() >= expires),
+            );
+        }
         if running.confirming_quit
             || running.exit_authorized
             || running.retiring
@@ -1388,6 +1408,7 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     // restored with its original document, presentation and expiry.
     let refused = matches!(value["status"].as_str(), Some("focus_required" | "denied"));
     if refused {
+        let mut rearmed = false;
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         if let Some(r) = guard.as_mut() {
@@ -1404,9 +1425,10 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
                     expires: epoch.2,
                     focus_sent: true,
                 });
+                rearmed = true;
             }
         }
-        why("refused_before_host");
+        why(if rearmed { "refused_rearmed" } else { "refused" });
         return idle();
     }
     json!({"attempted":true,"value":value})

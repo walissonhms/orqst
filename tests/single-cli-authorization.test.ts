@@ -118,6 +118,48 @@ test('missing/new permission scope and MCP expansion block inline without anothe
   }
 });
 
+test('MCP expansion needs its own native review; the opening review never covers it', async () => {
+  const s = policyFixture();
+  try {
+    await s.store.authorizeCli(s.selected, async () => true);
+    const oldEpoch = s.store.epoch(s.selected);
+    const expanded = { ...s.selected, cliAuthorizationScope: 'synthetic-local-v1:mcp' };
+    let opening = 0;
+    let expansion = 0;
+    const declined = await s.store.authorizeCli(
+      expanded,
+      async () => (opening++, true),
+      async () => (expansion++, false),
+    );
+    assert.equal(declined, 'blocked');
+    assert.equal(s.store.current(s.selected), 'allowed');
+    assert.equal(
+      await s.store.authorizeCli(
+        expanded,
+        async () => (opening++, true),
+        async () => (expansion++, true),
+      ),
+      'allowed',
+    );
+    assert.equal(opening, 0);
+    assert.equal(expansion, 2);
+    assert.notEqual(s.store.epoch(expanded), oldEpoch);
+    assert.equal(s.store.current(s.selected), 'blocked');
+    s.store.revoke(expanded);
+    assert.equal(
+      await s.store.authorizeCli(
+        { ...expanded, cliAuthorizationScope: 'synthetic-local-v1:other' },
+        async () => (opening++, true),
+        async () => (expansion++, true),
+      ),
+      'revoked',
+    );
+    assert.equal(expansion, 2);
+  } finally {
+    s.cleanup();
+  }
+});
+
 test('binary change requires one fresh native CLI review and replaces the old epoch', async () => {
   const s = policyFixture();
   try {
@@ -593,6 +635,62 @@ for (const prepared of [false, true]) {
   });
 }
 
+test('an accepted MCP expansion review opens a consumed Studio intent once', async () => {
+  const s = policyFixture();
+  const keys = generateKeyPairSync('ed25519');
+  const messages: Array<Record<string, unknown>> = [];
+  let starts = 0;
+  await s.store.authorizeCli(s.selected, async () => true);
+  const selected = { ...s.selected, cliAuthorizationScope: 'synthetic-expanded' };
+  const supervisor = new TerminalSupervisor(
+    new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
+    {
+      validate: () => true,
+      start: (_profile, events) => {
+        starts++;
+        events.started();
+        return { write() {}, resize() {}, signal() {}, dispose() {} };
+      },
+    },
+    [selected],
+  );
+  const service = new TauriTerminalService(
+    [supervisor],
+    keys,
+    (message) => messages.push(message as Record<string, unknown>),
+    (key) => key,
+    undefined,
+    undefined,
+    s.store,
+  );
+  try {
+    const id = randomUUID();
+    const pending = service.receive({
+      kind: 'request',
+      id,
+      slot: 0,
+      focused: true,
+      openingAuthorized: true,
+      request: { version: 1, action: 'open', profileId: selected.id },
+    });
+    await setImmediate();
+    const confirmation = messages.find((m) => m.kind === 'confirm');
+    assert.ok(confirmation);
+    assert.equal(confirmation.message, 'terminalNative.cliScopeExpansion');
+    await service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+    await pending;
+    assert.equal(
+      Reflect.get(messages.find((m) => m.id === id)?.value as object, 'opening'),
+      'ready',
+    );
+    assert.equal(starts, 1);
+    assert.equal(s.store.current(selected), 'allowed');
+  } finally {
+    service.close();
+    s.cleanup();
+  }
+});
+
 test('replacing an executable with identical bytes retains durable CLI authorization and epoch', async () => {
   const s = policyFixture();
   try {
@@ -747,16 +845,21 @@ for (const fault of ['unfocused', 'binary', 'revoked', 'scope', 'start', 'blur']
         await service.receive({ kind: 'revoke', slot: 0 });
         release();
       }
+      if (fault === 'scope') {
+        // The expansion review is always native; declining it refuses the opening.
+        await setImmediate();
+        const confirmation = messages.find((m) => m.kind === 'confirm');
+        assert.ok(confirmation);
+        assert.equal(confirmation.message, 'terminalNative.cliScopeExpansion');
+        await service.receive({ kind: 'confirm', id: confirmation.id, accepted: false });
+      }
       await pending;
       assert.equal(
         Reflect.get(messages.find((m) => m.id === id)?.value as object, 'status'),
         'denied',
       );
       assert.equal(starts, 0);
-      assert.equal(
-        messages.some((m) => m.kind === 'confirm'),
-        false,
-      );
+      assert.equal(messages.filter((m) => m.kind === 'confirm').length, fault === 'scope' ? 1 : 0);
     } finally {
       service.close();
       s.cleanup();

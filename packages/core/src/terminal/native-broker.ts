@@ -442,6 +442,8 @@ export class TerminalNativeBroker<Document extends object> {
   private refusal(status: 'denied' | 'cancelled', view: View): TerminalNativeReply {
     if (!this.host.cliAuthorization) return { status };
     const current = this.host.cliAuthorization.current(this.document, view.profile);
+    // Diagnostics only: the refusal state, never content (forwarded only with diagnostics on).
+    process.stderr.write(`ORQST_OPEN_HOST refused status=${status} policy=${current}\n`);
     if (
       current === 'allowed' &&
       view.policyEpoch === this.host.cliAuthorization.epoch(view.profile)

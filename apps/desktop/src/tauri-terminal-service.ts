@@ -151,24 +151,31 @@ export class TauriTerminalService {
                   profile: Parameters<TerminalCliPolicyStore['current']>[0],
                 ) => {
                   if (!state.focused || state.closed || this.closed) return 'blocked' as const;
-                  return this.cliPolicy!.authorizeCli(profile, () =>
-                    state.openingAuthorized
-                      ? Promise.resolve(state.focused && !state.closed && !this.closed)
-                      : this.confirm(
-                          slot,
-                          this.translate('terminalNative.cliScope'),
-                          JSON.stringify(
-                            {
-                              executable: profile.executable,
-                              sha256: profile.executableSha256,
-                              version: profile.executableVersion,
-                              scope: 'owned-local-terminal-v1',
-                            },
-                            null,
-                            2,
-                          ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
-                          'terminalNative.authorizeCli',
-                        ),
+                  const review = (message: string, permissions?: string) =>
+                    this.confirm(
+                      slot,
+                      this.translate(message),
+                      JSON.stringify(
+                        {
+                          executable: profile.executable,
+                          sha256: profile.executableSha256,
+                          version: profile.executableVersion,
+                          scope: 'owned-local-terminal-v1',
+                          ...(permissions ? { permissions } : {}),
+                        },
+                        null,
+                        2,
+                      ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
+                      'terminalNative.authorizeCli',
+                    );
+                  return this.cliPolicy!.authorizeCli(
+                    profile,
+                    () =>
+                      state.openingAuthorized
+                        ? Promise.resolve(state.focused && !state.closed && !this.closed)
+                        : review('terminalNative.cliScope'),
+                    // Always a native dialog: the opening review never covers new permissions.
+                    () => review('terminalNative.cliScopeExpansion', profile.cliAuthorizationScope),
                   );
                 },
                 current: (

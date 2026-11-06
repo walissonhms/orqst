@@ -623,7 +623,8 @@
     "confirm": "Autorizar uma vez",
     "open": "Abrir este CLI e modelo exatos neste workspace e permitir o uso normal do terminal?",
     "authorizeCli": "Autorizar CLI local",
-    "cliScope": "Permitir o uso normal dos terminais que você abrir com este executável revisado. As aprovações nativas do provedor continuam inalteradas."
+    "cliScope": "Permitir o uso normal dos terminais que você abrir com este executável revisado. As aprovações nativas do provedor continuam inalteradas.",
+    "cliScopeExpansion": "Permitir que o ORQST adicione novas permissões a este executável revisado: o servidor MCP do ORQST, para que os terminais da mesma Feature troquem mensagens. As aprovações nativas do provedor continuam inalteradas."
   },
   "overviewLayout": {
     "title": "Personalizar visão geral",

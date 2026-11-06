@@ -129,20 +129,22 @@ export class TerminalCliPolicyStore {
   async authorizeCli(
     profile: Readonly<TerminalProfile>,
     review: () => Promise<boolean>,
+    reviewExpansion?: () => Promise<boolean>,
   ): Promise<TerminalCliAuthorizationState> {
     try {
       if (!profile.cliAuthorizationScope) return 'blocked';
       if (this.current(profile) === 'allowed') return 'allowed';
       const previous = this.load(profile);
-      // Revocation and permission expansion require explicit configuration. Opening is not consent to either.
-      if (
-        previous &&
-        (previous.state === 'revoked' || previous.permissionScope !== permissionScope(profile))
-      )
-        return previous.state === 'revoked' ? 'revoked' : 'blocked';
+      // Revocation requires explicit configuration. Opening is never consent to it.
+      if (previous?.state === 'revoked') return 'revoked';
+      // A permission expansion (e.g. ORQST MCP added to an allowed CLI) needs its own explicit
+      // native review of the new scope. The opening review never stands in for it.
+      const expansion =
+        previous !== undefined && previous.permissionScope !== permissionScope(profile);
+      if (expansion && !reviewExpansion) return 'blocked';
       this.inspect(profile);
       const identity = this.identity(profile);
-      if (!(await review())) return 'blocked';
+      if (!(await (expansion ? reviewExpansion! : review)())) return 'blocked';
       if (identity !== this.identity(profile)) return 'revoked';
       // A concurrent policy change must not be overwritten by a stale native review.
       if (JSON.stringify(previous) !== JSON.stringify(this.load(profile))) return 'revoked';
