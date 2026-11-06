@@ -1543,8 +1543,5 @@ Feature permission policy reads can be retried explicitly with Refresh through t
 focus gate. If a proposal outcome is uncertain, the revision is invalidated until a
 fresh read; no proposal is retried automatically. Native UI acceptance remains pending.
 
-<<<<<<< HEAD
 The owned MCP pair can project bounded, metadata-only delegation/result evidence into Feature snapshot/canvas replies. This is a display feed for an already authorized pair; ordinary terminals and unsupported composer mentions acquire no communication route. See [the API contract](docs/api/terminal-native.md#owned-mcp-communication-projection--2026-11-05).
-=======
 Studio-hosted native terminal documents use the shared Studio header while keeping process authorization controls. Accepted Feature snapshots independently hide non-members; hiding retains owned processes and never grants input.
->>>>>>> 779eed72700274e8e6a9e65ca7da8efc98b6cf91

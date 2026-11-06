@@ -1395,12 +1395,6 @@ acceptance pending.
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 - Implemented current-owned-MCP-pair communication audit and Feature-scoped display projection; native UI and real provider exchange acceptance remain pending. No new composer route or cross-Feature authority.
-=======
 - Owned Claude hook review fixes implemented; actual pinned-provider and OS notification acceptance remain pending.
->>>>>>> 095a3563ed272d668fda4476eb9304fce3e33d0d
-=======
 - Implemented the native Feature-membership hide barrier and Studio document chrome marker; owner native acceptance and isolated package verification remain required.
->>>>>>> 779eed72700274e8e6a9e65ca7da8efc98b6cf91

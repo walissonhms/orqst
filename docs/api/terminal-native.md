@@ -681,7 +681,6 @@ See [source/reuse and security review](../research/current-workspace-terminal-ba
 Renderer integration, actual native mixed-provider batch acceptance and the
 separately reviewed multi-workspace design remain pending.
 
-<<<<<<< HEAD
 ### Owned MCP communication projection — 2026-11-05
 
 Successful `snapshot` and `canvas` replies may include:
@@ -719,7 +718,9 @@ The Core stores a private metadata-only current-epoch audit in
 separate structured-agents host journal or restore an old epoch. Pair capacity is
 16 grants / 32 events; unsafe files or the 64 KiB read budget omit evidence without
 changing accepted MCP operations. See the [reference review](../research/mcp-pair-communication-projection.md).
+
 ## Claude owned hook state — 2026-11-05 (source candidate)
+
 New native-prepared Claude TUI 2.1.318 manifests opt into `ownedHooks: true`.
 Their reviewed launch adds `--settings <state>/claude-hooks-settings.json`; the
 settings and original ORQST writer script are immutable private 0600 files, and
@@ -750,16 +751,13 @@ started by the observer. Actual pinned-provider behavior remains native acceptan
 Waiting transitions from a previously sampled running state use the existing
 `intervention` preference and fixed localized native body. Native pipe category
 `waiting_for_user` maps internally to intervention; epoch/slot/generation/input
-<<<<<<< HEAD
 revocation and click-routing guards are unchanged. Dedupe remains terminal+turn,
 including disabled transitions, so an idle notification cannot replay a completed
 turn alert. No notification is inferred solely from initial/missing evidence.
-=======
 revocation and click-routing guards are unchanged. Node and Rust dedupe each
 terminal+turn+category, including disabled transitions. A permission alert or disabled
 intervention preference cannot consume a later completion/failure category. No notification is inferred solely from initial/missing evidence.
 
->>>>>>> 095a3563ed272d668fda4476eb9304fce3e33d0d
 See [pinned merge/source review](../research/claude-owned-hooks.md).
 
 #### Owned hook review adjustments — 2026-11-05
@@ -777,7 +775,7 @@ that completed→waiting edge does not emit a new notification (running is requi
 Stop/`completed` means **response completed**, never a whole delegated task. Owned
 completion notifications use `desktopShell.alert.responseCompleted`; the frontend
 owner supplies English/Portuguese translations. Observer copy keeps its existing key.
-=======
+
 ### Studio hosted-document membership barrier — 2026-11-05
 
 An accepted Feature snapshot also establishes a hide-only native member set for
@@ -789,10 +787,8 @@ geometry frame is refused. Later frames in that generation must carry exactly th
 same member set; viewport, revision, ordering and input fences remain required.
 A fresh native generation clears the prior display constraint for the next owned
 context operation; it does not restore input, grants or processes.
-
 Tauri Studio documents (initial and enrolled) additionally use
 `main[data-chrome="studio"]` to activate the existing compact CSS. Open terminal,
 Connect output and Enable keyboard input remain outside the hidden duplicate
 header and keep their existing native authorization. Legacy/Electron documents
 retain their existing header. No renderer request or runtime authority is added.
->>>>>>> 779eed72700274e8e6a9e65ca7da8efc98b6cf91

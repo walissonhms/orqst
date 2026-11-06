@@ -1224,7 +1224,6 @@ acceptance pending.
 - [ ] Renderer wiring and real native mixed-provider batch acceptance.
 - [ ] Multi-workspace design review and account-profile creation remain separate.
 
-<<<<<<< HEAD
 ### Owned MCP pair communication evidence — pane-817, 2026-11-05
 
 - [x] Add metadata-only current-pair audit at exact broker delivery/result acceptance;
@@ -1235,7 +1234,9 @@ acceptance pending.
       the separate structured-agents host outside this projection.
 - [ ] Accept native rendering and a real provider MCP exchange. Normal CLI terminal
       preparation still has MCP disabled; this increment creates no new route.
+
 ## Owned Claude hooks and integrated batch candidate — 2026-11-05
+
 - [x] Package exact frontend `1401ee8` with batch UI and per-item results; full
       Node 1443/1443, Rust 173 passed + 2 ignored, lint/types/Clippy/build passed.
       The package is signed and verified separately and is not opened during delivery.
@@ -1255,7 +1256,7 @@ acceptance pending.
       failure callbacks; distinguish response completion from delegated task success.
 - [ ] Accept with actual Claude Code 2.1.318 and macOS notifications. No provider
       launch is part of the automatic tests; this work changes no user settings.
-=======
+
 ### Studio native membership/chrome corrections — pane-817, 2026-11-05
 
 - [x] Bind hide-only native visibility to the accepted Feature snapshot independently
@@ -1265,4 +1266,3 @@ acceptance pending.
       retaining the separate process authorization controls and legacy documents.
 - [ ] Accept the new isolated package against the owner's empty-Feature and
       duplicate-header report. Synthetic scope/HTML tests do not prove AppKit behavior.
->>>>>>> 779eed72700274e8e6a9e65ca7da8efc98b6cf91
