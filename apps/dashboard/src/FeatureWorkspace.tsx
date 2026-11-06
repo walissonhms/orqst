@@ -202,41 +202,62 @@ export function FeatureWorkspace({
   immersiveRef.current = immersive;
   const arranging = useRef<{ layout: NativePaneLayout[]; mode: ArrangementMode } | null>(null);
   const arrangeRef = useRef<(layout: NativePaneLayout[], mode: ArrangementMode) => void>(undefined);
-  const busyRetry = useRef<number>(undefined);
+  const arrangeRetry = useRef<{ timer?: number; attempt: number }>({ attempt: 0 });
+  // Read through a ref: a new terminals array (clock tick, dock event) must not
+  // re-create arrange, or the resend effect below would loop with native dock events.
+  const terminalsRef = useRef(terminals);
+  terminalsRef.current = terminals;
   /** Send the Studio geometry to native views; the bridge keeps only the latest frame. */
   const arrange = useCallback(
     (layout: NativePaneLayout[], mode: ArrangementMode) => {
       arranging.current = { layout, mode };
       const live = current.current;
       if (!native?.arrange || !live) return;
-      const chrome = nativeChrome(immersiveRef.current, window.innerWidth);
-      const viewport = {
-        width: window.innerWidth - chrome.sidebar,
-        height: window.innerHeight - chrome.top - chrome.bottom,
+      const resendLatest = (delay: number) => {
+        window.clearTimeout(arrangeRetry.current.timer);
+        arrangeRetry.current.timer = window.setTimeout(() => {
+          const latest = arranging.current;
+          if (latest) arrangeRef.current?.(latest.layout, latest.mode);
+        }, delay);
       };
-      const memberIds = live.slots
-        .filter((slot) => terminals.some((terminal) => terminal.id === slot.terminalId))
-        .map((slot) => slot.terminalId);
-      const send = (snapshotNow: FeatureNativeSnapshot, retry: boolean) =>
-        native.arrange!({
+      const send = (snapshotNow: FeatureNativeSnapshot, retry: boolean) => {
+        // Viewport and members are read at send time, next to the request they describe.
+        const chrome = nativeChrome(immersiveRef.current, window.innerWidth);
+        const viewport = {
+          width: window.innerWidth - chrome.sidebar,
+          height: window.innerHeight - chrome.top - chrome.bottom,
+        };
+        const memberIds = snapshotNow.slots
+          .filter((slot) =>
+            terminalsRef.current.some((terminal) => terminal.id === slot.terminalId),
+          )
+          .map((slot) => slot.terminalId);
+        return native.arrange!({
           ...arrangeRequest(snapshotNow, memberIds, layout, mode, viewport, chrome),
           contractVersion: 1,
           generation: snapshotNow.generation,
         })
           .then((reply) => {
             if (reply.status === 'ok') {
+              window.clearTimeout(arrangeRetry.current.timer);
+              arrangeRetry.current.attempt = 0;
               setArrangeIssue('');
               return;
             }
-            // A newer generation hides the views until a matching frame: resend once with it.
+            // Native keeps one frame per 16 ms: resend the latest one shortly after.
+            if (reply.status === 'busy') return resendLatest(40);
+            // A newer generation hides the views until a matching frame: resend with it.
             if (retry && reply.snapshot && reply.snapshot.generation !== snapshotNow.generation) {
               current.current = reply.snapshot;
               setSnapshot(reply.snapshot);
               void send(reply.snapshot, false);
               return;
             }
-            // The native presentation changed without new metadata: re-read, then resend once.
-            if (retry && reply.status === 'stale' && native) {
+            setArrangeIssue(reply.status);
+            // Members, presentation or focus may have changed (a new terminal, a resize, a
+            // native dialog). Re-read the snapshot so the Studio renders the current members,
+            // then keep resending the latest frame with a growing delay.
+            if (retry && native) {
               void native
                 .request({
                   contractVersion: 1,
@@ -244,32 +265,26 @@ export function FeatureWorkspace({
                   action: 'snapshot',
                 })
                 .then((fresh) => {
-                  if (!fresh.snapshot) return setArrangeIssue('stale');
+                  if (!fresh.snapshot) return;
                   current.current = fresh.snapshot;
                   setSnapshot(fresh.snapshot);
-                  void send(fresh.snapshot, false);
                 })
-                .catch(() => setArrangeIssue('unavailable'));
-              return;
+                .catch(() => undefined);
             }
-            // Native keeps one frame per 16 ms: resend the latest one shortly after.
-            if (reply.status === 'busy') {
-              window.clearTimeout(busyRetry.current);
-              busyRetry.current = window.setTimeout(() => {
-                const latest = arranging.current;
-                if (latest) arrangeRef.current?.(latest.layout, latest.mode);
-              }, 40);
-              return;
-            }
-            setArrangeIssue(reply.status);
+            const attempt = Math.min(arrangeRetry.current.attempt++, 4);
+            resendLatest([300, 600, 1200, 2500, 5000][attempt]!);
           })
-          .catch(() => setArrangeIssue('unavailable'));
+          .catch(() => {
+            setArrangeIssue('unavailable');
+            resendLatest(2500);
+          });
+      };
       void send(live, true);
     },
-    [native, terminals],
+    [native],
   );
   arrangeRef.current = arrange;
-  useEffect(() => () => window.clearTimeout(busyRetry.current), []);
+  useEffect(() => () => window.clearTimeout(arrangeRetry.current.timer), []);
   // Native hides terminal views on every new generation until a matching frame arrives,
   // so the last arrangement is sent again whenever the generation changes.
   // Two counters can hide the views: the metadata generation and the native layout fence
@@ -287,11 +302,9 @@ export function FeatureWorkspace({
       const latest = arranging.current;
       if (latest) arrangeRef.current?.(latest.layout, latest.mode);
     };
-    const timer = window.setTimeout(resend, 600);
     window.addEventListener('focus', resend);
     window.addEventListener('pointerdown', resend, true);
     return () => {
-      window.clearTimeout(timer);
       window.removeEventListener('focus', resend);
       window.removeEventListener('pointerdown', resend, true);
     };

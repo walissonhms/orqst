@@ -97,9 +97,27 @@ export function NativeTerminalCreator({
 
   /** One native batch: every terminal gets its own accepted/refused/unknown result. */
   const open = async (requests: TerminalRequest[]) => {
-    if (!catalog || !snapshot) return;
+    if (!catalog) return;
     setState('opening');
     setFailure(undefined);
+    // The first snapshot read can fail while the host starts; read again before creating.
+    let current = snapshot;
+    if (!current) {
+      try {
+        const fresh = await native.request({ action: 'snapshot' });
+        if (fresh.status !== 'catalog' && fresh.snapshot) {
+          current = fresh.snapshot;
+          setSnapshot(fresh.snapshot);
+        }
+      } catch {
+        // Reported below.
+      }
+    }
+    if (!current) {
+      setState('error');
+      setMessage(t('studio.unavailable'));
+      return;
+    }
     const counts = new Map<string, number>();
     const items = requests.map((request) => {
       const entry = catalog.providers.find((p) => p.provider === request.provider);
@@ -123,7 +141,7 @@ export function NativeTerminalCreator({
     try {
       const reply = await native.request({
         action: 'create-batch',
-        generation: snapshot.generation,
+        generation: current.generation,
         workspaceId: workspace.id,
         featureId,
         catalogId: catalog.catalogId,

@@ -410,7 +410,17 @@ export function TerminalStudio({
   }, [fixedNow]);
 
   useEffect(() => setState((current) => reconcile(current, terminals)), [terminals]);
-  useEffect(() => saveState(storageKey, state), [storageKey, state]);
+  // Each Feature keeps its own arrangement: load the new key's state before saving again.
+  const stateKey = useRef(storageKey);
+  useEffect(() => {
+    if (stateKey.current !== storageKey) {
+      stateKey.current = storageKey;
+      setState(initialState(storageKey, terminals));
+      return;
+    }
+    saveState(storageKey, state);
+    // terminals is read only when the key changes; reconcile handles later changes.
+  }, [storageKey, state]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -775,11 +785,13 @@ export function TerminalStudio({
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
       );
       const box = hole?.getBoundingClientRect();
+      // Tiled modes may not overlap natively: hide the dragged view until it drops.
+      const dragging = drag?.id === pane.id && scoped.mode !== 'free';
       return {
         id: pane.id,
         z: drag?.id === pane.id ? 255 : pane.z,
         rect:
-          covered || !box || box.width < 1 || box.height < 1
+          covered || dragging || !box || box.width < 1 || box.height < 1
             ? null
             : {
                 x: box.left - origin.left,
