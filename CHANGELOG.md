@@ -1532,3 +1532,8 @@ acceptance pending.
 - Added a Feature-scoped optional delegation/result feed from the owned MCP pair audit, with metadata-only persistence, exact identity binding and Node/Rust validation. Unsupported mention attempts remain separate.
 - Fixed owned Claude hook notification dedupe per category in Node/Rust, unmatched metadata invalidation and repeated progress coalescing. Added refusal coverage and explicit response/idle/interruption limits.
 - Fixed retained native terminal visibility across Feature changes even when geometry is refused, and enabled Studio chrome for initial/enrolled terminal documents without hiding process authorization controls.
+
+## Studio direct opening — 2026-11-06
+
+- Use the focused Studio Open gesture for ordinary selected/batch creation and
+  owned opening, retaining single-use intents, binary/policy checks and Core proofs.

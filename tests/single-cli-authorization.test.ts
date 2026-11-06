@@ -520,72 +520,78 @@ test('installed owned-retirement port denies invalid evidence inline and never f
   assert.equal(retired, false);
 });
 
-test('production service policy port shows one compact CLI review across two native-owned slots', async () => {
-  const s = policyFixture();
-  const keys = generateKeyPairSync('ed25519');
-  const messages: Array<Record<string, unknown>> = [];
-  let starts = 0;
-  const supervisors = [0, 1].map(
-    () =>
-      new TerminalSupervisor(
-        new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
-        {
-          validate: () => true,
-          start: (_profile, events) => {
-            starts++;
-            events.started();
-            return { write() {}, resize() {}, signal() {}, dispose() {} };
+for (const prepared of [false, true]) {
+  test(`production service uses ${prepared ? 'the consumed Studio intent without a dialog' : 'one legacy CLI review'} across two native-owned slots`, async () => {
+    const s = policyFixture();
+    const keys = generateKeyPairSync('ed25519');
+    const messages: Array<Record<string, unknown>> = [];
+    let starts = 0;
+    const supervisors = [0, 1].map(
+      () =>
+        new TerminalSupervisor(
+          new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
+          {
+            validate: () => true,
+            start: (_profile, events) => {
+              starts++;
+              events.started();
+              return { write() {}, resize() {}, signal() {}, dispose() {} };
+            },
           },
-        },
-        [s.selected],
-      ),
-  );
-  const service = new TauriTerminalService(
-    supervisors,
-    keys,
-    (message) => messages.push(message as Record<string, unknown>),
-    (key) => key,
-    undefined,
-    undefined,
-    s.store,
-  );
-  try {
-    const first = randomUUID();
-    const pending = service.receive({
-      kind: 'request',
-      id: first,
-      slot: 0,
-      focused: true,
-      request: { version: 1, action: 'open', profileId: profile.id },
-    });
-    await setImmediate();
-    const confirmation = messages.find((m) => m.kind === 'confirm');
-    assert.ok(confirmation);
-    assert.equal(confirmation.approve, 'terminalNative.authorizeCli');
-    assert.equal(confirmation.message, 'terminalNative.cliScope');
-    await service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
-    await pending;
-    const reply = messages.find((m) => m.id === first)?.value;
-    assert.equal(Reflect.get(reply as object, 'opening'), 'ready');
-    const second = randomUUID();
-    await service.receive({
-      kind: 'request',
-      id: second,
-      slot: 1,
-      focused: true,
-      request: { version: 1, action: 'open', profileId: profile.id },
-    });
-    assert.equal(
-      Reflect.get(messages.find((m) => m.id === second)?.value as object, 'opening'),
-      'ready',
+          [s.selected],
+        ),
     );
-    assert.equal(messages.filter((m) => m.kind === 'confirm').length, 1);
-    assert.equal(starts, 2);
-  } finally {
-    service.close();
-    s.cleanup();
-  }
-});
+    const service = new TauriTerminalService(
+      supervisors,
+      keys,
+      (message) => messages.push(message as Record<string, unknown>),
+      (key) => key,
+      undefined,
+      undefined,
+      s.store,
+    );
+    try {
+      const first = randomUUID();
+      const pending = service.receive({
+        kind: 'request',
+        id: first,
+        slot: 0,
+        focused: true,
+        ...(prepared ? { openingAuthorized: true } : {}),
+        request: { version: 1, action: 'open', profileId: profile.id },
+      });
+      if (!prepared) {
+        await setImmediate();
+        const confirmation = messages.find((m) => m.kind === 'confirm');
+        assert.ok(confirmation);
+        assert.equal(confirmation.approve, 'terminalNative.authorizeCli');
+        assert.equal(confirmation.message, 'terminalNative.cliScope');
+        await service.receive({ kind: 'confirm', id: confirmation.id, accepted: true });
+      }
+      await pending;
+      const reply = messages.find((m) => m.id === first)?.value;
+      assert.equal(Reflect.get(reply as object, 'opening'), 'ready');
+      const second = randomUUID();
+      await service.receive({
+        kind: 'request',
+        id: second,
+        slot: 1,
+        focused: true,
+        ...(prepared ? { openingAuthorized: true } : {}),
+        request: { version: 1, action: 'open', profileId: profile.id },
+      });
+      assert.equal(
+        Reflect.get(messages.find((m) => m.id === second)?.value as object, 'opening'),
+        'ready',
+      );
+      assert.equal(messages.filter((m) => m.kind === 'confirm').length, prepared ? 0 : 1);
+      assert.equal(starts, 2);
+    } finally {
+      service.close();
+      s.cleanup();
+    }
+  });
+}
 
 test('replacing an executable with identical bytes retains durable CLI authorization and epoch', async () => {
   const s = policyFixture();
@@ -667,3 +673,93 @@ test('trusted CLI Stop still requires the current native document and focus, and
     s.broker.close();
   }
 });
+
+for (const fault of ['unfocused', 'binary', 'revoked', 'scope', 'start', 'blur'] as const) {
+  test(`a consumed Studio intent cannot bypass ${fault} refusal`, async () => {
+    const s = policyFixture();
+    const keys = generateKeyPairSync('ed25519');
+    const messages: Array<Record<string, unknown>> = [];
+    let starts = 0;
+    if (fault === 'revoked' || fault === 'scope') {
+      await s.store.authorizeCli(s.selected, async () => true);
+      if (fault === 'revoked') s.store.revoke(s.selected);
+    }
+    const selected =
+      fault === 'scope'
+        ? { ...s.selected, cliAuthorizationScope: 'synthetic-expanded' }
+        : s.selected;
+    const supervisor = new TerminalSupervisor(
+      new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), Date.now),
+      {
+        validate: () => true,
+        start: (_profile, events) => {
+          starts++;
+          events.started();
+          return { write() {}, resize() {}, signal() {}, dispose() {} };
+        },
+      },
+      [selected],
+    );
+    let release: (() => void) | undefined;
+    const port: TerminalNativeSupervisor =
+      fault === 'blur'
+        ? new Proxy(supervisor, {
+            get(target, property) {
+              if (property === 'prepare')
+                return async (...args: Parameters<TerminalSupervisor['prepare']>) => {
+                  await new Promise<void>((resolve) => {
+                    release = resolve;
+                  });
+                  return target.prepare(...args);
+                };
+              const value: unknown = Reflect.get(target, property);
+              return typeof value === 'function' ? value.bind(target) : value;
+            },
+          })
+        : supervisor;
+    const service = new TauriTerminalService(
+      [port],
+      keys,
+      (message) => messages.push(message as Record<string, unknown>),
+      (key) => key,
+      undefined,
+      undefined,
+      s.store,
+    );
+    try {
+      if (fault === 'binary') writeFileSync(selected.executable, 'SYNTHETIC-DRIFT');
+      const id = randomUUID();
+      const pending = service.receive({
+        kind: 'request',
+        id,
+        slot: 0,
+        focused: fault !== 'unfocused',
+        openingAuthorized: true,
+        request: {
+          version: 1,
+          action: fault === 'start' ? 'start' : 'open',
+          profileId: selected.id,
+        },
+      });
+      if (fault === 'blur') {
+        await setImmediate();
+        assert.ok(release);
+        await service.receive({ kind: 'revoke', slot: 0 });
+        release();
+      }
+      await pending;
+      assert.equal(
+        Reflect.get(messages.find((m) => m.id === id)?.value as object, 'status'),
+        'denied',
+      );
+      assert.equal(starts, 0);
+      assert.equal(
+        messages.some((m) => m.kind === 'confirm'),
+        false,
+      );
+    } finally {
+      service.close();
+      s.cleanup();
+    }
+  });
+}

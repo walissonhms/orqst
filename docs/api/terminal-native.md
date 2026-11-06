@@ -862,3 +862,12 @@ Tauri Studio documents (initial and enrolled) additionally use
 Connect output and Enable keyboard input remain outside the hidden duplicate
 header and keep their existing native authorization. Legacy/Electron documents
 retain their existing header. No renderer request or runtime authority is added.
+
+## Studio opening without a second sheet — 2026-11-06
+
+`create-selected` and `create-batch` use the existing activated, focused main Studio
+Open gesture. No per-CLI preparation sheet is shown. Native commit and opening
+intent remain single-use and generation-bound. The consumed intent marks only the
+private host envelope `openingAuthorized: true`; no public request changes. MCP
+pair grants, explicit revocation and manual legacy reviews remain separate. See
+[decision/security review](../research/studio-open-gesture.md).

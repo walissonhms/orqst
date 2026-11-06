@@ -1369,3 +1369,11 @@ suite 1,478/1,478 (zero failures/cancellations/skips); Rust 182 passed with two
 existing ignored tests; lint, types, filtered dashboard build, isolated staging
 and all-target Clippy with warnings denied passed. No new app bundle, live
 reservation operation, provider stop or native acceptance was performed.
+
+## Studio Open gesture — 2026-11-06
+
+- [x] Owner decision: ordinary selected/batch creation without redundant dialogs.
+- [x] Preserve source/focus/generation, commit latch, admission, binary/path/hash and signed Core proofs.
+- [x] Private consumed-intent mark only; revoked/expanded policies still refuse.
+- [x] Pinned Anywh/Tucano research; synthetic provisioning and broker refusal coverage.
+- [ ] Native/provider one-click acceptance remains pending.

@@ -164,6 +164,15 @@ function fixture(openCodeCopies = false) {
   };
 }
 
+// Inject concurrent change at the first post-plan current-context check, before the native latch.
+function beforeCommit(f: ReturnType<typeof fixture>, mutate: () => void) {
+  let calls = 0;
+  f.ports.current = () => {
+    if (++calls === 2) mutate();
+    return true;
+  };
+}
+
 for (const [provider, useDefault] of [
   ['codex', false],
   ['claude', false],
@@ -209,7 +218,7 @@ for (const [provider, useDefault] of [
         f.trusted,
       );
       assert.equal(prepared.status, 'open');
-      assert.deepEqual(f.confirmations, ['selected']);
+      assert.deepEqual(f.confirmations, []);
       assert.deepEqual(readdirSync(f.project), ['SYNTHETIC-EXISTING-SOURCE']);
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
       assert.equal(config.project, f.project);
@@ -406,14 +415,11 @@ test('OpenCode review rejects a changed chosen executable instead of substitutin
         commits++;
         return true;
       };
-      f.ports.confirm = async (_key, detail) => {
-        // The complete pre-write configuration stays available through native Details.
-        assert.ok(detail.includes(join(f.root, 'bin/opencode')));
+      beforeCommit(f, () => {
         const first = join(f.root, 'bin/opencode');
         if (change === 'removal') rmSync(first);
         else writeFileSync(first, Buffer.concat([readFileSync(binary), Buffer.from('DRIFT')]));
-        return true;
-      };
+      });
       await assert.rejects(
         prepareTauriTerminals(
           {
@@ -486,10 +492,9 @@ test('unknown model capabilities and changed source/view are refused before prov
       commits++;
       return true;
     };
-    f.ports.confirm = async () => {
+    beforeCommit(f, () => {
       writeFileSync(join(f.home, '.codex/config.toml'), 'model="changed"\n', { mode: 0o600 });
-      return true;
-    };
+    });
     await assert.rejects(
       prepareTauriTerminals(request, f.context, f.ports, Date.now, f.trusted),
       (error: unknown) => {
@@ -727,7 +732,7 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
       );
       assert.equal(prepared.status, 'open');
       assert.equal(prepared.files.length, 1);
-      assert.deepEqual(f.confirmations, ['selected']);
+      assert.deepEqual(f.confirmations, []);
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
       assert.equal(config.interactive?.mcp, undefined);
       assert.equal(config.project, f.project);
@@ -783,7 +788,7 @@ function syntheticCache(f: ReturnType<typeof fixture>, fetchedAt = Date.now()) {
 }
 
 for (const selected of ['native-config', 'cli-default', 'cli-cache'] as const) {
-  for (const phase of ['before-click', 'review', 'commit'] as const) {
+  for (const phase of ['before-click', 'revalidation', 'commit'] as const) {
     test(`catalog regression: ${selected} survives unrelated cache/provider updates at ${phase}`, async (t) => {
       const f = fixture();
       let clock = Date.now();
@@ -812,11 +817,7 @@ for (const selected of ['native-config', 'cli-default', 'cli-cache'] as const) {
           rmSync(join(f.root, 'bin/claude'));
         };
         if (phase === 'before-click') mutate();
-        if (phase === 'review')
-          f.ports.confirm = async () => {
-            mutate();
-            return true;
-          };
+        if (phase === 'revalidation') beforeCommit(f, mutate);
         if (phase === 'commit')
           f.ports.commit = async () => {
             mutate();
@@ -867,7 +868,7 @@ for (const fault of [
   'feature',
   'workspace',
 ] as const) {
-  for (const phase of ['before-click', 'review', 'commit'] as const) {
+  for (const phase of ['before-click', 'revalidation', 'commit'] as const) {
     test(`catalog regression: selected ${fault} drift at ${phase} refuses before effects`, async (t) => {
       const f = fixture();
       let clock = Date.now();
@@ -919,10 +920,7 @@ for (const fault of [
           if (fault === 'home') f.context.home = f.project;
         };
         if (phase === 'before-click') drift();
-        f.ports.confirm = async () => {
-          if (phase === 'review') drift();
-          return true;
-        };
+        if (phase === 'revalidation') beforeCommit(f, drift);
         f.ports.commit = async () => {
           commits++;
           if (phase === 'commit') drift();
@@ -980,7 +978,7 @@ for (const field of ['fetched_at', 'other-model', 'other-cli'] as const) {
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
       assert.equal(config.model!.value, 'gpt-6.1-sol');
       assert.equal(config.model!.source, 'native-config');
-      assert.deepEqual(f.confirmations, ['selected']);
+      assert.deepEqual(f.confirmations, []);
     } finally {
       f.close();
     }
@@ -1116,17 +1114,8 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
     const opencode = catalog.catalog.providers.find((entry) => entry.provider === 'opencode')!;
     const chosen = opencode.models.find((entry) => entry.label === 'synthetic/variant-model#fast');
     assert.ok(chosen);
-    const details: string[] = [];
-    f.ports.confirm = async (key, detail, overview) => {
-      assert.equal(key, 'selected');
-      assert.equal(overview?.project, f.project);
-      assert.equal(overview?.terminals[0]?.provider, 'opencode');
-      assert.equal(overview?.terminals[0]?.model, 'synthetic/variant-model#fast');
-      assert.equal(overview?.terminals[0]?.id, JSON.parse(detail).terminals[0].identity.terminalId);
-      // No file is written before both concise summary and full Details are available.
-      assert.deepEqual(readdirSync(f.context.parent), []);
-      details.push(detail);
-      return true;
+    f.ports.confirm = async () => {
+      throw new Error('Studio Open must not show a preparation dialog');
     };
     const prepared = await prepareTauriTerminals(
       {
@@ -1144,8 +1133,6 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
       f.trusted,
     );
     assert.equal(prepared.status, 'open');
-    assert.equal(details.length, 1);
-    assert.equal(JSON.parse(details[0]!).terminals[0].model.value, 'synthetic/variant-model#fast');
     const config = readInteractiveTerminalConfig(prepared.files[0]!);
     assert.equal(config.version, 3);
     assert.deepEqual(config.model, {
@@ -1154,7 +1141,7 @@ test('OpenCode native choice reaches the launch profile without a picker cache o
       files: config.model!.files,
     });
     assert.ok(config.model!.files.some((file) => file.path.endsWith('/opencode/model.json')));
-    // The written manifest is the complete configuration that the short consent authorized.
+    // The written manifest keeps the exact configuration selected by the Studio Open gesture.
     assert.deepEqual(JSON.parse(readFileSync(join(config.state, 'terminal.json'), 'utf8')), config);
   } finally {
     f.close();
@@ -1285,7 +1272,7 @@ for (const change of ['unrelated', 'removed', 'variant'] as const) {
         commits++;
         return true;
       };
-      f.ports.confirm = async () => {
+      beforeCommit(f, () => {
         openCodeState(
           f,
           change === 'unrelated'
@@ -1294,8 +1281,7 @@ for (const change of ['unrelated', 'removed', 'variant'] as const) {
               ? { recent: [], variant: {} }
               : { ...original, variant: { 'synthetic/chosen': 'slow' } },
         );
-        return true;
-      };
+      });
       const attempt = prepareTauriTerminals(
         {
           action: 'create-selected',
@@ -1332,7 +1318,13 @@ for (const change of ['unrelated', 'removed', 'variant'] as const) {
   });
 }
 
-for (const phase of ['before', 'review', 'commit', 'same-owner-replaced', 'same-core'] as const) {
+for (const phase of [
+  'before',
+  'revalidation',
+  'commit',
+  'same-owner-replaced',
+  'same-core',
+] as const) {
   test(`admission preflight ${phase} preserves reservation and never provisions a blocked selection`, async () => {
     const f = fixture();
     const file = join(f.trusted.preferencesDirectory, 'active-pair.json');
@@ -1369,16 +1361,14 @@ for (const phase of ['before', 'review', 'commit', 'same-owner-replaced', 'same-
       if (phase === 'before' || phase === 'same-core' || phase === 'same-owner-replaced')
         writeFileSync(file, bytes, { mode: 0o600 });
       let commits = 0;
-      const confirm = f.ports.confirm;
-      f.ports.confirm = async (...args) => {
-        if (phase === 'review') writeFileSync(file, bytes, { mode: 0o600 });
+      beforeCommit(f, () => {
+        if (phase === 'revalidation') writeFileSync(file, bytes, { mode: 0o600 });
         if (phase === 'same-owner-replaced') {
           const replacement = file + '.synthetic-replacement';
           writeFileSync(replacement, bytes, { mode: 0o600 });
           renameSync(replacement, file);
         }
-        return confirm(...args);
-      };
+      });
       f.ports.commit = async () => {
         commits++;
         if (phase === 'commit') writeFileSync(file, bytes, { mode: 0o600 });
@@ -1444,33 +1434,20 @@ async function batchFixture(f: ReturnType<typeof fixture>, count = 3) {
   return { request, features, feature };
 }
 
-test('batch prepares eight independent owned manifests with one review per CLI and one commit', async () => {
+test('batch prepares eight independent owned manifests without dialogs and with one commit', async () => {
   const f = fixture();
   try {
     const { request, features, feature } = await batchFixture(f, 8);
-    const reviews: string[] = [];
-    const disclosed = new Set<string>();
+    let reviews = 0;
     let commits = 0;
     const result = await prepareTauriTerminals(
       request,
       f.context,
       {
         ...f.ports,
-        confirm: async (key, detail, overview) => {
-          assert.equal(key, 'selected');
-          assert.ok(detail.length <= 65_536);
-          assert.ok(overview);
-          assert.equal(overview.project, f.project);
-          const providers = new Set(overview.terminals.map((terminal) => terminal.provider));
-          assert.equal(providers.size, 1);
-          reviews.push(overview.terminals[0]!.provider);
-          const plans = JSON.parse(detail) as Array<{
-            terminals: Array<{ identity: { terminalId: string } }>;
-          }>;
-          for (const plan of plans)
-            for (const terminal of plan.terminals) disclosed.add(terminal.identity.terminalId);
-          assert.deepEqual(readdirSync(f.context.parent), []);
-          return true;
+        confirm: async () => {
+          reviews++;
+          throw new Error('Studio batch must not show a preparation dialog');
         },
         commit: async () => {
           commits++;
@@ -1483,7 +1460,7 @@ test('batch prepares eight independent owned manifests with one review per CLI a
       8,
     );
     assert.equal(result.status, 'batch');
-    assert.deepEqual(reviews, ['codex', 'claude', 'opencode']);
+    assert.equal(reviews, 0);
     assert.equal(commits, 1);
     assert.equal(result.items.length, 8);
     assert.equal(new Set(result.items.map((item) => item.terminalId)).size, 8);
@@ -1495,11 +1472,11 @@ test('batch prepares eight independent owned manifests with one review per CLI a
       result.items.every((item) => item.status === 'prepared' && item.effects === 'possible'),
       true,
     );
-    assert.equal(new Set(result.items.map((item) => item.terminalId)).size, disclosed.size);
-    assert.deepEqual(new Set(features.read(feature.featureId).terminalIds), disclosed);
+    const created = new Set(result.items.map((item) => item.terminalId));
+    assert.deepEqual(new Set(features.read(feature.featureId).terminalIds), created);
     for (const item of result.items) {
       const config = readInteractiveTerminalConfig(item.file!);
-      assert.ok(disclosed.has(config.identity!.terminalId));
+      assert.ok(created.has(config.identity!.terminalId));
       assert.equal(config.project, f.project);
       assert.equal(item.name, request.requests.find((input) => input.id === item.id)!.name);
     }
@@ -1547,18 +1524,20 @@ test('batch refuses foreign workspaces, unsupported accounts, unknown models and
   }
 });
 
-for (const change of ['cancel', 'catalog', 'view', 'commit', 'symlink'] as const) {
+for (const change of ['context', 'catalog', 'view', 'commit', 'symlink'] as const) {
   test(`batch ${change} before writes refuses all pending items without starting or provisioning`, async () => {
     const f = fixture();
     try {
       const { request, features } = await batchFixture(f);
       let commits = 0;
+      let currentChecks = 0;
       const result = await prepareTauriTerminals(
         request,
         f.context,
         {
           ...f.ports,
-          confirm: async () => {
+          current: () => {
+            if (++currentChecks !== 2) return true;
             if (change === 'catalog')
               writeFileSync(join(f.home, '.codex/config.toml'), 'model = "changed"\n');
             if (change === 'view') features.saveView({ expectedRevision: 1, featureId: null });
@@ -1566,7 +1545,7 @@ for (const change of ['cancel', 'catalog', 'view', 'commit', 'symlink'] as const
               renameSync(f.project, f.project + '-original');
               symlinkSync(f.project + '-original', f.project);
             }
-            return change !== 'cancel';
+            return change !== 'context';
           },
           commit: async () => {
             commits++;

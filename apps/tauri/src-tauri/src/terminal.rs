@@ -1105,7 +1105,7 @@ async fn dispatch_terminal_request_inner(
         let id = format!("00000000-0000-4000-8000-{:012x}", running.sequence);
         let bytes = format!(
             "{}\n",
-            json!({"kind": "request", "id": id, "slot": slot, "request": request, "focused": focus})
+            native_request_message(&id, slot, request.clone(), focus, expected.is_some())
         );
         if bytes.len() > 128 * 1024 {
             return denied();
@@ -1172,6 +1172,22 @@ async fn dispatch_terminal_request_inner(
             denied()
         }
     }
+}
+
+/// Only terminal_open_prepared supplies a consumed native intent; renderer fields cannot do so.
+fn native_request_message(
+    id: &str,
+    slot: usize,
+    request: Value,
+    focused: bool,
+    prepared: bool,
+) -> Value {
+    let mut message = json!({"kind":"request", "id":id, "slot":slot,
+        "request":request, "focused":focused});
+    if prepared && message["request"]["action"] == "open" {
+        message["openingAuthorized"] = json!(true);
+    }
+    message
 }
 
 fn incomplete_open(value: &Value) -> Value {
@@ -3648,9 +3664,33 @@ pub fn confirm_exit(app: &tauri::AppHandle) -> bool {
 
 #[cfg(test)]
 mod opening_tests {
-    use super::{incomplete_open, invalidate_opening, take_opening, OpeningIntent};
+    use super::{
+        incomplete_open, invalidate_opening, native_request_message, take_opening, OpeningIntent,
+    };
     use serde_json::json;
     use std::time::{Duration, Instant};
+    #[test]
+    fn only_a_consumed_native_opening_intent_marks_the_private_pipe() {
+        let request = json!({"version":1,"action":"open","profileId":"synthetic"});
+        assert_eq!(
+            native_request_message("id", 0, request.clone(), true, true)["openingAuthorized"],
+            true
+        );
+        assert!(
+            native_request_message("id", 0, request.clone(), true, false)
+                .get("openingAuthorized")
+                .is_none()
+        );
+        let forged = json!({"version":1,"action":"open","openingAuthorized":true});
+        assert!(native_request_message("id", 0, forged, true, false)
+            .get("openingAuthorized")
+            .is_none());
+        assert!(
+            native_request_message("id", 0, json!({"action":"start"}), true, true)
+                .get("openingAuthorized")
+                .is_none()
+        );
+    }
     fn intent(now: Instant) -> Option<OpeningIntent> {
         Some(OpeningIntent {
             profile: "codex-terminal-v1".into(),

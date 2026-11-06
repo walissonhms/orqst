@@ -1422,3 +1422,8 @@ acceptance pending.
 - Implemented current-owned-MCP-pair communication audit and Feature-scoped display projection; native UI and real provider exchange acceptance remain pending. No new composer route or cross-Feature authority.
 - Owned Claude hook review fixes implemented; actual pinned-provider and OS notification acceptance remain pending.
 - Implemented the native Feature-membership hide barrier and Studio document chrome marker; owner native acceptance and isolated package verification remain required.
+
+### Studio direct opening — 2026-11-06
+
+Selected/batch redundant dialogs removed in source; consumed native intents and
+Core/policy guards preserved. Native/provider acceptance remains pending.
