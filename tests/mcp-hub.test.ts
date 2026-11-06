@@ -213,3 +213,38 @@ test('the owner sends as owner to a Feature member only', async () => {
   assert.equal(f.evidence[0]!.from, OWNER_SENDER);
   assert.throws(() => f.hub.ownerSend('f1', 'T-004', 'other feature'), HubRefusal);
 });
+
+test('a hub endpoint serves one terminal over its private socket, refusals included', async () => {
+  const { mkdtempSync, realpathSync, rmSync, statSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { openHubEndpoint } = await import('../packages/core/src/terminal/mcp-hub-socket.js');
+  const { connectMcpInstance } = await import('../packages/core/src/terminal/mcp-socket.js');
+  // Short parent: Unix socket paths are limited to about 100 bytes.
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), 'oh-')));
+  const f = fixture();
+  const endpoint = await openHubEndpoint(f.hub, ids.a, parent);
+  try {
+    assert.equal(statSync(endpoint.capabilityFile).mode & 0o777, 0o600);
+    const client = await connectMcpInstance(endpoint.socketPath, endpoint.capabilityFile);
+    assert.equal(client.role, 'terminal');
+    const listed = (await client.call(crypto.randomUUID(), {
+      name: 'list_terminals',
+      arguments: {},
+    })) as { terminals: { handle: string }[] };
+    assert.equal(listed.terminals.length, 2);
+    await client.call(crypto.randomUUID(), send('@T-002', 'over the socket'));
+    const inbox = (await f.hub.call(ids.b, read)) as { messages: { text: string }[] };
+    assert.equal(inbox.messages[0]!.text, 'over the socket');
+    const refusal = (await client.call(crypto.randomUUID(), send('@T-004', 'x'))) as {
+      refused: string;
+      message: string;
+    };
+    assert.equal(refusal.refused, 'unknown_terminal');
+    assert.match(refusal.message, /list_terminals/);
+    client.close();
+  } finally {
+    await endpoint.close();
+    rmSync(parent, { recursive: true, force: true });
+  }
+});

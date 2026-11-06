@@ -17,8 +17,20 @@ import { McpTaskBroker, mcpToolCallSchema, type McpRole } from './mcp-task.js';
 
 const authenticate = z.strictObject({ secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 const request = z.strictObject({ id: z.uuid(), call: mcpToolCallSchema });
+// The relay talks to a pair endpoint (source/worker) or a hub terminal endpoint.
+const clientRequest = z.strictObject({
+  id: z.uuid(),
+  call: z.strictObject({
+    name: z.string().min(1).max(64),
+    arguments: z.record(z.string(), z.unknown()),
+  }),
+});
+export type McpClientRole = McpRole | 'terminal';
 const response = z.union([
-  z.strictObject({ authenticated: z.literal(true), role: z.enum(['source', 'worker']) }),
+  z.strictObject({
+    authenticated: z.literal(true),
+    role: z.enum(['source', 'worker', 'terminal']),
+  }),
   z.strictObject({ id: z.uuid(), ok: z.literal(true), value: z.unknown() }),
   z.strictObject({ id: z.uuid(), ok: z.literal(false) }),
 ]);
@@ -243,9 +255,9 @@ export async function connectMcpInstance(socketPath: string, capabilityFile: str
       }
     | undefined;
   let initialized = false;
-  let ready: (role: McpRole) => void;
+  let ready: (role: McpClientRole) => void;
   let reject: (error: Error) => void;
-  const startup = new Promise<McpRole>((resolve, fail) => {
+  const startup = new Promise<McpClientRole>((resolve, fail) => {
     ready = resolve;
     reject = fail;
   });
@@ -303,7 +315,7 @@ export async function connectMcpInstance(socketPath: string, capabilityFile: str
     return {
       role,
       call(id: string, call: unknown) {
-        const value = request.parse({ id, call });
+        const value = clientRequest.parse({ id, call });
         if (pending || socket.destroyed)
           return Promise.reject(new Error('MCP request unavailable'));
         return new Promise<unknown>((resolve, reject) => {
