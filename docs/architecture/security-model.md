@@ -1758,3 +1758,24 @@ is added. Native owner/provider acceptance remains distinct from source checks.
 
 See [pinned research/owner decision](../research/studio-open-gesture.md) and
 [layout cause and boundaries](../research/studio-arrangement-focus.md).
+
+## Feature-scoped terminal messaging — 2026-11-06
+
+Owner decision: every managed terminal gets the ORQST MCP message hub
+(`docs/design/mcp-n-terminals.md`). This deliberately replaces the pair's one native-signed
+grant per task with a session capability scoped to the terminal's Feature:
+
+- Each terminal has its own private Unix socket and 0600 capability (one authenticated
+  connection, bounded framing, one call at a time); nothing listens on TCP.
+- Targets outside the sender's Feature, the sender itself, unknown and unassigned
+  terminals are refused alike; membership is read from the Feature database at each call.
+- Limits: chain depth 3 from one owner message, 30 sends per minute, inbox 20, 3
+  recipients, 16 KiB text cut and marked.
+- Content from another terminal is untrusted data: tool descriptions say so, it is never
+  executed or rendered as HTML by ORQST, and it is not persisted. The audit keeps metadata
+  only (sender, recipient, kind, time, Feature); Studio shows recent events from memory.
+- The owner can message a Feature member from the Studio; it is recorded as `queued`,
+  never as read or done.
+- Claude hub terminals keep the owned metadata-only hooks together with MCP.
+
+Implemented and unit/socket-tested; native and provider acceptance pending.

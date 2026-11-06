@@ -105,27 +105,50 @@ async function start() {
     claude: 'Claude Code',
     opencode: 'OpenCode',
   };
+  // Metadata-only recent events for the Studio projection (no text, owner sends excluded).
+  const hubEvents: Array<{
+    id: string;
+    from: string;
+    to: string;
+    kind: 'message' | 'delegation' | 'result';
+    at: number;
+    featureId: string;
+  }> = [];
   const hub = usesHub
-    ? new TerminalMessageHub(() => {
-        const features = featureConfigurationDatabase(process.argv[4]!, hubWorkspace).list();
-        return hubSlots.flatMap((member, slot) => {
-          if (!member) return [];
-          const owner = features.filter(
-            (feature) =>
-              feature.status !== 'archived' && feature.terminalIds.includes(member.terminalId),
-          );
-          return [
-            {
-              terminalId: member.terminalId,
-              alias: `T-${String(slot + 1).padStart(3, '0')}`,
-              name: hubNames[member.provider] ?? member.provider,
-              provider: member.provider,
-              featureId: owner.length === 1 ? owner[0]!.featureId : null,
-              running: true,
-            },
-          ];
-        });
-      })
+    ? new TerminalMessageHub(
+        () => {
+          const features = featureConfigurationDatabase(process.argv[4]!, hubWorkspace).list();
+          return hubSlots.flatMap((member, slot) => {
+            if (!member) return [];
+            const owner = features.filter(
+              (feature) =>
+                feature.status !== 'archived' && feature.terminalIds.includes(member.terminalId),
+            );
+            return [
+              {
+                terminalId: member.terminalId,
+                alias: `T-${String(slot + 1).padStart(3, '0')}`,
+                name: hubNames[member.provider] ?? member.provider,
+                provider: member.provider,
+                featureId: owner.length === 1 ? owner[0]!.featureId : null,
+                running: true,
+              },
+            ];
+          });
+        },
+        (event) => {
+          if (event.from === 'owner') return;
+          hubEvents.push({
+            id: event.messageId,
+            from: event.from,
+            to: event.to,
+            kind: event.kind === 'task' ? 'delegation' : event.kind,
+            at: event.at,
+            featureId: event.featureId,
+          });
+          if (hubEvents.length > 200) hubEvents.splice(0, hubEvents.length - 200);
+        },
+      )
     : undefined;
   const hubEndpoints: Array<Awaited<ReturnType<typeof openHubEndpoint>>> = [];
   const communication = pairMcp
@@ -386,11 +409,37 @@ async function start() {
               request.featureId,
               selection.map(({ config }) => terminalIdentity(config).terminalId),
               request.input,
+              hub && request.featureId
+                ? (terminalId, text) => {
+                    try {
+                      hub.ownerSend(request.featureId!, terminalId, text);
+                      return { delivery: 'queued', reason: 'hub_inbox' };
+                    } catch (error) {
+                      const code = (error as { code?: string }).code;
+                      return {
+                        delivery: 'denied',
+                        reason:
+                          code === 'inbox_full'
+                            ? 'inbox_full'
+                            : code === 'unknown_terminal'
+                              ? 'unknown_terminal'
+                              : 'unavailable',
+                      };
+                    }
+                  }
+                : undefined,
             );
             break;
           case 'communicationProjection':
-            if (communication) admission.assertOwner();
-            value = communication?.project(request.featureId) ?? null;
+            if (communication || hub) admission.assertOwner();
+            value = hub
+              ? {
+                  events: hubEvents
+                    .filter((event) => event.featureId === request.featureId)
+                    .slice(-50)
+                    .map(({ id, from, to, kind, at }) => ({ id, from, to, kind, at })),
+                }
+              : (communication?.project(request.featureId) ?? null);
             break;
           case 'featureList':
             value = features().list();

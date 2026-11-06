@@ -50,3 +50,29 @@ test('mentions are recorded privately and never claim delivery', async () => {
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('hub delivery applies only to owner messages inside a Feature', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orqst-mentions-'));
+  await chmod(directory, 0o700);
+  try {
+    let delivered = 0;
+    // Unassigned terminals have no Feature: the owner note stays recorded, not delivered.
+    const reply = recordComposerMention(
+      directory,
+      'synthetic-workspace',
+      null,
+      [a, b],
+      { from: { kind: 'user' }, to: [b], text: 'synthetic' },
+      () => {
+        delivered++;
+        return { delivery: 'queued', reason: 'hub_inbox' };
+      },
+    );
+    assert.equal(delivered, 0);
+    assert.deepEqual(reply.outcomes, [
+      { terminalId: b, delivery: 'unsupported', reason: 'no_structured_route' },
+    ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

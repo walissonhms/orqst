@@ -1107,9 +1107,10 @@ export function FeatureWorkspace({
               } | null;
               const outcomes = recorded?.outcomes;
               if (status !== 'ok' || !outcomes) return 'unknown';
-              return outcomes.some((outcome) => outcome.delivery === 'denied')
-                ? 'denied'
-                : 'unsupported';
+              if (outcomes.some((outcome) => outcome.delivery === 'denied')) return 'denied';
+              // Placed in each terminal's hub inbox; the terminal reads it with read_messages.
+              if (outcomes.every((outcome) => outcome.delivery === 'queued')) return 'queued';
+              return 'unsupported';
             }}
             {...(nativeWorkspace
               ? {

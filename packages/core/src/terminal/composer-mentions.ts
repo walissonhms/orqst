@@ -20,12 +20,18 @@ import { terminalDirectory } from './codex-profile.js';
 import { withTerminalPreferences } from './layout-database.js';
 
 /** Record attempts only; this service has no transport and confers no authority. */
+export type ComposerDeliveryOutcome =
+  | { delivery: 'queued'; reason: 'hub_inbox' }
+  | { delivery: 'denied'; reason: 'inbox_full' | 'unavailable' | 'unknown_terminal' };
+
 export function recordComposerMention(
   directory: string,
   workspaceId: string,
   featureId: string | null,
   knownIds: string[],
   raw: ComposerMentionInput,
+  /** Hub delivery for owner messages to a Feature member; undefined keeps v1 (no route). */
+  deliver?: (terminalId: string, text: string) => ComposerDeliveryOutcome,
 ) {
   const input = composerMentionInputSchema.parse(raw);
   return withTerminalPreferences(directory, (store) =>
@@ -49,6 +55,8 @@ export function recordComposerMention(
               ? ('cross_feature_denied' as const)
               : ('not_member' as const),
           };
+        if (deliver && input.from.kind === 'user' && featureId !== null)
+          return { terminalId, ...deliver(terminalId, input.text) };
         return {
           terminalId,
           delivery: 'unsupported' as const,

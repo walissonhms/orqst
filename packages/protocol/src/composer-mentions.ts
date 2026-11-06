@@ -22,7 +22,20 @@ export const composerMentionOutcomeSchema = z.discriminatedUnion('delivery', [
   z.strictObject({
     terminalId: z.uuid(),
     delivery: z.literal('denied'),
-    reason: z.enum(['not_member', 'cross_feature_denied', 'unknown_terminal']),
+    reason: z.enum([
+      'not_member',
+      'cross_feature_denied',
+      'unknown_terminal',
+      'inbox_full',
+      'unavailable',
+    ]),
+  }),
+  // Owner message placed in the terminal's hub inbox (docs/design/mcp-n-terminals.md).
+  // Queued is not read or acted upon: the terminal reads it with read_messages.
+  z.strictObject({
+    terminalId: z.uuid(),
+    delivery: z.literal('queued'),
+    reason: z.literal('hub_inbox'),
   }),
 ]);
 export const composerMentionReplySchema = z.strictObject({

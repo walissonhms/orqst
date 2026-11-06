@@ -911,6 +911,17 @@ Implemented in `terminal.rs`, unit-tested (`hide_document`); native acceptance p
   for up to 60 s (the intent lifetime) besides on focus. An idle answer consumes nothing;
   native still validates the intent, focus and generations.
 
+## Message hub for every terminal — 2026-11-06
+
+New terminal batches provision `interactive.mcp` + `interactive.hub` for Codex, Claude and
+OpenCode. The Core opens one private hub endpoint per slot and gives each terminal the
+ORQST MCP tools `list_terminals`, `send_message`, `read_messages`, `wait_messages`,
+`delegate_task`, `submit_result`, `task_status` (docs/design/mcp-n-terminals.md).
+`mention` replies may now carry `{delivery:"queued", reason:"hub_inbox"}` for owner
+messages placed in a Feature member's inbox, and `denied` reasons `inbox_full` /
+`unavailable`; native validation accepts exactly these. `communicationProjection` returns
+recent hub events (metadata only, owner sends excluded). The pair MCP flow is unchanged.
+
 ## Second terminal, dialog lifetime and keyboard resume — 2026-11-06
 
 - `feature_prepare` accepts an owned PTY of `main` as gesture focus (AppKit keeps it first

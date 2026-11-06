@@ -1408,7 +1408,7 @@
       "hint": "Mention at least one terminal with @, for example @T-002.",
       "crossWorkspace": "Another workspace: needs explicit permission.",
       "state": {
-        "queued": "Queued",
+        "queued": "Sent · in the terminal’s inbox",
         "accepted": "Delivered · not yet done",
         "delivery_failed": "Delivery failed",
         "unsupported": "Recorded · delivery to terminals is not available yet",

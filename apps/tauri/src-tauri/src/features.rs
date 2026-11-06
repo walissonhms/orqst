@@ -858,8 +858,16 @@ fn valid_mention_reply(value: &Value) -> bool {
                             Some("unsupported") => outcome["reason"] == "no_structured_route",
                             Some("denied") => matches!(
                                 outcome["reason"].as_str(),
-                                Some("not_member" | "cross_feature_denied" | "unknown_terminal")
+                                Some(
+                                    "not_member"
+                                        | "cross_feature_denied"
+                                        | "unknown_terminal"
+                                        | "inbox_full"
+                                        | "unavailable"
+                                )
                             ),
+                            // Placed in the terminal's hub inbox; never claimed as read.
+                            Some("queued") => outcome["reason"] == "hub_inbox",
                             _ => false,
                         }
                 })
@@ -3481,6 +3489,16 @@ mod layout_tests {
             &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"unsupported","reason":"not_member"}]})
         ));
         assert!(!valid_mention_reply(&json!({"id":id,"outcomes":[]})));
+        // Hub inbox placement (owner message), never a read or completion claim.
+        assert!(valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"queued","reason":"hub_inbox"}]})
+        ));
+        assert!(!valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"queued","reason":"read"}]})
+        ));
+        assert!(valid_mention_reply(
+            &json!({"id":id,"outcomes":[{"terminalId":t,"delivery":"denied","reason":"inbox_full"}]})
+        ));
     }
     #[test]
     fn account_limits_validate_exact_actions_and_evidenced_bounds() {

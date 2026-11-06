@@ -1408,7 +1408,7 @@
       "hint": "Mencione pelo menos um terminal com @, por exemplo @T-002.",
       "crossWorkspace": "Outro Workspace: precisa de permissão explícita.",
       "state": {
-        "queued": "Na fila",
+        "queued": "Enviado · na caixa de entrada do terminal",
         "accepted": "Entregue · ainda não concluído",
         "delivery_failed": "Falha na entrega",
         "unsupported": "Registrado · a entrega aos terminais ainda não está disponível",
