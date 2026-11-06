@@ -24,6 +24,25 @@ struct State {
     feature_revisions: HashMap<String, u64>,
     preparation_scope: Option<(Value, String, u64)>,
     last_arrangement: Option<Instant>,
+    arrangement_ticket: u64,
+}
+impl State {
+    fn queue_arrangement(&mut self, now: Instant) -> (u64, Duration) {
+        self.arrangement_ticket = self.arrangement_ticket.saturating_add(1);
+        (
+            self.arrangement_ticket,
+            self.last_arrangement
+                .map(|last| (last + Duration::from_millis(16)).saturating_duration_since(now))
+                .unwrap_or_default(),
+        )
+    }
+    fn accept_arrangement(&mut self, ticket: u64, now: Instant) -> bool {
+        if ticket != self.arrangement_ticket {
+            return false;
+        }
+        self.last_arrangement = Some(now);
+        true
+    }
 }
 fn exact(value: &Value, keys: &[&str]) -> bool {
     value
@@ -1189,6 +1208,18 @@ async fn focus_then_current(
     let focused = focus.await;
     focused && current()
 }
+
+fn request_focus_allowed(action: &str, direct: bool, owned_terminal: bool) -> bool {
+    direct || (action == "arrange" && owned_terminal)
+}
+
+async fn request_focused(view: &Webview, action: &str, epoch: &str, presentation: u64) -> bool {
+    let direct = focused(view).await;
+    let terminal = !direct
+        && action == "arrange"
+        && crate::terminal::arrangement_focused(view.app_handle(), epoch, presentation).await;
+    request_focus_allowed(action, direct, terminal)
+}
 struct MetadataCompletion<F: FnOnce(bool)> {
     finish: Option<F>,
     completed: bool,
@@ -1841,7 +1872,15 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         return json!({"status":"unavailable"});
     };
     let mutable = request["action"] != "snapshot";
-    if mutable && !focused(&window).await {
+    if mutable
+        && !request_focused(
+            &window,
+            request["action"].as_str().unwrap(),
+            &epoch,
+            presentation,
+        )
+        .await
+    {
         return denied();
     }
     if identity(&window) != Some((source.clone(), document))
@@ -1851,16 +1890,31 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         return denied();
     }
     if request["action"] == "arrange" {
+        let (ticket, delay) = {
+            let state = app.state::<Features>();
+            let mut guard = state.0.lock().unwrap();
+            guard.queue_arrangement(Instant::now())
+        };
+        // Keep the trailing frame instead of dropping it inside the 16 ms window.
+        // Concurrent waiting frames coalesce to the latest request, with no view recreation.
+        tokio::time::sleep(delay).await;
+        if !focus_then_current(
+            request_focused(&window, "arrange", &epoch, presentation),
+            || {
+                identity(&window) == Some((source.clone(), document))
+                    && !crate::terminal::presentation_blocked(app)
+                    && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
+            },
+        )
+        .await
+        {
+            return denied();
+        }
         let state = app.state::<Features>();
         let mut guard = state.0.lock().unwrap();
-        let now = Instant::now();
-        if guard
-            .last_arrangement
-            .is_some_and(|last| now.saturating_duration_since(last) < Duration::from_millis(16))
-        {
+        if !guard.accept_arrangement(ticket, Instant::now()) {
             return json!({"status":"busy"});
         }
-        guard.last_arrangement = Some(now);
     }
     let _ = install_workspace(app);
     let id = {
@@ -1886,11 +1940,24 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                 &epoch,
             )
             .await;
-            if !focus_then_current(async { !mutable || focused(&window).await }, || {
-                identity(&window) == Some((source, document))
-                    && !crate::terminal::presentation_blocked(app)
-                    && crate::terminal::metadata_context(app) == Some((epoch.clone(), presentation))
-            })
+            if !focus_then_current(
+                async {
+                    !mutable
+                        || request_focused(
+                            &window,
+                            request["action"].as_str().unwrap(),
+                            &epoch,
+                            presentation,
+                        )
+                        .await
+                },
+                || {
+                    identity(&window) == Some((source, document))
+                        && !crate::terminal::presentation_blocked(app)
+                        && crate::terminal::metadata_context(app)
+                            == Some((epoch.clone(), presentation))
+                },
+            )
             .await
             {
                 return denied();
@@ -2124,6 +2191,46 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn owned_terminal_focus_is_layout_only_and_never_permission_or_execution_authority() {
+        for action in [
+            "arrange",
+            "pane",
+            "select",
+            "renamePane",
+            "mention",
+            "accountLimits",
+            "start",
+            "write",
+            "propose",
+        ] {
+            assert_eq!(
+                super::request_focus_allowed(action, false, true),
+                action == "arrange"
+            );
+            assert!(!super::request_focus_allowed(action, false, false));
+            assert!(super::request_focus_allowed(action, true, false));
+        }
+    }
+    #[test]
+    fn arrangement_burst_keeps_the_trailing_frame_at_the_next_frame_boundary() {
+        let now = std::time::Instant::now();
+        let mut state = super::State::default();
+        let (first, delay) = state.queue_arrangement(now);
+        assert!(delay.is_zero());
+        assert!(state.accept_arrangement(first, now));
+        let (middle, middle_delay) =
+            state.queue_arrangement(now + std::time::Duration::from_millis(1));
+        let (last, last_delay) = state.queue_arrangement(now + std::time::Duration::from_millis(2));
+        assert_eq!(middle_delay, std::time::Duration::from_millis(15));
+        assert_eq!(last_delay, std::time::Duration::from_millis(14));
+        let boundary = now + std::time::Duration::from_millis(16);
+        assert!(!state.accept_arrangement(middle, boundary));
+        assert!(state.accept_arrangement(last, boundary));
+        assert_eq!(state.last_arrangement, Some(boundary));
+        let (_, next_delay) = state.queue_arrangement(boundary);
+        assert_eq!(next_delay, std::time::Duration::from_millis(16));
+    }
     #[test]
     fn polling_and_arrangement_do_not_advance_native_presentation() {
         use serde_json::json;

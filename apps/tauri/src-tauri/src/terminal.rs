@@ -724,6 +724,69 @@ fn document_slot(label: &str, source: &str) -> Option<usize> {
     (slot < 8 && label == format!("terminal-{slot}") && source == url(slot)).then_some(slot)
 }
 
+fn arrangement_responder_current(
+    expected: (&str, u64, u64),
+    actual: (&str, u64, u64),
+    loaded: bool,
+    revoked: bool,
+) -> bool {
+    loaded && !revoked && expected == actual
+}
+
+/// Layout-only focus allowance, never used for execution/input/permission operations.
+pub(crate) async fn arrangement_focused(
+    app: &tauri::AppHandle,
+    epoch: &str,
+    presentation: u64,
+) -> bool {
+    let candidates = {
+        let state = app.state::<Terminals>();
+        let guard = state.0.lock().unwrap();
+        let Some(r) = guard
+            .as_ref()
+            .filter(|r| r.epoch == epoch && r.layout_generation == presentation)
+        else {
+            return false;
+        };
+        r.generations
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, document)| {
+                (r.loaded[slot] && !r.revoked[slot]).then_some((slot, *document))
+            })
+            .collect::<Vec<_>>()
+    };
+    for (index, document) in candidates {
+        let Some(view) = app.get_webview(&format!("terminal-{index}")) else {
+            continue;
+        };
+        if view.window().label() != "main" || slot(&view) != Some(index) {
+            continue;
+        }
+        // A barrier-hidden owned PTY may still be AppKit's first responder. Layout
+        // must be able to recover it; visibility does not authorize any input.
+        if !crate::features::focused(&view).await {
+            continue;
+        }
+        let state = app.state::<Terminals>();
+        let guard = state.0.lock().unwrap();
+        if guard.as_ref().is_some_and(|r| {
+            r.generations.get(index).is_some_and(|current| {
+                arrangement_responder_current(
+                    (epoch, presentation, document),
+                    (&r.epoch, r.layout_generation, *current),
+                    r.loaded.get(index) == Some(&true),
+                    r.revoked.get(index) != Some(&false),
+                )
+            })
+        }) && slot(&view) == Some(index)
+        {
+            return true;
+        }
+    }
+    false
+}
+
 // Tauri exposes native window focus, but no per-child-webview focus getter.
 // Inspect the owned WKWebView's native first responder on the UI thread. Never
 // accept a renderer-supplied active slot or document.hasFocus as execution proof.
@@ -2051,8 +2114,8 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             // Visible terminals are raised afterwards, outside the summary canvas transform.
             raise_surface(&chrome);
             let _ = chrome.show();
-            // Arrange still requires the actual chrome first responder. When native
-            // opening has only hidden PTYs, focus the visible Studio, never a PTY.
+            // When native opening has only hidden PTYs, establish visible Studio
+            // focus. Later arrangements also accept an owned PTY first responder.
             if !geometry_ready
                 && window.is_focused().unwrap_or(false)
                 && !presentation_blocked(app)
@@ -3669,6 +3732,28 @@ mod opening_tests {
     };
     use serde_json::json;
     use std::time::{Duration, Instant};
+    #[test]
+    fn layout_responder_requires_the_same_owned_epoch_presentation_and_loaded_document() {
+        let expected = ("owned-epoch", 9, 3);
+        assert!(super::arrangement_responder_current(
+            expected, expected, true, false
+        ));
+        for actual in [
+            ("foreign-epoch", 9, 3),
+            ("owned-epoch", 10, 3),
+            ("owned-epoch", 9, 4),
+        ] {
+            assert!(!super::arrangement_responder_current(
+                expected, actual, true, false
+            ));
+        }
+        assert!(!super::arrangement_responder_current(
+            expected, expected, false, false
+        ));
+        assert!(!super::arrangement_responder_current(
+            expected, expected, true, true
+        ));
+    }
     #[test]
     fn only_a_consumed_native_opening_intent_marks_the_private_pipe() {
         let request = json!({"version":1,"action":"open","profileId":"synthetic"});

@@ -1537,3 +1537,9 @@ acceptance pending.
 
 - Use the focused Studio Open gesture for ordinary selected/batch creation and
   owned opening, retaining single-use intents, binary/policy checks and Core proofs.
+
+## Studio layout focus — 2026-11-06
+
+- Admit layout frames while an exact current owned PTY is first responder; retain
+  source/focus/fence and geometry checks for the Studio.
+- Retain the trailing frame inside the 16 ms window through native coalescing.
