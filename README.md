@@ -1569,3 +1569,8 @@ fresh read; no proposal is retried automatically. Native UI acceptance remains p
 
 The owned MCP pair can project bounded, metadata-only delegation/result evidence into Feature snapshot/canvas replies. This is a display feed for an already authorized pair; ordinary terminals and unsupported composer mentions acquire no communication route. See [the API contract](docs/api/terminal-native.md#owned-mcp-communication-projection--2026-11-05).
 Studio-hosted native terminal documents use the shared Studio header while keeping process authorization controls. Accepted Feature snapshots independently hide non-members; hiding retains owned processes and never grants input.
+
+Studio selected/batch opening now follows the owner decision of 2026-11-06:
+the focused Open gesture replaces redundant native sheets while owned intents,
+binary/policy checks and signed Core proofs remain. See the
+[dated decision](docs/research/studio-open-gesture.md). Native acceptance is pending.

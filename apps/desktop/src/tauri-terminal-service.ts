@@ -30,6 +30,8 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
     slot,
     request: z.unknown(),
     focused: z.boolean(),
+    // Native parent pipe only: emitted after consuming the exact prepared opening intent.
+    openingAuthorized: z.literal(true).optional(),
   }),
   z.strictObject({ kind: z.literal('retire'), id: z.uuid(), slot, focused: z.boolean() }),
   // Native Quit/CloseRequested private pipe only. Neither action is in terminalNativeRequestSchema.
@@ -125,8 +127,9 @@ export class TauriTerminalService {
       busy: boolean;
       reviewing: boolean;
       closed: boolean;
+      openingAuthorized: boolean;
       instanceId?: string;
-    } = { focused: false, busy: false, reviewing: false, closed: false };
+    } = { focused: false, busy: false, reviewing: false, closed: false, openingAuthorized: false };
     const authority = new TerminalAuthority(
       new Map([['desktop-managed', this.keys.publicKey]]),
       Date.now,
@@ -149,21 +152,23 @@ export class TauriTerminalService {
                 ) => {
                   if (!state.focused || state.closed || this.closed) return 'blocked' as const;
                   return this.cliPolicy!.authorizeCli(profile, () =>
-                    this.confirm(
-                      slot,
-                      this.translate('terminalNative.cliScope'),
-                      JSON.stringify(
-                        {
-                          executable: profile.executable,
-                          sha256: profile.executableSha256,
-                          version: profile.executableVersion,
-                          scope: 'owned-local-terminal-v1',
-                        },
-                        null,
-                        2,
-                      ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
-                      'terminalNative.authorizeCli',
-                    ),
+                    state.openingAuthorized
+                      ? Promise.resolve(state.focused && !state.closed && !this.closed)
+                      : this.confirm(
+                          slot,
+                          this.translate('terminalNative.cliScope'),
+                          JSON.stringify(
+                            {
+                              executable: profile.executable,
+                              sha256: profile.executableSha256,
+                              version: profile.executableVersion,
+                              scope: 'owned-local-terminal-v1',
+                            },
+                            null,
+                            2,
+                          ).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`),
+                          'terminalNative.authorizeCli',
+                        ),
                   );
                 },
                 current: (
@@ -336,6 +341,10 @@ export class TauriTerminalService {
       this.send({ kind: 'reply', id: message.id, value: { status: 'denied' } });
       return;
     }
+    if (message.openingAuthorized && request.data.action !== 'open') {
+      this.send({ kind: 'reply', id: message.id, value: { status: 'denied' } });
+      return;
+    }
     if (pane.state.busy || this.mcpBusy) {
       this.send({ kind: 'reply', id: message.id, value: { status: 'busy' } });
       return;
@@ -343,6 +352,7 @@ export class TauriTerminalService {
     pane.state.busy = true;
     pane.state.reviewing = !['read', 'snapshot', 'resize'].includes(request.data.action);
     pane.state.focused = message.focused;
+    pane.state.openingAuthorized = message.openingAuthorized === true;
     try {
       const reply = await pane.broker.dispatch(pane.document, request.data);
       if (reply.status === 'ok' && ['start', 'open'].includes(request.data.action))
@@ -361,6 +371,7 @@ export class TauriTerminalService {
     } finally {
       pane.state.busy = false;
       pane.state.reviewing = false;
+      pane.state.openingAuthorized = false;
     }
   }
 

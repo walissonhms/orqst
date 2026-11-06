@@ -107,3 +107,13 @@ PID adoption or cross-Feature/Workspace authority; configured bilateral MCP rema
 Source/fixture validation does not establish WebKit native focus, real-provider operation,
 package behavior or deterministic Quit cleanup. Independent review and separately
 coordinated native acceptance are required before real use.
+
+## Studio direct opening — owner decision 2026-11-06
+
+Ordinary Studio creation now uses its focused Open gesture instead of a second
+native review. The consumed native intent adds `openingAuthorized: true` only on
+the private Rust-to-Node `request` envelope for `open`. It is never a renderer
+field or public reply. The service grants the policy review callback only for that
+request; current hash, permission scope, explicit revocation, policy CAS, broker
+fences and signed challenges remain enforced. Manual legacy routes without the
+mark retain review. See the [dated decision and pinned research](../research/studio-open-gesture.md).

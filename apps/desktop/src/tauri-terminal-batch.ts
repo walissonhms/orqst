@@ -19,7 +19,7 @@ type Prepared = Omit<TerminalBatchItem, 'status'> & {
   name?: string;
 };
 
-/** One immutable review per CLI, then one-shot provisioning. No provider/runtime is started. */
+/** The bound Studio Open gesture authorizes one-shot provisioning. No runtime is started here. */
 export async function prepareTauriBatch(
   request: TerminalBatchRequest,
   context: Pick<TerminalCreationInput, 'parent' | 'home' | 'node' | 'environment'>,
@@ -131,26 +131,6 @@ export async function prepareTauriBatch(
     preflight();
   };
   if (!plans.length) return result();
-  for (const provider of [...new Set(plans.map((entry) => entry.provider))]) {
-    const group = plans.filter((entry) => entry.provider === provider);
-    // Every complete manifest is disclosed; shared-state/startup acknowledgement is unchanged.
-    const detail = JSON.stringify(group.map(({ plan }) => JSON.parse(plan.detail) as unknown));
-    const overview = {
-      project: discovered.workspace.project,
-      terminals: group.flatMap(({ plan }) => plan.overview.terminals),
-    };
-    try {
-      revalidate();
-      if (!(await ports.confirm('selected', detail, overview))) {
-        for (const { index } of plans) items[index]!.reason = 'review_cancelled';
-        return result();
-      }
-      revalidate();
-    } catch {
-      for (const { index } of plans) items[index]!.reason = 'context_changed';
-      return result();
-    }
-  }
   try {
     revalidate();
     if (!(await ports.commit()) || !reviewed()) {

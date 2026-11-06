@@ -201,8 +201,8 @@ export async function prepareTauriTerminals(
         mcp: pair,
         ...(pair || sourceProvider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
-      // One exact native selection review includes shared-state/provider startup acknowledgement.
-      // Runtime execution remains a separate signed native Open operation.
+      // Studio's focused, generation-bound Open gesture authorizes the exact selection.
+      // MCP pairs retain their separate bilateral consent; ordinary creation has no sheet.
       if (!pair && plan.pages.length !== 1) fail('review_too_large');
       stage = 'review';
       const expires = now() + 60_000;
@@ -210,7 +210,7 @@ export async function prepareTauriTerminals(
       // The summary and optional complete review come from the same immutable pre-write plan.
       if (
         !reviewed() ||
-        !(await ports.confirm(pair ? 'mcpPair' : 'selected', plan.detail, plan.overview)) ||
+        (pair && !(await ports.confirm('mcpPair', plan.detail, plan.overview))) ||
         !reviewed()
       )
         return { status: 'cancelled', files: [] };
