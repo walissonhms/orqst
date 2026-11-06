@@ -585,7 +585,7 @@ Private Node → Rust frame (not a renderer action or WebSocket event):
 
 The host rereads `core/orqst.db`'s existing notification preferences read-only:
 `completed`, `failed`, and `sound`. Invalid/missing preferences suppress the sample.
-Transitions are deduplicated by `(terminalId, turnId)` and consumed when disabled.
+Transitions are deduplicated by `(terminalId, turnId, category)` in Node and Rust and consumed per category when disabled.
 The existing per-run native-alert toggle and fresh observer connection are also
 required; both observer and owned notifications share the twenty-attempt run cap
 (the plugin retains waiting threads). The dedupe sets and native queue are bounded.
@@ -701,9 +701,10 @@ The private channel `claude-hook-events.jsonl` is selected empty before dispatch
 pins its file identity and append-only prefix, and reads at most 128 KiB. Its records
 contain only `{version:1,sessionId,promptId,event,at}`. UserPromptSubmit and explicit post-tool callbacks establish
 running; Notification permission/idle events establish waiting; Stop establishes a
-finished-response signal; StopFailure establishes failed. Subagent events, mismatched
-session/cwd/transcript paths, missing prompt IDs and unrelated notifications are
-ignored by the writer. Malformed/partial/replaced/rewritten/unsafe files establish
+finished-response signal; StopFailure establishes failed. Subagent events, foreign
+session IDs, missing prompt IDs and unrelated notifications are ignored. A trusted
+session/prompt with divergent cwd or transcript path records metadata-only `unmatched`
+and becomes unknown until the next explicit new prompt; no divergent path is stored. Malformed/partial/replaced/rewritten/unsafe files establish
 no state. Hook input is limited to 64 KiB, consumed in memory and never copied to
 the channel; prompts, tool inputs, notification/response/error bodies and credentials
 are not persisted or sent to the facade by this route.
@@ -716,8 +717,24 @@ started by the observer. Actual pinned-provider behavior remains native acceptan
 Waiting transitions from a previously sampled running state use the existing
 `intervention` preference and fixed localized native body. Native pipe category
 `waiting_for_user` maps internally to intervention; epoch/slot/generation/input
-revocation and click-routing guards are unchanged. Dedupe remains terminal+turn,
-including disabled transitions, so an idle notification cannot replay a completed
-turn alert. No notification is inferred solely from initial/missing evidence.
+revocation and click-routing guards are unchanged. Node and Rust dedupe each
+terminal+turn+category, including disabled transitions. A permission alert or disabled
+intervention preference cannot consume a later completion/failure category. No notification is inferred solely from initial/missing evidence.
 
 See [pinned merge/source review](../research/claude-owned-hooks.md).
+
+#### Owned hook review adjustments — 2026-11-05
+
+Repeated post-tool progress is coalesced while the last metadata record for the
+same prompt is prompt/progress, using a bounded 512-byte tail read. A callback
+following waiting still records progress and resumes running. The channel remains
+bounded to 128 KiB; exhaustion makes state unknown. This reduces writes for long
+tool runs without promising unlimited session lifetime or inferring progress.
+
+Esc/interruption does not emit Stop: the last running evidence can remain until
+another observed hook/new prompt; ORQST does not infer interruption from silence.
+An explicit idle_prompt after Stop changes displayed completed to waiting for input;
+that completed→waiting edge does not emit a new notification (running is required).
+Stop/`completed` means **response completed**, never a whole delegated task. Owned
+completion notifications use `desktopShell.alert.responseCompleted`; the frontend
+owner supplies English/Portuguese translations. Observer copy keeps its existing key.

@@ -44,7 +44,7 @@ export class OwnedTurnMonitor {
         !['completed', 'failed', 'waiting_for_user'].includes(entry.agentState)
       )
         continue;
-      const key = `${entry.terminalId}:${entry.turnId}`;
+      const key = `${entry.terminalId}:${entry.turnId}:${entry.agentState}`;
       if (this.seen.has(key) || this.seen.size >= 128) continue;
       // Consume transitions even when disabled, so changing a preference cannot replay them.
       this.seen.add(key);

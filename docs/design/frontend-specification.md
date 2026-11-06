@@ -321,7 +321,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Owner native acceptance of the Studio (layouts, focus, keyboard, drag, Quit)                                              | owner    | new package                                      |
 | Studio v2 chrome contract: candidate `1401ee8` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `1401ee8`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
-| Claude "needs you": owned hook source implemented; native acceptance pending                                              | pane-817 | independent review + owner provider test         |
+| Claude "needs you": independent-review fixes implemented; native acceptance pending                                       | pane-817 | review A–F addressed; owner provider test        |
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
 | Current-workspace batch create: renderer wired in `1401ee8`, native acceptance pending                                    | pane-817 | owner native/provider acceptance                 |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |

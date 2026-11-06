@@ -1394,3 +1394,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Owned Claude hook review fixes implemented; actual pinned-provider and OS notification acceptance remain pending.

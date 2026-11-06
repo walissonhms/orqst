@@ -21,7 +21,9 @@ test('only a same-turn running transition alerts once, with preference and recon
     { terminalId, turnId, category: 'completed', silent: true },
   ]);
   monitor.accept([item('running')], preferences);
-  assert.deepEqual(monitor.accept([item('failed')], preferences), []);
+  assert.deepEqual(monitor.accept([item('failed')], preferences), [
+    { terminalId, turnId, category: 'failed', silent: true },
+  ]);
   const second = randomUUID();
   monitor.accept([item('running', second)], preferences);
   assert.deepEqual(monitor.accept([item('failed', second)], { ...preferences, failed: false }), []);
@@ -52,7 +54,9 @@ test('proved owned waiting state uses intervention preference and never replays 
     { terminalId, turnId, category: 'waiting_for_user', silent: true },
   ]);
   monitor.accept([item('running')], preferences);
-  assert.deepEqual(monitor.accept([item('completed')], preferences), []);
+  assert.deepEqual(monitor.accept([item('completed')], preferences), [
+    { terminalId, turnId, category: 'completed', silent: true },
+  ]);
   const next = randomUUID();
   monitor.accept([item('running', next)], preferences);
   assert.deepEqual(
@@ -61,4 +65,10 @@ test('proved owned waiting state uses intervention preference and never replays 
   );
   monitor.accept([item('running', next)], preferences);
   assert.deepEqual(monitor.accept([item('waiting_for_user', next)], preferences), []);
+  monitor.accept([item('running', next)], preferences);
+  assert.deepEqual(monitor.accept([item('failed', next)], preferences), [
+    { terminalId, turnId: next, category: 'failed', silent: true },
+  ]);
+  monitor.accept([item('running', next)], preferences);
+  assert.deepEqual(monitor.accept([item('failed', next)], preferences), []);
 });

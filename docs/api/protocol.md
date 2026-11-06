@@ -429,3 +429,8 @@ Activities remain transcript tool-name evidence. Private hook records are bounde
 source metadata, not normalized observer events or a new public ingestion endpoint.
 The native alert pipe additionally accepts waiting-for-user events through the
 existing intervention preference and all current ownership/freshness guards.
+
+Owned hook `unmatched` metadata invalidates the current displayed turn state until
+a new explicit prompt. It contains no mismatching path/content. Notification
+dedupe uses terminal UUID, prompt UUID and category independently in Node/Rust;
+a waiting alert never consumes that turn's later completion/failure category.

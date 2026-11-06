@@ -31,7 +31,7 @@ struct State {
     notification_id: i32,
     routes: HashMap<i32, String>,
     owned_routes: HashMap<i32, OwnedRoute>,
-    owned_seen: HashSet<(String, String)>,
+    owned_seen: HashSet<(String, String, &'static str)>,
     owned_frames_queued: usize,
     ui: Option<Ui>,
 }
@@ -266,7 +266,11 @@ impl State {
     }
 
     fn register_owned(&mut self, alert: &OwnedAlert, now: Instant) -> Option<i32> {
-        let key = (alert.route.terminal_id.clone(), alert.turn_id.clone());
+        let key = (
+            alert.route.terminal_id.clone(),
+            alert.turn_id.clone(),
+            alert.category,
+        );
         if self.owned_seen.len() >= 128 || !self.owned_seen.insert(key) {
             return None;
         }
@@ -724,12 +728,17 @@ pub(crate) fn notify_owned(app: &tauri::AppHandle, alert: OwnedAlert) {
                 .unwrap()
                 .register_owned(&alert, Instant::now());
             let Some(id) = id else { return };
+            let category = if alert.category == "completed" {
+                "responseCompleted"
+            } else {
+                alert.category
+            };
             let mut notification = native
                 .notification()
                 .builder()
                 .id(id)
                 .title("ORQST")
-                .body(translate(&format!("desktopShell.alert.{}", alert.category)));
+                .body(translate(&format!("desktopShell.alert.{}", category)));
             if !alert.silent {
                 notification = notification.sound(if cfg!(target_os = "macos") {
                     "NSUserNotificationDefaultSoundName"
@@ -1011,6 +1020,28 @@ mod tests {
         assert!(state.register_owned(&alert, now).is_none());
         alert.turn_id = "00000000-0000-4000-8000-000000000005".into();
         state.attempts = MAX_ATTEMPTS;
+        assert!(state.register_owned(&alert, now).is_none());
+    }
+
+    #[test]
+    fn owned_notification_categories_do_not_consume_one_another_in_the_same_turn() {
+        let now = Instant::now();
+        let value = owned_alert();
+        let mut alert = parse_owned_alert(&value, value["epoch"].as_str().unwrap(), 1000).unwrap();
+        let mut state = State {
+            enabled: true,
+            last_frame: Some(now),
+            ..State::default()
+        };
+        alert.category = "intervention";
+        let waiting = state.register_owned(&alert, now).unwrap();
+        assert!(state.register_owned(&alert, now).is_none());
+        alert.category = "completed";
+        let completed = state.register_owned(&alert, now).unwrap();
+        assert_ne!(waiting, completed);
+        assert!(state.register_owned(&alert, now).is_none());
+        alert.category = "failed";
+        assert!(state.register_owned(&alert, now).is_some());
         assert!(state.register_owned(&alert, now).is_none());
     }
 

@@ -48,3 +48,22 @@ proof do not establish a state. Stop means Claude invoked its finished-response
 hook; other configured hooks may continue work. It does not establish process exit
 or completion of an entire delegated task. Missing hooks or policies disabling them
 remain unavailable, with no attempt to override user or managed policy.
+
+## Independent review adjustments — 2026-11-05
+
+The review of candidate 151d097 found availability/notification fidelity gaps,
+with no blocking authority issue. Reuse the reviewed pinned CLI hooks and existing
+ORQST readers; no new hook, dependency, upstream code or user-setting mutation.
+
+Dedupe now includes category at both Node and native OS boundaries. Trusted
+same-session events with divergent cwd/transcript write an `unmatched` metadata
+marker; no path/body is retained, and a new explicit prompt is required to restore
+state. Post-tool progress is coalesced after prompt/progress using only the last
+512 channel bytes; the 128 KiB exhaustion boundary remains unknown. Esc does not
+produce a Stop event and can leave the last running evidence until a later hook.
+Idle after Stop explicitly changes the display to waiting without a completion→
+waiting alert. Finished-response copy is distinct from delegated task completion.
+
+Synthetic refusals additionally cover MCP/unreviewed versions, changed writer
+script, FIFO/hardlinked channels and PostToolUseFailure. Real pinned-CLI behavior,
+OS delivery/click handling and user/managed hook policy remain native acceptance.

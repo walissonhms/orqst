@@ -1504,3 +1504,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Fixed owned Claude hook notification dedupe per category in Node/Rust, unmatched metadata invalidation and repeated progress coalescing. Added refusal coverage and explicit response/idle/interruption limits.

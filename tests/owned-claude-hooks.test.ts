@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import {
   appendFileSync,
   chmodSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -136,14 +137,12 @@ test('owned settings add only hook metadata handlers; the actual quoted command 
   }
 });
 
-test('foreign session/cwd/transcript, subagents, missing prompt IDs and unrelated notifications are ignored', () => {
+test('foreign sessions, subagents, missing prompt IDs and unrelated notifications are ignored', () => {
   const f = fixture();
   try {
     const read = ownedClaudeHookEvidence(f.config);
     for (const extra of [
       { session_id: randomUUID() },
-      { cwd: f.root },
-      { transcript_path: '/SYNTHETIC/foreign.jsonl' },
       { agent_id: 'SYNTHETIC-subagent' },
       { prompt_id: undefined },
       { prompt_id: 'not-a-uuid' },
@@ -167,6 +166,9 @@ for (const mutation of [
   'symlink',
   'mode',
   'settings',
+  'script',
+  'fifo',
+  'hardlink',
   'oversized',
 ] as const) {
   test(`owned hook channel ${mutation} cannot establish or replay a state`, () => {
@@ -184,6 +186,13 @@ for (const mutation of [
       }
       if (mutation === 'mode') chmodSync(f.channel, 0o644);
       if (mutation === 'settings') appendFileSync(claudeOwnedHooksPath(f.config), ' ');
+      if (mutation === 'script') appendFileSync(join(f.state, 'claude-hooks.cjs'), ' ');
+      if (mutation === 'hardlink') linkSync(f.channel, f.channel + '.linked');
+      if (mutation === 'fifo') {
+        renameSync(f.channel, f.channel + '.original');
+        assert.equal(spawnSync('/usr/bin/mkfifo', [f.channel]).status, 0);
+        chmodSync(f.channel, 0o600);
+      }
       if (mutation === 'oversized') appendFileSync(f.channel, 'X'.repeat(128 * 1024));
       assert.deepEqual(read(), { agentState: 'unknown' });
       if (mutation === 'rewrite' || mutation === 'replace') {
@@ -276,6 +285,81 @@ test('oversized input is discarded and an exhausted channel cannot retain a misl
     f.send('Stop');
     assert.ok(statSync(f.channel).size <= 128 * 1024);
     assert.deepEqual(read(), { agentState: 'unknown' });
+  } finally {
+    f.close();
+  }
+});
+
+test('mismatched cwd/transcript leaves a metadata-only unmatched marker and recovers at a new prompt', () => {
+  for (const extra of [
+    { cwd: '/SYNTHETIC/changed' },
+    { transcript_path: '/SYNTHETIC/other.jsonl' },
+  ]) {
+    const f = fixture();
+    try {
+      const read = ownedClaudeHookEvidence(f.config);
+      f.send('UserPromptSubmit');
+      assert.equal(read().agentState, 'running');
+      f.send('Stop', extra);
+      assert.deepEqual(read(), { agentState: 'unknown' });
+      assert.equal(
+        JSON.parse(readFileSync(f.channel, 'utf8').trim().split('\n').at(-1)!).event,
+        'unmatched',
+      );
+      assert.equal(readFileSync(f.channel, 'utf8').includes('SYNTHETIC'), false);
+      f.send('PostToolUse');
+      assert.deepEqual(read(), { agentState: 'unknown' });
+      const next = randomUUID();
+      f.send('UserPromptSubmit', { prompt_id: next });
+      assert.deepEqual(read(), { agentState: 'running', turnId: next });
+    } finally {
+      f.close();
+    }
+  }
+});
+
+test('progress coalesces after prompt/progress but resumes waiting state, including tool failure', () => {
+  const f = fixture();
+  try {
+    const read = ownedClaudeHookEvidence(f.config);
+    f.send('UserPromptSubmit');
+    const size = statSync(f.channel).size;
+    for (let i = 0; i < 20; i++) f.send(i % 2 ? 'PostToolUseFailure' : 'PostToolUse');
+    assert.equal(statSync(f.channel).size, size);
+    assert.equal(read().agentState, 'running');
+    f.send('Notification', { notification_type: 'permission_prompt' });
+    assert.equal(read().agentState, 'waiting_for_user');
+    f.send('PostToolUseFailure', { error: 'SYNTHETIC_PRIVATE_TOOL_ERROR' });
+    assert.equal(read().agentState, 'running');
+    const resumed = statSync(f.channel).size;
+    f.send('PostToolUseFailure');
+    f.send('PostToolUse');
+    assert.equal(statSync(f.channel).size, resumed);
+    f.send('Stop');
+    assert.equal(read().agentState, 'completed');
+    f.send('Notification', { notification_type: 'idle_prompt' });
+    assert.equal(read().agentState, 'waiting_for_user');
+    assert.equal(readFileSync(f.channel, 'utf8').includes('SYNTHETIC'), false);
+  } finally {
+    f.close();
+  }
+});
+
+test('owned hook validation refuses MCP mode and unreviewed CLI versions', () => {
+  const f = fixture();
+  try {
+    assert.throws(
+      () =>
+        validateClaudeOwnedHooks({
+          ...f.config,
+          interactive: { ...f.config.interactive, mcp: true },
+        }),
+      /reviewed Claude TUI/,
+    );
+    assert.throws(
+      () => validateClaudeOwnedHooks({ ...f.config, executableVersion: '2.1.178' }),
+      /reviewed Claude TUI/,
+    );
   } finally {
     f.close();
   }
