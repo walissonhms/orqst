@@ -85,6 +85,8 @@ struct OpeningIntent {
     document: u64,
     presentation: u64,
     expires: Instant,
+    /// Native focused this view once for the intent; never again (no focus stealing).
+    focus_sent: bool,
 }
 impl OpeningIntent {
     fn current(&self, document: u64, presentation: u64, now: Instant) -> bool {
@@ -1363,6 +1365,7 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         why("take_failed");
         return idle();
     };
+    let rearm = profile.clone();
     if focus_diagnostics() {
         eprintln!("ORQST_OPEN_PREPARED dispatch slot={slot}");
     }
@@ -1372,6 +1375,29 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         Some(epoch),
     )
     .await;
+    // focus_required is refused before anything reaches the host: nothing ran, so the
+    // same one-use intent is restored (same document, presentation and expiry).
+    if value["status"] == "focus_required" {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        if let Some(r) = guard.as_mut() {
+            if r.pending_open[slot].is_none()
+                && r.generations[slot] == epoch.0
+                && r.layout_generation == epoch.1
+                && Instant::now() < epoch.2
+            {
+                r.pending_open[slot] = Some(OpeningIntent {
+                    profile: rearm,
+                    document: epoch.0,
+                    presentation: epoch.1,
+                    expires: epoch.2,
+                    focus_sent: true,
+                });
+            }
+        }
+        why("focus_required_rearmed");
+        return idle();
+    }
     json!({"attempted":true,"value":value})
 }
 
@@ -2220,18 +2246,24 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             let _ = view.show();
             // A new terminal opens when its own view is first responder. Its first visible
             // frame arrives after the layout that asked for focus, so focus it here once.
-            let opening = app
-                .state::<Terminals>()
-                .0
-                .lock()
-                .unwrap()
-                .as_ref()
-                .is_some_and(|r| {
-                    r.pending_open
-                        .get(slot as usize)
-                        .is_some_and(|pending| pending.is_some())
-                });
-            if opening && window.is_focused().unwrap_or(false) {
+            let opening = window.is_focused().unwrap_or(false)
+                && app
+                    .state::<Terminals>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .as_mut()
+                    .is_some_and(|r| {
+                        let quiet = r.native_dialog.is_none() && !r.confirming_quit;
+                        match r.pending_open.get_mut(slot as usize) {
+                            Some(Some(intent)) if quiet && !intent.focus_sent => {
+                                intent.focus_sent = true;
+                                true
+                            }
+                            _ => false,
+                        }
+                    });
+            if opening {
                 let _ = view.set_focus();
             }
         }
@@ -3037,6 +3069,7 @@ async fn enroll_selected_inner(
             document: r.generations[slot],
             presentation: generation,
             expires: Instant::now() + Duration::from_secs(60),
+            focus_sent: false,
         });
         r.presentation_suspended = false;
     }
@@ -3642,6 +3675,7 @@ async fn start_selected_inner(
                     document: r.generations[slot],
                     presentation: r.layout_generation,
                     expires,
+                    focus_sent: false,
                 });
             }
         }
@@ -3933,6 +3967,7 @@ mod opening_tests {
             document: 3,
             presentation: 9,
             expires: now + Duration::from_secs(60),
+            focus_sent: false,
         })
     }
     #[test]
@@ -4166,6 +4201,7 @@ mod enrollment_tests {
             document: 0,
             presentation: 2,
             expires: now + Duration::from_secs(60),
+            focus_sent: false,
         };
         let late = json!({
             "kind":"layout","generation":2,"revision":3,

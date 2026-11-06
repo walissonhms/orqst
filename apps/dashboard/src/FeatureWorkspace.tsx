@@ -170,21 +170,32 @@ export function FeatureWorkspace({
   const studio = !canvas && (nativeWorkspace || !!native);
   const hasSnapshot = !!snapshot;
   const leftCanvas = useRef(false);
+  const canvasShown = useRef(false);
+  const restoreTimer = useRef<number>(undefined);
+  canvasShown.current = !!nativeWorkspace && nativeCanvas && !wantsCanvas;
+  useEffect(() => () => window.clearTimeout(restoreTimer.current), []);
   useEffect(() => {
     // Native may present the old summary canvas first; the Studio needs live terminal views.
-    if (!nativeWorkspace || !nativeCanvas || wantsCanvas) {
+    if (!canvasShown.current) {
       leftCanvas.current = false;
+      window.clearTimeout(restoreTimer.current);
       return;
     }
     const first = snapshot?.slots.find((slot) => members.includes(slot.terminalId));
     if (!first || leftCanvas.current) return;
     leftCanvas.current = true;
-    void request({
-      action: 'pane',
-      slot: first.slot,
-      terminalId: first.terminalId,
-      command: 'restore',
-    });
+    // A restore changes the native presentation, which ends a new terminal's pending
+    // opening. Native leaves the canvas by itself when it presents a new terminal, so wait
+    // briefly and restore only if the canvas is still shown.
+    restoreTimer.current = window.setTimeout(() => {
+      if (!canvasShown.current) return;
+      void request({
+        action: 'pane',
+        slot: first.slot,
+        terminalId: first.terminalId,
+        command: 'restore',
+      });
+    }, 1500);
   });
   const terminals = useMemo(
     () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
