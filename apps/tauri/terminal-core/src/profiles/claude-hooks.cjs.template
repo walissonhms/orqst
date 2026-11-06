@@ -1,0 +1,58 @@
+'use strict';
+const fs = require('node:fs');
+const expected = __ORQST_EXPECTED__;
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let chunks = [], length = 0, rejected = false;
+const deadline = setTimeout(() => process.stdin.destroy(), 1000);
+process.stdin.on('close', () => clearTimeout(deadline));
+process.stdin.on('error', () => clearTimeout(deadline));
+process.stdin.on('data', (chunk) => {
+  length += chunk.length;
+  if (length > 65536) { rejected = true; chunks = []; process.stdin.destroy(); }
+  else chunks.push(chunk);
+});
+process.stdin.on('end', () => {
+  clearTimeout(deadline);
+  let fd;
+  try {
+    if (rejected) return;
+    const raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)));
+    chunks = [];
+    if (!raw || Array.isArray(raw) || typeof raw !== 'object' || raw.agent_id !== undefined ||
+        raw.session_id !== expected.sessionId || !uuid.test(raw.prompt_id ?? '')) return;
+    const matched = raw.cwd === expected.project && raw.transcript_path === expected.transcript;
+    const event = !matched ? 'unmatched' : raw.hook_event_name === 'UserPromptSubmit' ? 'prompt' :
+      ['PostToolUse', 'PostToolUseFailure'].includes(raw.hook_event_name) ? 'progress' :
+      raw.hook_event_name === 'Stop' ? 'stop' :
+      raw.hook_event_name === 'StopFailure' ? 'failure' :
+      raw.hook_event_name === 'Notification' && ['permission_prompt', 'idle_prompt'].includes(raw.notification_type) ? raw.notification_type : undefined;
+    if (!event) return;
+    if (fs.realpathSync(expected.state) !== expected.state || fs.realpathSync(expected.channel) !== expected.channel) return;
+    const directory = fs.lstatSync(expected.state);
+    if (!directory.isDirectory() || directory.uid !== process.getuid() || (directory.mode & 63)) return;
+    fd = fs.openSync(expected.channel, fs.constants.O_RDWR | fs.constants.O_APPEND | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK);
+    const file = fs.fstatSync(fd);
+    const selected = fs.lstatSync(expected.channel);
+    const line = JSON.stringify({ version: 1, sessionId: expected.sessionId, promptId: raw.prompt_id, event, at: Date.now() }) + String.fromCharCode(10);
+    if (!file.isFile() || file.uid !== process.getuid() || (file.mode & 63) || file.nlink !== 1 ||
+        file.ino !== selected.ino || file.dev !== selected.dev) return;
+    if (event === 'progress' && file.size > 0 && file.size < __ORQST_MAXIMUM__) {
+      const tail = Buffer.alloc(Math.min(file.size, 512));
+      if (fs.readSync(fd, tail, 0, tail.length, file.size - tail.length) !== tail.length) return;
+      const lines = tail.toString('utf8').split(String.fromCharCode(10));
+      const last = lines.at(-2);
+      if (lines.at(-1) === '' && last) {
+        const prior = JSON.parse(last);
+        if (prior.version === 1 && prior.sessionId === expected.sessionId &&
+            prior.promptId === raw.prompt_id && ['prompt', 'progress'].includes(prior.event)) return;
+      }
+    }
+    if (file.size + Buffer.byteLength(line) > __ORQST_MAXIMUM__) {
+      if (file.size < __ORQST_MAXIMUM__) fs.writeSync(fd, "!");
+      return;
+    }
+    if (fs.writeSync(fd, line) !== Buffer.byteLength(line)) return;
+    fs.fsyncSync(fd);
+  } catch { /* Missing/unsafe evidence does not control the CLI. */ }
+  finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
+});
