@@ -233,6 +233,23 @@ export function FeatureWorkspace({
               void send(reply.snapshot, false);
               return;
             }
+            // The native presentation changed without new metadata: re-read, then resend once.
+            if (retry && reply.status === 'stale' && native) {
+              void native
+                .request({
+                  contractVersion: 1,
+                  generation: snapshotNow.generation,
+                  action: 'snapshot',
+                })
+                .then((fresh) => {
+                  if (!fresh.snapshot) return setArrangeIssue('stale');
+                  current.current = fresh.snapshot;
+                  setSnapshot(fresh.snapshot);
+                  void send(fresh.snapshot, false);
+                })
+                .catch(() => setArrangeIssue('unavailable'));
+              return;
+            }
             if (reply.status !== 'busy') setArrangeIssue(reply.status);
           })
           .catch(() => setArrangeIssue('unavailable'));
@@ -242,11 +259,13 @@ export function FeatureWorkspace({
   );
   // Native hides terminal views on every new generation until a matching frame arrives,
   // so the last arrangement is sent again whenever the generation changes.
+  // Two counters can hide the views: the metadata generation and the native layout fence
+  // (published with the terminal dock state). A change in either resends the frame.
   const generation = snapshot?.generation;
   useEffect(() => {
     if (generation === undefined || !arranging.current) return;
     arrange(arranging.current.layout, arranging.current.mode);
-  }, [generation, arrange]);
+  }, [generation, dockEpoch, arrange]);
 
   useEffect(() => {
     try {
