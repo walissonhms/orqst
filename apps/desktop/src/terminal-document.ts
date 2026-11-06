@@ -13,6 +13,7 @@ export function terminalDocument(options: {
   startProfile: string;
   operationalOpen?: boolean;
   canvasNavigation?: boolean;
+  studioChrome?: boolean;
   nativeAuthentication: boolean;
   scope: string;
   blocker?: string;
@@ -34,7 +35,7 @@ export function terminalDocument(options: {
   return `<!doctype html>
 <html lang="${escapeHTML(options.language)}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${text('title')} ${alias} · ${escapeHTML(options.provider)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head>
-<body><main data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}"${options.operationalOpen ? ' data-operational-open="true"' : ''}>
+<body><main${options.studioChrome ? ' data-chrome="studio"' : ''} data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}"${options.operationalOpen ? ' data-operational-open="true"' : ''}>
 <header class="pane-header">
   <span class="pane-provider">${escapeHTML(options.provider)}</span>
   <span class="pane-identity" title="${identity}">${identity}</span>

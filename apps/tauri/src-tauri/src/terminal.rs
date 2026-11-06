@@ -47,6 +47,7 @@ struct Running {
     labels: Vec<String>,
     providers: Vec<String>,
     layout: Value,
+    feature_members: Option<Vec<usize>>,
     generations: Vec<u64>,
     loaded: Vec<bool>,
     revoked: Vec<bool>,
@@ -233,6 +234,7 @@ fn publish_layout_generation(r: &mut Running) {
 }
 
 fn advance_layout(r: &mut Running) {
+    r.feature_members = None;
     r.layout_generation = r.layout_generation.saturating_add(1);
     publish_layout_generation(r);
 }
@@ -243,6 +245,7 @@ fn invalidate_presentation_state(generation: &mut u64, suspended: &mut bool) {
 }
 
 fn invalidate_layout(r: &mut Running) {
+    r.feature_members = None;
     r.metadata_pending.clear();
     r.metadata_mutating = None;
     r.permission_review = None;
@@ -1653,6 +1656,137 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
     }
 }
 
+/// Snapshot membership is a hide-only native guard; it never starts/focuses a surface.
+fn feature_member_slots(snapshot: &Value) -> Option<Vec<usize>> {
+    if !crate::features::valid_snapshot(snapshot) {
+        return None;
+    }
+    let features = snapshot["features"].as_array()?;
+    let active = features
+        .iter()
+        .find(|feature| feature["featureId"] == snapshot["activeFeatureId"]);
+    Some(
+        snapshot["slots"]
+            .as_array()?
+            .iter()
+            .filter(|slot| {
+                active.map_or_else(
+                    || {
+                        !features.iter().any(|feature| {
+                            feature["terminalIds"]
+                                .as_array()
+                                .unwrap()
+                                .contains(&slot["terminalId"])
+                        })
+                    },
+                    |feature| {
+                        feature["terminalIds"]
+                            .as_array()
+                            .unwrap()
+                            .contains(&slot["terminalId"])
+                    },
+                )
+            })
+            .map(|slot| slot["slot"].as_u64().unwrap() as usize)
+            .collect(),
+    )
+}
+fn layout_members_current(state: &Value, members: Option<&[usize]>) -> bool {
+    members.is_none_or(|members| {
+        state["order"].as_array().is_some_and(|order| {
+            order.len() == members.len()
+                && order.iter().all(|slot| {
+                    slot.as_u64()
+                        .is_some_and(|slot| members.contains(&(slot as usize)))
+                })
+        })
+    })
+}
+fn restrict_layout_members(state: &mut Value, members: &[usize]) {
+    for key in ["order", "shown", "visible"] {
+        if let Some(slots) = state[key].as_array_mut() {
+            slots.retain(|slot| {
+                slot.as_u64()
+                    .is_some_and(|slot| members.contains(&(slot as usize)))
+            });
+        }
+    }
+    if !state["order"]
+        .as_array()
+        .is_some_and(|order| order.contains(&state["active"]))
+    {
+        state["active"] = state["order"]
+            .as_array()
+            .and_then(|order| order.first())
+            .cloned()
+            .unwrap_or(json!(-1));
+    }
+    if !state["shown"]
+        .as_array()
+        .is_some_and(|shown| shown.contains(&state["maximized"]))
+    {
+        state["maximized"] = Value::Null;
+    }
+}
+pub(crate) fn restrict_feature_members(
+    app: &tauri::AppHandle,
+    snapshot: &Value,
+    presentation: u64,
+    epoch: &str,
+) {
+    let Some(members) = feature_member_slots(snapshot) else {
+        return;
+    };
+    let count = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(r) = guard.as_mut() else {
+            return;
+        };
+        if r.epoch != epoch
+            || r.layout_generation != presentation
+            || members.iter().any(|slot| *slot >= r.documents.len())
+        {
+            return;
+        }
+        if r.feature_members.as_ref() == Some(&members) {
+            return;
+        }
+        r.feature_members = Some(members.clone());
+        restrict_layout_members(&mut r.layout, &members);
+        r.documents.len()
+    };
+    let handle = app.clone();
+    let epoch = epoch.to_owned();
+    let _ = app.run_on_main_thread(move || {
+        crate::renderer::present(|| {
+            let current = handle
+                .state::<Terminals>()
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|r| {
+                    r.epoch == epoch
+                        && r.layout_generation == presentation
+                        && r.feature_members.as_ref() == Some(&members)
+                });
+            if !current {
+                return;
+            }
+            for slot in 0..count {
+                if !members.contains(&slot) {
+                    revoke(&handle, slot, false);
+                    if let Some(view) = handle.get_webview(&format!("terminal-{slot}")) {
+                        let _ = view.hide();
+                    }
+                }
+            }
+            publish_workspace_projection(&handle);
+        })
+    });
+}
+
 /// Minimal dock state only: hidden slot, label and provider. No ids, proofs or epochs.
 pub(crate) fn publish_workspace_projection(app: &tauri::AppHandle) {
     let value = app
@@ -1796,7 +1930,8 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             logical.height,
             r.layout_revision,
             r.layout_generation,
-        ) || (r.presentation_suspended && state["suspended"] != true)
+        ) || !layout_members_current(state, r.feature_members.as_deref())
+            || (r.presentation_suspended && state["suspended"] != true)
         {
             return;
         }
@@ -2890,6 +3025,7 @@ async fn start_selected_inner(
             .map(|pane| pane["provider"].as_str().unwrap_or("").to_owned())
             .collect(),
         layout: ready["layout"].clone(),
+        feature_members: None,
         generations: vec![0; count],
         loaded: vec![false; count],
         revoked: vec![false; count],
@@ -3652,5 +3788,54 @@ mod enrollment_tests {
             &late, 2, 1440, 900, 2, generation
         ));
         assert!(!intent.current(0, generation, now));
+    }
+}
+
+#[cfg(test)]
+mod feature_membership_tests {
+    use super::*;
+    fn snapshot() -> Value {
+        let f = "e10636eb-3a12-4094-9123-49a4cdad27b8";
+        let a = "a10636eb-3a12-4094-9123-49a4cdad27b8";
+        let b = "b10636eb-3a12-4094-9123-49a4cdad27b8";
+        json!({"contractVersion":1,"storage":"core","generation":1,
+            "workspace":{"id":"workspace","name":"Workspace"},
+            "features":[{"schemaVersion":1,"workspaceId":"workspace","featureId":f,"name":"Feature", "description":"", "status":"active", "revision":1,"terminalIds":[a],"createdAt":1,"updatedAt":1}],
+            "view":{"contractVersion":1,"storage":"core","workspaceId":"workspace","featureId":f,"revision":1},
+            "activeFeatureId":f,"slots":[{"slot":0,"terminalId":a,"provider":"codex"},{"slot":1,"terminalId":b,"provider":"opencode"}],"layoutSaved":true})
+    }
+    #[test]
+    fn selected_empty_and_unassigned_contexts_do_not_adopt_other_terminals() {
+        let mut value = snapshot();
+        assert_eq!(feature_member_slots(&value), Some(vec![0]));
+        value["features"][0]["terminalIds"] = json!([]);
+        assert_eq!(feature_member_slots(&value), Some(vec![]));
+        value = snapshot();
+        value["activeFeatureId"] = Value::Null;
+        value["view"]["featureId"] = Value::Null;
+        assert_eq!(feature_member_slots(&value), Some(vec![1]));
+        value["slots"][0]["slot"] = json!(9);
+        assert_eq!(feature_member_slots(&value), None);
+    }
+    #[test]
+    fn snapshot_hides_old_scope_even_when_next_geometry_frame_is_rejected() {
+        let mut old = json!({"order":[0,1],"shown":[0,1],"visible":[0,1],"active":1,"maximized":1,"count":2,"names":["A","B"]});
+        assert!(!layout_members_current(&old, Some(&[0])));
+        restrict_layout_members(&mut old, &[0]);
+        assert_eq!(old["order"], json!([0]));
+        assert_eq!(old["shown"], json!([0]));
+        assert_eq!(old["visible"], json!([0]));
+        assert_eq!(old["active"], json!(0));
+        assert!(old["maximized"].is_null());
+        assert_eq!(old["count"], 2); // Global pool/documents remain owned and retained.
+        assert!(layout_members_current(&old, Some(&[0])));
+        restrict_layout_members(&mut old, &[]);
+        assert_eq!(old["visible"], json!([]));
+        assert_eq!(old["order"], json!([]));
+        assert_eq!(old["active"], json!(-1));
+        assert!(layout_members_current(&old, Some(&[])));
+        assert!(!layout_members_current(&json!({"order":[1]}), Some(&[])));
+        // Only a newly fenced native generation clears the old snapshot constraint.
+        assert!(layout_members_current(&json!({"order":[1]}), None));
     }
 }

@@ -322,10 +322,14 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Studio v2 chrome contract: candidate `15b6ef5` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `15b6ef5`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you" state via owned `--settings` hooks                                                                     | pane-817 | step 1b                                          |
+<<<<<<< HEAD
 | MCP pair delegation/result projection: metadata-only audit + facade/Rust guards implemented                               | pane-817 | native/provider exchange and UI acceptance       |
 | Studio v2 chrome contract: candidate `1401ee8` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `1401ee8`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you": independent-review fixes implemented; native acceptance pending                                       | pane-817 | review A–F addressed; owner provider test        |
+=======
+| Studio native membership hide barrier and hosted-document chrome implemented                                              | pane-817 | empty-Feature/header native acceptance           |
+>>>>>>> 779eed72700274e8e6a9e65ca7da8efc98b6cf91
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
 | Current-workspace batch create: renderer wired in `1401ee8`, native acceptance pending                                    | pane-817 | owner native/provider acceptance                 |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |
