@@ -11,6 +11,7 @@ pub mod json;
 pub mod lifecycle_receipt;
 pub mod marker;
 pub mod owned_shutdown;
+pub mod pair_admission;
 pub mod startup_failure;
 
 pub use error::{AdmissionError, RefusalCode, Result};
@@ -28,6 +29,7 @@ pub use owned_shutdown::{
     parse_owned_shutdown_inventory, OwnedShutdownInventory, OwnedShutdownPorts,
     OwnedShutdownResult, OwnedTerminalShutdown,
 };
+pub use pair_admission::SharedDesktopAdmission;
 pub use startup_failure::{
     core_startup_failure_message, terminal_startup_failure, terminal_startup_host_failure,
     TerminalPreparationFailure,

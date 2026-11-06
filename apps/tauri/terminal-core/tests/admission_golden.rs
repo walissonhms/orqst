@@ -858,3 +858,39 @@ fn owned_shutdown_matches_typescript() {
     let actual = json!({ "results": steps.0 });
     assert_same("shutdown", &base, expected, actual);
 }
+
+#[test]
+fn shared_admission_implements_the_pair_trait() {
+    use orqst_terminal_core::admission::SharedDesktopAdmission;
+    use orqst_terminal_core::pair::Admission;
+    let base = base("pair-trait");
+    let dir = base.join("managed-agents");
+    let opened = DesktopAdmission::open_with(
+        &dir,
+        &manifests(),
+        Some(EPOCH),
+        sources(&[OWNER, ARCHIVE], T0),
+    )
+    .unwrap();
+    let mut shared = SharedDesktopAdmission::new(opened);
+    assert!(
+        shared.assert_owner().is_err(),
+        "unclaimed admission has no owner"
+    );
+    shared.preflight().unwrap();
+    shared.claim().unwrap();
+    shared.assert_owner().unwrap();
+    let marker = fs::read_to_string(dir.join("active-pair.json")).unwrap();
+    assert_eq!(
+        marker,
+        shared.with(|a| a.marker_bytes().to_owned()).unwrap()
+    );
+    let mut step = shared.prepare_release(&evidence()).unwrap();
+    let archive = dir.join(format!("retired-{OWNER}-{ARCHIVE}.json"));
+    assert!(archive.exists() && dir.join("active-pair.json").exists());
+    step().unwrap();
+    assert!(!dir.join("active-pair.json").exists() && archive.exists());
+    assert!(step().is_err(), "the release step is one-shot");
+    assert!(shared.claim().is_err(), "retired admission never reclaims");
+    fs::remove_dir_all(base).unwrap();
+}
