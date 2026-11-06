@@ -891,8 +891,9 @@ shows its results) did the same.
   requires PTY focus and the intent was consumed without a possible open.
 - Native focuses that view at most once per intent (`focus_sent`) and never while a native
   dialog or Quit review is active, so it cannot steal focus from other terminals.
-- When the open dispatch is refused with `focus_required` (before anything reaches the
-  host), the same intent is restored with its original document, presentation and expiry.
+- When the open dispatch is refused with `focus_required` or `denied` and the request
+  sequence did not advance (nothing was written to the host), the same intent is restored
+  with its original document, presentation and expiry.
 - The Studio's automatic canvas `pane restore` waits 1.5 s and runs only if the canvas is
   still shown; it changes presentation and would otherwise end a new terminal's opening.
 - `ORQST_TAURI_FOCUS_DIAGNOSTICS=1` prints `ORQST_OPEN_PREPARED` call/idle reason/intent/

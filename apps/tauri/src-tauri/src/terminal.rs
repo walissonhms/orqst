@@ -1366,6 +1366,14 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         return idle();
     };
     let rearm = profile.clone();
+    // The request sequence advances only right before a request is written to the host.
+    let sequence = app
+        .state::<Terminals>()
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.sequence);
     if focus_diagnostics() {
         eprintln!("ORQST_OPEN_PREPARED dispatch slot={slot}");
     }
@@ -1375,13 +1383,16 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         Some(epoch),
     )
     .await;
-    // focus_required is refused before anything reaches the host: nothing ran, so the
-    // same one-use intent is restored (same document, presentation and expiry).
-    if value["status"] == "focus_required" {
+    // A refusal before anything reached the host (focus_required, or denied while another
+    // request held the slot or metadata): nothing ran, so the same one-use intent is
+    // restored with its original document, presentation and expiry.
+    let refused = matches!(value["status"].as_str(), Some("focus_required" | "denied"));
+    if refused {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         if let Some(r) = guard.as_mut() {
-            if r.pending_open[slot].is_none()
+            if Some(r.sequence) == sequence
+                && r.pending_open[slot].is_none()
                 && r.generations[slot] == epoch.0
                 && r.layout_generation == epoch.1
                 && Instant::now() < epoch.2
@@ -1395,7 +1406,7 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
                 });
             }
         }
-        why("focus_required_rearmed");
+        why("refused_before_host");
         return idle();
     }
     json!({"attempted":true,"value":value})
