@@ -30,6 +30,7 @@ import {
 } from './provider-mcp-config.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
 import type { TerminalProfile } from './supervisor.js';
+import { claudeOwnedHooksPath, validateClaudeOwnedHooks } from './owned-claude-hooks.js';
 
 import {
   managedOpenCodeConfigSchema,
@@ -69,6 +70,7 @@ export const managedClaudeConfigSchema = z.strictObject({
   model: z.lazy(() => terminalModelSelectionSchema).optional(),
   preparation: z.lazy(() => terminalPreparationBindingSchema).optional(),
   sessionId: z.uuid(),
+  ownedHooks: z.literal(true).optional(),
   authentication: z.strictObject({
     mode: z.literal('reuse-existing'),
     home: path,
@@ -103,6 +105,8 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
         ? 'No reviewed Claude MCP launch contract for this version/hash'
         : 'No reviewed launch contract for this exact Claude binary version/hash',
     );
+  if (config.ownedHooks && (config.executableVersion !== '2.1.318' || config.interactive.mcp))
+    throw new Error('Owned hooks require the reviewed Claude TUI contract');
 }
 
 export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
@@ -142,6 +146,7 @@ export function readInteractiveTerminalConfig(file: string): InteractiveTerminal
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 2) {
     const config = managedClaudeConfigSchema.parse(raw);
     validateManagedClaudeConfig(config);
+    validateClaudeOwnedHooks(config);
     return config;
   }
   const config = managedCodexConfigSchema.parse(raw);
@@ -157,6 +162,7 @@ export function interactiveTerminalProfiles(
   if (config.version === 1) return managedCodexProfiles(config, mcp);
   if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
   validateClaudeLaunchContract(config);
+  validateClaudeOwnedHooks(config);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
     throw new Error('Claude MCP composition/acknowledgment mismatch');
   if (
@@ -183,13 +189,17 @@ export function interactiveTerminalProfiles(
       cwd: config.project,
       argv: [
         ...(candidate?.argv ?? ['--session-id', config.sessionId]),
+        ...(config.ownedHooks ? ['--settings', claudeOwnedHooksPath(config)] : []),
         ...terminalModelArguments(config.model),
       ],
       environmentProfile: 'claude-native-identity-no-inherited-credentials-v1',
-      cliAuthorizationScope: `claude-native-v1:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}`,
+      cliAuthorizationScope: `claude-native-v1:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}${config.ownedHooks ? ':orqst-owned-hooks-v1' : ''}`,
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
         'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ' +
+        (config.ownedHooks
+          ? 'ORQST adds private metadata-only prompt/notification/stop hooks through an additional owned settings file; existing settings and policy remain effective. '
+          : '') +
         (mcp
           ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude 2.1.178. ORQST task grant requires separate native authorization. '
           : 'Native MCP definitions may start. ') +

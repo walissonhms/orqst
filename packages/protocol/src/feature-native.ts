@@ -276,7 +276,7 @@ export const featureCanvasSessionEvidenceSchema = z.strictObject({
       }),
     )
     .max(3),
-  agentState: z.enum(['running', 'completed', 'failed', 'unknown']),
+  agentState: z.enum(['running', 'waiting_for_user', 'completed', 'failed', 'unknown']),
   turnId: z.uuid().optional(),
 });
 /** Display-only owned PTY evidence, never a session status or execution grant. */
