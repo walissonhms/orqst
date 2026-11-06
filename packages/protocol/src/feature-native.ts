@@ -411,6 +411,13 @@ export const featureNativeReplyEnvelopeSchema = z.strictObject({
   document: featureNativeEnvelopeSchema.shape.document,
   value: featureNativeReplySchema,
 });
+/** Native host push, not a renderer command. Generation is the native presentation fence. */
+export const featureNativeStateEnvelopeSchema = z.strictObject({
+  kind: z.literal('feature-state'),
+  epoch: z.uuid(),
+  generation: base.generation,
+  snapshot: featureNativeSnapshotSchema,
+});
 /** Passive native navigation only; deliberately separate from Core metadata requests. */
 export const featurePreparationRequestSchema = z.strictObject({
   ...base,

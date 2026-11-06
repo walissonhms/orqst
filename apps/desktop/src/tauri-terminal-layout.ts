@@ -183,7 +183,7 @@ export class TauriTerminalLayout {
   /** Apply geometry only, keeping the retained PTYs and their process ownership unchanged. */
   arrange(input: Arrangement): boolean {
     if (
-      this.suspended ||
+      (this.suspended && !(this.studio && input.layoutVersion === 2)) ||
       !this.chrome ||
       (this.studio && input.layoutVersion !== 2) ||
       !featureNativeRequestSchema.safeParse(input).success
@@ -261,6 +261,7 @@ export class TauriTerminalLayout {
       (slot) => this.state.shown.includes(slot) || visible.some((pane) => pane.slot === slot),
     );
     this.arrangement = structuredClone(input);
+    this.suspended = false; // A fully validated current Studio frame resumes geometry only.
     this.canvas = false;
     this.publish();
     return true;

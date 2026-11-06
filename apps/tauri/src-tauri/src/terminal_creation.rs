@@ -415,7 +415,8 @@ pub(crate) fn navigation_available(app: &tauri::AppHandle) -> bool {
     !app.state::<Preparation>().0.lock().unwrap().busy
 }
 fn snapshot(app: &tauri::AppHandle) -> Value {
-    let running = crate::terminal::is_running(app);
+    let live_count = crate::terminal::pool_count(app);
+    let running = live_count.is_some();
     let blocked = crate::terminal::presentation_blocked(app);
     let state = app.state::<Preparation>();
     let guard = state.0.lock().unwrap();
@@ -426,7 +427,7 @@ fn snapshot(app: &tauri::AppHandle) -> Value {
         } else {
             !guard.opened
         };
-    json!({"generation":guard.generation, "limit":8, "count":guard.prepared.len(), "liveEnrollment":running,
+    json!({"generation":guard.generation, "limit":8, "count":live_count.unwrap_or(guard.prepared.len()), "liveEnrollment":running,
         "busy":guard.busy || blocked, "canCreate":available && !guard.committed,
         "canReview":available && !running && !guard.prepared.is_empty(), "selectionLocked":if running { !available } else { guard.opened }})
 }
