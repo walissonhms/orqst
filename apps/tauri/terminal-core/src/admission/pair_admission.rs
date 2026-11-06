@@ -92,4 +92,16 @@ impl Admission for SharedDesktopAdmission {
             text(handle.lock()?.finish_release(&preparation))
         }))
     }
+
+    fn reserve_enrollment(
+        &mut self,
+        input: &Value,
+        manifest_file: &str,
+        member: &Value,
+    ) -> std::result::Result<Box<dyn FnMut(&Value) -> std::result::Result<(), String>>, String>
+    {
+        let reservation = SharedDesktopAdmission::reserve_enrollment(self, input, manifest_file, member)?;
+        let handle = self.clone();
+        Ok(Box::new(move |receipt| handle.finish_enrollment(&reservation, receipt)))
+    }
 }
