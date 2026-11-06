@@ -64,7 +64,6 @@ export function FeatureWorkspace({
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
   // Provider-reported limits only; the panel stays hidden until the host reports some.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
-  const [limitsOpen, setLimitsOpen] = useState(false);
   /** Last refused native frame, shown so a hidden terminal is never silent. */
   const [arrangeIssue, setArrangeIssue] = useState('');
   // Proven pair communication only; events older than the view are history, not new effects.
@@ -1002,7 +1001,6 @@ export function FeatureWorkspace({
                     source={t('accountLimits.sourceApp')}
                     onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
                     onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
-                    onOpenChange={setLimitsOpen}
                     onRefresh={(accountId) =>
                       void request({ action: 'accountLimits', command: 'refresh', accountId })
                     }
@@ -1044,7 +1042,8 @@ export function FeatureWorkspace({
               ? {
                   native: {
                     onLayout: arrange,
-                    overlayOpen: !!editor || !!renamePane || quitFence || limitsOpen,
+                    // The limits panel hides only the views under it (data-native-overlay).
+                    overlayOpen: !!editor || !!renamePane || quitFence,
                   },
                 }
               : {})}

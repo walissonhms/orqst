@@ -197,6 +197,7 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
       entryPoints: [
         resolve('apps/dashboard/src/feature-workspace.css'),
         resolve('apps/dashboard/src/terminal-studio.css'),
+        resolve('apps/dashboard/src/pane-menu.css'),
       ],
       bundle: true,
       write: false,
@@ -253,11 +254,12 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
         b.y + b.height <= a.y,
       'tiled holes do not overlap',
     );
-    // Opening the pane menu hides every native view; closing it shows them again.
+    // Opening the pane menu hides only the native views under it; closing it shows them again.
     await page.locator('.ts-pane').first().getByRole('button', { name: 'More actions' }).click();
     await page.waitForFunction(() => {
       const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
-      return list.at(-1)!.panes.every((pane) => !pane.visible);
+      const panes = list.at(-1)!.panes;
+      return panes.some((pane) => !pane.visible) && panes.some((pane) => pane.visible);
     });
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => {

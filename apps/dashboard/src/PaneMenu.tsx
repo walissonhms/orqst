@@ -114,16 +114,10 @@ export function PaneMenu({
     label: string,
     action: () => void,
   ) => {
-    const enabled = type === null || supported.has(type);
+    // Actions the host does not support are not offered at all (no dead menu entries).
+    if (type !== null && !supported.has(type)) return null;
     return (
-      <button
-        type="button"
-        role="menuitem"
-        className="pm-item"
-        disabled={!enabled}
-        title={enabled ? undefined : unsupported}
-        onClick={run(action)}
-      >
+      <button type="button" role="menuitem" className="pm-item" onClick={run(action)}>
         {icon}
         <span>{label}</span>
       </button>
@@ -153,6 +147,7 @@ export function PaneMenu({
           <div
             ref={menu}
             className="pm-menu"
+            data-native-overlay=""
             role="menu"
             aria-label={t('terminalStudio.menu.title', { label: terminal.label })}
             style={{ top: position.top, left: position.left }}
@@ -222,9 +217,11 @@ export function PaneMenu({
             )}
             {onFullScreen &&
               item(null, <Maximize size={15} />, t('terminalStudio.menu.fullScreen'), onFullScreen)}
-            <hr />
-            <div className="pm-section">{t('terminalStudio.menu.migrate')}</div>
-            {others.length === 0 ? (
+            {supported.has('migrate') && <hr />}
+            {supported.has('migrate') && (
+              <div className="pm-section">{t('terminalStudio.menu.migrate')}</div>
+            )}
+            {!supported.has('migrate') ? null : others.length === 0 ? (
               <div className="pm-empty">{t('terminalStudio.menu.noOtherAccount')}</div>
             ) : (
               others.map((account) => {

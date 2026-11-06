@@ -373,7 +373,6 @@ export function TerminalStudio({
   const [scope, setScope] = useState<string>('all');
   const [composer, setComposer] = useState<{ from: string | null } | null>(null);
   const [details, setDetails] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(0);
   const [fullScreen, setFullScreen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const supported = useMemo(
@@ -761,7 +760,25 @@ export function TerminalStudio({
   })();
 
   // Native host: report each PTY hole after layout; hide all while an overlay is open.
-  const covered = !!native && (menuOpen > 0 || !!details || !!native.overlayOpen);
+  // Modal details and native overlays (Quit fence, editors) hide every view; small popovers
+  // marked data-native-overlay (pane menu, limits) hide only the views under them.
+  const covered = !!native && (!!details || !!native.overlayOpen);
+  const [, setOverlayTick] = useState(0);
+  // Popovers are portals that position themselves after mounting: measure again on the
+  // next frame whenever one opens or closes, so only the views under them are hidden.
+  useEffect(() => {
+    if (!native) return;
+    let frame = 0;
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setOverlayTick((tick) => tick + 1));
+    });
+    observer.observe(document.body, { childList: true });
+    return () => {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [native]);
   const lastLayout = useRef('');
   const lastRects = useRef(new Map<string, NonNullable<NativePaneLayout['rect']>>());
   const nativeLayout = useRef(native?.onLayout);
@@ -781,6 +798,21 @@ export function TerminalStudio({
       left: root?.left ?? stage.getBoundingClientRect().left,
       top: toolbar?.bottom ?? stage.getBoundingClientRect().top,
     };
+    const overlays = native
+      ? Array.from(document.querySelectorAll<HTMLElement>('[data-native-overlay]')).map((element) =>
+          element.getBoundingClientRect(),
+        )
+      : [];
+    const underOverlay = (box: DOMRect) =>
+      overlays.some(
+        (o) =>
+          o.width > 0 &&
+          o.height > 0 &&
+          box.left < o.right &&
+          o.left < box.right &&
+          box.top < o.bottom &&
+          o.top < box.bottom,
+      );
     const layout: NativePaneLayout[] = placed.map((pane) => {
       const hole = stage.querySelector<HTMLElement>(
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
@@ -793,7 +825,7 @@ export function TerminalStudio({
         if (kept) return { id: pane.id, z: pane.z, rect: kept };
       }
       const rect =
-        covered || !box || box.width < 1 || box.height < 1
+        covered || !box || box.width < 1 || box.height < 1 || underOverlay(box)
           ? null
           : {
               x: box.left - origin.left,
@@ -1125,9 +1157,6 @@ export function TerminalStudio({
                     }
                     onToggleMaximize={() => setState((current) => toggleMaximize(current, pane.id))}
                     onTogglePin={() => setState((current) => togglePin(current, pane.id))}
-                    onOpenChange={(open) =>
-                      setMenuOpen((count) => Math.max(0, count + (open ? 1 : -1)))
-                    }
                     onFullScreen={
                       native
                         ? undefined

@@ -142,6 +142,7 @@ export function AccountLimits({
           <div
             ref={panel}
             className="al-panel"
+            data-native-overlay=""
             role="dialog"
             aria-label={t('accountLimits.title')}
             style={{ top: position.top, left: position.left }}
