@@ -24,10 +24,14 @@ pub trait SlotProfiles {
     fn validate(&mut self, profile: &PreparedProfile) -> bool;
     fn environment(&self, profile: &PreparedProfile) -> R<Vec<(String, String)>>;
     fn receipt(&mut self, identity: &Identity) -> R<Box<dyn Receipt>>;
-    fn session_evidence(&self, _identity: &Identity) -> Option<serde_json::Value> {
+    /// Live provider session evidence (Claude transcript reader), created before dispatch.
+    fn session_evidence(&mut self, _identity: &Identity) -> Option<SessionReader> {
         None
     }
 }
+
+/// Polled on `canvasSessionEvidence`; metadata only.
+pub type SessionReader = Box<dyn FnMut() -> Option<serde_json::Value> + Send>;
 
 /// Events from every owned PTY, delivered to the single Core thread.
 pub struct Delivery {
@@ -52,7 +56,7 @@ impl PtyBackend {
 struct PtyHandle {
     pty: Arc<Pty>,
     exited: Arc<AtomicBool>,
-    evidence: Option<serde_json::Value>,
+    evidence: Option<Mutex<SessionReader>>,
 }
 
 impl Handle for PtyHandle {
@@ -69,7 +73,9 @@ impl Handle for PtyHandle {
         self.pty.signal(signal).map_err(|e| e.to_string())
     }
     fn session_evidence(&self) -> Option<serde_json::Value> {
-        self.evidence.clone()
+        let reader = self.evidence.as_ref()?;
+        let mut reader = reader.lock().ok()?;
+        reader()
     }
     // Dispose releases listeners only: the PTY stays owned by its watcher until exit.
 }
@@ -85,7 +91,7 @@ impl Backend for PtyBackend {
             return Err("Managed profile changed".into());
         }
         let env = self.profiles.environment(profile)?;
-        let evidence = self.profiles.session_evidence(identity);
+        let evidence = self.profiles.session_evidence(identity).map(Mutex::new);
         let receipt = Arc::new(Mutex::new(self.profiles.receipt(identity)?));
         let p = &profile.profile;
         let spec = Spawn { executable: &p.executable, argv: &p.argv, cwd: &p.cwd, env: &env, cols: 80, rows: 24 };

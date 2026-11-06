@@ -23,6 +23,10 @@ pub trait Extensions {
     fn close(&mut self) {}
     /// `closeSlot` side effects (MCP invalidation). The hub inbox survives.
     fn slot_closed(&mut self, _slot: usize) {}
+    /// OpenCode slots (initial or enrolled) keep capacity reserved: retirement is refused.
+    fn retire_blocked(&self) -> bool {
+        false
+    }
 }
 
 pub struct NoExtensions;
@@ -136,7 +140,7 @@ impl Core {
                 if !exact(&["kind", "id"]) {
                     return None;
                 }
-                if self.opencode {
+                if self.opencode || self.extensions.retire_blocked() {
                     return Some(Err("OpenCode descendant exit unvalidated; capacity remains reserved".into()));
                 }
                 Some(self.pair.prepare_retire().map(Some))
@@ -145,7 +149,7 @@ impl Core {
                 if !exact(&["kind", "id", "proof"]) {
                     return None;
                 }
-                if self.opencode {
+                if self.opencode || self.extensions.retire_blocked() {
                     return Some(Err("OpenCode descendant exit unvalidated; capacity remains reserved".into()));
                 }
                 let result = self.pair.retire(&raw["proof"]).map(|_| None);
