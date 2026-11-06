@@ -87,7 +87,12 @@ fn termios() -> libc::termios {
 }
 
 fn winsize(cols: u16, rows: u16) -> libc::winsize {
-    libc::winsize { ws_row: rows, ws_col: cols, ws_xpixel: 0, ws_ypixel: 0 }
+    libc::winsize {
+        ws_row: rows,
+        ws_col: cols,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    }
 }
 
 fn check(result: libc::c_int) -> io::Result<libc::c_int> {
@@ -111,15 +116,21 @@ pub fn helper_main(args: &[std::ffi::OsString]) -> ! {
             libc::_exit(1);
         };
         if !cwd.is_empty() {
-            let Ok(cwd) = cstring(cwd.as_bytes()) else { libc::_exit(1) };
+            let Ok(cwd) = cstring(cwd.as_bytes()) else {
+                libc::_exit(1)
+            };
             if libc::chdir(cwd.as_ptr()) == -1 {
                 libc::_exit(1);
             }
         }
-        let Ok(file_c) = cstring(file.as_bytes()) else { libc::_exit(1) };
+        let Ok(file_c) = cstring(file.as_bytes()) else {
+            libc::_exit(1)
+        };
         let mut argv: Vec<CString> = Vec::new();
         for arg in &args[1..] {
-            let Ok(arg) = cstring(arg.as_bytes()) else { libc::_exit(1) };
+            let Ok(arg) = cstring(arg.as_bytes()) else {
+                libc::_exit(1)
+            };
             argv.push(arg);
         }
         let mut ptrs: Vec<*const libc::c_char> = argv.iter().map(|a| a.as_ptr()).collect();
@@ -134,16 +145,27 @@ impl Pty {
     /// events arrive on the returned receiver: data chunks, then exactly one exit.
     pub fn spawn(spec: &Spawn, helper: &OsStr) -> io::Result<(Pty, mpsc::Receiver<Event>)> {
         if !spec.executable.starts_with('/') {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Executable must be absolute"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Executable must be absolute",
+            ));
         }
         // SAFETY: each call is checked; fds are wrapped in OwnedFd as soon as they exist.
         unsafe {
-            let master = OwnedFd::from_raw_fd(check(libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY))?);
+            let master =
+                OwnedFd::from_raw_fd(check(libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY))?);
             check(libc::grantpt(master.as_raw_fd()))?;
             check(libc::unlockpt(master.as_raw_fd()))?;
             let mut name = [0 as libc::c_char; 128];
-            check(libc::ioctl(master.as_raw_fd(), libc::TIOCPTYGNAME as _, name.as_mut_ptr()))?;
-            let slave = OwnedFd::from_raw_fd(check(libc::open(name.as_ptr(), libc::O_RDWR | libc::O_NOCTTY))?);
+            check(libc::ioctl(
+                master.as_raw_fd(),
+                libc::TIOCPTYGNAME as _,
+                name.as_mut_ptr(),
+            ))?;
+            let slave = OwnedFd::from_raw_fd(check(libc::open(
+                name.as_ptr(),
+                libc::O_RDWR | libc::O_NOCTTY,
+            ))?);
             let term = termios();
             check(libc::tcsetattr(slave.as_raw_fd(), libc::TCSANOW, &term))?;
             let size = winsize(spec.cols, spec.rows);
@@ -158,13 +180,15 @@ impl Pty {
             for arg in spec.argv {
                 argv.push(cstring(arg.as_bytes())?);
             }
-            let mut argp: Vec<*mut libc::c_char> = argv.iter().map(|a| a.as_ptr() as *mut _).collect();
+            let mut argp: Vec<*mut libc::c_char> =
+                argv.iter().map(|a| a.as_ptr() as *mut _).collect();
             argp.push(std::ptr::null_mut());
             let env: Vec<CString> = environment(spec)
                 .iter()
                 .map(|(k, v)| cstring(format!("{k}={v}").as_bytes()))
                 .collect::<io::Result<_>>()?;
-            let mut envp: Vec<*mut libc::c_char> = env.iter().map(|e| e.as_ptr() as *mut _).collect();
+            let mut envp: Vec<*mut libc::c_char> =
+                env.iter().map(|e| e.as_ptr() as *mut _).collect();
             envp.push(std::ptr::null_mut());
 
             let mut acts: libc::posix_spawn_file_actions_t = std::ptr::null_mut();
@@ -194,7 +218,14 @@ impl Pty {
             let mut pid: libc::pid_t = 0;
             if err == 0 {
                 loop {
-                    err = libc::posix_spawn(&mut pid, argv[0].as_ptr(), &acts, &attrs, argp.as_ptr(), envp.as_ptr());
+                    err = libc::posix_spawn(
+                        &mut pid,
+                        argv[0].as_ptr(),
+                        &acts,
+                        &attrs,
+                        argp.as_ptr(),
+                        envp.as_ptr(),
+                    );
                     if err != libc::EINTR {
                         break;
                     }
@@ -223,7 +254,9 @@ impl Pty {
             let mut buffer = vec![0u8; CHUNK];
             loop {
                 // SAFETY: reading into our own buffer from our own fd.
-                let n = unsafe { libc::read(reader.as_raw_fd(), buffer.as_mut_ptr().cast(), buffer.len()) };
+                let n = unsafe {
+                    libc::read(reader.as_raw_fd(), buffer.as_mut_ptr().cast(), buffer.len())
+                };
                 if n < 0 && io::Error::last_os_error().kind() == io::ErrorKind::Interrupted {
                     continue;
                 }
@@ -266,7 +299,8 @@ impl Pty {
         let mut rest = bytes;
         while !rest.is_empty() {
             // SAFETY: writing our own buffer to our own fd.
-            let n = unsafe { libc::write(self.master.as_raw_fd(), rest.as_ptr().cast(), rest.len()) };
+            let n =
+                unsafe { libc::write(self.master.as_raw_fd(), rest.as_ptr().cast(), rest.len()) };
             if n < 0 {
                 let error = io::Error::last_os_error();
                 if error.kind() == io::ErrorKind::Interrupted {
@@ -290,7 +324,12 @@ impl Pty {
         let signal = match name {
             "SIGTERM" => libc::SIGTERM,
             "SIGKILL" => libc::SIGKILL,
-            _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Unsupported signal")),
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Unsupported signal",
+                ))
+            }
         };
         // SAFETY: plain kill(2) on the child we spawned and have not reaped.
         check(unsafe { libc::kill(self.pid, signal) }).map(|_| ())
@@ -358,13 +397,17 @@ impl Utf8Chunks {
         self.pending.extend_from_slice(bytes);
         let keep = incomplete_tail(&self.pending);
         let split = self.pending.len() - keep;
-        let text = String::from_utf8_lossy(&self.pending[..split]).into_owned().into_bytes();
+        let text = String::from_utf8_lossy(&self.pending[..split])
+            .into_owned()
+            .into_bytes();
         self.pending.drain(..split);
         text
     }
 
     pub fn finish(&mut self) -> Vec<u8> {
-        let text = String::from_utf8_lossy(&self.pending).into_owned().into_bytes();
+        let text = String::from_utf8_lossy(&self.pending)
+            .into_owned()
+            .into_bytes();
         self.pending.clear();
         text
     }
@@ -408,8 +451,18 @@ mod tests {
 
     #[test]
     fn environment_adds_only_pwd_and_term() {
-        let env = vec![("HOME".to_owned(), "/h".to_owned()), ("TERM".to_owned(), "dumb".to_owned())];
-        let spec = Spawn { executable: "/bin/sh", argv: &[], cwd: "/tmp", env: &env, cols: 80, rows: 24 };
+        let env = vec![
+            ("HOME".to_owned(), "/h".to_owned()),
+            ("TERM".to_owned(), "dumb".to_owned()),
+        ];
+        let spec = Spawn {
+            executable: "/bin/sh",
+            argv: &[],
+            cwd: "/tmp",
+            env: &env,
+            cols: 80,
+            rows: 24,
+        };
         assert_eq!(
             environment(&spec),
             vec![

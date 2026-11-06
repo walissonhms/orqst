@@ -100,8 +100,11 @@ impl Admission for SharedDesktopAdmission {
         member: &Value,
     ) -> std::result::Result<Box<dyn FnMut(&Value) -> std::result::Result<(), String>>, String>
     {
-        let reservation = SharedDesktopAdmission::reserve_enrollment(self, input, manifest_file, member)?;
+        let reservation =
+            SharedDesktopAdmission::reserve_enrollment(self, input, manifest_file, member)?;
         let handle = self.clone();
-        Ok(Box::new(move |receipt| handle.finish_enrollment(&reservation, receipt)))
+        Ok(Box::new(move |receipt| {
+            handle.finish_enrollment(&reservation, receipt)
+        }))
     }
 }

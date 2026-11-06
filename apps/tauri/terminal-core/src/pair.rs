@@ -1,9 +1,11 @@
 //! Port of `managed-pair.ts`: one owner, a bounded team of independent slots sharing one
 //! authority. No provider semantics are inferred from PTY text.
 use crate::authority::{terminal_digest, Binding};
-use crate::rpc::Request;
-use crate::supervisor::{Backend, Handle, Identity, PreparedProfile, Shared, StartBinding, Supervisor};
 use crate::journal::Journal;
+use crate::rpc::Request;
+use crate::supervisor::{
+    Backend, Handle, Identity, PreparedProfile, Shared, StartBinding, Supervisor,
+};
 use serde_json::{json, Map, Value};
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -22,7 +24,12 @@ pub trait Admission {
     fn prepare_release(&mut self, evidence: &Value) -> R<Box<dyn FnMut() -> R<()>>>;
     /// `reserveEnrollment({ input, manifestFile, member })`: durable exclusive record; the
     /// returned finisher writes the receipt once.
-    fn reserve_enrollment(&mut self, _input: &Value, _manifest_file: &str, _member: &Value) -> R<EnrollmentFinish> {
+    fn reserve_enrollment(
+        &mut self,
+        _input: &Value,
+        _manifest_file: &str,
+        _member: &Value,
+    ) -> R<EnrollmentFinish> {
         Err("Incremental admission unavailable".into())
     }
 }
@@ -46,7 +53,14 @@ fn is_uuid_text(value: &str) -> bool {
 /// `terminalEnrollmentInputSchema.parse` (strict), in schema key order.
 pub fn parse_enrollment_input(raw: &Value) -> R<Map<String, Value>> {
     let object = raw.as_object().ok_or("Invalid enrollment input")?;
-    let keys = ["version", "epoch", "opId", "expectedRevision", "workspaceId", "featureId"];
+    let keys = [
+        "version",
+        "epoch",
+        "opId",
+        "expectedRevision",
+        "workspaceId",
+        "featureId",
+    ];
     if object.len() != keys.len() || !keys.iter().all(|k| object.contains_key(*k)) {
         return Err("Invalid enrollment input".into());
     }
@@ -54,45 +68,96 @@ pub fn parse_enrollment_input(raw: &Value) -> R<Map<String, Value>> {
         && object["version"].is_u64()
         && object["epoch"].as_str().is_some_and(is_uuid_text)
         && object["opId"].as_str().is_some_and(is_uuid_text)
-        && object["expectedRevision"].as_u64().is_some_and(|r| r <= MAX_SAFE)
-        && object["workspaceId"].as_str().is_some_and(crate::authority::is_digest)
-        && (object["featureId"].is_null() || object["featureId"].as_str().is_some_and(is_uuid_text));
+        && object["expectedRevision"]
+            .as_u64()
+            .is_some_and(|r| r <= MAX_SAFE)
+        && object["workspaceId"]
+            .as_str()
+            .is_some_and(crate::authority::is_digest)
+        && (object["featureId"].is_null()
+            || object["featureId"].as_str().is_some_and(is_uuid_text));
     if !valid {
         return Err("Invalid enrollment input".into());
     }
-    Ok(keys.iter().map(|k| ((*k).to_owned(), object[*k].clone())).collect())
+    Ok(keys
+        .iter()
+        .map(|k| ((*k).to_owned(), object[*k].clone()))
+        .collect())
 }
 
 /// `terminalEnrollmentMemberSchema` validation; returns the member in schema key order.
 pub fn member_schema_order(member: &Map<String, Value>) -> R<Value> {
-    let keys = ["slot", "terminalId", "alias", "provider", "requestedModel", "workspaceId", "featureId", "admissionRevision", "bindingDigest", "status"];
+    let keys = [
+        "slot",
+        "terminalId",
+        "alias",
+        "provider",
+        "requestedModel",
+        "workspaceId",
+        "featureId",
+        "admissionRevision",
+        "bindingDigest",
+        "status",
+    ];
     if member.keys().any(|k| !keys.contains(&k.as_str())) {
         return Err("Invalid enrollment member".into());
     }
     let text = |k: &str| member.get(k).and_then(Value::as_str);
     let length = |v: &str, max: usize| (1..=max).contains(&v.encode_utf16().count());
-    let valid = member.get("slot").and_then(Value::as_u64).is_some_and(|s| s < 8)
+    let valid = member
+        .get("slot")
+        .and_then(Value::as_u64)
+        .is_some_and(|s| s < 8)
         && text("terminalId").is_some_and(is_uuid_text)
-        && member.get("alias").is_none_or(|a| a.as_str().is_some_and(|a| length(a, 128)))
+        && member
+            .get("alias")
+            .is_none_or(|a| a.as_str().is_some_and(|a| length(a, 128)))
         && text("provider").is_some_and(|p| ["codex", "claude", "opencode"].contains(&p))
-        && member.get("requestedModel").is_none_or(|m| m.is_null() || m.as_str().is_some_and(|m| length(m, 160)))
+        && member
+            .get("requestedModel")
+            .is_none_or(|m| m.is_null() || m.as_str().is_some_and(|m| length(m, 160)))
         && text("workspaceId").is_some_and(crate::authority::is_digest)
-        && member.get("featureId").is_some_and(|f| f.is_null() || f.as_str().is_some_and(is_uuid_text))
-        && member.get("admissionRevision").and_then(Value::as_u64).is_some_and(|r| r <= MAX_SAFE)
+        && member
+            .get("featureId")
+            .is_some_and(|f| f.is_null() || f.as_str().is_some_and(is_uuid_text))
+        && member
+            .get("admissionRevision")
+            .and_then(Value::as_u64)
+            .is_some_and(|r| r <= MAX_SAFE)
         && text("bindingDigest").is_some_and(crate::authority::is_digest)
         && text("status").is_some_and(|s| s == "ready" || s == "uncertain");
     if !valid {
         return Err("Invalid enrollment member".into());
     }
-    Ok(Value::Object(keys.iter().filter_map(|k| member.get(*k).map(|v| ((*k).to_owned(), v.clone()))).collect()))
+    Ok(Value::Object(
+        keys.iter()
+            .filter_map(|k| member.get(*k).map(|v| ((*k).to_owned(), v.clone())))
+            .collect(),
+    ))
 }
 
 /// `terminalEnrollmentReceiptSchema.parse` output order (refinement checked by construction).
 pub fn receipt_schema_order(receipt: &Value) -> R<Value> {
     let object = receipt.as_object().ok_or("Invalid enrollment receipt")?;
     let mut out = Map::new();
-    for key in ["version", "epoch", "opId", "expectedRevision", "workspaceId", "featureId", "revision", "status", "reason"] {
-        out.insert(key.into(), object.get(key).cloned().ok_or("Invalid enrollment receipt")?);
+    for key in [
+        "version",
+        "epoch",
+        "opId",
+        "expectedRevision",
+        "workspaceId",
+        "featureId",
+        "revision",
+        "status",
+        "reason",
+    ] {
+        out.insert(
+            key.into(),
+            object
+                .get(key)
+                .cloned()
+                .ok_or("Invalid enrollment receipt")?,
+        );
     }
     let member = match object.get("member") {
         Some(Value::Object(member)) => member_schema_order(member)?,
@@ -176,7 +241,12 @@ pub struct Pair {
 }
 
 impl Pair {
-    pub fn new(authority: Shared, slots: Vec<Slot>, admission: Box<dyn Admission>, capacity: usize) -> R<Pair> {
+    pub fn new(
+        authority: Shared,
+        slots: Vec<Slot>,
+        admission: Box<dyn Admission>,
+        capacity: usize,
+    ) -> R<Pair> {
         if slots.is_empty() || slots.len() > capacity {
             return Err("Terminal slots exceed configured capacity".into());
         }
@@ -208,8 +278,17 @@ impl Pair {
     }
 
     fn supervisor(&self, slot: Slot, binding: Option<StartBinding>) -> R<Supervisor> {
-        let backend = PairBackend { inner: slot.backend, state: self.state.clone() };
-        Supervisor::new(self.authority.clone(), Box::new(backend), slot.profiles, Some(slot.journal), binding)
+        let backend = PairBackend {
+            inner: slot.backend,
+            state: self.state.clone(),
+        };
+        Supervisor::new(
+            self.authority.clone(),
+            Box::new(backend),
+            slot.profiles,
+            Some(slot.journal),
+            binding,
+        )
     }
 
     pub fn len(&self) -> usize {
@@ -233,7 +312,11 @@ impl Pair {
         if self.uncertain_slot(slot) {
             return Err("Terminal enrollment uncertain".into());
         }
-        let supervisor = self.slots.get_mut(slot).and_then(Option::as_mut).ok_or("Unknown terminal slot")?;
+        let supervisor = self
+            .slots
+            .get_mut(slot)
+            .and_then(Option::as_mut)
+            .ok_or("Unknown terminal slot")?;
         {
             let state = self.state.borrow();
             if state.reserved && request.operation != "snapshot" {
@@ -241,13 +324,21 @@ impl Pair {
             }
         }
         let a = |i: usize| request.args.get(i).cloned().unwrap_or(Value::Null);
-        let s = |i: usize| request.args.get(i).and_then(Value::as_str).unwrap_or("").to_owned();
+        let s = |i: usize| {
+            request
+                .args
+                .get(i)
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_owned()
+        };
         let n = |i: usize| request.args.get(i).and_then(Value::as_i64).unwrap_or(-1);
         let value = match request.operation.as_str() {
             "prepare" => {
                 let prepared = supervisor.prepare(&s(0), &s(1))?;
                 self.attempts[slot].push(prepared.attempt_id.clone());
-                let profile: Value = serde_json::from_str(&prepared.profile.json).map_err(|e| e.to_string())?;
+                let profile: Value =
+                    serde_json::from_str(&prepared.profile.json).map_err(|e| e.to_string())?;
                 let policy: Value = serde_json::from_str(crate::supervisor::POLICY_JSON).unwrap();
                 Some(json!({
                     "attemptId": prepared.attempt_id,
@@ -263,14 +354,28 @@ impl Pair {
             "attach" => Some(Value::from(supervisor.attach(&s(0), &a(1))?)),
             "requestInput" => Some(json!(supervisor.request_input(&s(0), &s(1))?)),
             "enableInput" => Some(Value::from(supervisor.enable_input(&s(0), &s(1), &a(2))?)),
-            "requestPaste" => Some(json!(supervisor.request_paste(&s(0), &s(1), &s(2), n(3), &s(4))?)),
-            "paste" => supervisor.paste(&s(0), &s(1), &s(2), n(3), &s(4), &a(5)).map(|_| None)?,
+            "requestPaste" => Some(json!(supervisor.request_paste(
+                &s(0),
+                &s(1),
+                &s(2),
+                n(3),
+                &s(4)
+            )?)),
+            "paste" => supervisor
+                .paste(&s(0), &s(1), &s(2), n(3), &s(4), &a(5))
+                .map(|_| None)?,
             "requestStop" => Some(json!(supervisor.request_stop(&s(0), &s(1), &s(2))?)),
             "stop" => supervisor.stop(&s(0), &s(1), &a(2)).map(|_| None)?,
-            "write" => supervisor.write(&s(0), &s(1), &s(2), n(3), &s(4)).map(|_| None)?,
+            "write" => supervisor
+                .write(&s(0), &s(1), &s(2), n(3), &s(4))
+                .map(|_| None)?,
             "resize" => supervisor.resize(&s(0), &s(1), n(2), n(3)).map(|_| None)?,
             "read" => {
-                let cursor = request.args.get(2).and_then(Value::as_u64).unwrap_or(u64::MAX);
+                let cursor = request
+                    .args
+                    .get(2)
+                    .and_then(Value::as_u64)
+                    .unwrap_or(u64::MAX);
                 let read = supervisor.read(&s(0), &s(1), cursor)?;
                 Some(json!({"bytes": read.bytes, "nextCursor": read.next_cursor, "gap": read.gap}))
             }
@@ -282,7 +387,10 @@ impl Pair {
     }
 
     fn authority_snapshot(&mut self, slot: usize, id: &str) -> R<Value> {
-        let snapshot = self.slots[slot].as_mut().ok_or("Unknown terminal slot")?.snapshot(id)?;
+        let snapshot = self.slots[slot]
+            .as_mut()
+            .ok_or("Unknown terminal slot")?
+            .snapshot(id)?;
         let mut out = Map::new();
         out.insert("slot".into(), slot.into());
         for key in ["instanceId", "epoch", "state", "exit"] {
@@ -332,7 +440,9 @@ impl Pair {
         let unreleased = attempts.iter().any(|a| {
             let state = a["state"].as_str().unwrap_or("");
             !["prepared", "exited", "start_failed"].contains(&state)
-                || (a["instanceId"].as_str().is_some_and(|id| dispatched.contains(id))
+                || (a["instanceId"]
+                    .as_str()
+                    .is_some_and(|id| dispatched.contains(id))
                     && (state != "exited" || a.get("exit").is_none()))
         });
         if unreleased {
@@ -370,7 +480,10 @@ impl Pair {
     pub fn prepare_retire(&mut self) -> R<Value> {
         let evidence = self.evidence()?;
         let binding = self.retire_binding(&evidence);
-        let challenge = self.authority.borrow_mut().prepare("desktop-managed", &binding)?;
+        let challenge = self
+            .authority
+            .borrow_mut()
+            .prepare("desktop-managed", &binding)?;
         Ok(json!({"evidence": evidence, "challenge": challenge}))
     }
 
@@ -379,7 +492,11 @@ impl Pair {
         let binding = self.retire_binding(&evidence);
         self.authority.borrow_mut().consume(proof, &binding)?;
         if self.finish.is_none() {
-            let finish = self.state.borrow_mut().admission.prepare_release(&evidence)?;
+            let finish = self
+                .state
+                .borrow_mut()
+                .admission
+                .prepare_release(&evidence)?;
             self.retirement = Some(evidence);
             self.finish = Some(finish);
             self.close(); // Fence all dispatch before releasing shared capacity.
@@ -410,7 +527,9 @@ impl Pair {
     }
 
     fn uncertain_slot(&self, slot: usize) -> bool {
-        self.enrolled.iter().any(|m| m["slot"].as_u64() == Some(slot as u64) && m["status"] != "ready")
+        self.enrolled
+            .iter()
+            .any(|m| m["slot"].as_u64() == Some(slot as u64) && m["status"] != "ready")
     }
 
     fn any_uncertain(&self) -> bool {
@@ -440,7 +559,12 @@ impl Pair {
     /// read-only; `create` may open a journal. After the effect boundary nothing is rolled
     /// back, released, retried, signalled or adopted. Returns the receipt in insertion order
     /// (the durable record order); the host reorders it for the reply.
-    pub fn enroll(&mut self, raw: &Value, manifest_file: &str, inspect: impl FnOnce() -> R<EnrollmentCandidate>) -> R<Value> {
+    pub fn enroll(
+        &mut self,
+        raw: &Value,
+        manifest_file: &str,
+        inspect: impl FnOnce() -> R<EnrollmentCandidate>,
+    ) -> R<Value> {
         self.state.borrow().active()?;
         let input = parse_enrollment_input(raw)?;
         if input["epoch"].as_str() != Some(self.authority.borrow().epoch.as_str()) {
@@ -448,9 +572,13 @@ impl Pair {
         }
         let op_id = input["opId"].as_str().unwrap_or_default().to_owned();
         let key = terminal_digest(
-            serde_json::to_string(&json!([Value::Object(input.clone()), manifest_file])).map_err(|e| e.to_string())?.as_bytes(),
+            serde_json::to_string(&json!([Value::Object(input.clone()), manifest_file]))
+                .map_err(|e| e.to_string())?
+                .as_bytes(),
         );
-        if let Some((_, previous_key, receipt)) = self.enrollments.iter().find(|(id, _, _)| *id == op_id) {
+        if let Some((_, previous_key, receipt)) =
+            self.enrollments.iter().find(|(id, _, _)| *id == op_id)
+        {
             if *previous_key != key {
                 return Err("Enrollment operation rebound".into());
             }
@@ -469,7 +597,8 @@ impl Pair {
         };
         let rejected = |pair: &mut Pair, reason: &str| {
             let value = receipt(pair.revision, "rejected", reason, Value::Null);
-            pair.enrollments.push((op_id.clone(), key.clone(), value.clone()));
+            pair.enrollments
+                .push((op_id.clone(), key.clone(), value.clone()));
             Ok(value)
         };
         if input["expectedRevision"].as_u64() != Some(self.revision) {
@@ -517,11 +646,24 @@ impl Pair {
                 let mut state = self.state.borrow_mut();
                 state.reserved = true;
                 state.admission.claim()?;
-                finish = Some(state.admission.reserve_enrollment(&Value::Object(input.clone()), manifest_file, &Value::Object(member.clone()))?);
+                finish = Some(state.admission.reserve_enrollment(
+                    &Value::Object(input.clone()),
+                    manifest_file,
+                    &Value::Object(member.clone()),
+                )?);
             }
             let created = (candidate.create)(slot)?;
-            let digest = member["bindingDigest"].as_str().unwrap_or_default().to_owned();
-            let supervisor = self.supervisor(created, Some(StartBinding { binding_digest: digest, admission_revision: self.revision as i64 }))?;
+            let digest = member["bindingDigest"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let supervisor = self.supervisor(
+                created,
+                Some(StartBinding {
+                    binding_digest: digest,
+                    admission_revision: self.revision as i64,
+                }),
+            )?;
             self.slots[slot] = Some(supervisor);
             let mut ready = member.clone();
             ready.insert("status".into(), "ready".into());
@@ -534,7 +676,12 @@ impl Pair {
         let value = match outcome {
             Ok(value) => value,
             Err(_) => {
-                let value = receipt(self.revision, "uncertain", "effect_uncertain", Value::Object(member));
+                let value = receipt(
+                    self.revision,
+                    "uncertain",
+                    "effect_uncertain",
+                    Value::Object(member),
+                );
                 if let (Some(finish), false) = (finish.as_mut(), receipt_attempted) {
                     let _ = finish(&value); // Preserve partial evidence, never retry.
                 }

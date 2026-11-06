@@ -349,13 +349,11 @@ fn hub_composition_routes_owner_mentions() {
         json!({"kind": "composerMention", "id": id(), "featureId": feature, "input": {"from": {"kind": "user"}, "to": [terminal], "text": "SYNTHETIC hello"}}),
     );
     assert_eq!(r["ok"], true, "{r}");
-    // Parity with host.ts, including its known defect: the hub member provider re-opens the
-    // Feature store while the composer transaction holds `BEGIN IMMEDIATE`, so the owner send
-    // fails with "database is locked" and the outcome is honestly `denied/unavailable` (the
-    // TypeScript path behaves identically; reported upstream, not silently diverged here).
+    // The owner message reaches the member's hub inbox (fixed in both cores: the Feature
+    // scope transaction closes before the hub re-reads membership on its own connection).
     assert_eq!(
         r["value"]["outcomes"],
-        json!([{"terminalId": terminal, "delivery": "denied", "reason": "unavailable"}])
+        json!([{"terminalId": terminal, "delivery": "queued", "reason": "hub_inbox"}])
     );
     // Capacity is not claimed before a launch: the owner-only projection refuses.
     let r = call(json!({"kind": "communicationProjection", "id": id(), "featureId": feature}));

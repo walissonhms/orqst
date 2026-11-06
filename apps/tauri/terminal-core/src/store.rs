@@ -52,7 +52,11 @@ impl Store {
     pub fn open(file: &Path) -> Result<Store, String> {
         let parent = file.parent().ok_or("Invalid database path")?;
         fs::create_dir_all(parent).map_err(err)?;
-        if fs::symlink_metadata(parent).map_err(err)?.file_type().is_symlink() {
+        if fs::symlink_metadata(parent)
+            .map_err(err)?
+            .file_type()
+            .is_symlink()
+        {
             return Err("Data directory must not be a symlink".into());
         }
         fs::set_permissions(parent, fs::Permissions::from_mode(0o700)).map_err(err)?;
@@ -72,18 +76,27 @@ impl Store {
         )
         .map_err(err)?;
         let all = migrations();
-        let version: i64 = db.query_row("PRAGMA user_version", [], |r| r.get(0)).map_err(err)?;
+        let version: i64 = db
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .map_err(err)?;
         if version > all.len() as i64 {
             return Err("Database schema is newer than this application".into());
         }
         for index in version as usize..all.len() {
-            let tx = db.transaction_with_behavior(TransactionBehavior::Immediate).map_err(err)?;
+            let tx = db
+                .transaction_with_behavior(TransactionBehavior::Immediate)
+                .map_err(err)?;
             tx.execute_batch(&all[index]).map_err(err)?;
-            tx.execute_batch(&format!("PRAGMA user_version={}", index + 1)).map_err(err)?;
+            tx.execute_batch(&format!("PRAGMA user_version={}", index + 1))
+                .map_err(err)?;
             tx.commit().map_err(err)?;
         }
         let existing: Option<String> = db
-            .query_row("SELECT value FROM settings WHERE key=?", ["machineId"], |r| r.get(0))
+            .query_row(
+                "SELECT value FROM settings WHERE key=?",
+                ["machineId"],
+                |r| r.get(0),
+            )
             .optional()
             .map_err(err)?;
         let machine_id = match existing {
@@ -98,9 +111,16 @@ impl Store {
                 id
             }
         };
-        db.execute("INSERT OR IGNORE INTO machines VALUES (?,?)", params![machine_id, iso_now()])
-            .map_err(err)?;
-        Ok(Store { db, path, machine_id })
+        db.execute(
+            "INSERT OR IGNORE INTO machines VALUES (?,?)",
+            params![machine_id, iso_now()],
+        )
+        .map_err(err)?;
+        Ok(Store {
+            db,
+            path,
+            machine_id,
+        })
     }
 }
 

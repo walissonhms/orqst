@@ -18,7 +18,11 @@ impl TerminalOutput {
         if limit < 1 || limit > 1024 * 1024 {
             return Err("Invalid terminal replay limit");
         }
-        Ok(Self { bytes: Vec::new(), end: 0, limit })
+        Ok(Self {
+            bytes: Vec::new(),
+            end: 0,
+            limit,
+        })
     }
 
     pub fn end(&self) -> u64 {
@@ -45,7 +49,11 @@ impl TerminalOutput {
         let from = (offset - start) as usize;
         let to = (from + READ_BYTES).min(self.bytes.len());
         let bytes = self.bytes[from..to].to_vec();
-        Ok(Read { next_cursor: offset + bytes.len() as u64, gap: cursor < start, bytes })
+        Ok(Read {
+            next_cursor: offset + bytes.len() as u64,
+            gap: cursor < start,
+            bytes,
+        })
     }
 }
 

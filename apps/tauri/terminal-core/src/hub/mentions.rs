@@ -117,110 +117,106 @@ pub fn record_composer_mention(
     }
     let input = ComposerMentionInput::parse(raw)?;
     let env = Env::default();
-    with_terminal_preferences(directory, |db| {
-        db.transaction(|| {
-            let features = Features::open(db, &env)?.list(workspace_id)?;
-            let feature = features
-                .iter()
-                .find(|f| Some(f.feature_id.as_str()) == feature_id);
-            if feature_id.is_some() && feature.is_none() {
-                return Err(refused("Feature unavailable"));
-            }
-            let assigned: HashSet<&String> = features
-                .iter()
-                .flat_map(|f| f.terminal_ids.iter())
-                .collect();
-            let members: HashSet<&String> = match feature {
-                Some(f) => f.terminal_ids.iter().collect(),
-                None => known_ids
-                    .iter()
-                    .filter(|id| !assigned.contains(id))
-                    .collect(),
-            };
-            let origin_valid = match &input.from {
-                ComposerOrigin::User => true,
-                ComposerOrigin::Terminal { terminal_id } => members.contains(terminal_id),
-            };
-            let outcomes: Vec<MentionOutcome> = input
-                .to
-                .iter()
-                .map(|terminal_id| {
-                    let (delivery, reason) = if !known_ids.contains(terminal_id) {
-                        ("denied", "unknown_terminal")
-                    } else if !origin_valid {
-                        ("denied", "not_member")
-                    } else if !members.contains(terminal_id) {
-                        (
-                            "denied",
-                            if assigned.contains(terminal_id) {
-                                "cross_feature_denied"
-                            } else {
-                                "not_member"
-                            },
-                        )
-                    } else if let (Some(deliver), ComposerOrigin::User, Some(_)) =
-                        (deliver, &input.from, feature_id)
-                    {
-                        deliver(terminal_id, &input.text)
+    // Read the Feature scope in one transaction, then close it before any hub delivery: the
+    // hub re-reads membership on its own connection, which would wait on this write lock.
+    let features = with_terminal_preferences(directory, |db| {
+        db.transaction(|| Features::open(db, &env)?.list(workspace_id))
+    })?;
+    let feature = features
+        .iter()
+        .find(|f| Some(f.feature_id.as_str()) == feature_id);
+    if feature_id.is_some() && feature.is_none() {
+        return Err(refused("Feature unavailable"));
+    }
+    let assigned: HashSet<&String> = features
+        .iter()
+        .flat_map(|f| f.terminal_ids.iter())
+        .collect();
+    let members: HashSet<&String> = match feature {
+        Some(f) => f.terminal_ids.iter().collect(),
+        None => known_ids
+            .iter()
+            .filter(|id| !assigned.contains(id))
+            .collect(),
+    };
+    let origin_valid = match &input.from {
+        ComposerOrigin::User => true,
+        ComposerOrigin::Terminal { terminal_id } => members.contains(terminal_id),
+    };
+    let outcomes: Vec<MentionOutcome> = input
+        .to
+        .iter()
+        .map(|terminal_id| {
+            let (delivery, reason) = if !known_ids.contains(terminal_id) {
+                ("denied", "unknown_terminal")
+            } else if !origin_valid {
+                ("denied", "not_member")
+            } else if !members.contains(terminal_id) {
+                (
+                    "denied",
+                    if assigned.contains(terminal_id) {
+                        "cross_feature_denied"
                     } else {
-                        ("unsupported", "no_structured_route")
-                    };
-                    MentionOutcome {
-                        terminal_id: terminal_id.clone(),
-                        delivery,
-                        reason,
-                    }
-                })
-                .collect();
-            if workspace_id.is_empty() || utf16_len(workspace_id) > 128 {
-                return Err(invalid("Invalid workspace"));
-            }
-            let id = (env.new_id)();
-            let record = MentionRecord {
-                from: &input.from,
-                to: &input.to,
-                id: &id,
-                at: now_ms(),
-                workspace_id,
-                feature_id,
-                outcomes: &outcomes,
-            };
-            let parent = fs::canonicalize(directory)?;
-            terminal_directory(&parent, true)?;
-            let root = parent.join("composer-mentions");
-            private_mkdir(&root)?;
-            terminal_directory(&root, true)?;
-            if fs::read_dir(&root)?.count() >= 10_000 {
-                return Err(refused("Mention journal full"));
-            }
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .custom_flags(libc::O_NOFOLLOW)
-                .open(root.join(format!("{id}.json")))?;
-            let info = file.metadata()?;
-            if !info.is_file()
-                || info.nlink() != 1
-                || info.uid() != getuid()
-                || info.mode() & 0o077 != 0
+                        "not_member"
+                    },
+                )
+            } else if let (Some(deliver), ComposerOrigin::User, Some(_)) =
+                (deliver, &input.from, feature_id)
             {
-                return Err(store("Unsafe mention journal"));
+                deliver(terminal_id, &input.text)
+            } else {
+                ("unsupported", "no_structured_route")
+            };
+            MentionOutcome {
+                terminal_id: terminal_id.clone(),
+                delivery,
+                reason,
             }
-            let mut text = serde_json::to_string(&record).map_err(|_| store("json"))?;
-            text.push('\n');
-            file.write_all(text.as_bytes())?;
-            file.sync_all()?;
-            fs::OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NOFOLLOW)
-                .open(&root)?
-                .sync_all()?;
-            serde_json::to_string(&MentionReply {
-                id: &id,
-                outcomes: &outcomes,
-            })
-            .map_err(|_| store("json"))
         })
+        .collect();
+    if workspace_id.is_empty() || utf16_len(workspace_id) > 128 {
+        return Err(invalid("Invalid workspace"));
+    }
+    let id = (env.new_id)();
+    let record = MentionRecord {
+        from: &input.from,
+        to: &input.to,
+        id: &id,
+        at: now_ms(),
+        workspace_id,
+        feature_id,
+        outcomes: &outcomes,
+    };
+    let parent = fs::canonicalize(directory)?;
+    terminal_directory(&parent, true)?;
+    let root = parent.join("composer-mentions");
+    private_mkdir(&root)?;
+    terminal_directory(&root, true)?;
+    if fs::read_dir(&root)?.count() >= 10_000 {
+        return Err(refused("Mention journal full"));
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(root.join(format!("{id}.json")))?;
+    let info = file.metadata()?;
+    if !info.is_file() || info.nlink() != 1 || info.uid() != getuid() || info.mode() & 0o077 != 0 {
+        return Err(store("Unsafe mention journal"));
+    }
+    let mut text = serde_json::to_string(&record).map_err(|_| store("json"))?;
+    text.push('\n');
+    file.write_all(text.as_bytes())?;
+    file.sync_all()?;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(&root)?
+        .sync_all()?;
+    serde_json::to_string(&MentionReply {
+        id: &id,
+        outcomes: &outcomes,
     })
+    .map_err(|_| store("json"))
 }

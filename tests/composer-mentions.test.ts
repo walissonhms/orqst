@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { recordComposerMention } from '../packages/core/src/terminal/composer-mentions.js';
+import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 
 const a = '00000000-0000-4000-8000-000000000011';
 const b = '00000000-0000-4000-8000-000000000012';
@@ -72,6 +73,34 @@ test('hub delivery applies only to owner messages inside a Feature', async () =>
     assert.deepEqual(reply.outcomes, [
       { terminalId: b, delivery: 'unsupported', reason: 'no_structured_route' },
     ]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('hub delivery reads Feature membership on its own connection without waiting a lock', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'orqst-mentions-'));
+  await chmod(directory, 0o700);
+  try {
+    const features = featureConfigurationDatabase(directory, 'synthetic-workspace');
+    let feature = features.create({ name: 'SYNTHETIC hub' });
+    feature = features.assignTerminal(feature.featureId, b, feature.revision);
+    const started = Date.now();
+    // Like the Core hub: every send re-reads the Feature scope through a new Store.
+    const reply = recordComposerMention(
+      directory,
+      'synthetic-workspace',
+      feature.featureId,
+      [a, b],
+      { from: { kind: 'user' }, to: [b], text: 'synthetic' },
+      () => {
+        const current = featureConfigurationDatabase(directory, 'synthetic-workspace').list();
+        assert.ok(current.some((entry) => entry.terminalIds.includes(b)));
+        return { delivery: 'queued', reason: 'hub_inbox' };
+      },
+    );
+    assert.deepEqual(reply.outcomes, [{ terminalId: b, delivery: 'queued', reason: 'hub_inbox' }]);
+    assert.ok(Date.now() - started < 2000, 'no busy_timeout wait');
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

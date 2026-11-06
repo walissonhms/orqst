@@ -6,7 +6,9 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
-pub const OPERATIONS: [&str; 7] = ["start", "attach", "input", "paste", "stop", "retire", "delegate"];
+pub const OPERATIONS: [&str; 7] = [
+    "start", "attach", "input", "paste", "stop", "retire", "delegate",
+];
 
 pub fn terminal_digest(value: &[u8]) -> String {
     let hash = Sha256::digest(value);
@@ -14,7 +16,10 @@ pub fn terminal_digest(value: &[u8]) -> String {
 }
 
 pub fn is_digest(value: &str) -> bool {
-    value.len() == 64 && value.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -55,11 +60,15 @@ pub fn challenge_bytes(c: &Challenge) -> Vec<u8> {
 
 /// Ed25519 SPKI DER (RFC 8410): fixed 12-byte prefix plus the 32-byte key.
 pub fn ed25519_spki(der: &[u8]) -> Result<VerifyingKey, &'static str> {
-    const PREFIX: [u8; 12] = [0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
+    const PREFIX: [u8; 12] = [
+        0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+    ];
     if der.len() != 44 || der[..12] != PREFIX {
         return Err("Invalid terminal client");
     }
-    let key: [u8; 32] = der[12..].try_into().map_err(|_| "Invalid terminal client")?;
+    let key: [u8; 32] = der[12..]
+        .try_into()
+        .map_err(|_| "Invalid terminal client")?;
     VerifyingKey::from_bytes(&key).map_err(|_| "Invalid terminal client")
 }
 
@@ -78,7 +87,10 @@ pub struct Authority {
 }
 
 impl Authority {
-    pub fn new(clients: Vec<(String, VerifyingKey)>, now: fn() -> i64) -> Result<Self, &'static str> {
+    pub fn new(
+        clients: Vec<(String, VerifyingKey)>,
+        now: fn() -> i64,
+    ) -> Result<Self, &'static str> {
         if clients.len() > 8 {
             return Err("Terminal client limit exceeded");
         }
@@ -89,7 +101,12 @@ impl Authority {
             }
             map.insert(id, key);
         }
-        Ok(Self { epoch: uuid::Uuid::new_v4().to_string(), clients: map, pending: HashMap::new(), now })
+        Ok(Self {
+            epoch: uuid::Uuid::new_v4().to_string(),
+            clients: map,
+            pending: HashMap::new(),
+            now,
+        })
     }
 
     pub fn now(&self) -> i64 {
@@ -131,12 +148,17 @@ impl Authority {
             target: binding.target.clone(),
             digest: binding.digest.clone(),
         };
-        self.pending.insert(challenge.challenge_id.clone(), challenge.clone());
+        self.pending
+            .insert(challenge.challenge_id.clone(), challenge.clone());
         Ok(challenge)
     }
 
     /// Consumed before side effects. A failed operation never retries this proof.
-    pub fn consume(&mut self, proof: &serde_json::Value, binding: &Binding) -> Result<String, &'static str> {
+    pub fn consume(
+        &mut self,
+        proof: &serde_json::Value,
+        binding: &Binding,
+    ) -> Result<String, &'static str> {
         let object = proof.as_object().ok_or("Invalid terminal proof")?;
         let (Some(id), Some(signature)) = (
             object.get("challengeId").and_then(|v| v.as_str()),
@@ -146,7 +168,9 @@ impl Authority {
         };
         if object.len() != 2
             || signature.len() != 86
-            || !signature.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+            || !signature
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
         {
             return Err("Invalid terminal proof");
         }
@@ -178,7 +202,11 @@ mod tests {
         SigningKey::from_bytes(&[7u8; 32])
     }
     fn binding() -> Binding {
-        Binding { operation: "start".into(), target: "t".into(), digest: "a".repeat(64) }
+        Binding {
+            operation: "start".into(),
+            target: "t".into(),
+            digest: "a".repeat(64),
+        }
     }
 
     #[test]
@@ -202,20 +230,32 @@ mod tests {
     #[test]
     fn a_signed_proof_is_consumed_once_and_bound_to_its_operation() {
         let key = signer();
-        let mut authority =
-            Authority::new(vec![("desktop-managed".into(), key.verifying_key())], now_ms).unwrap();
+        let mut authority = Authority::new(
+            vec![("desktop-managed".into(), key.verifying_key())],
+            now_ms,
+        )
+        .unwrap();
         let challenge = authority.prepare("desktop-managed", &binding()).unwrap();
         let signature = URL_SAFE_NO_PAD.encode(key.sign(&challenge_bytes(&challenge)).to_bytes());
-        let proof = serde_json::json!({"challengeId": challenge.challenge_id, "signature": signature});
-        let other = Binding { operation: "stop".into(), ..binding() };
+        let proof =
+            serde_json::json!({"challengeId": challenge.challenge_id, "signature": signature});
+        let other = Binding {
+            operation: "stop".into(),
+            ..binding()
+        };
         assert!(authority.consume(&proof, &other).is_err());
-        assert_eq!(authority.consume(&proof, &binding()).unwrap(), "desktop-managed");
+        assert_eq!(
+            authority.consume(&proof, &binding()).unwrap(),
+            "desktop-managed"
+        );
         assert!(authority.consume(&proof, &binding()).is_err());
     }
 
     #[test]
     fn spki_parsing_accepts_only_ed25519() {
-        let mut der = vec![0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00];
+        let mut der = vec![
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+        ];
         der.extend_from_slice(signer().verifying_key().as_bytes());
         assert!(ed25519_spki(&der).is_ok());
         der[6] = 0;

@@ -71,7 +71,14 @@ fn valid(record: &Attempt) -> bool {
         })
 }
 
-pub const STATES: [&str; 6] = ["prepared", "starting", "running", "exited", "start_failed", "ownership_lost"];
+pub const STATES: [&str; 6] = [
+    "prepared",
+    "starting",
+    "running",
+    "exited",
+    "start_failed",
+    "ownership_lost",
+];
 
 fn allowed(from: &str, to: &str) -> bool {
     matches!(
@@ -100,13 +107,25 @@ impl Journal {
         if !store.db.is_autocommit() {
             return Err("Terminal journal requires an independent commit".into());
         }
-        store.db.execute_batch("PRAGMA synchronous=FULL").map_err(err)?;
-        let mut journal = Journal { store, epoch: epoch.to_owned(), released: false, now };
+        store
+            .db
+            .execute_batch("PRAGMA synchronous=FULL")
+            .map_err(err)?;
+        let mut journal = Journal {
+            store,
+            epoch: epoch.to_owned(),
+            released: false,
+            now,
+        };
         journal.commit(|j| {
             let exists = j
                 .store
                 .db
-                .query_row("SELECT 1 FROM sqlite_master WHERE type='table' AND name='terminal_schema'", [], |_| Ok(()))
+                .query_row(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='terminal_schema'",
+                    [],
+                    |_| Ok(()),
+                )
                 .optional()
                 .map_err(err)?
                 .is_some();
@@ -116,17 +135,30 @@ impl Journal {
             let version = |j: &Journal| -> R<Option<i64>> {
                 j.store
                     .db
-                    .query_row("SELECT version FROM terminal_schema WHERE singleton=1", [], |r| r.get(0))
+                    .query_row(
+                        "SELECT version FROM terminal_schema WHERE singleton=1",
+                        [],
+                        |r| r.get(0),
+                    )
                     .optional()
                     .map_err(err)
             };
             if version(j)? == Some(1) {
-                j.store.db.execute_batch("UPDATE terminal_schema SET version=2 WHERE singleton=1").map_err(err)?;
+                j.store
+                    .db
+                    .execute_batch("UPDATE terminal_schema SET version=2 WHERE singleton=1")
+                    .map_err(err)?;
             }
             if version(j)? != Some(2) {
                 return Err("Unsupported terminal journal schema".into());
             }
-            let count: i64 = j.store.db.query_row("SELECT COUNT(*) AS count FROM terminal_attempts", [], |r| r.get(0)).map_err(err)?;
+            let count: i64 = j
+                .store
+                .db
+                .query_row("SELECT COUNT(*) AS count FROM terminal_attempts", [], |r| {
+                    r.get(0)
+                })
+                .map_err(err)?;
             if count > ATTEMPTS {
                 return Err("Terminal journal capacity exceeded".into());
             }
@@ -135,7 +167,13 @@ impl Journal {
                 return Err("Terminal journal already owned".into());
             }
             j.reconcile()?;
-            j.store.db.execute("INSERT OR REPLACE INTO terminal_owner VALUES (1,?)", [&j.epoch]).map_err(err)?;
+            j.store
+                .db
+                .execute(
+                    "INSERT OR REPLACE INTO terminal_owner VALUES (1,?)",
+                    [&j.epoch],
+                )
+                .map_err(err)?;
             Ok(())
         })?;
         Ok(journal)
@@ -144,7 +182,11 @@ impl Journal {
     fn owner(&self) -> R<Option<String>> {
         self.store
             .db
-            .query_row("SELECT epoch FROM terminal_owner WHERE singleton=1", [], |r| r.get(0))
+            .query_row(
+                "SELECT epoch FROM terminal_owner WHERE singleton=1",
+                [],
+                |r| r.get(0),
+            )
             .optional()
             .map_err(err)
     }
@@ -154,7 +196,10 @@ impl Journal {
         if !self.store.db.is_autocommit() {
             return action(self);
         }
-        self.store.db.execute_batch("BEGIN IMMEDIATE").map_err(err)?;
+        self.store
+            .db
+            .execute_batch("BEGIN IMMEDIATE")
+            .map_err(err)?;
         match action(self) {
             Ok(value) => {
                 self.store.db.execute_batch("COMMIT").map_err(err)?;
@@ -171,7 +216,11 @@ impl Journal {
         let row: Option<String> = self
             .store
             .db
-            .query_row("SELECT metadata FROM terminal_attempts WHERE instance_id=?", [instance], |r| r.get(0))
+            .query_row(
+                "SELECT metadata FROM terminal_attempts WHERE instance_id=?",
+                [instance],
+                |r| r.get(0),
+            )
             .optional()
             .map_err(err)?;
         match row {
@@ -194,7 +243,12 @@ impl Journal {
             .db
             .execute(
                 "UPDATE terminal_attempts SET state=?,updated_at=?,metadata=? WHERE instance_id=?",
-                params![record.state, record.updated_at, serde_json::to_string(record).map_err(err)?, record.instance_id],
+                params![
+                    record.state,
+                    record.updated_at,
+                    serde_json::to_string(record).map_err(err)?,
+                    record.instance_id
+                ],
             )
             .map_err(err)?;
         Ok(())
@@ -206,11 +260,20 @@ impl Journal {
             .db
             .prepare("SELECT metadata FROM terminal_attempts WHERE state IN ('prepared','starting','running')")
             .map_err(err)?;
-        let rows: Vec<String> = statement.query_map([], |r| r.get(0)).map_err(err)?.collect::<Result<_, _>>().map_err(err)?;
+        let rows: Vec<String> = statement
+            .query_map([], |r| r.get(0))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
         drop(statement);
         for text in rows {
             let mut record: Attempt = serde_json::from_str(&text).map_err(err)?;
-            record.state = if record.state == "prepared" { "start_failed" } else { "ownership_lost" }.into();
+            record.state = if record.state == "prepared" {
+                "start_failed"
+            } else {
+                "ownership_lost"
+            }
+            .into();
             record.updated_at = (self.now)().max(record.updated_at);
             self.save(&record)?;
         }
@@ -235,8 +298,14 @@ impl Journal {
             .db
             .prepare("SELECT project_id FROM terminal_attempts WHERE state IN ('starting','running','ownership_lost')")
             .map_err(err)?;
-        let active: Vec<String> = statement.query_map([], |r| r.get(0)).map_err(err)?.collect::<Result<_, _>>().map_err(err)?;
-        if active.len() >= ACTIVE || active.iter().filter(|p| **p == record.project_id).count() >= PER_PROJECT {
+        let active: Vec<String> = statement
+            .query_map([], |r| r.get(0))
+            .map_err(err)?
+            .collect::<Result<_, _>>()
+            .map_err(err)?;
+        if active.len() >= ACTIVE
+            || active.iter().filter(|p| **p == record.project_id).count() >= PER_PROJECT
+        {
             return Err("Terminal durable admission limit exceeded".into());
         }
         Ok(())
@@ -251,8 +320,19 @@ impl Journal {
         outcome
     }
 
-    pub fn prepare(&mut self, instance: &str, client: &str, project: &str, manifest: &str) -> R<()> {
-        let (instance, client, project, manifest) = (instance.to_owned(), client.to_owned(), project.to_owned(), manifest.to_owned());
+    pub fn prepare(
+        &mut self,
+        instance: &str,
+        client: &str,
+        project: &str,
+        manifest: &str,
+    ) -> R<()> {
+        let (instance, client, project, manifest) = (
+            instance.to_owned(),
+            client.to_owned(),
+            project.to_owned(),
+            manifest.to_owned(),
+        );
         self.commit(move |j| {
             j.assert_owner()?;
             let timestamp = (j.now)();
@@ -294,7 +374,9 @@ impl Journal {
         self.commit(move |j| {
             j.assert_owner()?;
             let record = j.read(&instance)?;
-            let Some(mut record) = record.filter(|r| r.epoch == j.epoch && allowed(&r.state, &state)) else {
+            let Some(mut record) =
+                record.filter(|r| r.epoch == j.epoch && allowed(&r.state, &state))
+            else {
                 return Err("Terminal journal transition denied".into());
             };
             if state == "starting" {
@@ -313,7 +395,13 @@ impl Journal {
         self.commit(|j| {
             j.assert_owner()?;
             j.reconcile()?;
-            j.store.db.execute("DELETE FROM terminal_owner WHERE singleton=1 AND epoch=?", [&j.epoch]).map_err(err)?;
+            j.store
+                .db
+                .execute(
+                    "DELETE FROM terminal_owner WHERE singleton=1 AND epoch=?",
+                    [&j.epoch],
+                )
+                .map_err(err)?;
             j.released = true;
             Ok(())
         })

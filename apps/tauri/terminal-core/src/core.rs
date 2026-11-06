@@ -18,7 +18,13 @@ pub enum CoreEvent {
 /// Pair-RPC kinds owned by other modules (features, hub, enrollment, preserved exits).
 /// Return `None` for a kind it does not own.
 pub trait Extensions {
-    fn handle(&mut self, kind: &str, request: &Value, pair: &mut Pair, draining: bool) -> Option<R<Option<Value>>>;
+    fn handle(
+        &mut self,
+        kind: &str,
+        request: &Value,
+        pair: &mut Pair,
+        draining: bool,
+    ) -> Option<R<Option<Value>>>;
     /// Called on disconnect and on retirement (close hub endpoints, journals).
     fn close(&mut self) {}
     /// `closeSlot` side effects (MCP invalidation). The hub inbox survives.
@@ -44,8 +50,20 @@ pub struct Startup {
 }
 
 /// Terminal operations still allowed while the owned shutdown drains.
-const DRAIN_TERMINAL: [&str; 6] = ["snapshot", "read", "requestStop", "stop", "revokeInput", "detach"];
-const DRAIN_KINDS: [&str; 4] = ["beginOwnedShutdown", "preserveOwnedShutdown", "prepareRetire", "retire"];
+const DRAIN_TERMINAL: [&str; 6] = [
+    "snapshot",
+    "read",
+    "requestStop",
+    "stop",
+    "revokeInput",
+    "detach",
+];
+const DRAIN_KINDS: [&str; 4] = [
+    "beginOwnedShutdown",
+    "preserveOwnedShutdown",
+    "prepareRetire",
+    "retire",
+];
 
 pub fn events() -> (Sender<CoreEvent>, Receiver<CoreEvent>) {
     channel()
@@ -65,7 +83,13 @@ pub struct Core {
 
 impl Core {
     pub fn new(startup: Startup, extensions: Box<dyn Extensions>) -> Core {
-        Core { pair: startup.pair, extensions, draining: false, closed: false, opencode: startup.opencode }
+        Core {
+            pair: startup.pair,
+            extensions,
+            draining: false,
+            closed: false,
+            opencode: startup.opencode,
+        }
     }
 
     fn shutdown(&mut self) {
@@ -103,14 +127,24 @@ impl Core {
         })
     }
 
-    fn dispatch(&mut self, kind: &str, raw: &Value, terminal: Option<(usize, rpc::Request)>) -> Option<R<Option<Value>>> {
+    fn dispatch(
+        &mut self,
+        kind: &str,
+        raw: &Value,
+        terminal: Option<(usize, rpc::Request)>,
+    ) -> Option<R<Option<Value>>> {
         if self.draining
             && !DRAIN_KINDS.contains(&kind)
-            && !terminal.as_ref().is_some_and(|(_, r)| DRAIN_TERMINAL.contains(&r.operation.as_str()))
+            && !terminal
+                .as_ref()
+                .is_some_and(|(_, r)| DRAIN_TERMINAL.contains(&r.operation.as_str()))
         {
             return Some(Err("Owned Core shutdown in progress".into()));
         }
-        let exact = |keys: &[&str]| raw.as_object().is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)));
+        let exact = |keys: &[&str]| {
+            raw.as_object()
+                .is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)))
+        };
         match kind {
             "terminal" => {
                 let (slot, request) = terminal?;
@@ -141,7 +175,9 @@ impl Core {
                     return None;
                 }
                 if self.opencode || self.extensions.retire_blocked() {
-                    return Some(Err("OpenCode descendant exit unvalidated; capacity remains reserved".into()));
+                    return Some(Err(
+                        "OpenCode descendant exit unvalidated; capacity remains reserved".into(),
+                    ));
                 }
                 Some(self.pair.prepare_retire().map(Some))
             }
@@ -150,7 +186,9 @@ impl Core {
                     return None;
                 }
                 if self.opencode || self.extensions.retire_blocked() {
-                    return Some(Err("OpenCode descendant exit unvalidated; capacity remains reserved".into()));
+                    return Some(Err(
+                        "OpenCode descendant exit unvalidated; capacity remains reserved".into(),
+                    ));
                 }
                 let result = self.pair.retire(&raw["proof"]).map(|_| None);
                 if result.is_ok() {
@@ -158,7 +196,9 @@ impl Core {
                 }
                 Some(result)
             }
-            _ => self.extensions.handle(kind, raw, &mut self.pair, self.draining),
+            _ => self
+                .extensions
+                .handle(kind, raw, &mut self.pair, self.draining),
         }
     }
 
@@ -177,7 +217,14 @@ impl Core {
     }
 
     /// Runs until the host disconnects. Sends `ready` first.
-    pub fn run(mut self, mut channel: Channel, reader: std::fs::File, ready: &Value, sender: Sender<CoreEvent>, events: Receiver<CoreEvent>) {
+    pub fn run(
+        mut self,
+        mut channel: Channel,
+        reader: std::fs::File,
+        ready: &Value,
+        sender: Sender<CoreEvent>,
+        events: Receiver<CoreEvent>,
+    ) {
         spawn_reader(reader, sender, CoreEvent::Ipc);
         if channel.send(ready).is_err() {
             return self.shutdown();

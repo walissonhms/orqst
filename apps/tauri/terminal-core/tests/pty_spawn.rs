@@ -10,7 +10,14 @@ fn helper() -> &'static OsStr {
 fn run(argv: &[&str], cwd: &str, cols: u16, rows: u16) -> (Pty, std::sync::mpsc::Receiver<Event>) {
     let argv: Vec<String> = argv.iter().map(|s| s.to_string()).collect();
     let env = vec![("PATH".to_owned(), "/usr/bin:/bin".to_owned())];
-    let spec = Spawn { executable: "/bin/sh", argv: &argv, cwd, env: &env, cols, rows };
+    let spec = Spawn {
+        executable: "/bin/sh",
+        argv: &argv,
+        cwd,
+        env: &env,
+        cols,
+        rows,
+    };
     Pty::spawn(&spec, helper()).expect("spawn")
 }
 
@@ -36,11 +43,19 @@ fn output_size_cwd_controlling_tty_env_and_exit_code() {
     );
     let (text, code, signal) = collect(events);
     assert!(text.contains("30 100"), "{text}");
-    assert!(text.contains("/tmp") || text.contains("/private/tmp"), "{text}");
+    assert!(
+        text.contains("/tmp") || text.contains("/private/tmp"),
+        "{text}"
+    );
     assert!(text.contains("tty"), "{text}");
     assert!(text.contains("T=xterm-256color"), "{text}");
     // The shell is the session leader and owns the controlling terminal's foreground group.
-    let pid = text.lines().find_map(|l| l.trim().strip_prefix("P=")).unwrap().trim().to_owned();
+    let pid = text
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("P="))
+        .unwrap()
+        .trim()
+        .to_owned();
     assert!(text.lines().any(|l| l.trim() == pid), "{text}");
     assert_eq!((code, signal), (3, 0));
 }
@@ -59,7 +74,12 @@ fn sigterm_reports_the_numeric_signal() {
 
 #[test]
 fn resize_reaches_the_child_and_input_is_echoed() {
-    let (pty, events) = run(&["-c", "read line; stty size; echo got=$line"], "/tmp", 80, 24);
+    let (pty, events) = run(
+        &["-c", "read line; stty size; echo got=$line"],
+        "/tmp",
+        80,
+        24,
+    );
     std::thread::sleep(Duration::from_millis(200));
     pty.resize(120, 40).unwrap();
     pty.write(b"hello\r").unwrap();

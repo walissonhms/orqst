@@ -20,7 +20,11 @@ pub struct Channel {
 impl Channel {
     /// Takes ownership of `NODE_CHANNEL_FD`. Refuses any other serialization mode.
     pub fn from_env() -> Result<(Channel, std::fs::File), String> {
-        if std::env::var("NODE_CHANNEL_SERIALIZATION_MODE").as_deref().unwrap_or("json") != "json" {
+        if std::env::var("NODE_CHANNEL_SERIALIZATION_MODE")
+            .as_deref()
+            .unwrap_or("json")
+            != "json"
+        {
             return Err("Unsupported IPC serialization".into());
         }
         let fd: i32 = std::env::var("NODE_CHANNEL_FD")
@@ -47,25 +51,41 @@ impl Channel {
     pub fn disconnect(self) {
         // SAFETY: shutting down our own socket.
         unsafe {
-            libc::shutdown(std::os::fd::AsRawFd::as_raw_fd(&self.writer), libc::SHUT_RDWR);
+            libc::shutdown(
+                std::os::fd::AsRawFd::as_raw_fd(&self.writer),
+                libc::SHUT_RDWR,
+            );
         }
     }
 }
 
 /// Reads inbound lines on a thread until EOF, then reports `Closed` once.
-pub fn spawn_reader<T: Send + 'static>(reader: std::fs::File, out: Sender<T>, wrap: fn(Inbound) -> T) {
+pub fn spawn_reader<T: Send + 'static>(
+    reader: std::fs::File,
+    out: Sender<T>,
+    wrap: fn(Inbound) -> T,
+) {
     std::thread::spawn(move || {
         let mut lines = BufReader::new(reader);
         let mut line = Vec::new();
         loop {
             line.clear();
-            match std::io::Read::by_ref(&mut lines).take(MAX_LINE as u64 + 1).read_until(b'\n', &mut line) {
+            match std::io::Read::by_ref(&mut lines)
+                .take(MAX_LINE as u64 + 1)
+                .read_until(b'\n', &mut line)
+            {
                 Ok(0) | Err(_) => break,
                 Ok(_) if line.len() > MAX_LINE => break,
                 Ok(_) => {}
             }
-            let Ok(value) = serde_json::from_slice::<Value>(&line) else { break };
-            if value.get("cmd").and_then(Value::as_str).is_some_and(|c| c.starts_with("NODE_")) {
+            let Ok(value) = serde_json::from_slice::<Value>(&line) else {
+                break;
+            };
+            if value
+                .get("cmd")
+                .and_then(Value::as_str)
+                .is_some_and(|c| c.starts_with("NODE_"))
+            {
                 continue;
             }
             if out.send(wrap(Inbound::Message(value))).is_err() {

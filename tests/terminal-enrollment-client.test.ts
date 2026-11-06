@@ -42,7 +42,9 @@ await build({
         }));
         builder.onLoad({ filter: /.*/, namespace: 'synthetic' }, () => ({
           contents:
-            "export const fork = (...args) => globalThis[Symbol.for('orqst.synthetic.enrollment.fork')](...args);",
+            "export const fork = (...args) => globalThis[Symbol.for('orqst.synthetic.enrollment.fork')](...args);" +
+            // The Rust Core selector (ORQST_RUST_TERMINALS=1) is off in this test.
+            " export const spawn = () => { throw new Error('synthetic: Rust Core not selected'); };",
           loader: 'js',
         }));
       },

@@ -48,8 +48,18 @@ pub struct PtyBackend {
 }
 
 impl PtyBackend {
-    pub fn new(slot: usize, profiles: Box<dyn SlotProfiles>, helper: OsString, events: Sender<crate::core::CoreEvent>) -> Self {
-        PtyBackend { slot, profiles, helper, events }
+    pub fn new(
+        slot: usize,
+        profiles: Box<dyn SlotProfiles>,
+        helper: OsString,
+        events: Sender<crate::core::CoreEvent>,
+    ) -> Self {
+        PtyBackend {
+            slot,
+            profiles,
+            helper,
+            events,
+        }
     }
 }
 
@@ -94,7 +104,14 @@ impl Backend for PtyBackend {
         let evidence = self.profiles.session_evidence(identity).map(Mutex::new);
         let receipt = Arc::new(Mutex::new(self.profiles.receipt(identity)?));
         let p = &profile.profile;
-        let spec = Spawn { executable: &p.executable, argv: &p.argv, cwd: &p.cwd, env: &env, cols: 80, rows: 24 };
+        let spec = Spawn {
+            executable: &p.executable,
+            argv: &p.argv,
+            cwd: &p.cwd,
+            env: &env,
+            cols: 80,
+            rows: 24,
+        };
         let (pty, receiver) = match Pty::spawn(&spec, &self.helper) {
             Ok(spawned) => spawned,
             Err(error) => {
@@ -104,9 +121,14 @@ impl Backend for PtyBackend {
         };
         let pty = Arc::new(pty);
         let exited = Arc::new(AtomicBool::new(false));
-        let (slot, instance, events) = (self.slot, identity.instance_id.clone(), self.events.clone());
+        let (slot, instance, events) =
+            (self.slot, identity.instance_id.clone(), self.events.clone());
         let send = move |event: BackendEvent| {
-            let _ = events.send(crate::core::CoreEvent::Backend(Delivery { slot, instance: instance.clone(), event }));
+            let _ = events.send(crate::core::CoreEvent::Backend(Delivery {
+                slot,
+                instance: instance.clone(),
+                event,
+            }));
         };
         // Successful PTY creation is OS process evidence, not provider readiness.
         let started_at = match receipt.lock().unwrap().started() {
@@ -114,10 +136,16 @@ impl Backend for PtyBackend {
             Err(_) => {
                 // Receipt failure is uncertainty; the process may run. Never invent exit.
                 send(BackendEvent::Lost);
-                return Ok(Box::new(PtyHandle { pty, exited, evidence }));
+                return Ok(Box::new(PtyHandle {
+                    pty,
+                    exited,
+                    evidence,
+                }));
             }
         };
-        send(BackendEvent::Started { started_at: Some(started_at) });
+        send(BackendEvent::Started {
+            started_at: Some(started_at),
+        });
         let watch_pty = pty.clone();
         let watch_exited = exited.clone();
         let lifetime_pty = pty.clone();
@@ -147,8 +175,16 @@ impl Backend for PtyBackend {
                     Event::Data(bytes) => send(BackendEvent::Data(bytes)),
                     Event::Exit { exit_code, signal } => {
                         watch_exited.store(true, Ordering::SeqCst);
-                        let name = if signal != 0 { pty::signal_name(signal) } else { None };
-                        let code = if signal != 0 { None } else { Some(exit_code as i64) };
+                        let name = if signal != 0 {
+                            pty::signal_name(signal)
+                        } else {
+                            None
+                        };
+                        let code = if signal != 0 {
+                            None
+                        } else {
+                            Some(exit_code as i64)
+                        };
                         match receipt.lock().unwrap().exit(code, name) {
                             Ok(exited_at) => send(BackendEvent::Exit {
                                 exit_code: exit_code as i64,
@@ -162,7 +198,11 @@ impl Backend for PtyBackend {
                 }
             }
         });
-        Ok(Box::new(PtyHandle { pty, exited, evidence }))
+        Ok(Box::new(PtyHandle {
+            pty,
+            exited,
+            evidence,
+        }))
     }
 }
 
@@ -171,8 +211,14 @@ impl Backend for PtyBackend {
 pub struct LifecycleReceipt(crate::admission::lifecycle_receipt::LifecycleRecorder);
 
 impl LifecycleReceipt {
-    pub fn create(state: &std::path::Path, identity: &Identity, config_digest: &str) -> R<Box<dyn Receipt>> {
-        use crate::admission::lifecycle_receipt::{arm_lifecycle_receipt, create_lifecycle_receipt, LifecycleBinding};
+    pub fn create(
+        state: &std::path::Path,
+        identity: &Identity,
+        config_digest: &str,
+    ) -> R<Box<dyn Receipt>> {
+        use crate::admission::lifecycle_receipt::{
+            arm_lifecycle_receipt, create_lifecycle_receipt, LifecycleBinding,
+        };
         let binding = LifecycleBinding {
             instance_id: identity.instance_id.clone(),
             epoch: identity.epoch.clone(),
@@ -181,7 +227,8 @@ impl LifecycleReceipt {
         };
         let now = || crate::authority::now_ms().max(0) as u64;
         let file = create_lifecycle_receipt(state, &binding, now()).map_err(|e| e.to_string())?;
-        let recorder = arm_lifecycle_receipt(file, config_digest, now()).map_err(|e| e.to_string())?;
+        let recorder =
+            arm_lifecycle_receipt(file, config_digest, now()).map_err(|e| e.to_string())?;
         Ok(Box::new(LifecycleReceipt(recorder)))
     }
 }
@@ -189,17 +236,32 @@ impl LifecycleReceipt {
 impl Receipt for LifecycleReceipt {
     fn started(&mut self) -> R<i64> {
         use crate::admission::lifecycle_receipt::LifecycleEvent;
-        self.0.record(LifecycleEvent::Started, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())?;
+        self.0
+            .record(
+                LifecycleEvent::Started,
+                crate::authority::now_ms().max(0) as u64,
+            )
+            .map_err(|e| e.to_string())?;
         Ok(self.0.last_at() as i64)
     }
     fn spawn_failed(&mut self) -> R<()> {
         use crate::admission::lifecycle_receipt::LifecycleEvent;
-        self.0.record(LifecycleEvent::SpawnFailed, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())
+        self.0
+            .record(
+                LifecycleEvent::SpawnFailed,
+                crate::authority::now_ms().max(0) as u64,
+            )
+            .map_err(|e| e.to_string())
     }
     fn exit(&mut self, code: Option<i64>, signal: Option<&str>) -> R<i64> {
         use crate::admission::lifecycle_receipt::LifecycleEvent;
-        let event = LifecycleEvent::Exit { code, signal: signal.map(str::to_owned) };
-        self.0.record(event, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())?;
+        let event = LifecycleEvent::Exit {
+            code,
+            signal: signal.map(str::to_owned),
+        };
+        self.0
+            .record(event, crate::authority::now_ms().max(0) as u64)
+            .map_err(|e| e.to_string())?;
         Ok(self.0.last_at() as i64)
     }
 }
