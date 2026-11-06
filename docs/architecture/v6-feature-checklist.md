@@ -1331,3 +1331,22 @@ relaxed to bypass that requirement.
 - [ ] Owner acceptance of retained PTY visibility, native event timing and guided new-terminal modal.
 
 See [polling/fence/catalog research](../research/v6-terminal-chrome.md#polling-native-fence-wake-up-and-catalog-review--2026-11-05).
+
+### Isolated fence-notification package `d840e3c` — 2026-11-05
+
+Frozen integrated source `d840e3ce345b9ccf0e5f1ce63ef7ea0814c31501` produced
+`dist/native-preview-studio-d840e3c/ORQST Preview.app`, not opened. Full Node
+concurrency-2 suite passed 1,477/1,477 without failures, cancellations or skips;
+Rust passed 180 with two existing ignored tests. Lint, types, filtered dashboard
+build, staging, all-target Clippy with warnings denied, custom-protocol build,
+app bundle, ad-hoc signing, deep/strict signature check and all 99 file hashes
+passed. Seven resource groups match staging. Exact commands/results and hashes
+are in the generated package manifest/logs outside Git. Free disk after packaging:
+26.40 GiB. Existing packages remain preserved.
+
+Native/provider acceptance of PTY visibility and dock-event timing remains open.
+Catalog source/synthetic validation does not reproduce the owner's old-modal
+report; transient admission refusal and absent-bridge/advanced UI paths remain
+separate possibilities. Both native fence increment paths now publish the dock
+notification independently of host layout acceptance; passive polling does not
+advance either generation. No authority guard is relaxed.
