@@ -911,6 +911,18 @@ Implemented in `terminal.rs`, unit-tested (`hide_document`); native acceptance p
   for up to 60 s (the intent lifetime) besides on focus. An idle answer consumes nothing;
   native still validates the intent, focus and generations.
 
+## Studio chrome sizes from the approved preview — 2026-11-06
+
+`arrange` layoutVersion 2 `chrome` now also accepts `top` 47 (full window) or 92 (45px
+Feature header + 47px toolbar) and `bottom` 38, matching the preview's toolbar and dock.
+The original 36/81 and 34 remain valid. The Studio sends 47/92 and 38
+(`nativeChrome`), and its native toolbar/dock rows use the same heights. Validated in
+`featureNativeRequestSchema` and Rust `valid_chrome` (unit-tested).
+
+Popovers (pane menu, account limits) mark themselves `data-native-overlay`; only native
+views whose holes intersect them are hidden. Modal details, Quit fences and editors still
+hide every view.
+
 ## Arrange with an owned PTY first responder — 2026-11-06
 
 `arrange` keeps the existing schema and validates only the feature-workspace

@@ -102,8 +102,9 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
       chrome: z
         .strictObject({
           sidebar: z.union([z.literal(0), z.literal(46), z.literal(155)]),
-          top: z.union([z.literal(36), z.literal(81)]),
-          bottom: z.literal(34),
+          // 47/92 and 38 match the approved preview; 36/81 and 34 stay accepted.
+          top: z.union([z.literal(36), z.literal(47), z.literal(81), z.literal(92)]),
+          bottom: z.union([z.literal(34), z.literal(38)]),
         })
         .optional(),
       mode: z.enum(['mosaic', 'columns', 'rows', 'focus', 'list', 'free']),

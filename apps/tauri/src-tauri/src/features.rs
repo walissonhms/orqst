@@ -374,8 +374,9 @@ fn valid_arrangement_request(value: &Value) -> bool {
 fn valid_chrome(value: &Value) -> bool {
     exact(value, &["sidebar", "top", "bottom"])
         && matches!(value["sidebar"].as_u64(), Some(0 | 46 | 155))
-        && matches!(value["top"].as_u64(), Some(36 | 81))
-        && value["bottom"].as_u64() == Some(34)
+        // 47/92 and 38 match the approved preview; 36/81 and 34 stay accepted.
+        && matches!(value["top"].as_u64(), Some(36 | 47 | 81 | 92))
+        && matches!(value["bottom"].as_u64(), Some(34 | 38))
 }
 pub(crate) fn valid_envelope(value: &Value) -> bool {
     exact(value, &["kind", "id", "document", "source", "request"])
@@ -2245,6 +2246,19 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chrome_accepts_preview_and_original_insets_only() {
+        for (top, bottom) in [(36, 34), (47, 38), (81, 34), (92, 38)] {
+            assert!(super::valid_chrome(
+                &json!({"sidebar":0,"top":top,"bottom":bottom})
+            ));
+        }
+        for (top, bottom) in [(40, 38), (47, 36), (0, 0)] {
+            assert!(!super::valid_chrome(
+                &json!({"sidebar":0,"top":top,"bottom":bottom})
+            ));
+        }
+    }
     #[test]
     fn pushed_snapshot_is_epoch_generation_and_pool_bound_and_never_rolls_cache_back() {
         let id = "e10636eb-3a12-4094-9123-49a4cdad27b8";

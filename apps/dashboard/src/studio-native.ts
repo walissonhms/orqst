@@ -67,14 +67,15 @@ export function studioTerminals(
 /** Native chrome insets: full window (like the preview) or with the Feature panel. */
 export interface NativeChrome {
   sidebar: 0 | 46 | 155;
-  top: 36 | 81;
-  bottom: 34;
+  top: 36 | 47 | 81 | 92;
+  bottom: 34 | 38;
 }
 
+/** Preview sizes: 47px toolbar (plus the 45px Feature header with the panel), 38px dock. */
 export function nativeChrome(immersive: boolean, windowWidth: number): NativeChrome {
   return immersive
-    ? { sidebar: 0, top: 36, bottom: 34 }
-    : { sidebar: windowWidth > 720 ? 155 : 46, top: 81, bottom: 34 };
+    ? { sidebar: 0, top: 47, bottom: 38 }
+    : { sidebar: windowWidth > 720 ? 155 : 46, top: 92, bottom: 38 };
 }
 
 /** Rectangle of a PTY hole, in logical px relative to the native content area. */

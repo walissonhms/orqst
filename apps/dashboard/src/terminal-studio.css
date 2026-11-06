@@ -1026,16 +1026,16 @@
 .ts-native .ts-stage {
   margin: 0;
 }
+/* Fixed rows that match the native chrome insets (studio-native.ts nativeChrome). */
 .ts-native .ts-toolbar {
-  height: 36px;
+  box-sizing: border-box;
+  height: 47px;
   padding-top: 0;
   padding-bottom: 0;
 }
-.ts-native .ts-modes button {
-  height: 24px;
-}
 .ts-native .ts-dock {
-  height: 34px;
+  box-sizing: border-box;
+  height: 38px;
 }
 /* Overlays would sit under native views: keep them in the chrome rows. */
 .ts-native .ts-toasts {

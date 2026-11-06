@@ -137,8 +137,8 @@ test('arrange requests are valid for every mode and clip to the viewport', () =>
     [t1, t2],
     layout,
     'mosaic',
-    { width: 1440, height: 830 },
-    { sidebar: 0, top: 36, bottom: 34 },
+    { width: 1440, height: 815 },
+    { sidebar: 0, top: 47, bottom: 38 },
   );
   assert.equal(full.layoutVersion, 2);
   assert.ok(
@@ -228,13 +228,13 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
     )) as unknown as Frame[];
     const last = frames.at(-1)!;
     assert.equal(last.generation, 7);
-    // Full window like the preview: no Feature panel, 36px toolbar, 34px dock.
+    // Full window like the preview: no Feature panel, 47px toolbar, 38px dock.
     assert.deepEqual((last as unknown as { chrome: unknown }).chrome, {
       sidebar: 0,
-      top: 36,
-      bottom: 34,
+      top: 47,
+      bottom: 38,
     });
-    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 70 });
+    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 85 });
     assert.deepEqual(last.panes.map((pane) => pane.terminalId).sort(), [t1, t2]);
     for (const pane of last.panes) {
       assert.ok(pane.rect);
