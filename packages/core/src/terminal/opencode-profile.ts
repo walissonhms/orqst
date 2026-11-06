@@ -43,15 +43,19 @@ export const managedOpenCodeConfigSchema = z.strictObject({
     nativeIdentity: opencodeNativeIdentitySchema,
     sharedNativeConfiguration: z.literal(true),
   }),
-  interactive: z.strictObject({
-    sharedNativeSessions: z.literal(true),
-    // Provisioning a review manifest is not permission to open writable native SQLite.
-    nativeStartupAuthorized: z.boolean(),
-    nativeDatabaseMigrationsAcknowledged: z.literal(true).optional(),
-    nativeStartupActivityAcknowledged: z.literal(true).optional(),
-    mcp: z.literal(true).optional(),
-    mergedMcpAcknowledged: z.literal(true).optional(),
-  }),
+  interactive: z
+    .strictObject({
+      sharedNativeSessions: z.literal(true),
+      // Provisioning a review manifest is not permission to open writable native SQLite.
+      nativeStartupAuthorized: z.boolean(),
+      nativeDatabaseMigrationsAcknowledged: z.literal(true).optional(),
+      nativeStartupActivityAcknowledged: z.literal(true).optional(),
+      mcp: z.literal(true).optional(),
+      mergedMcpAcknowledged: z.literal(true).optional(),
+      // Feature-scoped message hub (docs/design/mcp-n-terminals.md) instead of the pair.
+      hub: z.literal(true).optional(),
+    })
+    .refine((value) => !value.hub || value.mcp, 'The message hub requires MCP'),
 });
 export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 
@@ -161,7 +165,10 @@ export function openCodeTerminalProfiles(
         `Tool PATH: ${terminalToolPath(config.toolPath)}. Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
         'Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. No automatic ORQST task/login/resume/adoption. --standalone selects a private native server with generated authentication and stdin lease; existing service is not adopted. 30 minute owned TUI deadline; exit proves TUI only, descendant exit and concurrent DB compatibility UNVALIDATED; capacity remains sticky. One dispatch per manifest. ' +
         (mcp
-          ? 'Inline ORQST MCP MERGES with native definitions; task grant requires separate native authorization. '
+          ? 'Inline ORQST MCP MERGES with native definitions; ' +
+            (config.interactive.hub
+              ? 'ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. '
+              : 'task grant requires separate native authorization. ')
           : '') +
         (model
           ? `Per-process native initial model default: ${JSON.stringify(model)}. Native managed settings, agent model and saved variant preferences may override it; unavailable models/variants follow native fallback. Effective model/provider acceptance is unverified. `

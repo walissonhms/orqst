@@ -87,7 +87,10 @@ async function start() {
       return shutdown();
     process.stdout.write(line);
   };
-  const mcpEnabled = !!selection[0]!.config.interactive?.mcp;
+  // The pair's native task authorization; hub terminals message freely within a Feature.
+  const mcpEnabled =
+    !!selection[0]!.config.interactive?.mcp &&
+    !selection.some(({ config }) => !!config.interactive?.hub);
   const service = new TauriTerminalService(
     core.supervisors,
     keys,

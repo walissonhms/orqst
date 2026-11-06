@@ -28,12 +28,17 @@ export const hubRefusalText: Record<string, string> = {
   unavailable: 'ORQST messaging is unavailable right now.',
 };
 
+/**
+ * `terminal` is the bound terminal id, or a lookup for endpoints opened ahead for slots that
+ * enroll later (the Core's request handler is synchronous). An unbound endpoint refuses.
+ */
 export async function openHubEndpoint(
   hub: Pick<TerminalMessageHub, 'call'>,
-  terminalId: string,
+  terminal: string | (() => string | undefined),
   parent = '/tmp',
 ) {
-  z.uuid().parse(terminalId);
+  if (typeof terminal === 'string') z.uuid().parse(terminal);
+  const bound = () => (typeof terminal === 'string' ? terminal : terminal());
   const directory = await realpath(await mkdtemp(join(await realpath(parent), 'orqst-hub-')));
   await chmod(directory, 0o700);
   terminalDirectory(directory, true);
@@ -69,8 +74,12 @@ export async function openHubEndpoint(
         // One call at a time per terminal, like the CLI's own tool loop.
         if (!parsed.success || busy) return socket.destroy();
         busy = true;
-        void hub
-          .call(terminalId, parsed.data.call)
+        const terminalId = bound();
+        void (
+          terminalId
+            ? hub.call(terminalId, parsed.data.call)
+            : Promise.reject(new HubRefusal('not_member'))
+        )
           .then(
             (value) => ({ id: parsed.data.id, ok: true, value }),
             (error: unknown) =>

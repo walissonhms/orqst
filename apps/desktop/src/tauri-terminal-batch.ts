@@ -106,7 +106,9 @@ export async function prepareTauriBatch(
         limit: 8,
         project: discovered.workspace.project,
         preparation: binding,
-        mcp: false,
+        // Every terminal talks through the Feature-scoped hub (owner decision 2026-11-06).
+        mcp: true,
+        hub: true,
         ...(input.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
       plans.push({ index, provider: input.provider, modelId: modelId!, plan });

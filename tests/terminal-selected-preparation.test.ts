@@ -1464,6 +1464,16 @@ test('batch prepares eight independent owned manifests without dialogs and with 
     assert.equal(commits, 1);
     assert.equal(result.items.length, 8);
     assert.equal(new Set(result.items.map((item) => item.terminalId)).size, 8);
+    // Every batch terminal talks through the Feature-scoped hub (owner decision 2026-11-06).
+    for (const item of result.items) {
+      const file = (item as { file?: string }).file;
+      assert.ok(file);
+      const manifest = JSON.parse(readFileSync(file, 'utf8')) as {
+        interactive?: { mcp?: boolean; hub?: boolean };
+      };
+      assert.equal(manifest.interactive?.mcp, true);
+      assert.equal(manifest.interactive?.hub, true);
+    }
     assert.deepEqual(
       result.items.map((item) => item.id),
       request.requests.map((item) => item.id),

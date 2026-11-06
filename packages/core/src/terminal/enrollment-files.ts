@@ -62,7 +62,8 @@ export function inspectTerminalEnrollment(
     !config.model ||
     !config.preparation ||
     !config.interactive ||
-    config.interactive.mcp
+    // Only hub MCP may enroll; the disposable pair is never extended.
+    (config.interactive.mcp && !config.interactive.hub)
   )
     throw new Error('Enrollment requires a prepared independent native profile');
   if (

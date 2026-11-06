@@ -78,11 +78,15 @@ export const managedClaudeConfigSchema = z.strictObject({
     claudeConfigDirectory: path.optional(),
     sharedNativeConfiguration: z.literal(true),
   }),
-  interactive: z.strictObject({
-    sharedNativeSessions: z.literal(true),
-    mcp: z.literal(true).optional(),
-    strictMcpAcknowledged: z.literal(true).optional(),
-  }),
+  interactive: z
+    .strictObject({
+      sharedNativeSessions: z.literal(true),
+      mcp: z.literal(true).optional(),
+      strictMcpAcknowledged: z.literal(true).optional(),
+      // Feature-scoped message hub (docs/design/mcp-n-terminals.md) instead of the pair.
+      hub: z.literal(true).optional(),
+    })
+    .refine((value) => !value.hub || value.mcp, 'The message hub requires MCP'),
 });
 export type ManagedClaudeConfig = z.infer<typeof managedClaudeConfigSchema>;
 export type InteractiveTerminalConfig =
@@ -107,7 +111,11 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
         ? 'No reviewed Claude MCP launch contract for this version/hash'
         : 'No reviewed launch contract for this exact Claude binary version/hash',
     );
-  if (config.ownedHooks && (config.executableVersion !== '2.1.318' || config.interactive.mcp))
+  // Owner decision 2026-11-06: hub terminals keep owned hooks together with MCP.
+  if (
+    config.ownedHooks &&
+    (config.executableVersion !== '2.1.318' || (config.interactive.mcp && !config.interactive.hub))
+  )
     throw new Error('Owned hooks require the reviewed Claude TUI contract');
 }
 
@@ -203,7 +211,10 @@ export function interactiveTerminalProfiles(
           ? 'ORQST adds private metadata-only prompt/notification/stop hooks through an additional owned settings file; existing settings and policy remain effective. '
           : '') +
         (mcp
-          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude. ORQST task grant requires separate native authorization. '
+          ? 'Only supplied MCP servers are selected: native MCP definitions are excluded. Strict startup/project approval can block Claude. ' +
+            (config.interactive.hub
+              ? 'ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. '
+              : 'ORQST task grant requires separate native authorization. ')
           : 'Native MCP definitions may start. ') +
         'Login, native focus, MCP tool/timeout behavior and inference acceptance remain unvalidated.',
     },

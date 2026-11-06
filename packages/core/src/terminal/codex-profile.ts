@@ -40,7 +40,13 @@ export const managedCodexConfigSchema = z.strictObject({
   model: z.lazy(() => terminalModelSelectionSchema).optional(),
   preparation: z.lazy(() => terminalPreparationBindingSchema).optional(),
   interactive: z
-    .strictObject({ sharedNativeSessions: z.literal(true), mcp: z.literal(true).optional() })
+    .strictObject({
+      sharedNativeSessions: z.literal(true),
+      mcp: z.literal(true).optional(),
+      // Feature-scoped message hub (docs/design/mcp-n-terminals.md) instead of the pair.
+      hub: z.literal(true).optional(),
+    })
+    .refine((value) => !value.hub || value.mcp, 'The message hub requires MCP')
     .optional(),
   // Optional extension: legacy manifests retain their separate-login behavior.
   authentication: z
@@ -269,7 +275,7 @@ export function managedCodexProfiles(
           ...nativeCodexOverrides(config).flatMap((value) => ['-c', value]),
           ...mcpArguments,
         ],
-        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${mcp ? 'Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ' : ''}${common.permissions}`,
+        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${mcp ? (config.interactive?.hub ? `Per-instance ORQST MCP connects to a private local relay. ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. Inherited MCPs remain enabled. ` : 'Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ') : ''}${common.permissions}`,
       },
     ];
   return [

@@ -68,6 +68,8 @@ export interface TerminalCreationInput {
   home: string;
   environment: NodeJS.ProcessEnv;
   mcp: boolean;
+  /** Feature-scoped message hub (docs/design/mcp-n-terminals.md); implies MCP. */
+  hub?: boolean;
   openCodeStartupAuthorized?: boolean;
   model?: TerminalModelSelection;
   preparation?: TerminalPreparationBinding;
@@ -92,7 +94,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   const count = input.count ?? 2;
   if (!Number.isInteger(count) || count < 1 || count > terminalSlotLimit(input.limit))
     throw new Error('Terminal count exceeds configured capacity');
-  if (input.mcp && count !== 2) throw new Error('MCP requires exactly two terminals');
+  if (input.hub && !input.mcp) throw new Error('The message hub requires MCP');
+  if (input.mcp && !input.hub && count !== 2) throw new Error('MCP requires exactly two terminals');
   const members = Array.from({ length: count }, (_, index) =>
     index === 1 && input.companion ? input.companion : input,
   );
@@ -167,13 +170,20 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
           codexHome,
           sharedNativeConfiguration: true,
         },
-        interactive: { sharedNativeSessions: true, ...(input.mcp ? { mcp: true } : {}) },
+        interactive: {
+          sharedNativeSessions: true,
+          ...(input.mcp ? { mcp: true } : {}),
+          ...(input.hub ? { hub: true } : {}),
+        },
       });
     }
     if (provider === 'claude') {
+      // The reviewed TUI binary (2.1.318) is also an MCP binary; prefer it (owned hooks).
       const pin = input.mcp
-        ? (reviewedClaudeMcpBinaries.find((binary) => binary.sha256 === executable.sha256) ??
-          reviewedProviderMcpBinaries.claude)
+        ? executable.sha256 === reviewedClaudeTuiBinary.sha256
+          ? reviewedClaudeTuiBinary
+          : (reviewedClaudeMcpBinaries.find((binary) => binary.sha256 === executable.sha256) ??
+            reviewedProviderMcpBinaries.claude)
         : reviewedClaudeTuiBinary;
       if (executable.sha256 !== pin.sha256)
         throw new Error(
@@ -190,7 +200,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         provider: 'claude',
         executableVersion: pin.version,
         sessionId: randomUUID(),
-        ...(!input.mcp ? { ownedHooks: true } : {}),
+        // Owner decision 2026-11-06: hub terminals keep owned hooks with MCP.
+        ...(!input.mcp || input.hub ? { ownedHooks: true } : {}),
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -200,6 +211,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         interactive: {
           sharedNativeSessions: true,
           ...(input.mcp ? { mcp: true, strictMcpAcknowledged: true } : {}),
+          ...(input.hub ? { hub: true } : {}),
         },
       });
     }
@@ -236,6 +248,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
             }
           : {}),
         ...(input.mcp ? { mcp: true, mergedMcpAcknowledged: true } : {}),
+        ...(input.hub ? { hub: true } : {}),
       },
     });
     validateOpenCodeSelection(config);
@@ -255,15 +268,16 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     });
   const identities = JSON.stringify(directoryIdentities());
   const snapshot = JSON.stringify(configs);
-  const communication = input.mcp
-    ? {
-        communication: {
-          sourceTerminalId: configs[0]!.identity!.terminalId,
-          workerTerminalId: configs[1]!.identity!.terminalId,
-          separateTaskGrantRequired: true,
-        },
-      }
-    : {};
+  const communication =
+    input.mcp && !input.hub
+      ? {
+          communication: {
+            sourceTerminalId: configs[0]!.identity!.terminalId,
+            workerTerminalId: configs[1]!.identity!.terminalId,
+            separateTaskGrantRequired: true,
+          },
+        }
+      : {};
   // The common PATH is disclosed once; both persisted manifests contain the exact reviewed value.
   const review = JSON.stringify({
     ...communication,
@@ -297,7 +311,9 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         id: config.identity!.terminalId,
         provider: members[index]!.provider,
         model: config.model?.value ?? null,
-        ...(input.mcp ? { role: index === 0 ? ('source' as const) : ('worker' as const) } : {}),
+        ...(input.mcp && !input.hub
+          ? { role: index === 0 ? ('source' as const) : ('worker' as const) }
+          : {}),
       })),
     } satisfies TerminalCreationOverview,
     root,

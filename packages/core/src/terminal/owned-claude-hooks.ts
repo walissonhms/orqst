@@ -117,7 +117,7 @@ process.stdin.on('end', () => {
 /** Exact generated files are part of the approved profile; no user settings are read or changed. */
 export function validateClaudeOwnedHooks(config: ManagedClaudeConfig) {
   if (!config.ownedHooks) return;
-  if (config.executableVersion !== '2.1.318' || config.interactive.mcp)
+  if (config.executableVersion !== '2.1.318' || (config.interactive.mcp && !config.interactive.hub))
     throw new Error('Owned hooks require the reviewed Claude TUI contract');
   terminalDirectory(config.state, true);
   for (const [name, expected] of Object.entries(claudeOwnedHookFiles(config))) {

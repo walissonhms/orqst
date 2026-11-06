@@ -29,6 +29,8 @@ import { DesktopAdmissionRefused } from '../managed-codex/desktop-admission-insp
 import { terminalStartupFailureSchema, terminalStartupIdSchema } from './startup-failure.js';
 import { terminalPairRPCSchema } from './rpc.js';
 import { InteractiveMcpSession } from './interactive-mcp.js';
+import { TerminalMessageHub } from './mcp-hub.js';
+import { openHubEndpoint } from './mcp-hub-socket.js';
 import { terminalDigest } from './authority.js';
 import { terminalFile } from './codex-profile.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
@@ -87,7 +89,46 @@ async function start() {
   startupStage = 'core_startup';
   const stores: Store[] = [];
   let pair!: ManagedTerminalPair;
-  const communication = selection[0]!.config.interactive?.mcp
+  // Feature-scoped hub for every terminal (docs/design/mcp-n-terminals.md); the disposable
+  // pair session remains for manifests that opted into the pair only.
+  const usesHub = selection.some(({ config }) => !!config.interactive?.hub);
+  const pairMcp = !usesHub && !!selection[0]!.config.interactive?.mcp;
+  const hubWorkspace = stableId('workspace', selection[0]!.config.project);
+  const hubSlots: Array<{ terminalId: string; provider: string } | undefined> = selection.map(
+    ({ config }) =>
+      config.interactive?.hub
+        ? { terminalId: terminalIdentity(config).terminalId, provider: interactiveProvider(config) }
+        : undefined,
+  );
+  const hubNames: Record<string, string> = {
+    codex: 'Codex',
+    claude: 'Claude Code',
+    opencode: 'OpenCode',
+  };
+  const hub = usesHub
+    ? new TerminalMessageHub(() => {
+        const features = featureConfigurationDatabase(process.argv[4]!, hubWorkspace).list();
+        return hubSlots.flatMap((member, slot) => {
+          if (!member) return [];
+          const owner = features.filter(
+            (feature) =>
+              feature.status !== 'archived' && feature.terminalIds.includes(member.terminalId),
+          );
+          return [
+            {
+              terminalId: member.terminalId,
+              alias: `T-${String(slot + 1).padStart(3, '0')}`,
+              name: hubNames[member.provider] ?? member.provider,
+              provider: member.provider,
+              featureId: owner.length === 1 ? owner[0]!.featureId : null,
+              running: true,
+            },
+          ];
+        });
+      })
+    : undefined;
+  const hubEndpoints: Array<Awaited<ReturnType<typeof openHubEndpoint>>> = [];
+  const communication = pairMcp
     ? mcpCommunicationJournal(
         process.argv[4]!,
         authority.epoch,
@@ -100,7 +141,7 @@ async function start() {
           ).list(),
       )
     : undefined;
-  const mcp = selection[0]!.config.interactive?.mcp
+  const mcp = pairMcp
     ? new InteractiveMcpSession(
         authority,
         terminalDigest(selection[0]!.config.project),
@@ -122,6 +163,27 @@ async function start() {
     : undefined;
   try {
     const launches: TerminalMcpLaunch[] = [];
+    const hubRelay = () => {
+      const relayPath = join(__dirname, 'orqst-mcp-relay.cjs');
+      return {
+        path: relayPath,
+        sha256: terminalDigest(terminalFile(relayPath, false, 16 * 1024 * 1024)),
+      };
+    };
+    if (hub) {
+      // One endpoint per possible slot, opened ahead: enrolled terminals bind to a free one.
+      const relay = hubRelay();
+      for (let slot = 0; slot < limit; slot++) {
+        const endpoint = await openHubEndpoint(hub, () => hubSlots[slot]?.terminalId);
+        hubEndpoints.push(endpoint);
+        launches.push({
+          serverName: `orqst_${randomUUID().replaceAll('-', '')}`,
+          socketPath: endpoint.socketPath,
+          capabilityFile: endpoint.capabilityFile,
+          relay,
+        });
+      }
+    }
     if (mcp) {
       const relayPath = join(__dirname, 'orqst-mcp-relay.cjs');
       const relay = {
@@ -148,12 +210,15 @@ async function start() {
         const store = new Store(join(config.state, 'terminal.sqlite'));
         stores.push(store);
         return {
-          profiles: adapter.profiles(config, launches[slot]),
+          profiles: adapter.profiles(
+            config,
+            hub ? (config.interactive?.hub ? launches[slot] : undefined) : launches[slot],
+          ),
           backend: (() => {
             const backend = adapter.backend(
               files[slot]!,
               join(__dirname, 'managed-terminal-host.cjs'),
-              launches[slot],
+              hub ? (config.interactive?.hub ? launches[slot] : undefined) : launches[slot],
             );
             return mcp ? mcp.wrap(slot, backend) : backend;
           })(),
@@ -195,6 +260,8 @@ async function start() {
       authority.revoke('desktop-managed');
       pair.close();
       void mcp?.close();
+      hub?.close();
+      for (const endpoint of hubEndpoints) void endpoint.close();
       for (const store of stores) store.close();
       if (process.connected) process.disconnect();
     }
@@ -246,10 +313,16 @@ async function start() {
                 'reuse-existing',
                 true,
               );
-              const profiles = adapter.profiles(config);
+              // Enrolled slots take the next index; hub terminals use that slot's endpoint.
+              const enrolledSlot = selection.length;
+              const hubLaunch = hub && config.interactive?.hub ? launches[enrolledSlot] : undefined;
+              if (hub && config.interactive?.hub && !hubLaunch)
+                throw new Error('No free hub endpoint');
+              const profiles = adapter.profiles(config, hubLaunch);
               const backend = adapter.backend(
                 request.manifestFile,
                 join(__dirname, 'managed-terminal-host.cjs'),
+                hubLaunch,
               );
               reviewed.validate();
               return {
@@ -288,7 +361,13 @@ async function start() {
               enrollmentFiles.push(inspected.candidate);
               if (receipt.status === 'ready') {
                 files.push(request.manifestFile);
-                selection.push({ config: inspected.candidate.config, blocker: undefined });
+                const config = inspected.candidate.config;
+                if (hub && config.interactive?.hub)
+                  hubSlots[selection.length] = {
+                    terminalId: terminalIdentity(config).terminalId,
+                    provider: interactiveProvider(config),
+                  };
+                selection.push({ config, blocker: undefined });
               }
             }
             value = terminalEnrollmentReceiptSchema.parse(receipt);
@@ -383,10 +462,14 @@ async function start() {
           case 'terminal':
             value = pair.dispatch(request.slot, request.request);
             break;
-          case 'closeSlot':
+          case 'closeSlot': {
             mcp?.invalidate();
+            // A closed or reloaded view forgets its queue; the terminal stays a member.
+            const member = hubSlots[request.slot];
+            if (member) hub?.forget(member.terminalId);
             pair.closeSlot(request.slot);
             break;
+          }
           case 'beginOwnedShutdown':
             draining = true;
             mcp?.invalidate();
@@ -463,6 +546,8 @@ async function start() {
     authority.revoke('desktop-managed');
     pair?.close();
     await mcp?.close();
+    hub?.close();
+    for (const endpoint of hubEndpoints) await endpoint.close().catch(() => {});
     for (const store of stores) store.close();
     process.exitCode = 1;
   }
