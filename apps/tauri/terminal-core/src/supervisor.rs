@@ -5,7 +5,12 @@ use crate::journal::{Exit, Journal};
 use crate::output::{Read, TerminalOutput};
 use crate::types::TerminalProfile;
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+/// One authority shared by every slot of the pair (`managed-pair.ts`).
+pub type Shared = Rc<RefCell<Authority>>;
 
 /// `JSON.stringify(terminalPolicy)`.
 pub const POLICY_JSON: &str = r#"{"version":1,"activeInstances":2,"activeInstancesPerProject":1,"startupMs":10000,"inputLeaseMs":120000,"inputWriteBytes":4096,"inputBytesPerSecond":16384,"pasteBytes":16384,"replayBytes":1048576,"outputReadBytes":65536,"backendEventCodeUnits":65536,"resizePerSecond":10,"columns":[20,300],"rows":[5,100]}"#;
@@ -117,7 +122,7 @@ fn utf16_len(text: &str) -> usize {
 }
 
 pub struct Supervisor {
-    pub authority: Authority,
+    pub authority: Shared,
     backend: Box<dyn Backend>,
     profiles: Vec<PreparedProfile>,
     attempts: HashMap<String, Attempt>,
@@ -129,7 +134,7 @@ pub struct Supervisor {
 
 impl Supervisor {
     pub fn new(
-        authority: Authority,
+        authority: Shared,
         backend: Box<dyn Backend>,
         profiles: Vec<PreparedProfile>,
         journal: Option<Journal>,
@@ -141,7 +146,7 @@ impl Supervisor {
             }
         }
         if let Some(journal) = &journal {
-            if journal.epoch != authority.epoch {
+            if journal.epoch != authority.borrow().epoch {
                 return Err(e("Terminal journal epoch mismatch"));
             }
             journal.assert_owner()?;
@@ -175,6 +180,10 @@ impl Supervisor {
             journal,
             start_binding,
         })
+    }
+
+    pub fn journal(&self) -> Option<&Journal> {
+        self.journal.as_ref()
     }
 
     pub fn journal_mut(&mut self) -> Option<&mut Journal> {
@@ -225,14 +234,14 @@ impl Supervisor {
         }
         let id = uuid::Uuid::new_v4().to_string();
         let digest = self.start_digest(&profile);
-        let challenge = self.authority.prepare(
+        let challenge = self.authority.borrow_mut().prepare(
             client,
             &Binding { operation: "start".into(), target: id.clone(), digest: digest.clone() },
         )?;
         if let Some(journal) = self.journal.as_mut() {
             journal.prepare(&id, client, &profile.profile.project_id, &digest)?;
         }
-        let now = self.authority.now();
+        let now = self.authority.borrow().now();
         self.attempts.insert(
             id.clone(),
             Attempt {
@@ -266,7 +275,7 @@ impl Supervisor {
         let attempt = &self.attempts[id];
         let mut snapshot = serde_json::Map::new();
         snapshot.insert("instanceId".into(), id.into());
-        snapshot.insert("epoch".into(), self.authority.epoch.clone().into());
+        snapshot.insert("epoch".into(), self.authority.borrow().epoch.clone().into());
         snapshot.insert("state".into(), attempt.state.into());
         if let Some((code, signal)) = attempt.exit {
             let mut exit = serde_json::Map::new();
@@ -333,8 +342,7 @@ impl Supervisor {
         let profile = self.attempts[id].profile.clone();
         let digest = self.attempts[id].digest.clone();
         let valid = self.valid_profile(&profile);
-        self.authority
-            .consume(proof, &Binding { operation: "start".into(), target: id.into(), digest: digest.clone() })?;
+        self.authority.borrow_mut().consume(proof, &Binding { operation: "start".into(), target: id.into(), digest: digest.clone() })?;
         if !valid {
             if let Some(journal) = self.journal.as_mut() {
                 journal.transition(id, "start_failed", None)?;
@@ -346,15 +354,15 @@ impl Supervisor {
         if let Some(journal) = self.journal.as_mut() {
             journal.transition(id, "starting", None)?;
         }
-        let now = self.authority.now();
+        let now = self.authority.borrow().now();
         {
             let attempt = self.attempts.get_mut(id).unwrap();
             attempt.state = "starting";
             attempt.startup_deadline = Some(now + STARTUP_MS);
         }
         let (client, expires) = (self.attempts[id].client.clone(), self.attempts[id].start_expires_at);
-        let identity = Identity { instance_id: id.into(), epoch: self.authority.epoch.clone(), manifest_digest: digest };
-        let started = if !self.authority.is_enrolled(&client) || self.authority.now() >= expires {
+        let identity = Identity { instance_id: id.into(), epoch: self.authority.borrow().epoch.clone(), manifest_digest: digest };
+        let started = if !self.authority.borrow().is_enrolled(&client) || self.authority.borrow().now() >= expires {
             Err(e("Terminal start authorization expired"))
         } else {
             let backend = &mut self.backend;
@@ -429,7 +437,7 @@ impl Supervisor {
 
     /// Startup timers: an attempt that never reported started is uncertain.
     pub fn tick(&mut self) {
-        let now = self.authority.now();
+        let now = self.authority.borrow().now();
         let late: Vec<String> = self
             .attempts
             .values()
@@ -461,7 +469,7 @@ impl Supervisor {
             return Err(e("Terminal unavailable"));
         }
         let binding = self.binding("attach", id, &attempt.attachment_generation.to_string());
-        self.authority.prepare(client, &binding).map_err(e)
+        self.authority.borrow_mut().prepare(client, &binding).map_err(e)
     }
 
     pub fn attach(&mut self, id: &str, proof: &Value) -> R<String> {
@@ -473,11 +481,11 @@ impl Supervisor {
         if !["running", "exited"].contains(&attempt.state) {
             return Err(e("Terminal unavailable"));
         }
-        if attempt.attachment.as_ref().is_some_and(|a| self.authority.is_enrolled(&a.client)) {
+        if attempt.attachment.as_ref().is_some_and(|a| self.authority.borrow().is_enrolled(&a.client)) {
             return Err(e("Terminal already attached"));
         }
         let binding = self.binding("attach", id, &attempt.attachment_generation.to_string());
-        let client = self.authority.consume(proof, &binding)?;
+        let client = self.authority.borrow_mut().consume(proof, &binding)?;
         let attachment = uuid::Uuid::new_v4().to_string();
         let attempt = self.attempts.get_mut(id).unwrap();
         attempt.attachment_generation += 1;
@@ -505,7 +513,7 @@ impl Supervisor {
         let (client, generation) = self.attachment(id, attachment)?;
         let detail = serde_json::to_string(&serde_json::json!([attachment, generation])).unwrap();
         let binding = self.binding("input", id, &detail);
-        self.authority.prepare(&client, &binding).map_err(e)
+        self.authority.borrow_mut().prepare(&client, &binding).map_err(e)
     }
 
     pub fn enable_input(&mut self, id: &str, attachment: &str, proof: &Value) -> R<String> {
@@ -513,12 +521,12 @@ impl Supervisor {
         let (expected, generation) = self.attachment(id, attachment)?;
         let detail = serde_json::to_string(&serde_json::json!([attachment, generation])).unwrap();
         let binding = self.binding("input", id, &detail);
-        let client = self.authority.consume(proof, &binding)?;
+        let client = self.authority.borrow_mut().consume(proof, &binding)?;
         if client != expected {
             return Err(e("Terminal client mismatch"));
         }
         let lease = uuid::Uuid::new_v4().to_string();
-        let expires_at = self.authority.now() + INPUT_LEASE_MS;
+        let expires_at = self.authority.borrow().now() + INPUT_LEASE_MS;
         let attachment = self.attempts.get_mut(id).unwrap().attachment.as_mut().unwrap();
         attachment.generation += 1;
         attachment.lease = Some(Lease { id: lease.clone(), client, expires_at, sequence: 0 });
@@ -560,7 +568,7 @@ impl Supervisor {
         Self::paste_size(text)?;
         self.input_lease(id, lease, sequence)?;
         let binding = self.paste_binding(id, attachment, lease, sequence, text);
-        self.authority.prepare(&client, &binding).map_err(e)
+        self.authority.borrow_mut().prepare(&client, &binding).map_err(e)
     }
 
     pub fn paste(&mut self, id: &str, attachment: &str, lease: &str, sequence: i64, text: &str, proof: &Value) -> R<()> {
@@ -569,7 +577,7 @@ impl Supervisor {
         Self::paste_size(text)?;
         self.input_lease(id, lease, sequence)?;
         let binding = self.paste_binding(id, attachment, lease, sequence, text);
-        self.authority.consume(proof, &binding)?;
+        self.authority.borrow_mut().consume(proof, &binding)?;
         self.write_authorized(id, attachment, lease, sequence, text)
     }
 
@@ -592,14 +600,14 @@ impl Supervisor {
         self.live(id)?;
         Self::valid_signal(signal)?;
         let binding = self.binding("stop", id, signal);
-        self.authority.prepare(client, &binding).map_err(e)
+        self.authority.borrow_mut().prepare(client, &binding).map_err(e)
     }
 
     pub fn stop(&mut self, id: &str, signal: &str, proof: &Value) -> R<()> {
         self.live(id)?;
         Self::valid_signal(signal)?;
         let binding = self.binding("stop", id, signal);
-        self.authority.consume(proof, &binding)?;
+        self.authority.borrow_mut().consume(proof, &binding)?;
         // A successful signal call is not exit evidence. Escalation needs another grant.
         let signal = signal.to_owned();
         self.effect(id, move |h| h.signal(&signal))
@@ -653,8 +661,8 @@ impl Supervisor {
         let attachment = self.attempts[id].attachment.as_ref();
         let ok = attachment.and_then(|a| a.lease.as_ref()).is_some_and(|l| {
             l.id == lease
-                && l.expires_at > self.authority.now()
-                && self.authority.is_enrolled(&l.client)
+                && l.expires_at > self.authority.borrow().now()
+                && self.authority.borrow().is_enrolled(&l.client)
                 && (0..=9_007_199_254_740_991).contains(&sequence)
                 && sequence == l.sequence
         });
@@ -665,7 +673,7 @@ impl Supervisor {
     }
 
     fn rate(&mut self, id: &str) {
-        let now = self.authority.now();
+        let now = self.authority.borrow().now();
         let attempt = self.attempts.get_mut(id).unwrap();
         if now - attempt.rate_at >= 1000 {
             attempt.rate_at = now;
@@ -695,7 +703,7 @@ impl Supervisor {
             return Err(e("Terminal journal ownership lost"));
         }
         match self.attempts[id].attachment.as_ref() {
-            Some(a) if a.id == attachment && self.authority.is_enrolled(&a.client) => Ok((a.client.clone(), a.generation)),
+            Some(a) if a.id == attachment && self.authority.borrow().is_enrolled(&a.client) => Ok((a.client.clone(), a.generation)),
             _ => Err(e("Terminal attachment unavailable")),
         }
     }

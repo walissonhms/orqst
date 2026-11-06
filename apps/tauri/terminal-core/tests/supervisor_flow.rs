@@ -44,7 +44,7 @@ fn open_attach_input_write_read_and_stop() {
     let key = SigningKey::from_bytes(&[3u8; 32]);
     let log = Arc::new(Mutex::new(Log::default()));
     let authority = Authority::new(vec![("desktop-managed".into(), key.verifying_key())], now_ms).unwrap();
-    let mut s = Supervisor::new(authority, Box::new(Fake(log.clone())), vec![profile()], None, None).unwrap();
+    let mut s = Supervisor::new(std::rc::Rc::new(std::cell::RefCell::new(authority)), Box::new(Fake(log.clone())), vec![profile()], None, None).unwrap();
     let prepared = s.prepare("desktop-managed", "synthetic-terminal-v1").unwrap();
     let id = prepared.attempt_id.clone();
     assert!(s.request_attach("desktop-managed", &id).is_err(), "attach before running");
@@ -67,7 +67,7 @@ fn open_attach_input_write_read_and_stop() {
     s.event(&id, BackendEvent::Exit { exit_code: 0, signal: Some(15), evidence: Some((5, 9)) });
     assert_eq!(
         s.snapshot(&id).unwrap(),
-        serde_json::json!({"instanceId": id, "epoch": s.authority.epoch, "state": "exited",
+        serde_json::json!({"instanceId": id, "epoch": s.authority.borrow().epoch.clone(), "state": "exited",
             "exit": {"exitCode": 0, "signal": 15}, "lifecycle": {"startedAt": 5, "exitedAt": 9}})
     );
     assert_eq!(log.lock().unwrap().0, vec!["start:synthetic-terminal-v1", "write:ls\r", "resize:100x30", "signal:SIGTERM"]);
@@ -80,7 +80,7 @@ fn a_start_without_started_evidence_becomes_uncertain() {
     static NOW: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(1_000_000);
     fn now() -> i64 { NOW.load(std::sync::atomic::Ordering::SeqCst) }
     let authority = Authority::new(vec![("desktop-managed".into(), key.verifying_key())], now).unwrap();
-    let mut s = Supervisor::new(authority, Box::new(Fake(log)), vec![profile()], None, None).unwrap();
+    let mut s = Supervisor::new(std::rc::Rc::new(std::cell::RefCell::new(authority)), Box::new(Fake(log)), vec![profile()], None, None).unwrap();
     let prepared = s.prepare("desktop-managed", "synthetic-terminal-v1").unwrap();
     s.launch(&prepared.attempt_id, &proof(&key, &prepared.challenge)).unwrap();
     NOW.fetch_add(10_001, std::sync::atomic::Ordering::SeqCst);
