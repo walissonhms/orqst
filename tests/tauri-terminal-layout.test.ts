@@ -152,7 +152,11 @@ test('a title-bar safe area above the Studio document offsets the views, within 
     width: 1254,
     height: 684,
   });
-  assert.deepEqual(f.messages.at(-1)!.insets, { left: 0, top: 47, bottom: 38 });
+  assert.deepEqual((f.messages.at(-1) as unknown as { insets: unknown }).insets, {
+    left: 0,
+    top: 47,
+    bottom: 38,
+  });
   // More than a title bar, a taller viewport than the window or another width is refused.
   for (const viewport of [
     { width: 1280, height: 775 - 65 },
