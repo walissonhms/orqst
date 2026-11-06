@@ -285,12 +285,22 @@ export class TerminalMessageHub {
           });
           return { to: target.alias, messageId: id };
         });
+        // The chain travels with the recipients; the sender's next message starts over.
+        this.chain.delete(senderId);
         return { sent: ids, state: 'queued', truncated: cut.truncated };
       }
       case 'delegate_task': {
         const target = this.resolveTarget(sender, call.arguments.to);
         const depth = this.nextDepth(senderId);
-        if (this.tasks.size >= HUB_LIMITS.tasks) throw new HubRefusal('too_many_tasks');
+        const open = [...this.tasks.values()].filter((task) => task.state === 'delivered');
+        if (open.length >= HUB_LIMITS.tasks) throw new HubRefusal('too_many_tasks');
+        // Finished tasks stay queryable for a while; the oldest are dropped past 256.
+        if (this.tasks.size >= 256)
+          for (const [id, task] of this.tasks)
+            if (task.state !== 'delivered') {
+              this.tasks.delete(id);
+              if (this.tasks.size < 256) break;
+            }
         this.admit(senderId, [target]);
         const cut = truncateText(call.arguments.task, HUB_LIMITS.textBytes);
         const taskId = randomUUID();
@@ -309,6 +319,7 @@ export class TerminalMessageHub {
           depth,
           taskId,
         });
+        this.chain.delete(senderId);
         return { taskId, to: target.alias, state: 'delivered' };
       }
       case 'submit_result': {
@@ -327,7 +338,9 @@ export class TerminalMessageHub {
             kind: 'result',
             text: cut.text,
             truncated: cut.truncated,
-            depth: Math.min(HUB_LIMITS.maxDepth, this.chainDepth(senderId) + 1),
+            // A result closes its task: it does not deepen the chain, so an orchestrator can
+            // delegate again after reading it (each delegation still costs rate budget).
+            depth: 0,
             taskId: task.id,
             status: call.arguments.status,
           });
@@ -350,14 +363,22 @@ export class TerminalMessageHub {
         if (!this.inboxes.get(senderId)?.length) {
           const timeout = call.arguments.timeout_ms ?? 30_000;
           await new Promise<void>((resolve) => {
+            const waiters = this.waiters;
             const timer = setTimeout(done, timeout);
             function done() {
               clearTimeout(timer);
+              // A timed-out wait removes itself; nothing accumulates across calls.
+              const current = waiters.get(senderId);
+              if (current) {
+                const rest = current.filter((entry) => entry !== done);
+                if (rest.length) waiters.set(senderId, rest);
+                else waiters.delete(senderId);
+              }
               resolve();
             }
-            const list = this.waiters.get(senderId) ?? [];
+            const list = waiters.get(senderId) ?? [];
             list.push(done);
-            this.waiters.set(senderId, list);
+            waiters.set(senderId, list);
           });
         }
         return this.take(senderId);

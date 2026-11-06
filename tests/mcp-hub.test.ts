@@ -248,3 +248,65 @@ test('a hub endpoint serves one terminal over its private socket, refusals inclu
     rmSync(parent, { recursive: true, force: true });
   }
 });
+
+test('replying hands the chain to the recipient; the sender can start a new one', async () => {
+  const f = fixture();
+  f.hub.ownerSend('f1', '@T-001', 'start');
+  await f.hub.call(ids.a, read);
+  await f.hub.call(ids.a, send('@T-002', 'hop 1'));
+  // The sender's own next message starts a fresh chain instead of being muted.
+  await f.hub.call(ids.a, send('@T-003', 'unrelated'));
+});
+
+test('more than 64 tasks over time keep working while only open ones count', async () => {
+  const f = fixture();
+  for (let index = 0; index < 70; index++) {
+    const task = (await f.hub.call(ids.a, {
+      name: 'delegate_task',
+      arguments: { to: '@T-002', task: `t${index}` },
+    })) as { taskId: string };
+    await f.hub.call(ids.b, read);
+    await f.hub.call(ids.b, {
+      name: 'submit_result',
+      arguments: { taskId: task.taskId, status: 'done', summary: 'ok' },
+    });
+    await f.hub.call(ids.a, read);
+    f.advance(2_100);
+  }
+});
+
+test('the durable hub journal keeps metadata only, privately', async () => {
+  const { mkdtempSync, readFileSync, realpathSync, rmSync, statSync, chmodSync } =
+    await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { hubMessageJournal } = await import('../packages/core/src/terminal/mcp-hub-journal.js');
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-hub-journal-')));
+  chmodSync(directory, 0o700);
+  try {
+    const epoch = '00000000-0000-4000-8000-0000000000e1';
+    const journal = hubMessageJournal(directory, epoch);
+    const f = fixture();
+    const hub = new TerminalMessageHub(
+      () => f.members,
+      (event) => journal.append(event),
+    );
+    await hub.call(ids.a, send('@T-002', 'secret content'));
+    hub.ownerSend('f1', 'T-003', 'owner secret');
+    journal.close();
+    const file = join(directory, 'hub-communication', `${epoch}.jsonl`);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    const text = readFileSync(file, 'utf8');
+    assert.equal(text.includes('secret'), false);
+    const lines = text
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { from: string });
+    assert.deepEqual(
+      lines.map((line) => line.from),
+      [ids.a, OWNER_SENDER],
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -37,7 +37,7 @@ test('mentions are recorded privately and never claim delivery', async () => {
     const info = await stat(join(root, files[0]!));
     assert.equal(info.mode & 0o077, 0, 'journal entries are private');
     const record = JSON.parse(await readFile(join(root, `${reply.id}.json`), 'utf8'));
-    assert.equal(record.text, 'synthetic request');
+    assert.equal(record.text, undefined, 'the audit record keeps metadata only');
     assert.deepEqual(record.from, { kind: 'user' });
     assert.throws(() =>
       recordComposerMention(directory, 'synthetic-workspace', null, [a], {

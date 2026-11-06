@@ -31,6 +31,7 @@ import { terminalPairRPCSchema } from './rpc.js';
 import { InteractiveMcpSession } from './interactive-mcp.js';
 import { TerminalMessageHub } from './mcp-hub.js';
 import { openHubEndpoint } from './mcp-hub-socket.js';
+import { hubMessageJournal } from './mcp-hub-journal.js';
 import { terminalDigest } from './authority.js';
 import { terminalFile } from './codex-profile.js';
 import type { TerminalMcpLaunch } from './mcp-launch.js';
@@ -106,6 +107,7 @@ async function start() {
     opencode: 'OpenCode',
   };
   // Metadata-only recent events for the Studio projection (no text, owner sends excluded).
+  const hubJournal = usesHub ? hubMessageJournal(process.argv[4]!, authority.epoch) : undefined;
   const hubEvents: Array<{
     id: string;
     from: string;
@@ -137,6 +139,8 @@ async function start() {
           });
         },
         (event) => {
+          // Durable metadata-only audit, owner messages included; Studio shows terminals only.
+          hubJournal?.append(event);
           if (event.from === 'owner') return;
           hubEvents.push({
             id: event.messageId,
@@ -284,6 +288,7 @@ async function start() {
       pair.close();
       void mcp?.close();
       hub?.close();
+      hubJournal?.close();
       for (const endpoint of hubEndpoints) void endpoint.close();
       for (const store of stores) store.close();
       if (process.connected) process.disconnect();
@@ -341,6 +346,9 @@ async function start() {
               const hubLaunch = hub && config.interactive?.hub ? launches[enrolledSlot] : undefined;
               if (hub && config.interactive?.hub && !hubLaunch)
                 throw new Error('No free hub endpoint');
+              // A hub Core only admits hub terminals: every terminal has ORQST messaging.
+              if (hub && !config.interactive?.hub)
+                throw new Error('Hub Core requires hub terminals');
               const profiles = adapter.profiles(config, hubLaunch);
               const backend = adapter.backend(
                 request.manifestFile,
@@ -513,9 +521,8 @@ async function start() {
             break;
           case 'closeSlot': {
             mcp?.invalidate();
-            // A closed or reloaded view forgets its queue; the terminal stays a member.
-            const member = hubSlots[request.slot];
-            if (member) hub?.forget(member.terminalId);
+            // The terminal's hub inbox survives a view close or reload (unread messages
+            // were already reported as queued to their senders).
             pair.closeSlot(request.slot);
             break;
           }

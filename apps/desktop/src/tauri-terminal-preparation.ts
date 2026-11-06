@@ -198,7 +198,9 @@ export async function prepareTauriTerminals(
         limit: 8,
         project: discovered.workspace.project,
         preparation,
-        mcp: pair,
+        // Every terminal talks through the Feature-scoped hub; the pair keeps its own MCP.
+        mcp: true,
+        ...(pair ? {} : { hub: true }),
         ...((members ?? [sourceProvider]).includes('opencode')
           ? { openCodeStartupAuthorized: true }
           : {}),

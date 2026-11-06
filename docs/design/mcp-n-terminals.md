@@ -78,9 +78,11 @@ Delivery is pull-based (tool calls); nothing is typed into a PTY (no steering).
 
 ### Studio
 
-- Mention composer sends through the hub (`send_message` on behalf of the owner is out of
-  scope: the composer stays an owner-side note until an owner-sender identity is designed).
-- Communication arcs/badges come from the hub audit journal (same projection contract).
+- The mention box delivers owner messages into each Feature member's hub inbox
+  (`queued` / `hub_inbox`); unassigned terminals stay recorded-only.
+- Communication arcs/badges come from recent hub events (metadata only, terminals only).
+- Audit: `<preferences>/hub-communication/<epoch>.jsonl` (0600, append-only, 1 MiB cap,
+  metadata only, owner messages included); composer mention records omit the text.
 
 ## Open questions
 

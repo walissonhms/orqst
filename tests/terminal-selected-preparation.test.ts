@@ -90,6 +90,32 @@ const { discoverTerminalExecutable } = (await import(
   pathToFileURL(join(bundle, 'discovery.cjs')).href
 )) as typeof import('../apps/desktop/src/terminal-discovery.js');
 
+// Hub terminals carry ORQST MCP arguments (docs/design/mcp-n-terminals.md). These helpers
+// build profiles with a synthetic endpoint and check the rest of argv as before.
+const hubLaunch = () => ({
+  serverName: 'orqst_' + 'b'.repeat(32),
+  socketPath: '/SYNTHETIC/hub.sock',
+  capabilityFile: '/SYNTHETIC/hub.cap',
+  relay: { path: binary, sha256: hash },
+});
+function withoutHubMcp<T extends { argv: readonly string[] }>(profile: T): T {
+  const argv: string[] = [];
+  for (let index = 0; index < profile.argv.length; index++) {
+    const value = profile.argv[index]!;
+    if (value === '--strict-mcp-config') continue;
+    if (value === '--mcp-config') {
+      index++;
+      continue;
+    }
+    if (value === '-c' && profile.argv[index + 1]?.startsWith('mcp_servers.')) {
+      index++;
+      continue;
+    }
+    argv.push(value);
+  }
+  return { ...profile, argv };
+}
+
 function fixture(openCodeCopies = false) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-selected-')));
   chmodSync(root, 0o700);
@@ -226,7 +252,8 @@ for (const [provider, useDefault] of [
         config.executable.path,
         join(f.context.environment.PATH.split(':')[0]!, provider),
       );
-      const profile = interactiveTerminalProfiles(config)[0]!;
+      const fullProfile = interactiveTerminalProfiles(config, hubLaunch())[0]!;
+      const profile = withoutHubMcp(fullProfile);
       const model = profile.argv.indexOf('--model');
       if (provider === 'opencode') {
         assert.deepEqual(profile.argv, ['--standalone']);
@@ -240,8 +267,12 @@ for (const [provider, useDefault] of [
       }
       assert.equal(profile.cwd, f.project);
       assert.deepEqual(features.read(feature.featureId).terminalIds, [config.identity!.terminalId]);
-      const backend = managedTerminalBackend(prepared.files[0]!, 'SYNTHETIC-NEVER-EXECUTED');
-      assert.equal(backend.validate(profile), true);
+      const backend = managedTerminalBackend(
+        prepared.files[0]!,
+        'SYNTHETIC-NEVER-EXECUTED',
+        hubLaunch(),
+      );
+      assert.equal(backend.validate(fullProfile), true);
       const keys = generateKeyPairSync('ed25519');
       const authority = new TerminalAuthority(new Map([['synthetic-native', keys.publicKey]]));
       let starts = 0;
@@ -254,7 +285,7 @@ for (const [provider, useDefault] of [
             throw new Error('Synthetic test must never spawn');
           },
         },
-        [profile],
+        [fullProfile],
       );
       const attempt = supervisor.prepare('synthetic-native', profile.id);
       writeFileSync(
@@ -321,11 +352,13 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       assert.equal(config.version, 2);
       if (config.version !== 2) throw new Error('Expected Claude manifest');
       assert.equal(config.executableVersion, reviewedClaudeTuiBinary.version);
-      assert.equal(config.interactive.mcp, undefined);
+      assert.equal(config.interactive.mcp, true);
+      assert.equal(config.interactive.hub, true);
       assert.equal(config.ownedHooks, true);
       assert.ok(config.sessionId);
       assert.equal(config.model!.value, choice);
-      const profile = interactiveTerminalProfiles(config)[0]!;
+      const fullProfile = interactiveTerminalProfiles(config, hubLaunch())[0]!;
+      const profile = withoutHubMcp(fullProfile);
       assert.deepEqual(profile.argv, [
         '--session-id',
         config.sessionId,
@@ -335,7 +368,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       ]);
       assert.equal(
         profile.cliAuthorizationScope,
-        'claude-native-v1:native-mcp:orqst-owned-hooks-v1',
+        'claude-native-v1:orqst-mcp-configured:orqst-owned-hooks-v1',
       );
       for (const name of [
         'claude-hooks-settings.json',
@@ -347,8 +380,12 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
         readFileSync(join(f.home, '.claude/settings.json'), 'utf8'),
         '{"model":"synthetic-model"}',
       );
-      const backend = managedTerminalBackend(prepared.files[0]!, 'SYNTHETIC-NEVER-EXECUTED');
-      assert.equal(backend.validate(profile), true);
+      const backend = managedTerminalBackend(
+        prepared.files[0]!,
+        'SYNTHETIC-NEVER-EXECUTED',
+        hubLaunch(),
+      );
+      assert.equal(backend.validate(fullProfile), true);
       // The same selected path with different native bytes is never substituted or admitted.
       writeFileSync(
         config.executable.path,
@@ -358,7 +395,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
         discoverTerminalExecutable('claude', f.context.environment.PATH, f.home),
         [],
       );
-      assert.throws(() => backend.validate(profile), /executable changed/);
+      assert.throws(() => backend.validate(fullProfile), /executable changed/);
     } finally {
       f.close();
     }
@@ -703,7 +740,7 @@ for (const fault of [
 }
 
 for (const provider of ['codex', 'claude', 'opencode'] as const) {
-  test(`product independent ${provider} opening remains MCP-disabled without a session`, async () => {
+  test(`product independent ${provider} opening joins the Feature hub without a session`, async () => {
     const f = fixture();
     try {
       const scope = { workspaceId: f.workspaceId, featureId: null };
@@ -734,7 +771,8 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
       assert.equal(prepared.files.length, 1);
       assert.deepEqual(f.confirmations, []);
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
-      assert.equal(config.interactive?.mcp, undefined);
+      assert.equal(config.interactive?.mcp, true);
+      assert.equal(config.interactive?.hub, true);
       assert.equal(config.project, f.project);
       assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
     } finally {
@@ -838,7 +876,8 @@ for (const selected of ['native-config', 'cli-default', 'cli-cache'] as const) {
           config.model!.expiresAt,
           selected === 'cli-cache' ? originalExpiry : undefined,
         );
-        assert.equal(config.interactive?.mcp, undefined);
+        assert.equal(config.interactive?.mcp, true);
+        assert.equal(config.interactive?.hub, true);
         // A successful preparation is files only; it never initializes a runtime journal.
         assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
         if (selected === 'cli-cache') {

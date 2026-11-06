@@ -197,7 +197,11 @@ async function start() {
       void client
         .call(randomUUID(), { name: params?.name, arguments: params?.arguments ?? {} })
         .then((value) =>
-          result({ content: [{ type: 'text', text: JSON.stringify(value) }], isError: false }),
+          result({
+            content: [{ type: 'text', text: JSON.stringify(value) }],
+            // A hub refusal is a tool error with its instructive text, not a success.
+            isError: !!value && typeof value === 'object' && 'refused' in value,
+          }),
         )
         .catch(() =>
           result({

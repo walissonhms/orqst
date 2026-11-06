@@ -42,7 +42,10 @@ export const composerMentionReplySchema = z.strictObject({
   id: z.uuid(),
   outcomes: z.array(composerMentionOutcomeSchema).min(1).max(8),
 });
+// Metadata only: the message text is never written to the audit record (owner decision
+// 2026-11-06, docs/design/mcp-n-terminals.md).
 export const composerMentionRecordSchema = composerMentionInputSchema
+  .omit({ text: true })
   .extend({
     id: z.uuid(),
     at: z.number().int().nonnegative().safe(),

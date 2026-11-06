@@ -64,7 +64,8 @@ export function recordComposerMention(
         };
       });
       const record = composerMentionRecordSchema.parse({
-        ...input,
+        from: input.from,
+        to: input.to,
         id: randomUUID(),
         at: Date.now(),
         workspaceId,
