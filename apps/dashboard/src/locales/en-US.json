@@ -1496,7 +1496,8 @@
     },
     "showUnassigned_one": "Show the {{count}} terminal without a Feature",
     "showUnassigned_other": "Show the {{count}} terminals without a Feature",
-    "arrangeIssue": "Terminal view not shown ({{status}}); retrying"
+    "arrangeIssue": "Terminal view not shown ({{status}}); retrying",
+    "arrangeFocus": "Click the terminal area to show the terminal"
   },
   "overviewPage": {
     "title": "Overview",

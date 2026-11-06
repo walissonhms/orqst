@@ -201,6 +201,8 @@ export function FeatureWorkspace({
   const immersiveRef = useRef(immersive);
   immersiveRef.current = immersive;
   const arranging = useRef<{ layout: NativePaneLayout[]; mode: ArrangementMode } | null>(null);
+  const arrangeRef = useRef<(layout: NativePaneLayout[], mode: ArrangementMode) => void>(undefined);
+  const busyRetry = useRef<number>(undefined);
   /** Send the Studio geometry to native views; the bridge keeps only the latest frame. */
   const arrange = useCallback(
     (layout: NativePaneLayout[], mode: ArrangementMode) => {
@@ -250,13 +252,24 @@ export function FeatureWorkspace({
                 .catch(() => setArrangeIssue('unavailable'));
               return;
             }
-            if (reply.status !== 'busy') setArrangeIssue(reply.status);
+            // Native keeps one frame per 16 ms: resend the latest one shortly after.
+            if (reply.status === 'busy') {
+              window.clearTimeout(busyRetry.current);
+              busyRetry.current = window.setTimeout(() => {
+                const latest = arranging.current;
+                if (latest) arrangeRef.current?.(latest.layout, latest.mode);
+              }, 40);
+              return;
+            }
+            setArrangeIssue(reply.status);
           })
           .catch(() => setArrangeIssue('unavailable'));
       void send(live, true);
     },
     [native, terminals],
   );
+  arrangeRef.current = arrange;
+  useEffect(() => () => window.clearTimeout(busyRetry.current), []);
   // Native hides terminal views on every new generation until a matching frame arrives,
   // so the last arrangement is sent again whenever the generation changes.
   // Two counters can hide the views: the metadata generation and the native layout fence
@@ -266,6 +279,23 @@ export function FeatureWorkspace({
     if (generation === undefined || !arranging.current) return;
     arrange(arranging.current.layout, arranging.current.mode);
   }, [generation, dockEpoch, arrange]);
+  // Native refuses a frame while this document lacks keyboard focus ('denied').
+  // Resend the latest frame as soon as focus or a click comes back here.
+  useEffect(() => {
+    if (!arrangeIssue) return;
+    const resend = () => {
+      const latest = arranging.current;
+      if (latest) arrangeRef.current?.(latest.layout, latest.mode);
+    };
+    const timer = window.setTimeout(resend, 600);
+    window.addEventListener('focus', resend);
+    window.addEventListener('pointerdown', resend, true);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', resend);
+      window.removeEventListener('pointerdown', resend, true);
+    };
+  }, [arrangeIssue]);
 
   useEffect(() => {
     try {
@@ -918,7 +948,9 @@ export function FeatureWorkspace({
               <>
                 {arrangeIssue && (
                   <span className="ts-arrange-issue" role="status">
-                    {t('terminalStudio.arrangeIssue', { status: arrangeIssue })}
+                    {arrangeIssue === 'denied'
+                      ? t('terminalStudio.arrangeFocus')
+                      : t('terminalStudio.arrangeIssue', { status: arrangeIssue })}
                   </span>
                 )}
                 {limits.length > 0 ? (
