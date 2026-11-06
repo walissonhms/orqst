@@ -16,19 +16,13 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-struct SyntheticReceipt;
-impl Receipt for SyntheticReceipt {
-    fn started(&mut self) -> Result<i64, String> { Ok(now_ms()) }
-    fn spawn_failed(&mut self) -> Result<(), String> { Ok(()) }
-    fn exit(&mut self, _c: Option<i64>, _s: Option<&str>) -> Result<i64, String> { Ok(now_ms()) }
-}
-struct SyntheticProfiles;
+struct SyntheticProfiles(std::path::PathBuf);
 impl SlotProfiles for SyntheticProfiles {
     fn validate(&mut self, _p: &PreparedProfile) -> bool { true }
     fn environment(&self, _p: &PreparedProfile) -> Result<Vec<(String, String)>, String> {
         Ok(vec![("PATH".into(), "/usr/bin:/bin".into())])
     }
-    fn receipt(&mut self, _i: &Identity) -> Result<Box<dyn Receipt>, String> { Ok(Box::new(SyntheticReceipt)) }
+    fn receipt(&mut self, i: &Identity) -> Result<Box<dyn Receipt>, String> { orqst_terminal_core::backend::LifecycleReceipt::create(&self.0, i, &"c".repeat(64)) }
 }
 struct SyntheticAdmission;
 impl Admission for SyntheticAdmission {
@@ -59,6 +53,9 @@ fn pair_rpc_drives_a_real_owned_pty() {
     let key = SigningKey::from_bytes(&[9u8; 32]);
     let authority = Rc::new(RefCell::new(Authority::new(vec![("desktop-managed".into(), key.verifying_key())], now_ms).unwrap()));
     let epoch = authority.borrow().epoch.clone();
+    std::fs::create_dir_all(&base).unwrap();
+    let base = std::fs::canonicalize(&base).unwrap();
+    std::fs::set_permissions(&base, std::os::unix::fs::PermissionsExt::from_mode(0o700)).unwrap();
     let journal = Journal::open(Store::open(&base.join("terminal.sqlite")).unwrap(), &epoch, false, now_ms).unwrap();
     let profile = TerminalProfile {
         id: "codex-terminal-v1".into(), project_id: "p".into(), executable: "/bin/sh".into(),
@@ -68,7 +65,7 @@ fn pair_rpc_drives_a_real_owned_pty() {
     };
     let json_text = serde_json::to_string(&profile).unwrap();
     let (sender, receiver) = events();
-    let backend = PtyBackend::new(0, Box::new(SyntheticProfiles), env!("CARGO_BIN_EXE_orqst-terminal-core").into(), sender.clone());
+    let backend = PtyBackend::new(0, Box::new(SyntheticProfiles(base.clone())), env!("CARGO_BIN_EXE_orqst-terminal-core").into(), sender.clone());
     let slot = Slot { profiles: vec![PreparedProfile { profile, json: json_text }], backend: Box::new(backend), journal };
     let pair = Pair::new(authority, vec![slot], Box::new(SyntheticAdmission), 8).unwrap();
     let mut core = Core::new(Startup { ready: json!({}), pair, opencode: false }, Box::new(NoExtensions));
@@ -109,6 +106,10 @@ fn pair_rpc_drives_a_real_owned_pty() {
     let read = call(&mut core, "read", json!([id, attachment, 0]));
     let bytes: Vec<u8> = read["bytes"].as_array().unwrap().iter().map(|b| b.as_u64().unwrap() as u8).collect();
     assert!(String::from_utf8_lossy(&bytes).contains("got=hi"), "{}", String::from_utf8_lossy(&bytes));
+    let receipt = std::fs::read_to_string(base.join(format!("lifecycle-{id}.jsonl"))).unwrap();
+    let kinds: Vec<String> = receipt.lines().map(|l| serde_json::from_str::<Value>(l).unwrap()["type"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(kinds, ["prepared", "armed", "started", "exit"]);
+    assert!(receipt.lines().last().unwrap().contains(r#""code":4,"signal":null"#), "{receipt}");
     // Invalid request shape is a protocol violation (host shuts the Core down).
     assert!(core.handle(&json!({"kind": "terminal", "slot": 0, "request": {"id": "x", "operation": "snapshot", "args": [id]}})).is_none());
     // Retirement: exits are owned, so the signed retire succeeds once.

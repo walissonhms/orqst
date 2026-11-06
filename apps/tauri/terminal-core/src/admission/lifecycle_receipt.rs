@@ -303,6 +303,11 @@ pub fn arm_lifecycle_receipt(
 }
 
 impl LifecycleRecorder {
+    /// The `at` of the last record written (monotonic, as `readLifecycleReceipt` reports it).
+    pub fn last_at(&self) -> u64 {
+        self.previous
+    }
+
     pub fn record(&mut self, event: LifecycleEvent, now_ms: u64) -> Result<()> {
         let at = self.previous.max(now_ms);
         let next = match event {

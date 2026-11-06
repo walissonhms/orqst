@@ -159,3 +159,41 @@ impl Backend for PtyBackend {
         Ok(Box::new(PtyHandle { pty, exited, evidence }))
     }
 }
+
+/// The owned lifecycle receipt: created (prepared) and armed before spawn, exactly like
+/// `createLifecycleReceipt` + `armLifecycleReceipt` around the Node PTY host.
+pub struct LifecycleReceipt(crate::admission::lifecycle_receipt::LifecycleRecorder);
+
+impl LifecycleReceipt {
+    pub fn create(state: &std::path::Path, identity: &Identity, config_digest: &str) -> R<Box<dyn Receipt>> {
+        use crate::admission::lifecycle_receipt::{arm_lifecycle_receipt, create_lifecycle_receipt, LifecycleBinding};
+        let binding = LifecycleBinding {
+            instance_id: identity.instance_id.clone(),
+            epoch: identity.epoch.clone(),
+            manifest_digest: identity.manifest_digest.clone(),
+            config_digest: config_digest.to_owned(),
+        };
+        let now = || crate::authority::now_ms().max(0) as u64;
+        let file = create_lifecycle_receipt(state, &binding, now()).map_err(|e| e.to_string())?;
+        let recorder = arm_lifecycle_receipt(file, config_digest, now()).map_err(|e| e.to_string())?;
+        Ok(Box::new(LifecycleReceipt(recorder)))
+    }
+}
+
+impl Receipt for LifecycleReceipt {
+    fn started(&mut self) -> R<i64> {
+        use crate::admission::lifecycle_receipt::LifecycleEvent;
+        self.0.record(LifecycleEvent::Started, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())?;
+        Ok(self.0.last_at() as i64)
+    }
+    fn spawn_failed(&mut self) -> R<()> {
+        use crate::admission::lifecycle_receipt::LifecycleEvent;
+        self.0.record(LifecycleEvent::SpawnFailed, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())
+    }
+    fn exit(&mut self, code: Option<i64>, signal: Option<&str>) -> R<i64> {
+        use crate::admission::lifecycle_receipt::LifecycleEvent;
+        let event = LifecycleEvent::Exit { code, signal: signal.map(str::to_owned) };
+        self.0.record(event, crate::authority::now_ms().max(0) as u64).map_err(|e| e.to_string())?;
+        Ok(self.0.last_at() as i64)
+    }
+}
