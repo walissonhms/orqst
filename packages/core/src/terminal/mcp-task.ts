@@ -21,6 +21,15 @@ type Delivery =
   | { state: 'delivered'; taskId: string; task: string }
   | { state: 'unknown'; taskId: string | null };
 
+export type McpTaskEvidence = {
+  grantId: string;
+  taskId: string;
+  sourceInstanceId: string;
+  targetInstanceId: string;
+  kind: 'delegation' | 'result';
+  at: number;
+};
+
 /** One native-signed A -> B -> A grant. Has no PTY reference, launch, signal or retry operation. */
 export class McpTaskBroker {
   private grant;
@@ -41,6 +50,8 @@ export class McpTaskBroker {
     identity: { sourceInstanceId: string; targetInstanceId: string; workspaceId: string },
     private owned: () => boolean,
     deadlineMs = 120_000,
+    private readonly evidence?: (event: McpTaskEvidence) => void,
+    private readonly evidenceNow: () => number = Date.now,
   ) {
     z.strictObject({
       sourceInstanceId: z.uuid(),
@@ -137,6 +148,7 @@ export class McpTaskBroker {
       throw new Error('Result denied');
     this.state = 'completed';
     this.result = call.arguments.result;
+    this.record('result');
     this.complete?.({ state: 'completed', taskId: this.taskId, result: this.result });
     this.complete = undefined;
     this.task = undefined;
@@ -160,8 +172,24 @@ export class McpTaskBroker {
     this.assertAvailable();
     if (!this.taskId || !this.task || !this.deliver) throw new Error('No deliverable task');
     this.state = 'delivered';
+    this.record('delegation');
     this.deliver({ state: 'delivered', taskId: this.taskId, task: this.task });
     this.deliver = undefined;
+  }
+
+  private record(kind: McpTaskEvidence['kind']) {
+    try {
+      this.evidence?.({
+        grantId: this.grant.grantId,
+        taskId: this.taskId!,
+        sourceInstanceId: this.grant.sourceInstanceId,
+        targetInstanceId: this.grant.targetInstanceId,
+        kind,
+        at: this.evidenceNow(),
+      });
+    } catch {
+      // Display evidence failure never retries, cancels or changes an accepted MCP operation.
+    }
   }
 
   private assertAvailable() {

@@ -322,6 +322,7 @@ Full suite at the latest commit: `pnpm lint`, `pnpm typecheck`, `pnpm test` 1414
 | Studio v2 chrome contract: candidate `15b6ef5` packaged; native acceptance pending                                        | pane-817 | owner native test                                |
 | Native OS notifications on completed/failed: packaged in `15b6ef5`; native acceptance pending                             | pane-817 | owner OS/provider test                           |
 | Claude "needs you" state via owned `--settings` hooks                                                                     | pane-817 | step 1b                                          |
+| MCP pair delegation/result projection: metadata-only audit + facade/Rust guards implemented                               | pane-817 | native/provider exchange and UI acceptance       |
 | Codex/OpenCode session binding and turn state                                                                             | pane-817 | no proven identity yet                           |
 | Current-workspace batch create (pool 8): native contract implemented                                                      | pane-817 | renderer wiring + native/provider acceptance     |
 | Batch create across several workspaces                                                                                    | pane-817 | multi-workspace design review (owner + pane-769) |

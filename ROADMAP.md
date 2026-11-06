@@ -1384,3 +1384,5 @@ acceptance pending.
       identity fail-closed behavior (`435e4be`).
 - [ ] Production native authority, picker, route, real provider and native UI
       acceptance remain pending.
+
+- Implemented current-owned-MCP-pair communication audit and Feature-scoped display projection; native UI and real provider exchange acceptance remain pending. No new composer route or cross-Feature authority.

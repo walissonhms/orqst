@@ -340,6 +340,32 @@ export const featureNativeReplySchema = z
     (value) => value.status !== 'ok' || value.snapshot !== undefined,
     'Missing Feature snapshot',
   )
+  .refine((value) => {
+    if (!value.communication) return true;
+    const snapshot = value.snapshot;
+    const feature = snapshot?.features.find(
+      (entry) => entry.featureId === snapshot.activeFeatureId,
+    );
+    return (
+      value.status === 'ok' &&
+      !!snapshot &&
+      (value.communication.events.length === 0 ||
+        (!!feature &&
+          feature.status !== 'archived' &&
+          value.communication.events.every(
+            (event) =>
+              event.kind !== 'message' &&
+              event.from !== event.to &&
+              [event.from, event.to].every(
+                (id) =>
+                  feature.terminalIds.includes(id) &&
+                  snapshot.slots.some((slot) => slot.terminalId === id),
+              ),
+          ))) &&
+      new Set(value.communication.events.map((event) => event.id)).size ===
+        value.communication.events.length
+    );
+  }, 'Communication evidence outside active Feature scope')
   .refine(
     (value) =>
       !value.canvas ||

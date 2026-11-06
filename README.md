@@ -1532,3 +1532,5 @@ Real-state use, native acceptance and CLI/provider operation remain unvalidated.
 Feature permission policy reads can be retried explicitly with Refresh through the native
 focus gate. If a proposal outcome is uncertain, the revision is invalidated until a
 fresh read; no proposal is retried automatically. Native UI acceptance remains pending.
+
+The owned MCP pair can project bounded, metadata-only delegation/result evidence into Feature snapshot/canvas replies. This is a display feed for an already authorized pair; ordinary terminals and unsupported composer mentions acquire no communication route. See [the API contract](docs/api/terminal-native.md#owned-mcp-communication-projection--2026-11-05).
