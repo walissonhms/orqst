@@ -96,6 +96,17 @@ fn invalidate_opening(document: &mut u64, pending: &mut Option<OpeningIntent>) {
     *document = document.wrapping_add(1);
     *pending = None;
 }
+
+/// Hiding a view still revokes its document authority (input and other grants follow the
+/// new generation), but it is the same loaded document: its one-use opening intent follows
+/// it. A new Studio view is hidden until its first accepted frame, so dropping the intent
+/// here meant the CLI never started. Closing or losing the document still drops it.
+fn hide_document(document: &mut u64, pending: &mut Option<OpeningIntent>) {
+    *document = document.wrapping_add(1);
+    if let Some(intent) = pending.as_mut() {
+        intent.document = *document;
+    }
+}
 fn take_opening(
     pending: &mut Option<OpeningIntent>,
     expected: (u64, u64, Instant),
@@ -1076,6 +1087,23 @@ fn revoke(app: &tauri::AppHandle, slot: usize, close: bool) {
     );
 }
 
+/// A layout frame hides this view (presentation barrier, rect null or geometry pending).
+/// Its document authority is revoked like any hide, but the pending opening intent
+/// follows the same loaded document. Blur, deactivation, dashboard, Quit, reload and
+/// close keep consuming it through `revoke`.
+fn hide_for_layout(app: &tauri::AppHandle, slot: usize) {
+    {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        if let Some(running) = guard.as_mut() {
+            if let Some(generation) = running.generations.get_mut(slot) {
+                hide_document(generation, &mut running.pending_open[slot]);
+            }
+        }
+    }
+    send(app, json!({"kind": "revoke", "slot": slot}));
+}
+
 #[tauri::command]
 pub async fn terminal_request(window: Webview, request: Value) -> Value {
     dispatch_terminal_request(window, request, None).await
@@ -1275,7 +1303,16 @@ fn incomplete_open(value: &Value) -> Value {
 #[tauri::command]
 pub async fn terminal_open_prepared(window: Webview) -> Value {
     let idle = || json!({"attempted":false});
+    let why = |reason: &str| {
+        if focus_diagnostics() {
+            eprintln!("ORQST_OPEN_PREPARED idle {reason}");
+        }
+    };
+    if focus_diagnostics() {
+        eprintln!("ORQST_OPEN_PREPARED call {}", window.label());
+    }
     let Some(slot) = slot(&window) else {
+        why("slot");
         return idle();
     };
     let app = window.app_handle().clone();
@@ -1286,18 +1323,18 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
             return idle();
         };
         let Some(intent) = r.pending_open[slot].as_ref() else {
+            why("no_intent");
             return idle();
         };
         if !intent.current(r.generations[slot], r.layout_generation, Instant::now()) {
             r.pending_open[slot] = None;
+            why("stale_intent");
             return idle();
         }
         (r.generations[slot], r.layout_generation, intent.expires)
     };
-    if presentation_blocked(&app)
-        || !opening_focused(&app, &window).await
-        || self::slot(&window) != Some(slot)
-    {
+    if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
+        why("blocked_or_unfocused");
         return idle();
     }
     let profile = {
@@ -1316,14 +1353,19 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
             || r.retiring
             || r.mcp_request.is_some()
         {
+            why("busy_gate");
             return idle();
         }
         let current = (r.generations[slot], r.layout_generation);
         take_opening(&mut r.pending_open[slot], epoch, current, Instant::now())
     };
     let Some(profile) = profile else {
+        why("take_failed");
         return idle();
     };
+    if focus_diagnostics() {
+        eprintln!("ORQST_OPEN_PREPARED dispatch slot={slot}");
+    }
     let value = dispatch_terminal_request(
         window,
         json!({"version":1,"action":"open","profileId":profile}),
@@ -1331,29 +1373,6 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
     )
     .await;
     json!({"attempted":true,"value":value})
-}
-
-/// Whether the one-use opening intent may be consumed for this view.
-/// The Studio "Open" gesture happens in the exact chrome document of main, while the
-/// new PTY view is still hidden by the presentation barrier and cannot be focused.
-/// Either owned document may therefore hold focus; the intent itself stays one-use,
-/// expiring and bound to the slot document and presentation generations.
-fn opening_focus_allowed(terminal: bool, chrome: bool) -> bool {
-    terminal || chrome
-}
-
-async fn opening_focused(app: &tauri::AppHandle, window: &Webview) -> bool {
-    let terminal = focused(window).await;
-    let chrome = !terminal
-        && window.window().label() == "main"
-        && match app.get_webview("feature-workspace") {
-            Some(view) => {
-                crate::features::chrome_identity(&view).is_some()
-                    && crate::features::focused(&view).await
-            }
-            None => false,
-        };
-    opening_focus_allowed(terminal, chrome)
 }
 
 /// A dock restore only re-shows an existing hidden slot; it grants no process authority.
@@ -2135,7 +2154,19 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
     // The whole envelope is validated before any state, geometry or visibility change.
     let show = crate::features::workspace_visible(state);
     if !show {
-        revoke_all(app);
+        // A hidden workspace (e.g. while the New terminal dialog shows its results) revokes
+        // every view, but pending openings follow their documents.
+        let count = app
+            .state::<Terminals>()
+            .0
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|r| r.documents.len())
+            .unwrap_or(0);
+        for slot in 0..count {
+            hide_for_layout(app, slot);
+        }
     } else {
         crate::agents::hide_surface(app);
     }
@@ -2169,7 +2200,7 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             continue;
         };
         if bound["rect"].is_null() || !show || !geometry_ready {
-            revoke(app, slot as usize, false);
+            hide_for_layout(app, slot as usize);
             let _ = view.hide();
         } else {
             let rect = &bound["rect"];
@@ -2187,6 +2218,22 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
             });
             raise_surface(&view);
             let _ = view.show();
+            // A new terminal opens when its own view is first responder. Its first visible
+            // frame arrives after the layout that asked for focus, so focus it here once.
+            let opening = app
+                .state::<Terminals>()
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|r| {
+                    r.pending_open
+                        .get(slot as usize)
+                        .is_some_and(|pending| pending.is_some())
+                });
+            if opening && window.is_focused().unwrap_or(false) {
+                let _ = view.set_focus();
+            }
         }
         let _ = view.eval(format!(
             "window.dispatchEvent(new CustomEvent('orqst-terminal-layout',{{detail:{state}}}));"
@@ -2981,6 +3028,9 @@ async fn enroll_selected_inner(
             drop(guard);
             fence_enrollment_presentation(app, expected, generation, &id, slot);
             return Err("Enrollment presentation expired".into());
+        }
+        if focus_diagnostics() {
+            eprintln!("ORQST_OPEN_PREPARED intent slot={slot} presentation={generation}");
         }
         r.pending_open[slot] = Some(OpeningIntent {
             profile: value["pane"]["profileId"].as_str().unwrap().into(),
@@ -3827,19 +3877,12 @@ mod opening_tests {
     }
 
     use super::{
-        incomplete_open, invalidate_opening, native_request_message, opening_focus_allowed,
-        take_opening, OpeningIntent,
+        hide_document, incomplete_open, invalidate_opening, native_request_message, take_opening,
+        OpeningIntent,
     };
     use serde_json::json;
     use std::time::{Duration, Instant};
 
-    #[test]
-    fn studio_open_gesture_focus_or_owned_terminal_focus_may_consume_the_intent() {
-        // The hidden new PTY cannot be focused; the chrome document holds the gesture.
-        assert!(opening_focus_allowed(false, true));
-        assert!(opening_focus_allowed(true, false));
-        assert!(!opening_focus_allowed(false, false));
-    }
     #[test]
     fn layout_responder_requires_the_same_owned_epoch_presentation_and_loaded_document() {
         let expected = ("owned-epoch", 9, 3);
@@ -3919,6 +3962,34 @@ mod opening_tests {
             .is_none());
             assert!(pending.is_none());
         }
+    }
+    #[test]
+    fn a_layout_hide_keeps_the_opening_intent_with_the_same_document() {
+        let now = Instant::now();
+        let mut pending = intent(now);
+        let mut document = 3;
+        hide_document(&mut document, &mut pending);
+        assert_eq!(document, 4);
+        assert_eq!(
+            take_opening(
+                &mut pending,
+                (4, 9, now + Duration::from_secs(60)),
+                (4, 9),
+                now
+            ),
+            Some("codex-terminal-v1".into())
+        );
+        // The old document generation cannot use it.
+        let mut stale = intent(now);
+        let mut document = 3;
+        hide_document(&mut document, &mut stale);
+        assert!(take_opening(
+            &mut stale,
+            (3, 9, now + Duration::from_secs(60)),
+            (3, 9),
+            now
+        )
+        .is_none());
     }
     #[test]
     fn async_focus_cannot_rebind_document_presentation_or_extend_expiry() {

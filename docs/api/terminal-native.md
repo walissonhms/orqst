@@ -872,18 +872,27 @@ private host envelope `openingAuthorized: true`; no public request changes. MCP
 pair grants, explicit revocation and manual legacy reviews remain separate. See
 [decision/security review](../research/studio-open-gesture.md).
 
-## Opening intent consumed from the Studio gesture focus — 2026-11-06
+## Studio opening intent survives the presentation barrier — 2026-11-06
 
-A new Studio terminal view stays hidden by the presentation barrier until its first
-accepted frame, so its own WKWebView cannot be first responder when the document asks
-`terminal_open_prepared` on load. The one-use opening intent may now be consumed when
-either that owned PTY view or the exact feature-workspace chrome child of visible,
-focused `main` is first responder (the Open gesture happens there). The intent stays
-single-use, expires after 60 s and remains bound to the slot document and presentation
-generations; no request, profile or authority comes from the renderer. The proof of
-intent is therefore the approved Studio creation gesture within the 60 s window, not a
-separate click inside the new card. Implemented in
-`terminal.rs` (`opening_focused`), unit-tested; native acceptance is pending.
+Root cause of Studio terminals that never started (no `terminal_attempts` row): a new
+view stays hidden until its first accepted frame, and every layout that hid it called
+`revoke`, which drops the one-use opening intent. The first layout publication therefore
+destroyed the intent; a hidden workspace (`revoke_all`, e.g. while the New terminal dialog
+shows its results) did the same.
+
+- Layout hides (`hide_for_layout`) still advance the document generation and send the
+  host `revoke` (input and other document grants end), but the pending intent is rebound
+  to the same loaded document. Blur, deactivation, dashboard, Quit, reload and close keep
+  consuming it through `revoke`, unchanged.
+- When a view with a pending intent is shown and `main` is focused, native focuses that
+  view once, so the document's existing focus path consumes the intent. Opening still
+  requires the PTY view itself to be first responder; an earlier same-day attempt that
+  accepted chrome focus was reverted because `dispatch_terminal_request` correctly
+  requires PTY focus and the intent was consumed without a possible open.
+- `ORQST_TAURI_FOCUS_DIAGNOSTICS=1` prints `ORQST_OPEN_PREPARED` call/idle reason/intent/
+  dispatch lines (labels and generations only) to stderr.
+
+Implemented in `terminal.rs`, unit-tested (`hide_document`); native acceptance pending.
 
 ## Quit retirement wait and opening retry — 2026-11-06
 
