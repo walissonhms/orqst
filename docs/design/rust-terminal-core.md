@@ -60,3 +60,20 @@ Today: Tauri (`terminal.rs`) → Node host (`tauri-terminal-host.cjs`) → Node 
 - The existing TypeScript RPC tests run against the Rust binary where they exercise the
   private protocol.
 - Native acceptance on the owner's Mac with the flag on, then the owner compares paths.
+
+## Status 2026-11-06
+
+- Implemented in code: Stage A, the full `orqst-terminal-core` binary. It covers the
+  modules above plus the startup composition (`startup.rs`), enrollment, and offline
+  recovery (`recovery/`, library and `recovery` entry, not wired into the app). The legacy
+  pair MCP (`interactive.mcp` without the hub) is refused at startup and stays on Node.
+- Synthetic checks: 64+ Rust tests (golden byte equality with TypeScript for the journal,
+  admission, receipts, profiles, Features, hub and recovery; a real PTY with `/bin/sh`;
+  the binary under a real Node IPC parent), and the full TypeScript suite.
+- Native check on the owner's Mac (diag19, `ORQST_RUST_TERMINALS=1`): the Rust Core
+  started. One Codex and two enrolled OpenCode terminals ran real CLIs and accepted
+  keyboard input. One enrolled opening was incomplete because the app lost focus during
+  the combined review (`application-deactivated`); clicking the pane resumed it.
+- Not yet: Quit/retirement acceptance on the Rust path, signed package, Stage B.
+- Fixed in both cores: composer mentions to the hub returned `denied/unavailable`
+  because delivery ran inside the Feature transaction (`busy_timeout`).

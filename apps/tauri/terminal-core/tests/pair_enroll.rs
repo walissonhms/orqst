@@ -255,3 +255,125 @@ fn failed_slot_creation_leaves_an_uncertain_reservation() {
     assert!(pair.owned_exit_evidence().is_err());
     std::fs::remove_dir_all(base).unwrap();
 }
+
+struct OkBackend;
+struct OkHandle;
+impl Handle for OkHandle {
+    fn write(&mut self, _t: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn resize(&mut self, _c: u16, _r: u16) -> Result<(), String> {
+        Ok(())
+    }
+    fn signal(&mut self, _s: &str) -> Result<(), String> {
+        Ok(())
+    }
+}
+impl Backend for OkBackend {
+    fn validate(&mut self, _p: &PreparedProfile) -> bool {
+        true
+    }
+    fn start(&mut self, _p: &PreparedProfile, _i: &Identity) -> Result<Box<dyn Handle>, String> {
+        Ok(Box::new(OkHandle))
+    }
+}
+
+fn sign(key: &SigningKey, c: &Value) -> Value {
+    use base64::Engine;
+    use ed25519_dalek::Signer;
+    let challenge = orqst_terminal_core::authority::Challenge {
+        version: 1,
+        epoch: c["epoch"].as_str().unwrap().into(),
+        client_id: c["clientId"].as_str().unwrap().into(),
+        challenge_id: c["challengeId"].as_str().unwrap().into(),
+        expires_at: c["expiresAt"].as_i64().unwrap(),
+        operation: c["operation"].as_str().unwrap().into(),
+        target: c["target"].as_str().unwrap().into(),
+        digest: c["digest"].as_str().unwrap().into(),
+    };
+    let bytes = orqst_terminal_core::authority::challenge_bytes(&challenge);
+    json!({"challengeId": challenge.challenge_id,
+        "signature": base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(key.sign(&bytes).to_bytes())})
+}
+
+/// The native broker's combined open on an ENROLLED slot: prepare, launch, started,
+/// attach, input and write (synthetic backend, nothing launched).
+#[test]
+fn an_enrolled_slot_opens_like_an_initial_slot() {
+    use orqst_terminal_core::rpc::parse;
+    use orqst_terminal_core::supervisor::BackendEvent;
+    use orqst_terminal_core::types::TerminalProfile;
+    let base = std::fs::canonicalize(std::env::temp_dir())
+        .unwrap()
+        .join(format!("orqst-synthetic-enroll-open-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&base).unwrap();
+    let key = SigningKey::from_bytes(&[5u8; 32]);
+    let authority = Rc::new(RefCell::new(
+        Authority::new(vec![("desktop-managed".into(), key.verifying_key())], now_ms).unwrap(),
+    ));
+    let epoch = authority.borrow().epoch.clone();
+    let log = Rc::new(RefCell::new(Vec::new()));
+    let mut pair =
+        Pair::new(authority, vec![slot(&base, "a", &epoch)], Box::new(Log(log)), 2).unwrap();
+    let workspace = "c".repeat(64);
+    let terminal = uuid::Uuid::new_v4().to_string();
+    let mut member = Map::new();
+    member.insert("terminalId".into(), terminal.clone().into());
+    member.insert("alias".into(), format!("P-{terminal}").into());
+    member.insert("provider".into(), "codex".into());
+    member.insert("requestedModel".into(), Value::Null);
+    member.insert("workspaceId".into(), workspace.clone().into());
+    member.insert("featureId".into(), Value::Null);
+    member.insert("bindingDigest".into(), "d".repeat(64).into());
+    let profile = TerminalProfile {
+        id: "codex-terminal-v1".into(),
+        project_id: "p2".into(),
+        executable: "/bin/sh".into(),
+        executable_sha256: "a".repeat(64),
+        executable_version: "synthetic".into(),
+        argv: vec![],
+        cwd: "/tmp".into(),
+        environment_profile: "synthetic".into(),
+        permissions: "synthetic".into(),
+        cli_authorization_scope: None,
+    };
+    let json_text = serde_json::to_string(&profile).unwrap();
+    let (base2, epoch2) = (base.clone(), epoch.clone());
+    let op = uuid::Uuid::new_v4().to_string();
+    let r = pair
+        .enroll(
+            &json!({"version": 1, "epoch": epoch, "opId": op, "expectedRevision": 0, "workspaceId": workspace, "featureId": null}),
+            "/synthetic/b.json",
+            || {
+                Ok(EnrollmentCandidate {
+                    member,
+                    create: Box::new(move |_| {
+                        let mut s = slot(&base2, "b", &epoch2);
+                        s.profiles = vec![PreparedProfile { profile, json: json_text }];
+                        s.backend = Box::new(OkBackend);
+                        Ok(s)
+                    }),
+                })
+            },
+        )
+        .unwrap();
+    assert_eq!(r["status"], "ready", "{r}");
+    let mut call = |operation: &str, args: Value| -> Value {
+        let request = parse(&json!({"id": uuid::Uuid::new_v4().to_string(), "operation": operation, "args": args})).unwrap();
+        pair.dispatch(1, &request).unwrap_or_else(|e| panic!("{operation}: {e}")).unwrap_or(Value::Null)
+    };
+    let prepared = call("prepare", json!(["desktop-managed", "codex-terminal-v1"]));
+    let id = prepared["attemptId"].as_str().unwrap().to_owned();
+    call("launch", json!([id, sign(&key, &prepared["challenge"])]));
+    pair.supervisor_mut(1).unwrap().event(&id, BackendEvent::Started { started_at: Some(1) });
+    let mut call = |operation: &str, args: Value| -> Value {
+        let request = parse(&json!({"id": uuid::Uuid::new_v4().to_string(), "operation": operation, "args": args})).unwrap();
+        pair.dispatch(1, &request).unwrap_or_else(|e| panic!("{operation}: {e}")).unwrap_or(Value::Null)
+    };
+    assert_eq!(call("snapshot", json!([id]))["state"], "running");
+    let c = call("requestAttach", json!(["desktop-managed", id]));
+    let attachment = call("attach", json!([id, sign(&key, &c)]));
+    let c = call("requestInput", json!([id, attachment]));
+    let lease = call("enableInput", json!([id, attachment, sign(&key, &c)]));
+    call("write", json!([id, attachment, lease, 0, "x"]));
+}
