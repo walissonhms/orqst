@@ -16,10 +16,11 @@ pnpm validate:local --with-browser
 ## Automated suites
 
 The Node runner groups output by file. An apparently quiet run can still be
-performing work: native initialization exercises multiple eight-second refusal
-paths, offline recovery verifies durable files, and the source guard creates a
-large synthetic directory to check its real entry limit. Allow several minutes
-and wait for the final test counts and exit status. To isolate a suspected hang,
+performing work as offline recovery verifies durable files and the source guard
+creates a large synthetic directory to check its real entry limit. The native
+initialization test observes real host IPC before advancing the parent RPC
+clock to exercise the eight-second refusal boundary. Allow several minutes and
+wait for the final test counts and exit status. To isolate a suspected hang,
 use `pnpm exec tsx --test --test-concurrency=1 tests/*.test.ts` and give each
 file a timeout longer than its declared test deadlines; do not shorten security
 fixtures or interpret an interrupted run as a pass.
