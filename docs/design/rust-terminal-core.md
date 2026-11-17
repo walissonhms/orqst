@@ -4,7 +4,7 @@ Status: draft 2026-11-06, pane-768. Owner decision (2026-11-06): port the manage
 runtime (supervisor, journal, recovery, PTY, profiles, CLI policy, lifecycle, MCP hub) to
 Rust behind `ORQST_RUST_TERMINALS=1`; the Node path stays the default until the owner
 accepts the Rust path. Reference research: pane-825 report
-(`orqst-reference-753/rust-terminal-pilot-research.md`, Anywh `0866169`, Tucano `c321b30`):
+([`docs/research/rust-terminal-pilot-research.md`](../research/rust-terminal-pilot-research.md), Anywh `0866169`, Tucano `c321b30`):
 neither reference owns a PTY in Rust; nothing is reused from them for the PTY.
 
 ## Strategy: replace from the inside, keep every contract
