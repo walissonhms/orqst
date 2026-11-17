@@ -267,6 +267,10 @@ keep the shared hosts/xterm/savers under `apps/desktop` until their consumers ar
 Normal preparation still uses `mcp:false`; the existing opt-in pair and separate
 task grant do not yet provide Feature/N-member communication.
 
+The [native startup and terminal-opening benchmark](docs/development/native-opening-performance.md)
+measures Desktop history sync, passive discovery and the managed opening path
+using disposable fixtures.
+
 The [bounded native preparation diagnostics](docs/development/terminal-preparation-diagnostics.md)
 now preserve the failing stage and possible effects without exposing raw errors.
 The normal picker keeps CLI → model → Open primary. Synthetic/static checks do

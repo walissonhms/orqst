@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Store } from '@orqst/database';
 import type { Snapshot } from '@orqst/protocol';
 import { meta, record } from './fixtures.js';
@@ -177,6 +178,16 @@ async function snapshot(base: string, cookie: string): Promise<Snapshot> {
   return (await response.json()) as Snapshot;
 }
 
+async function initialSnapshot(base: string, cookie: string): Promise<Snapshot> {
+  const deadline = Date.now() + readinessLimit;
+  for (;;) {
+    const current = await snapshot(base, cookie);
+    if (current.diagnostics.lastScan !== null) return current;
+    assert.ok(Date.now() < deadline, 'Initial synthetic scan did not finish');
+    await delay(25);
+  }
+}
+
 test('Desktop Core announces a loopback port, serves bootstrap-cookie API and private SQLite', async () => {
   const ctx = await createFixture();
   const run = launch(ctx);
@@ -193,7 +204,7 @@ test('Desktop Core announces a loopback port, serves bootstrap-cookie API and pr
     const cookieHeader = await fetch(base + '/api/bootstrap');
     assert.match(cookieHeader.headers.get('set-cookie') ?? '', /HttpOnly/);
     assert.match(cookieHeader.headers.get('set-cookie') ?? '', /SameSite=Strict/);
-    const current = await snapshot(base, cookie);
+    const current = await initialSnapshot(base, cookie);
     assert.equal(current.sessions.length, 1);
     assert.equal(current.sessions[0]?.id, 'synthetic-desktop-session');
     assert.ok(current.cursor > 0);
@@ -242,7 +253,7 @@ test('Desktop Core drains and releases its private state on stdin EOF', async ()
   try {
     const port = await run.ready;
     const base = `http://127.0.0.1:${port}`;
-    const before = await snapshot(base, await bootstrap(base));
+    const before = await initialSnapshot(base, await bootstrap(base));
     assert.equal(before.sessions[0]?.id, 'synthetic-desktop-session');
 
     run.child.stdin!.end();
@@ -374,12 +385,12 @@ test('Desktop Core can reopen a stable native origin without duplicating observe
   try {
     const port = await first.ready;
     const base = `http://127.0.0.1:${port}`;
-    const before = await snapshot(base, await bootstrap(base));
+    const before = await initialSnapshot(base, await bootstrap(base));
     first.child.stdin!.end('shutdown\n');
     assert.equal((await first.exited).code, 0);
     second = launch(ctx, { env: { ORQST_PORT: String(port) } });
     assert.equal(await second.ready, port);
-    const after = await snapshot(base, await bootstrap(base));
+    const after = await initialSnapshot(base, await bootstrap(base));
     assert.equal(after.cursor, before.cursor);
     assert.deepEqual(
       after.sessions.map(({ id }) => id),
@@ -418,6 +429,8 @@ test('native metadata pipe reuses live evidence, consumes replay and omits priva
     const port = await run.ready;
     await until(() => frames().length > 0);
     assert.deepEqual(frames()[0], { connected: true, pending: 0, alerts: [] });
+    const base = `http://127.0.0.1:${port}`;
+    await initialSnapshot(base, await bootstrap(base));
     const completion =
       JSON.stringify({
         ...record('event_msg', {

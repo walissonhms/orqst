@@ -16,6 +16,7 @@ import {
   openSync,
   readSync,
   realpathSync,
+  type BigIntStats,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, parse, relative } from 'node:path';
@@ -138,11 +139,51 @@ export function terminalFile(
 /** Finite native-file budget: reviewed standalone CLIs can exceed 256 MiB. */
 export const terminalExecutableMaximumBytes = 512 * 1024 * 1024;
 
+const executableDigests = new Map<string, { identity: string; digest: string }>();
+
+function executableIdentity(info: BigIntStats): string {
+  return [
+    info.dev,
+    info.ino,
+    info.birthtimeNs,
+    info.size,
+    info.mtimeNs,
+    info.ctimeNs,
+    info.mode,
+    info.uid,
+    info.gid,
+  ].join(':');
+}
+
 /** Bounded native executable hash; never execute a version/authentication command. */
 export function terminalExecutableSha256(path: string): string {
+  return readExecutableDigest(path, false);
+}
+
+/** Reuse an in-process verification for unchanged files during discovery and metadata checks. */
+export function cachedTerminalExecutableSha256(path: string): string {
+  return readExecutableDigest(path, true);
+}
+
+function readExecutableDigest(path: string, reuseUnchanged: boolean): string {
   const fd = openTerminalFile(path, false, terminalExecutableMaximumBytes);
   try {
-    if (!(fstatSync(fd).mode & 0o111)) throw new Error('Terminal file is not executable');
+    const before = fstatSync(fd, { bigint: true });
+    if (!(before.mode & 0o111n)) throw new Error('Terminal file is not executable');
+    const identity = executableIdentity(before);
+    const assertUnchanged = () => {
+      if (
+        executableIdentity(fstatSync(fd, { bigint: true })) !== identity ||
+        executableIdentity(lstatSync(path, { bigint: true })) !== identity
+      )
+        throw new Error('Terminal executable identity changed');
+    };
+    const cached = executableDigests.get(path);
+    if (reuseUnchanged && cached?.identity === identity) {
+      assertUnchanged();
+      return cached.digest;
+    }
+    executableDigests.delete(path);
     const chunk = Buffer.alloc(64 * 1024);
     const hash = createHash('sha256');
     let position = 0;
@@ -163,7 +204,15 @@ export function terminalExecutableSha256(path: string): string {
         throw new Error('Terminal executable too large');
     }
     if (!position) throw new Error('Empty terminal executable');
-    return hash.digest('hex');
+    assertUnchanged();
+    if (BigInt(position) !== before.size) throw new Error('Terminal executable size changed');
+    const digest = hash.digest('hex');
+    if (executableDigests.size >= 32) {
+      const oldest = executableDigests.keys().next();
+      if (!oldest.done) executableDigests.delete(oldest.value);
+    }
+    executableDigests.set(path, { identity, digest });
+    return digest;
   } finally {
     closeSync(fd);
   }
@@ -198,7 +247,10 @@ export function managedCodexSettings(config: ManagedCodexConfig): string {
   ].join('\n');
 }
 
-export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
+export function validateManagedCodexConfig(
+  config: ManagedCodexConfig,
+  verifyExecutable = terminalExecutableSha256,
+): void {
   managedCodexConfigSchema.parse(config);
   validateTerminalModelSelection(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
@@ -229,7 +281,7 @@ export function validateManagedCodexConfig(config: ManagedCodexConfig): void {
     throw new Error('Managed Codex settings changed');
   for (const executable of [config.executable, config.node]) {
     const info = lstatSync(executable.path);
-    if (!(info.mode & 0o111) || terminalExecutableSha256(executable.path) !== executable.sha256)
+    if (!(info.mode & 0o111) || verifyExecutable(executable.path) !== executable.sha256)
       throw new Error('Terminal executable changed');
   }
 }

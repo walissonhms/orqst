@@ -7,6 +7,7 @@ export interface Config {
   dashboardDir: string;
   retentionDays: number;
   pollMs: number;
+  initialScanInBackground?: boolean;
   dev: boolean;
 }
 function integer(value: string | undefined, fallback: number, min: number, max: number): number {

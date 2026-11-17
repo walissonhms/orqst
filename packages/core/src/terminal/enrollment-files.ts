@@ -3,7 +3,7 @@ import { relative } from 'node:path';
 import { stableId } from '@orqst/shared';
 import type { TerminalEnrollmentInput } from '@orqst/protocol';
 import { terminalDigest } from './authority.js';
-import { terminalFile } from './codex-profile.js';
+import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
 import { terminalIdentity } from './identity.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
 import {
@@ -54,7 +54,9 @@ export function inspectTerminalEnrollment(
   existing: readonly TerminalEnrollmentFile[],
 ) {
   const before = inode(file);
-  const selected = inspectManagedTerminalFiles([file], 1)[0]!;
+  // Hash the candidate before any durable reservation. Later fence checks still reread its
+  // manifest, scope and model sources and revalidate the executable identities.
+  const selected = inspectManagedTerminalFiles([file], 1, terminalExecutableSha256)[0]!;
   const config = selected.config;
   if (
     selected.blocker ||

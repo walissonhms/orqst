@@ -10,7 +10,7 @@ import {
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
-import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
+import { inspectTerminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
 import type { TauriPreparationPorts } from './tauri-terminal-preparation.js';
 
 type Prepared = Omit<TerminalBatchItem, 'status'> & {
@@ -42,12 +42,18 @@ export async function prepareTauriBatch(
     items,
     previousLayout,
   });
-  const discovered = terminalPreparationCatalog(
-    { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },
+  const scope = {
+    action: 'catalog',
+    workspaceId: request.workspaceId,
+    featureId: request.featureId,
+  };
+  const discovered = inspectTerminalPreparationCatalog(
+    scope,
     trusted,
     context,
+    request.requests.map(({ provider }) => provider),
   );
-  if (discovered.catalog.catalogId !== request.catalogId) {
+  if (discovered.catalogId !== request.catalogId) {
     for (const item of items) item.reason = 'catalog_changed';
     return result();
   }
@@ -86,9 +92,9 @@ export async function prepareTauriBatch(
       continue;
     }
     const defaults =
-      discovered.catalog.providers
+      discovered.providers
         .find((entry) => entry.provider === input.provider)
-        ?.models.filter((entry) => entry.isDefault) ?? [];
+        ?.models?.options.filter((entry) => entry.selection.value === null) ?? [];
     const modelId = input.modelId ?? (defaults.length === 1 ? defaults[0]!.id : undefined);
     const selected =
       modelId === undefined
@@ -120,13 +126,14 @@ export async function prepareTauriBatch(
   const reviewed = () => current() && now() < expires;
   const revalidate = () => {
     if (!reviewed()) throw new Error('Batch context changed');
-    const fresh = terminalPreparationCatalog(
-      { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },
+    const fresh = inspectTerminalPreparationCatalog(
+      scope,
       trusted,
       context,
+      plans.map(({ provider }) => provider),
     );
     if (
-      fresh.catalog.catalogId !== request.catalogId ||
+      fresh.catalogId !== request.catalogId ||
       plans.some(({ provider, modelId }) => !resolveCatalogSelection(fresh, provider, modelId))
     )
       throw new Error('Batch catalog changed');

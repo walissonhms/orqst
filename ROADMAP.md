@@ -1,5 +1,9 @@
 # ORQST roadmap
 
+Native startup and terminal-opening performance is measured with [disposable host
+benchmarks](docs/development/native-opening-performance.md). Preview and real CLI
+acceptance are pending.
+
 ## Structured Studio agents — 2026-11-17
 
 The gated Studio pilot now has Codex and OpenCode providers with the same native

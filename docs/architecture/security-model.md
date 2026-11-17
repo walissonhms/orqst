@@ -1,5 +1,19 @@
 # Security model
 
+## Native startup and executable verification
+
+The bridge binds the loopback transport and applies retention before Desktop
+readiness. Early snapshots use the existing authenticated API and read-only
+observer. They report when the initial bounded history scan is running.
+
+Node discovery and repeated manifest checks can reuse a digest within one process
+if the securely opened descriptor and canonical path match the checked identity.
+Provisioning and enrollment hash the selected files before writing. The parent
+freshly verifies the pinned Node before forking it. The independent PTY host
+validates the full configuration and CLI digest before spawning. Native focus,
+one-use grants, owner checks and durable receipts still govern effects.
+See the [verification and source review](../development/native-opening-performance.md).
+
 ## Structured OpenCode Studio pilot
 
 The existing native review token binds the provider, reviewed executable digest,

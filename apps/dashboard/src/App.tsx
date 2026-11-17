@@ -722,12 +722,16 @@ export function App() {
   }, []);
   useEffect(() => nativeNavigation.current?.observe(snapshot), [snapshot]);
   function linkedDestination() {
-    if (isSessionLocation(location) && !snapshot) {
+    const id = sessionFromLocation(location, snapshot?.sessions.map((value) => value.id) ?? []);
+    if (
+      isSessionLocation(location) &&
+      !id &&
+      (!snapshot || (snapshot.diagnostics.scanning && snapshot.diagnostics.lastScan === null))
+    ) {
       pendingSessionLink.current = true;
       return;
     }
     pendingSessionLink.current = false;
-    const id = sessionFromLocation(location, snapshot?.sessions.map((value) => value.id) ?? []);
     const page = viewFromLocation(location) ?? view;
     if (id) {
       applySession(id);
@@ -1350,6 +1354,11 @@ export function App() {
               {t('shell.loading')}
             </p>
           )}
+          {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan === null && (
+            <p className="notice" role="status">
+              {t('syncing')}
+            </p>
+          )}
           {notice && !notificationOpen && (
             <div className="notice" role="status">
               {t(notice)}
@@ -1542,7 +1551,7 @@ export function App() {
                     <button className="button" onClick={() => setGuideOpen(true)}>
                       {t('observationGuide.title')}
                     </button>
-                    {snapshot?.diagnostics.scanning && (
+                    {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan !== null && (
                       <span className="connection">{t('syncing')}</span>
                     )}
                   </div>

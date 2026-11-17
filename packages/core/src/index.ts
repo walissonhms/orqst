@@ -19,6 +19,7 @@ export interface CoreOptions {
   sessionsDir: string;
   retentionDays: number;
   pollMs: number;
+  initialScanInBackground?: boolean;
 }
 
 export type CoreState =
@@ -191,6 +192,7 @@ export class ObserverCore {
         root: this.options.sessionsDir,
         store: this.currentStore,
         pollMs: this.options.pollMs,
+        initialScanInBackground: this.options.initialScanInBackground,
         onEvent: (event, live) => {
           for (const listener of this.listeners) {
             try {
@@ -216,7 +218,7 @@ export class ObserverCore {
     }
   }
 
-  /** Resolves after retention and the initial bounded observer scan/start attempt. */
+  /** Resolves after retention and observer startup, with optional background initial scan. */
   start(): Promise<void> {
     if (this.currentState === 'starting' || this.currentState === 'ready') return this.starting!;
     if (!['idle', 'initializing', 'initialized'].includes(this.currentState))

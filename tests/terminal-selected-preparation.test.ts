@@ -18,6 +18,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -27,7 +28,10 @@ import test, { after } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { build } from 'esbuild';
 import { Store } from '../packages/database/src/index.js';
-import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
+import {
+  cachedTerminalExecutableSha256,
+  terminalExecutableSha256,
+} from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
@@ -189,6 +193,37 @@ function fixture(openCodeCopies = false) {
     close: () => rmSync(root, { recursive: true, force: true }),
   };
 }
+
+test('executable digest reuse checks inode, restored mtimes, and current trust', () => {
+  const f = fixture();
+  const executable = join(f.root, 'reviewed');
+  const replacement = join(f.root, 'replacement');
+  const bytes = readFileSync(binary);
+  const changed = Buffer.from(bytes);
+  changed[changed.length - 1] = changed[changed.length - 1]! ^ 1;
+  const mtime = new Date('2026-01-01T00:00:00Z');
+  try {
+    writeFileSync(executable, bytes, { mode: 0o700 });
+    utimesSync(executable, mtime, mtime);
+    assert.equal(cachedTerminalExecutableSha256(executable), hash);
+    assert.equal(cachedTerminalExecutableSha256(executable), hash);
+    writeFileSync(executable, changed);
+    utimesSync(executable, mtime, mtime);
+    assert.notEqual(cachedTerminalExecutableSha256(executable), hash);
+    writeFileSync(replacement, bytes, { mode: 0o700 });
+    utimesSync(replacement, mtime, mtime);
+    renameSync(replacement, executable);
+    assert.equal(cachedTerminalExecutableSha256(executable), hash);
+    chmodSync(executable, 0o702);
+    assert.throws(() => cachedTerminalExecutableSha256(executable), /Untrusted terminal file/);
+    renameSync(executable, replacement);
+    chmodSync(replacement, 0o700);
+    symlinkSync(replacement, executable);
+    assert.throws(() => cachedTerminalExecutableSha256(executable), /Noncanonical file/);
+  } finally {
+    f.close();
+  }
+});
 
 // Inject concurrent change at the first post-plan current-context check, before the native latch.
 function beforeCommit(f: ReturnType<typeof fixture>, mutate: () => void) {
@@ -606,7 +641,7 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       );
       assert.equal(prepared.status, 'open');
       assert.equal(prepared.files.length, 2);
-      const configs = prepared.files.map(readInteractiveTerminalConfig);
+      const configs = prepared.files.map((file) => readInteractiveTerminalConfig(file));
       assert.equal(configs[0]!.version, sourceProvider === 'codex' ? 1 : 3);
       assert.equal(configs[1]!.version, sourceProvider === 'codex' ? 3 : 1);
       // The pair is reviewed once, and the reviewed configuration is the written manifest.

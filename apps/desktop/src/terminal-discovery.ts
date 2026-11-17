@@ -8,6 +8,7 @@ import {
 import { localCliPathDirectories } from '../../../packages/core/src/terminal/local-cli-path.js';
 import {
   terminalExecutableSha256,
+  cachedTerminalExecutableSha256,
   terminalFile,
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
@@ -25,24 +26,21 @@ export function discoverTerminalExecutable(
       : provider === 'claude'
         ? reviewedClaudeTuiBinary
         : reviewedProviderMcpBinaries.opencode;
-  const candidates = (
+  const candidates =
     discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)?.candidates ??
-    []
-  )
-    .filter(({ canonical }) => {
-      try {
-        return terminalExecutableSha256(canonical) === pin.sha256;
-      } catch {
-        return false;
-      }
-    })
-    .map(({ canonical }) => canonical);
-  // OpenCode installers can leave separate native copies of the exact reviewed bytes.
-  // Each candidate passed the same native-file/ownership/hash checks above; canonical
-  // paths alone do not establish distinct implementations. Keep the existing reviewed
-  // PATH precedence, disclose that exact path in native review, then revalidate it at Start.
-  // Raw discoverLocalClis evidence still retains every distinct canonical installation.
-  return provider === 'opencode' ? candidates.slice(0, 1) : candidates;
+    [];
+  const reviewed: string[] = [];
+  for (const { canonical } of candidates) {
+    try {
+      if (cachedTerminalExecutableSha256(canonical) !== pin.sha256) continue;
+    } catch {
+      continue;
+    }
+    reviewed.push(canonical);
+    // OpenCode already selects the first reviewed PATH candidate, even with separate installs.
+    if (provider === 'opencode') break;
+  }
+  return reviewed;
 }
 
 export function discoverTerminalNode(searchPath: string, home: string): string[] {

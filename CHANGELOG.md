@@ -1,5 +1,12 @@
 # Changelog
 
+## Native startup and terminal opening — 2026-11-17
+
+The native dashboard can load during the initial Codex history scan. Terminal
+preparation rechecks selected providers and reuses verified executable digests
+for unchanged file identities within the Node host. Final dispatch still hashes
+the files. See the [benchmark](docs/development/native-opening-performance.md).
+
 ## Structured OpenCode Studio pilot — 2026-11-17
 
 The native Feature panel can select the pinned OpenCode 2.2.5 alongside Codex.

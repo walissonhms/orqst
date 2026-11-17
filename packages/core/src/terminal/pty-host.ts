@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { constants } from 'node:os';
 import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
-import { terminalFile } from './codex-profile.js';
+import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
 import {
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
@@ -18,7 +18,7 @@ process.umask(0o077);
 if (!process.send || ![4, 5].includes(process.argv.length) || !/^v24\./.test(process.version))
   throw new Error('Private Node host only');
 async function start(): Promise<void> {
-  const config = readInteractiveTerminalConfig(process.argv[2]!);
+  const config = readInteractiveTerminalConfig(process.argv[2]!, terminalExecutableSha256);
   const mcp = process.argv[4]
     ? terminalMcpLaunchSchema.parse(JSON.parse(process.argv[4]))
     : undefined;

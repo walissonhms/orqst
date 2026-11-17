@@ -1,5 +1,10 @@
 # REST API
 
+During native Desktop startup, the existing snapshot endpoint can return retained
+and partially ingested history while `diagnostics.scanning` is true and
+`diagnostics.lastScan` is null. The latter records the first bounded scan pass
+after it finishes. Later passes can continue reading large source files.
+
 > **Current observation API.** The aggregate Analytics route below is additive;
 > existing observation routes and WebSocket messages retain their shapes. The
 > [lifecycle contracts](lifecycle-contracts.md) define future semantics,

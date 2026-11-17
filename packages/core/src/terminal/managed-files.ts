@@ -1,11 +1,16 @@
 import { terminalSlotLimit } from '@orqst/protocol';
 import { terminalIdentity } from './identity.js';
+import type { terminalExecutableSha256 } from './codex-profile.js';
 import { lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { readInteractiveTerminalConfig, interactiveProvider } from './interactive-profile.js';
 
 /** Inspect the complete selection before creating a Core, journal or admission marker. */
-export function inspectManagedTerminalFiles(files: readonly string[], limit?: number) {
+export function inspectManagedTerminalFiles(
+  files: readonly string[],
+  limit?: number,
+  verifyExecutable?: typeof terminalExecutableSha256,
+) {
   const capacity = terminalSlotLimit(limit);
   if (files.length < 1 || files.length > capacity)
     throw new Error('Terminal selection exceeds capacity');
@@ -14,7 +19,7 @@ export function inspectManagedTerminalFiles(files: readonly string[], limit?: nu
   const states: string[] = [];
   const sessions = new Set<string>();
   const selection = files.map((file) => {
-    const config = readInteractiveTerminalConfig(file);
+    const config = readInteractiveTerminalConfig(file, verifyExecutable);
     const { terminalId } = terminalIdentity(config);
     if (terminalIds.has(terminalId)) throw new Error('Duplicate terminal identity');
     terminalIds.add(terminalId);
