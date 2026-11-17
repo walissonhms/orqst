@@ -3,7 +3,8 @@
 ## Structured Studio agents — 2026-11-17
 
 The gated Studio pilot now has Codex and OpenCode providers with the same native
-confirmation and Core routing. Native packaging, permission sheets, real model
+confirmation and Core routing. OpenCode uses the user's existing login,
+global configuration and session storage. Native packaging, permission sheets, real model
 turns and A → B → A acceptance remain open. See the
 [OpenCode pilot](docs/design/structured-opencode-pilot.md).
 

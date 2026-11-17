@@ -33,7 +33,21 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         .args([script.as_os_str(), preferences.as_os_str()])
         .env_clear()
         .envs(std::env::vars_os().filter(|(key, _)| {
-            matches!(key.to_str(), Some("HOME" | "PATH" | "LANG" | "TMPDIR" | "CODEX_HOME" | "ORQST_STRUCTURED_AGENTS"))
+            matches!(
+                key.to_str(),
+                Some(
+                    "HOME"
+                        | "PATH"
+                        | "LANG"
+                        | "TMPDIR"
+                        | "CODEX_HOME"
+                        | "XDG_CONFIG_HOME"
+                        | "XDG_DATA_HOME"
+                        | "XDG_STATE_HOME"
+                        | "XDG_CACHE_HOME"
+                        | "ORQST_STRUCTURED_AGENTS"
+                )
+            )
         }))
         .spawn()?;
     let exited = Arc::new(Notify::new());

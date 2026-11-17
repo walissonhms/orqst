@@ -17,24 +17,53 @@ Feature fence and session pool. See the
   checks the authenticated server version and subscribes before creating the
   session. The random Basic Auth password stays in Core memory and the child
   launch environment. HTTP requests go directly to IPv4 loopback.
-- Each process gets a disposable HOME and XDG roots. It uses the selected workspace
-  as its project and starts independently of the user's existing OpenCode account,
-  data and background service. The pinned configuration disables updates, sharing,
-  external plugins, MCP, skills, project and Claude configuration discovery,
-  formatters, LSP and snapshots. The child environment omits OTLP endpoints and
-  headers, and Core emits no telemetry. Managed configuration takes precedence
-  in 2.2.5, so the pilot refuses startup when those platform paths exist.
+- The owner approved shared OpenCode storage on 2026-11-17. Each new process uses
+  the user's `HOME` and any absolute `XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
+  `XDG_STATE_HOME` and `XDG_CACHE_HOME`
+  supplied to Studio. OpenCode resolves its own default roots for unset XDG values.
+  It uses the selected workspace and inherits the user's global OpenCode configuration
+  and saved login. ORQST passes directory paths and lets the OpenCode process resolve
+  credentials. ORQST never reads, copies, links or logs credential files. Parent
+  API keys, OpenCode-specific path overrides and OTLP settings are excluded from the
+  launch environment. Core emits no telemetry.
+- Per-invocation settings disable updates, sharing, formatters, LSP, snapshots,
+  warming and scheduled prompts. Project configuration and Claude discovery stay off.
+  Startup refuses existing platform-managed configuration because it can override
+  the invocation settings. The environment also disables the OpenCode updater.
+- The invocation removes `opencode.config.mcp` to keep settings-file MCP servers
+  from registering, and denies `plugin.use`, `mcp.use`, `skill.use` and
+  `integration.connect` for all resources. In 2.2.5, policy decisions use the
+  first matching config document in load order, so a matching global user or
+  account-supplied allow can outrank the inline deny. An allowed external plugin
+  can execute during startup and register MCP servers, and an earlier `mcp.use`
+  allow can keep a server contributed outside `opencode.config.mcp` active. The
+  pinned CLI exposes no unconditional per-invocation external-plugin or MCP switch.
+  See [config order](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config.ts),
+  [plugin loading](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/plugin/module.ts),
+  [policy matching](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/managed-policy.ts)
+  and [MCP filtering](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config/plugin/policy.ts).
 - Only file read, edit, glob and grep are exposed by the pilot permission rules,
   with an `ask` rule for each. Reviewable requests include an exact tool source and
   bounded resources. An edit also needs a full reviewable patch for its resources.
   The host checks the live pending request again before submitting `once` or
   `reject`. OpenCode may invalidate other pending permissions when handling a
   rejection. Shell, external-directory and subagent permissions are denied by the
-  provider policy. This is an application policy boundary.
+  provider policy. OpenCode applies any matching saved project approvals from its
+  database after the session's `ask` rules. Those actions can run without a new
+  request, so ORQST's human review applies to permissions OpenCode actually emits.
+  See [permission evaluation](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/permission.ts).
 - Closing the panel or switching Features changes the view. Ending an owned
   session closes stdin, then escalates to TERM/KILL for the owned process group
-  if needed. The provider database and cache in the disposable home are removed
-  after exit. Startup or transport failure cannot adopt another server.
+  if needed. Exit stays unproved without a reported code or signal. Sessions appear
+  in normal OpenCode history. ORQST leaves the user's database and cache intact
+  on stop and failure. Startup or transport failure cannot adopt another server.
+- OpenCode owns writes to its shared database, including native migrations and
+  scheduler bookkeeping. The 2.2.5 server starts its scheduler in stdio mode.
+  The invocation setting disables new scheduled prompts, but the scheduler's
+  leader can wake an already queued scheduled prompt from the user's database
+  before it checks the flag for due work. The pilot sends inputs only to sessions
+  it creates. See [server boot](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/server/src/process.ts)
+  and [scheduler recovery](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/schedule.ts).
 
 ## Turns, recovery and delegation
 
@@ -85,14 +114,17 @@ pnpm exec tsx --test packages/core/test/structured-agents.test.ts packages/core/
 ORQST_STRUCTURED_REAL_OPENCODE=/absolute/path/to/opencode pnpm exec tsx --test packages/core/test/structured-opencode.test.ts
 ```
 
-The synthetic suite covers stream updates, a 401 requirement, exact one-use
-approval and rejection, interruption, recovered and unproved outcomes, scope
-denials, process-group cleanup and same-provider and mixed delegation. The
-optional smoke verifies the local binary digest, loopback listener, 401,
-authenticated version, live SSE handshake, session creation, inbox admission
-with `resume:false`, and a log watermark. It also verifies an empty delivered
-history and normal exit after EOF with disposable storage. It uses neither
-login nor a model turn.
+The synthetic suite covers inherited and default directory settings, exclusion of
+secret and telemetry variables, preservation of provider files, stream updates,
+a 401 requirement, exact one-use approval and rejection, interruption, recovered
+and unproved outcomes, scope denials, process-group cleanup and delegation between
+both providers. The optional smoke inherits the supplied shell environment.
+It verifies the pinned binary, loopback listener, 401, authenticated version,
+live SSE handshake, empty session history and a log watermark. It submits no
+prompt and checks normal EOF exit and persistence by reopening the session with
+a second process. The smoke leaves an empty session in the selected OpenCode
+database. Supply test-owned `HOME` and XDG roots when running the smoke without
+accessing a real user's data or scheduled work.
 
 Native acceptance still requires an isolated Tauri build with the desktop's
 flag on and off, native review cancel and confirm, a real model turn, provider

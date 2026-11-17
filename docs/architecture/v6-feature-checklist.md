@@ -4,7 +4,8 @@
 
 - [x] Provider selection in the existing active-Feature panel and native gate.
 - [x] Synthetic OpenCode stream, permission, recovery, cleanup and mixed-provider delegation.
-- [x] Isolated OpenCode 2.2.5 startup and EOF smoke without a model turn or login.
+- [x] OpenCode 2.2.5 inherited HOME/XDG launch and persistent session history.
+- [x] Optional pinned startup, EOF and history smoke without sending a model turn.
 - [ ] Native packaging, approval review, real model turns and mixed-provider acceptance.
 
 See the [implementation and verification record](../design/structured-opencode-pilot.md).

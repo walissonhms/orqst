@@ -9,7 +9,8 @@ and same-Feature delegations. OpenCode's session ID comes from the provider.
 Core generates each input ID and uses it only in that owned session. A matched inbox delivery and
 an execution outcome drive terminal turn state. A reconciled outcome also
 requires a fresh busy/idle pair and matching delivered input from provider
-history. Unproved loss is `unknown`. See the
+history. Unproved turn loss is `unknown`. The process `exit` field stays `null`
+without an observed exit code or signal. See the
 [OpenCode contract](../design/structured-opencode-pilot.md).
 
 The ORQST protocol is the provider-independent contract between adapters, the

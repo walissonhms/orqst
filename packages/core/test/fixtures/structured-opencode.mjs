@@ -15,11 +15,18 @@ assert.deepEqual(process.argv.slice(2), [
 assert.match(process.env.OPENCODE_PASSWORD, /^[a-zA-Z0-9_-]{43}$/);
 assert.equal(process.env.OPENCODE_SERVER_PASSWORD, undefined);
 assert.equal(process.env.OTEL_EXPORTER_OTLP_ENDPOINT, undefined);
+assert.equal(process.env.OTEL_EXPORTER_OTLP_HEADERS, undefined);
+assert.equal(process.env.OPENCODE_CONFIG_DIR, undefined);
+assert.equal(process.env.OPENCODE_DB, undefined);
+assert.equal(process.env.OPENAI_API_KEY, undefined);
 assert.equal(process.env.OPENCODE_DISABLE_AUTOUPDATE, '1');
 assert.equal(process.env.OPENCODE_DISABLE_PROJECT_CONFIG, '1');
-assert.ok(process.env.XDG_DATA_HOME.startsWith(process.env.HOME + '/'));
 const config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
 assert.equal(config.share, 'disabled');
+assert.equal(config.update, 'disable');
+assert.equal(config.warming, false);
+assert.equal(config.experimental.schedules, false);
+assert.deepEqual(config.plugins, ['-opencode.config.mcp']);
 for (const action of ['plugin.use', 'mcp.use'])
   assert.ok(config.policies.some((policy) => policy.action === action && policy.effect === 'deny'));
 
@@ -30,7 +37,16 @@ const messages = [];
 const time = {};
 let outcome;
 let tick = 0;
-const trace = { prompts: [], returned: [], decisions: [], replays: 0, child: null };
+const { HOME, TMPDIR, XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME, XDG_CACHE_HOME } =
+  process.env;
+const trace = {
+  prompts: [],
+  returned: [],
+  decisions: [],
+  replays: 0,
+  child: null,
+  directories: { HOME, TMPDIR, XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME, XDG_CACHE_HOME },
+};
 let allowed;
 let activeInput;
 

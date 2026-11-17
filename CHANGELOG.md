@@ -4,8 +4,9 @@
 
 The native Feature panel can select the pinned OpenCode 2.2.5 alongside Codex.
 Core owns its private authenticated server, streams turns and permission requests
-to Studio, and routes one-use delegation across providers. Synthetic protocol
-coverage and the disposable-HOME startup smoke are described in the
+to Studio, and routes one-use delegation across providers. OpenCode resolves its
+existing login from the user's HOME and XDG roots, and pilot sessions persist in
+normal OpenCode history. See the updated controls and smoke in the
 [pilot record](docs/design/structured-opencode-pilot.md).
 
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)

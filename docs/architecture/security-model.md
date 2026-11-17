@@ -4,9 +4,11 @@
 
 The existing native review token binds the provider, reviewed executable digest,
 Feature and exact operation. Core controls the child, a private loopback HTTP
-client and the one-use grant. Fresh HOME/XDG roots and explicit policies scope
-provider startup. Each permission reply rechecks its pending request and is
-limited to once or reject. See the
+client and the one-use grant. OpenCode resolves its existing login and global
+settings using the user's HOME and XDG directories. The pilot applies inline
+startup controls. Each permission reply rechecks its pending request and is limited
+to once or reject. OpenCode's saved project approvals and higher-priority user or
+account policies affect what the provider can enforce. See the
 [provider controls and limits](../design/structured-opencode-pilot.md#ownership-and-policy).
 
 ## Structured Codex Studio pilot

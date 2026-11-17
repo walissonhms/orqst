@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { lstatSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { lstatSync } from 'node:fs';
 import { request, type IncomingMessage } from 'node:http';
-import { tmpdir, userInfo } from 'node:os';
+import { userInfo } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { BoundedLineSplitter } from '../managed-codex/line-splitter.js';
@@ -23,6 +23,9 @@ const config = JSON.stringify({
   lsp: false,
   snapshots: false,
   update: 'disable',
+  warming: false,
+  experimental: { schedules: false },
+  plugins: ['-opencode.config.mcp'],
   permissions: openCodePermissions,
   policies: ['mcp.use', 'plugin.use', 'skill.use', 'integration.connect'].map((action) => ({
     action,
@@ -34,7 +37,28 @@ const config = JSON.stringify({
 export interface OpenCodeLaunch {
   executable: string;
   cwd: string;
-  env: Record<string, string>;
+  env: NodeJS.ProcessEnv;
+}
+
+const userDirectories = [
+  'TMPDIR',
+  'XDG_CONFIG_HOME',
+  'XDG_DATA_HOME',
+  'XDG_STATE_HOME',
+  'XDG_CACHE_HOME',
+] as const;
+
+function userEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const result: Record<string, string> = {
+    HOME: env.HOME && isAbsolute(env.HOME) ? env.HOME : userInfo().homedir,
+    PATH: env.PATH ?? '/usr/bin:/bin',
+    LANG: env.LANG ?? 'en_US.UTF-8',
+  };
+  for (const key of userDirectories) {
+    const value = env[key];
+    if (value && isAbsolute(value)) result[key] = value;
+  }
+  return result;
 }
 
 function verifyManagedConfigAbsent(): void {
@@ -71,44 +95,28 @@ export class OwnedOpenCode {
     if (!isAbsolute(executable) || !isAbsolute(cwd) || process.platform === 'win32')
       throw new Error('Structured OpenCode requires absolute paths and POSIX groups');
     verifyManagedConfigAbsent();
-    const home = mkdtempSync(join(tmpdir(), 'orqst-structured-opencode-'));
     const password = randomBytes(32).toString('base64url');
     this.auth = 'Basic ' + Buffer.from('opencode:' + password).toString('base64');
-    try {
-      mkdirSync(join(home, 'tmp'), { mode: 0o700 });
-
-      const child = spawn(executable, openCodeArgs, {
-        cwd,
-        env: {
-          HOME: home,
-          PATH: env.PATH ?? '/usr/bin:/bin',
-          LANG: env.LANG ?? 'en_US.UTF-8',
-          TMPDIR: join(home, 'tmp'),
-          XDG_CONFIG_HOME: join(home, 'config'),
-          XDG_DATA_HOME: join(home, 'data'),
-          XDG_STATE_HOME: join(home, 'state'),
-          XDG_CACHE_HOME: join(home, 'cache'),
-          OPENCODE_PASSWORD: password,
-          OPENCODE_CLIENT: 'orqst',
-          OPENCODE_CONFIG_CONTENT: config,
-          OPENCODE_DISABLE_AUTOUPDATE: '1',
-          OPENCODE_DISABLE_PROJECT_CONFIG: '1',
-          OPENCODE_DISABLE_CLAUDE_CODE: '1',
-          OPENCODE_DISABLE_FILEWATCHER: '1',
-          OPENCODE_DISABLE_MODELS_FETCH: '1',
-          OPENCODE_DISABLE_FFF: '1',
-        },
-        stdio: ['pipe', 'pipe', 'ignore'],
-        detached: true,
-      });
-      this.process = processTransport(child, 1200);
-    } catch (error) {
-      rmSync(home, { recursive: true, force: true });
-      throw error;
-    }
+    const child = spawn(executable, openCodeArgs, {
+      cwd,
+      env: {
+        ...userEnvironment(env),
+        OPENCODE_PASSWORD: password,
+        OPENCODE_CLIENT: 'orqst',
+        OPENCODE_CONFIG_CONTENT: config,
+        OPENCODE_DISABLE_AUTOUPDATE: '1',
+        OPENCODE_DISABLE_PROJECT_CONFIG: '1',
+        OPENCODE_DISABLE_CLAUDE_CODE: '1',
+        OPENCODE_DISABLE_FILEWATCHER: '1',
+        OPENCODE_DISABLE_MODELS_FETCH: '1',
+        OPENCODE_DISABLE_FFF: '1',
+      },
+      stdio: ['pipe', 'pipe', 'ignore'],
+      detached: true,
+    });
+    this.process = processTransport(child, 1200);
     this.exited = this.process.exited.then((exit) => {
       this.lifetime.abort();
-      rmSync(home, { recursive: true, force: true });
       return exit;
     });
     this.endpoint = new Promise<number>((resolve, reject) => {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, type TestContext } from 'node:test';
@@ -17,7 +17,17 @@ const scope = { workspaceId: 'a'.repeat(64), featureId: randomUUID() };
 const other = { ...scope, featureId: randomUUID() };
 const fixture = fileURLToPath(new URL('./fixtures/structured-opencode.mjs', import.meta.url));
 const codexFixture = fileURLToPath(new URL('./fixtures/structured-codex.mjs', import.meta.url));
-const env = { PATH: '/usr/bin:/bin', OPENCODE_SERVER_PASSWORD: 'synthetic-not-forwarded' };
+const env = {
+  PATH: '/usr/bin:/bin',
+  OPENCODE_PASSWORD: 'synthetic-not-forwarded',
+  OPENCODE_SERVER_PASSWORD: 'synthetic-not-forwarded',
+  OPENCODE_CONFIG_CONTENT: '{}',
+  OPENCODE_CONFIG_DIR: '/synthetic/config-override',
+  OPENCODE_DB: '/synthetic/db-override',
+  OPENAI_API_KEY: 'synthetic-not-forwarded',
+  OTEL_EXPORTER_OTLP_ENDPOINT: 'https://example.invalid',
+  OTEL_EXPORTER_OTLP_HEADERS: 'synthetic-not-forwarded',
+};
 
 async function until(check: () => boolean) {
   const deadline = Date.now() + 4000;
@@ -30,6 +40,14 @@ async function until(check: () => boolean) {
 async function harness(t: TestContext, binary?: string) {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'orqst-test-opencode-')));
   const executable = binary ?? join(cwd, 'fake-opencode');
+  const directories = {
+    HOME: join(cwd, 'home'),
+    TMPDIR: join(cwd, 'temp'),
+    XDG_CONFIG_HOME: join(cwd, 'config'),
+    XDG_DATA_HOME: join(cwd, 'data'),
+    XDG_STATE_HOME: join(cwd, 'state'),
+    XDG_CACHE_HOME: join(cwd, 'cache'),
+  };
   if (!binary) {
     await writeFile(
       executable,
@@ -41,7 +59,12 @@ async function harness(t: TestContext, binary?: string) {
       { mode: 0o700 },
     );
   }
-  const launch = { executable, cwd, env, provider: 'opencode' as const };
+  const launch = {
+    executable,
+    cwd,
+    env: binary ? process.env : { ...env, ...directories },
+    provider: 'opencode' as const,
+  };
   const servers: OwnedOpenCode[] = [];
   const service = new StructuredAgents(
     () =>
@@ -89,6 +112,8 @@ async function harness(t: TestContext, binary?: string) {
   return {
     service,
     servers,
+    launch,
+    directories,
     start,
     startCodex,
     session: (id: string) =>
@@ -102,8 +127,46 @@ type Trace = {
   decisions: string[];
   replays: number;
   child: number;
+  directories: Record<string, string>;
 };
 const trace = async (server: OwnedOpenCode) => (await server.json('/synthetic-trace')) as Trace;
+
+test('synthetic OpenCode inherits the supplied roots and preserves provider files on stop', async (t) => {
+  const { directories, service, session, servers, start } = await harness(t);
+  const files = [directories.XDG_DATA_HOME, directories.XDG_CACHE_HOME].map((root) =>
+    join(root, 'provider-data-sentinel'),
+  );
+  for (const root of Object.values(directories)) await mkdir(root);
+  for (const path of files) await writeFile(path, 'existing provider data');
+  const sessionId = await start('OpenCode with user storage');
+  assert.deepEqual((await trace(servers[0]!)).directories, directories);
+  await service.apply(scope, { action: 'stop', sessionId });
+  assert.deepEqual(session(sessionId).exit, { code: 0, signal: null });
+  for (const path of files) assert.equal(await readFile(path, 'utf8'), 'existing provider data');
+});
+
+test('synthetic OpenCode uses native XDG defaults for unset or nonabsolute overrides', async (t) => {
+  const { launch, servers, start, directories } = await harness(t);
+  launch.env = { ...env, HOME: directories.HOME, XDG_CONFIG_HOME: '', XDG_DATA_HOME: 'relative' };
+  await start('OpenCode with XDG defaults');
+  assert.deepEqual((await trace(servers[0]!)).directories, { HOME: directories.HOME });
+});
+
+test('OpenCode spawn failure leaves the exit unproved and preserves provider files', async (t) => {
+  const { launch, service, directories } = await harness(t);
+  await mkdir(directories.XDG_DATA_HOME);
+  const path = join(directories.XDG_DATA_HOME, 'provider-data-sentinel');
+  await writeFile(path, 'existing provider data');
+  launch.executable = join(launch.cwd, 'missing-opencode');
+  await assert.rejects(
+    service.apply(scope, { action: 'start', provider: 'opencode', label: 'Spawn failure' }, launch),
+    /OpenCode session unavailable/,
+  );
+  const [failed] = service.snapshot(scope).sessions;
+  assert.equal(failed?.lifecycle, 'failed');
+  assert.equal(failed?.exit, null);
+  assert.equal(await readFile(path, 'utf8'), 'existing provider data');
+});
 
 test(
   'synthetic OpenCode denies access without Basic Auth and projects prompts, one-use decisions, and interruption',
@@ -264,42 +327,20 @@ test(
 
 const real = process.env.ORQST_STRUCTURED_REAL_OPENCODE;
 test(
-  'pinned OpenCode smoke with disposable HOME and no login or model turn',
+  'pinned OpenCode smoke with inherited HOME/XDG and no model turn',
   { skip: !real, timeout: 30_000 },
   async (t) => {
     const executable = await realpath(real!);
     assert.equal(terminalExecutableSha256(executable), reviewedProviderMcpBinaries.opencode.sha256);
-    const { service, session, servers, start } = await harness(t, executable);
-    const sessionId = await start('OpenCode isolated smoke');
+    const { launch, service, session, servers, start } = await harness(t, executable);
+    const sessionId = await start('OpenCode storage smoke');
     const server = servers[0]!;
     assert.equal(session(sessionId).lifecycle, 'ready');
     const threadId = encodeURIComponent(session(sessionId).threadId!);
     const path = '/api/session/' + threadId;
-    const inputId = 'msg_' + randomUUID();
     const feed = server.events('/api/event', AbortSignal.timeout(8000));
     try {
       assert.equal(((await feed.next()).value as { type?: string }).type, 'server.connected');
-      await server.json(path + '/synthetic', {
-        id: inputId,
-        text: 'Synthetic inbox entry for the startup smoke',
-        delivery: 'queue',
-        resume: false,
-      });
-      let enqueued = false;
-      for await (const raw of feed) {
-        const event = raw as {
-          type: string;
-          data: { sessionID?: string; inboxID?: string };
-          durable?: { seq: number };
-        };
-        if (event.type === 'session.inbox.enqueued' && event.data.inboxID === inputId) {
-          assert.equal(event.data.sessionID, threadId);
-          assert.equal(typeof event.durable?.seq, 'number');
-          enqueued = true;
-          break;
-        }
-      }
-      assert.equal(enqueued, true);
     } finally {
       await feed.return(undefined);
     }
@@ -322,5 +363,14 @@ test(
     await service.close();
     assert.deepEqual(session(sessionId).exit, { code: 0, signal: null });
     assert.throws(() => process.kill(server.pid!, 0), { code: 'ESRCH' });
+
+    const reopened = new OwnedOpenCode(launch);
+    try {
+      await reopened.verify();
+      const stored = (await reopened.json(path)) as { data: { id: string } };
+      assert.equal(stored.data.id, session(sessionId).threadId);
+    } finally {
+      assert.deepEqual(await reopened.terminate(), { code: 0, signal: null });
+    }
   },
 );

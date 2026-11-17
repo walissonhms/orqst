@@ -282,6 +282,10 @@ export class StructuredOpenCodeSession extends StructuredProjection {
     }
     this.stopPromise = this.server.terminate().then(
       (exit) => {
+        if (exit.code === null && exit.signal === null) {
+          this.state.lifecycle = 'failed';
+          return;
+        }
         this.state.exit = exit;
         this.state.lifecycle = failed ? 'failed' : 'exited';
       },

@@ -60,7 +60,7 @@ function installExitHook(): void {
 export function spawnCodexAppServer(options: {
   executable: string;
   cwd: string;
-  env: Record<string, string>;
+  env: NodeJS.ProcessEnv;
 }): StructuredProcessTransport {
   if (!isAbsolute(options.executable) || !isAbsolute(options.cwd))
     throw new Error('Structured Codex requires absolute executable and project paths');

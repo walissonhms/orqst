@@ -105,7 +105,7 @@ async function run(): Promise<void> {
         ? {
             executable: executable(provider),
             cwd: project,
-            env: structuredCodexEnvironment(process.env),
+            env: provider === 'opencode' ? process.env : structuredCodexEnvironment(process.env),
             provider,
           }
         : undefined;
@@ -121,8 +121,9 @@ async function run(): Promise<void> {
               ...(provider === 'opencode'
                 ? {
                     arguments: openCodeArgs,
-                    storage: 'disposable home without existing login',
-                    approvalPolicy: 'ask for read, edit, glob and grep; deny other tools',
+                    storage: 'existing OpenCode login, configuration and local session history',
+                    approvalPolicy:
+                      'Ask for read, edit, glob and grep unless OpenCode has a matching saved approval. Deny other tools.',
                   }
                 : { sandbox: 'read-only', approvalPolicy: 'on-request' }),
             }

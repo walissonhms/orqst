@@ -1148,7 +1148,9 @@ start the built bridge with `node --env-file=.env dist/bridge.mjs`.
 Invalid numeric values fail startup instead of silently falling back.
 
 The native macOS Studio can opt into structured Codex and OpenCode sessions with
-`ORQST_STRUCTURED_AGENTS=1`. See the [Codex workflow](docs/design/structured-codex-pilot.md)
+`ORQST_STRUCTURED_AGENTS=1`. OpenCode uses the user's saved login and global
+configuration, and pilot sessions appear in normal OpenCode history.
+See the [Codex workflow](docs/design/structured-codex-pilot.md)
 and [OpenCode workflow and verification limits](docs/design/structured-opencode-pilot.md).
 
 ## Data and privacy
