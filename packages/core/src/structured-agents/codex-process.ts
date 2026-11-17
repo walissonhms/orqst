@@ -95,7 +95,7 @@ export function spawnCodexAppServer(options: {
 }
 
 /** Exported for synthetic tests that spawn a labeled fake app-server instead of Codex. */
-export function processTransport(child: ChildProcess): StructuredProcessTransport {
+export function processTransport(child: ChildProcess, eofGraceMs = 0): StructuredProcessTransport {
   let exitFacts: StructuredProcessExit | undefined;
   let listening: { data(chunk: Uint8Array): void; lost(): void } | undefined;
   let detached = false;
@@ -156,9 +156,13 @@ export function processTransport(child: ChildProcess): StructuredProcessTranspor
       if (exitFacts) return exited;
       if (!termination) {
         child.stdin?.end();
-        groupSignal('SIGTERM');
-        const timer = setTimeout(() => groupSignal('SIGKILL'), graceMs);
-        termination = exited.finally(() => clearTimeout(timer));
+        const term = eofGraceMs ? setTimeout(() => groupSignal('SIGTERM'), eofGraceMs) : undefined;
+        if (!term) groupSignal('SIGTERM');
+        const timer = setTimeout(() => groupSignal('SIGKILL'), eofGraceMs + graceMs);
+        termination = exited.finally(() => {
+          clearTimeout(term);
+          clearTimeout(timer);
+        });
       }
       return termination;
     },

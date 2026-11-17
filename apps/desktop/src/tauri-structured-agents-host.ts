@@ -5,6 +5,7 @@ import {
   structuredAgentsRequestSchema,
   structuredAgentsReviewSchema,
   structuredAgentsScopeSchema,
+  type StructuredProvider,
 } from '@orqst/protocol';
 import { redact } from '@orqst/shared';
 import { terminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
@@ -12,11 +13,16 @@ import { discoverLocalClis } from '../../../packages/core/src/terminal/local-cli
 import { resolveTerminalPreparationContext } from '../../../packages/core/src/terminal/preparation-context.js';
 import { BoundedLineSplitter } from '../../../packages/core/src/managed-codex/line-splitter.js';
 import { structuredCodexEnvironment } from '../../../packages/core/src/structured-agents/codex-process.js';
+import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
+import { openCodeArgs } from '../../../packages/core/src/structured-agents/opencode-process.js';
 import { StructuredAgents } from '../../../packages/core/src/structured-agents/service.js';
 
 const reviewed = {
-  version: '0.169.0',
-  sha256: '739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002',
+  codex: {
+    version: '0.169.0',
+    sha256: '739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002',
+  },
+  opencode: reviewedProviderMcpBinaries.opencode,
 };
 const correlation = z.object({ id: z.number().int().safe().positive() });
 const envelope = z.strictObject({
@@ -27,18 +33,18 @@ const envelope = z.strictObject({
   token: z.uuid().optional(),
 });
 
-function executable(): string {
+function executable(provider: StructuredProvider): string {
   const candidates = discoverLocalClis(process.env.PATH ?? '', process.env.HOME).find(
-    ({ provider }) => provider === 'codex',
+    (entry) => entry.provider === provider,
   )!.candidates;
   for (const { canonical } of candidates) {
     try {
-      if (terminalExecutableSha256(canonical) === reviewed.sha256) return canonical;
+      if (terminalExecutableSha256(canonical) === reviewed[provider].sha256) return canonical;
     } catch {
       // Inaccessible and unreviewed executables cannot be used.
     }
   }
-  throw new Error('Reviewed Codex unavailable');
+  throw new Error('Reviewed structured executable unavailable');
 }
 
 async function run(): Promise<void> {
@@ -94,21 +100,31 @@ async function run(): Promise<void> {
         return send(id, { status: 'denied' });
       const action = service.review(scope, request);
       if (!action) return send(id, { status: 'denied' });
-      const launch =
-        request.action === 'start'
-          ? { executable: executable(), cwd: project, env: structuredCodexEnvironment(process.env) }
-          : undefined;
+      const provider = request.action === 'start' ? (request.provider ?? 'codex') : undefined;
+      const launch = provider
+        ? {
+            executable: executable(provider),
+            cwd: project,
+            env: structuredCodexEnvironment(process.env),
+            provider,
+          }
+        : undefined;
       const review = {
         feature: feature.name,
         featureId: scope.featureId,
-        ...(launch
+        ...(launch && provider
           ? {
               project,
               executable: launch.executable,
-              codexVersion: reviewed.version,
-              sha256: reviewed.sha256,
-              sandbox: 'read-only',
-              approvalPolicy: 'on-request',
+              version: reviewed[provider].version,
+              sha256: reviewed[provider].sha256,
+              ...(provider === 'opencode'
+                ? {
+                    arguments: openCodeArgs,
+                    storage: 'disposable home without existing login',
+                    approvalPolicy: 'ask for read, edit, glob and grep; deny other tools',
+                  }
+                : { sandbox: 'read-only', approvalPolicy: 'on-request' }),
             }
           : {}),
         ...action,

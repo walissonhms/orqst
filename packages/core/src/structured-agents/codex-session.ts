@@ -12,6 +12,12 @@ import {
 } from '@orqst/protocol';
 import { CodexChannel, type CodexNotification } from '../managed-codex/channel.js';
 import { delegationTool, dynamicCallSchema } from '../managed-codex/dynamic-tools.js';
+import {
+  display,
+  StructuredProjection,
+  type DelegationResult,
+  type StructuredDelegate,
+} from './session.js';
 import type { StructuredProcessTransport } from './codex-process.js';
 
 const id = z.string().min(1).max(200);
@@ -44,51 +50,22 @@ interface Active {
   report?: (turn: StructuredTurn, result?: string) => void;
 }
 
-interface DelegationResult {
-  success: boolean;
-  text: string;
-  receipt?(received: boolean): void;
-}
-
-export type StructuredDelegate = (
-  call: z.infer<typeof dynamicCallSchema>,
-) => Promise<DelegationResult>;
-
-function display(text: string, max: number = limits.itemText): string {
-  return redact(text).slice(0, max);
-}
-
 function status(value: z.infer<typeof commandStatus>): NonNullable<StructuredItem['status']> {
   return value === 'inProgress' ? 'in_progress' : value;
 }
 
-export class StructuredCodexSession {
+export class StructuredCodexSession extends StructuredProjection {
   private readonly channel: CodexChannel;
   private active?: Active;
   private approvals = new Map<string, { approval: StructuredApproval; rpcId: string | number }>();
-  private itemBytes = 0;
   private stopPromise?: Promise<void>;
-  private readonly state: StructuredSession;
 
   constructor(
     scope: Pick<StructuredSession, 'featureId' | 'workspaceId' | 'label'>,
     private readonly process: StructuredProcessTransport,
     private readonly delegate: StructuredDelegate,
   ) {
-    this.state = {
-      ...scope,
-      sessionId: randomUUID(),
-      provider: 'codex',
-      lifecycle: 'starting',
-      reportedModel: null,
-      threadId: null,
-      items: [],
-      droppedItems: 0,
-      approvals: [],
-      turn: null,
-      busy: false,
-      exit: null,
-    };
+    super(scope, 'codex');
     this.channel = new CodexChannel(process, true, {
       answerServerRequests: true,
       lineBytes: 1024 * 1024,
@@ -100,16 +77,8 @@ export class StructuredCodexSession {
     });
   }
 
-  get id() {
-    return this.state.sessionId;
-  }
-
   get ready() {
     return this.state.lifecycle === 'ready' && this.channel.available && !this.active;
-  }
-
-  get lifecycle() {
-    return this.state.lifecycle;
   }
 
   snapshot(): StructuredSession {
@@ -157,7 +126,7 @@ export class StructuredCodexSession {
     text: string,
     origin: StructuredTurn['origin'],
     report?: Active['report'],
-    parentTurnId?: string,
+    { parentTurnId }: { parentTurnId?: string } = {},
   ): Promise<void> {
     if (!this.ready || !text.trim() || Buffer.byteLength(text) > limits.turnText * 4)
       throw new Error('Codex turn unavailable');
@@ -274,20 +243,6 @@ export class StructuredCodexSession {
     if (active.turn) active.turn.state = result;
     for (const call of active.calls.values()) call?.receipt?.(false);
     this.report(active);
-  }
-
-  private put(item: StructuredItem): void {
-    const items = this.state.items;
-    const index = items.findIndex((old) => old.id === item.id && old.turnId === item.turnId);
-    if (index >= 0) {
-      this.itemBytes -= Buffer.byteLength(JSON.stringify(items[index]));
-      items[index] = item;
-    } else items.push(item);
-    this.itemBytes += Buffer.byteLength(JSON.stringify(item));
-    while (items.length > limits.items || this.itemBytes > 32 * 1024) {
-      this.itemBytes -= Buffer.byteLength(JSON.stringify(items.shift()));
-      this.state.droppedItems++;
-    }
   }
 
   private receive(event: CodexNotification): void {

@@ -7,6 +7,8 @@ import {
   type StructuredAgentsRequest,
   type StructuredAgentsScope,
   type StructuredAgentsSnapshot,
+  type StructuredProvider,
+  structuredProviderSchema,
 } from '@orqst/protocol';
 import { Modal } from './Modal.js';
 
@@ -23,6 +25,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
   const [sessionId, setSessionId] = useState('');
   const [workerId, setWorkerId] = useState('');
   const [label, setLabel] = useState('');
+  const [provider, setProvider] = useState<StructuredProvider>('codex');
   const [text, setText] = useState('');
   const [task, setTask] = useState('');
   const [notice, setNotice] = useState<StructuredAgentsReply['status']>();
@@ -67,11 +70,16 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
       if (response.status === 'ok' && request.action === 'turn') setText('');
       if (response.status === 'ok' && request.action === 'grant') {
         setText(
-          t('structuredAgents.delegatePrompt', {
-            target: request.targetSessionId,
-            task: request.task,
-            interpolation: { escapeValue: false },
-          }),
+          t(
+            session?.provider === 'opencode'
+              ? 'structuredAgents.openCodeDelegatePrompt'
+              : 'structuredAgents.delegatePrompt',
+            {
+              target: request.targetSessionId,
+              task: request.task,
+              interpolation: { escapeValue: false },
+            },
+          ),
         );
         setTask('');
       }
@@ -115,9 +123,22 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          void submit({ action: 'start', label: label.trim() });
+          void submit({ action: 'start', label: label.trim(), provider });
         }}
       >
+        <label>
+          {t('structuredAgents.provider')}
+          <select
+            value={provider}
+            onChange={(event) => setProvider(structuredProviderSchema.parse(event.target.value))}
+          >
+            {structuredProviderSchema.options.map((entry) => (
+              <option value={entry} key={entry}>
+                {t(`structuredAgents.provider_${entry}`)}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           {t('structuredAgents.sessionName')}
           <input
@@ -145,7 +166,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
               >
                 {snapshot?.sessions.map((entry) => (
                   <option key={entry.sessionId} value={entry.sessionId}>
-                    {entry.label}
+                    {entry.label} · {t(`structuredAgents.provider_${entry.provider}`)}
                   </option>
                 ))}
               </select>
@@ -250,7 +271,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
                         <option value="">{t('features.choose')}</option>
                         {workers.map((entry) => (
                           <option key={entry.sessionId} value={entry.sessionId}>
-                            {entry.label}
+                            {entry.label} · {t(`structuredAgents.provider_${entry.provider}`)}
                           </option>
                         ))}
                       </select>

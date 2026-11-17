@@ -12,6 +12,9 @@ export const structuredAgentsLimits = Object.freeze({
 
 const uuid = z.uuid();
 const id = z.string().min(1).max(200);
+export const structuredProviderSchema = z.enum(['codex', 'opencode']);
+export type StructuredProvider = z.infer<typeof structuredProviderSchema>;
+
 const decision = z.enum(['accept', 'decline', 'cancel']);
 export type StructuredDecision = z.infer<typeof decision>;
 
@@ -26,7 +29,7 @@ export interface StructuredItem {
 export interface StructuredApproval {
   approvalId: string;
   turnId: string;
-  kind: 'command' | 'file_change' | 'unsupported';
+  kind: 'command' | 'file_change' | 'permission' | 'unsupported';
   detail: string;
   decisions: StructuredDecision[];
   state: 'pending' | 'answered' | 'resolved' | 'unavailable';
@@ -40,7 +43,7 @@ export interface StructuredTurn {
 
 export interface StructuredSession {
   sessionId: string;
-  provider: 'codex';
+  provider: StructuredProvider;
   workspaceId: string;
   featureId: string;
   label: string;
@@ -81,6 +84,7 @@ export const structuredAgentsRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
   z.strictObject({
     action: z.literal('start'),
+    provider: structuredProviderSchema.optional(),
     label: z.string().trim().min(1).max(structuredAgentsLimits.label),
   }),
   z.strictObject({

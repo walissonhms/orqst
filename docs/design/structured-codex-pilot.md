@@ -1,5 +1,7 @@
 # Structured Codex Studio pilot
 
+The same Studio panel now includes the [OpenCode 2.2.5 increment](structured-opencode-pilot.md).
+
 ## Reference research
 
 | Candidate                     | Pinned source and files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Decision                                                                                                                                                                                                                             |
@@ -16,7 +18,7 @@ No upstream source, assets or dependencies were incorporated.
 
 1. Launch the Apple Silicon macOS Tauri app with `ORQST_STRUCTURED_AGENTS=1`.
 2. Open the Feature panel in an active, non-archived Feature in native Studio,
-   then open **Structured Codex**. This uses the existing selected workspace and
+   then open **Structured agents** and select Codex. This uses the existing selected workspace and
    Feature metadata. Name a session and review its executable, workspace, SHA-256
    and read-only policy in the native sheet. The pilot expects the Apple Silicon
    0.169.0 native binary with the digest disclosed in the sheet. Codex uses its
@@ -73,7 +75,7 @@ and shutdown without authenticating or submitting a model turn.
 The pilot keeps up to four sessions in memory and bounds turn duration, wire
 traffic, displayed items and approvals. Content redaction is best-effort. Codex
 still owns its local logs and configuration. No process adoption, thread resume,
-persistence, cross-Feature routing, durable history or Claude/OpenCode support is
+persistence, cross-Feature routing, durable history or Claude support is
 included. Cleanup covers the owned group during ordinary stop, transport loss and
 app shutdown. A hard kill of the Node host or a descendant that leaves its process
 group is outside the demonstrated cleanup guarantee.

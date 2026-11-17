@@ -1,5 +1,14 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Structured Studio agents — 2026-11-17
+
+- [x] Provider selection in the existing active-Feature panel and native gate.
+- [x] Synthetic OpenCode stream, permission, recovery, cleanup and mixed-provider delegation.
+- [x] Isolated OpenCode 2.2.5 startup and EOF smoke without a model turn or login.
+- [ ] Native packaging, approval review, real model turns and mixed-provider acceptance.
+
+See the [implementation and verification record](../design/structured-opencode-pilot.md).
+
 2026-11-05 multi-workspace groundwork: snapshot slots carry the current Workspace
 and an honest unknown agent state. Eligible workspace enumeration, independent
 cross-workspace membership and preparation, batch outcomes, evidence-backed

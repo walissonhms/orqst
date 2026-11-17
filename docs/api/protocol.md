@@ -1,5 +1,17 @@
 # Event protocol
 
+## Structured Studio session projections
+
+The local Tauri Feature command accepts `start` with an optional `provider`
+(`codex` by default, or `opencode`). Session snapshots expose the provider,
+owned execution lifecycle, latest turn, bounded history, permission decisions
+and same-Feature delegations. OpenCode's session ID comes from the provider.
+Core generates each input ID and uses it only in that owned session. A matched inbox delivery and
+an execution outcome drive terminal turn state. A reconciled outcome also
+requires a fresh busy/idle pair and matching delivered input from provider
+history. Unproved loss is `unknown`. See the
+[OpenCode contract](../design/structured-opencode-pilot.md).
+
 The ORQST protocol is the provider-independent contract between adapters, the
 database, the bridge, and the dashboard. It is defined with zod in
 `packages/protocol/src/index.ts` and validated at runtime.

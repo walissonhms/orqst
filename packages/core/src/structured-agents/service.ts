@@ -7,14 +7,19 @@ import {
   type StructuredAgentsScope,
   type StructuredAgentsSnapshot,
   type StructuredDelegation,
+  type StructuredProvider,
 } from '@orqst/protocol';
-import { StructuredCodexSession, type StructuredDelegate } from './codex-session.js';
+import { StructuredCodexSession } from './codex-session.js';
+import { OwnedOpenCode } from './opencode-process.js';
+import { StructuredOpenCodeSession } from './opencode-session.js';
+import type { OwnedStructuredSession, StructuredDelegate } from './session.js';
 import { spawnCodexAppServer, type StructuredProcessTransport } from './codex-process.js';
 
 export interface StructuredLaunch {
   executable: string;
   cwd: string;
   env: Record<string, string>;
+  provider?: StructuredProvider;
 }
 
 type Mutation = Exclude<StructuredAgentsRequest, { action: 'snapshot' }>;
@@ -24,7 +29,7 @@ const refusal = { success: false, text: 'No matching user grant or worker unavai
 export class StructuredAgents {
   private readonly sessions = new Map<
     string,
-    { scope: StructuredAgentsScope; session: StructuredCodexSession }
+    { scope: StructuredAgentsScope; session: OwnedStructuredSession }
   >();
   private readonly delegations: StructuredDelegation[] = [];
   private readonly grants = new Map<
@@ -38,9 +43,10 @@ export class StructuredAgents {
       input: StructuredLaunch,
     ) => StructuredProcessTransport = spawnCodexAppServer,
     private readonly now = Date.now,
+    private readonly ownOpenCode = (input: StructuredLaunch) => new OwnedOpenCode(input),
   ) {}
 
-  private find(scope: StructuredAgentsScope, id: string): StructuredCodexSession | undefined {
+  private find(scope: StructuredAgentsScope, id: string): OwnedStructuredSession | undefined {
     const entry = this.sessions.get(id);
     if (entry?.scope.workspaceId === scope.workspaceId && entry.scope.featureId === scope.featureId)
       return entry.session;
@@ -63,7 +69,8 @@ export class StructuredAgents {
 
   review(scope: StructuredAgentsScope, request: Mutation): object | undefined {
     if (this.closed) return;
-    if (request.action === 'start') return { label: request.label };
+    if (request.action === 'start')
+      return { label: request.label, provider: request.provider ?? 'codex' };
     if (request.action === 'grant') {
       const source = this.find(scope, request.sourceSessionId);
       const target = this.find(scope, request.targetSessionId);
@@ -83,7 +90,8 @@ export class StructuredAgents {
     }
     const session = this.find(scope, request.sessionId);
     if (!session) return;
-    const identity = { label: session.snapshot().label, sessionId: session.id };
+    const { label, provider } = session.snapshot();
+    const identity = { label, provider, sessionId: session.id };
     if (request.action === 'approval') {
       const approval = session.approval(request.approvalId, request.decision);
       return (
@@ -112,7 +120,8 @@ export class StructuredAgents {
   ): Promise<StructuredAgentsReply> {
     if (!this.review(scope, request)) return { status: 'denied' };
     if (request.action === 'start') {
-      if (!launch) return { status: 'denied' };
+      const provider = request.provider ?? 'codex';
+      if (!launch || provider !== (launch.provider ?? 'codex')) return { status: 'denied' };
       if (this.sessions.size >= limits.sessions) {
         const old = [...this.sessions].find(([, entry]) =>
           ['exited', 'failed'].includes(entry.session.lifecycle),
@@ -121,11 +130,12 @@ export class StructuredAgents {
         this.sessions.delete(old[0]);
         this.grants.delete(old[0]);
       }
-      const session: StructuredCodexSession = new StructuredCodexSession(
-        { ...scope, label: request.label },
-        this.ownProcess(launch),
-        (call) => this.delegate(scope, session.id, call),
-      );
+      const sessionScope = { ...scope, label: request.label };
+      const delegate: StructuredDelegate = (call) => this.delegate(scope, session.id, call);
+      const session: OwnedStructuredSession =
+        provider === 'opencode'
+          ? new StructuredOpenCodeSession(sessionScope, this.ownOpenCode(launch), delegate)
+          : new StructuredCodexSession(sessionScope, this.ownProcess(launch), delegate);
       this.sessions.set(session.id, { scope: { ...scope }, session });
       await session.initialize(launch.cwd);
     } else if (request.action === 'grant') {
@@ -137,11 +147,17 @@ export class StructuredAgents {
     } else {
       const session = this.find(scope, request.sessionId)!;
       switch (request.action) {
-        case 'turn':
-          await session.startTurn(request.text, 'human');
+        case 'turn': {
+          const grant = this.grants.get(session.id);
+          const delegation =
+            grant && grant.expiresAt > this.now()
+              ? { targetPaneId: grant.targetId, task: grant.task }
+              : undefined;
+          await session.startTurn(request.text, 'human', undefined, { delegation });
           break;
+        }
         case 'approval':
-          session.answer(request.approvalId, request.decision);
+          await session.answer(request.approvalId, request.decision);
           break;
         case 'interrupt':
           await session.interrupt();
@@ -168,6 +184,7 @@ export class StructuredAgents {
   ): ReturnType<StructuredDelegate> {
     const grant = this.grants.get(sourceId);
     const target = this.find(scope, call.arguments.targetPaneId);
+    const source = this.find(scope, sourceId);
     if (
       this.closed ||
       !grant ||
@@ -212,7 +229,12 @@ export class StructuredAgents {
               resolve({ success: false, text: 'Worker result unavailable.' });
             }
           },
-          call.turnId,
+          {
+            parentTurnId:
+              source?.snapshot().provider === 'codex' && target.snapshot().provider === 'codex'
+                ? call.turnId
+                : undefined,
+          },
         )
         .catch(() => {
           record.state = 'unknown';

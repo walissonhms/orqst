@@ -1,5 +1,12 @@
 # Security policy
 
+## Structured OpenCode Studio pilot
+
+The gated native pilot owns the local OpenCode listener and its short-lived Basic
+Auth password. Only the Feature's native review can apply user mutations.
+Provider approval, lost-stream handling, configuration isolation and cleanup
+are described in the [OpenCode pilot record](docs/design/structured-opencode-pilot.md).
+
 ## Structured Codex Studio pilot
 
 The local Feature Webview can propose new Codex sessions and one-shot decisions

@@ -1,5 +1,13 @@
 # Data model
 
+## Structured Studio pilot state
+
+The private Core owns the in-memory Feature sessions, turn and permission
+projections and one-use grants. OpenCode writes its own SQLite data only to the
+disposable provider HOME for that process. The Core uses its history for bounded
+reconciliation during that process lifetime. See the
+[OpenCode ownership and recovery contract](../design/structured-opencode-pilot.md).
+
 ## Offline reservation artifacts — 2026-11-04
 
 No SQLite migration or journal-owner acquisition is added. Prepared attempts and

@@ -1,5 +1,14 @@
 # Security model
 
+## Structured OpenCode Studio pilot
+
+The existing native review token binds the provider, reviewed executable digest,
+Feature and exact operation. Core controls the child, a private loopback HTTP
+client and the one-use grant. Fresh HOME/XDG roots and explicit policies scope
+provider startup. Each permission reply rechecks its pending request and is
+limited to once or reject. See the
+[provider controls and limits](../design/structured-opencode-pilot.md#ownership-and-policy).
+
 ## Structured Codex Studio pilot
 
 The opt-in local Feature command requires the existing native focus and own-sheet
