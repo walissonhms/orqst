@@ -21,6 +21,7 @@ import {
   type FeatureNoticeContext,
 } from './feature-notice.js';
 import { FeaturePermissions } from './FeaturePermissions.js';
+import { StructuredAgents } from './StructuredAgents.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
@@ -179,6 +180,15 @@ export function FeatureWorkspace({
   );
 
   const studio = !canvas && (nativeWorkspace || !!native);
+  const [structuredFeature, setStructuredFeature] = useState<string>();
+  const structured = nativeWorkspace ? window.orqstStructuredAgents : undefined;
+  const structuredOpen =
+    !!selected &&
+    selected.status !== 'archived' &&
+    structuredFeature === selected.featureId &&
+    !!structured &&
+    !!snapshot;
+
   const hasSnapshot = !!snapshot;
   // Main document: when the New terminal dialog closes, return to the live terminal views
   // with the same restore used to leave the summary canvas (a reviewed presentation change).
@@ -863,6 +873,15 @@ export function FeatureWorkspace({
               </button>
             </form>
           )}
+        {structured && selected && selected.status !== 'archived' && studio && (
+          <button
+            className="feature-refresh"
+            type="button"
+            onClick={() => setStructuredFeature(selected.featureId)}
+          >
+            {t('structuredAgents.title')}
+          </button>
+        )}
         {nativeWorkspace && (
           <details className="feature-permissions-disclosure">
             <summary>{t('features.permissions.title')}</summary>
@@ -870,6 +889,15 @@ export function FeatureWorkspace({
           </details>
         )}
       </aside>
+      {structuredOpen && (
+        <StructuredAgents
+          key={selected.featureId}
+          client={structured}
+          scope={{ workspaceId: snapshot.workspace.id, featureId: selected.featureId }}
+          featureName={selected.name}
+          onClose={() => setStructuredFeature(undefined)}
+        />
+      )}
       <header className="feature-topbar">
         {navigation}
         <strong title={selected?.featureId}>
@@ -1117,7 +1145,7 @@ export function FeatureWorkspace({
                   native: {
                     onLayout: arrange,
                     // The limits panel hides only the views under it (data-native-overlay).
-                    overlayOpen: !!editor || !!renamePane || quitFence,
+                    overlayOpen: !!editor || !!renamePane || structuredOpen || quitFence,
                   },
                 }
               : {})}

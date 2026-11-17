@@ -1147,6 +1147,9 @@ start the built bridge with `node --env-file=.env dist/bridge.mjs`.
 
 Invalid numeric values fail startup instead of silently falling back.
 
+The native macOS Studio can opt into structured Codex sessions with
+`ORQST_STRUCTURED_AGENTS=1`. See the [pilot workflow and verification limits](docs/design/structured-codex-pilot.md).
+
 ## Data and privacy
 
 - Observed session files are opened read-only and never modified. The observer

@@ -184,3 +184,4 @@ export * from './feature-permissions.js';
 export * from './cross-feature-communication.js';
 export * from './composer-mentions.js';
 export * from './owned-turn.js';
+export * from './structured-agents.js';

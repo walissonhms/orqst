@@ -12,6 +12,7 @@ mod quit_native;
 mod quit_orchestration;
 mod renderer;
 mod sidecar;
+mod structured_agents;
 mod terminal;
 mod terminal_creation;
 mod unavailable;
@@ -68,7 +69,8 @@ fn main() {
         .manage(agents::Agents::default())
         .manage(files::Files::default())
         .manage(features::Features::default())
-        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, terminal::terminal_restore, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, features::feature_permissions, terminal_creation::studio_request, features::diagnostic_note])
+        .manage(structured_agents::StructuredAgents::default())
+        .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, terminal::terminal_restore, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, features::feature_permissions, features::feature_structured_agents, terminal_creation::studio_request, features::diagnostic_note])
         .manage(terminal_creation::Preparation::default())
         .manage(offline_recovery::Recovery::default())
         .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); agents::on_window_event(window,event); })
@@ -191,6 +193,9 @@ fn main() {
                 eprintln!("ORQST managed agents startup refused.");
             }
             terminal_creation::install(app.handle())?;
+            if structured_agents::start(app.handle()).is_err() {
+                eprintln!("ORQST structured agent pilot unavailable.");
+            }
             diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Ready, local_diagnostics::Effects::Unconfirmed);
             Ok(())
         })
@@ -208,6 +213,7 @@ fn main() {
             if let tauri::RunEvent::Exit = event {
                 local_diagnostics::Attempt::begin().record(local_diagnostics::Stage::NativeExit, local_diagnostics::Outcome::Requested, local_diagnostics::Effects::Unconfirmed);
                 desktop::stop(app);
+                structured_agents::stop(app);
                 agents::stop_and_wait(app);
                 terminal_creation::stop(app);
                 terminal::stop_and_wait(app);

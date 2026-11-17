@@ -684,3 +684,74 @@
   font-size: 11px;
   white-space: nowrap;
 }
+
+.structured-agents {
+  background: var(--feature-panel, #090b10);
+  border: 1px solid var(--border, #373b4e);
+  border-radius: 12px;
+  color: inherit;
+  width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  padding: 16px;
+  overflow: auto;
+}
+
+.structured-agents::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.structured-agents header,
+.structured-agents form,
+.structured-agents-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-block: 8px;
+}
+
+.structured-agents header {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.structured-agents h2,
+.structured-agents h3,
+.structured-agents pre {
+  margin: 0;
+}
+
+.structured-agents label {
+  display: grid;
+  flex: 1 1 15rem;
+  gap: 4px;
+  min-width: 0;
+}
+
+.structured-agents input,
+.structured-agents select,
+.structured-agents textarea {
+  width: 100%;
+}
+
+.structured-agents-history {
+  list-style: none;
+  padding: 0;
+  max-height: 36vh;
+  overflow: auto;
+}
+
+.structured-agents-history li,
+.structured-agents-approval {
+  padding: 8px;
+  margin: 4px 0;
+  border: 1px solid var(--border, #373b4e);
+  border-radius: 6px;
+}
+
+.structured-agents pre {
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

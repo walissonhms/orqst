@@ -10,6 +10,7 @@ fn main() {
             "feature_request",
             "feature_prepare",
             "feature_permissions",
+            "feature_structured_agents",
             "studio_request",
             "diagnostic_note",
         ]),

@@ -54,6 +54,7 @@ const result = await build({
 // Reuse the exact existing Node hosts and terminal renderer; no Electron runtime is shipped.
 const terminalResult = await build({
   entryPoints: {
+    'tauri-structured-agents-host': 'apps/desktop/src/tauri-structured-agents-host.ts',
     'tauri-agents-host': 'apps/desktop/src/tauri-agents-host.ts',
     'tauri-files-host': 'apps/desktop/src/tauri-files-host.ts',
     'managed-agents-host': 'apps/desktop/src/managed-agents-host.ts',

@@ -1,5 +1,14 @@
 # Security model
 
+## Structured Codex Studio pilot
+
+The opt-in local Feature command requires the existing native focus and own-sheet
+review. Its private Node host binds one-use apply to the exact active Feature,
+workspace identity, request and reviewed executable digest. The pilot starts new
+ephemeral, read-only threads with human approval routing. Delegation requires a
+separate exact one-use grant within the Feature. See the
+[pilot review and remaining validation](../design/structured-codex-pilot.md).
+
 ## Studio arrangement boundary — 2026-11-05
 
 The layout-only `arrange` action is accepted only from the current focused native

@@ -1,4 +1,4 @@
-//! Metadata-only facade over the existing selected Terminal Core. No execution transport is exposed.
+//! Feature metadata and the optional, natively confirmed Studio Codex surface.
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
@@ -1911,6 +1911,115 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     }, |cancelled| crate::terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
 }
 
+#[tauri::command]
+pub async fn feature_structured_agents(window: Webview, scope: Value, request: Value) -> Value {
+    use crate::{structured_agents, terminal, terminal_creation::translate};
+    let denied = || json!({"status":"denied"});
+    if !structured_agents::enabled() {
+        return json!({"status":"disabled"});
+    }
+    let Some((source, document)) = identity(&window) else {
+        return denied();
+    };
+    if !permission_source_allowed(window.label(), window.window().label(), &source)
+        || !exact(&scope, &["workspaceId", "featureId"])
+        || !uuid(&scope["featureId"])
+        || request.to_string().len() > 24 * 1024
+    {
+        return denied();
+    }
+    let app = window.app_handle();
+    let Some((epoch, presentation)) = terminal::metadata_context(app) else {
+        return json!({"status":"unavailable"});
+    };
+    let Some(feature_id) = scope["featureId"].as_str() else {
+        return denied();
+    };
+    let generation = {
+        let state = app.state::<Features>();
+        let guard = state.0.lock().unwrap();
+        if guard.workspace_id.as_deref() != scope["workspaceId"].as_str() {
+            return denied();
+        }
+        permission_scope_generation(&guard, feature_id, &epoch, presentation)
+    };
+    let Some(generation) = generation else {
+        return denied();
+    };
+    let current = || {
+        identity(&window) == Some((source.clone(), document))
+            && terminal::metadata_context(app) == Some((epoch.clone(), presentation))
+            && !terminal::presentation_blocked(app)
+            && permission_capture_current(app, feature_id, &epoch, presentation, generation)
+    };
+    if !current() {
+        return denied();
+    }
+    if request["action"] == "snapshot" {
+        let result = structured_agents::call(app, json!({
+            "operation":"snapshot", "scope":scope, "request":request
+        })).await;
+        return if current() { result } else { denied() };
+    }
+    let Some(action) = request["action"].as_str().filter(|action| {
+        matches!(*action, "start" | "turn" | "grant" | "approval" | "interrupt" | "stop")
+    }) else {
+        return denied();
+    };
+    if !focus_then_current(focused(&window), current).await {
+        return denied();
+    }
+    let review_id = {
+        let state = app.state::<Features>();
+        let mut guard = state.0.lock().unwrap();
+        if guard.sequence >= 0xffffffffffff {
+            return denied();
+        }
+        guard.sequence += 1;
+        format!("00000000-6991-4000-8000-{:012x}", guard.sequence)
+    };
+    if !terminal::permission_review_begin(app, &epoch, presentation, &review_id) {
+        return json!({"status":"busy"});
+    }
+    with_metadata_completion(async {
+        let prepared = structured_agents::call(app, json!({
+            "operation":"prepare", "scope":scope, "request":request
+        })).await;
+        if prepared["status"] != "ok" {
+            return prepared;
+        }
+        let Some(detail) = prepared["detail"].as_str().filter(|s| s.len() <= 16 * 1024) else {
+            return denied();
+        };
+        let token = &prepared["token"];
+        if !uuid(token) || !current() {
+            return denied();
+        }
+        let approved = terminal::confirm_permission_sheet(app, window.clone(), [
+            translate("structuredAgents.title"),
+            translate(&format!("structuredAgents.confirm_{action}")),
+            detail.into(),
+            translate("terminalNative.cancel"),
+            translate("terminalNative.confirm"),
+        ], terminal::PermissionReviewContext {
+            epoch: epoch.clone(), presentation, document, id: review_id.clone(),
+            feature_id: feature_id.into(), generation,
+        }).await;
+        if !approved {
+            return json!({"status":"cancelled"});
+        }
+        if !focus_then_current(focused(&window), || {
+            current() && terminal::permission_review_current(app, &epoch, presentation, &review_id)
+        }).await {
+            return denied();
+        }
+        let result = structured_agents::call(app, json!({
+            "operation":"apply", "scope":scope, "request":request, "token":token
+        })).await;
+        if current() { result } else { json!({"status":"unavailable"}) }
+    }, |cancelled| terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
+}
+
 fn changes_presentation(request: &Value) -> bool {
     matches!(
         request["action"].as_str(),
@@ -2217,8 +2326,8 @@ pub fn configure(
     let client = std::fs::read_to_string(app.path().resource_dir()?.join("features/client.js"))?;
     Ok(format!("if(window.top===window.self && location.origin === {} && !location.search) {{\n{client}\n}}",json!(origin)))
 }
-fn workspace_capability() -> tauri::ipc::CapabilityBuilder {
-    tauri::ipc::CapabilityBuilder::new("feature-workspace-metadata")
+fn workspace_capability(structured: bool) -> tauri::ipc::CapabilityBuilder {
+    let capability = tauri::ipc::CapabilityBuilder::new("feature-workspace-metadata")
         .local(true)
         .remote(CHROME_URL.into())
         .webview("feature-workspace")
@@ -2226,7 +2335,12 @@ fn workspace_capability() -> tauri::ipc::CapabilityBuilder {
         .permission("allow-feature-prepare")
         .permission("allow-terminal-restore")
         .permission("allow-feature-permissions")
-        .permission("allow-diagnostic-note")
+        .permission("allow-diagnostic-note");
+    if structured {
+        capability.permission("allow-feature-structured-agents")
+    } else {
+        capability
+    }
 }
 
 pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
@@ -2243,7 +2357,7 @@ pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::erro
     }
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         if !app.state::<Features>().0.lock().unwrap().chrome_capability {
-            app.add_capability(workspace_capability())?;
+            app.add_capability(workspace_capability(crate::structured_agents::enabled()))?;
             app.state::<Features>().0.lock().unwrap().chrome_capability = true;
         }
         let size = workspace
@@ -2323,7 +2437,13 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
     }
     let (file,mime) = match uri.path() {
         "/logo.svg" => return Some((std::fs::read(app.path().resource_dir().ok()?.join("dashboard/brand/orqst-logo-dark.svg")).ok()?, "image/svg+xml")),
-        "/index.html" => return Some((b"<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ORQST</title><link rel=\"stylesheet\" href=\"workspace.css\"></head><body style=\"margin:0\"><div id=\"root\"></div><script src=\"workspace.js\"></script></body></html>".to_vec(),"text/html; charset=utf-8")),
+        "/index.html" => {
+            let html = "<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ORQST</title><link rel=\"stylesheet\" href=\"workspace.css\"></head><body style=\"margin:0\"><div id=\"root\"></div><script src=\"workspace.js\"></script></body></html>";
+            let html = if crate::structured_agents::enabled() {
+                html.replace("<html>", "<html data-structured-agents>")
+            } else { html.into() };
+            return Some((html.into_bytes(), "text/html; charset=utf-8"));
+        }
         "/workspace.js" => ("workspace.js","application/javascript; charset=utf-8"),
         "/workspace.css" => ("workspace.css","text/css; charset=utf-8"),
         _ => return None,
@@ -2606,7 +2726,7 @@ mod tests {
         assert!(authority
             .resolve_access("feature_permissions", "main", "feature-workspace", &local)
             .is_none());
-        authority.add_capability(workspace_capability()).unwrap();
+        authority.add_capability(workspace_capability(false)).unwrap();
         assert!(authority
             .resolve_access("feature_permissions", "main", "feature-workspace", &local)
             .is_some());
@@ -2659,6 +2779,25 @@ mod tests {
     }
 
     #[test]
+    fn structured_agents_capability_is_opt_in_and_exact_chrome_only() {
+        for enabled in [false, true] {
+            let mut context = crate::app_context();
+            let authority = context.runtime_authority_mut();
+            authority.add_capability(workspace_capability(enabled)).unwrap();
+            let local = tauri::ipc::Origin::Local;
+            assert_eq!(
+                authority.resolve_access("feature_structured_agents", "main", "feature-workspace", &local).is_some(),
+                enabled
+            );
+            for label in ["main", "managed-agents", "terminal-0"] {
+                assert!(authority.resolve_access("feature_structured_agents", "main", label, &local).is_none());
+            }
+            let remote = tauri::ipc::Origin::Remote { url: "https://example.invalid/".parse().unwrap() };
+            assert!(authority.resolve_access("feature_structured_agents", "main", "feature-workspace", &remote).is_none());
+        }
+    }
+
+    #[test]
     fn dock_restore_runtime_acl_and_exact_source_gate_are_chrome_only() {
         // Resolve the real build.rs app manifest and static capabilities without starting an app.
         let mut context = crate::app_context();
@@ -2668,7 +2807,7 @@ mod tests {
         assert!(authority
             .resolve_access("terminal_restore", "main", "feature-workspace", &correct)
             .is_none());
-        authority.add_capability(workspace_capability()).unwrap();
+        authority.add_capability(workspace_capability(false)).unwrap();
         assert!(authority
             .resolve_access("terminal_restore", "main", "feature-workspace", &correct)
             .is_some());

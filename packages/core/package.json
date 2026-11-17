@@ -5,6 +5,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": "./src/index.ts",
+  "scripts": {
+    "test": "tsx --test test/*.test.ts"
+  },
   "dependencies": {
     "@orqst/adapter-codex": "workspace:*",
     "@orqst/database": "workspace:*",
