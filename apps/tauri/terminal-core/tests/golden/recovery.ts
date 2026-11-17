@@ -9,15 +9,7 @@
 //        tsx recovery.ts anchor <parent>
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
-import {
-  chmodSync,
-  copyFileSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  rmSync,
-} from 'node:fs';
+import { chmodSync, copyFileSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -66,7 +58,9 @@ const ids = {
 };
 
 function classify(error: unknown): string {
-  if (error instanceof offline.OfflineRecoveryBlocked) return `blocked:${error.reason}`;
+  if (error instanceof offline.OfflineRecoveryBlocked) {
+    return `blocked:${(error as { reason: string }).reason}`;
+  }
   if (error instanceof files.OfflineEnrollmentBindingChanged) return 'enrollment_binding_changed';
   const e = error as { name?: string; code?: string; message?: string };
   if (e.name === 'ZodError' || e.name === 'SyntaxError') return 'invalid';
@@ -346,7 +340,6 @@ else if (command === 'anchor') {
     approve: boolean;
   }>;
   const frames: unknown[] = [];
-  let pipe: InstanceType<typeof wire.AdministrativeReviewPipe>;
   const send = (value: Record<string, unknown>) => {
     frames.push(['out', value]);
     const approved = current?.approve ?? false;
@@ -377,7 +370,7 @@ else if (command === 'anchor') {
     }
   };
   let current: (typeof plan)[number] | undefined;
-  pipe = new wire.AdministrativeReviewPipe(send);
+  const pipe = new wire.AdministrativeReviewPipe(send);
   const engine = new host.TauriOfflineRecovery(join(base, 'parent'), pipe, {
     bootUUID: () => boot!,
     now: () => 1000,
