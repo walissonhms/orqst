@@ -19,7 +19,13 @@ const messageSchema = z.object({
   result: z.unknown().optional(),
   error: z.unknown().optional(),
 });
-const requestMethodSchema = z.enum(['initialize', 'account/read', 'thread/start', 'turn/start']);
+const requestMethodSchema = z.enum([
+  'initialize',
+  'account/read',
+  'thread/start',
+  'turn/start',
+  'turn/interrupt',
+]);
 type CodexMethod = z.infer<typeof requestMethodSchema>;
 type FailureReason =
   | 'transport_lost'
@@ -29,6 +35,7 @@ type FailureReason =
   | 'invalid_message'
   | 'unexpected_response'
   | 'dynamic_request_limit'
+  | 'server_request_limit'
   | 'native_request_rejected'
   | 'detached';
 interface Diagnostic {
@@ -44,6 +51,17 @@ export interface CodexTransport {
   startupDiagnostic?(): unknown;
   finishDiagnostics?(): void;
 }
+/**
+ * Opt-in channel options. Defaults keep the original Desktop runtime behavior unchanged:
+ * no generic server-request replies and the original byte budgets.
+ */
+export interface CodexChannelOptions {
+  /** Track native server requests so a trusted owner can answer each exactly once. */
+  answerServerRequests?: boolean;
+  lineBytes?: number;
+  sessionBytes?: number;
+}
+const maxPendingServerRequests = 16;
 export interface CodexNotification {
   method: string;
   params: unknown;
@@ -83,7 +101,11 @@ export class CodexChannel {
       method: CodexMethod;
     }
   >();
-  private readonly lines = new BoundedLineSplitter(codexChannelLimits.lineBytes);
+  private readonly lines: BoundedLineSplitter;
+  private readonly lineBytes: number;
+  private readonly sessionBytes: number;
+  private readonly answerServerRequests: boolean;
+  private pendingServerRequests = new Set<string>();
   private total = 0;
   private closed = false;
   private failure: Diagnostic | null = null;
@@ -95,7 +117,12 @@ export class CodexChannel {
   constructor(
     private transport: CodexTransport,
     private readonly reuseExistingAuthentication = false,
+    options: CodexChannelOptions = {},
   ) {
+    this.lineBytes = options.lineBytes ?? codexChannelLimits.lineBytes;
+    this.sessionBytes = options.sessionBytes ?? codexChannelLimits.sessionBytes;
+    this.answerServerRequests = options.answerServerRequests === true;
+    this.lines = new BoundedLineSplitter(this.lineBytes);
     this.unsubscribe = transport.listen(
       (chunk) => this.receive(chunk),
       () => this.fail('transport_lost'),
@@ -176,6 +203,24 @@ export class CodexChannel {
       throw new Error('Dynamic result delivery uncertain');
     }
   }
+  /**
+   * Answer one tracked native server request exactly once. Only available when the owner
+   * opted in; callers decide the payload (a human decision or a fail-closed error).
+   */
+  replyServerRequest(
+    id: string | number,
+    reply: { result: object } | { error: { code: number; message: string } },
+  ): void {
+    const key = JSON.stringify(id);
+    if (this.closed || !this.answerServerRequests || !this.pendingServerRequests.delete(key))
+      throw new Error('No matching native server request');
+    try {
+      this.transport.send(JSON.stringify({ id, ...reply }) + '\n');
+    } catch {
+      this.fail('send_failed');
+      throw new Error('Server request reply delivery uncertain');
+    }
+  }
   /** Release transport ownership without signaling or adopting a PID. */
   detach(): void {
     this.fail('detached');
@@ -187,10 +232,7 @@ export class CodexChannel {
     this.startup.add('receivedBytes', chunk.byteLength);
     this.startup.add('chunks');
     this.total += chunk.byteLength;
-    if (
-      chunk.byteLength > codexChannelLimits.lineBytes ||
-      this.total > codexChannelLimits.sessionBytes
-    )
+    if (chunk.byteLength > this.lineBytes || this.total > this.sessionBytes)
       return this.fail('output_limit');
     try {
       for (const line of this.lines.push(Buffer.from(chunk))) {
@@ -204,9 +246,32 @@ export class CodexChannel {
             this.startup.add('notifications');
             if (raw.method === 'item/tool/call' && raw.id !== undefined) {
               const key = JSON.stringify(raw.id);
-              if (this.serverRequests.has(key) || this.serverRequests.size >= 4)
+              if (
+                this.serverRequests.has(key) ||
+                this.serverRequests.size >= 4 ||
+                (this.answerServerRequests && this.pendingServerRequests.has(key))
+              )
                 return this.fail('dynamic_request_limit');
               this.serverRequests.add(key);
+            } else if (raw.id !== undefined && this.answerServerRequests) {
+              const key = JSON.stringify(raw.id);
+              if (
+                this.pendingServerRequests.has(key) ||
+                this.serverRequests.has(key) ||
+                this.pendingServerRequests.size >= maxPendingServerRequests
+              )
+                return this.fail('server_request_limit');
+              this.pendingServerRequests.add(key);
+            }
+            if (this.answerServerRequests && raw.method === 'serverRequest/resolved') {
+              const resolved = z
+                .object({ requestId: messageSchema.shape.id.unwrap() })
+                .safeParse(raw.params);
+              if (resolved.success) {
+                const key = JSON.stringify(resolved.data.requestId);
+                this.pendingServerRequests.delete(key);
+                this.serverRequests.delete(key);
+              }
             }
             const event = {
               method: raw.method,
@@ -255,6 +320,7 @@ export class CodexChannel {
     }
     this.pending.clear();
     this.serverRequests.clear();
+    this.pendingServerRequests.clear();
     this.unsubscribe?.();
     for (const listener of this.lostListeners) {
       try {

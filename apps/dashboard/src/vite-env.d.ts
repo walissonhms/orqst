@@ -2,6 +2,7 @@
 
 interface Window {
   readonly orqstTauriStudio?: import('@orqst/protocol').TauriStudio;
+  readonly orqstStructuredAgents?: import('@orqst/protocol').DesktopStructuredAgents;
   readonly orqstFeatures?: import('@orqst/protocol').DesktopFeatures;
   readonly orqstFeaturePermissions?: {
     read(featureId: string): Promise<{

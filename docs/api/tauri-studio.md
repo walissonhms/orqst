@@ -105,3 +105,12 @@ release application mutexes for the wait, then revalidate source/version. Featur
 replies retain Core epoch, presentation/document and exact request ownership checks
 before consumption. This adds no renderer authority or public fields. See the
 [combined source review and native limits](../development/tauri-opening-source-integration.md).
+
+## Structured Codex pilot
+
+With `ORQST_STRUCTURED_AGENTS=1`, the exact local Feature Webview has a separate
+`feature_structured_agents` command. The request carries the selected Workspace and
+Feature IDs and one action from `structuredAgentsRequestSchema`. Studio reads
+bounded snapshots and proposes start, turn, grant, approval, interrupt and stop.
+All mutations go through a native sheet and a private one-shot review token.
+See the [pilot design and evidence limits](../design/structured-codex-pilot.md).

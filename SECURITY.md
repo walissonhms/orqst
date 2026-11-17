@@ -1,5 +1,20 @@
 # Security policy
 
+## Structured OpenCode Studio pilot
+
+The gated native pilot owns the local OpenCode listener and its short-lived Basic
+Auth password. Only the Feature's native review can apply user mutations.
+Provider approval, lost-stream handling, configuration isolation and cleanup
+are described in the [OpenCode pilot record](docs/design/structured-opencode-pilot.md).
+
+## Structured Codex Studio pilot
+
+The local Feature Webview can propose new Codex sessions and one-shot decisions
+when the native app starts with `ORQST_STRUCTURED_AGENTS=1`. The existing native
+focus and review gate controls each mutation. The Node host checks the reviewed
+executable and workspace before launch. The observer and ordinary dashboard
+remain read-only. See the [pilot security boundary](docs/design/structured-codex-pilot.md).
+
 ## Renderer unavailable presentation fence — 2026-11-05
 
 The native renderer-termination callback latches child presentation unavailable

@@ -66,7 +66,7 @@ impl State {
     }
 }
 
-fn translate(key: &str) -> String {
+pub(crate) fn translate(key: &str) -> String {
     let portuguese = std::env::var("LANG")
         .unwrap_or_default()
         .to_lowercase()
