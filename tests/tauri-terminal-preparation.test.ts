@@ -34,6 +34,11 @@ const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-tauri-pr
 const nativePreparationSupported =
   process.platform === 'darwin' && process.arch === 'arm64' && process.getuid?.() !== 0;
 after(() => rmSync(bundle, { recursive: true, force: true }));
+// Provisioning only inspects metadata. Keep the provider fixture small and non-runnable;
+// the packaged helper itself still runs under the real Node executable.
+const executable = join(bundle, 'SYNTHETIC-provider');
+writeFileSync(executable, Buffer.from([0xfe, 0xed, 0xfa, 0xcf, 0, 0, 0, 0]), { mode: 0o700 });
+const executableHash = terminalExecutableSha256(executable);
 await build({
   entryPoints: {
     preparation: 'apps/desktop/src/tauri-terminal-preparation.ts',
@@ -55,18 +60,9 @@ await build({
           { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
           (args) => ({
             contents: readFileSync(args.path, 'utf8')
-              .replaceAll(
-                reviewedDesktopCodexBinary.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              )
-              .replaceAll(
-                reviewedClaudeTuiBinary.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              )
-              .replaceAll(
-                reviewedProviderMcpBinaries.claude.sha256,
-                terminalExecutableSha256(realpathSync(process.execPath)),
-              ),
+              .replaceAll(reviewedDesktopCodexBinary.sha256, executableHash)
+              .replaceAll(reviewedClaudeTuiBinary.sha256, executableHash)
+              .replaceAll(reviewedProviderMcpBinaries.claude.sha256, executableHash),
             loader: 'ts',
           }),
         );
@@ -93,13 +89,13 @@ function fixture() {
   const context = {
     parent,
     home,
-    node: realpathSync(process.execPath),
+    node: realpathSync('/usr/bin/true'), // Metadata only in the in-process fixture.
     environment: { HOME: home, PATH: '/usr/bin:/bin' },
   };
   const confirmations: string[] = [];
   const ports: TauriPreparationPorts = {
     current: () => true,
-    choose: async (directory) => (directory ? project : context.node),
+    choose: async (directory) => (directory ? project : executable),
     confirm: async (key, detail) => {
       confirmations.push(key);
       assert.ok(detail.length <= 4096);
@@ -318,6 +314,7 @@ test('production pins and strict native request bounds remain enforced', async (
           effects: 'not_started',
         });
         assert.ok(!String(error).includes(f.context.node));
+        assert.ok(!String(error).includes(executable));
         return true;
       },
     );
@@ -351,28 +348,35 @@ test(
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );
-    const exit = once(child, 'exit');
+    const closed = once(child, 'close');
     const timer = setTimeout(() => child.kill('SIGKILL'), 15_000);
     const messages: Array<Record<string, unknown>> = [];
     child.stderr.resume();
     createInterface({ input: child.stdout }).on('line', (line) => {
       const value = JSON.parse(line) as Record<string, unknown>;
       messages.push(value);
-      if (value.kind !== 'complete')
+      if (value.kind === 'pick' || value.kind === 'confirm' || value.kind === 'commit')
         child.stdin.write(
           JSON.stringify({
             id: value.id,
-            value: value.kind === 'pick' ? (value.directory ? f.project : f.context.node) : true,
+            value: value.kind === 'pick' ? (value.directory ? f.project : executable) : true,
           }) + '\n',
         );
     });
     try {
-      assert.equal((await exit)[0], 0);
+      const [code, signal] = await closed;
+      assert.deepEqual([code, signal], [0, null], JSON.stringify(messages.map(({ kind }) => kind)));
       const result = messages.at(-1)!;
       assert.equal(result.kind, 'complete');
       assert.equal(result.status, 'open');
       const members = inspectManagedTerminalFiles(result.files as string[], 8);
+      const node = realpathSync(process.execPath);
       assert.equal(members.length, 4);
+      assert.ok(
+        members.every(
+          ({ config }) => config.executable.path === executable && config.node.path === node,
+        ),
+      );
       assert.ok(
         members.every(({ config }) => !readdirSync(config.state).includes('terminal.sqlite')),
       );
@@ -403,7 +407,7 @@ for (const fault of ['eof', 'wrong-id', 'oversized'] as const) {
           stdio: ['pipe', 'pipe', 'pipe'],
         },
       );
-      const exit = once(child, 'exit');
+      const closed = once(child, 'close');
       const timer = setTimeout(() => child.kill('SIGKILL'), 10_000);
       child.stderr.resume();
       const messages: Array<Record<string, unknown>> = [];
@@ -415,12 +419,12 @@ for (const fault of ['eof', 'wrong-id', 'oversized'] as const) {
           child.stdin.write(
             JSON.stringify({
               id: fault === 'wrong-id' ? 999 : message.id,
-              value: fault === 'oversized' ? 'x'.repeat(17000) : f.context.node,
+              value: fault === 'oversized' ? 'x'.repeat(17000) : executable,
             }) + '\n',
           );
       });
       try {
-        assert.equal((await exit)[0], 0);
+        assert.deepEqual(await closed, [0, null]);
         assert.equal(
           messages.some((value) => value.kind === 'complete'),
           false,

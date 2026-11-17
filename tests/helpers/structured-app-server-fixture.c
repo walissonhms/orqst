@@ -13,6 +13,14 @@ static void record(const char *method) {
   fclose(file);
 }
 
+/* The test advances its RPC timer after observing the host. The alarm bounds this gate. */
+static void wait_for_release(void) {
+  char path[4096];
+  int length = snprintf(path, sizeof(path), "%s/SYNTHETIC-release", getenv("TMPDIR"));
+  if (length < 0 || (size_t)length >= sizeof(path)) exit(40);
+  while (access(path, F_OK) != 0) usleep(10000);
+}
+
 int main(void) {
   alarm(12); /* Independent disposable-child deadline, including after IPC disconnect. */
   setbuf(stdout, NULL);
@@ -22,7 +30,7 @@ int main(void) {
   const char *mode = strrchr(cwd, '/');
   if (!mode) return 33;
   mode++;
-  if (!strcmp(mode, "silent")) { sleep(9); return 0; }
+  if (!strcmp(mode, "silent")) { wait_for_release(); return 0; }
 
   char *line = NULL;
   size_t capacity = 0;
@@ -48,10 +56,10 @@ int main(void) {
     if (!length || length >= sizeof(id)) return 39;
     memcpy(id, start, length); id[length] = 0;
     if (!strcmp(name, "initialize")) {
-      if (!strcmp(mode, "delayed-initialize")) sleep(9);
+      if (!strcmp(mode, "delayed-initialize")) wait_for_release();
       if (!strcmp(mode, "events-only")) {
         puts("{\"method\":\"SYNTHETIC/startup\",\"params\":{}}");
-        sleep(9); return 0;
+        wait_for_release(); return 0;
       }
       char response[1024];
       snprintf(response, sizeof(response),
@@ -59,16 +67,16 @@ int main(void) {
         "\"platformFamily\":\"unix\",\"platformOs\":\"macos\","
         "\"codexHome\":\"/SYNTHETIC-NOT-READ\"}}", id);
       if (!strcmp(mode, "unterminated")) {
-        fputs(response, stdout); sleep(9); return 0;
+        fputs(response, stdout); wait_for_release(); return 0;
       }
       if (!strcmp(mode, "content-length")) {
         printf("Content-Length: %zu\r\n\r\n%s", strlen(response), response);
-        usleep(250000); return 0;
+        wait_for_release(); return 0;
       }
       if (!strcmp(mode, "rejected")) {
         printf("{\"id\":\"%s\",\"error\":{\"code\":-32602,"
           "\"message\":\"SYNTHETIC-SECRET-MUST-NOT-LEAK\"}}\n", id);
-        usleep(250000); return 0;
+        wait_for_release(); return 0;
       }
       /* Notification larger than a host IPC slice; followed by fragmented UTF-8 JSONL. */
       fputs("{\"method\":\"SYNTHETIC/startup\",\"params\":\"", stdout);

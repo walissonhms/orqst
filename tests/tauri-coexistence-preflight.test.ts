@@ -1,8 +1,8 @@
 // Synthetic process metadata only. No Tauri, provider, credentials or user app is launched.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -13,8 +13,9 @@ test(
   {
     skip: process.platform !== 'darwin',
   },
-  async () => {
+  async (t) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-synthetic-preflight-')));
+    t.after(() => rm(root, { recursive: true, force: true }));
     const identity = `dev.orqst.coexistencetest${process.pid}`;
     const makeApp = async (name: string, identifier: string) => {
       const app = join(root, `${name}.app`);
@@ -29,11 +30,29 @@ test(
     const copy = await makeApp('Synthetic second copy', identity);
     const separate = await makeApp('Synthetic unrelated identity', `${identity}other`);
     const executable = join(resident, 'Contents/MacOS/orqst-desktop');
-    await copyFile('/bin/sleep', executable);
-    const child = spawn(executable, ['30'], { stdio: 'ignore' });
+    // A relocated system binary can be killed after spawn. Compile an owned fixture
+    // and wait for it to enter main before checking the kernel's process listing.
+    execFileSync('/usr/bin/cc', ['-x', 'c', '-', '-o', executable], {
+      input: `
+        #include <unistd.h>
+        int main(void) {
+          alarm(30);
+          if (write(STDOUT_FILENO, "R", 1) != 1) return 1;
+          pause();
+          return 0;
+        }
+      `,
+    });
+    const child = spawn(executable, [], { env: {}, stdio: ['ignore', 'pipe', 'ignore'] });
     const exited = once(child, 'exit');
     try {
-      await once(child, 'spawn');
+      const [ready] = await Promise.race([
+        once(child.stdout, 'data'),
+        exited.then(([code, signal]) => {
+          throw new Error(`Synthetic resident exited before readiness (${code}, ${signal})`);
+        }),
+      ]);
+      assert.deepEqual(ready, Buffer.from('R'));
       for (const app of [resident, copy]) {
         assert.throws(() => assertNoResidentCoexistenceApp(app, identity), /already running/);
       }
@@ -44,7 +63,6 @@ test(
     } finally {
       child.kill('SIGTERM');
       await exited;
-      await rm(root, { recursive: true, force: true });
     }
     // A stale single-instance socket is irrelevant: only a live process blocks the fixture.
     assertNoResidentCoexistenceApp(copy, identity);

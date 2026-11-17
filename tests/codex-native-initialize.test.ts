@@ -19,6 +19,7 @@ import test from 'node:test';
 import { build } from 'esbuild';
 import { Store } from '@orqst/database';
 import { PaneCommunication } from '../packages/core/src/communication/service.js';
+import { codexChannelLimits } from '../packages/core/src/managed-codex/channel.js';
 import {
   readLifecycleReceipt,
   type LifecycleBinding,
@@ -27,6 +28,7 @@ import {
   CodexStructuredRuntime,
   nativeCodexBackend,
 } from '../packages/core/src/managed-codex/runtime.js';
+import type { HostDiagnostic } from '../packages/core/src/managed-codex/startup-diagnostics.js';
 import {
   TerminalAuthority,
   terminalChallengeBytes,
@@ -38,10 +40,17 @@ import {
   type ManagedCodexConfig,
 } from '../packages/core/src/terminal/codex-profile.js';
 
+type StartupTransport = {
+  finished: boolean;
+  host: HostDiagnostic | null;
+  parent: { counters: { sendQueued: number } };
+};
+const realDelay = delay;
+
 test(
   'production startup counters distinguish observed boundaries without inferring the cause of silence',
   { timeout: 55000, skip: process.platform !== 'darwin' || process.arch !== 'arm64' },
-  async () => {
+  async (t) => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-SYNTHETIC-initialize-')));
     chmodSync(root, 0o700);
     const binary = join(root, 'SYNTHETIC-app-server');
@@ -99,6 +108,9 @@ test(
       ],
     });
     const keys = generateKeyPairSync('ed25519');
+    const nodePath = realpathSync(process.execPath);
+    const node = { path: nodePath, sha256: terminalExecutableSha256(nodePath) };
+    const executable = { path: binary, sha256: terminalExecutableSha256(binary) };
     const proof = (challenge: TerminalChallenge) => ({
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), keys.privateKey).toString(
@@ -120,9 +132,13 @@ test(
       for (const mode of scenarios) {
         const area = join(root, mode);
         mkdirSync(area, { mode: 0o700 });
-        const compatible = ['compatible', 'stderr-error', 'delayed-initialize'].includes(mode);
+        const delayed = mode === 'delayed-initialize';
+        const compatible = delayed || mode === 'compatible' || mode === 'stderr-error';
+        const timesOut = ['silent', 'unterminated', 'events-only'].includes(mode);
+        const controlledClock = delayed || timesOut;
         const project = join(area, mode === 'stderr-error' ? 'compatible' : mode);
         const state = join(area, 'state');
+        const release = delayed || !compatible ? join(state, 'tmp', 'SYNTHETIC-release') : null;
         for (const directory of [
           project,
           state,
@@ -134,12 +150,9 @@ test(
         const config: ManagedCodexConfig = {
           version: 1,
           trust: 'native-same-user',
-          executable: { path: binary, sha256: terminalExecutableSha256(binary) },
+          executable,
           executableVersion: 'SYNTHETIC-NOT-CODEX',
-          node: {
-            path: realpathSync(process.execPath),
-            sha256: terminalExecutableSha256(realpathSync(process.execPath)),
-          },
+          node,
           project,
           state,
           ...(compatible
@@ -189,8 +202,41 @@ test(
         };
         let receipt: ReturnType<typeof readLifecycleReceipt> = { status: 'missing' };
         try {
+          if (controlledClock) t.mock.timers.enable({ apis: ['setTimeout'] });
+          const launching = runtime.launch(prepared.instanceId, proof(prepared.challenge));
+          // Observe real IPC before advancing the parent's RPC clock. Keep an early failure
+          // handled during that wait and assert the original promise below.
+          void launching.catch(() => {});
+          if (controlledClock) {
+            const deadline = performance.now() + codexChannelLimits.requestMs;
+            for (;;) {
+              const snapshot = runtime.snapshot(prepared.instanceId);
+              assert.equal(snapshot.channelDiagnostic, null, mode);
+              const diagnostic = snapshot.startupDiagnostic;
+              const transport = diagnostic?.transport as StartupTransport | null | undefined;
+              const host = transport?.host?.counters;
+              if (
+                diagnostic &&
+                host?.stdinCallbacks === 1 &&
+                host.stderrBytes > 0 &&
+                (mode !== 'unterminated' || diagnostic.parser.bufferedBytes > 0) &&
+                (mode !== 'events-only' || diagnostic.parser.counters.completeLines === 1)
+              )
+                break;
+              assert.ok(performance.now() < deadline, `No startup IPC evidence for ${mode}`);
+              await realDelay(20, undefined, { signal: t.signal });
+            }
+            t.mock.timers.tick(codexChannelLimits.requestMs - 1);
+            assert.equal(runtime.snapshot(prepared.instanceId).startupPhase, 'initialize');
+            assert.equal(runtime.snapshot(prepared.instanceId).channelDiagnostic, null);
+            if (delayed) {
+              t.mock.timers.tick(1001);
+              assert.equal(runtime.snapshot(prepared.instanceId).channelDiagnostic, null);
+              writeFileSync(release!, '', { mode: 0o600 });
+            } else t.mock.timers.tick(1);
+          }
           if (compatible) {
-            await runtime.launch(prepared.instanceId, proof(prepared.challenge));
+            await launching;
             const snapshot = runtime.snapshot(prepared.instanceId);
             assert.equal(snapshot.authentication, 'existing-native-login');
             assert.equal(snapshot.startupPhase, 'ready');
@@ -204,10 +250,7 @@ test(
             const stop = runtime.requestStop('synthetic', prepared.instanceId, 'SIGTERM');
             runtime.stop(prepared.instanceId, 'SIGTERM', proof(stop));
           } else {
-            await assert.rejects(
-              runtime.launch(prepared.instanceId, proof(prepared.challenge)),
-              /no automatic retry/,
-            );
+            await assert.rejects(launching, /no automatic retry/);
             const snapshot = runtime.snapshot(prepared.instanceId);
             assert.equal(snapshot.state, 'ownership_lost');
             assert.equal(snapshot.nativeExit, null);
@@ -227,26 +270,13 @@ test(
             );
             assert.ok(!JSON.stringify(snapshot).includes('SYNTHETIC-SECRET'));
             const diagnostic = snapshot.startupDiagnostic!;
-            const transport = diagnostic.transport as {
-              finished: boolean;
-              host: {
-                counters: {
-                  accepted: number;
-                  stdinBytes: number;
-                  stdinCallbacks: number;
-                  stdoutBytes: number;
-                  stdoutNewlines: number;
-                  stderrBytes: number;
-                };
-              } | null;
-              parent: { counters: { sendQueued: number; dataFrames: number } };
-            };
+            const transport = diagnostic.transport as StartupTransport;
             assert.equal(transport.finished, true);
             assert.equal(
               diagnostic.parser.counters.correlatedResponses,
               mode === 'rejected' ? 1 : 0,
             );
-            if (['silent', 'unterminated', 'events-only'].includes(mode)) {
+            if (timesOut) {
               assert.ok(
                 transport.host,
                 'Host observations are present before the eight-second deadline',
@@ -265,7 +295,7 @@ test(
               assert.ok(transport.host.counters.stderrBytes > 0);
             }
             const frozen = JSON.stringify(diagnostic);
-            await delay(20);
+            await realDelay(20);
             assert.equal(
               JSON.stringify(runtime.snapshot(prepared.instanceId).startupDiagnostic),
               frozen,
@@ -274,9 +304,11 @@ test(
             assert.ok(!frozen.includes(area));
           }
         } finally {
+          if (controlledClock) t.mock.timers.reset();
           // Never adopt a PID or signal after loss. Each fake has an independent bounded self-exit.
           let exitConfirmed = false;
           try {
+            if (release) writeFileSync(release, '', { mode: 0o600 });
             for (let attempt = 0; attempt < 150; attempt++) {
               receipt = readLifecycleReceipt(state, binding);
               if (
@@ -286,7 +318,7 @@ test(
                 exitConfirmed = true;
                 break;
               }
-              await delay(100);
+              await realDelay(100);
             }
             const snapshot = runtime.snapshot(prepared.instanceId);
             if (compatible) {

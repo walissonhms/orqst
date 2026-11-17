@@ -25,9 +25,9 @@ import {
   readMcpLines,
 } from '../packages/core/src/terminal/mcp-socket.js';
 
-function grant(deadline = 10000) {
+function grant(deadline = 10000, now?: () => number) {
   const keys = generateKeyPairSync('ed25519');
-  const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]));
+  const authority = new TerminalAuthority(new Map([['desktop-managed', keys.publicKey]]), now);
   let owned = true;
   const broker = new McpTaskBroker(
     authority,
@@ -109,16 +109,26 @@ test('MCP grant binds identities, explicit native proof, roles, target, bytes, s
   }
 });
 
-test('MCP timeout, lost ownership and disconnect retain unknown outcomes without retry or process exit', async () => {
-  const f = grant(30);
-  f.broker.authorize(f.proof);
-  const outcome = await f.broker.call('source', {
-    name: 'delegate_task',
-    arguments: { task: 'SYNTHETIC no receiver' },
-  });
-  assert.equal((outcome as { state: string }).state, 'unknown');
-  assert.equal('exit' in f.broker.snapshot(), false);
-  await assert.rejects(f.broker.call('worker', { name: 'wait_task', arguments: {} }));
+test('MCP timeout, lost ownership and disconnect retain unknown outcomes without retry or process exit', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: Date.now() });
+  const f = grant(30, Date.now);
+  try {
+    f.broker.authorize(f.proof);
+    const outcome = f.broker.call('source', {
+      name: 'delegate_task',
+      arguments: { task: 'SYNTHETIC no receiver' },
+    });
+    const { taskId } = f.broker.snapshot();
+    t.mock.timers.tick(29);
+    assert.equal(f.broker.snapshot().state, 'queued');
+    t.mock.timers.tick(1);
+    assert.deepEqual(await outcome, { state: 'unknown', taskId });
+    assert.equal('exit' in f.broker.snapshot(), false);
+    await assert.rejects(f.broker.call('worker', { name: 'wait_task', arguments: {} }));
+  } finally {
+    f.broker.close();
+    t.mock.timers.reset();
+  }
   const g = grant();
   try {
     g.broker.authorize(g.proof);
