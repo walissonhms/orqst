@@ -96,6 +96,29 @@ test('Core initializes once, awaits readiness, and drains observation before clo
   await assert.rejects(core.start(), /cannot be restarted/);
 });
 
+test('Desktop Core readiness can precede the first scan and stopping drains it', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orqst-core-background-'));
+  const core = new ObserverCore({
+    ...options,
+    dataDir: join(dir, 'store'),
+    sessionsDir: dir,
+    initialScanInBackground: true,
+  });
+  try {
+    await core.start();
+    assert.equal(core.state, 'ready');
+    const diagnostics = core.diagnostics;
+    assert.equal(diagnostics.scanning, true);
+    assert.equal(diagnostics.lastScan, null);
+    await core.stop();
+    assert.equal(diagnostics.scanning, false);
+    assert.equal(core.state, 'stopped');
+  } finally {
+    await core.stop();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('stop before start opens no resources; stop during startup never reports ready', async (t) => {
   const idle = new ObserverCore(options, {
     openStore: () => assert.fail('Stopped Core must not open SQLite'),

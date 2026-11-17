@@ -4,6 +4,7 @@ import {
   type ComposerMentionInput,
 } from '@orqst/protocol';
 import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit-pending.js';
+import { terminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
   inspectDesktopAdmission,
@@ -87,6 +88,8 @@ export async function connectManagedTerminalCore(
     });
   }
   const config = readInteractiveTerminalConfig(files[0]!);
+  if (terminalExecutableSha256(config.node.path) !== config.node.sha256)
+    throw new Error('Managed Node runtime changed');
   const coreArgs = [
     JSON.stringify(files),
     publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),

@@ -16,7 +16,11 @@ import {
   terminalPreparationBindingSchema,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
-import { terminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
+import {
+  inspectTerminalPreparationCatalog,
+  resolveCatalogSelection,
+  terminalPreparationCatalog,
+} from './terminal-catalog.js';
 import { z } from 'zod';
 import {
   prepareTerminalCreation,
@@ -143,36 +147,35 @@ export async function prepareTauriTerminals(
     ) {
       stage = 'catalog';
       if (!trusted) throw new Error('Native workspace catalogue required');
-      const discovered = terminalPreparationCatalog(
-        {
-          action: 'catalog',
-          workspaceId: request.workspaceId,
-          featureId: request.featureId,
-        },
-        trusted,
-        context,
-      );
+      const scope = {
+        action: 'catalog',
+        workspaceId: request.workspaceId,
+        featureId: request.featureId,
+      };
       if (request.action === 'catalog')
         return {
           status: 'catalog',
           catalog: {
-            ...discovered.catalog,
+            ...terminalPreparationCatalog(scope, trusted, context),
             pendingOwnedExits: inspectPendingOwnedExits(trusted.preferencesDirectory),
           },
         };
-      if (request.catalogId !== discovered.catalog.catalogId) fail('catalog_changed');
-      stage = 'selection';
       const pair = request.action === 'create-mcp-pair';
       const count = pair ? 2 : request.count;
       const sourceProvider = pair ? request.sourceProvider : request.provider;
+      const members = pair ? terminalMcpPairMembers(request) : null;
+      const providers = members ?? [sourceProvider];
+      const inspect = () => inspectTerminalPreparationCatalog(scope, trusted, context, providers);
+      const discovered = inspect();
+      if (request.catalogId !== discovered.catalogId) fail('catalog_changed');
+      stage = 'selection';
+      if (pair && !members) fail('selection_unavailable');
       const select = (name: typeof sourceProvider, modelId: string | undefined) => {
         const selected =
           modelId === undefined ? undefined : resolveCatalogSelection(discovered, name, modelId);
         if (!selected) return fail('selection_unavailable');
         return selected;
       };
-      const members = pair ? terminalMcpPairMembers(request) : null;
-      if (pair && !members) fail('selection_unavailable');
       const source = select(
         sourceProvider,
         pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,
@@ -201,9 +204,7 @@ export async function prepareTauriTerminals(
         // Every terminal talks through the Feature-scoped hub; the pair keeps its own MCP.
         mcp: true,
         ...(pair ? {} : { hub: true }),
-        ...((members ?? [sourceProvider]).includes('opencode')
-          ? { openCodeStartupAuthorized: true }
-          : {}),
+        ...(providers.includes('opencode') ? { openCodeStartupAuthorized: true } : {}),
       });
       // Studio's focused, generation-bound Open gesture authorizes the exact selection.
       // MCP pairs retain their separate bilateral consent; ordinary creation has no sheet.
@@ -220,15 +221,11 @@ export async function prepareTauriTerminals(
         return { status: 'cancelled', files: [] };
       stage = 'revalidation';
       const revalidate = () => {
-        const rechecked = terminalPreparationCatalog(
-          { action: 'catalog', workspaceId: request.workspaceId, featureId: request.featureId },
-          trusted,
-          context,
-        );
+        const rechecked = inspect();
         const still = (provider: typeof sourceProvider, modelId: string | undefined) =>
           modelId !== undefined && !!resolveCatalogSelection(rechecked, provider, modelId);
         if (
-          rechecked.catalog.catalogId !== request.catalogId ||
+          rechecked.catalogId !== request.catalogId ||
           !still(
             sourceProvider,
             pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,

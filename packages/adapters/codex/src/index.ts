@@ -31,6 +31,7 @@ export interface CodexObserverOptions {
   root: string;
   store: Store;
   pollMs?: number;
+  initialScanInBackground?: boolean;
   onEvent?: (event: StoredEvent, live: boolean) => void;
 }
 export class CodexObserver {
@@ -55,7 +56,8 @@ export class CodexObserver {
     this.root = resolve(options.root);
   }
   async start(): Promise<void> {
-    await this.scan();
+    const initialScan = this.scan();
+    if (!this.options.initialScanInBackground) await initialScan;
     if (this.stopped) return;
     this.watcher = watch(this.root, { ignoreInitial: true, followSymlinks: false, depth: 5 });
     this.watcher.on('all', () => {

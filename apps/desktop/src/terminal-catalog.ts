@@ -1,5 +1,5 @@
 import { terminalPreparationCatalogSchema, terminalCatalogRequestSchema } from '@orqst/protocol';
-import { terminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
+import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import {
   resolveTerminalPreparationContext,
@@ -16,11 +16,12 @@ import {
 import { discoverTerminalExecutable } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
 
-/** Read-only discovery. The returned public projection contains no launch paths or arguments. */
-export function terminalPreparationCatalog(
+/** Resolve the scope and re-read only providers participating in the request. */
+export function inspectTerminalPreparationCatalog(
   raw: unknown,
   trusted: TerminalPreparationContext,
   context: Pick<TerminalCreationInput, 'home' | 'environment'>,
+  requestedProviders: readonly LocalCliProvider[],
 ) {
   const request = terminalCatalogRequestSchema.parse(raw);
   const workspace = resolveTerminalPreparationContext(
@@ -28,7 +29,7 @@ export function terminalPreparationCatalog(
     request.workspaceId,
     request.featureId,
   );
-  const providers = localCliProviders.map((provider) => {
+  const providers = [...new Set(requestedProviders)].map((provider) => {
     const executables = discoverTerminalExecutable(
       provider,
       context.environment.PATH ?? '',
@@ -50,7 +51,7 @@ export function terminalPreparationCatalog(
     const identity = JSON.stringify([
       provider,
       executable,
-      executable ? terminalExecutableSha256(executable) : null,
+      executable ? cachedTerminalExecutableSha256(executable) : null,
       context.home,
       context.environment.PATH ?? '',
       // Only native selectors consumed by this provider, never credential variables.
@@ -84,7 +85,22 @@ export function terminalPreparationCatalog(
       workspace.feature?.revision ?? null,
     ]),
   );
-  const catalog = terminalPreparationCatalogSchema.parse({
+  return { request, catalogId, providers, workspace };
+}
+
+/** Read-only public projection with every provider, no launch paths or arguments. */
+export function terminalPreparationCatalog(
+  raw: unknown,
+  trusted: TerminalPreparationContext,
+  context: Pick<TerminalCreationInput, 'home' | 'environment'>,
+) {
+  const { request, catalogId, providers } = inspectTerminalPreparationCatalog(
+    raw,
+    trusted,
+    context,
+    localCliProviders,
+  );
+  return terminalPreparationCatalogSchema.parse({
     contractVersion: 1,
     workspaceId: request.workspaceId,
     featureId: request.featureId,
@@ -111,7 +127,6 @@ export function terminalPreparationCatalog(
         })) ?? [],
     })),
   });
-  return { catalog, providers, workspace };
 }
 
 /** An opaque 64-hex choice: original deadline + 208-bit evidence digest, no public paths. */
@@ -122,7 +137,7 @@ function selectionId(identity: string, label: string, selection: TerminalModelSe
 
 /** Rebind only an unchanged choice; refreshing a cache cannot extend the selected deadline. */
 export function resolveCatalogSelection(
-  discovered: ReturnType<typeof terminalPreparationCatalog>,
+  discovered: Pick<ReturnType<typeof inspectTerminalPreparationCatalog>, 'providers'>,
   name: LocalCliProvider,
   id: string,
 ) {

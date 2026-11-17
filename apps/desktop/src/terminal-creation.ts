@@ -17,6 +17,7 @@ import {
   managedCodexSettings,
   terminalDirectory,
   terminalExecutableSha256,
+  cachedTerminalExecutableSha256,
   validateManagedCodexConfig,
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
@@ -121,9 +122,9 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
   const root = join(input.parent, `terminal-pair-${randomUUID()}`);
   const executables = members.map(({ executable }) => ({
     path: executable,
-    sha256: terminalExecutableSha256(executable),
+    sha256: cachedTerminalExecutableSha256(executable),
   }));
-  const node = { path: input.node, sha256: terminalExecutableSha256(input.node) };
+  const node = { path: input.node, sha256: cachedTerminalExecutableSha256(input.node) };
   const directories = new Set([input.parent, input.project, input.home]);
   const nativeRoots: string[] = [];
   const tools = localCliPathDirectories(input.environment.PATH ?? legacyTerminalPath, input.home, [
@@ -251,7 +252,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         ...(input.hub ? { hub: true } : {}),
       },
     });
-    validateOpenCodeSelection(config);
+    validateOpenCodeSelection(config, cachedTerminalExecutableSha256);
     return config;
   });
   assertSeparateTerminalState(input.project, root);
@@ -350,9 +351,11 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
             mode: 0o600,
           });
         const stagedConfig = { ...config, state };
-        if (stagedConfig.version === 1) validateManagedCodexConfig(stagedConfig);
-        else if (stagedConfig.version === 2) validateManagedClaudeConfig(stagedConfig);
-        else validateManagedOpenCodeConfig(stagedConfig);
+        if (stagedConfig.version === 1)
+          validateManagedCodexConfig(stagedConfig, cachedTerminalExecutableSha256);
+        else if (stagedConfig.version === 2)
+          validateManagedClaudeConfig(stagedConfig, cachedTerminalExecutableSha256);
+        else validateManagedOpenCodeConfig(stagedConfig, cachedTerminalExecutableSha256);
         writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\n', {
           flag: 'wx',
           mode: 0o600,

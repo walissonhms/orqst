@@ -104,6 +104,6 @@ export function readManagedAgentsPair(
   const context = resolveManagedAgentsFeatureContext(configs, native);
   if (expected && JSON.stringify(context) !== JSON.stringify(expected))
     throw new Error('Native Feature scope mismatch');
-  configs.forEach(validateManagedCodexConfig);
+  configs.forEach((config) => validateManagedCodexConfig(config));
   return { configs, context };
 }

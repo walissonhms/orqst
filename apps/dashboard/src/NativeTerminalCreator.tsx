@@ -68,13 +68,11 @@ export function NativeTerminalCreator({
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const first = await native.request({ action: 'snapshot' });
+      const [first, reply] = await Promise.all([
+        native.request({ action: 'snapshot' }),
+        native.request({ action: 'catalog', workspaceId: workspace.id, featureId }),
+      ]);
       if (first.status !== 'catalog' && first.snapshot) setSnapshot(first.snapshot);
-      const reply = await native.request({
-        action: 'catalog',
-        workspaceId: workspace.id,
-        featureId,
-      });
       if (
         reply.status === 'catalog' &&
         reply.catalog.workspaceId === workspace.id &&

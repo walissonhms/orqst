@@ -19,6 +19,7 @@ import {
   managedCodexProfiles,
   terminalDirectory,
   terminalExecutableSha256,
+  cachedTerminalExecutableSha256,
   terminalFile,
   validateManagedCodexConfig,
   type ManagedCodexConfig,
@@ -119,7 +120,10 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
     throw new Error('Owned hooks require the reviewed Claude TUI contract');
 }
 
-export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
+export function validateManagedClaudeConfig(
+  config: ManagedClaudeConfig,
+  verifyExecutable = terminalExecutableSha256,
+): void {
   managedClaudeConfigSchema.parse(config);
   validateTerminalModelSelection(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
@@ -142,25 +146,28 @@ export function validateManagedClaudeConfig(config: ManagedClaudeConfig): void {
       throw new Error('Native identity cannot be inside managed state');
   }
   for (const executable of [config.executable, config.node])
-    if (terminalExecutableSha256(executable.path) !== executable.sha256)
+    if (verifyExecutable(executable.path) !== executable.sha256)
       throw new Error('Terminal executable changed');
 }
 
-export function readInteractiveTerminalConfig(file: string): InteractiveTerminalConfig {
+export function readInteractiveTerminalConfig(
+  file: string,
+  verifyExecutable = cachedTerminalExecutableSha256,
+): InteractiveTerminalConfig {
   const raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 3) {
     const config = managedOpenCodeConfigSchema.parse(raw);
-    validateManagedOpenCodeConfig(config);
+    validateManagedOpenCodeConfig(config, verifyExecutable);
     return config;
   }
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 2) {
     const config = managedClaudeConfigSchema.parse(raw);
-    validateManagedClaudeConfig(config);
+    validateManagedClaudeConfig(config, verifyExecutable);
     validateClaudeOwnedHooks(config);
     return config;
   }
   const config = managedCodexConfigSchema.parse(raw);
-  validateManagedCodexConfig(config);
+  validateManagedCodexConfig(config, verifyExecutable);
   return config;
 }
 

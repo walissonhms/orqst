@@ -167,6 +167,16 @@ stable identifiers, not exception text or retry permission. Extra fields are
 rejected. The helper sends the same object as `{kind:'failure',failure}` over its
 private pipe. See [boundaries and checks](../development/terminal-preparation-diagnostics.md).
 
+## Executable verification during preparation
+
+The public catalogue checks every supported provider. Creation and revalidation
+check the selected providers, along with the existing Workspace/Feature and
+model evidence. Within a Node process, repeated executable checks can reuse a
+SHA-256 result when the securely opened file and its canonical path still match
+the verified device, inode, size, birth time, mtime, ctime, mode and owner/group.
+No digest cache crosses a helper process boundary. Provisioning and the final
+Node/PTY dispatch boundaries recompute SHA-256 from the opened files.
+
 ## Selected catalogue evidence — 2026-11-04
 
 `catalogId` binds Workspace/Feature context and revision; each opaque `modelId`

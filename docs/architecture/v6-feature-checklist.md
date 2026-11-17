@@ -1,5 +1,13 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Native startup and terminal-opening performance — 2026-11-17
+
+- [x] Desktop snapshot availability during the initial scan with a localized history status.
+- [x] Scoped provider discovery and in-process digest reuse with full hashes at dispatch.
+- [ ] Native Preview and real CLI latency acceptance.
+
+See the [disposable host benchmark](../development/native-opening-performance.md).
+
 ## Structured Studio agents — 2026-11-17
 
 - [x] Provider selection in the existing active-Feature panel and native gate.

@@ -16,6 +16,7 @@ const app = createBridge({
   // process acceptance can omit the port and let the OS select an unused one.
   port: process.env.ORQST_PORT === undefined ? 0 : config.port,
   dev: false,
+  initialScanInBackground: true,
   dashboardDir: resolve(dashboardDir),
 });
 let stopping: Promise<void> | undefined;

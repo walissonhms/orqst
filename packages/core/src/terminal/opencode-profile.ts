@@ -60,7 +60,10 @@ export const managedOpenCodeConfigSchema = z.strictObject({
 export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 
 /** Also used before provisioning; checks directories only, never the DB or its ledger. */
-export function validateOpenCodeSelection(config: ManagedOpenCodeConfig): void {
+export function validateOpenCodeSelection(
+  config: ManagedOpenCodeConfig,
+  verifyExecutable = terminalExecutableSha256,
+): void {
   managedOpenCodeConfigSchema.parse(config);
   openCodeModelConfiguration(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
@@ -94,12 +97,15 @@ export function validateOpenCodeSelection(config: ManagedOpenCodeConfig): void {
       if (inside !== '..' && !inside.startsWith('../'))
         throw new Error('Managed state overlaps native OpenCode state');
   for (const executable of [config.executable, config.node])
-    if (terminalExecutableSha256(executable.path) !== executable.sha256)
+    if (verifyExecutable(executable.path) !== executable.sha256)
       throw new Error('Terminal executable changed');
 }
 
-export function validateManagedOpenCodeConfig(config: ManagedOpenCodeConfig): void {
-  validateOpenCodeSelection(config);
+export function validateManagedOpenCodeConfig(
+  config: ManagedOpenCodeConfig,
+  verifyExecutable = terminalExecutableSha256,
+): void {
+  validateOpenCodeSelection(config, verifyExecutable);
   terminalDirectory(config.state, true);
   terminalDirectory(join(config.state, 'tmp'), true);
 }

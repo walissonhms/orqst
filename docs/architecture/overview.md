@@ -175,9 +175,11 @@ See [../api/rest.md](../api/rest.md) and
 Codex adapter and protocol. It has no HTTP, Electron or React dependency. One Core
 opens one store shared by ingestion and transport queries. `initialize()` acquires
 store/observer resources without scanning. Bridge reserves the existing loopback
-port, subscribes to events and awaits `start()`, including retention and the initial
-bounded observer scan/start attempt, before announcing readiness. Source availability
-remains separate: a missing session root does not mean the Core failed to initialize.
+port, subscribes to events and awaits `start()`, including retention. The
+standalone Bridge awaits the initial bounded scan. The native Desktop sidecar
+announces readiness while the first scan runs, so its dashboard can display the
+retained snapshot and show that history is syncing. A missing session root still
+permits the Core to initialize.
 
 Repeated start/stop calls share their operation promises. A stopped or failed instance
 cannot restart; create a new instance against the same data directory. Bridge stops
@@ -253,8 +255,9 @@ associations, but it cannot act on an agent session.
 2. The HTTP server binds `127.0.0.1` on the configured port.
 3. Core starts observation, running `Store.retain()` before the initial scan;
    hourly retention begins after the observer starts.
-4. `CodexObserver.start()` performs an initial scan, then starts a chokidar
-   watcher and a polling timer.
+4. `CodexObserver.start()` starts an initial scan, a chokidar watcher and a
+   polling timer. Desktop installs the watcher and timer while the initial scan
+   is active. The standalone Bridge installs them after that scan attempt.
 5. For each changed file, the observer reads from the last committed checkpoint,
    parses complete JSONL lines, normalizes recognized records, and calls
    `Store.ingest()`.
