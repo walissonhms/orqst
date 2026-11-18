@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Activity, Bell, Folder, Search, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -43,6 +51,8 @@ import {
   type NativePaneLayout,
 } from './studio-native.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
+import { RouteHeaderActions } from './AppShell';
+import { StudioShellContext } from './navigation';
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -72,6 +82,8 @@ export function FeatureWorkspace({
   onWorkspace?: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const shell = useContext(StudioShellContext);
+  const [shellActions, setShellActions] = useState<HTMLDivElement | null>(null);
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
@@ -887,6 +899,15 @@ export function FeatureWorkspace({
     if (outcomes.every(({ delivery }) => delivery === 'unsupported')) return 'unsupported';
     return 'unknown';
   };
+  useEffect(() => {
+    if (!shell?.command || !shellActions || coreState === 'connecting') return;
+    const selector = shell.command === 'delegate' ? '.mc-delegate' : '.feature-add-terminal';
+    const button = shellActions.querySelector<HTMLButtonElement>(selector);
+    const activated =
+      !!button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+    if (activated) button.click();
+    shell.onCommandHandled?.(activated);
+  }, [shell, shellActions, coreState]);
   const prepareReason = t(
     selected?.status === 'archived' ? 'feature.archived' : 'features.creationUnavailable',
   );
@@ -948,356 +969,387 @@ export function FeatureWorkspace({
       </button>
     </>
   );
+  const limitsControl = (
+    <AccountLimits
+      accounts={limits}
+      shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
+      caps={limitPrefs.caps}
+      now={now}
+      source={t('accountLimits.sourceApp')}
+      onOpenChange={setLimitsOpen}
+      onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
+      onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
+      onRefresh={(accountId) =>
+        void request({ action: 'accountLimits', command: 'refresh', accountId })
+      }
+      onToggleLock={(accountId) =>
+        void request({
+          action: 'accountLimits',
+          command: limits.find((entry) => entry.id === accountId)?.locked ? 'unlock' : 'lock',
+          accountId,
+        })
+      }
+    />
+  );
+  const feedback = (notice ||
+    prepareIssue ||
+    closeIssue ||
+    arrangeIssue ||
+    (snapshot && !snapshot.layoutSaved)) && (
+    <div className="feature-feedback" role="status">
+      {notice && <p>{t(`features.${notice}`)}</p>}
+      {prepareIssue && prepareIssue !== notice && <p>{t(`features.${prepareIssue}`)}</p>}
+      {closeIssue && <p>{t('terminalStudio.closeTerminal.unconfirmed')}</p>}
+      {arrangeIssue && (
+        <p>
+          {t(
+            arrangeIssue === 'denied'
+              ? 'terminalStudio.arrangeFocus'
+              : 'terminalStudio.arrangeIssue',
+            { status: arrangeIssue },
+          )}
+        </p>
+      )}
+      {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
+    </div>
+  );
   return (
     <section
       className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}`}
       aria-label={t('features.workspace')}
     >
-      <aside className="feature-sidebar" ref={scopeTree}>
-        <div className="feature-brand">
-          <img
-            src={nativeWorkspace ? 'orqst-features://local/logo.svg' : '/brand/orqst-logo-dark.svg'}
-            alt={t('brand')}
-            width={117}
-            height={36}
-          />
-        </div>
-        <div className="feature-tree">
-          <h2 id="feature-workspaces-heading">{t('features.workspaces')}</h2>
-          <nav aria-labelledby="feature-workspaces-heading">
-            {[...workspaceCatalog.values()].map((workspace) => {
-              const managed = workspace.id === snapshot?.workspace.id;
-              return (
-                <button
-                  key={workspace.id}
-                  type="button"
-                  className="feature-scope"
-                  data-managed-workspace={managed || undefined}
-                  aria-current={managed || undefined}
-                  aria-disabled={!managed || !canWrite || busy}
-                  title={
-                    managed
-                      ? workspace.name
-                      : t('feature.workspace.unmanaged', { name: workspace.name })
-                  }
-                  onClick={() => {
-                    if (managed && canWrite && !busy) void selectScope(null, true);
-                  }}
-                >
-                  <span>{workspace.name}</span>
-                  <small>{managed ? snapshot.features.length : '—'}</small>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className="feature-create"
-              aria-disabled="true"
-              title={t('feature.workspace.creationUnavailable')}
-            >
-              {t('feature.workspace.create')}
-            </button>
-          </nav>
-          <h2 id="feature-tree-heading">{t('features.heading')}</h2>
-          <nav aria-labelledby="feature-tree-heading">
-            {snapshot?.features.map((feature) => {
-              const label = displayFeatureName(feature);
-              return (
-                <button
-                  key={feature.featureId}
-                  type="button"
-                  className="feature-scope"
-                  data-feature-scope={feature.featureId}
-                  aria-current={snapshot.activeFeatureId === feature.featureId || undefined}
-                  aria-disabled={!canWrite || busy}
-                  title={
-                    feature.status === 'archived'
-                      ? t('feature.archivedName', { name: label })
-                      : feature.description || label
-                  }
-                  onClick={() => {
-                    if (canWrite && !busy) void selectScope(feature.featureId);
-                  }}
-                >
-                  <span>
-                    {label}
-                    {feature.status === 'archived' && ' · ' + t('features.status_archived')}
-                  </span>
-                  <small>{feature.terminalIds.length}</small>
-                </button>
-              );
-            })}
-            {snapshot && unassigned.length > 0 && (
+      {!shell && (
+        <aside className="feature-sidebar" ref={scopeTree}>
+          <div className="feature-brand">
+            <img
+              src={
+                nativeWorkspace ? 'orqst-features://local/logo.svg' : '/brand/orqst-logo-dark.svg'
+              }
+              alt={t('brand')}
+              width={117}
+              height={36}
+            />
+          </div>
+          <div className="feature-tree">
+            <h2 id="feature-workspaces-heading">{t('features.workspaces')}</h2>
+            <nav aria-labelledby="feature-workspaces-heading">
+              {[...workspaceCatalog.values()].map((workspace) => {
+                const managed = workspace.id === snapshot?.workspace.id;
+                return (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    className="feature-scope"
+                    data-managed-workspace={managed || undefined}
+                    aria-current={managed || undefined}
+                    aria-disabled={!managed || !canWrite || busy}
+                    title={
+                      managed
+                        ? workspace.name
+                        : t('feature.workspace.unmanaged', { name: workspace.name })
+                    }
+                    onClick={() => {
+                      if (managed && canWrite && !busy) void selectScope(null, true);
+                    }}
+                  >
+                    <span>{workspace.name}</span>
+                    <small>{managed ? snapshot.features.length : '—'}</small>
+                  </button>
+                );
+              })}
               <button
                 type="button"
-                className="feature-scope"
-                data-feature-scope="unassigned"
-                aria-current={snapshot.activeFeatureId === null || undefined}
-                aria-disabled={!canWrite || busy}
-                onClick={() => {
-                  if (canWrite && !busy) void selectScope(null);
-                }}
+                className="feature-create"
+                aria-disabled="true"
+                title={t('feature.workspace.creationUnavailable')}
               >
-                <span>{t('features.unassigned')}</span>
-                <small>{unassigned.length}</small>
+                {t('feature.workspace.create')}
               </button>
-            )}
-            <button
-              type="button"
-              ref={createTrigger}
-              className="feature-create"
-              aria-disabled={busy || !canWrite}
-              title={canWrite ? undefined : t('feature.coreRequired')}
-              onClick={() => {
-                if (canWrite && !busy) openEditor('new');
-              }}
-            >
-              ＋ {t('features.create')}
-            </button>
-          </nav>
-          {canvas && (
-            <>
-              <label className="canvas-search">
-                <span>
-                  {t('canvas.search')} <kbd>⌘K</kbd>
-                </span>
-                <input
-                  ref={searchInput}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-              <CanvasSessionList
-                agents={canvasAgents}
-                query={search}
-                busy={busy || quitFence}
-                onOpen={(agent) => paneCommand(agent.slot, 'focus')}
-              />
-            </>
-          )}
-          {editor && (
-            <form
-              className="feature-editor"
-              aria-label={t(editor === 'new' ? 'features.create' : 'features.edit')}
-              onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && !busy) {
-                  event.stopPropagation();
-                  closeEditor();
-                }
-              }}
-            >
-              <h3>{t(editor === 'new' ? 'features.create' : 'features.edit')}</h3>
-              <label>
-                {t('features.name')}
-                <input
-                  ref={input}
-                  required
-                  maxLength={48}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label>
-                {t('features.description')}
-                <textarea
-                  aria-label={t('features.description')}
-                  maxLength={2048}
-                  rows={3}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label>
-                {t('features.status')}
-                <select
-                  aria-label={t('features.status')}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as WorkspaceFeature['status'])}
-                  disabled={busy}
+            </nav>
+            <h2 id="feature-tree-heading">{t('features.heading')}</h2>
+            <nav aria-labelledby="feature-tree-heading">
+              {snapshot?.features.map((feature) => {
+                const label = displayFeatureName(feature);
+                return (
+                  <button
+                    key={feature.featureId}
+                    type="button"
+                    className="feature-scope"
+                    data-feature-scope={feature.featureId}
+                    aria-current={snapshot.activeFeatureId === feature.featureId || undefined}
+                    aria-disabled={!canWrite || busy}
+                    title={
+                      feature.status === 'archived'
+                        ? t('feature.archivedName', { name: label })
+                        : feature.description || label
+                    }
+                    onClick={() => {
+                      if (canWrite && !busy) void selectScope(feature.featureId);
+                    }}
+                  >
+                    <span>
+                      {label}
+                      {feature.status === 'archived' && ' · ' + t('features.status_archived')}
+                    </span>
+                    <small>{feature.terminalIds.length}</small>
+                  </button>
+                );
+              })}
+              {snapshot && unassigned.length > 0 && (
+                <button
+                  type="button"
+                  className="feature-scope"
+                  data-feature-scope="unassigned"
+                  aria-current={snapshot.activeFeatureId === null || undefined}
+                  aria-disabled={!canWrite || busy}
+                  onClick={() => {
+                    if (canWrite && !busy) void selectScope(null);
+                  }}
                 >
-                  {(editor === 'new'
-                    ? ['planned', 'active', 'blocked', 'completed']
-                    : ['planned', 'active', 'blocked', 'completed', 'archived']
-                  ).map((value) => (
-                    <option key={value} value={value}>
-                      {t(`features.status_${value}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="feature-form-actions">
-                <button type="button" disabled={busy} onClick={closeEditor}>
-                  {t('features.cancel')}
+                  <span>{t('features.unassigned')}</span>
+                  <small>{unassigned.length}</small>
                 </button>
-                <button type="submit" disabled={busy || !canWrite || !name.trim()}>
-                  {t(busy ? 'features.saving' : 'features.save')}
-                </button>
-              </div>
-            </form>
-          )}
-          {(notice ||
-            prepareIssue ||
-            closeIssue ||
-            arrangeIssue ||
-            (snapshot && !snapshot.layoutSaved)) && (
-            <div className="feature-feedback" role="status">
-              {notice && <p>{t(`features.${notice}`)}</p>}
-              {prepareIssue && prepareIssue !== notice && <p>{t(`features.${prepareIssue}`)}</p>}
-              {closeIssue && <p>{t('terminalStudio.closeTerminal.unconfirmed')}</p>}
-              {arrangeIssue && (
-                <p>
-                  {t(
-                    arrangeIssue === 'denied'
-                      ? 'terminalStudio.arrangeFocus'
-                      : 'terminalStudio.arrangeIssue',
-                    { status: arrangeIssue },
-                  )}
-                </p>
               )}
-              {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
-            </div>
-          )}
-          {nativeWorkspace &&
-            renamePane &&
-            available.some((entry) => entry.terminalId === renamePane.terminalId) && (
-              <form
-                className="feature-pane-editor"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const editing = renamePane;
-                  void request({ action: 'renamePane', ...editing }).then((result) => {
-                    if (result === 'ok')
-                      setRenamePane((value) => (value === editing ? null : value));
-                  });
+              <button
+                type="button"
+                ref={createTrigger}
+                className="feature-create"
+                aria-disabled={busy || !canWrite}
+                title={canWrite ? undefined : t('feature.coreRequired')}
+                onClick={() => {
+                  if (canWrite && !busy) openEditor('new');
                 }}
               >
-                <label>
-                  {t('managedTerminal.displayName')}
+                ＋ {t('features.create')}
+              </button>
+            </nav>
+            {canvas && (
+              <>
+                <label className="canvas-search">
+                  <span>
+                    {t('canvas.search')} <kbd>⌘K</kbd>
+                  </span>
                   <input
-                    ref={renameInput}
-                    value={renamePane.name}
-                    maxLength={48}
-                    required
-                    onChange={(event) => setRenamePane({ ...renamePane, name: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') setRenamePane(null);
-                    }}
+                    ref={searchInput}
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
                   />
                 </label>
-                <button disabled={busy} type="submit">
-                  {t('managedTerminal.rename')}
-                </button>{' '}
-                <button type="button" onClick={() => setRenamePane(null)}>
-                  {t('features.cancel')}
-                </button>
-              </form>
+                <CanvasSessionList
+                  agents={canvasAgents}
+                  query={search}
+                  busy={busy || quitFence}
+                  onOpen={(agent) => paneCommand(agent.slot, 'focus')}
+                />
+              </>
             )}
-          {snapshot && (
-            <details className="feature-permissions-disclosure">
-              <summary>{t('feature.options')}</summary>
-              <button
-                ref={editTrigger}
-                type="button"
-                disabled={busy || !canWrite || !selected || !!editor}
-                onClick={() => selected && openEditor(selected)}
-              >
-                {t('features.edit')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={canvas}
-                disabled={busy || !canWrite}
-                onClick={() => {
-                  setWantsCanvas(!canvas);
-                  if (!canvas && nativeWorkspace)
-                    void request({ action: 'canvas' }).then((result) => {
-                      if (result !== 'ok') setWantsCanvas(false);
-                    });
+            {editor && (
+              <form
+                className="feature-editor"
+                aria-label={t(editor === 'new' ? 'features.create' : 'features.edit')}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void save();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && !busy) {
+                    event.stopPropagation();
+                    closeEditor();
+                  }
                 }}
               >
-                {t('canvas.title')}
-              </button>
-              {structured && (
-                <button
-                  type="button"
-                  disabled={busy || !canWrite || selected?.status === 'archived'}
-                  onClick={() => {
-                    if (selected) {
-                      setStructuredFeature(selected.featureId);
-                      return;
+                <h3>{t(editor === 'new' ? 'features.create' : 'features.edit')}</h3>
+                <label>
+                  {t('features.name')}
+                  <input
+                    ref={input}
+                    required
+                    maxLength={48}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  {t('features.description')}
+                  <textarea
+                    aria-label={t('features.description')}
+                    maxLength={2048}
+                    rows={3}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  {t('features.status')}
+                  <select
+                    aria-label={t('features.status')}
+                    value={status}
+                    onChange={(event) =>
+                      setStatus(event.target.value as WorkspaceFeature['status'])
                     }
-                    const featureId = defaultFeatureId(snapshot.workspace.id);
-                    void selectScope(featureId).then((accepted) => {
-                      if (accepted) setStructuredFeature(featureId);
+                    disabled={busy}
+                  >
+                    {(editor === 'new'
+                      ? ['planned', 'active', 'blocked', 'completed']
+                      : ['planned', 'active', 'blocked', 'completed', 'archived']
+                    ).map((value) => (
+                      <option key={value} value={value}>
+                        {t(`features.status_${value}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="feature-form-actions">
+                  <button type="button" disabled={busy} onClick={closeEditor}>
+                    {t('features.cancel')}
+                  </button>
+                  <button type="submit" disabled={busy || !canWrite || !name.trim()}>
+                    {t(busy ? 'features.saving' : 'features.save')}
+                  </button>
+                </div>
+              </form>
+            )}
+            {feedback}
+            {nativeWorkspace &&
+              renamePane &&
+              available.some((entry) => entry.terminalId === renamePane.terminalId) && (
+                <form
+                  className="feature-pane-editor"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const editing = renamePane;
+                    void request({ action: 'renamePane', ...editing }).then((result) => {
+                      if (result === 'ok')
+                        setRenamePane((value) => (value === editing ? null : value));
                     });
                   }}
                 >
-                  {t('structuredAgents.title')}
-                </button>
-              )}
-              {selected && !editor && (
-                <div className="feature-members">
-                  <p>{t('features.members', { count: selected.terminalIds.length })}</p>
-                  <p>{t('features.available', { count: available.length })}</p>
-                  {selected.terminalIds.length > available.length && (
-                    <p>
-                      {t('features.missing', {
-                        count: selected.terminalIds.length - available.length,
-                      })}
-                    </p>
-                  )}
-                  {unassigned.length > 0 && selected.status !== 'archived' && (
-                    <form
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        if (assignSlot)
-                          void request({
-                            action: 'assign',
-                            featureId: selected.featureId,
-                            slot: Number(assignSlot),
-                            expectedRevision: selected.revision,
-                          }).then((result) => {
-                            if (result === 'ok') setAssignSlot('');
-                          });
+                  <label>
+                    {t('managedTerminal.displayName')}
+                    <input
+                      ref={renameInput}
+                      value={renamePane.name}
+                      maxLength={48}
+                      required
+                      onChange={(event) =>
+                        setRenamePane({ ...renamePane, name: event.target.value })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') setRenamePane(null);
                       }}
-                    >
-                      <label>
-                        {t('features.assign')}
-                        <select
-                          value={assignSlot}
-                          disabled={busy}
-                          onChange={(event) => setAssignSlot(event.target.value)}
-                        >
-                          <option value="">{t('features.choose')}</option>
-                          {unassigned.map((slot) => (
-                            <option key={slot.terminalId} value={String(slot.slot)}>
-                              {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button disabled={busy || !assignSlot}>{t('features.addMember')}</button>
-                    </form>
-                  )}
-                </div>
+                    />
+                  </label>
+                  <button disabled={busy} type="submit">
+                    {t('managedTerminal.rename')}
+                  </button>{' '}
+                  <button type="button" onClick={() => setRenamePane(null)}>
+                    {t('features.cancel')}
+                  </button>
+                </form>
               )}
-              {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
-            </details>
+            {snapshot && (
+              <details className="feature-permissions-disclosure">
+                <summary>{t('feature.options')}</summary>
+                <button
+                  ref={editTrigger}
+                  type="button"
+                  disabled={busy || !canWrite || !selected || !!editor}
+                  onClick={() => selected && openEditor(selected)}
+                >
+                  {t('features.edit')}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={canvas}
+                  disabled={busy || !canWrite}
+                  onClick={() => {
+                    setWantsCanvas(!canvas);
+                    if (!canvas && nativeWorkspace)
+                      void request({ action: 'canvas' }).then((result) => {
+                        if (result !== 'ok') setWantsCanvas(false);
+                      });
+                  }}
+                >
+                  {t('canvas.title')}
+                </button>
+                {structured && (
+                  <button
+                    type="button"
+                    disabled={busy || !canWrite || selected?.status === 'archived'}
+                    onClick={() => {
+                      if (selected) {
+                        setStructuredFeature(selected.featureId);
+                        return;
+                      }
+                      const featureId = defaultFeatureId(snapshot.workspace.id);
+                      void selectScope(featureId).then((accepted) => {
+                        if (accepted) setStructuredFeature(featureId);
+                      });
+                    }}
+                  >
+                    {t('structuredAgents.title')}
+                  </button>
+                )}
+                {selected && !editor && (
+                  <div className="feature-members">
+                    <p>{t('features.members', { count: selected.terminalIds.length })}</p>
+                    <p>{t('features.available', { count: available.length })}</p>
+                    {selected.terminalIds.length > available.length && (
+                      <p>
+                        {t('features.missing', {
+                          count: selected.terminalIds.length - available.length,
+                        })}
+                      </p>
+                    )}
+                    {unassigned.length > 0 && selected.status !== 'archived' && (
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          if (assignSlot)
+                            void request({
+                              action: 'assign',
+                              featureId: selected.featureId,
+                              slot: Number(assignSlot),
+                              expectedRevision: selected.revision,
+                            }).then((result) => {
+                              if (result === 'ok') setAssignSlot('');
+                            });
+                        }}
+                      >
+                        <label>
+                          {t('features.assign')}
+                          <select
+                            value={assignSlot}
+                            disabled={busy}
+                            onChange={(event) => setAssignSlot(event.target.value)}
+                          >
+                            <option value="">{t('features.choose')}</option>
+                            {unassigned.map((slot) => (
+                              <option key={slot.terminalId} value={String(slot.slot)}>
+                                {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button disabled={busy || !assignSlot}>{t('features.addMember')}</button>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
+              </details>
+            )}
+          </div>
+          {(navigation || nativeNavigation) && (
+            <div className="feature-navigation">{navigation ?? nativeNavigation}</div>
           )}
-        </div>
-        {(navigation || nativeNavigation) && (
-          <div className="feature-navigation">{navigation ?? nativeNavigation}</div>
-        )}
-        <footer className="feature-core" role="status" data-state={coreState}>
-          <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
-        </footer>
-      </aside>
+          <footer className="feature-core" role="status" data-state={coreState}>
+            <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
+          </footer>
+        </aside>
+      )}
       {structuredOpen && (
         <StructuredAgents
           key={selected.featureId}
@@ -1307,7 +1359,24 @@ export function FeatureWorkspace({
           onClose={() => setStructuredFeature(undefined)}
         />
       )}
-      {!studio && (
+      {shell && (
+        <RouteHeaderActions>
+          <div className="studio-header-actions" ref={setShellActions}>
+            {studio
+              ? layoutActions(
+                  () => layoutControls.current?.toggleGrid(),
+                  () => layoutControls.current?.restore(),
+                )
+              : layoutActions(
+                  () => void request({ action: 'organize', command: 'columns-2' }),
+                  () => void request({ action: 'organize', command: 'show-all' }),
+                )}
+            {actions}
+            {limits.length > 0 && <div className="shell-account-limits">{limitsControl}</div>}
+          </div>
+        </RouteHeaderActions>
+      )}
+      {!shell && !studio && (
         <header className="feature-topbar">
           {breadcrumb}
           {toolbarUtilities}
@@ -1318,6 +1387,7 @@ export function FeatureWorkspace({
           {actions}
         </header>
       )}
+      {shell && feedback}
       {studio ? (
         <div
           className="feature-studio"
@@ -1375,51 +1445,33 @@ export function FeatureWorkspace({
                   }
                 : {}),
             }}
-            toolbarStart={breadcrumb}
+            showToolbar={!shell}
+            toolbarStart={shell ? undefined : breadcrumb}
             toolbarEnd={
-              <>
-                {toolbarUtilities}
-                {layoutActions(
-                  () => layoutControls.current?.toggleGrid(),
-                  () => layoutControls.current?.restore(),
-                )}
-                {selected &&
-                  measuredTerminals.length > 0 &&
-                  Number.isSafeInteger(featureTokens) && (
-                    <span className="fine-print">
-                      {t('terminalStudio.featureTokens', {
-                        tokens: new Intl.NumberFormat(i18n.resolvedLanguage).format(featureTokens),
-                        measured: measuredTerminals.length,
-                        total: terminals.length,
-                      })}
-                    </span>
+              shell ? undefined : (
+                <>
+                  {toolbarUtilities}
+                  {layoutActions(
+                    () => layoutControls.current?.toggleGrid(),
+                    () => layoutControls.current?.restore(),
                   )}
-                {nativeWorkspace ? (
-                  <AccountLimits
-                    accounts={limits}
-                    shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
-                    caps={limitPrefs.caps}
-                    now={now}
-                    source={t('accountLimits.sourceApp')}
-                    onOpenChange={setLimitsOpen}
-                    onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
-                    onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
-                    onRefresh={(accountId) =>
-                      void request({ action: 'accountLimits', command: 'refresh', accountId })
-                    }
-                    onToggleLock={(accountId) =>
-                      void request({
-                        action: 'accountLimits',
-                        command: limits.find((entry) => entry.id === accountId)?.locked
-                          ? 'unlock'
-                          : 'lock',
-                        accountId,
-                      })
-                    }
-                  />
-                ) : null}
-                {actions}
-              </>
+                  {selected &&
+                    measuredTerminals.length > 0 &&
+                    Number.isSafeInteger(featureTokens) && (
+                      <span className="fine-print">
+                        {t('terminalStudio.featureTokens', {
+                          tokens: new Intl.NumberFormat(i18n.resolvedLanguage).format(
+                            featureTokens,
+                          ),
+                          measured: measuredTerminals.length,
+                          total: terminals.length,
+                        })}
+                      </span>
+                    )}
+                  {nativeWorkspace ? limitsControl : null}
+                  {actions}
+                </>
+              )
             }
             {...(nativeWorkspace && selected?.status !== 'archived'
               ? {

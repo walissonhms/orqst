@@ -7,6 +7,12 @@ export function useObservatory(onLiveNotification: (event: StoredEvent, silent: 
     'connecting',
   );
   const [error, setError] = useState(false);
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
+  const reconnect = useCallback(() => {
+    setError(false);
+    setConnection('connecting');
+    setConnectionAttempt((attempt) => attempt + 1);
+  }, []);
   const liveRef = useRef(onLiveNotification);
   liveRef.current = onLiveNotification;
   const refresh = useCallback(async () => {
@@ -100,6 +106,6 @@ export function useObservatory(onLiveNotification: (event: StoredEvent, silent: 
       if (refreshTimer) clearTimeout(refreshTimer);
       socket?.close();
     };
-  }, [refresh]);
-  return { snapshot, connection, error, refresh };
+  }, [refresh, connectionAttempt]);
+  return { snapshot, connection, error, refresh, reconnect };
 }

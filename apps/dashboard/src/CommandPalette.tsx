@@ -3,33 +3,49 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, Search, X } from 'lucide-react';
 import type { Snapshot } from '@orqst/protocol';
 import { Modal } from './Modal';
-import type { StudioScope } from './navigation';
+import type { StudioScope, StudioShellCommand } from './navigation';
+import type { StudioTerminal } from './TerminalStudio';
+import type { ShellWorkspace } from './ShellSidebar';
 import { appViews, type AppView } from './shell-preferences';
 
 export function CommandPalette({
   snapshot,
   studioScope,
+  workspaces,
+  features,
   onNavigate,
   onWorkspace,
   onSession,
   onNotifications,
   onCreate,
-  onGuide,
+  onFeature,
+  onStudioCommand,
   onClose,
 }: {
   snapshot?: Snapshot;
   studioScope?: StudioScope;
+  workspaces: ShellWorkspace[];
+  features: { id: string; name: string; description: string; terminals: StudioTerminal[] }[];
   onNavigate: (view: AppView) => void;
   onWorkspace: (id: string) => void;
   onSession: (id: string) => void;
   onNotifications: () => void;
   onCreate: () => void;
-  onGuide: () => void;
+  onFeature: (id: string, terminalId?: string) => void;
+  onStudioCommand?: (command: StudioShellCommand) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const entries = [
+    ...(onStudioCommand
+      ? (['newTerminal', 'delegate'] as const).map((command) => ({
+          id: `action:${command}`,
+          label: t(`shell.frame.${command}`),
+          detail: t('shell.palette.actions'),
+          action: () => onStudioCommand(command),
+        }))
+      : []),
     ...appViews.map((view) => ({
       id: `view:${view}`,
       label: t(`shell.views.${view}`),
@@ -39,7 +55,7 @@ export function CommandPalette({
               workspace: studioScope.workspace.name,
               feature: studioScope.featureName ?? t('features.unassigned'),
             })
-          : t('shell.palette.navigation'),
+          : t('shell.palette.goTo', { route: t(`shell.views.${view}`) }),
       action: () => onNavigate(view),
     })),
     {
@@ -49,23 +65,38 @@ export function CommandPalette({
       action: onNotifications,
     },
     {
-      id: 'observation-guide',
-      label: t('observationGuide.title'),
-      detail: t('shell.palette.actions'),
-      action: onGuide,
-    },
-    {
       id: 'create',
       label: t('createWorkspace'),
       detail: t('shell.palette.actions'),
       action: onCreate,
     },
-    ...(snapshot?.workspaces ?? []).map((workspace) => ({
+    ...workspaces.map((workspace) => ({
       id: `workspace:${workspace.id}`,
       label: workspace.name,
-      detail: workspace.path,
+      detail: t('features.workspace'),
       action: () => onWorkspace(workspace.id),
     })),
+    ...features.flatMap((feature) => [
+      {
+        id: `feature:${feature.id}`,
+        label: feature.name,
+        detail: feature.description,
+        action: () => onFeature(feature.id),
+      },
+      ...feature.terminals.map((terminal) => ({
+        id: `terminal:${terminal.id}`,
+        label: `${terminal.label} · ${terminal.name === 'Claude Code' ? 'Claude' : terminal.name}`,
+        detail: [
+          terminal.alias && `@${terminal.alias}`,
+          t(`shell.adapters.${terminal.provider}`),
+          terminal.model,
+          feature.name,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        action: () => onFeature(feature.id, terminal.id),
+      })),
+    ]),
     ...(snapshot?.sessions ?? []).map((session) => ({
       id: `session:${session.id}`,
       label: session.agentName,
@@ -73,11 +104,13 @@ export function CommandPalette({
       action: () => onSession(session.id),
     })),
   ];
-  const matches = entries.filter((entry) =>
-    `${entry.label} ${entry.detail} ${entry.id}`
-      .toLocaleLowerCase()
-      .includes(query.trim().toLocaleLowerCase()),
-  );
+  const searchable = (text: string) =>
+    text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase();
+  const terms = searchable(query.trim()).split(/\s+/);
+  const matches = entries.filter((entry) => {
+    const text = searchable(`${entry.label} ${entry.detail} ${entry.id}`);
+    return terms.every((term) => text.includes(term));
+  });
   const visible = matches.slice(0, 60);
   return (
     <Modal
@@ -115,7 +148,9 @@ export function CommandPalette({
             }
           }}
         />
-        <p className="fine-print">{t('shell.palette.help')}</p>
+        <p className="fine-print" title={t('shell.palette.help.detail')}>
+          {t('shell.palette.help.label')}
+        </p>
       </div>
       <div
         className="palette-results"
@@ -143,7 +178,7 @@ export function CommandPalette({
           >
             <span>
               <strong>{entry.label}</strong>
-              <small>{entry.detail}</small>
+              <small title={entry.detail}>{entry.detail}</small>
             </span>
             <ArrowUpRight size={15} />
           </button>

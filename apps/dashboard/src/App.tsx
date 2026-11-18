@@ -7,23 +7,14 @@ import {
   Bell,
   Check,
   CheckCircle2,
-  ChevronRight,
   Circle,
-  Command,
+  ChevronRight,
+  Layers3,
+  Search,
   ExternalLink,
   Folder,
-  FileText,
   GitBranch,
-  Globe2,
-  Layers3,
-  Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
-  BarChart3,
-  Plus,
-  Pin,
   Radio,
-  Search,
   Settings2,
   ShieldCheck,
   Terminal,
@@ -36,10 +27,12 @@ import type {
   Preferences,
   SessionView,
   Snapshot,
+  WorkspaceFeature,
   StoredEvent,
   Usage,
 } from '@orqst/protocol';
 import {
+  defaultFeatureId,
   featureDisplayName,
   featurePreparationRequestSchema,
   type FeaturePreparationRequest,
@@ -62,81 +55,29 @@ import {
   viewFromLocation,
   viewPath,
   type StudioTreeProps,
+  type StudioShellCommand,
 } from './navigation';
 import { findNotificationSource, NativeSessionNavigation } from './native-session-navigation';
 import { Agents } from './Agents';
 import { Studio } from './Studio';
+import { AppShell } from './AppShell';
+import { ShellSidebar, type FeatureOperation } from './ShellSidebar';
+import { studioTerminals } from './studio-native';
 import { StudioWorkspace } from './StudioWorkspace';
 import { Workspaces } from './Workspaces';
-import { pinnedFirst, useWorkspacePins } from './workspace-pins';
+import { useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
 import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
 import { useFeatureShell } from './use-feature-shell.js';
-import { unassignedTerminalCount } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
 import { ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
-import { isTemporaryWorkspace, shellSections, shortAge, STALE_MS } from './shell-sections';
-import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
-
-const viewIcons = {
-  overview: Activity,
-  studio: Terminal,
-  workspaces: Folder,
-  agents: Terminal,
-  models: BarChart3,
-  artifacts: FileText,
-  settings: Settings2,
-} satisfies Record<AppView, typeof Activity>;
-
-const studioRoutes: readonly AppView[] = ['overview', 'studio', 'workspaces', 'settings'];
-
-function RouteLinks({
-  views,
-  current,
-  onNavigate,
-  compact = false,
-}: {
-  views: readonly AppView[];
-  current: AppView;
-  onNavigate: (view: AppView) => void;
-  compact?: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <nav
-      aria-label={t('analytics.navigation')}
-      className={compact ? 'studio-route-links' : undefined}
-    >
-      {views.map((view) => {
-        const Icon = viewIcons[view];
-        const label = t(`shell.views.${view}`);
-        return (
-          <a
-            key={view}
-            className={`workspace-link${view === current ? ' active' : ''}`}
-            href={viewPath(view)}
-            title={label}
-            aria-label={label}
-            aria-current={view === current ? 'page' : undefined}
-            onClick={(event) => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              event.preventDefault();
-              onNavigate(view);
-            }}
-          >
-            <Icon size={16} aria-hidden="true" />
-            <span>{label}</span>
-          </a>
-        );
-      })}
-    </nav>
-  );
-}
+import { shellSections, STALE_MS } from './shell-sections';
+import { readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -441,7 +382,9 @@ function SessionDetail({
           <code>{session.model ?? t('modelObservation.notRecorded')}</code>
           <details>
             <summary>{t('modelObservation.limits')}</summary>
-            <p>{t('modelObservation.historyNote')}</p>
+            <p title={t('modelObservation.historyNote.detail')}>
+              {t('modelObservation.historyNote.label')}
+            </p>
             <p>{t('modelObservation.availabilityNote')}</p>
           </details>
         </div>
@@ -595,17 +538,15 @@ export function App() {
     });
   }
   const [shell, setShell] = useState(readShellPreferences);
-  const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
-  const [view, setView] = useState<AppView>(
-    viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
-  );
-  const [studioReturn, setStudioReturn] = useState(false);
+  const [view, setView] = useState<AppView>(viewFromLocation(location) ?? 'studio');
+  const [studioCommand, setStudioCommand] = useState<StudioShellCommand>();
+  const [featureError, setFeatureError] = useState(false);
   const [preparationRequest, setPreparationRequest] = useState<FeaturePreparationRequest>();
   const showPreparation = useRef<(detail: unknown) => void>(() => {});
   useEffect(() => {
@@ -642,7 +583,10 @@ export function App() {
   const featureShell = useFeatureShell();
   const featureSnapshot = featureShell.snapshot;
   const managedShell = window.orqstFeatures?.contractVersion === 1;
-  const managedStudio = managedShell && view === 'studio';
+  const managedStudio =
+    managedShell &&
+    view === 'studio' &&
+    (!workspaceId || workspaceId === featureSnapshot?.workspace.id);
   const managedFeature = featureSnapshot?.features.find(
     (feature) => feature.featureId === featureSnapshot.activeFeatureId,
   );
@@ -686,18 +630,6 @@ export function App() {
   const [markingRead, setMarkingRead] = useState(false);
   const [markReadError, setMarkReadError] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuTrigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
-      setMenuOpen(false);
-      menuTrigger.current?.focus();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [menuOpen]);
   const [notice, setNotice] = useState('');
   const audioRef = useRef<AudioContext | null>(null);
   const [saveError, setSaveError] = useState(false);
@@ -762,7 +694,7 @@ export function App() {
     },
     [nativeDesktop, sound, t],
   );
-  const { snapshot, connection, error, refresh } = useObservatory(onLive);
+  const { snapshot, connection, error, refresh, reconnect } = useObservatory(onLive);
   const nativeNavigation = useRef<NativeSessionNavigation | null>(null);
   const nativeNavigationContext = useRef({ key: '', token: {} });
   const nativeNavigationKey = JSON.stringify([connection, workspaceId, view, selected]);
@@ -818,10 +750,9 @@ export function App() {
       setStatus('');
     } else if (page === 'overview') applySession(undefined);
     if (page !== 'overview') setArtifactRequest(undefined);
-    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
+    if (page !== 'studio') setStudioCommand(undefined);
     setView(page);
     navigation.current?.replace(viewPath(page, id));
-    setMenuOpen(false);
   }
   routeActions.current = {
     traverse: linkedDestination,
@@ -895,10 +826,9 @@ export function App() {
   }
   function applyView(page: AppView, sessionId = selected) {
     if (page !== 'overview') setArtifactRequest(undefined);
-    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
+    if (page !== 'studio') setStudioCommand(undefined);
     setView(page);
     navigation.current?.push(viewPath(page, sessionId));
-    setMenuOpen(false);
   }
   function navigate(page: AppView, focusContent = false) {
     if (page === view) return;
@@ -918,7 +848,6 @@ export function App() {
       else
         requestNavigation(() => {
           applyView(destination, destination === 'overview' ? selected : undefined);
-          setStudioReturn(true);
           requestAnimationFrame(() => document.getElementById('main-content')?.focus());
         });
       return;
@@ -1028,11 +957,12 @@ export function App() {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     try {
-      await api('/api/workspaces', {
+      const { id } = await api<{ id: string }>('/api/workspaces', {
         method: 'POST',
         body: JSON.stringify({ name: data.get('name'), path: data.get('path') }),
       });
       await refresh();
+      openWorkspace(id, 'studio');
       setWorkspaceOpen(false);
       setSaveError(false);
     } catch {
@@ -1051,8 +981,8 @@ export function App() {
   const notificationPreferences = (
     <>
       {(!snapshot || error || connection !== 'connected') && (
-        <p className="notice" role="status">
-          {t('settings.notificationsUnavailable')}
+        <p className="notice" role="status" title={t('settings.notificationsUnavailable.detail')}>
+          {t('settings.notificationsUnavailable.label')}
         </p>
       )}
       <NotificationPreferences
@@ -1071,24 +1001,10 @@ export function App() {
       />
     </>
   );
-  const languageControl = (
-    <label className="language-select">
-      <Globe2 size={14} />
-      <select
-        aria-label={t('language')}
-        value={i18n.resolvedLanguage ?? 'en-US'}
-        onChange={(event) => {
-          void i18n.changeLanguage(event.target.value);
-        }}
-      >
-        <option value="en-US">EN</option>
-        <option value="pt-BR">PT-BR</option>
-      </select>
-    </label>
-  );
   const notificationControl = (
     <button
-      className={`icon-button bell-button ${unread ? 'has-unread' : ''}`}
+      className="shell-icon shell-bell"
+      title={t('notifications')}
       aria-label={t('notifications')}
       aria-description={
         snapshot &&
@@ -1099,7 +1015,12 @@ export function App() {
       aria-haspopup="dialog"
       onClick={() => setNotificationOpen(true)}
     >
-      <Bell size={17} />
+      <Bell size={16} aria-hidden="true" />
+      {unread > 0 && (
+        <span className="shell-unread" aria-hidden="true">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
     </button>
   );
   const studioTree: StudioTreeProps = {
@@ -1108,406 +1029,229 @@ export function App() {
     observedWorkspaceId: workspaceId,
     onObservedWorkspaceChange: (id) => openWorkspace(id),
   };
-  const sideSections = shellSections(snapshot?.sessions ?? [], now);
   const overviewRunning = shellSections(sessions, now, Number.MAX_SAFE_INTEGER);
-  const hiddenWorkspaces = snapshot
-    ? snapshot.workspaces.filter(
-        (workspace) =>
-          !workspacePins.pins.includes(workspace.id) &&
-          workspace.id !== workspaceId &&
-          isTemporaryWorkspace(workspace),
-      ).length + Math.max(0, snapshot.workspaces.filter((w) => !isTemporaryWorkspace(w)).length - 8)
-    : 0;
-  return (
-    <div
-      className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${managedShell ? ' managed-shell' : ''}${managedStudio ? ' studio-shell' : ''}`}
-    >
-      <a
-        className="skip-link"
-        href="#main-content"
-        onClick={(event) => {
-          event.preventDefault();
-          document.getElementById('main-content')?.focus();
-        }}
-      >
-        {t('shell.skip')}
-      </a>
-      <aside id="app-sidebar" className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
-        <a
-          className="brand"
-          href="/overview"
-          aria-label={t('brand')}
-          onClick={(event) => {
-            event.preventDefault();
-            navigate('overview');
-          }}
-        >
-          <img
-            className="brand-logo"
-            src={
-              appearance.resolvedTheme === 'dark'
-                ? '/brand/orqst-logo-dark.svg'
-                : '/brand/orqst-logo.svg'
-            }
-            width={880}
-            height={270}
-            alt={t('brand')}
-          />
-        </a>
-        <button
-          className="icon-button sidebar-collapse"
-          aria-label={t(shell.collapsed ? 'shell.expand' : 'shell.collapse')}
-          aria-expanded={!shell.collapsed}
-          onClick={() => setShell((value) => ({ ...value, collapsed: !value.collapsed }))}
-        >
-          {shell.collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
-        <div className="side-actions">
-          <button className="side-row" onClick={() => setPaletteOpen(true)}>
-            <Search size={15} />
-            <span>{t('shell.side.search')}</span>
-            <kbd>⌘K</kbd>
-          </button>
-          <button className="side-row" onClick={() => navigate('studio')}>
-            <Plus size={15} />
-            <span>{t('shell.side.newSession')}</span>
-            <kbd>⌘N</kbd>
-          </button>
-        </div>
-        <RouteLinks
-          views={managedShell ? appViews.filter((page) => !studioRoutes.includes(page)) : appViews}
-          current={view}
-          onNavigate={navigate}
+  const managedWorkspace = featureSnapshot?.workspace;
+  const shellWorkspaceId = workspaceId || managedWorkspace?.id || '';
+  const shellWorkspace =
+    currentWorkspace ?? (shellWorkspaceId === managedWorkspace?.id ? managedWorkspace : undefined);
+  const managedSelected = !!managedWorkspace && shellWorkspaceId === managedWorkspace.id;
+  const coreConnection = offline ? 'offline' : connection;
+  const featureWritable =
+    managedSelected && coreConnection !== 'offline' && !quitFence && !featureShell.busy;
+  const openSlots = new Set(
+    featureSnapshot?.slots.filter((slot) => !slot.closed).map((slot) => slot.terminalId),
+  );
+  const managedFeatures = (featureSnapshot?.features ?? []).filter(
+    (feature) => feature.status !== 'archived',
+  );
+
+  function selectWorkspace(id: string) {
+    setFeatureError(false);
+    openWorkspace(id === managedWorkspace?.id ? '' : id, 'studio');
+  }
+  function openFeature(id: string, terminalId?: string) {
+    requestNavigation(() => {
+      setFeatureError(false);
+      void (async () => {
+        if (!(await featureShell.select(id))) {
+          setFeatureError(true);
+          return;
+        }
+        setWorkspaceId('');
+        applyView('studio');
+        if (terminalId && !(await featureShell.focusTerminal(terminalId))) setFeatureError(true);
+      })();
+    });
+  }
+  async function editFeature(
+    { action, feature }: { action: FeatureOperation; feature?: WorkspaceFeature },
+    name: string,
+    description: string,
+    featureStatus: WorkspaceFeature['status'],
+  ) {
+    if (!featureWritable || !featureSnapshot) return false;
+    const input = { name, description, status: featureStatus };
+    if (action === 'archive' || action === 'rename') {
+      if (!feature) return false;
+      const reply = await featureShell.request({
+        action: 'update',
+        featureId: feature.featureId,
+        input:
+          action === 'archive'
+            ? { status: 'archived', expectedRevision: feature.revision }
+            : { ...input, expectedRevision: feature.revision },
+      });
+      if (reply?.status !== 'ok') return false;
+      if (action === 'archive' && feature.featureId === featureSnapshot.activeFeatureId)
+        openFeature(defaultFeatureId(featureSnapshot.workspace.id));
+      return true;
+    }
+    const reply = await featureShell.request({ action: 'create', input });
+    if (reply?.status !== 'ok') return false;
+    const existing = new Set(featureSnapshot.features.map((feature) => feature.featureId));
+    const created = reply.snapshot?.features.filter(
+      (candidate) =>
+        !existing.has(candidate.featureId) &&
+        candidate.name === name &&
+        candidate.description === description &&
+        candidate.status === featureStatus,
+    );
+    if (created?.length === 1) openFeature(created[0]!.featureId);
+    return true;
+  }
+  function runStudioCommand(command: StudioShellCommand) {
+    requestNavigation(() => {
+      setFeatureError(false);
+      setWorkspaceId('');
+      applyView('studio');
+      setStudioCommand(command);
+    });
+  }
+
+  const paletteWorkspaces = new Map(
+    (snapshot?.workspaces ?? []).map(({ id, name }) => [id, { id, name }]),
+  );
+  if (managedWorkspace) paletteWorkspaces.set(managedWorkspace.id, managedWorkspace);
+  const workspaceRows = [...paletteWorkspaces.values()].map((workspace) => ({
+    ...workspace,
+    count: workspace.id === managedWorkspace?.id ? managedFeatures.length : undefined,
+  }));
+  const settingsRoute = view === 'settings' || view === 'agents';
+  const routeTitle = t(`shell.views.${settingsRoute ? 'settings' : view}`);
+  const featureName = managedSelected ? studioScope?.featureName : undefined;
+  const breadcrumb = [shellWorkspace?.name ?? t('allWorkspaces'), featureName]
+    .filter(Boolean)
+    .join(' / ');
+  const subtitle =
+    view === 'studio' && managedSelected && managedFeature
+      ? t(`features.status_${managedFeature.status}`)
+      : routeTitle;
+  const sidebar = (
+    <ShellSidebar
+      view={view}
+      workspaces={workspaceRows}
+      workspaceId={shellWorkspaceId}
+      features={
+        managedSelected
+          ? managedFeatures.map((feature) => ({
+              feature,
+              count: feature.terminalIds.filter((id) => openSlots.has(id)).length,
+            }))
+          : []
+      }
+      featureId={featureSnapshot?.activeFeatureId}
+      featureWritable={featureWritable}
+      onWorkspace={selectWorkspace}
+      onFeature={openFeature}
+      onEditFeature={editFeature}
+      featureError={featureError}
+      onNavigate={(page) => navigate(page, true)}
+      onCreateWorkspace={() => {
+        setSaveError(false);
+        setWorkspaceOpen(true);
+      }}
+      onSearch={() => setPaletteOpen(true)}
+      notificationControl={notificationControl}
+      connection={coreConnection}
+      onReconnect={reconnect}
+    />
+  );
+  const headerActions = view === 'overview' && (
+    <>
+      {selectedSession && (
+        <SessionTokenBadge
+          state={
+            headerMetrics?.sessionId === selectedSession.id ? headerMetrics.metrics : undefined
+          }
+          offline={connection !== 'connected' || error}
         />
-        {(
-          [
-            ['needsYou', sideSections.needsYou],
-            ['running', sideSections.running],
-            ['recent', sideSections.recent],
-          ] as const
-        ).map(([key, list]) => (
-          <details key={key} className="side-section" open>
-            <summary>
-              <span>{t(`shell.side.${key}`)}</span>
-              <small>{key === 'recent' ? list.length : list.length}</small>
-            </summary>
-            {list.length === 0 ? (
-              <p className="side-empty">
-                {key === 'running' && sideSections.stale > 0
-                  ? t('shell.side.staleOnly', { count: sideSections.stale })
-                  : '—'}
-              </p>
-            ) : (
-              list.map((session) => (
-                <button
-                  key={session.id}
-                  className={`side-session side-${key === 'recent' && session.status === 'running' ? 'stale' : session.status}${selected === session.id ? ' active' : ''}`}
-                  title={session.task ?? session.agentName}
-                  onClick={() => openSession(session.id)}
-                >
-                  <span className="side-dot" aria-hidden="true" />
-                  <span className="side-title">{session.task ?? session.agentName}</span>
-                  <small>{shortAge(session.lastActivity, now)}</small>
-                </button>
-              ))
-            )}
-            {key === 'running' && sideSections.stale > 0 && list.length > 0 && (
-              <p className="side-empty">{t('shell.side.stale', { count: sideSections.stale })}</p>
-            )}
-          </details>
-        ))}
-        <div className="nav-heading">
-          <span>{t('workspaceNav')}</span>
-          <button
-            className="icon-button"
-            aria-label={t('createWorkspace')}
-            onClick={() => setWorkspaceOpen(true)}
-          >
-            <Plus size={15} />
+      )}
+      <button ref={overviewLayoutTrigger} className="button" onClick={openOverviewLayout}>
+        <Settings2 size={16} />
+        {t('overviewLayout.title')}
+      </button>
+    </>
+  );
+  const outlet = (
+    <>
+      {(quitWait || quitFence) && (
+        <div className="quit-blocked" role="alert">
+          <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
+          {quitWait && (
+            <>
+              <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
+              {quitWait.uncertain.length > 0 && (
+                <ul>
+                  {quitWait.uncertain.map((entry) => (
+                    <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
+                  ))}
+                </ul>
+              )}
+              <span>{t('quitBlocked.retry')}</span>
+            </>
+          )}
+        </div>
+      )}
+      {!managedStudio && notice && !notificationOpen && (
+        <div className="notice" role="status">
+          {t(notice)}
+          <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
+            <X size={14} />
           </button>
         </div>
-        <nav aria-label={t('workspaceNav')}>
-          <button
-            aria-label={t('allWorkspaces')}
-            title={t('allWorkspaces')}
-            className={`workspace-link ${!workspaceId ? 'active' : ''}`}
-            onClick={() => {
-              openWorkspace('');
+      )}
+
+      {view === 'studio' ? (
+        managedStudio ? (
+          <StudioShellContext.Provider
+            value={{
+              tree: studioTree,
+              command: studioCommand,
+              onCommandHandled: (activated) => {
+                setStudioCommand(undefined);
+                if (!activated) setFeatureError(true);
+              },
+              navigate,
+              openNotifications: () => setNotificationOpen(true),
+              openSearch: () => setPaletteOpen(true),
             }}
           >
-            <Layers3 size={16} />
-            <span>{t('allWorkspaces')}</span>
-            <small>{snapshot?.sessions.length ?? 0}</small>
-          </button>
-          {snapshot &&
-            pinnedFirst(snapshot.workspaces, workspacePins.pins)
-              .filter(
-                (workspace) =>
-                  showAllWorkspaces ||
-                  workspace.id === workspaceId ||
-                  workspacePins.pins.includes(workspace.id) ||
-                  !isTemporaryWorkspace(workspace),
-              )
-              .slice(0, showAllWorkspaces ? undefined : 8)
-              .map((workspace) => (
-                <button
-                  key={workspace.id}
-                  className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
-                  title={workspace.path}
-                  aria-label={
-                    workspacePins.pins.includes(workspace.id)
-                      ? t('shell.workspaces.pinnedName', { name: workspace.name })
-                      : workspace.name
-                  }
-                  onClick={() => {
-                    openWorkspace(workspace.id);
-                  }}
-                >
-                  {workspacePins.pins.includes(workspace.id) ? (
-                    <Pin size={16} aria-hidden="true" />
-                  ) : (
-                    <Folder size={16} />
-                  )}
-                  <span>{workspace.name}</span>
-                  <small>{workspace.sessions}</small>
-                </button>
-              ))}
-          {snapshot && hiddenWorkspaces > 0 && (
-            <button className="side-more" onClick={() => setShowAllWorkspaces((value) => !value)}>
-              {showAllWorkspaces
-                ? t('shell.side.showFewer')
-                : t('shell.side.showAll', { count: hiddenWorkspaces })}
-            </button>
-          )}
-        </nav>
-        {featureShell.snapshot && (
-          <>
-            <div className="nav-heading">
-              <span>{t('features.heading')}</span>
-            </div>
-            <nav aria-label={t('features.heading')}>
-              {featureShell.snapshot.features.map((feature) => (
-                <button
-                  key={feature.featureId}
-                  className={`workspace-link ${feature.featureId === featureShell.snapshot?.activeFeatureId ? 'active' : ''}`}
-                  aria-current={
-                    feature.featureId === featureShell.snapshot?.activeFeatureId
-                      ? 'page'
-                      : undefined
-                  }
-                  disabled={featureShell.busy}
-                  title={`${feature.description}\n${t(`features.status_${feature.status}`)}`}
-                  onClick={() => void featureShell.select(feature.featureId)}
-                >
-                  <Layers3 size={16} />
-                  <span>{feature.name}</span>
-                  <small>{feature.terminalIds.length}</small>
-                </button>
-              ))}
-              <button
-                className={`workspace-link ${featureShell.snapshot.activeFeatureId === null ? 'active' : ''}`}
-                disabled={featureShell.busy}
-                onClick={() => void featureShell.select(null)}
-              >
-                <Layers3 size={16} />
-                <span>{t('features.unassigned')}</span>
-                <small>{unassignedTerminalCount(featureShell.snapshot)}</small>
-              </button>
-            </nav>
-          </>
-        )}
-        <div className="sidebar-bottom">
-          <div className="local-badge" title={t('localPrivacy')}>
-            <ShieldCheck size={14} />
-            <span>{t('localEdition')}</span>
-          </div>
-        </div>
-      </aside>
-      <div className="main-shell">
-        {!managedStudio && (
-          <header className="topbar">
-            {managedShell && (
-              <RouteLinks views={studioRoutes} current={view} onNavigate={navigate} compact />
-            )}
-            <div className="breadcrumbs">
-              <button
-                ref={menuTrigger}
-                className="icon-button menu-toggle"
-                aria-label={t('workspaceNav')}
-                aria-controls="app-sidebar"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                <Menu size={18} />
-              </button>
-              <Command size={15} aria-hidden="true" />
-              <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
-              <ChevronRight size={14} aria-hidden="true" />
-              <strong>{t(`shell.views.${view}`)}</strong>
-            </div>
-            <div className="topbar-actions">
-              {window.orqstManagedAgents?.contractVersion === 1 && (
-                <button
-                  className="button"
-                  onClick={() => {
-                    void window.orqstManagedAgents
-                      ?.open()
-                      .then((reply) => {
-                        if (reply?.status && reply.status !== 'ok')
-                          setNotice(
-                            reply.status === 'focus_required'
-                              ? 'managedAgents.open_focus_required'
-                              : 'managedAgents.open_unavailable',
-                          );
-                        else setNotice('');
-                      })
-                      .catch(() => setNotice('managedAgents.open_unavailable'));
-                  }}
-                >
-                  <Terminal size={15} />
-                  {t('managedAgents.title')}
-                </button>
-              )}
-              <button
-                className="button command-trigger"
-                aria-label={t('shell.palette.title')}
-                aria-keyshortcuts="Meta+K Control+K"
-                onClick={() => setPaletteOpen(true)}
-              >
-                <Search size={15} />
-                <span>{t('shell.palette.shortLabel')}</span>
-                <kbd>{t('shell.palette.shortcut')}</kbd>
-              </button>
-              <span className={`connection connection-${connection}`} role="status">
-                <span className="tiny-dot" />
-                {t(connection)}
-              </span>
-              {!managedShell && (
-                <button
-                  className="icon-button"
-                  aria-label={t('shell.views.settings')}
-                  onClick={() => navigate('settings')}
-                >
-                  <Settings2 size={17} />
-                </button>
-              )}
-              {languageControl}
-              {notificationControl}
-            </div>
-          </header>
-        )}
-        {(quitWait || quitFence) && (
-          <div className="quit-blocked" role="alert">
-            <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
-            {quitWait && (
-              <>
-                <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
-                {quitWait.uncertain.length > 0 && (
-                  <ul>
-                    {quitWait.uncertain.map((entry) => (
-                      <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
-                    ))}
-                  </ul>
-                )}
-                <span>{t('quitBlocked.retry')}</span>
-              </>
-            )}
-          </div>
-        )}
-        {selectedSession && view === 'overview' && (
-          <div
-            className="session-context-bar"
-            aria-label={t('shell.metrics.context')}
-            role="region"
-          >
-            <span className="session-context-name" title={selectedSession.agentName}>
-              {selectedSession.agentName}
-            </span>
-            <span className="session-context-model" title={t('modelObservation.availabilityNote')}>
-              {selectedSession.adapter} · {t('modelObservation.identifier')}:{' '}
-              <code>{selectedSession.model ?? t('modelObservation.notRecorded')}</code>
-            </span>
-            <Status status={selectedSession.status} />
-            <SessionTokenBadge
-              state={
-                headerMetrics?.sessionId === selectedSession.id ? headerMetrics.metrics : undefined
-              }
-              offline={connection !== 'connected' || error}
+            <StudioWorkspace
+              preparationRequest={preparationRequest}
+              onPreparationHandled={() => setPreparationRequest(undefined)}
+              workspaces={studioTree.observedWorkspaces}
+              workspaceId={studioTree.observedWorkspaceId}
+              onWorkspace={studioTree.onObservedWorkspaceChange}
             />
-          </div>
-        )}
-        <main id="main-content" tabIndex={-1}>
-          {!managedStudio && (error || saveError) && view !== 'overview' && (
-            <p className="notice" role="alert">
-              {t(saveError ? 'savedError' : 'error')}
-            </p>
-          )}
-          {!managedStudio && !snapshot && !error && view !== 'models' && view !== 'settings' && (
-            <p className="notice" role="status">
-              {t('shell.loading')}
-            </p>
-          )}
-          {!managedStudio && initialScan && (
-            <p className="notice" role="status">
-              {t('syncing')}
-            </p>
-          )}
-          {!managedStudio && notice && !notificationOpen && (
-            <div className="notice" role="status">
-              {t(notice)}
-              <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
-          {view === 'studio' ? (
-            managedStudio ? (
-              <StudioShellContext.Provider
-                value={{
-                  tree: studioTree,
-                  navigate,
-                  openNotifications: () => setNotificationOpen(true),
-                  openSearch: () => setPaletteOpen(true),
+          </StudioShellContext.Provider>
+        ) : managedShell ? (
+          <p className="notice" role="status">
+            {t('shell.frame.observedWorkspace')}
+          </p>
+        ) : (
+          <Studio />
+        )
+      ) : settingsRoute ? (
+        <>
+          <nav className="shell-settings-tabs" aria-label={routeTitle}>
+            {(['settings', 'agents'] as const).map((page) => (
+              <a
+                key={page}
+                href={viewPath(page)}
+                aria-current={view === page ? 'page' : undefined}
+                onClick={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  navigate(page);
                 }}
               >
-                <StudioWorkspace
-                  preparationRequest={preparationRequest}
-                  onPreparationHandled={() => setPreparationRequest(undefined)}
-                  navigation={
-                    <>
-                      <RouteLinks
-                        views={studioRoutes.filter((route) => route !== 'studio')}
-                        current={view}
-                        onNavigate={(page) => navigate(page, true)}
-                        compact
-                      />
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title={t('shell.palette.title')}
-                        aria-label={t('shell.palette.title')}
-                        aria-keyshortcuts="Meta+K Control+K"
-                        aria-haspopup="dialog"
-                        onClick={() => setPaletteOpen(true)}
-                      >
-                        <Search size={16} aria-hidden="true" />
-                      </button>
-                      {notificationControl}
-                    </>
-                  }
-                  toolbarUtilities={
-                    <div className="feature-toolbar-utilities">{languageControl}</div>
-                  }
-                  workspaces={studioTree.observedWorkspaces}
-                  workspaceId={studioTree.observedWorkspaceId}
-                  onWorkspace={studioTree.onObservedWorkspaceChange}
-                />
-              </StudioShellContext.Provider>
-            ) : (
-              <Studio />
-            )
-          ) : view === 'settings' ? (
+                {t(page === 'settings' ? 'shell.frame.general' : 'shell.views.agents')}
+              </a>
+            ))}
+          </nav>
+          {view === 'agents' ? (
+            snapshot && <Agents snapshot={snapshot} />
+          ) : (
             <Settings
               appearance={appearance.appearance}
               onAppearance={appearance.setAppearance}
@@ -1515,412 +1259,376 @@ export function App() {
               systemReducedMotion={appearance.systemReducedMotion}
               notifications={notificationPreferences}
               onGuide={() => setGuideOpen(true)}
-              returnAction={
-                studioReturn
-                  ? { label: t('shell.views.studio'), onReturn: () => navigate('studio', true) }
-                  : undefined
-              }
             />
-          ) : view === 'models' ? (
-            <ModelAnalytics
-              workspaceId={workspaceId}
+          )}
+        </>
+      ) : view === 'communication' ? (
+        <p className="notice" role="status">
+          {t('shell.frame.communicationUnavailable')}
+        </p>
+      ) : view === 'models' ? (
+        <ModelAnalytics
+          workspaceId={workspaceId}
+          snapshot={snapshot}
+          connection={connection}
+          snapshotError={error}
+        />
+      ) : view === 'artifacts' ? (
+        snapshot && (
+          <ArtifactLibrary
+            key={workspaceId}
+            snapshot={snapshot}
+            workspaceId={workspaceId}
+            online={connection === 'connected' && !error}
+            onOpen={(request) => openSession(request.sessionId, request)}
+          />
+        )
+      ) : view === 'workspaces' ? (
+        snapshot && (
+          <Workspaces
+            snapshot={snapshot}
+            activeId={workspaceId}
+            pins={workspacePins}
+            layout={shell.workspaceLayout}
+            sort={shell.workspaceSort}
+            onLayout={(value) => setShell((previous) => ({ ...previous, workspaceLayout: value }))}
+            onSort={(value) => setShell((previous) => ({ ...previous, workspaceSort: value }))}
+            onOpen={(id) => openWorkspace(id, 'overview')}
+            onAnalytics={(id) => openWorkspace(id, 'models')}
+            onCreate={() => setWorkspaceOpen(true)}
+          />
+        )
+      ) : (
+        <>
+          <div className="page-heading overview-heading">
+            <div>
+              <span className="eyebrow">
+                <Radio size={12} />
+                {t('readOnly')}
+              </span>
+              <h1>{t('overviewPage.title')}</h1>
+              <p>{t('overviewPage.subtitle')}</p>
+            </div>
+          </div>
+          {(error || saveError) && (
+            <p className="notice" role="alert">
+              {t(saveError ? 'savedError' : 'error')}
+            </p>
+          )}
+          <section className="stats" aria-label={t('overview')}>
+            <div className="stat">
+              <span>
+                {t('sessions')}
+                <Terminal size={15} />
+              </span>
+              <strong>
+                {historyReady
+                  ? f.number(sessions.length)
+                  : t('overviewPage.measurementUnavailable')}
+              </strong>
+              <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
+            </div>
+            <div className="stat">
+              <span>
+                {t('running')}
+                <Activity size={15} />
+              </span>
+              <strong>
+                {historyReady
+                  ? f.number(overviewRunning.running.length)
+                  : t('overviewPage.measurementUnavailable')}
+                {historyReady && overviewRunning.running.length > 0 && (
+                  <i className="stat-live" aria-hidden="true" />
+                )}
+              </strong>
+              <small>
+                {overviewRunning.stale > 0
+                  ? t('shell.side.staleOnly', { count: overviewRunning.stale })
+                  : t('overviewPage.recentActivity')}
+              </small>
+            </div>
+            <div className="stat">
+              <span>
+                {t('attention')}
+                <Bell size={15} />
+              </span>
+              <strong className={attention.length ? 'amber-text' : ''}>
+                {historyReady
+                  ? f.number(attention.length)
+                  : t('overviewPage.measurementUnavailable')}
+              </strong>
+              <small>{t('overviewPage.lastObservedState')}</small>
+            </div>
+            <div className="stat">
+              <span>
+                {t('tokens')}
+                <Zap size={15} />
+              </span>
+              <strong>
+                {historyReady && measuredSessions.length
+                  ? f.compact(usage.total)
+                  : t('overviewPage.measurementUnavailable')}
+              </strong>
+              {historyReady && (
+                <small>
+                  {t('tokenScope', {
+                    measured: measuredSessions.length,
+                    total: sessions.length,
+                  })}
+                </small>
+              )}
+            </div>
+          </section>
+          <section className="panel agents-panel">
+            <div className="panel-heading">
+              <h2>
+                <Terminal size={17} />
+                {t('agents')}
+                {historyReady && <span className="count-badge">{sessions.length}</span>}
+              </h2>
+              <span className="subtle-label">{t('latest')}</span>
+            </div>
+            <div className="filters">
+              <label className="search-box">
+                <Search size={15} />
+                <input
+                  aria-label={t('search')}
+                  placeholder={t('search')}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </label>
+              <label className="status-filter">
+                <Settings2 size={14} />
+                <select
+                  aria-label={t('status')}
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value)}
+                >
+                  <option value="">{t('allStatuses')}</option>
+                  {(
+                    [
+                      'running',
+                      'waiting_for_user',
+                      'completed',
+                      'failed',
+                      'interrupted',
+                      'unknown',
+                    ] as const
+                  ).map((value) => (
+                    <option value={value} key={value}>
+                      {t(`statusLabels.${value}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {!historyReady ? null : !sessions.length ? (
+              <div className="empty-state">
+                <img
+                  className="empty-mascot"
+                  src="/brand/orqst-mascot.svg"
+                  width={690}
+                  height={590}
+                  alt=""
+                  aria-hidden="true"
+                />
+                <h3>{t('emptyTitle')}</h3>
+                <p>{t('emptyBody')}</p>
+                <button className="button" onClick={() => setGuideOpen(true)}>
+                  {t('observationGuide.title')}
+                </button>
+                {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan !== null && (
+                  <span className="connection">{t('syncing')}</span>
+                )}
+              </div>
+            ) : (
+              <div className="table-scroll" tabIndex={0} role="group" aria-label={t('agents')}>
+                <table className="session-table" role="table">
+                  <thead>
+                    <tr>
+                      <th>{t('agent')}</th>
+                      <th>{t('status')}</th>
+                      <th>{t('duration')}</th>
+                      <th>{t('lastActivity')}</th>
+                      <th>{t('tokens')}</th>
+                      <th>
+                        <span className="sr-only">{t('viewSession')}</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((session) => (
+                      <tr
+                        key={session.id}
+                        className={selected === session.id ? 'selected-row' : ''}
+                      >
+                        <td>
+                          <button className="agent-cell" onClick={() => selectSession(session.id)}>
+                            <span
+                              className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
+                            >
+                              {session.parentSessionId ? (
+                                <GitBranch size={17} />
+                              ) : (
+                                <Terminal size={17} />
+                              )}
+                            </span>
+                            <span>
+                              <strong>{session.agentName}</strong>
+                              <small title={session.task ?? ''}>
+                                {session.task ?? t('noTask')}
+                              </small>
+                            </span>
+                          </button>
+                        </td>
+                        <td data-label={t('status')}>
+                          <Status status={session.status} lastActivity={session.lastActivity} />
+                        </td>
+                        <td className="mono muted" data-label={t('duration')}>
+                          {f.duration(session)}
+                        </td>
+                        <td className="mono muted" data-label={t('lastActivity')}>
+                          {f.date(session.lastActivity)}
+                        </td>
+                        <td className="mono token-cell" data-label={t('tokens')}>
+                          {(session.usageRecorded ?? session.usage.total > 0)
+                            ? f.compact(session.usage.total)
+                            : '—'}
+                        </td>
+                        <td>
+                          <button
+                            className="icon-button"
+                            aria-label={`${t('viewSession')} ${session.agentName}`}
+                            onClick={() => selectSession(session.id)}
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!filtered.length && <p className="empty-copy">{t('filteredEmpty')}</p>}
+              </div>
+            )}
+            <div className="panel-footer">
+              <span className="tiny-dot" />
+              {t('observedNote')}
+            </div>
+          </section>
+          {selectedSession && snapshot ? (
+            <SessionDetail
+              key={selectedSession.id}
+              session={selectedSession}
               snapshot={snapshot}
               connection={connection}
               snapshotError={error}
+              onMetrics={updateHeaderMetrics}
+              artifactCloseGuard={artifactCloseGuard}
+              artifactRequest={artifactRequest}
+              onArtifact={setArtifactRequest}
+              onClose={() => selectSession(undefined)}
+              onSave={() => {
+                void refresh();
+              }}
             />
-          ) : view === 'artifacts' ? (
-            snapshot && (
-              <ArtifactLibrary
-                key={workspaceId}
-                snapshot={snapshot}
-                workspaceId={workspaceId}
-                online={connection === 'connected' && !error}
-                onOpen={(request) => openSession(request.sessionId, request)}
-              />
-            )
-          ) : view === 'workspaces' ? (
-            snapshot && (
-              <Workspaces
-                snapshot={snapshot}
-                activeId={workspaceId}
-                pins={workspacePins}
-                layout={shell.workspaceLayout}
-                sort={shell.workspaceSort}
-                onLayout={(value) =>
-                  setShell((previous) => ({ ...previous, workspaceLayout: value }))
-                }
-                onSort={(value) => setShell((previous) => ({ ...previous, workspaceSort: value }))}
-                onOpen={(id) => openWorkspace(id, 'overview')}
-                onAnalytics={(id) => openWorkspace(id, 'models')}
-                onCreate={() => setWorkspaceOpen(true)}
-              />
-            )
-          ) : view === 'agents' ? (
-            snapshot && <Agents snapshot={snapshot} />
-          ) : (
-            <>
-              <div className="page-heading overview-heading">
-                <div>
-                  <span className="eyebrow">
-                    <Radio size={12} />
-                    {t('readOnly')}
-                  </span>
-                  <h1>{t('overviewPage.title')}</h1>
-                  <p>{t('overviewPage.subtitle')}</p>
-                </div>
-                <button ref={overviewLayoutTrigger} className="button" onClick={openOverviewLayout}>
-                  <Settings2 size={16} />
-                  {t('overviewLayout.title')}
-                </button>
-              </div>
-              {(error || saveError) && (
-                <p className="notice" role="alert">
-                  {t(saveError ? 'savedError' : 'error')}
-                </p>
-              )}
-              <section className="stats" aria-label={t('overview')}>
-                <div className="stat">
-                  <span>
-                    {t('sessions')}
-                    <Terminal size={15} />
-                  </span>
-                  <strong>
-                    {historyReady
-                      ? f.number(sessions.length)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('running')}
-                    <Activity size={15} />
-                  </span>
-                  <strong>
-                    {historyReady
-                      ? f.number(overviewRunning.running.length)
-                      : t('overviewPage.measurementUnavailable')}
-                    {historyReady && overviewRunning.running.length > 0 && (
-                      <i className="stat-live" aria-hidden="true" />
-                    )}
-                  </strong>
-                  <small>
-                    {overviewRunning.stale > 0
-                      ? t('shell.side.staleOnly', { count: overviewRunning.stale })
-                      : t('overviewPage.recentActivity')}
-                  </small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('attention')}
-                    <Bell size={15} />
-                  </span>
-                  <strong className={attention.length ? 'amber-text' : ''}>
-                    {historyReady
-                      ? f.number(attention.length)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  <small>{t('overviewPage.lastObservedState')}</small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('tokens')}
-                    <Zap size={15} />
-                  </span>
-                  <strong>
-                    {historyReady && measuredSessions.length
-                      ? f.compact(usage.total)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  {historyReady && (
-                    <small>
-                      {t('tokenScope', {
-                        measured: measuredSessions.length,
-                        total: sessions.length,
-                      })}
-                    </small>
-                  )}
-                </div>
-              </section>
-              <section className="panel agents-panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Terminal size={17} />
-                    {t('agents')}
-                    {historyReady && <span className="count-badge">{sessions.length}</span>}
-                  </h2>
-                  <span className="subtle-label">{t('latest')}</span>
-                </div>
-                <div className="filters">
-                  <label className="search-box">
-                    <Search size={15} />
-                    <input
-                      aria-label={t('search')}
-                      placeholder={t('search')}
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                    />
-                  </label>
-                  <label className="status-filter">
-                    <Settings2 size={14} />
-                    <select
-                      aria-label={t('status')}
-                      value={status}
-                      onChange={(event) => setStatus(event.target.value)}
-                    >
-                      <option value="">{t('allStatuses')}</option>
-                      {(
-                        [
-                          'running',
-                          'waiting_for_user',
-                          'completed',
-                          'failed',
-                          'interrupted',
-                          'unknown',
-                        ] as const
-                      ).map((value) => (
-                        <option value={value} key={value}>
-                          {t(`statusLabels.${value}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {!historyReady ? null : !sessions.length ? (
-                  <div className="empty-state">
-                    <img
-                      className="empty-mascot"
-                      src="/brand/orqst-mascot.svg"
-                      width={690}
-                      height={590}
-                      alt=""
-                      aria-hidden="true"
-                    />
-                    <h3>{t('emptyTitle')}</h3>
-                    <p>{t('emptyBody')}</p>
-                    <button className="button" onClick={() => setGuideOpen(true)}>
-                      {t('observationGuide.title')}
-                    </button>
-                    {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan !== null && (
-                      <span className="connection">{t('syncing')}</span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="table-scroll" tabIndex={0} role="group" aria-label={t('agents')}>
-                    <table className="session-table" role="table">
-                      <thead>
-                        <tr>
-                          <th>{t('agent')}</th>
-                          <th>{t('status')}</th>
-                          <th>{t('duration')}</th>
-                          <th>{t('lastActivity')}</th>
-                          <th>{t('tokens')}</th>
-                          <th>
-                            <span className="sr-only">{t('viewSession')}</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((session) => (
-                          <tr
-                            key={session.id}
-                            className={selected === session.id ? 'selected-row' : ''}
-                          >
-                            <td>
-                              <button
-                                className="agent-cell"
-                                onClick={() => selectSession(session.id)}
-                              >
-                                <span
-                                  className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
-                                >
-                                  {session.parentSessionId ? (
-                                    <GitBranch size={17} />
-                                  ) : (
-                                    <Terminal size={17} />
-                                  )}
-                                </span>
-                                <span>
-                                  <strong>{session.agentName}</strong>
-                                  <small title={session.task ?? ''}>
-                                    {session.task ?? t('noTask')}
-                                  </small>
-                                </span>
-                              </button>
-                            </td>
-                            <td data-label={t('status')}>
-                              <Status status={session.status} lastActivity={session.lastActivity} />
-                            </td>
-                            <td className="mono muted" data-label={t('duration')}>
-                              {f.duration(session)}
-                            </td>
-                            <td className="mono muted" data-label={t('lastActivity')}>
-                              {f.date(session.lastActivity)}
-                            </td>
-                            <td className="mono token-cell" data-label={t('tokens')}>
-                              {(session.usageRecorded ?? session.usage.total > 0)
-                                ? f.compact(session.usage.total)
-                                : '—'}
-                            </td>
-                            <td>
-                              <button
-                                className="icon-button"
-                                aria-label={`${t('viewSession')} ${session.agentName}`}
-                                onClick={() => selectSession(session.id)}
-                              >
-                                <ChevronRight size={16} />
-                              </button>
-                            </td>
-                          </tr>
+          ) : historyReady ? (
+            <OverviewPanels
+              preferences={overview.preferences}
+              onCustomize={openOverviewLayout}
+              panels={{
+                activity: (
+                  <section className="panel activity-panel">
+                    <div className="panel-heading">
+                      <h2>
+                        <Activity size={17} />
+                        {t('activity')}
+                      </h2>
+                      <span className="subtle-label">{f.number(recent.length)}</span>
+                    </div>
+                    <Timeline events={recent.slice(-45)} />
+                    <div className="panel-footer">
+                      {t('limitNotice', { count: Math.min(recent.length, 45) })}
+                    </div>
+                  </section>
+                ),
+                attention: (
+                  <section className="panel attention-panel">
+                    <div className="panel-heading">
+                      <h2>
+                        <Bell size={16} />
+                        {t('attention')}
+                      </h2>
+                      <span className="count-badge">{attention.length}</span>
+                    </div>
+                    {attention.length ? (
+                      <div className="attention-list">
+                        {attention.slice(0, 10).map((session) => (
+                          <button onClick={() => selectSession(session.id)} key={session.id}>
+                            <span>
+                              <strong>{session.agentName}</strong>
+                              <Status status={session.status} />
+                            </span>
+                            <ChevronRight size={16} />
+                          </button>
                         ))}
-                      </tbody>
-                    </table>
-                    {!filtered.length && <p className="empty-copy">{t('filteredEmpty')}</p>}
-                  </div>
-                )}
-                <div className="panel-footer">
-                  <span className="tiny-dot" />
-                  {t('observedNote')}
-                </div>
-              </section>
-              {selectedSession && snapshot ? (
-                <SessionDetail
-                  key={selectedSession.id}
-                  session={selectedSession}
-                  snapshot={snapshot}
-                  connection={connection}
-                  snapshotError={error}
-                  onMetrics={updateHeaderMetrics}
-                  artifactCloseGuard={artifactCloseGuard}
-                  artifactRequest={artifactRequest}
-                  onArtifact={setArtifactRequest}
-                  onClose={() => selectSession(undefined)}
-                  onSave={() => {
-                    void refresh();
-                  }}
-                />
-              ) : historyReady ? (
-                <OverviewPanels
-                  preferences={overview.preferences}
-                  onCustomize={openOverviewLayout}
-                  panels={{
-                    activity: (
-                      <section className="panel activity-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Activity size={17} />
-                            {t('activity')}
-                          </h2>
-                          <span className="subtle-label">{f.number(recent.length)}</span>
+                      </div>
+                    ) : (
+                      <div className="quiet-state">
+                        <CheckCircle2 size={26} />
+                        <strong>{t('attentionEmpty')}</strong>
+                        <p>{t('attentionBody')}</p>
+                      </div>
+                    )}
+                  </section>
+                ),
+                usage: (
+                  <section className="panel usage-panel">
+                    <div className="panel-heading">
+                      <h2>
+                        <Zap size={16} />
+                        {t('usage')}
+                      </h2>
+                    </div>
+                    <div className="usage-body">
+                      <TokenSummary usage={measuredSessions.length ? usage : undefined} />
+                    </div>
+                  </section>
+                ),
+                diagnostics: (
+                  <section className="panel diagnostics-panel">
+                    <div className="panel-heading">
+                      <h2>
+                        <ShieldCheck size={16} />
+                        {t('diagnostics')}
+                      </h2>
+                    </div>
+                    <dl>
+                      {[
+                        ['sourceFiles', snapshot?.diagnostics.files ?? 0],
+                        ['malformed', snapshot?.diagnostics.malformed ?? 0],
+                        ['oversized', snapshot?.diagnostics.oversized ?? 0],
+                        ['scanErrors', snapshot?.diagnostics.errors ?? 0],
+                      ].map(([key, value]) => (
+                        <div key={key}>
+                          <dt>{t(String(key))}</dt>
+                          <dd>{f.number(Number(value))}</dd>
                         </div>
-                        <Timeline events={recent.slice(-45)} />
-                        <div className="panel-footer">
-                          {t('limitNotice', { count: Math.min(recent.length, 45) })}
-                        </div>
-                      </section>
-                    ),
-                    attention: (
-                      <section className="panel attention-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Bell size={16} />
-                            {t('attention')}
-                          </h2>
-                          <span className="count-badge">{attention.length}</span>
-                        </div>
-                        {attention.length ? (
-                          <div className="attention-list">
-                            {attention.slice(0, 10).map((session) => (
-                              <button onClick={() => selectSession(session.id)} key={session.id}>
-                                <span>
-                                  <strong>{session.agentName}</strong>
-                                  <Status status={session.status} />
-                                </span>
-                                <ChevronRight size={16} />
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="quiet-state">
-                            <CheckCircle2 size={26} />
-                            <strong>{t('attentionEmpty')}</strong>
-                            <p>{t('attentionBody')}</p>
-                          </div>
-                        )}
-                      </section>
-                    ),
-                    usage: (
-                      <section className="panel usage-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Zap size={16} />
-                            {t('usage')}
-                          </h2>
-                        </div>
-                        <div className="usage-body">
-                          <TokenSummary usage={measuredSessions.length ? usage : undefined} />
-                        </div>
-                      </section>
-                    ),
-                    diagnostics: (
-                      <section className="panel diagnostics-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <ShieldCheck size={16} />
-                            {t('diagnostics')}
-                          </h2>
-                        </div>
-                        <dl>
-                          {[
-                            ['sourceFiles', snapshot?.diagnostics.files ?? 0],
-                            ['malformed', snapshot?.diagnostics.malformed ?? 0],
-                            ['oversized', snapshot?.diagnostics.oversized ?? 0],
-                            ['scanErrors', snapshot?.diagnostics.errors ?? 0],
-                          ].map(([key, value]) => (
-                            <div key={key}>
-                              <dt>{t(String(key))}</dt>
-                              <dd>{f.number(Number(value))}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        <p className="fine-print">{t('retentionNote')}</p>
-                      </section>
-                    ),
-                  }}
-                />
-              ) : null}
-            </>
-          )}
-        </main>
-        <footer className="status-bar" aria-label={t('shell.side.status')}>
-          <span className="status-item status-running">
-            <span className="side-dot" aria-hidden="true" />
-            {t('shell.side.runningCount', { count: sideSections.running.length })}
-          </span>
-          {sideSections.needsYou.length > 0 && (
-            <span className="status-item status-attention">
-              {t('shell.side.needsYouCount', { count: sideSections.needsYou.length })}
-            </span>
-          )}
-          <span className="status-spacer" />
-          <span className={`status-item connection-${connection}`}>
-            <span className="tiny-dot" />
-            {t(connection)}
-          </span>
-          <span className="status-item">{t('localEdition')}</span>
-        </footer>
-        <footer className="app-footer">
-          <span>
-            <span className="brand-dot" />
-            {t('brand')}
-            <span className="version">v0.1.0</span>
-          </span>
-          <span>
-            <ShieldCheck size={12} />
-            {t('localPrivacy')}
-          </span>
-        </footer>
-      </div>
+                      ))}
+                    </dl>
+                    <p className="fine-print">{t('retentionNote')}</p>
+                  </section>
+                ),
+              }}
+            />
+          ) : null}
+        </>
+      )}
+    </>
+  );
+  const overlays = (
+    <>
       {overviewLayoutOpen && (
         <OverviewLayoutEditor
           preferences={overview.preferences}
@@ -1934,11 +1642,29 @@ export function App() {
           snapshot={snapshot}
           studioScope={studioScope}
           onNavigate={navigate}
-          onWorkspace={(id) => openWorkspace(id, 'overview')}
+          workspaces={workspaceRows}
+          features={managedFeatures.map((feature) => ({
+            id: feature.featureId,
+            name: featureDisplayName(feature, t('features.defaultName')),
+            description: feature.description,
+            terminals: featureSnapshot
+              ? studioTerminals(
+                  { ...featureSnapshot, activeFeatureId: feature.featureId },
+                  featureShell.panes,
+                  undefined,
+                  now,
+                )
+              : [],
+          }))}
+          onWorkspace={selectWorkspace}
+          onFeature={openFeature}
+          onStudioCommand={managedShell ? runStudioCommand : undefined}
           onSession={openSession}
           onNotifications={() => setNotificationOpen(true)}
-          onCreate={() => setWorkspaceOpen(true)}
-          onGuide={() => setGuideOpen(true)}
+          onCreate={() => {
+            setSaveError(false);
+            setWorkspaceOpen(true);
+          }}
           onClose={() => setPaletteOpen(false)}
         />
       )}
@@ -2098,6 +1824,7 @@ export function App() {
               </button>
             </div>
             <div className="modal-body">
+              <p>{t('shell.frame.workspaceEvidence')}</p>
               {saveError && (
                 <p className="notice" role="alert">
                   {t('savedError')}
@@ -2123,6 +1850,23 @@ export function App() {
           </form>
         </Modal>
       )}
-    </div>
+    </>
+  );
+  return (
+    <AppShell
+      sidebar={sidebar}
+      breadcrumb={breadcrumb}
+      subtitle={subtitle}
+      headerActions={headerActions}
+      connection={coreConnection}
+      onReconnect={reconnect}
+      loading={
+        !offline && (managedStudio ? featureShell.loading : !snapshot || Boolean(initialScan))
+      }
+      studio={managedStudio}
+      overlays={overlays}
+    >
+      {outlet}
+    </AppShell>
   );
 }
