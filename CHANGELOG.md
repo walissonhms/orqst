@@ -1,5 +1,17 @@
 # Changelog
 
+## Structured Claude Studio pilot — 2026-11-18 (protocol increment)
+
+Adds the Core `claude -p` `stream-json` structured session, pinned Apple Silicon
+Claude 2.1.318 executable inspection, `default`-mode native `can_use_tool`
+routing, `orqst` stdio SDK MCP `A → B → A` delegation across Codex/OpenCode/Claude,
+response-ID deduplicated cumulative token/cost accounting, and localized Studio
+selector/refusal UI. Live subscription login in the native host stops at
+`provider_terms_unapproved` after binary verification pending Anthropic
+authorization or explicit API-key routing. Validated in synthetic tests and an
+optional `--bare` handshake smoke without user credentials; see the
+[Claude pilot record](docs/design/structured-claude-pilot.md).
+
 ## Diag21 Codex and structured peer sessions — 2026-11-17
 
 The native terminal picker accepts the exact reviewed Apple Silicon Codex

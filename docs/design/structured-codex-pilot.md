@@ -180,8 +180,11 @@ both Codex → OpenCode → Codex and OpenCode → Codex → OpenCode.
 The pilot keeps up to four sessions in memory and bounds turn duration, wire
 traffic, displayed items and approvals. Content redaction is best-effort. Codex
 still owns its local logs and configuration. No process adoption, thread resume,
-persistence, cross-Feature routing, durable history or Claude support is
-included. Cleanup covers the owned group during ordinary stop, transport loss and
+persistence, cross-Feature routing or durable history is included. The
+[Claude 2.1.318 protocol layer](structured-claude-pilot.md) is implemented in
+Core with synthetic fixtures and a `--bare` startup smoke, while live login in
+the native host stays gated behind `provider_terms_unapproved` pending
+Anthropic authorization. Cleanup covers the owned group during ordinary stop, transport loss and
 app shutdown. A hard kill of the Node host or a descendant that leaves its process
 group is outside the demonstrated cleanup guarantee.
 

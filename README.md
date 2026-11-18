@@ -1,5 +1,17 @@
 # ORQST
 
+## Structured Claude Studio pilot — 2026-11-18 (protocol increment)
+
+Core adds the `claude -p` `stream-json` session, SDK MCP delegation bridge,
+native permission routing, response-ID deduplicated cumulative token accounting
+and pinned Claude 2.1.318 binary checks for the `ORQST_STRUCTURED_AGENTS=1`
+Studio panel. Because Anthropic's current Agent SDK and CLI terms forbid
+unapproved third-party apps from driving `claude -p` via a `claude.ai`
+subscription login, the native Studio host stops after binary verification with
+localized `provider_terms_unapproved` before wiring a real login. Verified with
+synthetic multi-provider fixtures and an optional `--bare` handshake smoke in a
+disposable directory; see the [Claude pilot record](docs/design/structured-claude-pilot.md).
+
 ## Diag21 Codex and structured peers — 2026-11-17
 
 The Studio terminal picker now accepts the exact reviewed Codex 0.169.0 binary.

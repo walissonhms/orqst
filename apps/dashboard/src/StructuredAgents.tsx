@@ -242,14 +242,19 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
               : t('tokensUnavailable')}
             {' · '}
             {session.usage?.cost
-              ? t('structuredAgents.costEstimate', {
-                  cost: new Intl.NumberFormat(i18n.resolvedLanguage, {
-                    style: 'currency',
-                    currency: session.usage.cost.currency,
-                    currencyDisplay: 'code',
-                    maximumSignificantDigits: 6,
-                  }).format(session.usage.cost.amount),
-                })
+              ? t(
+                  session.usage.cost.source === 'claude_estimate'
+                    ? 'structuredAgents.claudeCostEstimate'
+                    : 'structuredAgents.costEstimate',
+                  {
+                    cost: new Intl.NumberFormat(i18n.resolvedLanguage, {
+                      style: 'currency',
+                      currency: session.usage.cost.currency,
+                      currencyDisplay: 'code',
+                      maximumSignificantDigits: 6,
+                    }).format(session.usage.cost.amount),
+                  },
+                )
               : t('structuredAgents.costUnavailable')}
           </p>
           {session.approvals

@@ -22,6 +22,22 @@ membership against the original Feature. The hub persists queue metadata and kee
 message bodies in memory. Relay authentication establishes a bound socket.
 [Communication contract and acceptance limits](docs/development/feature-mention-routing.md).
 
+## Structured Claude Studio pilot — 2026-11-18
+
+Core implements the `claude -p --input-format stream-json --output-format stream-json`
+session and control-request protocol for the pinned Apple Silicon Claude 2.1.318
+binary (`677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d`)
+with `--permission-mode default`, `--permission-prompt-tool stdio`,
+`--strict-mcp-config`, `disableAllHooks: true`, `permissions.ask` tool gates, an
+allowlisted child environment (excluding `ANTHROPIC_*` and proxy/OTLP overrides)
+and platform-managed policy detection. Because Anthropic's current Agent SDK and
+CLI compliance terms do not authorize third-party products to drive `claude -p`
+with a consumer `claude.ai` subscription login without prior approval, the
+native host verifies the executable digest and stops with
+`provider_terms_unapproved` before spawning or wiring a real login. No
+proprietary SDK is added and ORQST never reads `~/.claude` or Keychain files.
+See the [terms and protocol record](docs/design/structured-claude-pilot.md).
+
 ## Structured OpenCode Studio pilot
 
 The gated native pilot owns the local OpenCode listener and its short-lived Basic
