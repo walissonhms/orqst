@@ -600,8 +600,78 @@
 .feature-studio .ts-root {
   background: var(--orqst-background);
 }
-.feature-studio .ts-native .ts-stage {
-  margin: var(--orqst-space-3);
+/* Fixed toolbar and dock extents must match nativeChrome(). Stage margins are
+   included separately in the hole coordinates reported to Tauri. */
+.feature-studio .ts-toolbar {
+  box-sizing: border-box;
+  height: 36px;
+  flex: none;
+  padding: 0 9px;
+  gap: 6px;
+  background: var(--feature-bg);
+}
+.feature-studio .ts-modes {
+  margin-inline-end: auto;
+  border: 0;
+  padding: 0;
+}
+.feature-studio .ts-modes button {
+  height: 26px;
+  padding-inline: 7px;
+}
+.feature-studio .ts-modes button.active {
+  color: var(--orqst-lavender);
+  background: var(--orqst-accent-soft);
+}
+.feature-studio .ts-toolbar > .ts-primary,
+.feature-studio .ts-toolbar > .ts-ghost {
+  height: 26px;
+}
+.feature-topbar > div > button.feature-new-terminal:enabled {
+  color: var(--orqst-on-primary);
+  background: var(--orqst-primary);
+  border-color: var(--orqst-primary);
+}
+@media (min-width: 721px) {
+  .feature-workspace:not(.studio-immersive) .ts-toolbar > .ts-primary {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .feature-workspace:has(.ts-toolbar > .ts-primary) .feature-topbar .feature-new-terminal {
+    display: none;
+  }
+}
+.feature-studio .ts-stage {
+  margin: 4px;
+}
+.feature-studio .ts-pane {
+  border-radius: 3px;
+  border-color: var(--feature-line);
+  background: var(--feature-panel);
+}
+.feature-studio .ts-head {
+  background: #111018;
+  border-color: var(--feature-line);
+}
+.feature-studio .ts-orchestrator {
+  border-top: 2px solid var(--feature-purple);
+}
+.feature-studio .ts-dock {
+  box-sizing: border-box;
+  flex: none;
+  height: 34px;
+  gap: 7px;
+  padding-inline: 9px;
+  background: #0e0d15;
+}
+.feature-studio .ts-dock-title {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.feature-studio .ts-chip {
+  height: 23px;
+  padding-inline: 7px;
 }
 
 /* Full-window Studio (like the preview): no Feature panel or header. */

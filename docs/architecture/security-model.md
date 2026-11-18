@@ -1,5 +1,14 @@
 # Security model
 
+## Studio terminal output continuation — 2026-11-18
+
+The native document can finish the output part of a policy-reviewed Open during
+its first authorized read. The broker binds it to the exact owned attempt. It
+checks the original consent expiry, current CLI policy, document and generation
+around the signed attach, and consumes continuation before the attach effect.
+The same read starts at cursor zero and uses the existing output bounds. Focus
+and the existing input grant are required separately for keyboard effects.
+
 ## Native startup and executable verification
 
 The bridge binds the loopback transport and applies retention before Desktop

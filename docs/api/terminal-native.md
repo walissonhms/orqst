@@ -1,5 +1,15 @@
 # Native terminal client boundary
 
+## Studio output continuation — 2026-11-18
+
+After a policy-reviewed Open launches an owned attempt, the existing native
+`read` request can finish signing its output attachment if the combined opening
+was interrupted. The broker checks the original deadline, CLI policy, current
+document and current attempt snapshot. It accepts running or exited attempts for
+output. The reply contains bytes and the existing cursor fields. It carries no
+attachment ID, input lease or proof. Explicit detach consumes any outstanding
+continuation. Legacy Start still requires explicit attach.
+
 ## Studio catalog and Feature assignment — 2026-11-18
 
 The native catalog reply carries a Studio snapshot from the same native generation.

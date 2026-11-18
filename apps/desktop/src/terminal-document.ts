@@ -82,9 +82,9 @@ export function terminalDocument(options: {
 </header>
 <section class="process-controls" aria-label="${text('processControls')}">
   <div class="action-row">${['start', 'attach', 'input'].map(button).join('')}</div>
-  <p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>
+  ${options.studioChrome ? '' : `<p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>`}
 </section>
-<p id="status" data-blocked="${options.blocker ? 'true' : 'false'}" role="status" aria-live="polite" data-authorization="${text('authorization')}" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required', 'unavailable', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(key)}"`).join(' ')}>${text(options.blocker ?? (options.nativeAuthentication ? 'reuseIdle' : 'idle'))}</p>
+<p id="status"${options.studioChrome && !options.blocker ? ' hidden' : ''} data-blocked="${options.blocker ? 'true' : 'false'}"${options.blocker ? ` data-blocker-key="${escapeHTML(options.blocker)}"` : ''} role="status" aria-live="polite" data-authorization="${text('authorization')}" ${['idle', 'denied', 'cancelled', 'busy', 'ok', 'gap', 'revoked', 'focus_required', 'unavailable', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(key)}"`).join(' ')}>${text(options.blocker ?? (options.nativeAuthentication ? 'reuseIdle' : 'idle'))}</p>
 <div id="terminal" data-keyboard="${text('keyboard')}" data-toomuch="${text('tooMuch')}" aria-label="${text('output')}"></div>
 </main><script src="${terminalScriptURL}" defer></script></body></html>`;
 }

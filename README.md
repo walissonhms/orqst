@@ -1,5 +1,13 @@
 # ORQST
 
+## V6 Studio terminal cards — 2026-11-18
+
+Open a terminal from Studio to connect its live PTY output. The native terminal
+context menu (right-click or Shift+F10) separates hiding the pane, disconnecting
+output, stopping the process and forcing termination. It uses the existing
+native process reviews. See the
+[visual comparison and verification limits](docs/development/v6-visual-parity.md).
+
 ## Structured Claude Studio pilot — 2026-11-18 (protocol increment)
 
 Core adds the `claude -p` `stream-json` session, SDK MCP delegation bridge,

@@ -14,6 +14,13 @@ validates the full configuration and CLI digest before spawning. Native focus,
 one-use grants, owner checks and durable receipts still govern effects.
 See the [verification and source review](docs/development/native-opening-performance.md).
 
+## Studio PTY output
+
+A policy-reviewed Studio Open can finish attaching output for its exact owned
+instance within the original authorization window. The broker signs the attach
+challenge for the current document and checks the CLI policy again. The output
+reply carries no input lease. See the [native terminal boundary](docs/api/terminal-native.md#studio-output-continuation--2026-11-18).
+
 ## Feature communication
 
 Structured delegation rechecks the Feature-local handle and exact destination

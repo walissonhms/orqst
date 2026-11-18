@@ -1045,6 +1045,7 @@ export function FeatureWorkspace({
             ↗ {t('features.delegate')}
           </button>
           <button
+            className="feature-new-terminal"
             disabled={busy || !canPrepare}
             onClick={() => void prepare()}
             title={t(canPrepare ? 'studio.setupTitle' : 'features.creationUnavailable')}

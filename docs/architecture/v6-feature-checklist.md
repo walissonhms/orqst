@@ -1,5 +1,14 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Studio terminal cards — 2026-11-18
+
+- [x] Keep live PTY bodies free from legacy pair setup controls in both locales.
+- [x] Finish attaching reviewed output to the same owned instance after interrupted Open.
+- [x] Compare compact toolbar, dock, card headers and grid with the approved HTML in Chromium.
+- [ ] Verify the updated native package with Codex and OpenCode in the same Feature.
+
+See the [comparison, screenshots and limitations](../development/v6-visual-parity.md).
+
 ## Always inside a Feature — 2026-11-18
 
 - [x] Deterministic per-workspace default Feature ID (`defaultFeatureId(workspaceId)`, localized `"General"` / `"Geral"`, rename-preserving) shared across Node and Rust Cores.

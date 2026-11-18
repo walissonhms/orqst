@@ -75,11 +75,11 @@ export interface NativeChrome {
   bottom: 34 | 38;
 }
 
-/** Preview sizes: 47px toolbar (plus the 45px Feature header with the panel), 38px dock. */
+/** Compact Studio rows must agree with the CSS and the native arrange frame. */
 export function nativeChrome(immersive: boolean, windowWidth: number): NativeChrome {
   return immersive
-    ? { sidebar: 0, top: 47, bottom: 38 }
-    : { sidebar: windowWidth > 720 ? 155 : 46, top: 92, bottom: 38 };
+    ? { sidebar: 0, top: 36, bottom: 34 }
+    : { sidebar: windowWidth > 720 ? 155 : 46, top: 81, bottom: 34 };
 }
 
 /** Rectangle of a PTY hole, in logical px relative to the native content area. */

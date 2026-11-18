@@ -1,5 +1,8 @@
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { createInstance } from 'i18next';
+import en from '../../dashboard/src/locales/en-US.json';
+import pt from '../../dashboard/src/locales/pt-BR.json';
 import type { TerminalLayoutState, TerminalViewAction } from './terminal-layout.js';
 import type {
   DesktopTerminal,
@@ -12,11 +15,39 @@ import { paneActionRequest, profileAction } from './pane-actions.js';
 const client = (window as unknown as { orqstTerminal: DesktopTerminal }).orqstTerminal;
 const status = document.querySelector<HTMLElement>('#status')!;
 const container = document.querySelector<HTMLElement>('#terminal')!;
-Terminal.strings.promptLabel = container.dataset.keyboard ?? '';
-Terminal.strings.tooMuchOutput = container.dataset.toomuch ?? '';
+const main = document.querySelector<HTMLElement>('main')!;
+const studioChrome = main.dataset.chrome === 'studio';
+const studioLocale = createInstance();
+if (studioChrome) {
+  // Studio chrome and the dedicated terminal document share WebKit's preferred language.
+  // The host process locale is independent of the language shown by WebKit.
+  const browserLanguage = navigator.languages.find((language) => /^(en|pt)(-|$)/i.test(language));
+  const language = browserLanguage?.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US';
+  void studioLocale.init({
+    lng: language,
+    fallbackLng: 'en-US',
+    resources: {
+      'en-US': { translation: en.managedTerminal },
+      'pt-BR': { translation: pt.managedTerminal },
+    },
+    initAsync: false,
+  });
+  document.documentElement.lang = language;
+  container.setAttribute('aria-label', studioLocale.t('output'));
+  document.getElementById('start')!.textContent = studioLocale.t(
+    main.dataset.operationalOpen === 'true' ? 'open' : 'start',
+  );
+  document.getElementById('attach')!.textContent = studioLocale.t('attach');
+  if (status.dataset.blocked === 'true')
+    status.textContent = studioLocale.t(status.dataset.blockerKey ?? 'unavailable');
+}
+Terminal.strings.promptLabel = studioChrome
+  ? studioLocale.t('keyboard')
+  : (container.dataset.keyboard ?? '');
+Terminal.strings.tooMuchOutput = studioChrome
+  ? studioLocale.t('tooMuch')
+  : (container.dataset.toomuch ?? '');
 const palette = getComputedStyle(document.documentElement);
-// Inside the Studio card the body matches the approved preview: 12px on the card tone.
-const studioChrome = document.querySelector<HTMLElement>('main')?.dataset.chrome === 'studio';
 const terminal = new Terminal({
   allowProposedApi: false,
   scrollback: 2000,
@@ -58,6 +89,7 @@ let gap = false;
 let pending = '';
 let live = false;
 let openingIncomplete = false;
+let outputProbeUntil: number | undefined;
 let gesture = false;
 let gestureEnd: ReturnType<typeof setTimeout> | undefined;
 const actions = ['login', 'start', 'attach', 'input', 'detach', 'stop', 'kill'] as const;
@@ -87,8 +119,21 @@ document.addEventListener('visibilitychange', () => {
 });
 const updateGuidance = () => {
   const guidance = document.getElementById('guidance');
-  if (!guidance) return;
   const state = status.dataset.state;
+  if (studioChrome) {
+    main.dataset.next =
+      status.dataset.blocked === 'true' || gap || state === 'ownership_lost'
+        ? ''
+        : !instanceId
+          ? 'start'
+          : !attached &&
+              outputProbeUntil === undefined &&
+              (state === 'running' || state === 'exited')
+            ? 'attach'
+            : '';
+    return;
+  }
+  if (!guidance) return;
   const key =
     status.dataset.blocked === 'true'
       ? 'blocked'
@@ -107,8 +152,7 @@ const updateGuidance = () => {
                   : input
                     ? 'typing'
                     : 'input';
-  const main = document.querySelector('main');
-  if (main) main.dataset.next = key;
+  main.dataset.next = key;
   const message = guidance.dataset[key] ?? '';
   if (guidance.textContent !== message) guidance.textContent = message;
 };
@@ -122,7 +166,9 @@ const updateButtons = () => {
       document.getElementById(action)!.dataset.unavailable === 'true';
     if (action === 'login' || action === 'start')
       disabled ||=
-        live || status.dataset.state === 'ownership_lost' || (openingIncomplete && !!instanceId);
+        live ||
+        status.dataset.state === 'ownership_lost' ||
+        ((studioChrome || openingIncomplete) && !!instanceId);
     else if (action === 'attach')
       disabled ||=
         !instanceId || attached || !['running', 'exited'].includes(status.dataset.state ?? '');
@@ -134,7 +180,19 @@ const updateButtons = () => {
 };
 const show = (key: string) => {
   // Focus loss must never replace a relevant refusal or output gap with a benign notice.
-  if (key === 'revoked' && status.dataset.feedback === 'error') return;
+  if (key === 'revoked' && (studioChrome || status.dataset.feedback === 'error')) return;
+  if (studioChrome) {
+    const state = status.dataset.state;
+    const terminalState =
+      state === 'exited' || state === 'start_failed' || state === 'ownership_lost'
+        ? state
+        : undefined;
+    const message = key === 'ok' ? terminalState : key;
+    status.hidden = !message;
+    status.textContent = message ? studioLocale.t(message) : '';
+    status.dataset.feedback = message ? 'error' : 'info';
+    return;
+  }
   status.dataset.feedback = [
     'denied',
     'cancelled',
@@ -173,6 +231,7 @@ async function send(
       if (!quiet) show(reply.authorization ? 'authorization' : reply.status);
       return reply;
     }
+    if (studioChrome && 'instanceId' in request && request.instanceId !== reply.instanceId) return;
     if (request.action !== 'read' && request.action !== 'snapshot' && request.action !== 'resize')
       show('ok');
     if (instanceId !== reply.instanceId) {
@@ -181,13 +240,13 @@ async function send(
       status.dataset.instanceId = instanceId;
       document.getElementById('instance')!.textContent = instanceId;
       cursor = sequence = 0;
-      lastColumns = 80;
-      lastRows = 24;
+      lastSize = undefined;
+      outputProbeUntil = undefined;
       attached = input = gap = false;
       delete status.dataset.state;
       pending = '';
     }
-    if (reply.snapshot) {
+    if (reply.snapshot && (!studioChrome || reply.snapshot.instanceId === instanceId)) {
       status.dataset.state = reply.snapshot.state;
       const lifecycle = document.getElementById('lifecycle')!;
       lifecycle.textContent = lifecycle.getAttribute(`data-short-${reply.snapshot.state}`) ?? '';
@@ -198,11 +257,16 @@ async function send(
         input = false;
         pending = '';
       }
+      if (studioChrome && !gap && (status.hidden || !live)) show('ok');
     }
     if (request.action === 'open') {
       openingIncomplete = reply.opening !== 'ready';
       attached = input = reply.opening === 'ready';
-      if (openingIncomplete) {
+      if (openingIncomplete && studioChrome) {
+        // Read only the retained instance returned by Open. The broker checks whether
+        // the original review still authorizes its output or already attached it.
+        outputProbeUntil = performance.now() + 5_000;
+      } else if (openingIncomplete) {
         show('openingIncomplete');
         // The Open gesture authorizes startup, output and keyboard together. When a view
         // change revoked the grants mid-opening, finish the same opening once through the
@@ -227,6 +291,8 @@ async function send(
     }
     if (request.action === 'attach') {
       attached = true;
+      openingIncomplete = false;
+      lastSize = undefined;
       fit.fit();
       // Compact chrome can place output below the outer scroll viewport. xterm pauses
       // painting/accessibility updates while off-screen; explicit attach reveals it
@@ -245,6 +311,14 @@ async function send(
     }
     if (request.action === 'write' || request.action === 'paste') sequence++;
     if (reply.output) {
+      if (studioChrome && request.action === 'read' && !attached) {
+        attached = true;
+        openingIncomplete = false;
+        outputProbeUntil = undefined;
+        lastSize = undefined;
+        fit.fit();
+        show('ok');
+      }
       cursor = reply.output.nextCursor;
       if (reply.output.gap) {
         gap = true;
@@ -439,18 +513,18 @@ let resize: ReturnType<typeof setTimeout> | undefined;
 // native resize polling instead of the upstream WebSocket/tmux resize operation.
 const resizeObserver = new ResizeObserver(() => {
   clearTimeout(resize);
-  resize = setTimeout(() => {
-    fit.fit();
-  }, 150);
+  resize = setTimeout(() => fit.fit(), 150);
 });
 resizeObserver.observe(container);
 let ticks = 0;
-let lastColumns = 80;
-let lastRows = 24;
+let lastSize: { columns: number; rows: number } | undefined;
 const poll = (request: TerminalNativeRequest) => {
   polling = true;
-  pollInFlight = send(request)
-    .then(() => {})
+  pollInFlight = send(request, undefined, studioChrome)
+    .then((reply) => {
+      if (request.action === 'resize' && reply?.status === 'ok')
+        lastSize = { columns: request.columns, rows: request.rows };
+    })
     .catch(revoke)
     .finally(() => {
       polling = false;
@@ -464,16 +538,27 @@ const timer = setInterval(() => {
     void flush();
     return;
   }
+  if (outputProbeUntil !== undefined && performance.now() >= outputProbeUntil) {
+    outputProbeUntil = undefined;
+    if (status.dataset.state === 'running' || status.dataset.state === 'exited')
+      show('studioOutputUnavailable');
+    else if (!status.dataset.state || live) show('openingIncomplete');
+    updateButtons();
+  }
   const columns = Math.max(20, Math.min(300, terminal.cols));
   const rows = Math.max(5, Math.min(100, terminal.rows));
-  if (attached && live && (columns !== lastColumns || rows !== lastRows)) {
-    lastColumns = columns;
-    lastRows = rows;
-    poll({ version: 1, action: 'resize', instanceId, columns, rows });
-    return;
-  }
   if (++ticks % 5 === 0) poll({ version: 1, action: 'snapshot', instanceId });
-  else if (attached && !gap) poll({ version: 1, action: 'read', instanceId, cursor });
+  else if (
+    ticks % 5 === 1 &&
+    attached &&
+    live &&
+    container.clientWidth &&
+    container.clientHeight &&
+    (columns !== lastSize?.columns || rows !== lastSize.rows)
+  )
+    poll({ version: 1, action: 'resize', instanceId, columns, rows });
+  else if ((attached || outputProbeUntil !== undefined) && !gap)
+    poll({ version: 1, action: 'read', instanceId, cursor });
 }, 100);
 window.addEventListener(
   'pagehide',
@@ -641,8 +726,48 @@ paneMenu.addEventListener('keydown', (event) => {
   event.preventDefault();
   event.stopPropagation();
   paneMenu.open = false;
-  menuToggle.focus();
+  if (studioChrome) terminal.focus();
+  else menuToggle.focus();
 });
+if (studioChrome) {
+  const paneActions = paneMenu.querySelector<HTMLElement>('.pane-actions')!;
+  main.append(paneMenu);
+  for (const [group, help] of [
+    ['viewGroup', 'viewGroupHelp'],
+    ['processGroup', 'processGroupHelp'],
+  ] as const) {
+    const section = paneActions.querySelector<HTMLElement>(
+      `.${group === 'viewGroup' ? 'pane-view-actions' : 'pane-process-actions'}`,
+    )!;
+    section.setAttribute('aria-label', studioLocale.t(group));
+    section.querySelector('p')!.textContent = studioLocale.t(help);
+  }
+  for (const [id, label] of [
+    ['hide-pane-menu', 'hideView'],
+    ['detach', 'detach'],
+    ['stop', 'stop'],
+    ['kill', 'kill'],
+  ] as const)
+    document.getElementById(id)!.textContent = studioLocale.t(label);
+
+  const openProcessMenu = (event: Event) => {
+    if (!event.isTrusted) return;
+    event.preventDefault();
+    paneMenu.open = true;
+    document.getElementById('hide-pane-menu')!.focus();
+  };
+  container.addEventListener('contextmenu', openProcessMenu);
+  container.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        event.stopPropagation();
+        openProcessMenu(event);
+      }
+    },
+    true,
+  );
+}
 // A header drag starts outside the disclosure; keep its drop targets until a click occurs.
 document.addEventListener('click', (event) => {
   if (paneMenu.open && event.target instanceof Node && !paneMenu.contains(event.target))

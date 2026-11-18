@@ -43,3 +43,8 @@ passed; actual native/provider acceptance is pending. See
 ## Native consent viewport correction — 2026-11-04
 
 The authorization sheet uses bounded native plain-text scrolling and visible-control sizing without changing the approved Feature layout or renderer authority. A new package and actual small-screen visual acceptance remain pending. See [source and reuse](../../research/native-consent-scroll.md).
+
+## Studio card density and output — 2026-11-18
+
+See the [Chromium visual comparison and native acceptance limits](../../development/v6-visual-parity.md)
+for the compact card, toolbar and dock, and for the reviewed output continuation.

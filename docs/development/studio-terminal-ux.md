@@ -79,6 +79,8 @@ keyboard/drag range control. A selected single tab is marked pressed; when split
 neither tab implies it is the only visible panel. All controls are ordinary buttons
 or a native range input; terminal keystrokes are not intercepted for layout shortcuts.
 
+In a V6 Studio card, right-click the PTY or use Shift+F10 to reveal the native
+process actions. Ordinary keyboard focus changes leave the card body quiet.
 **Hide pane** hides only that document. **Show dashboard** returns to the still-loaded
 observer and its memory-only Artifact draft. **Disconnect output** detaches this
 view; **Stop process…** ends the owned process. These are separate operations.

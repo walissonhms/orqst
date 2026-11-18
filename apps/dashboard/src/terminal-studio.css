@@ -174,10 +174,10 @@
 .ts-head {
   display: flex;
   align-items: center;
-  gap: var(--orqst-space-2);
-  height: 32px;
+  gap: 6px;
+  height: 31px;
   flex: none;
-  padding: 0 4px 0 10px;
+  padding: 0 5px 0 7px;
   border-bottom: 1px solid var(--orqst-border);
   background: var(--orqst-surface);
   cursor: grab;
@@ -187,10 +187,19 @@
 .ts-compact .ts-head {
   border-bottom: none;
 }
-.ts-label {
-  font-family: var(--orqst-font-mono);
-  font-size: 11px;
+.ts-cli {
   color: var(--orqst-lavender);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ts-label {
+  padding: 1px 4px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 3px;
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-lavender);
+  font: 9px var(--orqst-font-mono);
   flex: none;
 }
 .ts-name {
@@ -225,8 +234,8 @@
 .ts-actions button {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--orqst-radius-control);
   color: var(--orqst-muted);
 }
@@ -396,28 +405,6 @@
   to {
     transform: rotate(360deg);
   }
-}
-
-.ts-provider {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  flex: none;
-}
-.ts-provider-codex {
-  background: var(--orqst-info);
-}
-.ts-provider-claude {
-  background: var(--orqst-warning);
-}
-.ts-provider-opencode {
-  background: var(--orqst-success);
-}
-.ts-provider-antigravity {
-  background: var(--orqst-neon);
-}
-.ts-provider-shell {
-  background: var(--orqst-muted);
 }
 
 /* Split handles */
@@ -648,9 +635,6 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.ts-dock-empty {
-  color: var(--orqst-subtle);
-}
 .ts-chip {
   display: inline-flex;
   align-items: center;
@@ -731,7 +715,7 @@
   display: none;
 }
 
-/* Summary in the toolbar */
+/* Session counts in the dock */
 .ts-summary {
   display: inline-flex;
   align-items: center;
@@ -1025,20 +1009,6 @@
 }
 .ts-native .ts-body {
   background: transparent;
-}
-.ts-native .ts-stage {
-  margin: 0;
-}
-/* Fixed rows that match the native chrome insets (studio-native.ts nativeChrome). */
-.ts-native .ts-toolbar {
-  box-sizing: border-box;
-  height: 47px;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-.ts-native .ts-dock {
-  box-sizing: border-box;
-  height: 38px;
 }
 /* Overlays would sit under native views: keep them in the chrome rows. */
 .ts-native .ts-toasts {

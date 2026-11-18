@@ -54,7 +54,7 @@ export interface PlacedPane {
   z: number;
 }
 
-export const GAP = 8;
+export const GAP = 5;
 export const LIST_ROW = 44;
 export const MIN_PANE = { width: 260, height: 160 };
 

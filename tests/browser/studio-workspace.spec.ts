@@ -60,12 +60,20 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
     ).toEqual({ width, height });
   }
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  const newTerminal = workspace.locator('.ts-toolbar').getByRole('button', {
+    name: 'New terminal',
+    exact: true,
+  });
+  await newTerminal.click();
+  await page
+    .getByRole('dialog', { name: 'New terminals', exact: true })
+    .getByRole('button', { name: 'Advanced options (MCP pair, path review)' })
+    .click();
   const drawer = page.getByRole('dialog', { name: 'Open terminal', exact: true });
   await expect(drawer).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Open', exact: true })).toBeDisabled();
   await expect(drawer.getByText('Prepare Codex + OpenCode…', { exact: true })).toHaveCount(0);
-  await expect(drawer.getByLabel('CLI provider').locator('option')).toHaveCount(3);
+  await expect(drawer.getByLabel('CLI provider').locator('option')).toHaveCount(4);
   await expect(drawer.getByLabel('Terminal count').locator('option')).toHaveCount(8);
   await expect(drawer.getByText('This Desktop is running an older', { exact: false })).toHaveCount(
     0,
@@ -80,7 +88,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.keyboard.press('Escape');
   await expect(drawer).toBeHidden();
-  await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeFocused();
+  await expect(newTerminal).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-en.png') });
   await page.getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page).toHaveURL('/overview');
@@ -88,19 +96,27 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
   await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
   await expect(workspace).toBeVisible();
-  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  await workspace
+    .locator('.ts-toolbar')
+    .getByRole('button', { name: 'Novo terminal', exact: true })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Novos terminais', exact: true })
+    .getByRole('button', { name: 'Opções avançadas (par MCP, revisão de caminhos)' })
+    .click();
   await expect(page.getByRole('dialog', { name: 'Abrir terminal', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('studio-preparation-pt.png') });
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-pt.png') });
   expect(await page.evaluate(() => Reflect.get(window, 'studioCalls'))).toEqual([
+    'catalog',
     'snapshot',
-    'snapshot',
-  ]);
-  expect((await page.evaluate(() => Reflect.get(window, 'featureCalls'))) as string[]).toEqual([
-    'snapshot',
+    'catalog',
     'snapshot',
   ]);
+  // Periodic Feature reads may finish during either drawer, without sending mutations.
+  const featureCalls = (await page.evaluate(() => Reflect.get(window, 'featureCalls'))) as string[];
+  expect(new Set(featureCalls)).toEqual(new Set(['snapshot']));
 });
 
 test('Studio has one Overview action and a compact Feature sidebar at narrow widths', async ({

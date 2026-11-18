@@ -61,6 +61,7 @@ interface View {
   inputSequence?: number;
   leaseSequence?: number;
   inputUncertain?: boolean;
+  openOutputUntil?: number;
 }
 
 /** One enrolled native document. Signatures, leases and attachment IDs never cross IPC. */
@@ -117,6 +118,9 @@ export class TerminalNativeBroker<Document extends object> {
               prepared.attemptId,
               this.proof(prepared.challenge, generation),
             );
+            // A policy-reviewed Open already covers output for this exact owned attempt.
+            // If focus changes mid-open, a later passive read can finish only that step.
+            if (this.host.cliAuthorization) view.openOutputUntil = prepared.challenge.expiresAt;
             // Attach needs a running (or exited) attempt; launch returns while it is still
             // starting. Wait briefly, bounded by the combined review's deadline.
             const startedBy = Math.min(prepared.challenge.expiresAt, Date.now() + 10_000);
@@ -142,6 +146,7 @@ export class TerminalNativeBroker<Document extends object> {
             // challenges may renew the original combined review's deadline.
             this.assertCurrent(input, generation, prepared.challenge.expiresAt);
             if (!view.attachment || !view.lease) throw new Error('Native grants revoked');
+            view.openOutputUntil = undefined;
             return { ...result, opening: 'ready' };
           } catch (error) {
             // Diagnostics only: the failed step's message (no content or credentials).
@@ -195,6 +200,7 @@ export class TerminalNativeBroker<Document extends object> {
             return { status: 'denied' };
           }
           view.attachment = attachment;
+          view.openOutputUntil = undefined;
           break;
         }
         case 'input': {
@@ -274,6 +280,7 @@ export class TerminalNativeBroker<Document extends object> {
           await this.supervisor.resize(id, view.attachment, request.columns, request.rows);
           break;
         case 'read':
+          if (!view.attachment) await this.completeOpenOutput(id, view, generation);
           if (!view.attachment) return { status: 'denied' };
           return {
             status: 'ok',
@@ -281,6 +288,7 @@ export class TerminalNativeBroker<Document extends object> {
             output: await this.supervisor.read(id, view.attachment, request.cursor),
           };
         case 'detach':
+          view.openOutputUntil = undefined;
           if (!view.attachment) return { status: 'denied' };
           await this.supervisor.detach(id, view.attachment);
           view.attachment = undefined;
@@ -296,6 +304,29 @@ export class TerminalNativeBroker<Document extends object> {
     } finally {
       this.busy = false;
     }
+  }
+
+  private async completeOpenOutput(id: string, view: View, generation: number): Promise<void> {
+    const expires = view.openOutputUntil;
+    if (expires === undefined) return;
+    const current = () =>
+      this.generation === generation &&
+      this.current(this.document, false) &&
+      this.policyCurrent(view) &&
+      this.authority.now() < expires;
+    if (!current()) return;
+    const snapshot = await this.supervisor.snapshot(id);
+    if (snapshot.instanceId !== id || !['running', 'exited'].includes(snapshot.state) || !current())
+      return;
+    const challenge = await this.supervisor.requestAttach(this.clientId, id);
+    if (!current() || this.authority.now() >= challenge.expiresAt) return;
+    view.openOutputUntil = undefined; // A lost effect reply does not authorize another attach.
+    const attachment = await this.supervisor.attach(id, this.signChallenge(challenge));
+    if (!current()) {
+      await this.supervisor.detach(id, attachment);
+      return;
+    }
+    view.attachment = attachment;
   }
 
   /** Native blur/transport loss. Invalidates pending dialogs and leases, never signals. */
@@ -416,6 +447,10 @@ export class TerminalNativeBroker<Document extends object> {
       (!view || (challenge.operation !== 'stop' && !this.policyCurrent(view)))
     )
       throw new Error('CLI policy revoked');
+    return this.signChallenge(challenge);
+  }
+
+  private signChallenge(challenge: TerminalChallenge) {
     return {
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), this.privateKey).toString(
