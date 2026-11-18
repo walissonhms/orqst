@@ -1,0 +1,400 @@
+/* V6 page bodies. The frame and route chrome are owned by the shell. */
+.spec-screen {
+  --spec-panel: #090b10;
+  --spec-line: #262334;
+  --spec-control: #1b1b29;
+  --spec-control-line: #373149;
+  --spec-button-text: #d4cce5;
+  --spec-button-hover: #30283f;
+  --spec-selected: #211b32;
+  --spec-text: #dedde9;
+  --spec-muted: #a29fb1;
+  --spec-accent: #a17bff;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  align-content: start;
+  color: var(--spec-text);
+  font:
+    12px/1.45 Inter,
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+:root[data-theme='light'] .spec-screen {
+  --spec-panel: var(--orqst-surface);
+  --spec-line: var(--orqst-border);
+  --spec-control: var(--orqst-background);
+  --spec-control-line: var(--orqst-border-strong);
+  --spec-button-text: var(--orqst-text);
+  --spec-button-hover: var(--orqst-accent-soft);
+  --spec-selected: var(--orqst-accent-soft);
+  --spec-text: var(--orqst-text);
+  --spec-muted: var(--orqst-muted);
+  --spec-accent: var(--orqst-primary);
+}
+
+.spec-screen :is(h1, h2, h3, p, dl, ul) {
+  margin: 0;
+}
+.spec-screen h1 {
+  font-size: 16px;
+}
+.spec-screen :is(h2, h3) {
+  font-size: 12px;
+}
+.spec-screen h3 {
+  font-weight: 600;
+}
+
+.spec-head,
+.spec-row-heading,
+.spec-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.spec-head,
+.spec-row-heading {
+  justify-content: space-between;
+}
+.spec-head {
+  min-height: 30px;
+}
+.spec-actions label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.spec-actions label,
+.spec-facts dt {
+  color: var(--spec-muted);
+}
+.spec-screen .button,
+.spec-screen :is(input:not([type='checkbox']), select) {
+  min-height: 26px;
+  border: 1px solid var(--spec-control-line);
+  border-radius: 5px;
+  background: var(--spec-control);
+  color: var(--spec-text);
+  font: inherit;
+  padding: 3px 8px;
+  box-shadow: none;
+}
+.spec-screen .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  color: var(--spec-button-text);
+  text-decoration: none;
+}
+.spec-screen .button.primary {
+  border-color: #8156d6;
+  background: #6c45b8;
+  color: white;
+}
+.spec-screen .button:hover:not(:disabled):not(.primary) {
+  background: var(--spec-button-hover);
+}
+.spec-screen .button:is([aria-current], [aria-pressed='true']) {
+  background: var(--spec-selected);
+  color: var(--spec-text);
+  border-color: var(--spec-accent);
+}
+.spec-screen :focus-visible {
+  outline: 2px solid var(--spec-accent);
+  outline-offset: 2px;
+}
+.spec-screen .button:disabled {
+  opacity: 0.56;
+}
+
+.spec-panel,
+.spec-screen .panel,
+.spec-counters > div {
+  border: 1px solid var(--spec-line);
+  border-radius: 0;
+  background: var(--spec-panel);
+}
+.spec-panel {
+  display: grid;
+  gap: 8px;
+  padding: 9px 10px;
+  min-width: 0;
+  align-content: start;
+}
+.spec-panel summary {
+  cursor: pointer;
+}
+.spec-panel[open] > summary {
+  margin-bottom: 8px;
+}
+.spec-counters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+.spec-usage-counters {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.spec-counters > div {
+  padding: 8px 10px;
+}
+.spec-counters dt {
+  color: var(--spec-muted);
+}
+.spec-counters dd {
+  margin: 2px 0 0;
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.spec-rows,
+.spec-artifact-items {
+  padding: 0;
+  list-style: none;
+}
+.spec-rows li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 30px;
+  border-top: 1px solid var(--spec-line);
+}
+.spec-rows time {
+  color: var(--spec-muted);
+}
+.spec-event-group h3 {
+  margin-bottom: 4px;
+}
+.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: inherit;
+}
+.spec-screen .spec-table :is(td, th) {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--spec-line);
+  white-space: nowrap;
+}
+.spec-table thead th {
+  color: var(--spec-muted);
+  font-weight: 600;
+}
+.spec-screen .spec-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--spec-accent);
+}
+
+.spec-tabs {
+  display: flex;
+  gap: 4px;
+}
+.spec-metrics {
+  display: grid;
+  gap: 8px;
+}
+.spec-metrics .analytics-coverage {
+  margin: 0;
+  padding: 4px 8px;
+}
+.spec-metrics-controls {
+  align-items: end;
+}
+.spec-metrics-controls :is(input, select) {
+  max-width: 160px;
+}
+.spec-metrics .stat {
+  min-height: auto;
+  border-radius: 0;
+  padding: 8px 10px;
+  background: var(--spec-panel);
+  border-color: var(--spec-line);
+}
+.spec-metrics .analytics-evidence {
+  padding: 8px 10px;
+}
+.spec-metrics .panel-heading {
+  padding: 8px 10px;
+}
+.spec-metrics .analytics-evolution {
+  padding: 0 8px 8px;
+}
+.spec-metrics .analytics-comparison > p {
+  margin: 0;
+}
+.spec-field,
+.spec-settings-fields {
+  display: grid;
+  align-items: start;
+  gap: 6px;
+}
+.spec-field {
+  max-width: 320px;
+}
+.spec-settings-layout,
+.spec-artifact-layout {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+.spec-settings-layout {
+  grid-template-columns: 160px minmax(0, 640px);
+}
+.spec-settings-nav {
+  display: grid;
+  gap: 4px;
+}
+.spec-settings-nav .button {
+  justify-content: flex-start;
+  min-height: 28px;
+}
+.spec-settings-content > h2 {
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--spec-line);
+}
+.spec-settings-fields > .button,
+.spec-settings-fields > form > .button {
+  justify-self: start;
+}
+.spec-settings-fields .settings-field {
+  margin: 0;
+  padding: 4px 0;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(120px, 210px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.spec-settings-fields .preferences {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.spec-settings-fields .reading-preview {
+  margin: 0;
+}
+.spec-facts {
+  display: grid;
+  gap: 5px;
+}
+.spec-facts > div {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.35fr) 1fr;
+  gap: 8px;
+}
+.spec-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.spec-cli {
+  display: grid;
+  gap: 8px;
+}
+.spec-cli-row {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--spec-line);
+  padding-top: 7px;
+}
+.spec-cli-row .spec-row-heading {
+  justify-content: start;
+}
+.spec-cli-row .spec-row-heading > a {
+  margin-inline-start: auto;
+}
+
+.spec-artifact-layout {
+  grid-template-columns: minmax(210px, 300px) minmax(0, 1fr);
+}
+.spec-artifact-list .spec-search {
+  min-width: 0;
+  flex: 1;
+}
+.spec-search input {
+  width: 100%;
+}
+.spec-artifact-items {
+  max-height: 65vh;
+  overflow: auto;
+}
+.spec-artifact-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  text-align: start;
+  padding: 7px 8px;
+  color: inherit;
+  border: 1px solid transparent;
+  border-top-color: var(--spec-line);
+  background: transparent;
+}
+.spec-artifact-item :is(strong, span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spec-artifact-item span {
+  color: var(--spec-muted);
+}
+.spec-artifact-item:is(:hover, [aria-pressed='true']) {
+  background: var(--spec-selected);
+  border-color: var(--spec-control-line);
+}
+.spec-artifact-preview .artifact-panel {
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+}
+.spec-artifact-preview .artifact-content {
+  min-height: 110px;
+}
+.spec-artifact-preview .panel-heading {
+  padding: 0;
+}
+.spec-artifact-preview .artifact-actions {
+  margin: 6px 0;
+}
+.spec-artifact-source {
+  overflow-wrap: anywhere;
+}
+
+.spec-onboarding.shell-dialog {
+  width: min(410px, 90vw);
+  padding: 12px;
+  background: #1d1828;
+  border: 1px solid #56466f;
+  border-radius: 10px;
+}
+:root[data-theme='light'] .spec-onboarding.shell-dialog {
+  background: var(--orqst-surface);
+}
+.spec-onboarding .spec-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 660px) {
+  .spec-counters {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  }
+  .spec-settings-layout,
+  .spec-artifact-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .spec-settings-nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .spec-artifact-items {
+    max-height: 32vh;
+  }
+}
