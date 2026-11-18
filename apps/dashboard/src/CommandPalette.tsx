@@ -50,10 +50,10 @@ export function CommandPalette({
       id: `view:${view}`,
       label: t(`shell.views.${view}`),
       detail:
-        view === 'studio' && studioScope
+        view === 'studio' && studioScope?.featureName
           ? t('shell.palette.studioScope', {
               workspace: studioScope.workspace.name,
-              feature: studioScope.featureName ?? t('features.unassigned'),
+              feature: studioScope.featureName,
             })
           : t('shell.palette.goTo', { route: t(`shell.views.${view}`) }),
       action: () => onNavigate(view),

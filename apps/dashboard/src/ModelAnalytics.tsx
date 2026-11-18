@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BarChart3, RefreshCw } from 'lucide-react';
+import { RouteHeaderActions } from './AppShell';
 import { ModelComparison } from './ModelComparison';
 import { ModelEvolution } from './ModelEvolution';
 import {
@@ -273,11 +274,13 @@ export function ModelAnalytics({
           <h1 id="analytics-title">{t('analytics.title')}</h1>
           <p>{t('analytics.description')}</p>
         </div>
+      </div>
+      <RouteHeaderActions>
         <button className="button" onClick={() => setRevision((value) => value + 1)}>
           <RefreshCw size={14} />
           {t('analytics.refresh')}
         </button>
-      </div>
+      </RouteHeaderActions>
       <div className="panel analytics-filter-panel">
         <div className="analytics-filters">
           <label>

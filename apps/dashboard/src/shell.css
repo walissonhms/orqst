@@ -452,33 +452,18 @@
   justify-content: space-between;
   margin-top: 8px;
 }
-@media (max-width: 1100px) {
-  .session-context-bar {
-    padding-inline: 24px;
-  }
-}
-@media (max-width: 700px) {
-  .session-context-bar {
-    padding-inline: 16px;
-  }
-  .session-context-model {
-    flex-basis: 100%;
-  }
+@media (width < 720px) {
   .session-token-badge {
     position: static;
   }
   .token-badge-popover {
     top: 100%;
-    right: 16px;
+    right: 8px;
+    max-width: calc(100% - 16px);
   }
 }
 .adapter-panel .table-scroll {
   max-height: none;
-}
-@media (max-width: 700px) {
-  .sidebar.mobile-open {
-    z-index: 26;
-  }
 }
 /* Keep long captured task snippets compact; the full result text remains accessible. */
 .palette-result small {
@@ -1360,6 +1345,7 @@ button:disabled {
   min-height: 0;
 }
 .app-shell .topbar {
+  position: relative;
   z-index: 2;
   display: flex;
   flex: 0 0 var(--orqst-topbar-height);
@@ -1598,4 +1584,54 @@ button:disabled {
   border-left: 1px solid var(--orqst-border);
   margin-left: 3px;
   padding-left: 8px;
+}
+
+.shell-account-limits .al-trigger {
+  height: 28px;
+  gap: 5px;
+  border-radius: 5px;
+}
+.shell-account-limits[data-empty] .al-trigger::after {
+  content: '—';
+  color: var(--orqst-muted);
+}
+@media (width < 720px) {
+  .shell-account-limits {
+    margin-left: 0;
+    padding-left: 4px;
+  }
+  .shell-account-limits .al-trigger {
+    gap: 3px;
+    padding-inline: 4px;
+    font-size: 10px;
+  }
+}
+@media (max-width: 420px) {
+  .breadcrumbs {
+    overflow: hidden;
+  }
+  .studio-shell .topbar-actions,
+  .studio-header-actions {
+    min-width: 0;
+  }
+  .app-shell .topbar-actions :is(.feature-action, .mc-delegate) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    padding-inline: 3px;
+    font-size: 10px;
+    text-overflow: ellipsis;
+  }
+  .shell-account-limits {
+    flex: none;
+  }
+  .shell-account-limits .al-trigger {
+    max-width: 50px;
+    overflow: hidden;
+  }
+  .shell-account-limits .al-trigger > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

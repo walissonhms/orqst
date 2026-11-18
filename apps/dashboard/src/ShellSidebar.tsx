@@ -18,7 +18,7 @@ import { Modal } from './Modal';
 export interface ShellWorkspace {
   id: string;
   name: string;
-  count?: number;
+  count: number;
 }
 
 export interface ShellFeature {
@@ -149,7 +149,7 @@ export function ShellSidebar({
             >
               <span aria-hidden="true">▣</span>
               <span className="shell-tree-name">{workspace.name}</span>
-              {workspace.count !== undefined && <small>{workspace.count}</small>}
+              <small>{workspace.count}</small>
             </button>
           ))}
           <button

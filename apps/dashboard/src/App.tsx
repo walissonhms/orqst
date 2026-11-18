@@ -1114,7 +1114,7 @@ export function App() {
   if (managedWorkspace) paletteWorkspaces.set(managedWorkspace.id, managedWorkspace);
   const workspaceRows = [...paletteWorkspaces.values()].map((workspace) => ({
     ...workspace,
-    count: workspace.id === managedWorkspace?.id ? managedFeatures.length : undefined,
+    count: workspace.id === managedWorkspace?.id ? managedFeatures.length : 0,
   }));
   const settingsRoute = view === 'settings' || view === 'agents';
   const routeTitle = t(`shell.views.${settingsRoute ? 'settings' : view}`);
@@ -1383,7 +1383,7 @@ export function App() {
             <div className="panel-heading">
               <h2>
                 <Terminal size={17} />
-                {t('agents')}
+                {t('sessions')}
                 {historyReady && <span className="count-badge">{sessions.length}</span>}
               </h2>
               <span className="subtle-label">{t('latest')}</span>
@@ -1443,7 +1443,7 @@ export function App() {
                 )}
               </div>
             ) : (
-              <div className="table-scroll" tabIndex={0} role="group" aria-label={t('agents')}>
+              <div className="table-scroll" tabIndex={0} role="group" aria-label={t('sessions')}>
                 <table className="session-table" role="table">
                   <thead>
                     <tr>

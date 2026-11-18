@@ -1372,7 +1372,9 @@ export function FeatureWorkspace({
                   () => void request({ action: 'organize', command: 'show-all' }),
                 )}
             {actions}
-            {limits.length > 0 && <div className="shell-account-limits">{limitsControl}</div>}
+            <div className="shell-account-limits" data-empty={limits.length === 0 || undefined}>
+              {limitsControl}
+            </div>
           </div>
         </RouteHeaderActions>
       )}
@@ -1434,7 +1436,11 @@ export function FeatureWorkspace({
               ) : undefined
             }
             v6={{
-              featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
+              featureName: selected
+                ? displayFeatureName(selected)
+                : shell
+                  ? undefined
+                  : t('features.unassigned'),
               layoutControlsRef: layoutControls,
               ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
                 ? {
