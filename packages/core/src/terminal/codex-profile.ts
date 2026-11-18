@@ -24,7 +24,12 @@ import { z } from 'zod';
 import { terminalToolPath, terminalToolPathSchema } from './local-cli-path.js';
 import { terminalDigest } from './authority.js';
 import type { TerminalProfile } from './supervisor.js';
-import { terminalMcpLaunchSchema, type TerminalMcpLaunch } from './mcp-launch.js';
+import {
+  hubRelayTools,
+  pairRelayTools,
+  terminalMcpLaunchSchema,
+  type TerminalMcpLaunch,
+} from './mcp-launch.js';
 
 const path = z.string().min(1).max(2048).refine(isAbsolute);
 const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
@@ -371,9 +376,10 @@ function codexMcpArguments(config: ManagedCodexConfig, raw: TerminalMcpLaunch): 
     throw new Error('Unreviewed Codex MCP version');
   if (terminalDigest(terminalFile(mcp.relay.path, false, 16 * 1024 * 1024)) !== mcp.relay.sha256)
     throw new Error('MCP relay changed');
+  const enabledTools = config.interactive?.hub ? hubRelayTools : pairRelayTools;
   return [
     '-c',
-    `mcp_servers.${mcp.serverName}={command=${JSON.stringify(config.node.path)},args=[${JSON.stringify(mcp.relay.path)}],env={ORQST_SOCKET_PATH=${JSON.stringify(mcp.socketPath)},ORQST_CAP_FILE=${JSON.stringify(mcp.capabilityFile)}},startup_timeout_sec=10,tool_timeout_sec=125,required=true}`,
+    `mcp_servers.${mcp.serverName}={command=${JSON.stringify(config.node.path)},args=[${JSON.stringify(mcp.relay.path)}],env={ORQST_SOCKET_PATH=${JSON.stringify(mcp.socketPath)},ORQST_CAP_FILE=${JSON.stringify(mcp.capabilityFile)}},startup_timeout_sec=10,tool_timeout_sec=125,required=true,default_tools_approval_mode="approve",enabled_tools=${JSON.stringify(enabledTools)}}`,
   ];
 }
 

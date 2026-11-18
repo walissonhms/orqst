@@ -447,9 +447,12 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       assert.equal(config.ownedHooks, true);
       assert.ok(config.sessionId);
       assert.equal(config.model!.value, choice);
-      const fullProfile = interactiveTerminalProfiles(config, hubLaunch())[0]!;
+      const launch = hubLaunch();
+      const fullProfile = interactiveTerminalProfiles(config, launch)[0]!;
       const profile = withoutHubMcp(fullProfile);
       assert.deepEqual(profile.argv, [
+        '--allowedTools',
+        `mcp__${launch.serverName}__*`,
         '--session-id',
         config.sessionId,
         '--settings',
@@ -473,7 +476,7 @@ for (const choice of [null, 'sonnet', 'opus', 'haiku']) {
       const backend = managedTerminalBackend(
         prepared.files[0]!,
         'SYNTHETIC-NEVER-EXECUTED',
-        hubLaunch(),
+        launch,
       );
       assert.equal(backend.validate(fullProfile), true);
       // The same selected path with different native bytes is never substituted or admitted.

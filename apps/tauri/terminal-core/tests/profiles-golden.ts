@@ -215,6 +215,7 @@ const codexNative = {
 const codexMcp = { ...codexNative, interactive: { sharedNativeSessions: true, mcp: true } };
 const codexHub = {
   ...codexNative,
+  executableVersion: '0.169.0',
   interactive: { sharedNativeSessions: true, mcp: true, hub: true },
 };
 const TUI = {

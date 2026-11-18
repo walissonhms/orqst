@@ -1,6 +1,6 @@
 // Configuration review only. No filesystem/process/credential access and no executable factory.
 import { z } from 'zod';
-import { terminalMcpLaunchSchema } from './mcp-launch.js';
+import { hubRelayTools, pairRelayTools, terminalMcpLaunchSchema } from './mcp-launch.js';
 
 /** Passive local binary metadata, not a provider run or proof of login/protocol compatibility. */
 export const reviewedProviderMcpBinaries = Object.freeze({
@@ -89,6 +89,8 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
           },
         },
       }),
+      '--allowedTools',
+      `mcp__${mcp.serverName}__*`,
       '--session-id',
       input.sessionId,
     ],
@@ -118,6 +120,11 @@ export function opencodeInteractiveMcpConfiguration(raw: unknown) {
     argv: ['--standalone'],
     environmentOverrides: {
       OPENCODE_CONFIG_CONTENT: JSON.stringify({
+        permissions: Array.from(new Set([...hubRelayTools, ...pairRelayTools]), (tool) => ({
+          action: `${mcp.serverName}_${tool}`,
+          resource: '*',
+          effect: 'allow',
+        })),
         mcp: {
           servers: {
             [mcp.serverName]: {

@@ -772,7 +772,7 @@
        "-c",
        "shell_environment_policy.inherit=\"none\"",
        "-c",
-       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true}"
+       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true,default_tools_approval_mode=\"approve\",enabled_tools=[\"delegate_task\",\"wait_task\",\"submit_result\"]}"
       ]
      }
     ]
@@ -874,7 +874,7 @@
       "path": "/private/tmp/orqst-l2-golden/bin/codex",
       "sha256": "8b405f721e4668beeef00b75ce31f5e966934f017f464ade5551f6c84e1e6f4b"
      },
-     "executableVersion": "codex-cli 0.162.1",
+     "executableVersion": "0.169.0",
      "node": {
       "path": "/private/tmp/orqst-l2-golden/bin/node",
       "sha256": "5fd738902b14ef308346631d64cf692302a4929d1db6114698209b938a2a505a"
@@ -911,7 +911,7 @@
       "projectId": "12e3776ebe3d4b4611e466dec9080104424ab13dea7d3d3c46f840027b6069ea",
       "executable": "/private/tmp/orqst-l2-golden/bin/codex",
       "executableSha256": "8b405f721e4668beeef00b75ce31f5e966934f017f464ade5551f6c84e1e6f4b",
-      "executableVersion": "codex-cli 0.162.1",
+      "executableVersion": "0.169.0",
       "cwd": "/private/tmp/orqst-l2-golden/project",
       "environmentProfile": "native-auth-config-sessions-no-inherited-credentials-v1",
       "permissions": "Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. Per-instance ORQST MCP connects to a private local relay. ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. Inherited MCPs remain enabled. Tool PATH: /private/tmp/orqst-l2-golden/bin. Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.",
@@ -955,7 +955,7 @@
        "-c",
        "shell_environment_policy.inherit=\"none\"",
        "-c",
-       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true}"
+       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true,default_tools_approval_mode=\"approve\",enabled_tools=[\"list_terminals\",\"send_message\",\"read_messages\",\"wait_messages\",\"delegate_task\",\"submit_result\",\"task_status\"]}"
       ]
      }
     ]
@@ -972,7 +972,7 @@
       "path": "/private/tmp/orqst-l2-golden/bin/codex",
       "sha256": "8b405f721e4668beeef00b75ce31f5e966934f017f464ade5551f6c84e1e6f4b"
      },
-     "executableVersion": "codex-cli 0.162.1",
+     "executableVersion": "0.169.0",
      "node": {
       "path": "/private/tmp/orqst-l2-golden/bin/node",
       "sha256": "5fd738902b14ef308346631d64cf692302a4929d1db6114698209b938a2a505a"
@@ -2352,6 +2352,8 @@
        "--strict-mcp-config",
        "--mcp-config",
        "{\"mcpServers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"stdio\",\"command\":\"/private/tmp/orqst-l2-golden/bin/node\",\"args\":[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"env\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"}}}}",
+       "--allowedTools",
+       "mcp__orqst_0123456789abcdef0123456789abcdef__*",
        "--session-id",
        "2f1c7a9e-3b4d-4c5e-8f60-718293a4b5c6",
        "--settings",
@@ -2511,6 +2513,8 @@
        "--strict-mcp-config",
        "--mcp-config",
        "{\"mcpServers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"stdio\",\"command\":\"/private/tmp/orqst-l2-golden/bin/node\",\"args\":[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"env\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"}}}}",
+       "--allowedTools",
+       "mcp__orqst_0123456789abcdef0123456789abcdef__*",
        "--session-id",
        "2f1c7a9e-3b4d-4c5e-8f60-718293a4b5c6"
       ],
@@ -3464,7 +3468,7 @@
      ],
      [
       "OPENCODE_CONFIG_CONTENT",
-      "{\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/private/tmp/orqst-l2-golden/bin/node\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
+      "{\"permissions\":[{\"action\":\"orqst_0123456789abcdef0123456789abcdef_list_terminals\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_send_message\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_read_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_delegate_task\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_submit_result\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_task_status\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_task\",\"resource\":\"*\",\"effect\":\"allow\"}],\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/private/tmp/orqst-l2-golden/bin/node\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
      ],
      [
       "TMPDIR",
@@ -3614,7 +3618,7 @@
      ],
      [
       "OPENCODE_CONFIG_CONTENT",
-      "{\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/private/tmp/orqst-l2-golden/bin/node\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
+      "{\"permissions\":[{\"action\":\"orqst_0123456789abcdef0123456789abcdef_list_terminals\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_send_message\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_read_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_delegate_task\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_submit_result\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_task_status\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_task\",\"resource\":\"*\",\"effect\":\"allow\"}],\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/private/tmp/orqst-l2-golden/bin/node\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
      ],
      [
       "TMPDIR",
@@ -4638,7 +4642,7 @@
        "-c",
        "shell_environment_policy.inherit=\"none\"",
        "-c",
-       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true}"
+       "mcp_servers.orqst_0123456789abcdef0123456789abcdef={command=\"/private/tmp/orqst-l2-golden/bin/node\",args=[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],env={ORQST_SOCKET_PATH=\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",ORQST_CAP_FILE=\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},startup_timeout_sec=10,tool_timeout_sec=125,required=true,default_tools_approval_mode=\"approve\",enabled_tools=[\"delegate_task\",\"wait_task\",\"submit_result\"]}"
       ]
      }
     ]
@@ -4873,6 +4877,8 @@
       "--strict-mcp-config",
       "--mcp-config",
       "{\"mcpServers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"stdio\",\"command\":\"/n\",\"args\":[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"env\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"}}}}",
+      "--allowedTools",
+      "mcp__orqst_0123456789abcdef0123456789abcdef__*",
       "--session-id",
       "2f1c7a9e-3b4d-4c5e-8f60-718293a4b5c6"
      ],
@@ -4928,6 +4934,8 @@
       "--strict-mcp-config",
       "--mcp-config",
       "{\"mcpServers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"stdio\",\"command\":\"/n\",\"args\":[\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"env\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"}}}}",
+      "--allowedTools",
+      "mcp__orqst_0123456789abcdef0123456789abcdef__*",
       "--session-id",
       "2f1c7a9e-3b4d-4c5e-8f60-718293a4b5c6"
      ],
@@ -5035,7 +5043,7 @@
       "--standalone"
      ],
      "environmentOverrides": {
-      "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/n\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
+      "OPENCODE_CONFIG_CONTENT": "{\"permissions\":[{\"action\":\"orqst_0123456789abcdef0123456789abcdef_list_terminals\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_send_message\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_read_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_delegate_task\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_submit_result\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_task_status\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_task\",\"resource\":\"*\",\"effect\":\"allow\"}],\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/n\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
      },
      "nativeIdentityEnvironment": [
       "HOME",
@@ -5206,7 +5214,7 @@
       "LANG": "en_US.UTF-8",
       "LC_ALL": "en_US.UTF-8",
       "TERM": "xterm-256color",
-      "OPENCODE_CONFIG_CONTENT": "{\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/n\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
+      "OPENCODE_CONFIG_CONTENT": "{\"permissions\":[{\"action\":\"orqst_0123456789abcdef0123456789abcdef_list_terminals\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_send_message\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_read_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_messages\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_delegate_task\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_submit_result\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_task_status\",\"resource\":\"*\",\"effect\":\"allow\"},{\"action\":\"orqst_0123456789abcdef0123456789abcdef_wait_task\",\"resource\":\"*\",\"effect\":\"allow\"}],\"mcp\":{\"servers\":{\"orqst_0123456789abcdef0123456789abcdef\":{\"type\":\"local\",\"command\":[\"/n\",\"/private/tmp/orqst-l2-golden/bin/relay.cjs\"],\"environment\":{\"ORQST_SOCKET_PATH\":\"/private/tmp/orqst-l2-golden/state-native/mcp.sock\",\"ORQST_CAP_FILE\":\"/private/tmp/orqst-l2-golden/state-native/cap \\\"quoted\\\".json\"},\"disabled\":false,\"codemode\":false,\"protocol\":\"legacy\",\"timeout\":{\"startup\":10000,\"catalog\":10000,\"execution\":125000}}}}}"
      },
      "server": {
       "selection": "private_child",
