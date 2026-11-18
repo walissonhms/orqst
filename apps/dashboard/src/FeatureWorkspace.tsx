@@ -31,7 +31,7 @@ import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
-import { TerminalStudio } from './TerminalStudio.js';
+import { TerminalStudio, type StudioLayoutControls } from './TerminalStudio.js';
 import { AccountLimits } from './AccountLimits.js';
 import { FeatureDelegate, type FeatureDelegateProps, type MentionSend } from './MentionComposer.js';
 import type { StudioCreationScope } from './StudioWorkspace.js';
@@ -39,7 +39,7 @@ import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account
 import {
   arrangeRequest,
   studioTerminals,
-  type NativeChrome,
+  nativeChrome,
   type NativePaneLayout,
 } from './studio-native.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
@@ -257,6 +257,7 @@ export function FeatureWorkspace({
   const featureTokens = measuredTerminals.reduce((sum, total) => sum + total, 0);
   const scopeKey = featureScopeKey(snapshot, workspaceId);
   const studioRef = useRef<HTMLDivElement>(null);
+  const layoutControls = useRef<StudioLayoutControls>(null);
   const focusedTerminals = useRef(new Map<string, string>());
   const arranging = useRef<{
     layout: NativePaneLayout[];
@@ -289,17 +290,7 @@ export function FeatureWorkspace({
       const send = (snapshotNow: FeatureNativeSnapshot) => {
         // Viewport and members are read at send time, next to the request they describe.
         if (featureScopeKey(snapshotNow) !== frameScope) return;
-        const chrome: NativeChrome = {
-          sidebar: window.innerWidth > 720 ? 155 : 46,
-          top: 47,
-          bottom: 38,
-        };
-        // The V2 native allowlist uses a 47 px top inset. The visible header is 45 px.
-        // Translate from TerminalStudio's measured toolbar bottom into the allowed base.
-        const translated = layout.map((pane) => ({
-          ...pane,
-          rect: pane.rect && { ...pane.rect, y: pane.rect.y - (chrome.top - 45) },
-        }));
+        const chrome = nativeChrome(false, window.innerWidth, 'v6');
         const viewport = {
           width: window.innerWidth - chrome.sidebar,
           height: window.innerHeight - chrome.top - chrome.bottom,
@@ -310,7 +301,7 @@ export function FeatureWorkspace({
           )
           .map((slot) => slot.terminalId);
         return native.arrange!({
-          ...arrangeRequest(snapshotNow, memberIds, translated, mode, viewport, chrome),
+          ...arrangeRequest(snapshotNow, memberIds, layout, mode, viewport, chrome),
           contractVersion: 1,
           generation: snapshotNow.generation,
         })
@@ -884,7 +875,7 @@ export function FeatureWorkspace({
       {selected ? ` / ${displayFeatureName(selected)}` : ''}
     </strong>
   );
-  const layoutActions = (onGrid: () => void, onRestore: () => void, mode?: ArrangementMode) => (
+  const layoutActions = (onGrid: () => void, onRestore: () => void) => (
     <>
       <button
         type="button"
@@ -896,7 +887,7 @@ export function FeatureWorkspace({
         }}
       >
         <span aria-hidden="true">▦ </span>
-        {t(mode === 'columns' ? 'terminalStudio.mode.columns' : 'features.grid')}
+        {t('features.grid')}
       </button>
       <button
         type="button"
@@ -1348,14 +1339,23 @@ export function FeatureWorkspace({
                 <span>{t('feature.archived')}</span>
               ) : undefined
             }
-            renderToolbar={({ mode, setMode, restore }) => (
+            v6={{
+              featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
+              layoutControlsRef: layoutControls,
+              ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
+                ? {onRename: (id: string) => {
+                  const slot = available.find(({ terminalId }) => terminalId === id);
+                  if (slot) editPane(slot.slot);
+                }}
+                : {}),
+            }}
+            toolbarStart={breadcrumb}
+            toolbarEnd={
               <>
-                {breadcrumb}
                 {toolbarUtilities}
                 {layoutActions(
-                  () => setMode(mode === 'mosaic' ? 'columns' : 'mosaic'),
-                  restore,
-                  mode,
+                  () => layoutControls.current?.toggleGrid(),
+                  () => layoutControls.current?.restore(),
                 )}
                 {selected &&
                   measuredTerminals.length > 0 &&
@@ -1394,7 +1394,7 @@ export function FeatureWorkspace({
                 ) : null}
                 {actions}
               </>
-            )}
+            }
             {...(nativeWorkspace && selected?.status !== 'archived'
               ? {
                   closePending: busy || quitFence,

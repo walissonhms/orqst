@@ -104,8 +104,8 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
         .strictObject({
           sidebar: z.union([z.literal(0), z.literal(46), z.literal(155)]),
           // 47/92 and 38 match the approved preview; 36/81 and 34 stay accepted.
-          top: z.union([z.literal(36), z.literal(47), z.literal(81), z.literal(92)]),
-          bottom: z.union([z.literal(34), z.literal(38)]),
+          top: z.union([z.literal(36), z.literal(45), z.literal(47), z.literal(81), z.literal(92)]),
+          bottom: z.union([z.literal(33), z.literal(34), z.literal(38)]),
         })
         .optional(),
       mode: z.enum(['mosaic', 'columns', 'rows', 'focus', 'list', 'free']),
@@ -119,6 +119,18 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
       (value) =>
         ((value.layoutVersion === 1 && value.chrome === undefined) ||
           (value.layoutVersion === 2 && value.chrome !== undefined)) &&
+        (!value.chrome ||
+          ((value.chrome.top === 45) === (value.chrome.bottom === 33) &&
+            (value.chrome.top !== 45 || value.chrome.sidebar !== 0))) &&
+        (value.chrome?.top !== 45 ||
+          value.panes.every(
+            ({ rect }) =>
+              !rect ||
+              (rect.x >= 4 &&
+                rect.y >= 35 &&
+                rect.x + rect.width <= value.viewport.width - 4 &&
+                rect.y + rect.height <= value.viewport.height - 4),
+          )) &&
         new Set(value.panes.map((pane) => pane.slot)).size === value.panes.length &&
         new Set(value.panes.map((pane) => pane.terminalId)).size === value.panes.length &&
         (value.mode !== 'list' || value.panes.every((pane) => !pane.visible)) &&

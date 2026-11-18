@@ -655,42 +655,6 @@
   opacity: 0.5;
 }
 
-/* Stage edges follow the approved shell. Native placement follows measured PTY holes. */
-.feature-studio .ts-root {
-  background: var(--feature-bg);
-}
-.feature-studio .ts-root .ts-stage {
-  margin: 4px;
-}
-.feature-studio .ts-pane {
-  border-radius: 3px;
-  border-color: var(--feature-line);
-  background: var(--feature-panel);
-}
-.feature-studio .ts-head {
-  background: #111018;
-  border-color: var(--feature-line);
-}
-.feature-studio .ts-orchestrator {
-  border-top: 2px solid var(--feature-purple);
-}
-.feature-studio .ts-dock {
-  box-sizing: border-box;
-  flex: none;
-  height: 34px;
-  gap: 7px;
-  padding-inline: 9px;
-  background: #0e0d15;
-}
-.feature-studio .ts-dock-title {
-  font-size: 9px;
-  letter-spacing: 1px;
-}
-.feature-studio .ts-chip {
-  height: 23px;
-  padding-inline: 7px;
-}
-
 .ts-loading {
   color: var(--orqst-muted);
   font-size: 12px;

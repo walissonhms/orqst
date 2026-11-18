@@ -285,3 +285,40 @@
 :root[data-motion='reduced'] .pm-menu {
   animation: none;
 }
+
+.pm-menu.pm-v6 {
+  width: min(215px, calc(100vw - 16px));
+  padding: 5px;
+  background: #201a2d;
+  border: 1px solid #4a3c64;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.pm-v6 .pm-item {
+  min-height: 29px;
+  padding: 5px 8px;
+  color: #e5dcf1;
+}
+.pm-v6 .pm-item:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.pm-v6 .pm-item:enabled:hover,
+.pm-v6 .pm-arrangements button:hover {
+  background: #3d3052;
+}
+.pm-arrangements summary,
+.pm-arrangements button {
+  padding: 6px 8px;
+  color: #e5dcf1;
+  cursor: pointer;
+}
+.pm-arrangements button {
+  display: block;
+  width: 100%;
+  text-align: start;
+}
+.pm-arrangements button[aria-checked='true'] {
+  color: #d9c9ff;
+  background: #3d3052;
+}

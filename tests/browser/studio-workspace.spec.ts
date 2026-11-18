@@ -267,6 +267,8 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
             if (input.input.status === 'archived' && feature.terminalIds.length)
               return { status: 'archive_blocked', snapshot: structuredClone(snapshot) };
             if (input.input.status) feature.status = input.input.status;
+            if (input.input.orchestratorTerminalId !== undefined)
+              feature.orchestratorTerminalId = input.input.orchestratorTerminalId;
             feature.revision++;
             snapshot.generation++;
           }
@@ -357,8 +359,8 @@ for (const [width, height] of [
       .toBe(4);
     const original = (await frames()).at(-1)!;
     const measured = await page.locator('.ts-body').first().boundingBox();
-    expect(original.chrome).toEqual({ sidebar: 155, top: 47, bottom: 38 });
-    expect(original.panes[0]!.rect!.y + 47).toBe(Math.ceil(measured!.y));
+    expect(original.chrome).toEqual({ sidebar: 155, top: 45, bottom: 33 });
+    expect(original.panes[0]!.rect!.y + 45).toBe(Math.ceil(measured!.y));
     await capture('01-four-panes');
     await page.getByRole('button', { name: 'Configurações', exact: true }).click();
     await expect
@@ -492,3 +494,122 @@ test('the renderer restores the previous terminal control by its ID within the r
     ),
   ).toBe(false);
 });
+
+for (const [width, height] of [
+  [1440, 900],
+  [1280, 800],
+] as const) {
+  test(`the integrated Feature Studio presents V6 pane states at ${width}×${height}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await openNativeFixture(page);
+    const row = page.locator('.ts-toolbar');
+    const first = page.locator(`[data-pane-id="${terminalId(1)}"]`);
+    const second = page.locator(`[data-pane-id="${terminalId(2)}"]`);
+    const dock = page.locator('.ts-dock');
+    const menu = page.getByRole('menu');
+    const capture = (name: string) =>
+      page.screenshot({
+        path: process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
+          ? join('docs/development/v6-parity/integrated', `${width}x${height}`, 'panes', `${name}.png`)
+          : testInfo.outputPath(`${name}.png`),
+        animations: 'disabled',
+      });
+    const openMenu = async () => {
+      await first.locator('.ts-more').click();
+      await expect(menu).toBeVisible();
+    };
+    const mode = () =>
+      page.evaluate(() => (Reflect.get(window, 'fixtureFrames') as { mode: string }[]).at(-1)?.mode);
+    const grade = row.getByRole('button', { name: 'Grade', exact: true });
+    const restore = row.getByRole('button', { name: 'Restaurar', exact: true });
+    await expect(row).toHaveCount(1);
+    await expect(grade).toHaveCount(1);
+    await expect(restore).toHaveCount(1);
+    await expect(row.locator('.ts-modes, .ts-features')).toHaveCount(0);
+    await expect(first.locator('.ts-head')).toHaveCSS('height', '31px');
+    await expect(first.locator('.ts-alias')).toHaveText('@T-001');
+    await expect(dock).toHaveCSS('height', '33px');
+    await expect(dock).toContainText('4 terminais· Feature A');
+    await expect(dock.locator('.ts-mention-open')).toHaveCount(0);
+    const origin = (await first.boundingBox())!;
+    expect([origin.x, origin.y]).toEqual([159, 49]);
+    await capture('01-grid');
+
+    await grade.click();
+    await expect.poll(mode).toBe('columns');
+    await capture('02-columns');
+    await restore.click();
+    await expect.poll(mode).toBe('mosaic');
+    await capture('03-grid-restored');
+    const divider = page.locator('.ts-track.ts-split-columns').first();
+    await expect(divider).toHaveCSS('width', '5px');
+    await divider.press('ArrowRight');
+    await expect.poll(async () => (await first.boundingBox())!.width).toBeGreaterThan(origin.width);
+    await capture('04-divider-resized');
+
+    const header = (await first.locator('.ts-head').boundingBox())!;
+    const target = (await second.boundingBox())!;
+    await page.mouse.move(header.x + 55, header.y + 14);
+    await page.mouse.down();
+    await page.mouse.move(target.x + 80, target.y + 22, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await first.boundingBox())!.x).toBeGreaterThan(origin.x);
+    await capture('05-dock-swap');
+
+    await openMenu();
+    await expect(menu).toHaveCSS('width', '215px');
+    await capture('06-pane-menu');
+    await menu.getByText('Layouts', { exact: true }).click();
+    await expect(menu.getByRole('menuitemradio', { name: 'Colunas', exact: true })).toBeVisible();
+    await capture('06a-layouts');
+    await menu.getByRole('menuitem', { name: 'Configurações / renomear', exact: true }).click();
+    const editor = page.locator('.feature-pane-editor');
+    await expect(editor).toBeVisible();
+    await capture('07-rename');
+    await editor.locator('input').press('Escape');
+    await expect(editor).toHaveCount(0);
+
+    await openMenu();
+    await menu.getByRole('menuitem', { name: 'Tornar flutuante', exact: true }).click();
+    await expect(first).toHaveClass(/ts-floating/);
+    await expect.poll(mode).toBe('free');
+    await capture('08-floating');
+    const handle = (await first.locator('.ts-edge-se').boundingBox())!;
+    const beforeResize = (await first.boundingBox())!.width;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + 40, handle.y + 30, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await first.boundingBox())!.width).toBeGreaterThan(beforeResize);
+    await capture('09-floating-resized');
+    await openMenu();
+    await capture('10-floating-menu');
+    await menu.getByRole('menuitem', { name: 'Encaixar na grade', exact: true }).click();
+    await expect(first).not.toHaveClass(/ts-floating/);
+
+    await first.getByRole('button', { name: 'Maximizar', exact: true }).click();
+    await expect.poll(() => first.boundingBox()).toEqual({
+      x: 159, y: 49, width: width - 163, height: height - 86,
+    });
+    await capture('11-maximized');
+    await first.getByRole('button', { name: 'Restaurar', exact: true }).click();
+    await first.getByRole('button', { name: 'Minimizar', exact: true }).click();
+    await expect(first).toHaveCount(0);
+    const chip = dock.locator('.ts-chip');
+    await expect(chip).toHaveCount(1);
+    await capture('12-minimized');
+    await chip.click();
+    await expect(first).toBeVisible();
+    await capture('13-restored');
+
+    await openMenu();
+    await expect(menu.getByRole('menuitem', { name: 'Duplicar configuração' })).toBeDisabled();
+    await capture('14-duplicate-availability');
+    await menu.getByRole('menuitem', { name: 'Marcar como Orquestrador', exact: true }).click();
+    await expect(first.locator('.ts-role')).toBeVisible();
+    await capture('15-role');
+  });
+}

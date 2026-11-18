@@ -1,0 +1,23 @@
+{
+  "studio": {
+    "pane": {
+      "settings": "Configurações / renomear",
+      "editAlias": "Editar alias para menções",
+      "alias": "Alias para menções",
+      "float": "Tornar flutuante",
+      "dock": "Encaixar na grade",
+      "gridFull": "A grade está cheia",
+      "hide": "Minimizar painel",
+      "maximize": "Maximizar / restaurar",
+      "duplicateConfig": "Duplicar configuração",
+      "layouts": "Layouts",
+      "emptySlot": "＋ Espaço livre"
+    }
+  },
+  "dock": {
+    "title": "Minimizados",
+    "restore": "Restaurar {{name}}",
+    "total_one": "{{count}} terminal",
+    "total_other": "{{count}} terminais"
+  }
+}

@@ -1162,7 +1162,20 @@
       "openMcpPair": "Review and open communication pair"
     },
     "layoutPreview": "Open the terminal layout preview (development).",
-    "browserOnly": "Terminals run in the ORQST Desktop app. This browser shows observed sessions only."
+    "browserOnly": "Terminals run in the ORQST Desktop app. This browser shows observed sessions only.",
+    "pane": {
+      "settings": "Settings / rename",
+      "editAlias": "Edit mention alias",
+      "alias": "Mention alias",
+      "float": "Make floating",
+      "dock": "Dock in grid",
+      "gridFull": "The grid has no free position",
+      "hide": "Minimize pane",
+      "maximize": "Maximize / restore",
+      "duplicateConfig": "Duplicate configuration",
+      "layouts": "Arrangements",
+      "emptySlot": "＋ Free position"
+    }
   },
   "tauriPreparation": {
     "retireDenied": "Retirement was refused or could not be confirmed. Preserve the reservation, archives and journals. After a possibly dispatched authorization, this client stays locked; an archive may already exist. Quit and inspect the evidence before selecting fresh profiles. No automatic recovery or replay is performed.",
@@ -1708,5 +1721,11 @@
     "critical": "Critical from",
     "hidden_one": "{{count}} account hidden from the toolbar",
     "hidden_other": "{{count}} accounts hidden from the toolbar"
+  },
+  "dock": {
+    "title": "Minimized",
+    "restore": "Restore {{name}}",
+    "total_one": "{{count}} terminal",
+    "total_other": "{{count}} terminals"
   }
 }

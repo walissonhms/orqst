@@ -52,8 +52,12 @@ export function studioTerminals(
         id: slot.terminalId,
         uuid: slot.terminalId,
         label,
+        // The Feature composer resolves exactly this Core slot handle.
+        ...(selected ? { alias: label } : {}),
         name: pane?.label && pane.label !== label ? pane.label : fallback,
         provider: slot.provider,
+        ...(pane?.active ? { active: true } : {}),
+        ...(pane?.minimized ? { nativeMinimized: true } : {}),
         ...(slot.selectedModel === undefined ? {} : { model: slot.selectedModel }),
         // Agent state only from evidenced turns (owned Claude today); never from the process.
         status: entry?.agentState ?? 'unknown',
@@ -71,12 +75,13 @@ export function studioTerminals(
 /** Native chrome insets: full window (like the preview) or with the Feature panel. */
 export interface NativeChrome {
   sidebar: 0 | 46 | 155;
-  top: 36 | 47 | 81 | 92;
-  bottom: 34 | 38;
+  top: 36 | 45 | 47 | 81 | 92;
+  bottom: 33 | 34 | 38;
 }
 
 /** Compact Studio rows must agree with the CSS and the native arrange frame. */
-export function nativeChrome(immersive: boolean, windowWidth: number): NativeChrome {
+export function nativeChrome(immersive: boolean, windowWidth: number, layout?: 'v6'): NativeChrome {
+  if (layout === 'v6') return { sidebar: windowWidth > 720 ? 155 : 46, top: 45, bottom: 33 };
   return immersive
     ? { sidebar: 0, top: 36, bottom: 34 }
     : { sidebar: windowWidth > 720 ? 155 : 46, top: 81, bottom: 34 };

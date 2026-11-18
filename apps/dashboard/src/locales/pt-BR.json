@@ -1162,7 +1162,20 @@
       "openMcpPair": "Revisar e abrir par com comunicação"
     },
     "layoutPreview": "Abrir a prévia do layout de terminais (desenvolvimento).",
-    "browserOnly": "Os terminais rodam no app ORQST Desktop. Este navegador mostra apenas as sessões observadas."
+    "browserOnly": "Os terminais rodam no app ORQST Desktop. Este navegador mostra apenas as sessões observadas.",
+    "pane": {
+      "settings": "Configurações / renomear",
+      "editAlias": "Editar alias para menções",
+      "alias": "Alias para menções",
+      "float": "Tornar flutuante",
+      "dock": "Encaixar na grade",
+      "gridFull": "A grade está cheia",
+      "hide": "Minimizar painel",
+      "maximize": "Maximizar / restaurar",
+      "duplicateConfig": "Duplicar configuração",
+      "layouts": "Layouts",
+      "emptySlot": "＋ Espaço livre"
+    }
   },
   "tauriPreparation": {
     "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",
@@ -1708,5 +1721,11 @@
     "critical": "Crítico a partir de",
     "hidden_one": "{{count}} conta oculta da barra",
     "hidden_other": "{{count}} contas ocultas da barra"
+  },
+  "dock": {
+    "title": "Minimizados",
+    "restore": "Restaurar {{name}}",
+    "total_one": "{{count}} terminal",
+    "total_other": "{{count}} terminais"
   }
 }

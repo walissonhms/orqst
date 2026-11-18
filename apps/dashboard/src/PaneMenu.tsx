@@ -6,6 +6,12 @@ import {
   CopyPlus,
   ExternalLink,
   Info,
+  AtSign,
+  Crown,
+  LayoutGrid,
+  Minus,
+  Pencil,
+  PictureInPicture2,
   Maximize,
   Maximize2,
   MoreHorizontal,
@@ -14,6 +20,52 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import type { StudioTerminal } from './TerminalStudio';
+import { arrangementModes, type ArrangementMode } from './terminal-arrangement';
+
+// Lane 1 owns the shared locale files. These bilingual defaults keep the lane
+// independently runnable and are overridden by the same keys in those files.
+const paneCopy = {
+  'studio.pane.settings': ['Settings / rename', 'Configurações / renomear'],
+  'studio.pane.editAlias': ['Edit mention alias', 'Editar alias para menções'],
+  'studio.pane.alias': ['Mention alias', 'Alias para menções'],
+  'studio.pane.float': ['Make floating', 'Tornar flutuante'],
+  'studio.pane.dock': ['Dock in grid', 'Encaixar na grade'],
+  'studio.pane.gridFull': ['The grid has no free position', 'A grade está cheia'],
+  'studio.pane.hide': ['Minimize pane', 'Minimizar painel'],
+  'studio.pane.maximize': ['Maximize / restore', 'Maximizar / restaurar'],
+  'studio.pane.duplicateConfig': ['Duplicate configuration', 'Duplicar configuração'],
+  'studio.pane.layouts': ['Arrangements', 'Layouts'],
+  'studio.pane.emptySlot': ['＋ Free position', '＋ Espaço livre'],
+  'dock.title': ['Minimized', 'Minimizados'],
+  'dock.restore': ['Restore {{name}}', 'Restaurar {{name}}'],
+  'dock.total': ['{{count}} terminals', '{{count}} terminais'],
+} as const;
+
+export function useStudioPaneText() {
+  const { t, i18n } = useTranslation();
+  const portuguese = (i18n.resolvedLanguage ?? i18n.language ?? '').startsWith('pt');
+  return (key: keyof typeof paneCopy, values: Record<string, string | number> = {}) => {
+    const fallback =
+      key === 'dock.total' && values.count === 1
+        ? '{{count}} terminal'
+        : paneCopy[key][portuguese ? 1 : 0];
+    return t(key, { ...values, defaultValue: fallback });
+  };
+}
+
+interface CanonicalPaneMenu {
+  onRename?: () => void;
+  onEditAlias?: () => void;
+  onDuplicate?: () => void;
+  onHide: () => void;
+  onRole?: () => void;
+  onMention?: () => void;
+  onFloat?: () => void;
+  onDock?: () => void;
+  canDock: boolean;
+  mode: ArrangementMode;
+  onLayoutMode(mode: ArrangementMode): void;
+}
 
 /** Actions a pane menu can request. The host decides which ones exist today. */
 export type PaneAction =
@@ -34,6 +86,8 @@ export interface AccountOption {
 }
 
 interface Props {
+  v6?: CanonicalPaneMenu;
+  orchestrator?: boolean;
   terminal: StudioTerminal;
   accounts: AccountOption[];
   supported: ReadonlySet<PaneActionType>;
@@ -56,6 +110,8 @@ const format = (value: number | undefined) => {
 };
 
 export function PaneMenu({
+  v6,
+  orchestrator,
   terminal,
   accounts,
   supported,
@@ -68,6 +124,7 @@ export function PaneMenu({
   onOpenChange,
 }: Props) {
   const { t } = useTranslation();
+  const paneText = useStudioPaneText();
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -79,7 +136,7 @@ export function PaneMenu({
   useLayoutEffect(() => {
     if (!open || !button.current) return;
     const rect = button.current.getBoundingClientRect();
-    const width = 340;
+    const width = v6 ? 215 : 340;
     const height = menu.current?.offsetHeight ?? 420;
     setPosition({
       left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
@@ -88,7 +145,7 @@ export function PaneMenu({
           ? Math.max(8, rect.top - height - 6)
           : rect.bottom + 6,
     });
-  }, [open]);
+  }, [open, !!v6]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,12 +169,20 @@ export function PaneMenu({
     type: PaneActionType | null,
     icon: React.ReactNode,
     label: string,
-    action: () => void,
+    action: (() => void) | undefined,
+    reason = unsupported,
   ) => {
     // Actions the host does not support are not offered at all (no dead menu entries).
     if (type !== null && !supported.has(type)) return null;
     return (
-      <button type="button" role="menuitem" className="pm-item" onClick={run(action)}>
+      <button
+        type="button"
+        role="menuitem"
+        className="pm-item"
+        disabled={!action}
+        title={action ? undefined : reason}
+        onClick={action && run(action)}
+      >
         {icon}
         <span>{label}</span>
       </button>
@@ -146,7 +211,7 @@ export function PaneMenu({
         createPortal(
           <div
             ref={menu}
-            className="pm-menu"
+            className={`pm-menu${v6 ? ' pm-v6' : ''}`}
             data-native-overlay=""
             role="menu"
             aria-label={t('terminalStudio.menu.title', { label: terminal.label })}
@@ -172,18 +237,95 @@ export function PaneMenu({
               }
             }}
           >
+            {v6 && (
+              <>
+                {item(
+                  null,
+                  <Pencil size={15} />,
+                  paneText('studio.pane.settings'),
+                  v6.onRename ?? (() => onAction({ type: 'details' })),
+                )}
+                {item(
+                  null,
+                  <AtSign size={15} />,
+                  paneText('studio.pane.editAlias'),
+                  v6.onEditAlias,
+                )}
+                {v6.onRole &&
+                  item(
+                    null,
+                    <Crown size={15} />,
+                    t(
+                      orchestrator
+                        ? 'terminalStudio.unsetOrchestrator'
+                        : 'terminalStudio.setOrchestrator',
+                    ),
+                    v6.onRole,
+                  )}
+                {v6.onDock
+                  ? item(
+                      null,
+                      <LayoutGrid size={15} />,
+                      paneText('studio.pane.dock'),
+                      v6.canDock ? v6.onDock : undefined,
+                      paneText('studio.pane.gridFull'),
+                    )
+                  : item(
+                      null,
+                      <PictureInPicture2 size={15} />,
+                      paneText('studio.pane.float'),
+                      v6.onFloat,
+                    )}
+                {item(null, <Minus size={15} />, paneText('studio.pane.hide'), v6.onHide)}
+                {item(
+                  null,
+                  <Maximize2 size={15} />,
+                  paneText('studio.pane.maximize'),
+                  onToggleMaximize,
+                )}
+                {item(
+                  null,
+                  <CopyPlus size={15} />,
+                  paneText('studio.pane.duplicateConfig'),
+                  v6.onDuplicate,
+                )}
+                {v6.onMention &&
+                  item(
+                    null,
+                    <AtSign size={15} />,
+                    t('terminalStudio.mention.fromThis'),
+                    v6.onMention,
+                  )}
+                <details className="pm-arrangements">
+                  <summary>{paneText('studio.pane.layouts')}</summary>
+                  {arrangementModes.map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={mode === v6.mode}
+                      onClick={run(() => v6.onLayoutMode(mode))}
+                    >
+                      {t(`terminalStudio.mode.${mode}`)}
+                    </button>
+                  ))}
+                </details>
+              </>
+            )}
             {item('refresh', <RefreshCw size={15} />, t('terminalStudio.menu.refresh'), () =>
               onAction({ type: 'refresh' }),
             )}
-            <div className="pm-tokens" title={t('terminalStudio.menu.tokensHint')}>
-              <span className="pm-tokens-label">{t('terminalStudio.menu.tokens')}</span>
-              <span className="pm-tokens-values">
-                <span title={t('terminalStudio.menu.total')}>{format(tokens?.total)}</span>
-                <span title={t('terminalStudio.menu.input')}>↑ {format(tokens?.input)}</span>
-                <span title={t('terminalStudio.menu.output')}>↓ {format(tokens?.output)}</span>
-                <span title={t('terminalStudio.menu.cached')}>⟲ {format(tokens?.cached)}</span>
-              </span>
-            </div>
+            {(!v6 || tokens) && (
+              <div className="pm-tokens" title={t('terminalStudio.menu.tokensHint')}>
+                <span className="pm-tokens-label">{t('terminalStudio.menu.tokens')}</span>
+                <span className="pm-tokens-values">
+                  <span title={t('terminalStudio.menu.total')}>{format(tokens?.total)}</span>
+                  <span title={t('terminalStudio.menu.input')}>↑ {format(tokens?.input)}</span>
+                  <span title={t('terminalStudio.menu.output')}>↓ {format(tokens?.output)}</span>
+                  <span title={t('terminalStudio.menu.cached')}>⟲ {format(tokens?.cached)}</span>
+                </span>
+              </div>
+            )}
             {item(
               'copy-conversation',
               <Copy size={15} />,
@@ -200,18 +342,20 @@ export function PaneMenu({
             {item(null, <Info size={15} />, t('terminalStudio.menu.details'), () =>
               onAction({ type: 'details' }),
             )}
-            {item(
-              null,
-              <Maximize2 size={15} />,
-              maximized ? t('terminalStudio.restore') : t('terminalStudio.menu.expand'),
-              onToggleMaximize,
-            )}
-            {item(
-              null,
-              <Pin size={15} />,
-              pinned ? t('terminalStudio.menu.unpin') : t('terminalStudio.menu.pin'),
-              onTogglePin,
-            )}
+            {!v6 &&
+              item(
+                null,
+                <Maximize2 size={15} />,
+                maximized ? t('terminalStudio.restore') : t('terminalStudio.menu.expand'),
+                onToggleMaximize,
+              )}
+            {!v6 &&
+              item(
+                null,
+                <Pin size={15} />,
+                pinned ? t('terminalStudio.menu.unpin') : t('terminalStudio.menu.pin'),
+                onTogglePin,
+              )}
             {item('detach', <ExternalLink size={15} />, t('terminalStudio.menu.detach'), () =>
               onAction({ type: 'detach' }),
             )}
