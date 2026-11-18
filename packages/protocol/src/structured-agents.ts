@@ -104,6 +104,22 @@ export const structuredAgentsRequestSchema = z.discriminatedUnion('action', [
 ]);
 export type StructuredAgentsRequest = z.infer<typeof structuredAgentsRequestSchema>;
 
+export const structuredAgentsMentionSchema = z.strictObject({
+  action: z.literal('mention'),
+  sourceSessionId: sessionId,
+  targetSessionId: sessionId,
+  handle: z
+    .string()
+    .trim()
+    .regex(/^@[a-z0-9][a-z0-9_-]{0,63}$/i),
+  task: z.string().trim().min(1).max(structuredAgentsLimits.delegationTask),
+});
+export const desktopStructuredAgentsRequestSchema = z.union([
+  structuredAgentsRequestSchema,
+  structuredAgentsMentionSchema,
+]);
+export type DesktopStructuredAgentsRequest = z.infer<typeof desktopStructuredAgentsRequestSchema>;
+
 export const structuredAgentsScopeSchema = z.strictObject({
   workspaceId: z.string().regex(/^[a-f0-9]{64}$/),
   featureId: uuid,
@@ -122,6 +138,6 @@ export type StructuredAgentsReply =
 export interface DesktopStructuredAgents {
   request(
     scope: StructuredAgentsScope,
-    request: StructuredAgentsRequest,
+    request: DesktopStructuredAgentsRequest,
   ): Promise<StructuredAgentsReply>;
 }

@@ -30,8 +30,9 @@ No upstream source, assets or dependencies were incorporated.
    when complete review details are available. Other requests with matching turn
    scope are decline-only. Cross-thread or uncorrelated server requests close the
    session. No session-wide, permission-amendment or automatic approvals exist.
-4. Start a second session in the same Feature. Select the source, choose the
-   worker and enter the exact task. Confirm the one-use grant, then review and
+4. Start a second session in the same Feature. Select the source, address the
+   worker with `@name` or `@<session UUID>`, and enter the exact task.
+   Confirm the one-use grant, then review and
    send the prefilled message. The source must request the exact task and target
    via `orqst_delegate_task` within five minutes. The worker cannot delegate a
    delegated turn. A busy worker receives no queued turn. B's `turn/start`

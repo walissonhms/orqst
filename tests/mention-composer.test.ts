@@ -19,4 +19,12 @@ test('mentions resolve only exact stable labels, once each', () => {
     ['id-2', 'id-3'],
   );
   assert.deepEqual(resolveMentions('@T-009 and email@T-001x and @Terminal', list), []);
+  assert.deepEqual(
+    resolveMentions('name@T-001.example `@T-002` @T-003/worker @T-003-suffix', list),
+    [],
+  );
+  assert.deepEqual(
+    resolveMentions('@T-001', [terminal(1), { ...terminal(1), id: 'duplicate' }]),
+    [],
+  );
 });

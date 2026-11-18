@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import {
-  structuredAgentsRequestSchema,
+  desktopStructuredAgentsRequestSchema,
   structuredAgentsReviewSchema,
   structuredAgentsScopeSchema,
   type StructuredProvider,
@@ -16,6 +16,7 @@ import { structuredCodexEnvironment } from '../../../packages/core/src/structure
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import { openCodeArgs } from '../../../packages/core/src/structured-agents/opencode-process.js';
 import { StructuredAgents } from '../../../packages/core/src/structured-agents/service.js';
+import { structuredMentionGrant } from './structured-mention.js';
 
 const reviewed = {
   codex: {
@@ -28,7 +29,7 @@ const correlation = z.object({ id: z.number().int().safe().positive() });
 const envelope = z.strictObject({
   ...correlation.shape,
   scope: structuredAgentsScopeSchema,
-  request: structuredAgentsRequestSchema,
+  request: desktopStructuredAgentsRequestSchema,
   operation: z.enum(['snapshot', 'prepare', 'apply']),
   token: z.uuid().optional(),
 });
@@ -84,7 +85,7 @@ async function run(): Promise<void> {
     process.stdout.write(line);
   }
   async function receive(message: z.infer<typeof envelope>) {
-    const { id, scope, request, operation, token } = message;
+    const { id, scope, request: submitted, operation, token } = message;
     if (operation === 'apply' && mutating) return send(id, { status: 'busy' });
     if (operation === 'apply') mutating = true;
     try {
@@ -94,6 +95,11 @@ async function run(): Promise<void> {
         scope.featureId,
       );
       if (!feature) return send(id, { status: 'denied' });
+      const request =
+        submitted.action === 'mention'
+          ? structuredMentionGrant(scope, service.snapshot(scope).sessions, submitted)
+          : submitted;
+      if (!request) return send(id, { status: 'denied' });
       if (operation === 'snapshot' && request.action === 'snapshot')
         return send(id, { status: 'ok', snapshot: service.snapshot(scope) });
       if (request.action === 'snapshot' || operation === 'snapshot')
@@ -130,7 +136,7 @@ async function run(): Promise<void> {
           : {}),
         ...action,
       };
-      const binding = JSON.stringify([scope, request, fence, feature.revision, review]);
+      const binding = JSON.stringify([scope, submitted, request, fence, feature.revision, review]);
       if (operation === 'prepare') {
         const detail = JSON.stringify(review, null, 2).replace(
           /[\p{Cf}\u2028\u2029]/gu,

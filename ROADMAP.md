@@ -12,6 +12,11 @@ global configuration and session storage. Native packaging, permission sheets, r
 turns and A → B → A acceptance remain open. See the
 [OpenCode pilot](docs/design/structured-opencode-pilot.md).
 
+Feature-local structured `@handles` reuse the native grant review. PTY hub peer
+discovery and inbox receipts use Core transport evidence. Native structured
+approval and real-provider hub and A → B → A acceptance remain open.
+[Communication findings and test workflow](docs/development/feature-mention-routing.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

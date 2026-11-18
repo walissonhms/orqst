@@ -34,6 +34,13 @@ ephemeral, read-only threads with human approval routing. Delegation requires a
 separate exact one-use grant within the Feature. See the
 [pilot review and remaining validation](../design/structured-codex-pilot.md).
 
+The sidecar resolves structured `@handles` in the active Feature before each
+native grant preparation and apply. The review token binds the address, resolved
+session ID and exact task. The PTY MCP sockets pin the authenticated terminal ID
+and recheck Feature membership for queued content and task access. The hub
+persists queue metadata. Message and result bodies stay in memory.
+[Communication contract and acceptance limits](../development/feature-mention-routing.md).
+
 ## Studio arrangement boundary — 2026-11-05
 
 The layout-only `arrange` action is accepted only from the current focused native

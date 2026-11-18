@@ -22,6 +22,7 @@ export const hubRefusalText: Record<string, string> = {
   chain_too_deep:
     'This conversation chain reached its limit of three hops. Report back to the owner instead.',
   unknown_task: 'No such task for you.',
+  task_unread: 'Read the task from your inbox before reporting its result.',
   already_submitted: 'This task already has a result.',
   too_many_tasks: 'Too many open tasks. Finish some first.',
   not_member: 'This terminal is not active in ORQST.',
@@ -33,7 +34,7 @@ export const hubRefusalText: Record<string, string> = {
  * enroll later (the Core's request handler is synchronous). An unbound endpoint refuses.
  */
 export async function openHubEndpoint(
-  hub: Pick<TerminalMessageHub, 'call'>,
+  hub: Pick<TerminalMessageHub, 'call' | 'relayConnected'>,
   terminal: string | (() => string | undefined),
   parent = '/tmp',
 ) {
@@ -55,17 +56,20 @@ export async function openHubEndpoint(
   const server = createServer((socket) => {
     if (closed || claimed || ++attempts > 16) return socket.destroy();
     sockets.add(socket);
-    let authenticated = false;
+    let terminalId: string | undefined;
     let busy = false;
     const timer = setTimeout(() => socket.destroy(), 2000);
     const unbind = readMcpLines(
       socket,
       (raw) => {
-        if (!authenticated) {
+        if (!terminalId) {
           const parsed = authenticate.safeParse(raw);
           if (!parsed.success || !timingSafeEqual(expected, hash(parsed.data.secret)) || claimed)
             return socket.destroy();
-          claimed = authenticated = true;
+          terminalId = bound();
+          if (!terminalId) return socket.destroy();
+          claimed = true;
+          hub.relayConnected(terminalId, true);
           clearTimeout(timer);
           socket.write(JSON.stringify({ authenticated: true, role: 'terminal' }) + '\n');
           return;
@@ -74,9 +78,8 @@ export async function openHubEndpoint(
         // One call at a time per terminal, like the CLI's own tool loop.
         if (!parsed.success || busy) return socket.destroy();
         busy = true;
-        const terminalId = bound();
         void (
-          terminalId
+          terminalId === bound()
             ? hub.call(terminalId, parsed.data.call)
             : Promise.reject(new HubRefusal('not_member'))
         )
@@ -105,6 +108,7 @@ export async function openHubEndpoint(
     );
     socket.on('error', () => socket.destroy());
     socket.on('close', () => {
+      if (terminalId) hub.relayConnected(terminalId, false);
       clearTimeout(timer);
       unbind();
       sockets.delete(socket);

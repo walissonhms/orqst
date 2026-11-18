@@ -1,5 +1,12 @@
 # ORQST
 
+## Feature communication — 2026-11-17
+
+The Studio structured-agent pilot resolves a worker `@handle` within the active
+Feature and opens the existing native one-time delegation review. Opted-in PTY
+relays expose Feature-local peers, inboxes and task receipts. See the
+[workflow and native acceptance checklist](docs/development/feature-mention-routing.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

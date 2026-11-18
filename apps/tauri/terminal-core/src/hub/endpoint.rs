@@ -36,6 +36,7 @@ pub fn refusal_text(code: &str) -> &'static str {
         "rate_limited" => "Too many messages this minute. Wait before sending more.",
         "chain_too_deep" => "This conversation chain reached its limit of three hops. Report back to the owner instead.",
         "unknown_task" => "No such task for you.",
+        "task_unread" => "Read the task from your inbox before reporting its result.",
         "already_submitted" => "This task already has a result.",
         "too_many_tasks" => "Too many open tasks. Finish some first.",
         "not_member" => "This terminal is not active in ORQST.",
@@ -256,7 +257,7 @@ fn serve(
     };
     let deadline = Instant::now() + Duration::from_secs(2);
     let busy = Arc::new(AtomicBool::new(false));
-    let mut authenticated = false;
+    let mut authenticated = None::<String>;
     let mut reader = LineReader::default();
     let mut stream = stream;
     let mut buffer = vec![0u8; 65_536];
@@ -264,7 +265,7 @@ fn serve(
         if destroyed.load(Ordering::SeqCst) || shared.closed.load(Ordering::SeqCst) {
             break;
         }
-        if !authenticated {
+        if authenticated.is_none() {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
                 break;
@@ -280,14 +281,16 @@ fn serve(
             Err(_) => break,
         };
         let fed = reader.feed(&buffer[..count], |raw| {
-            if !authenticated {
+            if authenticated.is_none() {
                 let secret = raw
                     .as_object()
                     .filter(|m| m.len() == 1)
                     .and_then(|m| m.get("secret"))
                     .and_then(Value::as_str)
                     .filter(|s| is_secret(s));
-                let Some(secret) = secret else { return false };
+                let (Some(secret), Some(terminal_id)) = (secret, terminal.current()) else {
+                    return false;
+                };
                 if !timing_safe_equal(&expected, &sha(secret.as_bytes()))
                     || shared
                         .claimed
@@ -296,7 +299,8 @@ fn serve(
                 {
                     return false;
                 }
-                authenticated = true;
+                hub.relay_connected(&terminal_id, true);
+                authenticated = Some(terminal_id);
                 if stream.set_read_timeout(None).is_err() {
                     return false;
                 }
@@ -324,9 +328,9 @@ fn serve(
                 id.to_owned(),
                 request.get("call").cloned().unwrap_or(Value::Null),
             );
-            let (hub, terminal, writer, destroyed, busy) = (
+            let bound_id = authenticated.clone().filter(|id| terminal.current().as_ref() == Some(id));
+            let (hub, writer, destroyed, busy) = (
                 hub.clone(),
-                terminal.clone(),
                 writer.clone(),
                 destroyed.clone(),
                 busy.clone(),
@@ -334,7 +338,7 @@ fn serve(
             let spawned = std::thread::Builder::new()
                 .name("orqst-hub-call".into())
                 .spawn(move || {
-                    let result = match terminal.current() {
+                    let result = match bound_id {
                         Some(terminal_id) => hub.call(&terminal_id, &call),
                         None => Err(HubError::Refused("not_member")),
                     };
@@ -370,6 +374,9 @@ fn serve(
         if reader.feed(&[], |_| true).is_err() {
             break;
         }
+    }
+    if let Some(id) = authenticated {
+        hub.relay_connected(&id, false);
     }
     destroy();
 }

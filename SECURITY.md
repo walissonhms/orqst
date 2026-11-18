@@ -14,6 +14,14 @@ validates the full configuration and CLI digest before spawning. Native focus,
 one-use grants, owner checks and durable receipts still govern effects.
 See the [verification and source review](docs/development/native-opening-performance.md).
 
+## Feature communication
+
+Structured delegation rechecks the Feature-local handle and exact destination
+when applying a one-time native grant. PTY hub reads and task status check current
+membership against the original Feature. The hub persists queue metadata and keeps
+message bodies in memory. Relay authentication establishes a bound socket.
+[Communication contract and acceptance limits](docs/development/feature-mention-routing.md).
+
 ## Structured OpenCode Studio pilot
 
 The gated native pilot owns the local OpenCode listener and its short-lived Basic
