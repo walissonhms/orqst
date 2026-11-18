@@ -194,7 +194,9 @@ Returns the current read model used to render the dashboard.
 
 `SessionView` includes: `id`, `workspaceId`, `cwd`, `agentName`, `adapter`,
 `status`, `startedAt`, `lastActivity`, `task`, `result`, `model`,
-`parentSessionId`, `usage`, and `manualWorkspace`.
+`parentSessionId`, `usage`, `usageRecorded`, and `manualWorkspace`. The optional
+`usageRecorded` distinguishes a valid reported zero from the numeric defaults
+of an unmeasured session. Older bridges can omit the flag.
 
 `WorkspaceView` includes: `id`, `name`, `path`, `sessions`, `usage`.
 

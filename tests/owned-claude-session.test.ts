@@ -96,6 +96,46 @@ test('only a newly created exact-session transcript supplies bounded tool names'
   }
 });
 
+test('owned Claude usage counts each response once and keeps cache reads inside input', () => {
+  const f = fixture();
+  try {
+    const read = ownedClaudeSession(f.config, f.binding)!;
+    mkdirSync(f.folder, { recursive: true, mode: 0o700 });
+    const assistant = (id: string, output: number, extra: object = {}) =>
+      f.row('Read', {
+        message: {
+          id,
+          model: 'claude-test',
+          content: [],
+          usage: {
+            input_tokens: 10,
+            output_tokens: output,
+            cache_read_input_tokens: 20,
+            cache_creation_input_tokens: 30,
+          },
+        },
+        ...extra,
+      });
+    const lines = [
+      assistant('msg_1', 1),
+      assistant('msg_1', 5),
+      assistant('msg_1', 1),
+      assistant('msg_2', 8),
+      assistant('excluded', 500, { isSidechain: true }),
+      assistant('foreign', 500, { sessionId: randomUUID() }),
+    ];
+    const write = (text: string) => writeFileSync(f.file, text, { mode: 0o600 });
+    write(lines.join('\n') + '\n');
+    assert.deepEqual(read()?.usage, { input: 120, output: 13, cached: 40, total: 133 });
+    write(lines.join('\n') + '\n' + assistant('msg_3', 4));
+    assert.equal(read()?.usage, undefined);
+    write(lines.join('\n') + '\n' + Array(509).fill('{}\n').join(''));
+    assert.equal(read()?.usage, undefined);
+  } finally {
+    f.close();
+  }
+});
+
 test('source replacement, links and unrelated session rows do not bind', () => {
   const f = fixture();
   try {

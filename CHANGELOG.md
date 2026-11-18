@@ -1,5 +1,12 @@
 # Changelog
 
+## Token accounting and plan evidence — 2026-11-17 (source)
+
+The observer distinguishes unmeasured sessions from reported zero. Native
+Features and structured Studio display measured coverage. The Codex account
+panel handles quota-only evidence and elapsed windows, and OpenCode Studio
+labels its USD estimate. See the [token evidence](docs/research/token-and-plan-accounting.md).
+
 ## Native startup and terminal opening — 2026-11-17
 
 The native dashboard can load during the initial Codex history scan. Terminal

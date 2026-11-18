@@ -58,6 +58,7 @@ export function studioTerminals(
           ? { startedAt: entry.startedAt }
           : {}),
         ...(last ? { lastActivity: last.label } : {}),
+        ...(entry?.session && entry.usage ? { tokens: entry.usage } : {}),
         workspace: slot.workspace ?? snapshot.workspace,
         orchestrator: selected?.orchestratorTerminalId === slot.terminalId,
       };

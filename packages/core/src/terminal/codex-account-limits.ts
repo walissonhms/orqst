@@ -82,14 +82,14 @@ export function parseCodexRateLimitRecord(raw: unknown, observedAt: number) {
       },
     ];
   });
-  if (!windows.length || new Set(windows.map((window) => window.id)).size !== windows.length)
-    return undefined;
   const plan = parsed.data.payload.rate_limits.plan_type;
-  return {
-    updatedAt,
-    windows,
-    ...(typeof plan === 'string' && /^[a-zA-Z0-9 _.-]{1,16}$/.test(plan) ? { plan } : {}),
-  };
+  const hasPlan = typeof plan === 'string' && /^[a-zA-Z0-9 _.-]{1,16}$/.test(plan);
+  if (
+    (!windows.length && !hasPlan) ||
+    new Set(windows.map((window) => window.id)).size !== windows.length
+  )
+    return undefined;
+  return { updatedAt, windows, ...(hasPlan && { plan }) };
 }
 
 function checkedFile(file: string) {
@@ -143,8 +143,11 @@ export function readObservedCodexLimits(
       throw new Error('Changed observer database');
     const rows = db
       .prepare(
-        `SELECT envelope FROM events WHERE type='agent.tokens.updated'
-      AND length(envelope)<=65536 ORDER BY timestamp DESC, sequence DESC LIMIT ?`,
+        `SELECT envelope FROM events WHERE type IN ('agent.tokens.updated','agent.rate_limits.updated')
+      AND length(envelope)<=65536
+      AND json_extract(envelope,'$.adapter')='codex'
+      AND json_extract(envelope,'$.source.recordType')='event_msg:token_count'
+      ORDER BY timestamp DESC, sequence DESC LIMIT ?`,
       )
       .all(MAX_CANDIDATES);
     let remaining = MAX_TOTAL_BYTES;

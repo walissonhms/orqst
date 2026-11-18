@@ -1,5 +1,11 @@
 # ORQST
 
+## Token accounting and plan evidence
+
+The observer, owned terminals and structured sessions report usage within their
+measured scopes. See the [data model](docs/architecture/data-model.md#token-accounting)
+and [provider coverage](docs/research/token-and-plan-accounting.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

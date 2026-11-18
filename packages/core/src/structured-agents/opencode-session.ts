@@ -9,6 +9,7 @@ import {
 } from '@orqst/protocol';
 import { z } from 'zod';
 import { OwnedOpenCode, openCodePermissions } from './opencode-process.js';
+import { openCodeSessionUsage } from './usage.js';
 import {
   display,
   StructuredProjection,
@@ -25,6 +26,8 @@ const sessionEvidence = z.object({
     id,
     time: z.object({ busy: time.optional(), idle: time.optional() }),
     outcome: z.enum(['succeeded', 'failed', 'interrupted']).optional(),
+    tokens: z.unknown().optional(),
+    cost: z.unknown().optional(),
   }),
 });
 const message = z.object({ id, type: id, time: z.object({ created: time }) });
@@ -100,7 +103,10 @@ export class StructuredOpenCodeSession extends StructuredProjection {
 
   constructor(
     scope: SessionScope,
-    private readonly server: OwnedOpenCode,
+    private readonly server: Pick<
+      OwnedOpenCode,
+      'verify' | 'exited' | 'terminate' | 'json' | 'events'
+    >,
     private readonly delegate: StructuredDelegate,
   ) {
     super(scope, 'opencode');
@@ -342,8 +348,15 @@ export class StructuredOpenCodeSession extends StructuredProjection {
   }
 
   private async sessionEvidence() {
+    const previous = this.state.usage;
     const { data } = sessionEvidence.parse(await this.server.json(this.path('')));
     if (data.id !== this.state.threadId) throw new Error('OpenCode session evidence unbound');
+    // A live snapshot received during the request supersedes a potentially older read.
+    if (previous === this.state.usage) {
+      const metric = openCodeSessionUsage(data);
+      // A newly created OpenCode session is initialized with all-zero counters.
+      if (metric && metric.usage.total > 0) this.state.usage = metric;
+    }
     return data;
   }
 
@@ -425,7 +438,13 @@ export class StructuredOpenCodeSession extends StructuredProjection {
         throw new Error('Uncorrelated OpenCode event');
       if (this.lastSeq !== undefined && durable.seq <= this.lastSeq) return;
     }
-    this.observe(type, (raw as { data: unknown }).data, durable !== undefined);
+    const data = (raw as { data: unknown }).data;
+    if (type === 'session.usage.updated') {
+      const metric = openCodeSessionUsage(data);
+      if (metric) this.state.usage = metric;
+    } else {
+      this.observe(type, data, durable !== undefined);
+    }
     if (durable) this.lastSeq = durable.seq;
   }
 

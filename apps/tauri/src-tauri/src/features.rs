@@ -964,6 +964,27 @@ fn valid_canvas(value: &Value, snapshot: &Value) -> bool {
             return false;
         }
         let has_session = entry.get("session").is_some() || entry.get("activities").is_some();
+        let entry_without_usage;
+        let entry = if let Some(usage) = entry.get("usage") {
+            if !has_session
+                || !exact(usage, &["input", "output", "cached", "total"])
+                || !safe(&usage["input"])
+                    .zip(safe(&usage["output"]))
+                    .zip(safe(&usage["cached"]))
+                    .zip(safe(&usage["total"]))
+                    .is_some_and(|(((input, output), cached), total)| {
+                        cached <= input && input + output == total
+                    })
+            {
+                return false;
+            }
+            let mut fields = entry.as_object().unwrap().clone();
+            fields.remove("usage");
+            entry_without_usage = Value::Object(fields);
+            &entry_without_usage
+        } else {
+            entry
+        };
         if has_session {
             let session = &entry["session"];
             if member["provider"] != "claude"
@@ -3034,6 +3055,15 @@ mod tests {
         let mut activity = json!({"observedAt":200,"entries":[{"slot":0,"terminalId":t,"state":"running","startedAt":100,"session":{"provider":"claude","sessionId":f,"bindingEvidence":"claude-argv-receipt-transcript"},"activities":[{"at":150,"kind":"tool","label":"Read"}],"agentState":"unknown"}]});
         assert!(valid_canvas(&activity, &scoped));
         assert!(!valid_canvas(&activity, &snapshot));
+        activity["entries"][0]["usage"] =
+            json!({"input":30,"output":10,"cached":11,"total":40});
+        assert!(valid_canvas(&activity, &scoped));
+        activity["entries"][0]["usage"]["cached"] = json!(31);
+        assert!(!valid_canvas(&activity, &scoped));
+        activity["entries"][0]["usage"]["cached"] = json!(11);
+        activity["entries"][0]["usage"]["total"] = json!(41);
+        assert!(!valid_canvas(&activity, &scoped));
+        activity["entries"][0]["usage"]["total"] = json!(40);
         scoped["slots"][0]["agentState"] = json!("completed");
         activity["entries"][0]["agentState"] = json!("completed");
         activity["entries"][0]["turnId"] = json!(f);

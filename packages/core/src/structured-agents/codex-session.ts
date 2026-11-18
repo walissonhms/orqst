@@ -19,6 +19,7 @@ import {
   type StructuredDelegate,
 } from './session.js';
 import type { StructuredProcessTransport } from './codex-process.js';
+import { codexThreadUsage } from './usage.js';
 
 const id = z.string().min(1).max(200);
 const rpcId = z.union([z.string(), z.number()]);
@@ -246,6 +247,12 @@ export class StructuredCodexSession extends StructuredProjection {
   }
 
   private receive(event: CodexNotification): void {
+    if (event.method === 'thread/tokenUsage/updated' && event.requestId === undefined) {
+      const metric = codexThreadUsage(event.params, this.state.threadId);
+      if (metric && metric.usage.total >= (this.state.usage?.usage.total ?? 0))
+        this.state.usage = metric;
+      return;
+    }
     if (this.stopPromise && !['turn/completed', 'serverRequest/resolved'].includes(event.method))
       return;
     const active = this.active;

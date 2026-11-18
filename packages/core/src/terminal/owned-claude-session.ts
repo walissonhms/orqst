@@ -17,6 +17,7 @@ import { terminalDirectory } from './codex-profile.js';
 import type { ManagedClaudeConfig } from './interactive-profile.js';
 import { lifecycleBindingSchema } from '../managed-codex/lifecycle-receipt.js';
 import { ownedClaudeHookEvidence } from './owned-claude-hooks.js';
+import { claudeTranscriptUsage } from './claude-transcript-usage.js';
 
 const maximum = 2 * 1024 * 1024;
 const lineMaximum = 64 * 1024;
@@ -263,6 +264,10 @@ export function ownedClaudeSession(
             ? { agentState: 'unknown' as const }
             : hooks()
           : { agentState, ...(turnId ? { turnId } : {}) };
+        const usage =
+          !partial && lines.length <= 512 && lines.every((line) => line.length <= lineMaximum)
+            ? claudeTranscriptUsage(lines, config.sessionId, project)
+            : undefined;
         return {
           session: {
             provider: 'claude' as const,
@@ -270,6 +275,7 @@ export function ownedClaudeSession(
             bindingEvidence: 'claude-argv-receipt-transcript' as const,
           },
           activities: activities.slice(-3),
+          ...(usage && { usage }),
           ...turn,
         };
       } catch {

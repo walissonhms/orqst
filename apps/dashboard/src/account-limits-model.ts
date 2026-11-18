@@ -49,10 +49,14 @@ export function renewsIn(resetsAt: number | undefined, now: number): string {
   return `${m}m`;
 }
 
-/** The most used window decides the toolbar bar for an account. */
-export function worstWindow(account: AccountLimit): LimitWindow | undefined {
-  return [...account.windows]
-    .filter((window) => window.usedPercent !== undefined)
+export function expiredWindow(window: LimitWindow, now: number): boolean {
+  return window.resetsAt !== undefined && window.resetsAt <= now;
+}
+
+/** The most used currently evidenced window decides the toolbar bar. */
+export function worstWindow(account: AccountLimit, now: number): LimitWindow | undefined {
+  return account.windows
+    .filter((window) => window.usedPercent !== undefined && !expiredWindow(window, now))
     .sort((a, b) => b.usedPercent! - a.usedPercent!)[0];
 }
 

@@ -111,24 +111,26 @@ type EventType =
   | 'agent.tool.completed'
   | 'agent.intervention.required'
   | 'agent.tokens.updated'
+  | 'agent.rate_limits.updated'
   | 'workspace.updated';
 ```
 
-| Type                          | Meaning                                             |
-| ----------------------------- | --------------------------------------------------- |
-| `session.started`             | A session was discovered.                           |
-| `session.updated`             | Session-level metadata changed, e.g. the model.     |
-| `session.completed`           | A session-level completion was explicitly observed. |
-| `agent.started`               | A turn or agent activity started.                   |
-| `agent.updated`               | Agent state changed without a completion/failure.   |
-| `agent.completed`             | The latest observed turn completed.                 |
-| `agent.failed`                | An explicit failure was observed.                   |
-| `agent.message`               | A user, assistant, or agent message was captured.   |
-| `agent.tool.started`          | A tool call started.                                |
-| `agent.tool.completed`        | A tool call returned.                               |
-| `agent.intervention.required` | The source explicitly requested user input.         |
-| `agent.tokens.updated`        | A token usage snapshot was observed.                |
-| `workspace.updated`           | Workspace metadata changed.                         |
+| Type                          | Meaning                                                                |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `session.started`             | A session was discovered.                                              |
+| `session.updated`             | Session-level metadata changed, e.g. the model.                        |
+| `session.completed`           | A session-level completion was explicitly observed.                    |
+| `agent.started`               | A turn or agent activity started.                                      |
+| `agent.updated`               | Agent state changed without a completion/failure.                      |
+| `agent.completed`             | The latest observed turn completed.                                    |
+| `agent.failed`                | An explicit failure was observed.                                      |
+| `agent.message`               | A user, assistant, or agent message was captured.                      |
+| `agent.tool.started`          | A tool call started.                                                   |
+| `agent.tool.completed`        | A tool call returned.                                                  |
+| `agent.intervention.required` | The source explicitly requested user input.                            |
+| `agent.tokens.updated`        | A token usage snapshot was observed.                                   |
+| `agent.rate_limits.updated`   | A Codex source record carried rate-limit evidence without token usage. |
+| `workspace.updated`           | Workspace metadata changed.                                            |
 
 The Codex adapter currently emits every type except `session.completed` and
 `workspace.updated`. It does not emit `session.completed` because a Codex
@@ -282,6 +284,7 @@ interface SessionView {
   model: string | null;
   parentSessionId: string | null;
   usage: Usage;
+  usageRecorded?: boolean;
   manualWorkspace: boolean;
 }
 

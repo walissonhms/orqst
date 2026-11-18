@@ -140,7 +140,8 @@
   "filteredEmpty": "Nenhuma sessão corresponde aos filtros.",
   "notificationCounts": "{{count}} não lidas",
   "activeWorkspace": "Workspace atual",
-  "tokenScope": "Todo o histórico capturado",
+  "tokenScope": "Histórico reportado · {{measured}} de {{total}} sessões",
+  "tokensUnavailable": "Nenhum uso de tokens reportado.",
   "notificationCompleted": "Turno concluído",
   "notificationFailed": "Falha na execução",
   "notificationIntervention": "Sua resposta é necessária",
@@ -173,6 +174,7 @@
     "agent.tool.completed": "Resultado da ferramenta",
     "agent.intervention.required": "Resposta solicitada",
     "agent.tokens.updated": "Registro de tokens",
+    "agent.rate_limits.updated": "Limites da conta reportados",
     "workspace.updated": "Workspace atualizado"
   },
   "roles": {
@@ -858,6 +860,10 @@
     "canvas": "Canvas"
   },
   "structuredAgents": {
+    "featureUsage": "{{tokens}} tokens · {{measured}} de {{total}} sessões estruturadas nesta Feature",
+    "sessionUsage": "{{tokens}} tokens reportados nesta sessão",
+    "costEstimate": "Estimativa do OpenCode {{cost}}",
+    "costUnavailable": "Custo indisponível",
     "title": "Agentes estruturados",
     "provider": "Provedor",
     "approval_permission": "Permissão solicitada pelo OpenCode",
@@ -1326,6 +1332,7 @@
     "for": "há {{duration}}"
   },
   "terminalStudio": {
+    "featureTokens": "{{tokens}} tokens · {{measured}} de {{total}} terminais da Feature",
     "title": "Terminais",
     "layout": "Layout",
     "count": "{{visible}} de {{total}} visíveis",
@@ -1575,7 +1582,8 @@
     "title": "Limites das contas",
     "open": "Mostrar limites das contas",
     "sourcePreview": "prévia sintética",
-    "sourceApp": "informado pela CLI",
+    "sourceApp": "último reporte da CLI",
+    "awaitingReport": "janela encerrada · aguardando reporte",
     "now": "agora",
     "ago": "há {{time}}",
     "lock": "Travar: nunca sugerir troca para esta conta",

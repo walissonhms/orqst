@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Usage } from './index.js';
 
 export const structuredAgentsLimits = Object.freeze({
   sessions: 4,
@@ -41,6 +42,13 @@ export interface StructuredTurn {
   origin: 'human' | 'delegation';
 }
 
+export interface StructuredSessionUsage {
+  usage: Usage;
+  usageKind: 'session_cumulative';
+  turnId?: string;
+  cost?: { amount: number; currency: 'USD'; source: 'opencode_estimate' };
+}
+
 export interface StructuredSession {
   sessionId: string;
   provider: StructuredProvider;
@@ -50,6 +58,7 @@ export interface StructuredSession {
   lifecycle: 'starting' | 'ready' | 'stopping' | 'exited' | 'failed';
   reportedModel: string | null;
   threadId: string | null;
+  usage?: StructuredSessionUsage;
   exit: { code: number | null; signal: string | null } | null;
   items: StructuredItem[];
   droppedItems: number;

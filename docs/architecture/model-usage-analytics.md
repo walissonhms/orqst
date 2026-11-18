@@ -235,7 +235,9 @@ Cost distinguishes provider-reported amounts, rate-based estimates and reconcile
 billing. Estimates retain rate source, effective date, currency, model and cache
 semantics, billing mode and uncertainty. A verified rate still does not prove an
 actual bill. Unknown rates or mixed models without interval attribution prevent a
-qualified monetary comparison. Generation speed requires a measured generation
+qualified monetary comparison. The OpenCode Studio session may display its own
+reported USD estimate. This estimate remains on that runtime session and is not
+an Analytics input. Generation speed requires a measured generation
 interval, not total elapsed session time.
 
 ## Export and local security

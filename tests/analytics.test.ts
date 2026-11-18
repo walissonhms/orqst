@@ -303,9 +303,13 @@ test('inconsistent components and invalid usage are explicit gaps, never negativ
     assert.equal(report.coverage.gaps[0]?.reason, 'non_monotonic_components');
     store.ingest(snapshot('invalid', 2, { input: 120, output: 10, cached: 130, total: 130 }, 'a'));
     const invalid = store.modelAnalytics();
-    assert.equal(invalid.usage, null);
+    assert.equal(invalid.usage?.total, 100);
+    assert.equal(store.totals().total, 120);
     assert.ok(invalid.coverage.gaps.some((gap) => gap.reason === 'invalid_usage'));
-    assert.ok(invalid.coverage.gaps.some((gap) => gap.reason === 'canonical_evidence_missing'));
+    assert.equal(
+      invalid.coverage.gaps.some((gap) => gap.reason === 'canonical_evidence_missing'),
+      false,
+    );
   } finally {
     store.close();
   }
