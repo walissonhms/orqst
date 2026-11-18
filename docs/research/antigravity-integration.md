@@ -670,3 +670,39 @@ increment and must not be advertised as verified until executed with owner autho
    require authenticated network calls.
 5. **Windows and Linux `agy` binary hashes and sandbox parity (`UNKNOWN`)**: only macOS `arm64`
    `1.5.10` (`780ee763...`) was inspected on this machine.
+
+---
+
+## 9. Post-Integration Reconciliation Note — 2026-11-18
+
+The original research evidence and normative proposal above are preserved intact. During parallel
+integration into `feat/frontend-768`, the shipped Phase 1 increments chose narrower contracts in
+three places:
+
+1. **Managed PTY launch contract ([antigravity-managed-terminal.md](../design/antigravity-managed-terminal.md))**:
+   - The implemented `version: 4` manifest (`antigravity-profile.ts` and Rust `profiles/antigravity.rs`)
+     defines `interactive: { sharedNativeSessions: true }` (without `nativeStartupAuthorized` /
+     `nativeDatabaseWritesAcknowledged`), passes `argv: ['--model', value]` (or `[]` for CLI
+     default, without `--sandbox` or `--settings`), validates model slugs with
+     `/^[a-zA-Z0-9][a-zA-Z0-9._:/#@+-]*$/`, and allows only `HOME`, `PATH`, `LANG`, `LC_ALL`,
+     `TERM`, and `TMPDIR` in the child environment (`AGY_CLI_DISABLE_AUTO_UPDATE='true'`,
+     `--sandbox` / `--settings` overrides, and display-label model strings with spaces/parentheses
+     remain future hardening candidates, not active source behavior).
+   - Under the 2026-11-18 _Always inside a Feature_ owner decision
+     ([terminal-native.md](../api/terminal-native.md#always-inside-a-feature-and-sender_unassigned-refusal--2026-11-18)),
+     every new Antigravity PTY terminal (`version: 4`, `hub: false`) is created inside the active
+     Feature or the workspace's deterministic default Feature (`General` / `Geral`). Because
+     Antigravity has no per-session MCP relay (`hub: false`), hub-connected peers do not list it and
+     receive `unknown_terminal` if addressing its handle, while unassigned hub senders receive
+     `sender_unassigned`.
+2. **Read-only observer contract ([antigravity.md](../adapters/antigravity.md))**:
+   - `@orqst/adapter-antigravity` prefers `transcript_full.jsonl` (falling back to
+     `transcript.jsonl`), resolves workspace URIs from `cache/conversation_metadata.json` without
+     copying or opening `conversation_summaries.db`, and keeps `tokenUsage: false` /
+     `SessionView.usageRecorded: false` rather than summing per-step incremental counters into
+     synthetic `session_cumulative` snapshots (`AGENTS.md §5`).
+3. **Reference license alignment**:
+   - Upstream Anywh at `4f8aef7b5f0dc9cf0832e457c224dc09a9792a21` is licensed under **Apache-2.0**
+     (superseding the historical MIT citation copied into `antigravity-managed-terminal.md` from an
+     older `reuse-first-audit.md` table). No Anywh code was copied into the Antigravity PTY or
+     observer implementations.

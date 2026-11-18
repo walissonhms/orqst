@@ -31,10 +31,11 @@ import {
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
+import { reviewedAntigravityBinary } from '../packages/core/src/terminal/antigravity-launch-plan.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 import { validateTerminalPreparationBinding } from '../packages/core/src/terminal/preparation-context.js';
 import { recordComposerMention } from '../packages/core/src/terminal/composer-mentions.js';
-import { TerminalMessageHub } from '../packages/core/src/terminal/mcp-hub.js';
+import { HubRefusal, TerminalMessageHub } from '../packages/core/src/terminal/mcp-hub.js';
 import { structuredMentionGrant } from '../apps/desktop/src/structured-mention.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-always-feature-')));
@@ -67,7 +68,7 @@ await build({
         builder.onLoad(
           {
             filter:
-              /(?:terminal-creation|provider-mcp-config|interactive-profile|codex-profile)\.ts$/,
+              /(?:terminal-creation|provider-mcp-config|interactive-profile|codex-profile|antigravity-launch-plan)\.ts$/,
           },
           (args) => ({
             contents: readFileSync(args.path, 'utf8')
@@ -75,7 +76,8 @@ await build({
               .replaceAll(reviewedCodex169Binary.sha256, newCodexHash)
               .replaceAll(reviewedProviderMcpBinaries.claude.sha256, hash)
               .replaceAll(reviewedClaudeTuiBinary.sha256, hash)
-              .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash),
+              .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash)
+              .replaceAll(reviewedAntigravityBinary.sha256, hash),
             loader: 'ts',
           }),
         );
@@ -104,7 +106,8 @@ function preparationFixture(locale = 'en-US') {
   mkdirSync(join(home, '.codex'), { mode: 0o700 });
   mkdirSync(join(home, '.claude'), { mode: 0o700 });
   mkdirSync(join(home, '.config/opencode'), { recursive: true, mode: 0o700 });
-  for (const provider of ['codex', 'claude', 'opencode'])
+  mkdirSync(join(home, '.gemini/antigravity-cli'), { recursive: true, mode: 0o700 });
+  for (const provider of ['codex', 'claude', 'opencode', 'agy'])
     writeFileSync(join(bin, provider), readFileSync(binary), { mode: 0o700 });
   writeFileSync(join(project, 'SYNTHETIC-EXISTING-SOURCE'), 'Preserve selected project', {
     mode: 0o600,
@@ -116,6 +119,11 @@ function preparationFixture(locale = 'en-US') {
   writeFileSync(join(home, '.config/opencode/opencode.json'), '{"model":"synthetic/model"}', {
     mode: 0o600,
   });
+  writeFileSync(
+    join(home, '.gemini/antigravity-cli/settings.json'),
+    '{"model":"gemini-4-carbon-medium"}',
+    { mode: 0o600 },
+  );
   const observerDatabase = join(root, 'observer.sqlite');
   const store = new Store(observerDatabase);
   const workspaceId = store.workspace(project, 'Synthetic project');
@@ -220,6 +228,13 @@ test('creating terminals from Sem Feature creates or reuses the default Feature 
             modelId: null,
             name: 'OpenCode 1',
           },
+          {
+            id: randomUUID(),
+            workspaceId: f.workspaceId,
+            provider: 'antigravity',
+            modelId: null,
+            name: 'Antigravity 1',
+          },
         ],
       },
       f.context,
@@ -235,7 +250,7 @@ test('creating terminals from Sem Feature creates or reuses the default Feature 
     const createdDefault = features.read(defaultId);
     assert.equal(createdDefault.name, 'Geral');
     assert.equal(createdDefault.status, 'active');
-    assert.equal(createdDefault.terminalIds.length, 2);
+    assert.equal(createdDefault.terminalIds.length, 3);
 
     for (const item of batch.items) {
       assert.equal(item.status, 'prepared');
@@ -244,6 +259,9 @@ test('creating terminals from Sem Feature creates or reuses the default Feature 
       assert.ok(createdDefault.terminalIds.includes(config.identity!.terminalId));
       validateTerminalPreparationBinding(config.preparation, f.project);
     }
+    const agyConfig = readInteractiveTerminalConfig(batch.items[2]!.file!);
+    assert.equal(agyConfig.version, 4);
+    assert.equal('hub' in agyConfig.interactive, false);
 
     // Rename the default Feature, switch back to Sem Feature, and create another terminal:
     // the same stable default Feature ID is reused and its custom title + layout are preserved.
@@ -251,11 +269,11 @@ test('creating terminals from Sem Feature creates or reuses the default Feature 
       expectedRevision: createdDefault.revision,
       name: 'Principal',
     });
-    const [t1, t2] = renamed.terminalIds as [string, string];
+    const [t1, t2, tAgy] = renamed.terminalIds as [string, string, string];
     features.saveLayout(defaultId, {
       version: 1,
-      order: [t2, t1],
-      shown: [t2, t1],
+      order: [t2, t1, tAgy],
+      shown: [t2, t1, tAgy],
       active: t2,
       maximized: null,
       axis: 'columns',
@@ -292,15 +310,15 @@ test('creating terminals from Sem Feature creates or reuses the default Feature 
       f.trusted,
     );
     assert.equal(selected.status, 'open');
-    const thirdConfig = readInteractiveTerminalConfig(selected.files[0]!);
-    const t3 = thirdConfig.identity!.terminalId;
-    assert.equal(thirdConfig.preparation?.featureId, defaultId);
-    validateTerminalPreparationBinding(thirdConfig.preparation, f.project);
+    const fourthConfig = readInteractiveTerminalConfig(selected.files[0]!);
+    const t4 = fourthConfig.identity!.terminalId;
+    assert.equal(fourthConfig.preparation?.featureId, defaultId);
+    validateTerminalPreparationBinding(fourthConfig.preparation, f.project);
     assert.equal(features.readView().featureId, defaultId);
     const reused = features.read(defaultId);
     assert.equal(reused.name, 'Principal');
-    assert.deepEqual(reused.terminalIds, [t1, t2, t3]);
-    assert.deepEqual(features.readLayout(defaultId)?.order, [t2, t1, t3]);
+    assert.deepEqual(reused.terminalIds, [t1, t2, tAgy, t4]);
+    assert.deepEqual(features.readLayout(defaultId)?.order, [t2, t1, tAgy, t4]);
   } finally {
     f.close();
   }
@@ -314,8 +332,10 @@ test('mentions (composer and structured @handles) resolve inside the default Fea
     const defaultId = defaultFeatureId(workspaceId);
     const t1 = '00000000-0000-4000-8000-0000000000a1';
     const t2 = '00000000-0000-4000-8000-0000000000b1';
+    const tAgy = '00000000-0000-4000-8000-0000000000c1';
+    const tUnassigned = '00000000-0000-4000-8000-0000000000e1';
     const features = featureConfigurationDatabase(root, workspaceId);
-    const { feature } = features.assignToOpenOrDefault(null, [t1, t2], 'General');
+    const { feature } = features.assignToOpenOrDefault(null, [t1, t2, tAgy], 'General');
     assert.equal(feature.featureId, defaultId);
 
     const parsed = resolveMentions('Please sync @T-001 and @T-002', [
@@ -341,6 +361,8 @@ test('mentions (composer and structured @handles) resolve inside the default Fea
       [t1, t2],
     );
 
+    // Antigravity (tAgy, T-003) has hub: false so host.ts omits it from hubSlots;
+    // unassigned hub terminals keep featureId: null.
     const hub = new TerminalMessageHub(
       () => [
         {
@@ -359,8 +381,27 @@ test('mentions (composer and structured @handles) resolve inside the default Fea
           featureId: defaultId,
           running: true,
         },
+        {
+          terminalId: tUnassigned,
+          alias: 'T-004',
+          name: 'Codex',
+          provider: 'codex',
+          featureId: null,
+          running: true,
+        },
       ],
       () => {},
+    );
+    await assert.rejects(
+      hub.call(t1, { name: 'send_message', arguments: { to: '@T-003', text: 'to non-hub agy' } }),
+      (error: unknown) => error instanceof HubRefusal && error.code === 'unknown_terminal',
+    );
+    await assert.rejects(
+      hub.call(tUnassigned, {
+        name: 'delegate_task',
+        arguments: { to: '@T-003', task: 'from unassigned' },
+      }),
+      (error: unknown) => error instanceof HubRefusal && error.code === 'sender_unassigned',
     );
     const ownerMention = recordComposerMention(
       root,

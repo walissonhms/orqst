@@ -60,3 +60,26 @@ Source and synthetic tests are verified in this increment; native UI and live pr
 3. Confirm native review displays `agy 1.5.10`, SHA-256 `780ee763a9938a37b45c7f9d6ae31747d7c574358fd10c64d3a1cdc36faf2798`, minimal environment allowlist, and shared `~/.gemini` disclosure, then approve **Open** and verify the interactive `agy` TUI renders, resizes and accepts keyboard input only while focused.
 4. Enroll a Codex or Claude Code terminal into the same Feature and verify both panes coexist, hide/restore independently, and close cleanly with journal receipts, both under the default Node Core and with `ORQST_RUST_TERMINALS=1`.
 5. Temporarily point `PATH` at an unreviewed binary named `agy` (in a disposable directory) and confirm the Studio catalog marks Antigravity **Unavailable** with the localized unreviewed-checksum reason and refuses creation.
+
+## Post-integration reconciliation note — 2026-11-18
+
+Reconciled with [docs/research/antigravity-integration.md](../research/antigravity-integration.md) and
+[docs/api/terminal-native.md](../api/terminal-native.md#always-inside-a-feature-and-sender_unassigned-refusal--2026-11-18)
+without altering the original evidence in either document:
+
+- **Implemented PTY flags and environment:** The shipped `version: 4` profile (`antigravity-terminal-v1`)
+  passes `argv: ['--model', value]` (or `[]` for CLI default) with slug regex
+  `/^[a-zA-Z0-9][a-zA-Z0-9._:/#@+-]*$/` and environment keys `HOME`, `PATH`, `LANG`, `LC_ALL`,
+  `TERM` and `TMPDIR`. The `--sandbox`, `--settings`, `AGY_CLI_DISABLE_AUTO_UPDATE="true"` and
+  spaced display-label `--model` options analyzed in `docs/research/antigravity-integration.md` §7.2
+  are **not** active in this increment; `agy` runs with its native session defaults under explicit
+  same-user consent.
+- **Always inside a Feature:** When opened from "Unassigned" / "Sem Feature" (`featureId: null`),
+  Antigravity terminals (`version: 4`, `hub: false`) are assigned to the workspace's deterministic
+  default Feature (`General` / `Geral`) and switch `feature_views` in the same Core transaction like
+  every other managed terminal. Because `hub` is `false`, Antigravity opens no hub socket; hub peers
+  in the same Feature receive `unknown_terminal` when addressing an Antigravity handle, and
+  unassigned hub senders continue to receive `sender_unassigned`.
+- **Anywh license note:** Current upstream Anywh (`4f8aef7b5f0dc9cf0832e457c224dc09a9792a21`) is
+  licensed under **Apache-2.0** (the table above quoted an earlier MIT entry from
+  `docs/research/reuse-first-audit.md`); no Anywh source was copied here.
