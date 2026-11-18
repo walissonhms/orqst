@@ -21,6 +21,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.0
         version: 10.0.1(eslint@10.14.0(jiti@2.7.0))
+      '@orqst/adapter-antigravity':
+        specifier: workspace:*
+        version: link:packages/adapters/antigravity
       '@orqst/adapter-codex':
         specifier: workspace:*
         version: link:packages/adapters/codex
@@ -81,6 +84,9 @@ importers:
 
   apps/bridge:
     dependencies:
+      '@orqst/adapter-antigravity':
+        specifier: workspace:*
+        version: link:../../packages/adapters/antigravity
       '@orqst/adapter-claude':
         specifier: workspace:*
         version: link:../../packages/adapters/claude
@@ -173,6 +179,21 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.12.4
         version: 2.12.4
+
+  packages/adapters/antigravity:
+    dependencies:
+      '@orqst/database':
+        specifier: workspace:*
+        version: link:../../database
+      '@orqst/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+      '@orqst/shared':
+        specifier: workspace:*
+        version: link:../../shared
+      chokidar:
+        specifier: ^6.0.0
+        version: 6.0.0
 
   packages/adapters/claude:
     dependencies:

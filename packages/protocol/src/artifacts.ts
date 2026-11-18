@@ -9,7 +9,7 @@ export const artifactExtractionRequestSchema = z
     eventId: artifactReferenceSchema.shape.evidence.shape.eventId,
     sessionId: observedSessionIdentitySchema.shape.sessionRef.shape.nativeSessionId,
     machineId: observedSessionIdentitySchema.shape.sessionRef.shape.machineId,
-    adapter: z.enum(['codex', 'claude', 'opencode', 'manual']),
+    adapter: z.enum(['codex', 'claude', 'opencode', 'antigravity', 'manual']),
     workspaceId: observedSessionIdentitySchema.shape.workspaceId,
     agentId: observedSessionIdentitySchema.shape.observedAgent.shape.id,
     sourceHash: artifactReferenceSchema.shape.evidence.shape.source.shape.hash,

@@ -49,24 +49,25 @@ dashboard shows the integration as planned.
 
 ## Current matrix
 
-| Capability         | Codex   | Claude Code | OpenCode |
-| ------------------ | ------- | ----------- | -------- |
-| `implemented`      | `true`  | `false`     | `false`  |
-| `sessionDiscovery` | `true`  | `false`     | `false`  |
-| `realtimeEvents`   | `true`  | `false`     | `false`  |
-| `messages`         | `true`  | `false`     | `false`  |
-| `toolCalls`        | `true`  | `false`     | `false`  |
-| `subagents`        | `true`  | `false`     | `false`  |
-| `tokenUsage`       | `true`  | `false`     | `false`  |
-| `taskResults`      | `true`  | `false`     | `false`  |
-| `userIntervention` | `false` | `false`     | `false`  |
-| `remoteControl`    | `false` | `false`     | `false`  |
+| Capability         | Codex   | Claude Code | OpenCode | Google Antigravity |
+| ------------------ | ------- | ----------- | -------- | ------------------ |
+| `implemented`      | `true`  | `false`     | `false`  | `true`             |
+| `sessionDiscovery` | `true`  | `false`     | `false`  | `true`             |
+| `realtimeEvents`   | `true`  | `false`     | `false`  | `true`             |
+| `messages`         | `true`  | `false`     | `false`  | `true`             |
+| `toolCalls`        | `true`  | `false`     | `false`  | `true`             |
+| `subagents`        | `true`  | `false`     | `false`  | `false`            |
+| `tokenUsage`       | `true`  | `false`     | `false`  | `false`            |
+| `taskResults`      | `true`  | `false`     | `false`  | `true`             |
+| `userIntervention` | `false` | `false`     | `false`  | `false`            |
+| `remoteControl`    | `false` | `false`     | `false`  | `false`            |
 
 The descriptors live in:
 
 - `packages/adapters/codex/src/index.ts`
 - `packages/adapters/claude/src/index.ts`
 - `packages/adapters/opencode/src/index.ts`
+- `packages/adapters/antigravity/src/index.ts`
 
 ## How to read the Codex claims
 
@@ -81,6 +82,22 @@ The descriptors live in:
   exists.
 - `realtimeEvents: true` means new file activity is observed while the session
   runs. Imported history is replayed but is not treated as live.
+
+## How to read the Google Antigravity claims
+
+- `sessionDiscovery`, `realtimeEvents`, `messages`, `toolCalls`, and
+  `taskResults` are backed by local `agy` (`1.5.10` language server) transcripts
+  at `brain/<sessionId>/.system_generated/logs/transcript_full.jsonl` (fallback
+  `transcript.jsonl`) and workspace metadata in
+  `cache/conversation_metadata.json`. See [antigravity.md](antigravity.md).
+- `tokenUsage: false` means on-disk `PLANNER_RESPONSE` records expose only
+  per-response uncached `input_tokens`, `output_tokens`, and `cache_read_tokens`
+  without an explicit session-cumulative snapshot or plan/quota record. ORQST
+  does not sum per-step counters into synthetic cumulative totals.
+- `subagents: false` means the JSONL transcript and metadata cache carry no
+  explicit parent session identifier.
+- `userIntervention: false` means `ask_question` intervention mapping is
+  fixture-tested only; no `ask_question` record appeared in the local sample.
 
 ## Adding an adapter
 

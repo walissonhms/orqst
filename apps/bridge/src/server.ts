@@ -18,6 +18,7 @@ import {
 import { codexDescriptor } from '@orqst/adapter-codex';
 import { claudeDescriptor } from '@orqst/adapter-claude';
 import { opencodeDescriptor } from '@orqst/adapter-opencode';
+import { antigravityDescriptor } from '@orqst/adapter-antigravity';
 import type { ObserverCore } from '@orqst/core';
 import type { Store } from '@orqst/database';
 import { AnalyticsQueries, AnalyticsQueryError } from './analytics.js';
@@ -106,7 +107,7 @@ export function createLocalServer(
       events: store.recentEvents(150),
       notifications: store.notifications(),
       preferences: store.preferences(),
-      adapters: [codexDescriptor, claudeDescriptor, opencodeDescriptor],
+      adapters: [codexDescriptor, claudeDescriptor, opencodeDescriptor, antigravityDescriptor],
       diagnostics: { ...observer.diagnostics },
     };
   }

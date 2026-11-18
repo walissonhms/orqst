@@ -5,13 +5,14 @@
   "license": "Apache-2.0",
   "type": "module",
   "dependencies": {
+    "@orqst/adapter-antigravity": "workspace:*",
+    "@orqst/adapter-claude": "workspace:*",
+    "@orqst/adapter-codex": "workspace:*",
+    "@orqst/adapter-opencode": "workspace:*",
     "@orqst/core": "workspace:*",
+    "@orqst/database": "workspace:*",
     "@orqst/protocol": "workspace:*",
     "@orqst/shared": "workspace:*",
-    "@orqst/database": "workspace:*",
-    "@orqst/adapter-codex": "workspace:*",
-    "@orqst/adapter-claude": "workspace:*",
-    "@orqst/adapter-opencode": "workspace:*",
     "ws": "^8.22.1"
   }
 }

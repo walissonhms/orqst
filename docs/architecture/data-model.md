@@ -83,12 +83,12 @@ only; the API never performs filesystem operations on them.
 
 ### `agents`
 
-| Column       | Type          | Notes                                               |
-| ------------ | ------------- | --------------------------------------------------- |
-| `id`         | TEXT PK       | Codex adapter uses `stableId(machineId, sessionId)` |
-| `machine_id` | TEXT NOT NULL | References `machines(id)`                           |
-| `name`       | TEXT NOT NULL | Observed nickname, agent path, or session prefix    |
-| `adapter`    | TEXT NOT NULL | Provider ID, e.g. `codex`                           |
+| Column       | Type          | Notes                                                               |
+| ------------ | ------------- | ------------------------------------------------------------------- |
+| `id`         | TEXT PK       | Codex and Antigravity adapters use `stableId(machineId, sessionId)` |
+| `machine_id` | TEXT NOT NULL | References `machines(id)`                                           |
+| `name`       | TEXT NOT NULL | Observed nickname, agent path, or session prefix                    |
+| `adapter`    | TEXT NOT NULL | Provider ID, e.g. `codex`, `antigravity`                            |
 
 In the current Codex adapter there is one agent identity per session. The
 `sessions` table stores a single `agent_id`, so a future adapter that needs
@@ -285,6 +285,12 @@ Consequences:
   from missing counters. The overview and workspace views show the number of
   observed sessions with counters. Invalid usage can remain as evidence of a
   gap, but it cannot replace the valid canonical row on write.
+- Google Antigravity (`antigravity`) on-disk JSONL transcripts record per-step
+  uncached `input_tokens`, `output_tokens`, and `cache_read_tokens` without a
+  session-cumulative snapshot or subscription quota record. No SQLite migration
+  is added: observed Antigravity sessions populate `sessions.model` and
+  `analytics_evidence` model rows while leaving `token_usage` absent
+  (`usageRecorded: false`, `usage_not_reported` in Model Analytics).
 - Core indexes Codex `event_msg/token_count` carrying only `rate_limits` as
   `agent.rate_limits.updated`. Its envelope stores source provenance and no
   rate-limit payload. The existing private per-account reader rechecks the

@@ -16,7 +16,7 @@ export const compactMetricMetadataSchema = z
     timestamp,
     machineId: identity,
     agentId: identity,
-    adapter: z.enum(['codex', 'claude', 'opencode', 'manual']),
+    adapter: z.enum(['codex', 'claude', 'opencode', 'antigravity', 'manual']),
     sessionId: identity,
     workspaceId: identity,
     source: retainedObservationEvidenceSchema.shape.source,

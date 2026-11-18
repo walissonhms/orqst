@@ -20,6 +20,7 @@ export async function smokeBuilt(
       ORQST_PORT: String(port),
       ORQST_DATA_DIR: join(dataDir, 'built-smoke'),
       ORQST_CODEX_SESSIONS: sessionsDir,
+      ORQST_ANTIGRAVITY_HOME: join(dataDir, 'empty-antigravity'),
       ORQST_DEV: '0',
     },
     stdio: 'ignore',

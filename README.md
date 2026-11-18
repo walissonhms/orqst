@@ -1,5 +1,19 @@
 # ORQST
 
+## Google Antigravity read-only observer — 2026-11-18
+
+ORQST now includes `@orqst/adapter-antigravity` to passively observe external
+Google Antigravity CLI (`agy`) sessions from
+`${ORQST_ANTIGRAVITY_HOME:-~/.gemini/antigravity-cli}/brain/<sessionId>/.system_generated/logs/transcript_full.jsonl`
+(fallback `transcript.jsonl`) and workspace metadata in
+`cache/conversation_metadata.json`. Messages, tool calls, tool results, observed
+models and turn completion are normalized read-only with checkpoints and symlink
+containment. On-disk `PLANNER_RESPONSE` token fields are per-step counters with
+no cumulative session snapshot or plan/quota evidence, so `tokenUsage`,
+`subagents`, `userIntervention` and `remoteControl` remain `false` and
+`SessionView.usageRecorded` stays `false`. See
+[docs/adapters/antigravity.md](docs/adapters/antigravity.md).
+
 ## Antigravity managed terminal provider — 2026-11-18 (source)
 
 ORQST now supports Google Antigravity (`agy` 1.5.10) as an owned managed PTY
@@ -590,28 +604,29 @@ acceptance. Normal startup and external sessions remain observation-only. See
 
 ## What works today
 
-| Area                                                                         | State                                                  |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Codex CLI session discovery (read-only)                                      | Implemented                                            |
-| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                            |
-| Normalized event protocol with runtime validation                            | Implemented                                            |
-| Local SQLite persistence, migrations, retention                              | Implemented                                            |
-| Loopback REST API and WebSocket streaming                                    | Implemented                                            |
-| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                            |
-| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer              |
-| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending            |
-| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending       |
-| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                            |
-| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions            |
-| Claude Code adapter                                                          | Contract only, not implemented                         |
-| OpenCode adapter                                                             | Contract only, not implemented                         |
-| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added      |
-| Embedded managed Codex/Claude Terminal                                       | Opt-in native paths; real-provider acceptance pending  |
-| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence      |
-| Codex structured runtime                                                     | Explicit Desktop surface; synthetic protocol tests     |
-| Scoped native A-to-B-to-A delegation facade                                  | Desktop-wired; synthetic only; real acceptance pending |
-| ORQST Cloud, accounts, billing                                               | Not implemented                                        |
-| Multi-machine observability and remote connectivity                          | Planned, not implemented                               |
+| Area                                                                         | State                                                                |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Codex CLI session discovery (read-only)                                      | Implemented                                                          |
+| Incremental JSONL parsing with checkpoints and recovery                      | Implemented                                                          |
+| Normalized event protocol with runtime validation                            | Implemented                                                          |
+| Local SQLite persistence, migrations, retention                              | Implemented                                                          |
+| Loopback REST API and WebSocket streaming                                    | Implemented                                                          |
+| React dashboard: workspaces, agents, timeline, attention, tokens             | Implemented                                                          |
+| macOS Electron window/tray over the existing local Bridge                    | Implemented checkout client; no installer                            |
+| macOS native alert mechanism                                                 | Implemented; signed visual delivery pending                          |
+| Most used models: bounded ranking, bars, filters and coverage                | Implemented; real multi-model validation pending                     |
+| English (en-US) and Brazilian Portuguese (pt-BR)                             | Implemented                                                          |
+| Live notifications (completion real-data path; failure/input fixture-tested) | Implemented, subject to browser permissions                          |
+| Claude Code adapter                                                          | Contract only, not implemented                                       |
+| OpenCode adapter                                                             | Contract only, not implemented                                       |
+| Google Antigravity CLI adapter (read-only)                                   | Implemented (messages, tools, models, results; no cumulative tokens) |
+| Local observed-session evidence / artifact references                        | Implemented library; manual Artifacts panel added                    |
+| Embedded managed Codex/Claude Terminal                                       | Opt-in native paths; real-provider acceptance pending                |
+| Structured pane queue, correlation and result inbox                          | Opt-in Core library; synthetic transport evidence                    |
+| Codex structured runtime                                                     | Explicit Desktop surface; synthetic protocol tests                   |
+| Scoped native A-to-B-to-A delegation facade                                  | Desktop-wired; synthetic only; real acceptance pending               |
+| ORQST Cloud, accounts, billing                                               | Not implemented                                                      |
+| Multi-machine observability and remote connectivity                          | Planned, not implemented                                             |
 
 This is version 0.1.0. Earlier macOS baseline evidence covers build, type checking, automated/browser tests, native Codex live acceptance and managed-service recovery. Final v1.0 acceptance remains pending. See [Validation status](#validation-status) and [Testing](docs/development/testing.md) for scope and reproduction commands.
 

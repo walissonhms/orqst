@@ -69,7 +69,7 @@ export const eventSchema = z.object({
   id: z.string().min(1),
   type: z.enum(eventTypes),
   timestamp: z.iso.datetime({ offset: true }),
-  adapter: z.enum(['codex', 'claude', 'opencode', 'manual']),
+  adapter: z.enum(['codex', 'claude', 'opencode', 'antigravity', 'manual']),
   machineId: z.string().min(1),
   workspaceId: z.string().min(1),
   sessionId: z.string().min(1),

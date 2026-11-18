@@ -8,7 +8,7 @@ export const modelAnalyticsQuerySchema = z
     to: z.iso.datetime({ offset: true }).optional(),
     workspaceId: z.string().min(1).optional(),
     agentId: z.string().min(1).optional(),
-    adapter: z.enum(['codex', 'claude', 'opencode', 'manual']).optional(),
+    adapter: z.enum(['codex', 'claude', 'opencode', 'antigravity', 'manual']).optional(),
     // null selects unidentified attribution, omission selects every model.
     model: z.string().trim().min(1).nullable().optional(),
   })
