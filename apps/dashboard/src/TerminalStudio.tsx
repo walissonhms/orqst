@@ -1464,7 +1464,7 @@ export function TerminalStudio({
             </button>
           );
         })}
-        {onMention && !composer && terminals.length > 0 && (
+        {!renderToolbar && onMention && !composer && terminals.length > 0 && (
           <button
             type="button"
             className="ts-mention-open"

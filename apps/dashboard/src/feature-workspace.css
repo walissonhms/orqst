@@ -77,6 +77,7 @@
     .ntd button,
     .mc-root button,
     .feature-action,
+    .mc-delegate,
     .feature-scope,
     .feature-create,
     .feature-navigation button
@@ -97,6 +98,7 @@
     .ntd button,
     .mc-root button,
     .feature-action,
+    .mc-delegate,
     .feature-scope,
     .feature-create,
     .feature-navigation button
@@ -187,7 +189,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feature-workspace .feature-action {
+.feature-workspace :is(.feature-action, .mc-delegate) {
   flex: none;
   height: 28px;
   padding: 0 9px;
@@ -203,7 +205,7 @@
   border-color: #8156d6;
   color: white;
 }
-.feature-workspace .feature-action:hover {
+.feature-workspace :is(.feature-action, .mc-delegate):enabled:hover {
   background: #30283f;
 }
 .feature-workspace .feature-action[aria-disabled='true'],
@@ -381,7 +383,7 @@
     gap: 3px;
     padding: 0 4px;
   }
-  .feature-workspace .feature-action {
+  .feature-workspace :is(.feature-action, .mc-delegate) {
     padding: 0 3px;
     font-size: 9px;
   }

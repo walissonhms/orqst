@@ -62,7 +62,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'New terminals', exact: true });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByText(/the action was refused/i)).toBeVisible();
+  await expect(drawer.getByRole('button', { name: 'Open terminal', exact: true })).toBeDisabled();
   await expect(drawer.getByRole('button', { name: 'Refresh selection' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Open', exact: true })).toHaveCount(0);
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
@@ -344,7 +344,7 @@ for (const [width, height] of [
     await expect(page.locator('.feature-crumb')).toContainText('Workspace sintético / Feature A');
     await expect(page.getByRole('button', { name: /Projeto observado/ })).toBeDisabled();
     await expect(page.getByRole('button', { name: '＋ Novo Workspace' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Delegar' })).toHaveAttribute('title', /.+/);
+    await expect(page.getByRole('button', { name: 'Delegar' })).toBeEnabled();
     await expect.poll(paneIds).toEqual([1, 2, 3, 4].map(terminalId));
     await expect
       .poll(async () => (await page.locator('.ts-pane').first().boundingBox())?.y)

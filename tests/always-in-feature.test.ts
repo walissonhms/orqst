@@ -883,7 +883,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
         'Move to Feature',
         'General',
         'Structured agents',
-        'Mention a terminal',
+        'Delegate',
       ],
       [
         'pt-BR',
@@ -891,7 +891,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
         'Mover para Feature',
         'Geral',
         'Agentes estruturados',
-        'Mencionar um terminal',
+        'Delegar',
       ],
     ] as const) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -908,8 +908,8 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
       assert.equal(await notices.count(), 2);
       assert.match((await notices.first().textContent()) ?? '', new RegExp(noticeText));
       assert.equal(
-        await page.locator('.ts-mention-open').count(),
-        0,
+        await page.getByRole('button', { name: mentionOpen, exact: true }).isDisabled(),
+        true,
         'no mention composer outside a Feature',
       );
 
@@ -930,14 +930,10 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
       await tab.waitFor({ state: 'visible' });
       assert.match((await tab.textContent()) ?? '', new RegExp(`^${defaultTab}`));
       assert.equal(await page.locator('.ts-unassigned').count(), 0);
-      assert.equal(await page.locator('.ts-mention-open').count(), 1);
-      assert.match(
-        (await page.locator('.ts-mention-open').textContent()) ?? '',
-        new RegExp(mentionOpen),
-      );
+      assert.equal(await page.getByRole('button', { name: mentionOpen, exact: true }).count(), 1);
 
       // MentionComposer resolves @T-002 inside the new default Feature and dispatches a queued mention.
-      await page.locator('.ts-mention-open').click();
+      await page.getByRole('button', { name: mentionOpen, exact: true }).click();
       const composerBox = page.locator('.mc-field textarea');
       await composerBox.waitFor({ state: 'visible' });
       await composerBox.fill('Check @T-002 now');

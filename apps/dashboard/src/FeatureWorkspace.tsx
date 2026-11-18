@@ -33,6 +33,8 @@ import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
 import { TerminalStudio } from './TerminalStudio.js';
 import { AccountLimits } from './AccountLimits.js';
+import { FeatureDelegate, type FeatureDelegateProps, type MentionSend } from './MentionComposer.js';
+import type { StudioCreationScope } from './StudioWorkspace.js';
 import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account-limits-model.js';
 import {
   arrangeRequest,
@@ -64,7 +66,7 @@ export function FeatureWorkspace({
   nativeWorkspace?: boolean;
   navigation?: ReactNode;
   toolbarUtilities?: ReactNode;
-  onPrepare?: (context: { workspaceId: string; featureId: string | null }) => void;
+  onPrepare?: (context: StudioCreationScope) => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
   onWorkspace?: (id: string) => void;
@@ -97,7 +99,6 @@ export function FeatureWorkspace({
         .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
     [communication, openedAt],
   );
-  const lastMention = useRef<{ id: string; outcomes: { delivery: string }[] } | null>(null);
   const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
@@ -446,7 +447,6 @@ export function FeatureWorkspace({
           ((action.action === 'snapshot' || action.action === 'canvas') && reply.status === 'ok')
         )
           setLimits(parseAccountLimits(reply.accountLimits?.accounts));
-        if (reply.mention) lastMention.current = reply.mention;
         if (reply.communication) setCommunication(reply.communication.events);
         const accepted = reply.snapshot && acceptSnapshot(reply.snapshot);
         if (action.action === 'snapshot' && reply.status === 'unavailable')
@@ -741,6 +741,8 @@ export function FeatureWorkspace({
       onPrepare({
         workspaceId: snapshot?.workspace.id ?? workspaceId,
         featureId: snapshot?.activeFeatureId ?? null,
+        workspaceName: snapshot?.workspace.name,
+        featureName: selected ? displayFeatureName(selected) : undefined,
       });
       return;
     }
@@ -834,7 +836,42 @@ export function FeatureWorkspace({
     </nav>
   );
   const gridReason = t('feature.noLayout');
-  const delegateReason = t('features.delegationUnavailable');
+  const mentionScope = snapshot && selected
+    ? { workspaceId: snapshot.workspace.id, featureId: selected.featureId }
+    : null;
+  const sendMention: FeatureDelegateProps['onSend'] = async (scope, { from, to, text }) => {
+    const latest = current.current;
+    const feature = latest?.features.find(({ featureId }) => featureId === scope.featureId);
+    if (
+      !latest || latest.workspace.id !== scope.workspaceId ||
+      latest.activeFeatureId !== scope.featureId || !feature || feature.status === 'archived' ||
+      quitFence || coreState !== 'online'
+    ) return 'denied';
+    const members = new Set(latest.slots
+      .filter((slot) => !slot.closed && feature.terminalIds.includes(slot.terminalId))
+      .map((slot) => slot.terminalId));
+    if (!to.length || new Set(to).size !== to.length ||
+      to.some((id) => !members.has(id)) || (from && !members.has(from))) return 'denied';
+
+    let outcomes: NonNullable<FeatureNativeReply['mention']>['outcomes'] | undefined;
+    const status = await request({
+      action: 'mention',
+      from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
+      to,
+      text,
+    }, (reply) => {
+      if (reply.snapshot?.workspace.id === scope.workspaceId &&
+        reply.snapshot.activeFeatureId === scope.featureId) outcomes = reply.mention?.outcomes;
+    });
+    if (status === 'denied') return 'denied';
+    if (status !== 'ok' || !outcomes || outcomes.length !== to.length ||
+      new Set(outcomes.map(({ terminalId }) => terminalId)).size !== to.length ||
+      outcomes.some(({ terminalId }) => !to.includes(terminalId))) return 'unknown';
+    if (outcomes.every(({ delivery }) => delivery === 'queued')) return 'queued';
+    if (outcomes.every(({ delivery }) => delivery === 'denied')) return 'denied';
+    if (outcomes.every(({ delivery }) => delivery === 'unsupported')) return 'unsupported';
+    return 'unknown';
+  };
   const prepareReason = t(
     selected?.status === 'archived' ? 'feature.archived' : 'features.creationUnavailable',
   );
@@ -877,25 +914,12 @@ export function FeatureWorkspace({
   );
   const actions = (
     <>
-      <button
-        type="button"
-        className="feature-action feature-delegate"
-        aria-disabled={!selected || !structured || !canWrite || selected.status === 'archived'}
-        title={
-          !selected || !structured || !canWrite
-            ? delegateReason
-            : selected.status === 'archived'
-              ? t('feature.archived')
-              : undefined
-        }
-        onClick={() => {
-          if (selected && structured && canWrite && selected.status !== 'archived')
-            setStructuredFeature(selected.featureId);
-        }}
-      >
-        <span aria-hidden="true">↗ </span>
-        {t('features.delegate')}
-      </button>
+      <FeatureDelegate
+        scope={mentionScope}
+        terminals={terminals}
+        onSend={sendMention}
+        disabled={!canWrite || selected?.status === 'archived'}
+      />
       <button
         type="button"
         className="feature-action feature-add-terminal"
@@ -1184,11 +1208,15 @@ export function FeatureWorkspace({
               >
                 {t('canvas.title')}
               </button>
-              {structured && !selected && (
+              {structured && (
                 <button
                   type="button"
-                  disabled={busy || !canWrite}
+                  disabled={busy || !canWrite || selected?.status === 'archived'}
                   onClick={() => {
+                    if (selected) {
+                      setStructuredFeature(selected.featureId);
+                      return;
+                    }
                     const featureId = defaultFeatureId(snapshot.workspace.id);
                     void selectScope(featureId).then((accepted) => {
                       if (accepted) setStructuredFeature(featureId);
@@ -1398,38 +1426,11 @@ export function FeatureWorkspace({
                   },
                 }
               : {})}
-            {...(selected && selected.status !== 'archived'
-              ? {
-                  onMention: async ({
-                    from,
-                    to,
-                    text,
-                  }: {
-                    from: string | null;
-                    to: string[];
-                    text: string;
-                  }) => {
-                    // The accepted Core receipt distinguishes its queue from delivery and execution.
-                    lastMention.current = null;
-                    const status = await request({
-                      action: 'mention',
-                      from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
-                      to,
-                      text,
-                    });
-                    // Set by request() when the reply carries the recorded mention.
-                    const recorded = lastMention.current as {
-                      outcomes: { delivery: string }[];
-                    } | null;
-                    const outcomes = recorded?.outcomes;
-                    if (status !== 'ok' || !outcomes) return 'unknown';
-                    if (outcomes.some((outcome) => outcome.delivery === 'denied')) return 'denied';
-                    // Placed in each terminal's hub inbox; the terminal reads it with read_messages.
-                    if (outcomes.every((outcome) => outcome.delivery === 'queued')) return 'queued';
-                    return 'unsupported';
-                  },
-                }
-              : {})}
+            onMention={
+              mentionScope && canWrite && selected?.status !== 'archived'
+                ? (message: MentionSend) => sendMention(mentionScope, message)
+                : undefined
+            }
             {...(nativeWorkspace
               ? {
                   native: {

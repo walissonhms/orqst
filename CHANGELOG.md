@@ -1,5 +1,14 @@
 # Changelog
 
+## V6 Studio creation and mentions — 2026-11-18
+
+Studio opens a compact Feature-scoped terminal form. The name and catalog
+selection pass through a single native review, while the host assigns the
+mention alias. Multiple terminals and advanced setup remain separate views.
+The breadcrumb delegation component resolves exact Feature-local terminal IDs
+and displays the inbox receipt as queued. See the [lane 4 integration and
+renderer evidence](docs/development/v6-parity/lane4/README.md).
+
 ## V6 Settings, notifications and account limits — 2026-11-18
 
 Aligned the settings, guide, notification drawer and limits panel with V6

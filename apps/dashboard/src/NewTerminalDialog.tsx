@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
+import { terminalDisplayNameSchema } from '@orqst/protocol';
 import { useTranslation } from 'react-i18next';
 import { Check, Crown, Minus, Plus, Sparkles, X } from 'lucide-react';
 import { Modal } from './Modal';
@@ -18,6 +19,8 @@ export interface ProviderCatalog {
   /** Short reason shown when unavailable, already translated by the caller. */
   reason?: string;
   models: CatalogModel[];
+  /** Native catalogs explicitly report whether a CLI-default selection exists. */
+  cliDefault?: boolean;
   /** ORQST account profiles for this CLI; login always happens in the CLI itself. */
   accounts?: { id: string; label: string; state: 'ready' | 'limited' | 'signed_out' | 'unknown' }[];
 }
@@ -54,6 +57,8 @@ interface Props {
   busy?: boolean;
   /** Optional link to the detailed preparation form. */
   onAdvanced?: () => void;
+  inline?: boolean;
+  onSingle?: () => void;
   onCancel: () => void;
   onConfirm: (requests: TerminalRequest[]) => void;
 }
@@ -91,6 +96,8 @@ export function NewTerminalDialog({
   allowOrchestrator = true,
   busy = false,
   onAdvanced,
+  inline = false,
+  onSingle,
   onCancel,
   onConfirm,
 }: Props) {
@@ -131,7 +138,11 @@ export function NewTerminalDialog({
     choices.every(
       (choice) =>
         byProvider.get(choice.provider)?.available === true &&
-        workspaces.some((workspace) => workspace.id === choice.workspaceId),
+        (choice.model === null
+          ? byProvider.get(choice.provider)?.cliDefault !== false
+          : byProvider.get(choice.provider)?.models.some((entry) => entry.id === choice.model)) &&
+        workspaces.some((workspace) => workspace.id === choice.workspaceId) &&
+        (!choice.name.trim() || terminalDisplayNameSchema.safeParse(choice.name.trim()).success),
     );
   const nameOf = (id: string) => workspaces.find((workspace) => workspace.id === id)?.name ?? '?';
   const toggleTarget = (id: string) =>
@@ -205,7 +216,7 @@ export function NewTerminalDialog({
   }
 
   const confirm = () => {
-    if (!valid) return;
+    if (!valid || busy) return;
     onConfirm(
       choices.map((choice) => ({
         workspaceId: choice.workspaceId,
@@ -219,7 +230,8 @@ export function NewTerminalDialog({
   };
 
   return (
-    <Modal
+    <BatchDialogFrame
+      inline={inline}
       label={t('terminalStudio.create.title')}
       className="ntd"
       initialFocus=".ntd-count-value"
@@ -242,6 +254,7 @@ export function NewTerminalDialog({
             className="ntd-icon"
             onClick={onCancel}
             aria-label={t('terminalStudio.create.cancel')}
+            disabled={busy}
           >
             <X size={16} />
           </button>
@@ -430,6 +443,7 @@ export function NewTerminalDialog({
               <>
                 <h3>{t('terminalStudio.create.model')}</h3>
                 <ModelPicker
+                  allowDefault={byProvider.get(shared.provider)?.cliDefault !== false}
                   models={byProvider.get(shared.provider)?.models ?? []}
                   value={shared.model}
                   onChange={(model) => setShared({ ...shared, model })}
@@ -531,7 +545,9 @@ export function NewTerminalDialog({
                           {model.label ?? model.id}
                         </option>
                       ))}
-                      <option value="">{t('terminalStudio.defaultModel')}</option>
+                      {entry?.cliDefault !== false && (
+                        <option value="">{t('terminalStudio.defaultModel')}</option>
+                      )}
                     </select>
                   )}
                 </div>
@@ -570,12 +586,17 @@ export function NewTerminalDialog({
                   })
                 : `${summary} · ${nameOf(choices[0]?.workspaceId ?? '')}`}
           </span>
+          {onSingle && (
+            <button type="button" className="ntd-link" disabled={busy} onClick={onSingle}>
+              {t('studio.create.single')}
+            </button>
+          )}
           {onAdvanced && (
-            <button type="button" className="ntd-link" onClick={onAdvanced}>
+            <button type="button" className="ntd-link" disabled={busy} onClick={onAdvanced}>
               {t('terminalStudio.create.advanced')}
             </button>
           )}
-          <button type="button" className="ntd-secondary" onClick={onCancel}>
+          <button type="button" className="ntd-secondary" disabled={busy} onClick={onCancel}>
             {t('terminalStudio.create.cancel')}
           </button>
           <button type="submit" className="ntd-primary" disabled={!valid || busy}>
@@ -586,23 +607,184 @@ export function NewTerminalDialog({
           </button>
         </footer>
       </form>
-    </Modal>
+    </BatchDialogFrame>
+  );
+}
+
+function BatchDialogFrame({
+  inline,
+  ...modal
+}: ComponentProps<typeof Modal> & { inline: boolean }) {
+  return inline ? modal.children : <Modal {...modal} />;
+}
+
+export function CompactTerminalForm({
+  catalog,
+  workspace,
+  featureName,
+  max,
+  busy,
+  onConfirm,
+  onCancel,
+  onBatch,
+  onAdvanced,
+}: {
+  catalog: ProviderCatalog[];
+  workspace: WorkspaceOption;
+  featureName?: string;
+  max: number;
+  busy: boolean;
+  onConfirm: (request: TerminalRequest) => void;
+  onCancel: () => void;
+  onBatch: () => void;
+  onAdvanced?: () => void;
+}) {
+  const { t } = useTranslation();
+  const [provider, setProvider] = useState(() => firstAvailable(catalog)?.provider ?? '');
+  const [model, setModel] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const nameInput = useRef<HTMLInputElement>(null);
+  useEffect(() => nameInput.current?.focus(), []);
+
+  const entry = catalog.find((candidate) => candidate.provider === provider);
+  const nameValid = !name.trim() || terminalDisplayNameSchema.safeParse(name.trim()).success;
+  const validModel =
+    model === null
+      ? entry?.cliDefault === true
+      : entry?.models.some((candidate) => candidate.id === model);
+  const canSubmit = !busy && max > 0 && nameValid && entry?.available && validModel;
+
+  return (
+    <form
+      className="ntd-compact-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!canSubmit || !entry) return;
+        onConfirm({
+          workspaceId: workspace.id,
+          provider: entry.provider,
+          model,
+          accountId: null,
+          name: name.trim(),
+          orchestrator: false,
+        });
+      }}
+    >
+      <header>
+        <h2>{t('studio.create.title')}</h2>
+        <p>
+          {featureName
+            ? t('studio.create.scope', { workspace: workspace.name, feature: featureName })
+            : workspace.name}
+        </p>
+      </header>
+      <fieldset disabled={busy}>
+        <label>
+          {t('studio.create.name')}
+          <input
+            ref={nameInput}
+            value={name}
+            maxLength={48}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        {!nameValid && <p role="alert">{t('studio.create.invalidName')}</p>}
+        <label>
+          {t('studio.create.alias')}
+          <input readOnly value={t('studio.create.automaticAlias')} />
+        </label>
+        <label>
+          {t('studio.create.cli')}
+          <select
+            value={provider}
+            onChange={(event) => {
+              const next = catalog.find((candidate) => candidate.provider === event.target.value);
+              setProvider(next?.provider ?? '');
+              setModel(null);
+            }}
+          >
+            {!provider && <option value="">{t('studio.create.chooseCli')}</option>}
+            {catalog.map((candidate) => (
+              <option
+                key={candidate.provider}
+                value={candidate.provider}
+                disabled={!candidate.available}
+              >
+                {t(`terminalStudio.providers.${candidate.provider}`)}
+                {candidate.reason ? ` · ${candidate.reason}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          {t('studio.create.model')}
+          <select
+            value={model ?? ''}
+            disabled={!entry?.available}
+            onChange={(event) => setModel(event.target.value || null)}
+          >
+            <option value="" disabled={!entry?.cliDefault}>
+              {t(
+                entry?.cliDefault
+                  ? 'studio.create.cliDefault'
+                  : entry?.models.length
+                    ? 'studio.create.chooseModel'
+                    : 'studio.create.modelUnknown',
+              )}
+            </option>
+            {entry?.models.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.label ?? candidate.id}
+              </option>
+            ))}
+          </select>
+        </label>
+        {validModel && <p>{t('studio.create.modelUnverified')}</p>}
+        {max === 0 && <p role="status">{t('studio.create.noCapacity')}</p>}
+      </fieldset>
+      <div className="ntd-compact-options">
+        <button type="button" className="ntd-link" disabled={busy || max < 2} onClick={onBatch}>
+          {t('studio.create.multiple')}
+        </button>
+        {onAdvanced && (
+          <button
+            type="button"
+            className="ntd-link"
+            aria-label={t('terminalStudio.create.advanced')}
+            disabled={busy}
+            onClick={onAdvanced}
+          >
+            {t('studio.create.advanced')}
+          </button>
+        )}
+      </div>
+      <footer>
+        <button type="button" className="ntd-secondary" disabled={busy} onClick={onCancel}>
+          {t('studio.create.cancel')}
+        </button>
+        <button type="submit" className="ntd-primary" disabled={!canSubmit}>
+          {t(busy ? 'studio.create.opening' : 'studio.create.open')}
+        </button>
+      </footer>
+    </form>
   );
 }
 
 function ModelPicker({
   models,
+  allowDefault,
   value,
   onChange,
 }: {
   models: CatalogModel[];
+  allowDefault: boolean;
   value: string | null;
   onChange: (model: string | null) => void;
 }) {
   const { t } = useTranslation();
   const options = [
     ...models.map((m) => ({ id: m.id as string | null, label: m.label })),
-    { id: null, label: undefined },
+    ...(allowDefault ? [{ id: null, label: undefined }] : []),
   ];
   return (
     <div className="ntd-models" role="radiogroup" aria-label={t('terminalStudio.create.model')}>
