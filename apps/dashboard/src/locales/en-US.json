@@ -1439,7 +1439,8 @@
     "terminalTabs": "Terminals",
     "paneControls": "Selected terminal controls",
     "tabHelp": "Select to focus · double-click or F2 to rename · drag or Alt+Arrow to reorder",
-    "layoutSaved": "Layout saved"
+    "layoutSaved": "Layout saved",
+    "missing": "{{count}} unavailable here; not adopted or restarted."
   },
   "tauriCoreUnavailable": {
     "title": "Observer unavailable",

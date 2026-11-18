@@ -1439,7 +1439,8 @@
     "terminalTabs": "Terminais",
     "paneControls": "Controles do terminal selecionado",
     "tabHelp": "Selecione para focar · clique duplo ou F2 para renomear · arraste ou Alt+Seta para reordenar",
-    "layoutSaved": "Layout salvo"
+    "layoutSaved": "Layout salvo",
+    "missing": "{{count}} indisponíveis aqui; não adotados ou reiniciados."
   },
   "tauriCoreUnavailable": {
     "title": "Observador indisponível",

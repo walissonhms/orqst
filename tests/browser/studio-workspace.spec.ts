@@ -38,7 +38,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.goto('/studio');
   const workspace = page.locator('.studio-workspace > .feature-workspace');
   await expect(workspace).toBeVisible();
-  await expect(workspace.locator('.ts-loading')).toHaveText('CORE UNAVAILABLE');
+  await expect(workspace.locator('.ts-loading')).toHaveText('MANAGED TERMINALS DISCONNECTED');
   await expect(page.locator('#app-sidebar')).toBeVisible();
   await expect(page.locator('.main-shell > .topbar')).toHaveCSS('height', '45px');
   await expect(page.locator('.app-footer')).toBeHidden();
