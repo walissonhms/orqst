@@ -1,4 +1,4 @@
-import type { TerminalPreparationCatalog } from '@orqst/protocol';
+import { terminalProviderSchema, type TerminalPreparationCatalog } from '@orqst/protocol';
 import type { ProviderCatalog, TerminalRequest } from './NewTerminalDialog.js';
 
 type Entry = TerminalPreparationCatalog['providers'][number];
@@ -8,16 +8,33 @@ export function dialogCatalog(
   catalog: TerminalPreparationCatalog,
   translateReason?: (reason: Entry['reason']) => string,
 ): ProviderCatalog[] {
-  return catalog.providers.map((entry) => ({
-    provider: entry.provider,
-    available: entry.status === 'available',
-    ...(entry.status === 'unavailable' && translateReason
-      ? { reason: translateReason(entry.reason) }
-      : {}),
-    models: entry.models
-      .filter((model) => model.source !== 'cli-default')
-      .map((model) => ({ id: model.id, label: model.label })),
-  }));
+  return terminalProviderSchema.options.map((provider) => {
+    const entry = catalog.providers.find((candidate) => candidate.provider === provider);
+    if (!entry)
+      return {
+        provider,
+        available: false,
+        ...(translateReason ? { reason: translateReason('catalog_limited') } : {}),
+        models: [],
+        cliDefault: false,
+      };
+    return {
+      provider: entry.provider,
+      available: entry.status === 'available',
+      ...(entry.status === 'unavailable' && translateReason
+        ? { reason: translateReason(entry.reason) }
+        : {}),
+      models:
+        entry.status === 'available'
+          ? entry.models
+              .filter((model) => model.source !== 'cli-default')
+              .map((model) => ({ id: model.id, label: model.label }))
+          : [],
+      cliDefault:
+        entry.status === 'available' &&
+        entry.models.filter((model) => model.source === 'cli-default').length === 1,
+    };
+  });
 }
 
 /** `null` in the dialog means the CLI's own default: use the catalog's CLI-default entry. */

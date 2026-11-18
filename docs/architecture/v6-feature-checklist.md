@@ -5,6 +5,11 @@
 - [x] Deterministic per-workspace default Feature ID (`defaultFeatureId(workspaceId)`, localized `"General"` / `"Geral"`, rename-preserving) shared across Node and Rust Cores.
 - [x] Every new managed terminal (PTY and structured) opens inside the active Feature, or creates/reuses the default Feature and switches the Studio tab in the same Core transaction when opened from "Sem Feature".
 - [x] Existing unassigned terminals remain untouched, show a localized notice plus "Move to Feature" preserving saved Feature layouts (`appendFeatureMember` in Node and Rust), and resolve composer/structured `@mentions` in the default Feature like any other.
+- [x] Compact terminal form uses the Feature-scoped catalog and its attached native generation, with separate multiple-terminal and advanced views.
+- [x] Feature-local breadcrumb delegation component displays a queued inbox receipt and rejects mixed-scope drafts in the renderer.
+- [ ] Integrate both breadcrumb actions into the single Feature toolbar. Add a signed Core contract for custom mention aliases and verify the live native flow.
+      See the [lane 4 renderer evidence and integration contract](../development/v6-parity/lane4/README.md).
+
 - [x] Node and Rust MCP hubs return `sender_unassigned` with an explicit message on `list_terminals`, `send_message` and `delegate_task` when the sender has no Feature, keeping `unknown_terminal` for missing/cross-Feature/unassigned targets.
 - [x] Guided Codex opening from Sem Feature and from an existing Feature exercises the native client and preparation helper in a browser test with a simulated enrollment acknowledgment.
 - [ ] Owner native validation of default-Feature creation, Move to Feature and `sender_unassigned` refusal in Tauri.

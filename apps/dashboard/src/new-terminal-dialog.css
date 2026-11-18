@@ -1,4 +1,4 @@
-/* New terminal dialog. Colors come only from tokens.css. */
+/* Terminal dialog, including the compact V6 palette. */
 
 .ntd {
   width: min(820px, calc(100vw - 32px));
@@ -601,4 +601,129 @@ button.ntd-row-index:hover {
   grid-column: 2 / -1;
   color: var(--orqst-muted);
   font-size: 12px;
+}
+
+.ntd.ntd-compact {
+  width: min(390px, 90vw);
+  padding: 20px;
+  border: 1px solid #56466f;
+  border-radius: 10px;
+  background: #1d1828;
+  color: #f1eafb;
+  overflow: auto;
+}
+
+.ntd-compact::backdrop {
+  background: #000b;
+  backdrop-filter: none;
+}
+
+.ntd-compact-form h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.ntd-compact-form p,
+.ntd-compact-form label {
+  margin: 0;
+  color: #b5a9c7;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.ntd-compact-form fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ntd-compact-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.ntd-compact-form input,
+.ntd-compact-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #524466;
+  border-radius: 5px;
+  background: #0d0b14;
+  color: inherit;
+  font: inherit;
+}
+
+.ntd-compact-form input[readonly] {
+  color: #b5a9c7;
+}
+
+.ntd-compact-options,
+.ntd-compact-form footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ntd-compact-options {
+  margin-top: 10px;
+}
+
+.ntd-compact-form footer {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.ntd-compact .ntd-primary,
+.ntd-compact .ntd-secondary {
+  height: 30px;
+  padding-inline: 9px;
+  border-radius: 5px;
+}
+
+:root:not([data-theme='light']) .ntd-compact .ntd-primary {
+  border: 1px solid #8156d6;
+  background: #6c45b8;
+}
+
+:root:not([data-theme='light']) .ntd-compact .ntd-secondary {
+  border-color: #373149;
+  background: #1b1b29;
+  color: #d4cce5;
+}
+
+.ntd-compact .ntd-status {
+  max-height: none;
+}
+
+.ntd-compact .ntd-status > :not(.ntd-head):not(.ntd-foot) {
+  margin-inline: 0;
+}
+
+.ntd-compact .ntd-head,
+.ntd-compact .ntd-foot {
+  padding-inline: 0;
+}
+
+.ntd-compact .ntd-foot {
+  flex-wrap: wrap;
+}
+
+:root[data-theme='light'] .ntd.ntd-compact,
+:root[data-theme='light'] .ntd-compact-form input,
+:root[data-theme='light'] .ntd-compact-form select {
+  border-color: var(--orqst-border-strong);
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+}
+
+:root[data-theme='light'] .ntd-compact-form p,
+:root[data-theme='light'] .ntd-compact-form label,
+:root[data-theme='light'] .ntd-compact-form input[readonly] {
+  color: var(--orqst-muted);
 }

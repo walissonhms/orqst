@@ -23,13 +23,16 @@ type McpPairProvider = keyof typeof pairModelKey;
 export function TauriStudioPreparation({
   native,
   context,
+  onReviewPending,
 }: {
   native?: TauriStudio;
   context?: Scope;
+  onReviewPending?: (pending: boolean) => void;
 }) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<TauriStudioSnapshot>();
   const [catalog, setCatalog] = useState<TerminalPreparationCatalog>();
+  const [catalogGeneration, setCatalogGeneration] = useState<number>();
   const [provider, setProvider] = useState<Provider>('codex');
   const [modelId, setModelId] = useState('');
   const [mcpPair, setMcpPair] = useState(false);
@@ -40,7 +43,9 @@ export function TauriStudioPreparation({
   const [failure, setFailure] = useState<TerminalPreparationFailure>();
   const sequence = useRef(0);
   const active = useRef(false);
-  const inFlight = useRef(false);
+  const inFlight = useRef<{ token: number; reviewing: boolean } | undefined>(undefined);
+  const reviewPending = useRef(onReviewPending);
+  reviewPending.current = onReviewPending;
   const chosen = catalog?.providers.find((entry) => entry.provider === provider);
   const model = chosen?.models.find((entry) => entry.id === modelId);
   // The pair worker is any other reviewed MCP-capable CLI; Codex/OpenCode keep their original pairing.
@@ -62,10 +67,19 @@ export function TauriStudioPreparation({
     async (input: TauriStudioRequest) => {
       if (!native || inFlight.current) return;
       const token = ++sequence.current;
-      inFlight.current = true;
+      const reviewing = input.action !== 'snapshot' && input.action !== 'catalog';
+      inFlight.current = { token, reviewing };
       setBusy(true);
       setNotice('');
-      if (!['snapshot', 'catalog'].includes(input.action)) setFailure(undefined);
+      if (reviewing) {
+        reviewPending.current?.(true);
+        setFailure(undefined);
+        setCatalogGeneration(undefined);
+      }
+      if (input.action === 'catalog') {
+        setCatalog(undefined);
+        setCatalogGeneration(undefined);
+      }
       try {
         const reply = await native.request(input);
         if (!active.current || sequence.current !== token) return;
@@ -75,7 +89,12 @@ export function TauriStudioPreparation({
             setCatalog(undefined);
             return;
           }
-          if (reply.snapshot) setSnapshot(reply.snapshot);
+          if (reply.snapshot) {
+            setSnapshot(reply.snapshot);
+            setCatalogGeneration(reply.snapshot.generation);
+          } else {
+            setNotice('catalog_unverified');
+          }
           setCatalog(reply.catalog);
           setModelId(''); // A refreshed catalog always needs a current explicit choice.
           setMcpPair(false);
@@ -94,20 +113,25 @@ export function TauriStudioPreparation({
       } catch {
         if (active.current && sequence.current === token) setNotice('unavailable');
       } finally {
-        inFlight.current = false;
+        if (reviewing) reviewPending.current?.(false);
+        if (inFlight.current?.token === token) inFlight.current = undefined;
         if (active.current && sequence.current === token) setBusy(false);
       }
     },
     [native, workspaceId, featureId],
   );
   const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    const token = sequence.current + 1;
     await request({ action: 'snapshot' });
-    if (workspaceId) await request({ action: 'catalog', workspaceId, featureId });
+    if (active.current && sequence.current === token && workspaceId)
+      await request({ action: 'catalog', workspaceId, featureId });
   }, [request, workspaceId, featureId]);
   useEffect(() => {
     active.current = true;
     setFailure(undefined);
     setCatalog(undefined);
+    setCatalogGeneration(undefined);
     setModelId('');
     setMcpPair(false);
     setCompanionModelId('');
@@ -117,6 +141,8 @@ export function TauriStudioPreparation({
     return () => {
       window.removeEventListener('focus', inspect);
       active.current = false;
+      // StrictMode and scope changes must be able to restart passive reads.
+      if (!inFlight.current?.reviewing) inFlight.current = undefined;
       sequence.current++;
     };
   }, [refresh]);
@@ -130,7 +156,11 @@ export function TauriStudioPreparation({
         : snapshot.canCreate
           ? 'empty'
           : 'blocked';
-  const scopeMatches = catalog?.workspaceId === workspaceId && catalog?.featureId === featureId;
+  const scopeMatches =
+    catalog?.workspaceId === workspaceId &&
+    catalog.featureId === featureId &&
+    catalogGeneration !== undefined &&
+    catalogGeneration === snapshot?.generation;
   return (
     <>
       <span id="studio-setup-title" className="sr-only">
@@ -159,7 +189,13 @@ export function TauriStudioPreparation({
       )}
       {notice && !failure && (
         <p className="notice" role="status">
-          {t(notice === 'denied' ? 'studio.tauri.denied' : `studio.${notice}`)}
+          {t(
+            notice === 'catalog_unverified'
+              ? 'studio.create.catalogUnverified'
+              : notice === 'denied'
+                ? 'studio.tauri.denied'
+                : `studio.${notice}`,
+          )}
         </p>
       )}
       <div className="studio-members studio-terminal-choice">
@@ -310,13 +346,14 @@ export function TauriStudioPreparation({
           }
           onClick={() =>
             snapshot &&
+            scopeMatches &&
             catalog &&
             model &&
             void request(
               mcpPair && provider !== 'antigravity' && companionModel
                 ? {
                     action: 'create-mcp-pair',
-                    generation: snapshot.generation,
+                    generation: catalogGeneration,
                     workspaceId,
                     featureId,
                     catalogId: catalog.catalogId,
@@ -327,7 +364,7 @@ export function TauriStudioPreparation({
                   }
                 : {
                     action: 'create-selected',
-                    generation: snapshot.generation,
+                    generation: catalogGeneration,
                     workspaceId,
                     featureId,
                     catalogId: catalog.catalogId,

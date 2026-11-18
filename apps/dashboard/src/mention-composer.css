@@ -242,3 +242,85 @@
 :root[data-motion='reduced'] .mc-spin {
   animation: none;
 }
+
+.mc-delegate {
+  white-space: nowrap;
+}
+
+.mc-dialog {
+  width: min(390px, calc(100vw - 24px));
+  margin: 50px 8px auto auto;
+  padding: 0;
+  overflow: visible;
+  border: 1px solid #56466f;
+  border-radius: 8px;
+  background: #1d1828;
+  color: #f1eafb;
+}
+
+.mc-dialog::backdrop {
+  background: #0006;
+}
+
+.mc-dialog h2 {
+  margin: 0;
+  padding: 12px 12px 0;
+  font-size: 14px;
+}
+
+.mc-dialog .mc-root {
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mc-dialog .mc-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: end;
+}
+
+.mc-dialog .mc-field {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+}
+
+.mc-dialog .mc-from select {
+  max-width: 100%;
+}
+
+.mc-dialog .mc-suggest {
+  position: static;
+  width: 100%;
+  max-height: min(150px, 25dvh);
+  overflow: auto;
+}
+
+.mc-dialog .mc-ws {
+  display: none;
+}
+
+.mc-state-queued {
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-lavender);
+}
+
+.mc-dialog .mc-meta {
+  min-height: 0;
+}
+
+@media (max-height: 450px) {
+  .mc-dialog {
+    max-height: calc(100dvh - 60px);
+    overflow: auto;
+  }
+}
+
+:root[data-theme='light'] .mc-dialog {
+  border-color: var(--orqst-border-strong);
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+}
