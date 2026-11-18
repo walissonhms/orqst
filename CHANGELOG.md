@@ -1,5 +1,14 @@
 # Changelog
 
+## V6 Settings, notifications and account limits — 2026-11-18
+
+Aligned the settings, guide, notification drawer and limits panel with V6
+secondary chrome. Account limit bars reflect reported usage and disappear
+when evidence is missing or the reporting window expires. Account visibility
+and display thresholds stay local. Added keyboard focus handling for the
+limits panel and documented the
+[Studio composition contract](docs/development/v6-parity/lane5/README.md).
+
 ## Studio terminal opening — 2026-11-18
 
 Studio binds each catalog to its native generation and reviews the destination

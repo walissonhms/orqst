@@ -4,6 +4,7 @@ import { BookOpen, X } from 'lucide-react';
 import type { Snapshot } from '@orqst/protocol';
 import { Modal } from './Modal';
 import type { AppView } from './shell-preferences';
+import './account-limits.css';
 
 /** Read-only orientation from the existing snapshot, never an installation or readiness test. */
 export function ObservationGuide({
@@ -47,17 +48,17 @@ export function ObservationGuide({
   return (
     <Modal
       label={t('observationGuide.title')}
-      className="observation-guide panel shell-dialog"
+      className="observation-guide panel shell-dialog lane-observation-guide"
       initialFocus=".guide-heading"
       onClose={onClose}
     >
       <div onKeyDown={containTab}>
         <div className="panel-heading">
           <h2 className="guide-heading" tabIndex={-1}>
-            <BookOpen size={18} /> {t('observationGuide.title')}
+            <BookOpen size={14} aria-hidden="true" /> {t('observationGuide.title')}
           </h2>
           <button className="icon-button" aria-label={t('close')} onClick={onClose}>
-            <X size={18} />
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
         <div className="observation-guide-body">

@@ -39,7 +39,7 @@ export function level(
 
 /** Compact countdown: `4d10h`, `21h15m`, `2h45m`, `5m`; `—` when unknown or past. */
 export function renewsIn(resetsAt: number | undefined, now: number): string {
-  if (resetsAt === undefined || resetsAt <= now) return '—';
+  if (resetsAt === undefined || !Number.isFinite(resetsAt) || resetsAt <= now) return '—';
   const minutes = Math.floor((resetsAt - now) / 60_000);
   const d = Math.floor(minutes / 1440);
   const h = Math.floor((minutes % 1440) / 60);
@@ -74,7 +74,7 @@ export function parseAccountLimits(value: unknown): AccountLimit[] {
     if (!raw || typeof raw !== 'object') return [];
     const entry = raw as Record<string, unknown>;
     if (typeof entry.id !== 'string' || !providers.has(entry.provider as string)) return [];
-    if (!finite(entry.index, 1, 99)) return [];
+    if (!finite(entry.index, 1, 99) || !Number.isInteger(entry.index)) return [];
     const windows = Array.isArray(entry.windows)
       ? entry.windows.slice(0, 8).flatMap((w): LimitWindow[] => {
           if (!w || typeof w !== 'object') return [];

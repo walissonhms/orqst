@@ -1,5 +1,15 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Settings, notifications and account limits — 2026-11-18
+
+- [x] Compact V6 Settings, observation guide, notification drawer and limits panel.
+- [x] Account limits distinguish confirmed zero, unknown usage and expired windows.
+- [x] Keyboard focus returns to the account-limits trigger. Account visibility and ordered display thresholds use local preferences.
+- [ ] Compose direct Settings and notification actions in Studio with a scoped return path.
+- [ ] Owner acceptance in a signed Tauri package with real provider reports.
+
+See the [comparison and composition contract](../development/v6-parity/lane5/README.md).
+
 ## Always inside a Feature — 2026-11-18
 
 - [x] Deterministic per-workspace default Feature ID (`defaultFeatureId(workspaceId)`, localized `"General"` / `"Geral"`, rename-preserving) shared across Node and Rust Cores.
