@@ -1,10 +1,12 @@
 import { createContext } from 'react';
 import {
+  dashboardRoutePaths,
   dashboardSessionPathSchema,
+  dashboardViewSchema,
   type FeatureNativeSnapshot,
   type Snapshot,
 } from '@orqst/protocol';
-import { appViews, viewFromHash, type AppView } from './shell-preferences';
+import { viewFromHash, type AppView } from './shell-preferences';
 
 export interface StudioScope {
   workspace: FeatureNativeSnapshot['workspace'];
@@ -21,7 +23,11 @@ export interface StudioTreeProps {
 }
 
 /** Dashboard chrome available to the embedded Feature tree and toolbar. */
+export type StudioShellCommand = 'newTerminal' | 'delegate';
+
 export interface StudioShellNavigation {
+  command?: StudioShellCommand;
+  onCommandHandled?: (activated: boolean) => void;
   tree: StudioTreeProps;
   navigate: (view: AppView, focusContent?: boolean) => void;
   openNotifications: () => void;
@@ -38,12 +44,14 @@ export function viewFromLocation(
   return (
     viewFromHash(location.hash) ??
     (dashboardSessionPathSchema.safeParse(location.pathname).success ? 'overview' : undefined) ??
-    appViews.find((view) => location.pathname === `/${view}`)
+    dashboardViewSchema.options.find(
+      (view) => location.pathname === dashboardRoutePaths[view] || location.pathname === `/${view}`,
+    )
   );
 }
 
 export function viewPath(view: AppView, sessionId?: string): string {
-  if (view !== 'overview' || !sessionId || sessionId.length > 200) return `/${view}`;
+  if (view !== 'overview' || !sessionId || sessionId.length > 200) return dashboardRoutePaths[view];
   try {
     const encoded = encodeURIComponent(sessionId);
     const path = `/overview/sessions/${encoded}`;
@@ -53,7 +61,7 @@ export function viewPath(view: AppView, sessionId?: string): string {
       : `/overview#session=${encoded}`;
   } catch {
     // An invalid UTF-16 source identity has no lossless URL representation.
-    return '/overview';
+    return dashboardRoutePaths.overview;
   }
 }
 

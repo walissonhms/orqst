@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dashboardPathSchema, dashboardSessionPathSchema } from '@orqst/protocol';
 import { allowedNavigation, allowedRequest } from '../apps/desktop/src/policy.js';
-import { viewPath } from '../apps/dashboard/src/navigation.js';
+import { viewFromLocation, viewPath } from '../apps/dashboard/src/navigation.js';
 import { sessionFromLocation } from '../apps/dashboard/src/session-link.js';
 
 const origin = 'http://127.0.0.1:4347';
@@ -73,6 +73,27 @@ test('legacy identities unsafe for path representation remain exact hash links w
 });
 
 test('unrepresentable source IDs remain viewable in memory without emitting an invalid identity URL', () => {
-  assert.equal(viewPath('overview', 'x'.repeat(201)), '/overview');
-  assert.equal(viewPath('overview', '\ud800'), '/overview');
+  assert.equal(viewPath('overview', 'x'.repeat(201)), '/visao-geral');
+  assert.equal(viewPath('overview', '\ud800'), '/visao-geral');
+});
+
+test('canonical shell routes are admitted by the dashboard and host allowlists', () => {
+  for (const [view, path] of [
+    ['overview', '/visao-geral'],
+    ['studio', '/studio'],
+    ['communication', '/comunicacao'],
+    ['models', '/metricas'],
+    ['artifacts', '/artefatos'],
+    ['settings', '/configuracoes'],
+    ['agents', '/configuracoes/agentes'],
+  ] as const) {
+    assert.equal(viewPath(view), path);
+    assert.equal(viewFromLocation({ pathname: path, hash: '' }), view);
+    assert.equal(dashboardPathSchema.safeParse(path).success, true);
+    assert.equal(allowedNavigation(origin + path, origin), true);
+  }
+  assert.equal(viewFromLocation({ pathname: '/agents', hash: '' }), 'agents');
+  for (const path of ['/kanban', '/notifications', '/configuracoes/unknown']) {
+    assert.equal(dashboardPathSchema.safeParse(path).success, false);
+  }
 });

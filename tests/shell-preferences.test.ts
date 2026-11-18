@@ -42,7 +42,6 @@ test('local shell preferences reject malformed storage and unsupported capabilit
       view: 'agents',
       workspaceId: 'synthetic-workspace',
       status: 'unknown',
-      collapsed: true,
       workspaceLayout: 'list',
       workspaceSort: 'name',
     },
@@ -53,6 +52,7 @@ test('hash navigation admits only implemented views, leaving session identities 
   for (const view of [
     'overview',
     'studio',
+    'communication',
     'workspaces',
     'agents',
     'models',
@@ -74,6 +74,7 @@ test('clean paths and legacy view aliases resolve only implemented views', () =>
   for (const view of [
     'overview',
     'studio',
+    'communication',
     'workspaces',
     'agents',
     'models',
@@ -82,12 +83,12 @@ test('clean paths and legacy view aliases resolve only implemented views', () =>
   ] as const) {
     assert.equal(viewFromLocation({ pathname: '/' + view, hash: '' }), view);
     assert.equal(viewFromLocation({ pathname: '/', hash: '#' + view }), view);
-    assert.equal(viewPath(view), '/' + view);
+    assert.equal(viewFromLocation({ pathname: viewPath(view), hash: '' }), view);
   }
   assert.equal(viewFromLocation({ pathname: '/settings', hash: '#agents' }), 'agents');
   assert.equal(viewFromLocation({ pathname: '/', hash: '#session=synthetic' }), 'overview');
   assert.equal(viewPath('overview', 'synthetic /?é'), '/overview#session=synthetic%20%2F%3F%C3%A9');
-  assert.equal(viewPath('settings', 'synthetic'), '/settings');
+  assert.equal(viewPath('settings', 'synthetic'), '/configuracoes');
   for (const pathname of ['/', '/unknown', '/settings/nested', '/overview/', '/%73ettings']) {
     assert.equal(viewFromLocation({ pathname, hash: '' }), undefined);
   }
