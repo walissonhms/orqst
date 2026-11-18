@@ -392,9 +392,6 @@ main[data-next='input'] #input:enabled {
 main[data-chrome='studio'] {
   border: 0;
 }
-main[data-chrome='studio'] .pane-header {
-  display: none;
-}
 /* The Studio owns the pane header. Keep only the PTY and actionable exceptions below it. */
 :root:has(main[data-chrome='studio']) {
   --orqst-terminal: var(--orqst-background);
@@ -415,9 +412,4 @@ main[data-chrome='studio'][data-next='attach'] .process-controls,
 main[data-chrome='studio'][data-next='start'] #start,
 main[data-chrome='studio'][data-next='attach'] #attach {
   display: block;
-}
-/* Inside a PTY, show native process actions only on the context-menu gesture. */
-main[data-chrome='studio'] > .pane-menu > summary,
-main[data-chrome='studio'] > .pane-menu .pane-menu-panel > :not(.pane-actions) {
-  display: none;
 }

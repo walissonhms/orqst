@@ -531,11 +531,6 @@
   border: 0;
   background: transparent;
 }
-.feature-pane-editor {
-  margin: 12px 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--feature-line);
-}
 .feature-permissions-disclosure {
   margin-top: 12px;
   border-top: 1px solid var(--feature-line);
@@ -557,31 +552,6 @@
   .feature-terminal-tools button:nth-child(2),
   .feature-terminal-tools button:nth-child(3) {
     display: none;
-  }
-  .feature-native:has(.feature-pane-editor) .feature-topbar {
-    visibility: hidden;
-  }
-  .feature-native .feature-pane-editor {
-    position: fixed;
-    top: 0;
-    left: 46px;
-    right: 0;
-    height: 45px;
-    margin: 0;
-    padding: 3px 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--feature-panel);
-  }
-  .feature-pane-editor label {
-    flex: 1;
-    min-width: 0;
-    margin: 0;
-  }
-  .feature-pane-editor input {
-    margin: 0;
-    height: 23px;
   }
 }
 

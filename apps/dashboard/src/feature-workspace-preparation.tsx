@@ -4,7 +4,7 @@ import { ArrowRight, Columns2, FileCheck2, FolderOpen, ShieldCheck, Terminal } f
 import type { StudioRequest, StudioSnapshot } from '@orqst/protocol';
 
 /** Navigation/preparation only. All choices and grants stay in the existing native flow. */
-export function Studio() {
+export function LegacyStudioPreparation() {
   const { t } = useTranslation();
   const native = window.orqstStudio?.contractVersion === 1 ? window.orqstStudio : undefined;
   const desktop = !!window.orqstManagedAgents || navigator.userAgent.includes(' ORQSTDesktop/0.1');
@@ -62,7 +62,7 @@ export function Studio() {
           <Terminal size={28} aria-hidden="true" />
           <h1 id="studio-title">{t('shell.views.studio')}</h1>
           <p>{t(desktop ? 'studio.oldDesktop' : 'studio.browserOnly')}</p>
-          {import.meta.env.DEV && !desktop && (
+          {import.meta.env?.DEV && !desktop && (
             <a className="button" href="/preview/terminals.html">
               {t('studio.layoutPreview')}
             </a>

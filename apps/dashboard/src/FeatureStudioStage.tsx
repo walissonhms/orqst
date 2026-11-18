@@ -13,10 +13,10 @@ import { useTranslation } from 'react-i18next';
 import {
   AtSign,
   Check,
+  Crown,
   CircleHelp,
   Columns3,
   CornerDownLeft,
-  Crown,
   LayoutGrid,
   List,
   Maximize2,
@@ -39,11 +39,13 @@ import {
   dockStudioPane,
   restoreStudioLayout,
   studioDockedMode,
+  studioArrangementModes,
   studioDockGeometry,
   arrange,
   arrangementModes,
   containRect,
   GAP,
+  STUDIO_FLOAT_MIN,
   mosaicGeometry,
   paneView,
   resizeFromEdge,
@@ -73,13 +75,9 @@ import {
 } from './terminal-arrangement';
 import type { NativePaneLayout } from './studio-native';
 import { nativeHiddenTerminals } from './feature-workspace-dock';
-import {
-  PaneMenu,
-  useStudioPaneText,
-  type AccountOption,
-  type PaneAction,
-  type PaneActionType,
-} from './PaneMenu';
+import { PaneMenu, type AccountOption, type PaneAction, type PaneActionType } from './PaneMenu';
+import { PaneCard } from './PaneCard';
+import { Modal } from './Modal';
 import { TerminalDetails } from './TerminalDetails';
 import { MentionComposer, type DeliveryState, type MentionSend } from './MentionComposer';
 import './terminal-studio.css';
@@ -87,8 +85,16 @@ import './mention-composer.css';
 import './pane-menu.css';
 
 export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'antigravity' | 'shell';
-export type TerminalStatus =
-  'running' | 'waiting_for_user' | 'completed' | 'failed' | 'interrupted' | 'unknown';
+export type PaneCardState =
+  | 'starting'
+  | 'ready'
+  | 'running'
+  | 'waiting_for_user'
+  | 'unknown'
+  | 'failed'
+  | 'disconnected'
+  | 'ended';
+export type TerminalStatus = PaneCardState | 'completed' | 'interrupted';
 
 export interface StudioTerminal {
   id: string;
@@ -103,6 +109,11 @@ export interface StudioTerminal {
   /** `undefined` = unknown, `null` = CLI default, string = selected model. */
   model?: string | null;
   status: TerminalStatus;
+  /** Product card state, supplied independently from the observed agent turn. */
+  cardState?: PaneCardState;
+  cwd?: string;
+  sessionId?: string;
+  activity?: ReadonlyArray<{ at: number; label: string }>;
   /** Epoch ms when the owned PTY started, when known. */
   startedAt?: number;
   /** Latest evidenced activity label, when known. */
@@ -145,6 +156,7 @@ export interface StudioMessage {
 export interface StudioLayoutControls {
   toggleGrid(): void;
   restore(): void;
+  placeTerminal(id: string, slot: number): void;
 }
 
 export interface StudioDuplicateConfig {
@@ -152,13 +164,14 @@ export interface StudioDuplicateConfig {
   name: string;
   provider: TerminalProvider;
   model: string | null;
+  cwd?: string;
 }
 
 export interface StudioPaneChrome {
   featureName?: string;
   layoutControlsRef?: Ref<StudioLayoutControls>;
   onRename?(terminalId: string): void;
-  onEditAlias?(terminalId: string): void;
+  onRestart?(terminalId: string): void;
   onDuplicateConfig?(draft: StudioDuplicateConfig): void;
 }
 
@@ -166,8 +179,10 @@ interface Props {
   v6?: StudioPaneChrome;
   terminals: StudioTerminal[];
   messages: StudioMessage[];
+  recentMessage?: StudioMessage;
+  endingTerminal?: string;
   renderBody: (terminal: StudioTerminal) => ReactNode;
-  onNewTerminal?: () => void;
+  onNewTerminal?: (slot?: number) => void;
   /** Return `'minimize'` when the host keeps the terminal (hide from view only). */
   onClose?: (id: string) => void | 'minimize';
   onCloseTerminal?: (id: string) => void;
@@ -331,9 +346,10 @@ function validGrid(value: unknown): ArrangementState['grid'] {
 
 function initialState(key: string, terminals: StudioTerminal[], v6: boolean): ArrangementState {
   const stored = loadState(key);
+  const modes: readonly ArrangementMode[] = v6 ? studioArrangementModes : arrangementModes;
   const base: ArrangementState = {
     ...(v6 ? { template: 'v6' } : {}),
-    mode: arrangementModes.includes(stored?.mode as ArrangementMode)
+    mode: modes.includes(stored?.mode as ArrangementMode)
       ? (stored!.mode as ArrangementMode)
       : 'mosaic',
     panes: Array.isArray(stored?.panes) ? stored.panes : [],
@@ -394,10 +410,12 @@ interface Drag {
   dy: number;
 }
 
-export function TerminalStudio({
+export function FeatureStudioStage({
   v6,
   terminals,
   messages,
+  recentMessage,
+  endingTerminal,
   renderBody,
   onNewTerminal,
   onClose,
@@ -421,15 +439,38 @@ export function TerminalStudio({
   emptyHint,
 }: Props) {
   const { t } = useTranslation();
-  const paneText = useStudioPaneText();
   const canonical = v6 !== undefined;
   const MaximizeIcon = canonical ? Square : Maximize2;
   const RestoreIcon = canonical ? SquareStack : Minimize2;
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
-  const [composer, setComposer] = useState<{ from: string | null } | null>(null);
+  const [composer, setComposer] = useState<{ from: string | null; recipient?: string } | null>(
+    null,
+  );
+  const [closeTarget, setCloseTarget] = useState<StudioTerminal>();
+  const [restartTarget, setRestartTarget] = useState<StudioTerminal>();
+  const [closedEnded, setClosedEnded] = useState(() => {
+    const saved = loadState(storageKey)?.closedEnded;
+    return new Set(Array.isArray(saved) ? saved.filter((id) => typeof id === 'string') : []);
+  });
   const [details, setDetails] = useState<string | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
+  useEffect(() => {
+    const reopened = terminals.filter(
+      ({ id, cardState }) =>
+        closedEnded.has(id) &&
+        (cardState === 'starting' ||
+          cardState === 'ready' ||
+          cardState === 'running' ||
+          cardState === 'waiting_for_user'),
+    );
+    if (reopened.length)
+      setClosedEnded((current) => {
+        const next = new Set(current);
+        reopened.forEach(({ id }) => next.delete(id));
+        return next;
+      });
+  }, [terminals, closedEnded]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [moveTargets, setMoveTargets] = useState<Record<string, string>>({});
   const supported = useMemo(
@@ -448,7 +489,9 @@ export function TerminalStudio({
     [localState, orchestratorLabel],
   );
   const [stack, setStack] = useState<string[]>([]);
-  const [activePane, setActivePane] = useState<string>();
+  const [activePane, setActivePane] = useState<string | undefined>(
+    () => loadState(storageKey)?.active ?? undefined,
+  );
   useImperativeHandle(
     v6?.layoutControlsRef,
     () => ({
@@ -463,6 +506,14 @@ export function TerminalStudio({
         setState(restoreStudioLayout);
         setStack([]);
       },
+      placeTerminal: (id, slot) =>
+        setState((current) =>
+          dockStudioPane(
+            current.panes.some((pane) => pane.id === id) ? current : addPane(current, id),
+            id,
+            slot,
+          ),
+        ),
     }),
     [],
   );
@@ -494,7 +545,7 @@ export function TerminalStudio({
   const nativeActiveId = terminals.find((terminal) => terminal.active)?.id;
   const nativeHidden = useRef(new Set<string>());
   useEffect(() => {
-    if (canonical) setActivePane(nativeActiveId);
+    if (canonical && nativeActiveId) setActivePane(nativeActiveId);
   }, [canonical, nativeActiveId]);
   useEffect(() => {
     if (!canonical) return;
@@ -512,9 +563,9 @@ export function TerminalStudio({
       setState(initialState(storageKey, terminals, canonical));
       return;
     }
-    saveState(storageKey, localState);
+    saveState(storageKey, { ...localState, active: activePane, closedEnded: [...closedEnded] });
     // terminals is read only when the key changes; reconcile handles later changes.
-  }, [storageKey, localState]);
+  }, [storageKey, localState, activePane, closedEnded]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -536,12 +587,15 @@ export function TerminalStudio({
     if (fresh.length === 0) return;
     fresh.forEach((message) => seen.current.add(message.id));
     setActive((current) => [...current, ...fresh].slice(-MAX_ACTIVE));
-    const timer = window.setTimeout(() => {
-      timers.current.delete(timer);
-      setActive((current) => current.filter((message) => !fresh.includes(message)));
-    }, LINK_MS);
+    const timer = window.setTimeout(
+      () => {
+        timers.current.delete(timer);
+        setActive((current) => current.filter((message) => !fresh.includes(message)));
+      },
+      canonical ? 1350 : LINK_MS,
+    );
     timers.current.add(timer);
-  }, [messages]);
+  }, [canonical, messages]);
   useEffect(() => {
     const pending = timers.current;
     return () => pending.forEach((timer) => window.clearTimeout(timer));
@@ -619,29 +673,41 @@ export function TerminalStudio({
     [terminals],
   );
   // The workspace filter only changes the view; it never minimizes or stops anything.
+  const viewState = useMemo(
+    () => ({
+      ...state,
+      panes: state.panes.filter((pane) => !closedEnded.has(pane.id)),
+      maximized: state.maximized && !closedEnded.has(state.maximized) ? state.maximized : null,
+    }),
+    [state, closedEnded],
+  );
   const scoped = useMemo<ArrangementState>(
     () =>
       scope === 'all'
-        ? state
+        ? viewState
         : {
-            ...state,
+            ...viewState,
             maximized:
-              state.maximized && inScope(byId.get(state.maximized)) ? state.maximized : null,
-            panes: state.panes.map((pane) =>
+              viewState.maximized && inScope(byId.get(viewState.maximized))
+                ? viewState.maximized
+                : null,
+            panes: viewState.panes.map((pane) =>
               inScope(byId.get(pane.id)) ? pane : { ...pane, minimized: true },
             ),
           },
-    [state, scope, byId],
+    [viewState, scope, byId],
   );
   const placed = useMemo(() => arrange(scoped, view, stack), [scoped, view, stack]);
   const dockGeometry = studioDockedMode(scoped) ? studioDockGeometry(scoped, view) : undefined;
   const wireMode = placed.some((pane) => pane.floating) ? 'free' : scoped.mode;
   const placedById = useMemo(() => new Map(placed.map((pane) => [pane.id, pane])), [placed]);
-  const minimized = state.panes
+  const minimized = viewState.panes
     .filter((pane) => pane.minimized && inScope(byId.get(pane.id)))
     .sort((a, b) => a.order - b.order);
   const visibleCount = visiblePanes(scoped).length;
-  const scopedTotal = terminals.filter(inScope).length;
+  const scopedTotal = terminals.filter(
+    (terminal) => inScope(terminal) && !closedEnded.has(terminal.id),
+  ).length;
 
   const reveal = (id: string) => {
     const terminal = byId.get(id);
@@ -659,7 +725,13 @@ export function TerminalStudio({
       1600,
     );
   };
-  const receiving = new Set(active.map((message) => message.to));
+  const receiving = new Set(
+    active
+      .filter(
+        (message) => !canonical || (placedById.has(message.from) && placedById.has(message.to)),
+      )
+      .map((message) => message.to),
+  );
   const sending = new Set(active.map((message) => message.from));
 
   const bringToFront = useCallback((id: string) => {
@@ -669,13 +741,22 @@ export function TerminalStudio({
   const setMode = (mode: ArrangementMode) =>
     setState((current) => ({ ...current, mode, maximized: null }));
 
+  const togglePaneMaximized = (id: string) => {
+    stageRef.current?.scrollTo(0, 0);
+    setState((current) =>
+      current.mode === 'focus'
+        ? { ...current, mode: 'mosaic', maximized: null }
+        : toggleMaximize(current, id),
+    );
+  };
+
   const startDrag = (
     event: React.PointerEvent,
     pane: PlacedPane,
     kind: Drag['kind'],
     edge?: Edge,
   ) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || state.maximized || state.mode === 'focus') return;
     if ((event.target as HTMLElement).closest('button')) return;
     event.preventDefault();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -709,8 +790,12 @@ export function TerminalStudio({
       const rect =
         kind === 'move'
           ? { ...origin, x: origin.x + dx, y: origin.y + dy }
-          : resizeFromEdge(origin, edge ?? 'se', dx, dy);
-      setState((current) => updatePane(current, id, { free: containRect(rect, view) }));
+          : resizeFromEdge(origin, edge ?? 'se', dx, dy, canonical ? STUDIO_FLOAT_MIN : undefined);
+      setState((current) =>
+        updatePane(current, id, {
+          free: containRect(rect, view, canonical ? STUDIO_FLOAT_MIN : undefined),
+        }),
+      );
       return;
     }
     const stage = stageRef.current;
@@ -741,7 +826,17 @@ export function TerminalStudio({
             { ...drag.origin, x: drag.origin.x + drag.dx, y: drag.origin.y + drag.dy },
             view,
           )
-        : containRect(resizeFromEdge(drag.origin, drag.edge ?? 'se', drag.dx, drag.dy), view);
+        : containRect(
+            resizeFromEdge(
+              drag.origin,
+              drag.edge ?? 'se',
+              drag.dx,
+              drag.dy,
+              canonical ? STUDIO_FLOAT_MIN : undefined,
+            ),
+            view,
+            canonical ? STUDIO_FLOAT_MIN : undefined,
+          );
     }
     return { ...pane.rect, x: pane.rect.x + drag.dx, y: pane.rect.y + drag.dy };
   };
@@ -796,6 +891,7 @@ export function TerminalStudio({
 
   // Mosaic: drag the borders between terminals to resize columns and rows.
   const trackHandles = (() => {
+    if (scoped.panes.length === 0) return null;
     if ((!dockGeometry && (scoped.mode !== 'mosaic' || placed.length < 2)) || scoped.maximized)
       return null;
     const g =
@@ -828,7 +924,10 @@ export function TerminalStudio({
       const back = axis === 'cols' ? 'ArrowLeft' : 'ArrowUp';
       const forward = axis === 'cols' ? 'ArrowRight' : 'ArrowDown';
       const delta = event.key === back ? -step : event.key === forward ? step : 0;
-      if (delta) setState((current) => resizeTrack(current, view, axis, index, delta));
+      if (delta) {
+        event.preventDefault();
+        setState((current) => resizeTrack(current, view, axis, index, delta));
+      }
     };
     for (let c = 0; c < g.colW.length - 1; c++)
       for (let r = 0; r < (dockGeometry ? 1 : g.rowH.length); r++) {
@@ -969,7 +1068,9 @@ export function TerminalStudio({
       const hole = stage.querySelector<HTMLElement>(
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
       );
-      const box = hole?.getBoundingClientRect();
+      const box = hole?.hasAttribute('data-native-suspended')
+        ? undefined
+        : hole?.getBoundingClientRect();
       // Tiled modes may not overlap natively, and a null rect revokes the view (and its
       // pending opening). Keep the dragged view at its last sent place until it drops.
       if (
@@ -988,27 +1089,30 @@ export function TerminalStudio({
       const occluded =
         box &&
         front.some((item) => item.z > z && item.chrome.some((chrome) => intersects(box, chrome)));
-      const outside =
-        canonical &&
-        box &&
-        (box.left < stageBox.left ||
-          box.top < stageBox.top ||
-          box.right > stageBox.right + 0.05 ||
-          box.bottom > stageBox.bottom + 0.05);
+      // Keep the host's versioned header and stage insets when the grid scrolls.
+      const left = box && Math.max(box.left, canonical ? stageBox.left : box.left);
+      const top = box && Math.max(box.top, canonical ? stageBox.top + 31 : box.top);
+      const right =
+        box && Math.min(box.right, canonical ? stageBox.left + stage.clientWidth : box.right);
+      const bottom =
+        box && Math.min(box.bottom, canonical ? stageBox.top + stage.clientHeight : box.bottom);
       const rect =
         covered ||
         !box ||
-        box.width < 1 ||
-        box.height < 1 ||
-        outside ||
+        left === undefined ||
+        top === undefined ||
+        right === undefined ||
+        bottom === undefined ||
+        right - left < 1 ||
+        bottom - top < 1 ||
         occluded ||
         overlays.some((overlay) => intersects(box, overlay))
           ? null
           : {
-              x: box.left - origin.left,
-              y: box.top - origin.top,
-              width: box.width,
-              height: box.height,
+              x: left - origin.left,
+              y: top - origin.top,
+              width: right - left,
+              height: bottom - top,
             };
       if (rect) lastRects.current.set(pane.id, rect);
       return { id: pane.id, z, rect };
@@ -1040,6 +1144,12 @@ export function TerminalStudio({
   const offscreen = active.filter(
     (message) => style === 'focus' || !placedById.has(message.from) || !placedById.has(message.to),
   );
+  const latestMessage =
+    canonical && recentMessage && byId.has(recentMessage.from) && byId.has(recentMessage.to)
+      ? recentMessage
+      : undefined;
+  const displayAlias = (id: string) =>
+    (byId.get(id)?.alias ?? byId.get(id)?.label ?? '—').replace(/^@/, '');
   const flowFor = (id: string) => ({
     outgoing: active.findLast((message) => message.from === id),
     incoming: active.findLast((message) => message.to === id),
@@ -1102,7 +1212,7 @@ export function TerminalStudio({
         )}
         {toolbarEnd}
         {!canonical && onNewTerminal && (
-          <button type="button" className="ts-primary" onClick={onNewTerminal}>
+          <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
             <Plus size={15} />
             {t('terminalStudio.newTerminal')}
           </button>
@@ -1154,14 +1264,14 @@ export function TerminalStudio({
         onPointerCancel={() => setDrag(null)}
         onScroll={native ? () => setOverlayTick((tick) => tick + 1) : undefined}
       >
-        {terminals.length === 0 && (
+        {viewState.panes.length === 0 && (
           <div className="ts-empty">
-            <p>{t('terminalStudio.empty')}</p>
+            <p>{t(canonical ? 'studio.pane.emptyFeature' : 'terminalStudio.empty')}</p>
             {emptyHint}
             {onNewTerminal && (
-              <button type="button" className="ts-primary" onClick={onNewTerminal}>
-                <Plus size={15} />
-                {t('terminalStudio.newTerminal')}
+              <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
+                {!canonical && <Plus size={15} />}
+                {t(canonical ? 'feature.addTerminal' : 'terminalStudio.newTerminal')}
               </button>
             )}
           </div>
@@ -1177,12 +1287,15 @@ export function TerminalStudio({
 
         {dockGeometry &&
           !scoped.maximized &&
-          terminals.length > 0 &&
+          scoped.panes.length > 0 &&
           dockGeometry.slots.map((rect, slot) =>
             placed.some((pane) => !pane.floating && pane.z === slot) ? null : (
-              <div
+              <button
+                type="button"
                 key={slot}
                 className="ts-dock-slot"
+                disabled={!onNewTerminal}
+                onClick={() => onNewTerminal?.(slot)}
                 style={{
                   left: rect.x,
                   top: rect.y,
@@ -1190,8 +1303,8 @@ export function TerminalStudio({
                   height: rect.height,
                 }}
               >
-                {paneText('studio.pane.emptySlot')}
-              </div>
+                {t('studio.pane.emptySlot')}
+              </button>
             ),
           )}
         {placed.map((pane) => {
@@ -1221,7 +1334,7 @@ export function TerminalStudio({
             .filter(Boolean)
             .join(' ');
           return (
-            <article
+            <PaneCard
               key={pane.id}
               className={classes}
               style={{
@@ -1237,57 +1350,46 @@ export function TerminalStudio({
                 if (state.mode === 'free' || pane.floating) bringToFront(pane.id);
                 if (canonical) setActivePane(pane.id);
               }}
-            >
-              <div
-                className="ts-head"
-                onPointerDown={(event) => startDrag(event, pane, 'move')}
-                onDoubleClick={() => setState((current) => toggleMaximize(current, pane.id))}
-                title={t('terminalStudio.dragHint')}
-              >
-                <StatusIcon status={terminal.status} />
-                <span className="ts-cli">{t(`terminalStudio.providers.${terminal.provider}`)}</span>
-                {state.orchestrator === pane.id && (
-                  <span className="ts-role" title={t('terminalStudio.orchestratorHint')}>
-                    <Crown size={11} strokeWidth={2.25} aria-hidden="true" />
-                    {t('terminalStudio.orchestrator')}
-                  </span>
-                )}
-                {canonical && terminal.alias && (
-                  <span className="ts-alias" title={terminal.alias}>
-                    @{terminal.alias.replace(/^@/, '')}
-                  </span>
-                )}
-                <span className="ts-label">{terminal.label}</span>
-                {(canonical ||
-                  terminal.name !== t(`terminalStudio.providers.${terminal.provider}`)) && (
-                  <span className="ts-name">{terminal.name}</span>
-                )}
-                {workspaces.length > 1 && (
-                  <span className="ts-ws" title={terminal.workspace.name}>
-                    <span className="ts-ws-dot" aria-hidden="true" />
-                    {terminal.workspace.name}
-                  </span>
-                )}
-                <FlowBadge {...flowFor(pane.id)} labelOf={(id) => byId.get(id)?.label ?? '?'} />
-                {!canonical && (
-                  <span className="ts-meta">
-                    {terminal.model !== undefined && (
-                      <span>{terminal.model ?? t('terminalStudio.defaultModel')}</span>
-                    )}
-                    {time !== undefined && (
-                      <span className="ts-time" title={t('terminalStudio.processTime')}>
-                        {time}
+              terminal={terminal}
+              state={terminal.cardState}
+              canonical={canonical}
+              orchestrator={state.orchestrator === pane.id}
+              statusIcon={<StatusIcon status={terminal.status} />}
+              onHeaderPointerDown={(event) => startDrag(event, pane, 'move')}
+              onHeaderDoubleClick={() => togglePaneMaximized(pane.id)}
+              legacyMetadata={
+                !canonical && (
+                  <>
+                    {workspaces.length > 1 && (
+                      <span className="ts-ws" title={terminal.workspace.name}>
+                        <span className="ts-ws-dot" aria-hidden="true" />
+                        {terminal.workspace.name}
                       </span>
                     )}
-                  </span>
-                )}
-                {pane.compact && (
-                  <span className="ts-compact-activity">
-                    {unassignedMove
-                      ? t('terminalStudio.unassigned.notice')
-                      : (terminal.lastActivity ?? t('terminalStudio.noActivity'))}
-                  </span>
-                )}
+                    <FlowBadge {...flowFor(pane.id)} labelOf={(id) => byId.get(id)?.label ?? '?'} />
+                    {!canonical && (
+                      <span className="ts-meta">
+                        {terminal.model !== undefined && (
+                          <span>{terminal.model ?? t('terminalStudio.defaultModel')}</span>
+                        )}
+                        {time !== undefined && (
+                          <span className="ts-time" title={t('terminalStudio.processTime')}>
+                            {time}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {pane.compact && (
+                      <span className="ts-compact-activity">
+                        {unassignedMove
+                          ? t('terminalStudio.unassigned.notice')
+                          : (terminal.lastActivity ?? t('terminalStudio.noActivity'))}
+                      </span>
+                    )}
+                  </>
+                )
+              }
+              actions={
                 <span className="ts-actions">
                   {pane.compact && unassignedMove && unassignedMove.targets[0] && (
                     <button
@@ -1373,14 +1475,14 @@ export function TerminalStudio({
                   >
                     <Minus size={14} />
                   </button>
-                  {state.mode !== 'focus' && (
+                  {(canonical || state.mode !== 'focus') && (
                     <button
                       type="button"
                       title={isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')}
                       aria-label={
                         isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')
                       }
-                      onClick={() => setState((current) => toggleMaximize(current, pane.id))}
+                      onClick={() => togglePaneMaximized(pane.id)}
                     >
                       {isMax ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
                     </button>
@@ -1390,22 +1492,21 @@ export function TerminalStudio({
                     v6={
                       v6 && {
                         onRename: v6.onRename ? () => v6.onRename!(pane.id) : undefined,
-                        onEditAlias: v6.onEditAlias ? () => v6.onEditAlias!(pane.id) : undefined,
                         onDuplicate:
                           v6.onDuplicateConfig && terminal.model !== undefined
                             ? () =>
                                 v6.onDuplicateConfig!({
                                   sourceTerminalId: terminal.id,
-                                  name: terminal.name,
+                                  name: `${terminal.name} 2`,
                                   provider: terminal.provider,
                                   model: terminal.model!,
+                                  ...(terminal.cwd ? { cwd: terminal.cwd } : {}),
                                 })
                             : undefined,
                         onHide: () => setState((current) => minimize(current, pane.id)),
-                        onMention:
-                          onMention && terminals.length > 1
-                            ? () => setComposer({ from: pane.id })
-                            : undefined,
+                        onMention: onMention
+                          ? () => setComposer({ from: null, recipient: terminal.label })
+                          : undefined,
                         onRole: onOrchestratorChange
                           ? () =>
                               onOrchestratorChange(state.orchestrator === pane.id ? null : pane.id)
@@ -1428,7 +1529,21 @@ export function TerminalStudio({
                                 maximized: null,
                               }))
                           : undefined,
-                        canDock: state.panes.filter((item) => !item.floating).length < 4,
+                        onRestart:
+                          v6.onRestart && !closePending
+                            ? () => {
+                                if (
+                                  terminal.cardState === 'ended' ||
+                                  terminal.cardState === 'failed'
+                                )
+                                  v6.onRestart?.(pane.id);
+                                else setRestartTarget(terminal);
+                              }
+                            : undefined,
+                        onTerminate:
+                          onCloseTerminal && !closePending && terminal.cardState !== 'ended'
+                            ? () => onCloseTerminal(pane.id)
+                            : undefined,
                         mode: state.mode,
                         onLayoutMode: setMode,
                       }
@@ -1443,7 +1558,7 @@ export function TerminalStudio({
                         ? setDetails(pane.id)
                         : onTerminalAction?.(pane.id, action)
                     }
-                    onToggleMaximize={() => setState((current) => toggleMaximize(current, pane.id))}
+                    onToggleMaximize={() => togglePaneMaximized(pane.id)}
                     onTogglePin={() => setState((current) => togglePin(current, pane.id))}
                     onFullScreen={
                       native
@@ -1454,7 +1569,7 @@ export function TerminalStudio({
                           }
                     }
                   />
-                  {(onCloseTerminal || (onClose && !(canonical && native))) && (
+                  {(canonical || onClose) && (
                     <button
                       type="button"
                       className="ts-close"
@@ -1462,9 +1577,14 @@ export function TerminalStudio({
                       aria-label={t('terminalStudio.closeTerminal.label', {
                         terminal: terminal.label,
                       })}
-                      disabled={closePending}
+                      disabled={closePending || !(onCloseTerminal || onClose)}
                       onClick={() => {
-                        if (onCloseTerminal) return onCloseTerminal(pane.id);
+                        if (onCloseTerminal) {
+                          if (terminal.cardState === 'ended')
+                            setClosedEnded((current) => new Set([...current, pane.id]));
+                          else setCloseTarget(terminal);
+                          return;
+                        }
                         if (onClose?.(pane.id) === 'minimize')
                           setState((current) => minimize(current, pane.id));
                         else setState((current) => removePane(current, pane.id));
@@ -1474,7 +1594,8 @@ export function TerminalStudio({
                     </button>
                   )}
                 </span>
-              </div>
+              }
+            >
               {(() => {
                 const suggestion = accountSuggestions.find(
                   (entry) =>
@@ -1561,8 +1682,27 @@ export function TerminalStudio({
                   );
                 })()}
               {pane.compact ? null : (
-                <div className="ts-body" data-terminal-id={pane.id}>
-                  {renderBody(terminal)}
+                <div
+                  className="ts-body"
+                  data-terminal-id={pane.id}
+                  data-native-suspended={
+                    canonical && terminal.cardState === 'starting' ? '' : undefined
+                  }
+                >
+                  {endingTerminal === terminal.id ? (
+                    <span className="ts-starting" role="status">
+                      {t('studio.pane.ending')}
+                    </span>
+                  ) : canonical && terminal.cardState === 'starting' ? (
+                    <span className="ts-starting" role="status">
+                      <span className="ts-spinner" aria-hidden="true" />
+                      {t('studio.pane.startingCli', {
+                        cli: t(`terminalStudio.providers.${terminal.provider}`),
+                      })}
+                    </span>
+                  ) : (
+                    renderBody(terminal)
+                  )}
                 </div>
               )}
               {(state.mode === 'free' || pane.floating) &&
@@ -1575,7 +1715,7 @@ export function TerminalStudio({
                     onPointerDown={(event) => startDrag(event, pane, 'resize', edge)}
                   />
                 ))}
-            </article>
+            </PaneCard>
           );
         })}
 
@@ -1638,7 +1778,7 @@ export function TerminalStudio({
         )}
       </div>
 
-      {onMention && composer && (
+      {onMention && composer && !canonical && (
         <MentionComposer
           terminals={terminals}
           featureScoped={canonical}
@@ -1650,12 +1790,95 @@ export function TerminalStudio({
         />
       )}
 
+      {onMention && composer?.recipient && canonical && (
+        <Modal
+          label={t('mention.delegate')}
+          className="mc-dialog"
+          initialFocus="textarea"
+          onClose={() => setComposer(null)}
+        >
+          <div data-native-overlay="">
+            <h2>{t('mention.delegate')}</h2>
+            <MentionComposer
+              terminals={terminals}
+              featureScoped
+              initialText={`@${composer.recipient} `}
+              from={composer.from}
+              onFromChange={(from) => setComposer({ ...composer, from })}
+              onSend={onMention}
+              onClose={() => setComposer(null)}
+            />
+          </div>
+        </Modal>
+      )}
+      {restartTarget && byId.has(restartTarget.id) && (
+        <Modal
+          label={t('studio.pane.restartQuestion', { label: restartTarget.label })}
+          className="mc-dialog"
+          onClose={() => setRestartTarget(undefined)}
+        >
+          <div data-native-overlay="">
+            <h2>{t('studio.pane.restartQuestion', { label: restartTarget.label })}</h2>
+            <div className="ts-close-options">
+              <button type="button" onClick={() => setRestartTarget(undefined)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  v6?.onRestart?.(restartTarget.id);
+                  setRestartTarget(undefined);
+                }}
+              >
+                {t('studio.pane.restart')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {closeTarget && byId.has(closeTarget.id) && (
+        <Modal
+          label={t('studio.pane.closeQuestion', { label: closeTarget.label })}
+          className="mc-dialog"
+          onClose={() => setCloseTarget(undefined)}
+        >
+          <div data-native-overlay="">
+            <h2>{t('studio.pane.closeQuestion', { label: closeTarget.label })}</h2>
+            <div className="ts-close-options">
+              <button type="button" onClick={() => setCloseTarget(undefined)}>
+                {t('cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setState((current) => minimize(current, closeTarget.id));
+                  setCloseTarget(undefined);
+                }}
+              >
+                {t('studio.pane.hideView')}
+              </button>
+              <button
+                type="button"
+                className="ts-end-process"
+                onClick={() => {
+                  const id = closeTarget.id;
+                  setCloseTarget(undefined);
+                  onCloseTerminal?.(id);
+                }}
+              >
+                {t('studio.pane.terminate')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       <footer
         className="ts-dock"
-        aria-label={canonical ? paneText('dock.title') : t('terminalStudio.dock')}
+        aria-label={canonical ? t('dock.title') : t('terminalStudio.dock')}
       >
         <span className="ts-dock-title">
-          {canonical ? paneText('dock.title') : t('terminalStudio.minimized')}
+          {canonical ? t('dock.title') : t('terminalStudio.minimized')}
         </span>
         {minimized.map((pane) => {
           const terminal = byId.get(pane.id);
@@ -1669,9 +1892,7 @@ export function TerminalStudio({
                 setState((current) => updatePane(current, pane.id, { minimized: false }))
               }
               title={
-                canonical
-                  ? paneText('dock.restore', { name: terminal.name })
-                  : t('terminalStudio.restore')
+                canonical ? t('dock.restore', { name: terminal.name }) : t('terminalStudio.restore')
               }
             >
               {canonical ? (
@@ -1697,8 +1918,17 @@ export function TerminalStudio({
         )}
         {canonical ? (
           <span className="ts-summary">
-            {paneText('dock.total', { count: scopedTotal })}
-            {v6.featureName ? ` · ${v6.featureName}` : null}
+            {latestMessage ? (
+              t('studio.pane.event', {
+                from: displayAlias(latestMessage.from),
+                to: displayAlias(latestMessage.to),
+              })
+            ) : (
+              <>
+                <span aria-hidden="true">●</span> {t('dock.total', { count: scopedTotal })}
+                {v6.featureName ? ` · ${v6.featureName}` : null}
+              </>
+            )}
           </span>
         ) : (
           <span className="ts-summary">
@@ -1749,18 +1979,19 @@ export function TerminalStudio({
               </div>
             );
           })}
-          {offscreen.map((message) => {
-            const Icon = kindIcons[message.kind];
-            return (
-              <div key={message.id} className={`ts-toast ts-link-${message.kind}`}>
-                <Icon size={13} />
-                <span className="ts-label">{byId.get(message.from)?.label ?? '?'}</span>
-                <span aria-hidden="true">→</span>
-                <span className="ts-label">{byId.get(message.to)?.label ?? '?'}</span>
-                {t(`terminalStudio.messageKind.${message.kind}`)}
-              </div>
-            );
-          })}
+          {!canonical &&
+            offscreen.map((message) => {
+              const Icon = kindIcons[message.kind];
+              return (
+                <div key={message.id} className={`ts-toast ts-link-${message.kind}`}>
+                  <Icon size={13} />
+                  <span className="ts-label">{byId.get(message.from)?.label ?? '?'}</span>
+                  <span aria-hidden="true">→</span>
+                  <span className="ts-label">{byId.get(message.to)?.label ?? '?'}</span>
+                  {t(`terminalStudio.messageKind.${message.kind}`)}
+                </div>
+              );
+            })}
         </div>
         <div className="ts-sr-only" aria-live="polite">
           {active.map((message) => (

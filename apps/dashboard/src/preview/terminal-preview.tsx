@@ -9,12 +9,12 @@ import { useTranslation } from 'react-i18next';
 import '../i18n';
 import '../styles.css';
 import {
-  TerminalStudio,
+  FeatureStudioStage,
   type AccountSuggestion,
   type StudioMessage,
   type StudioTerminal,
   type TerminalProvider,
-} from '../TerminalStudio';
+} from '../FeatureStudioStage';
 import {
   NewTerminalDialog,
   type ProviderCatalog,
@@ -309,7 +309,7 @@ function Preview() {
           </button>
         </span>
       </div>
-      <TerminalStudio
+      <FeatureStudioStage
         storageKey="orqst.preview.terminalStudio"
         terminals={terminals}
         messages={messages}

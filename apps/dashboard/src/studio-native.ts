@@ -5,7 +5,7 @@ import type {
 } from '@orqst/protocol';
 import type { WorkspacePane } from './feature-workspace-dock.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
-import type { StudioTerminal } from './TerminalStudio.js';
+import type { StudioTerminal } from './FeatureStudioStage.js';
 
 /** Evidence older than this is not shown (matches the canvas projection). */
 const EVIDENCE_MS = 10_000;
@@ -39,7 +39,7 @@ export function studioTerminals(
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
       const fallback = {
         codex: 'Codex',
-        claude: 'Claude Code',
+        claude: 'Claude',
         opencode: 'OpenCode',
         antigravity: 'Antigravity',
       }[slot.provider];
@@ -61,6 +61,20 @@ export function studioTerminals(
         ...(slot.selectedModel === undefined ? {} : { model: slot.selectedModel }),
         // Agent state only from evidenced turns (owned Claude today); never from the process.
         status: entry?.agentState ?? 'unknown',
+        cardState:
+          entry?.state === 'exited'
+            ? 'ended'
+            : entry?.agentState === 'waiting_for_user'
+              ? 'waiting_for_user'
+              : entry?.agentState === 'failed'
+                ? 'failed'
+                : entry?.agentState === 'running'
+                  ? 'running'
+                  : entry?.state === 'running'
+                    ? 'ready'
+                    : 'unknown',
+        ...(entry?.session ? { sessionId: entry.session.sessionId } : {}),
+        ...(entry?.activities ? { activity: entry.activities } : {}),
         ...(entry?.startedAt !== undefined && entry.state === 'running'
           ? { startedAt: entry.startedAt }
           : {}),

@@ -18,7 +18,7 @@ const bundled = await build({
   stdin: {
     contents: `
       import React from 'react'; import { createRoot } from 'react-dom/client';
-      import { StudioWorkspace } from './StudioWorkspace.tsx'; import { Studio } from './Studio.tsx';
+      import { FeatureStudio } from './FeatureStudio.tsx';
       import { createTauriStudioClient } from '../../tauri/src/studio-bridge.ts'; import i18n from './i18n.ts';
       if (window.syntheticMode === 'tauri') {
         Object.defineProperty(window, 'orqstTauriStudio', { value:createTauriStudioClient(window.syntheticStudioRequest,()=>navigator.userActivation.isActive) });
@@ -26,8 +26,8 @@ const bundled = await build({
       } else Object.defineProperty(window,'orqstStudio',{value:{contractVersion:1,request:window.syntheticStudioRequest}});
       await i18n.changeLanguage(navigator.language);
       createRoot(document.getElementById('root')).render(window.syntheticMode==='tauri'
-        ? React.createElement(StudioWorkspace,{onOverview:()=>{},workspaces:[{id:'synthetic-workspace',name:'SYNTHETIC project'}],workspaceId:'synthetic-workspace'})
-        : React.createElement(Studio));
+        ? React.createElement(FeatureStudio,{workspaces:[{id:'synthetic-workspace',name:'SYNTHETIC project'}],workspaceId:'synthetic-workspace'})
+        : React.createElement(FeatureStudio));
     `,
     resolveDir: resolve('apps/dashboard/src'),
     sourcefile: 'synthetic-studio.tsx',

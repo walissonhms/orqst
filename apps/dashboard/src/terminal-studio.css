@@ -1141,3 +1141,153 @@
 .ts-v6 .ts-dock .ts-toasts:empty {
   display: none;
 }
+
+.ts-v6 .ts-stage {
+  overflow: auto;
+}
+
+.ts-v6 .ts-cli {
+  color: #a17bff;
+}
+
+.ts-v6 .ts-pane.ts-orchestrator {
+  border-top: 2px solid #a17bff;
+}
+
+.ts-status-dot {
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ts-status-color, #818095);
+}
+
+.ts-status-dot-running,
+.ts-status-dot-ready {
+  --ts-status-color: #63d9a6;
+}
+
+.ts-status-dot-waiting_for_user {
+  --ts-status-color: #e9b95e;
+}
+
+.ts-status-dot-failed {
+  --ts-status-color: #f48297;
+}
+
+.ts-status-dot-starting,
+.ts-v6 .ts-receiving .ts-status-dot {
+  background: #a17bff;
+}
+
+.ts-card-model,
+.ts-card-tokens {
+  color: #a29ab7;
+  font: 10px var(--orqst-font-mono, monospace);
+  white-space: nowrap;
+}
+
+.ts-card-model {
+  max-width: 16ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ts-v6 button.ts-dock-slot {
+  pointer-events: auto;
+  background: transparent;
+  font: inherit;
+}
+
+.ts-v6 button.ts-dock-slot:enabled:hover {
+  color: #dedde9;
+  border-color: #a17bff;
+}
+
+.ts-starting {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+}
+
+.ts-close-options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ts-end-process {
+  color: #ff9bab;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-v6 .ts-links,
+  .ts-v6 .ts-flight {
+    display: none;
+  }
+}
+
+.ts-v6 .ts-link-line {
+  stroke: #a17bff;
+  stroke-dasharray: 7 5;
+  animation: ts-delegation-travel 0.45s linear 3;
+}
+
+.ts-v6 .ts-link-glow,
+.ts-v6 .ts-flight {
+  display: none;
+}
+
+.ts-v6 .ts-receiving .ts-status-dot {
+  animation: ts-delegation-pulse 0.45s ease-in-out 3;
+}
+
+@keyframes ts-delegation-travel {
+  from {
+    stroke-dashoffset: 12;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes ts-delegation-pulse {
+  50% {
+    box-shadow: 0 0 0 3px #a17bff66;
+  }
+}
+
+.ts-details-drawer {
+  margin-inline-start: auto;
+  margin-inline-end: 0;
+  align-self: stretch;
+}
+
+:root[data-motion='reduced'] .ts-v6 .ts-links {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-v6 .ts-receiving .ts-status-dot {
+    animation: none;
+    background: var(--ts-status-color, #818095);
+  }
+}
+
+:root[data-motion='reduced'] .ts-v6 .ts-receiving .ts-status-dot {
+  animation: none;
+  background: var(--ts-status-color, #818095);
+}
+
+.ts-pane-edit-form label {
+  display: grid;
+  gap: 6px;
+  margin-block-end: 12px;
+}
+
+.ts-pane-edit-form input {
+  width: 100%;
+}

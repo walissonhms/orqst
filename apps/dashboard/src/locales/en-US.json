@@ -1170,11 +1170,37 @@
       "float": "Make floating",
       "dock": "Dock in grid",
       "gridFull": "The grid has no free position",
-      "hide": "Minimize pane",
+      "hide": "Minimize",
       "maximize": "Maximize / restore",
       "duplicateConfig": "Duplicate configuration",
-      "layouts": "Arrangements",
-      "emptySlot": "＋ Free position"
+      "layouts": "Layout",
+      "emptySlot": "＋ Free position",
+      "pilot": "PILOT",
+      "sendMessage": "Send message…",
+      "restart": "Restart",
+      "restartQuestion": "Restart {{label}}?",
+      "details": "Details and logs",
+      "terminate": "End process",
+      "closeQuestion": "Close {{label}}?",
+      "hideView": "Hide",
+      "emptyFeature": "No terminals in this Feature",
+      "ending": "Ending…",
+      "startingCli": "Starting {{cli}}…",
+      "session": "Session ID",
+      "cwd": "Working directory",
+      "timeline": "Timeline",
+      "event": "↗ @{{from}} → @{{to}} · delivered",
+      "terminalCount": "● {{count}} terminals · {{feature}}",
+      "state": {
+        "starting": "Starting",
+        "ready": "Ready",
+        "running": "Running",
+        "waiting_for_user": "Waiting for you",
+        "unknown": "Unknown",
+        "failed": "Failed",
+        "disconnected": "Disconnected",
+        "ended": "Ended"
+      }
     }
   },
   "tauriPreparation": {
@@ -1509,7 +1535,7 @@
     "announce": "{{from}} to {{to}}: {{kind}}",
     "providers": {
       "codex": "Codex",
-      "claude": "Claude Code",
+      "claude": "Claude",
       "opencode": "OpenCode",
       "antigravity": "Antigravity",
       "shell": "Shell"

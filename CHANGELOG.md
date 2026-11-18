@@ -1,5 +1,12 @@
 # Changelog
 
+## Feature Studio pane controls — 2026-11-18
+
+Consolidated the Studio and Canvas routes into one Feature Studio. React owns
+pane chrome and the minimized dock. The stage grows to accommodate more than
+four docked panes. Embedded terminal documents retain the native PTY and its
+existing ownership checks.
+
 ## V6 Studio integration — 2026-11-18
 
 The Studio combines the persistent Workspace and Feature tree, a single action

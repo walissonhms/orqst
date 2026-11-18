@@ -20,13 +20,13 @@ const bundled = await build({
     contents: `
       import React from 'react';
       import { createRoot } from 'react-dom/client';
-      import { FeatureWorkspace } from './FeatureWorkspace.tsx';
+      import { FeatureStudio } from './FeatureStudio.tsx';
       import i18n from './i18n.ts';
       Object.defineProperty(window, 'orqstFeatures', {
         value: { contractVersion: 1, request: window.syntheticFeatureRequest },
       });
       await i18n.changeLanguage(navigator.language);
-      createRoot(document.getElementById('root')).render(React.createElement(FeatureWorkspace));
+      createRoot(document.getElementById('root')).render(React.createElement(FeatureStudio));
     `,
     resolveDir: resolve('apps/dashboard/src'),
     sourcefile: 'synthetic-feature-editor.tsx',

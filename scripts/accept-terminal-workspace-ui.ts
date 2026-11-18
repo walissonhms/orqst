@@ -19,13 +19,13 @@ const bundle = await build({
   stdin: {
     contents: `import React from 'react';
       import { createRoot } from 'react-dom/client';
-      import { FeatureWorkspace } from './FeatureWorkspace.tsx';
+      import { FeatureStudio } from './FeatureStudio.tsx';
       import i18n from './i18n.ts';
       window.orqstFeatures = { contractVersion: 1, request: window.syntheticWorkspaceRequest,
         showPreparationDrawer: window.syntheticPreparation };
       window.orqstTerminalDock = { restore: window.syntheticRestore };
       await i18n.changeLanguage(navigator.language);
-      createRoot(document.getElementById('root')).render(React.createElement(FeatureWorkspace, {nativeWorkspace:true}));`,
+      createRoot(document.getElementById('root')).render(React.createElement(FeatureStudio, {nativeWorkspace:true}));`,
     resolveDir: resolve('apps/dashboard/src'),
     sourcefile: 'synthetic-workspace.tsx',
     loader: 'tsx',

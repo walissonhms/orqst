@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   addPane,
   arrange,
+  assignStudioSlots,
+  studioDockGeometry,
   containRect,
   dropIndex,
   dropTarget,
@@ -262,5 +264,31 @@ test('mosaic balances the grid instead of one long row', () => {
     assert.equal(placed.length, n);
     const covered = placed.reduce((sum, pane) => sum + pane.rect.width * pane.rect.height, 0);
     assert.ok(covered > wide.width * wide.height * 0.9, `${n} terminals leave no large holes`);
+  }
+});
+
+test('Studio grows beyond four cards and keeps 320 × 180 cells when the stage scrolls', () => {
+  const state = assignStudioSlots({ ...stateWith(8), template: 'v6' });
+  const compact = { x: 0, y: 0, width: 720, height: 400 };
+  const tiles = arrange(state, compact);
+  assert.equal(tiles.length, 8);
+  assert.ok(
+    tiles.every(({ rect, floating }) => !floating && rect.width >= 320 && rect.height >= 180),
+  );
+  assert.equal(new Set(tiles.map(({ rect }) => rect.y)).size, 3);
+  assert.ok(tiles.some(({ rect }) => rect.y + rect.height > compact.height));
+  const columns = arrange({ ...state, mode: 'columns' }, compact);
+  assert.ok(columns.every(({ rect }) => rect.y === 0 && rect.width >= 320));
+  assert.ok(columns.at(-1)!.rect.x > compact.width);
+});
+
+test('Studio dividers clamp each adjacent track to at least 20 percent and keep the pane minimum', () => {
+  const wide = { x: 0, y: 0, width: 2200, height: 1500 };
+  const state = assignStudioSlots({ ...stateWith(4), template: 'v6' });
+  for (const axis of ['cols', 'rows'] as const) {
+    const resized = resizeTrack(state, wide, axis, 0, 9999);
+    const grid = studioDockGeometry(resized, wide);
+    const [first, second] = axis === 'cols' ? grid.colW : grid.rowH;
+    assert.ok(Math.abs(second! / (first! + second!) - 0.2) < 0.000001);
   }
 });

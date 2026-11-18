@@ -1,7 +1,7 @@
 import { escapeHTML } from './policy.js';
 import { terminalScriptURL, terminalStyleURL } from './terminal-policy.js';
 
-/** Trusted native chrome only. Provider output never supplies labels or markup. */
+/** The Studio embeds the PTY body; standalone legacy documents own their controls. */
 export function terminalDocument(options: {
   language: string;
   slot: number;
@@ -36,7 +36,10 @@ export function terminalDocument(options: {
 <html lang="${escapeHTML(options.language)}">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${text('title')} ${alias} · ${escapeHTML(options.provider)}</title><link rel="stylesheet" href="${terminalStyleURL}"></head>
 <body><main${options.studioChrome ? ' data-chrome="studio"' : ''} data-slot="${options.slot}" data-start-profile="${escapeHTML(options.startProfile)}"${options.operationalOpen ? ' data-operational-open="true"' : ''}>
-<header class="pane-header">
+${
+  options.studioChrome
+    ? ''
+    : `<header class="pane-header">
   <span class="pane-provider">${escapeHTML(options.provider)}</span>
   <span class="pane-identity" title="${identity}">${identity}</span>
   <h1 id="pane-title" data-provider="${escapeHTML(options.provider)}" data-slot-name="${slotName(options.slot)}" title="${alias}" draggable="true">${slotName(options.slot)}</h1>
@@ -79,7 +82,8 @@ export function terminalDocument(options: {
       </details>
     </div>
   </details>
-</header>
+</header>`
+}
 <section class="process-controls" aria-label="${text('processControls')}">
   <div class="action-row">${['start', 'attach', 'input'].map(button).join('')}</div>
   ${options.studioChrome ? '' : `<p id="guidance" class="guidance" ${['blocked', 'start', 'attach', 'input', 'typing', 'exited', 'uncertain', 'gap', 'openingIncomplete'].map((key) => `data-${attribute(key)}="${text(`guide_${key}`)}"`).join(' ')}>${text(options.blocker ? 'guide_blocked' : 'guide_start')}</p>`}

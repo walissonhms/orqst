@@ -65,8 +65,7 @@ import {
 } from './navigation';
 import { findNotificationSource, NativeSessionNavigation } from './native-session-navigation';
 import { Agents } from './Agents';
-import { Studio } from './Studio';
-import { StudioWorkspace } from './StudioWorkspace';
+import { FeatureStudio } from './FeatureStudio';
 import { Workspaces } from './Workspaces';
 import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
@@ -1471,7 +1470,7 @@ export function App() {
                   openSearch: () => setPaletteOpen(true),
                 }}
               >
-                <StudioWorkspace
+                <FeatureStudio
                   preparationRequest={preparationRequest}
                   onPreparationHandled={() => setPreparationRequest(undefined)}
                   navigation={
@@ -1505,7 +1504,7 @@ export function App() {
                 />
               </StudioShellContext.Provider>
             ) : (
-              <Studio />
+              <FeatureStudio />
             )
           ) : view === 'settings' ? (
             <Settings

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AtSign, Loader2, Send, TriangleAlert, X } from 'lucide-react';
 import { Modal } from './Modal';
-import type { StudioTerminal } from './TerminalStudio';
+import type { StudioTerminal } from './FeatureStudioStage';
 
 /** Delivery is separate from task execution: accepted never means done. */
 export type DeliveryState =
@@ -17,6 +17,7 @@ export interface MentionSend {
 }
 
 interface Props {
+  initialText?: string;
   terminals: StudioTerminal[];
   /** Reject the whole draft if any mention is ambiguous, outside scope or self-addressed. */
   featureScoped?: boolean;
@@ -71,6 +72,7 @@ function currentQuery(text: string, caret: number): Query | undefined {
 
 export function MentionComposer({
   terminals,
+  initialText = '',
   featureScoped = false,
   from,
   onFromChange,
@@ -82,7 +84,7 @@ export function MentionComposer({
   const input = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const sending = useRef(false);
-  const [text, setText] = useState('');
+  const [text, setText] = useState(initialText);
   const [query, setQuery] = useState<Query>();
   const [highlight, setHighlight] = useState(0);
   const [state, setState] = useState<DeliveryState | 'sending' | undefined>();

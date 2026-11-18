@@ -164,7 +164,7 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
         import { createRoot } from 'react-dom/client';
         import { createInstance } from 'i18next';
         import { I18nextProvider } from 'react-i18next';
-        import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
+        import { FeatureStudio } from './src/FeatureStudio.tsx';
         import './src/feature-shell.css';
         import en from './src/locales/en-US.json';
         window.startFixture = async (snapshot) => {
@@ -190,7 +190,7 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
           const i18n = createInstance();
           await i18n.init({ lng: 'en-US', resources: { 'en-US': { translation: en } } });
           createRoot(document.getElementById('root')).render(
-            <I18nextProvider i18n={i18n}><FeatureWorkspace nativeWorkspace /></I18nextProvider>,
+            <I18nextProvider i18n={i18n}><FeatureStudio nativeWorkspace /></I18nextProvider>,
           );
         };
       `,
@@ -376,7 +376,7 @@ test('V6 pane controls preserve document IDs and publish bounded Feature geometr
         import { createRoot } from 'react-dom/client';
         import { createInstance } from 'i18next';
         import { I18nextProvider } from 'react-i18next';
-        import { TerminalStudio } from './src/TerminalStudio.tsx';
+        import { FeatureStudioStage } from './src/FeatureStudioStage.tsx';
         import { arrangeRequest, nativeChrome } from './src/studio-native.ts';
         import en from './src/locales/en-US.json';
         import pt from './src/locales/pt-BR.json';
@@ -397,7 +397,7 @@ test('V6 pane controls preserve document IDs and publish bounded Feature geometr
                 <p>{snapshot.workspace.name}</p>
                 <p>{snapshot.features[0].name}</p>
               </aside>
-              <TerminalStudio
+              <FeatureStudioStage
                 v6={{
                   featureName:snapshot.features[0].name,
                   layoutControlsRef:controls,
@@ -552,7 +552,7 @@ test('V6 pane controls preserve document IDs and publish bounded Feature geometr
           .panes.some(({ visible }) => !visible),
       );
       await capture('06-pane-menu');
-      await menu().getByRole('menuitem', { name: 'Configurações / renomear' }).click();
+      await menu().getByRole('menuitem', { name: 'Detalhes e logs' }).click();
       await page.getByRole('dialog').waitFor();
       assert.ok((await page.getByRole('dialog').textContent())?.includes('test-1'));
       await capture('07-pane-details');
@@ -610,15 +610,25 @@ test('V6 pane controls preserve document IDs and publish bounded Feature geometr
       await menu().getByRole('menuitem', { name: 'Duplicar configuração' }).click();
       assert.deepEqual(await page.evaluate(() => Reflect.get(window, 'duplicateDraft')), {
         sourceTerminalId: t1,
-        name: 'Fixture 1',
+        name: 'Fixture 1 2',
         provider: 'codex',
         model: 'gpt-synthetic',
       });
       await openMenu();
-      await menu().getByRole('menuitem', { name: 'Marcar como Orquestrador' }).click();
+      await menu().getByRole('menuitem', { name: 'Definir orquestrador' }).click();
       await first().locator('.ts-role').waitFor();
       await capture('15-role');
       await first().locator('.ts-close').click();
+      const close = page.getByRole('dialog', { name: 'Fechar T-001?' });
+      await close.getByRole('button', { name: 'Ocultar' }).click();
+      assert.equal(await first().count(), 0);
+      assert.equal(
+        await page.evaluate(() => Reflect.get(window, 'reviewedCloseTarget')),
+        undefined,
+      );
+      await page.getByTitle('Restaurar Fixture 1').click();
+      await first().locator('.ts-close').click();
+      await close.getByRole('button', { name: 'Encerrar processo' }).click();
       assert.equal(await page.evaluate(() => Reflect.get(window, 'reviewedCloseTarget')), t1);
       assert.equal(await first().count(), 1, 'the host still owns native close and confirmation');
       await page.close();

@@ -3,7 +3,7 @@ import { terminalDisplayNameSchema } from '@orqst/protocol';
 import { useTranslation } from 'react-i18next';
 import { Check, Crown, Minus, Plus, Sparkles, X } from 'lucide-react';
 import { Modal } from './Modal';
-import { workspaceHue, type TerminalProvider } from './TerminalStudio';
+import { workspaceHue, type TerminalProvider } from './FeatureStudioStage';
 import './new-terminal-dialog.css';
 
 export interface CatalogModel {

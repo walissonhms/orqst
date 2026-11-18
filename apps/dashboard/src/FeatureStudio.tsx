@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Activity, Bell, Folder, Search, Settings2 } from 'lucide-react';
+import { Activity, Bell, Folder, Search, Settings2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   defaultFeatureId,
   featureDisplayName,
   type FeatureNativeRequest,
+  type FeaturePreparationRequest,
   type FeatureDashboardDestination,
   type FeatureNativeReply,
   type FeatureNativeSnapshot,
@@ -12,14 +13,7 @@ import {
   type WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
-import {
-  dockGeneration,
-  dockPanes,
-  workspacePanes,
-  type DockPane,
-  type WorkspacePane,
-} from './feature-workspace-dock.js';
-import { TerminalWorkspaceBar, type PaneCommand } from './TerminalWorkspaceBar.js';
+import { dockGeneration, workspacePanes, type WorkspacePane } from './feature-workspace-dock.js';
 import {
   featureNoticeAfterSnapshot,
   featureNoticeContext,
@@ -28,13 +22,13 @@ import {
 import { FeaturePermissions } from './FeaturePermissions.js';
 import { StructuredAgents } from './StructuredAgents.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
-import { FeatureCanvas } from './FeatureCanvas.js';
-import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
-import { canvasMembers } from './feature-canvas.js';
-import { TerminalStudio, type StudioLayoutControls } from './TerminalStudio.js';
+import { FeatureStudioStage, type StudioLayoutControls } from './FeatureStudioStage.js';
+import { TauriStudioPreparation } from './TauriStudioPreparation.js';
+import { NativeTerminalCreator } from './NativeTerminalCreator.js';
+import { Modal } from './Modal.js';
+import { LegacyStudioPreparation } from './feature-workspace-preparation.js';
 import { AccountLimits } from './AccountLimits.js';
 import { FeatureDelegate, type FeatureDelegateProps, type MentionSend } from './MentionComposer.js';
-import type { StudioCreationScope } from './StudioWorkspace.js';
 import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account-limits-model.js';
 import {
   arrangeRequest,
@@ -43,6 +37,16 @@ import {
   type NativePaneLayout,
 } from './studio-native.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
+
+export interface StudioCreationScope {
+  workspaceId: string;
+  featureId: string | null;
+  /** Display metadata from the active Feature snapshot. */
+  featureName?: string;
+  workspaceName?: string;
+}
+
+type PaneCommand = Extract<FeatureNativeRequest, { action: 'pane' }>['command'];
 
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
@@ -55,23 +59,66 @@ function featureScopeKey(snapshot: FeatureNativeSnapshot | undefined, workspaceI
 }
 
 /** Shared native chrome/Studio metadata UI. Terminals remain retained native documents. */
-export function FeatureWorkspace({
+export function FeatureStudio({
   nativeWorkspace = false,
   navigation,
   toolbarUtilities,
-  onPrepare,
+  preparationRequest,
+  onPreparationHandled,
   workspaces = [],
   workspaceId = '',
 }: {
   nativeWorkspace?: boolean;
   navigation?: ReactNode;
   toolbarUtilities?: ReactNode;
-  onPrepare?: (context: StudioCreationScope) => void;
+  preparationRequest?: FeaturePreparationRequest;
+  onPreparationHandled?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
   onWorkspace?: (id: string) => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
+  const creator =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const [creation, setCreation] = useState<{
+    scope: StudioCreationScope;
+    advanced: boolean;
+  }>();
+  const trigger = useRef<HTMLElement | null>(null);
+  const advancedPending = useRef(false);
+  const advancedStarted = useRef(false);
+  const handled = useRef<FeaturePreparationRequest | undefined>(undefined);
+  const openPreparation = useCallback(
+    (scope: StudioCreationScope) => {
+      if (trigger.current) return;
+      trigger.current =
+        document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+      setCreation({ scope, advanced: !creator });
+    },
+    [creator],
+  );
+
+  function closePreparation(possibleStart = false) {
+    if (advancedPending.current) return;
+    const opener = trigger.current;
+    trigger.current = null;
+    advancedStarted.current = false;
+    setCreation(undefined);
+    if (!possibleStart) window.dispatchEvent(new Event('orqst-terminal-creator-closed'));
+    requestAnimationFrame(() => {
+      if (opener?.isConnected && !trigger.current) opener.focus();
+    });
+  }
+
+  useEffect(() => {
+    if (!preparationRequest || handled.current === preparationRequest) return;
+    // The native sender validated the source and scope. Catalog and Open independently
+    // verify the current scope and native review.
+    handled.current = preparationRequest;
+    openPreparation(preparationRequest);
+    onPreparationHandled?.();
+  }, [preparationRequest, onPreparationHandled, openPreparation]);
+
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
@@ -91,14 +138,6 @@ export function FeatureWorkspace({
       at: number;
     }[]
   >([]);
-  const [openedAt] = useState(() => Date.now() - 10_000);
-  const messages = useMemo(
-    () =>
-      communication
-        .filter((event) => event.at >= openedAt)
-        .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
-    [communication, openedAt],
-  );
   const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
@@ -131,17 +170,8 @@ export function FeatureWorkspace({
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [dock, setDock] = useState<DockPane[]>([]);
   const [dockEpoch, setDockEpoch] = useState(0);
   const [panes, setPanes] = useState<WorkspacePane[]>([]);
-  // The new Studio is the default everywhere; the summary Canvas opens only on request.
-  const [nativeCanvas, setNativeCanvas] = useState(false);
-  const [wantsCanvas, setWantsCanvas] = useState(false);
-  const canvasIntent = useRef(wantsCanvas);
-  canvasIntent.current = wantsCanvas;
-  const canvas = wantsCanvas && (!nativeWorkspace || nativeCanvas);
-  const [search, setSearch] = useState('');
-  const searchInput = useRef<HTMLInputElement>(null);
   const scopeTree = useRef<HTMLElement>(null);
   const [coreState, setCoreState] = useState<'connecting' | 'online' | 'unavailable'>(
     native ? 'connecting' : 'unavailable',
@@ -151,7 +181,6 @@ export function FeatureWorkspace({
     terminalId: string;
     name: string;
   } | null>(null);
-  const renameInput = useRef<HTMLInputElement>(null);
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   // Native announces Quit as soon as it starts closing the owned terminals.
   const [quitClosing, setQuitClosing] = useState(false);
@@ -201,19 +230,6 @@ export function FeatureWorkspace({
       featureDisplayName(feature, t('features.defaultName')),
     [t],
   );
-  const canvasAgents = useMemo(
-    () => canvasMembers(snapshot, panes, evidence, now),
-    [snapshot, panes, evidence, now],
-  );
-  const canvasGroups = useMemo(
-    () => [
-      {
-        id: selected?.featureId ?? 'unassigned',
-        name: selected ? displayFeatureName(selected) : t('features.unassigned'),
-      },
-    ],
-    [selected, displayFeatureName, t],
-  );
   const moveTargets = useMemo(() => {
     if (!snapshot) return [];
     const eligible = snapshot.features
@@ -236,7 +252,7 @@ export function FeatureWorkspace({
     ];
   }, [snapshot, displayFeatureName, t]);
 
-  const studio = !canvas && (nativeWorkspace || !!native);
+  const studio = nativeWorkspace || !!native || !!creator;
   const [structuredFeature, setStructuredFeature] = useState<string>();
   const structured = nativeWorkspace ? window.orqstStructuredAgents : undefined;
   const structuredOpen =
@@ -251,13 +267,29 @@ export function FeatureWorkspace({
     () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
     [studio, snapshot, panes, evidence, now],
   );
-  const measuredTerminals = terminals.flatMap(({ tokens }) =>
-    tokens?.total === undefined ? [] : [tokens.total],
-  );
-  const featureTokens = measuredTerminals.reduce((sum, total) => sum + total, 0);
   const scopeKey = featureScopeKey(snapshot, workspaceId);
+  const scopeSince = useRef({ key: scopeKey, at: Date.now() });
+  if (scopeSince.current.key !== scopeKey) scopeSince.current = { key: scopeKey, at: Date.now() };
+  const messages = communication.filter((event) => event.at >= scopeSince.current.at);
+  const recentMessage = communication.at(-1);
+  const [endingTerminal, setEndingTerminal] = useState<string>();
   const studioRef = useRef<HTMLDivElement>(null);
   const layoutControls = useRef<StudioLayoutControls>(null);
+  const requestedSlot = useRef<{ scope: string; slot: number; known: Set<string>; until: number }>(
+    undefined,
+  );
+  useEffect(() => {
+    const pending = requestedSlot.current;
+    if (!pending) return;
+    if (pending.scope !== scopeKey || pending.until < Date.now()) {
+      requestedSlot.current = undefined;
+      return;
+    }
+    const arrivals = terminals.filter(({ id }) => !pending.known.has(id));
+    if (arrivals.length === 0) return;
+    requestedSlot.current = undefined;
+    if (arrivals.length === 1) layoutControls.current?.placeTerminal(arrivals[0]!.id, pending.slot);
+  }, [scopeKey, terminals]);
   const focusedTerminals = useRef(new Map<string, string>());
   const arranging = useRef<{
     layout: NativePaneLayout[];
@@ -275,7 +307,7 @@ export function FeatureWorkspace({
   const arrange = useCallback(
     (layout: NativePaneLayout[], mode: ArrangementMode, frameScope: string) => {
       const snapshot = current.current;
-      if (!native?.arrange || !snapshot || drawerOpen() || canvasIntent.current) return;
+      if (!native?.arrange || !snapshot || drawerOpen()) return;
       if (featureScopeKey(snapshot) !== frameScope) return;
       const submitted = { layout, mode, scope: frameScope };
       arranging.current = submitted;
@@ -431,15 +463,20 @@ export function FeatureWorkspace({
           generation: current.current?.generation ?? 0,
         } as FeatureNativeRequest);
         if (!live.current) return;
-        if (reply.canvas) setEvidence(reply.canvas);
+        const previousScope = featureScopeKey(current.current);
+        const accepted = reply.snapshot && acceptSnapshot(reply.snapshot);
+        if (previousScope !== featureScopeKey(current.current)) {
+          setCommunication([]);
+          setEvidence(undefined);
+        }
+        if (accepted && reply.canvas) setEvidence(reply.canvas);
         if (
           reply.accountLimits ||
           action.action === 'accountLimits' ||
           ((action.action === 'snapshot' || action.action === 'canvas') && reply.status === 'ok')
         )
           setLimits(parseAccountLimits(reply.accountLimits?.accounts));
-        if (reply.communication) setCommunication(reply.communication.events);
-        const accepted = reply.snapshot && acceptSnapshot(reply.snapshot);
+        if (accepted && reply.communication) setCommunication(reply.communication.events);
         if (action.action === 'snapshot' && reply.status === 'unavailable')
           setCoreState('unavailable');
         if (reply.status === 'ok' && accepted) onAccepted?.(reply);
@@ -478,6 +515,7 @@ export function FeatureWorkspace({
   useEffect(() => {
     if (nativeWorkspace) return;
     const closed = () => {
+      requestedSlot.current = undefined;
       const activePane = panes.find((pane) => pane.active);
       const target = available.find((slot) => slot.slot === activePane?.slot) ?? available[0];
       if (target)
@@ -512,7 +550,7 @@ export function FeatureWorkspace({
   useEffect(() => {
     // Native and Studio views keep asking: the first read can arrive before the host is
     // ready, and without a snapshot no layout reaches the native terminal views.
-    if (!(canvas || nativeWorkspace || studio) || !native) return;
+    if (!native) return;
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
     const refresh = window.setInterval(
       () => {
@@ -525,7 +563,7 @@ export function FeatureWorkspace({
       window.clearInterval(clock);
       window.clearInterval(refresh);
     };
-  }, [canvas, native, request, nativeWorkspace, studio, hasSnapshot]);
+  }, [native, request, hasSnapshot]);
   useEffect(() => {
     const blocked = (event: Event) => {
       setQuitClosing(false);
@@ -561,21 +599,12 @@ export function FeatureWorkspace({
   useEffect(() => {
     const update = (event: Event) => {
       const detail = (event as CustomEvent<unknown>).detail;
-      setDock(dockPanes(detail));
       setDockEpoch(dockGeneration(detail));
       setPanes(workspacePanes(detail));
-      if (nativeWorkspace) {
-        const shown = (detail as { canvas?: boolean } | null)?.canvas === true;
-        setNativeCanvas(shown);
-        if (!shown) setWantsCanvas(false);
-      }
     };
     window.addEventListener('orqst-terminal-dock', update);
     return () => window.removeEventListener('orqst-terminal-dock', update);
-  }, [nativeWorkspace]);
-  useEffect(() => {
-    if (renamePane) renameInput.current?.focus();
-  }, [renamePane?.slot]);
+  }, []);
 
   function paneCommand(slot: number, command: PaneCommand) {
     const member = available.find((entry) => entry.slot === slot);
@@ -590,19 +619,6 @@ export function FeatureWorkspace({
         name: panes.find((pane) => pane.slot === slot)?.label ?? '',
       });
   }
-  function movePane(slot: number, beforeSlot: number) {
-    const member = available.find((entry) => entry.slot === slot);
-    const target = available.find((entry) => entry.slot === beforeSlot);
-    if (member && target)
-      void request({
-        action: 'movePane',
-        slot,
-        terminalId: member.terminalId,
-        beforeSlot,
-        beforeTerminalId: target.terminalId,
-      });
-  }
-
   async function moveUnassignedTerminal(terminalId: string, featureId: string) {
     const member = unassigned.find((entry) => entry.terminalId === terminalId);
     const target = moveTargets.find((entry) => entry.id === featureId);
@@ -660,7 +676,6 @@ export function FeatureWorkspace({
       setPrepareIssue('');
       setCloseIssue(false);
     }
-    setWantsCanvas(false);
     setFocusScope({ featureId, workspace });
     return true;
   }
@@ -720,16 +735,25 @@ export function FeatureWorkspace({
   const canPrepare =
     !quitFence &&
     selected?.status !== 'archived' &&
-    (!!onPrepare || (canWrite && nativeWorkspace && !!native?.showPreparationDrawer));
+    (!nativeWorkspace || (canWrite && !!native?.showPreparationDrawer));
   // The New terminal dialog has its own latch: snapshot polling must not refuse the click.
-  async function prepare() {
+  async function prepare(slot?: number) {
     if (preparing.current) {
       setPrepareIssue('busy');
       return;
     }
     setPrepareIssue('');
-    if (onPrepare) {
-      onPrepare({
+    requestedSlot.current =
+      slot === undefined
+        ? undefined
+        : {
+            scope: scopeKey,
+            slot,
+            known: new Set(terminals.map(({ id }) => id)),
+            until: Date.now() + 60_000,
+          };
+    if (!nativeWorkspace) {
+      openPreparation({
         workspaceId: snapshot?.workspace.id ?? workspaceId,
         featureId: snapshot?.activeFeatureId ?? null,
         workspaceName: snapshot?.workspace.name,
@@ -753,10 +777,12 @@ export function FeatureWorkspace({
       });
       if (live.current && reply.status === 'ok') drawerOpenAt.current = Date.now();
       if (live.current && reply.status !== 'ok') {
+        requestedSlot.current = undefined;
         setNotice(reply.status);
         setPrepareIssue(reply.status);
       }
     } catch {
+      requestedSlot.current = undefined;
       if (live.current) {
         setNotice('unavailable');
         setPrepareIssue('unavailable');
@@ -768,10 +794,6 @@ export function FeatureWorkspace({
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.altKey) return;
-      if (event.key.toLowerCase() === 'k' && canvas) {
-        event.preventDefault();
-        searchInput.current?.focus();
-      }
       if (event.key.toLowerCase() === 'n' && canPrepare) {
         event.preventDefault();
         void prepare();
@@ -948,9 +970,10 @@ export function FeatureWorkspace({
       </button>
     </>
   );
-  return (
+  if (!studio) return <LegacyStudioPreparation />;
+  const workspace = (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${canvas ? ' feature-canvas-mode' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
       aria-label={t('features.workspace')}
     >
       <aside className="feature-sidebar" ref={scopeTree}>
@@ -1055,26 +1078,6 @@ export function FeatureWorkspace({
               ＋ {t('features.create')}
             </button>
           </nav>
-          {canvas && (
-            <>
-              <label className="canvas-search">
-                <span>
-                  {t('canvas.search')} <kbd>⌘K</kbd>
-                </span>
-                <input
-                  ref={searchInput}
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </label>
-              <CanvasSessionList
-                agents={canvasAgents}
-                query={search}
-                busy={busy || quitFence}
-                onOpen={(agent) => paneCommand(agent.slot, 'focus')}
-              />
-            </>
-          )}
           {editor && (
             <form
               className="feature-editor"
@@ -1163,41 +1166,6 @@ export function FeatureWorkspace({
               {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
             </div>
           )}
-          {nativeWorkspace &&
-            renamePane &&
-            available.some((entry) => entry.terminalId === renamePane.terminalId) && (
-              <form
-                className="feature-pane-editor"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const editing = renamePane;
-                  void request({ action: 'renamePane', ...editing }).then((result) => {
-                    if (result === 'ok')
-                      setRenamePane((value) => (value === editing ? null : value));
-                  });
-                }}
-              >
-                <label>
-                  {t('managedTerminal.displayName')}
-                  <input
-                    ref={renameInput}
-                    value={renamePane.name}
-                    maxLength={48}
-                    required
-                    onChange={(event) => setRenamePane({ ...renamePane, name: event.target.value })}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') setRenamePane(null);
-                    }}
-                  />
-                </label>
-                <button disabled={busy} type="submit">
-                  {t('managedTerminal.rename')}
-                </button>{' '}
-                <button type="button" onClick={() => setRenamePane(null)}>
-                  {t('features.cancel')}
-                </button>
-              </form>
-            )}
           {snapshot && (
             <details className="feature-permissions-disclosure">
               <summary>{t('feature.options')}</summary>
@@ -1208,20 +1176,6 @@ export function FeatureWorkspace({
                 onClick={() => selected && openEditor(selected)}
               >
                 {t('features.edit')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={canvas}
-                disabled={busy || !canWrite}
-                onClick={() => {
-                  setWantsCanvas(!canvas);
-                  if (!canvas && nativeWorkspace)
-                    void request({ action: 'canvas' }).then((result) => {
-                      if (result !== 'ok') setWantsCanvas(false);
-                    });
-                }}
-              >
-                {t('canvas.title')}
               </button>
               {structured && (
                 <button
@@ -1307,285 +1261,204 @@ export function FeatureWorkspace({
           onClose={() => setStructuredFeature(undefined)}
         />
       )}
-      {!studio && (
-        <header className="feature-topbar">
-          {breadcrumb}
-          {toolbarUtilities}
-          {layoutActions(
-            () => void request({ action: 'organize', command: 'columns-2' }),
-            () => void request({ action: 'organize', command: 'show-all' }),
-          )}
-          {actions}
-        </header>
-      )}
-      {studio ? (
-        <div
-          className="feature-studio"
-          ref={studioRef}
-          onFocusCapture={(event) => {
-            if (!(event.target instanceof HTMLElement)) return;
-            const id = event.target
-              .closest('.ts-pane')
-              ?.querySelector<HTMLElement>('.ts-body[data-terminal-id]')?.dataset.terminalId;
-            if (id) focusedTerminals.current.set(scopeKey, id);
-          }}
-        >
-          <TerminalStudio
-            key={scopeKey}
-            storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
-            terminals={terminals}
-            messages={messages}
-            renderBody={(terminal) =>
-              nativeWorkspace ? (
-                <div className="ts-hole" aria-hidden="true" />
-              ) : (
-                <div className="ts-open">
-                  <button
-                    type="button"
-                    disabled={busy || quitFence}
-                    onClick={() => {
-                      const slot = snapshot?.slots.find(
-                        (entry) => entry.terminalId === terminal.id,
-                      );
-                      if (slot) paneCommand(slot.slot, 'focus');
-                    }}
-                  >
-                    {t('terminalStudio.openTerminal')}
-                  </button>
-                  <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
-                </div>
-              )
-            }
-            emptyHint={
-              !snapshot ? (
-                <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
-              ) : selected?.status === 'archived' ? (
-                <span>{t('feature.archived')}</span>
-              ) : undefined
-            }
-            v6={{
-              featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
-              layoutControlsRef: layoutControls,
-              ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
-                ? {
-                    onRename: (id: string) => {
-                      const slot = available.find(({ terminalId }) => terminalId === id);
-                      if (slot) editPane(slot.slot);
-                    },
-                  }
-                : {}),
-            }}
-            toolbarStart={breadcrumb}
-            toolbarEnd={
-              <>
-                {toolbarUtilities}
-                {layoutActions(
-                  () => layoutControls.current?.toggleGrid(),
-                  () => layoutControls.current?.restore(),
-                )}
-                {selected &&
-                  measuredTerminals.length > 0 &&
-                  Number.isSafeInteger(featureTokens) && (
-                    <span className="fine-print">
-                      {t('terminalStudio.featureTokens', {
-                        tokens: new Intl.NumberFormat(i18n.resolvedLanguage).format(featureTokens),
-                        measured: measuredTerminals.length,
-                        total: terminals.length,
-                      })}
-                    </span>
-                  )}
-                {nativeWorkspace ? (
-                  <AccountLimits
-                    accounts={limits}
-                    shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
-                    caps={limitPrefs.caps}
-                    now={now}
-                    source={t('accountLimits.sourceApp')}
-                    onOpenChange={setLimitsOpen}
-                    onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
-                    onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
-                    onRefresh={(accountId) =>
-                      void request({ action: 'accountLimits', command: 'refresh', accountId })
-                    }
-                    onToggleLock={(accountId) =>
-                      void request({
-                        action: 'accountLimits',
-                        command: limits.find((entry) => entry.id === accountId)?.locked
-                          ? 'unlock'
-                          : 'lock',
-                        accountId,
-                      })
-                    }
-                  />
-                ) : null}
-                {actions}
-              </>
-            }
-            {...(nativeWorkspace && selected?.status !== 'archived'
-              ? {
-                  closePending: busy || quitFence,
-                  onCloseTerminal: (terminalId: string) => {
-                    const member = available.find((entry) => entry.terminalId === terminalId);
-                    if (!member) return;
-                    setCloseIssue(false);
-                    void request({
-                      action: 'pane',
-                      slot: member.slot,
-                      terminalId,
-                      command: 'close',
-                    }).then((status) => {
-                      if (status && status !== 'ok' && status !== 'cancelled') setCloseIssue(true);
-                    });
-                  },
-                }
-              : {})}
-            {...(!selected && snapshot && moveTargets.length > 0
-              ? {
-                  unassignedMove: {
-                    targets: moveTargets.map(({ id, name: targetName }) => ({
-                      id,
-                      name: targetName,
-                    })),
-                    pending: busy || quitFence,
-                    onMove: (terminalId: string, featureId: string) =>
-                      void moveUnassignedTerminal(terminalId, featureId),
-                  },
-                }
-              : {})}
-            onMention={
-              mentionScope && canWrite && selected?.status !== 'archived'
-                ? (message: MentionSend) => sendMention(mentionScope, message)
-                : undefined
-            }
-            {...(nativeWorkspace
-              ? {
-                  native: {
-                    onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) =>
-                      arrange(layout, mode, scopeKey),
-                    // The limits panel hides only the views under it (data-native-overlay).
-                    overlayOpen: !!editor || !!renamePane || structuredOpen || quitFence,
-                  },
-                }
-              : {})}
-            orchestratorLabel={selected?.orchestratorTerminalId ?? null}
-            onOrchestratorChange={
-              selected
-                ? (terminalId) =>
-                    void request({
-                      action: 'update',
-                      featureId: selected.featureId,
-                      input: {
-                        expectedRevision: selected.revision,
-                        orchestratorTerminalId: terminalId,
-                      },
-                    })
-                : undefined
-            }
-          />
-        </div>
-      ) : (
-        <>
-          {!canvas && nativeWorkspace && (
-            <TerminalWorkspaceBar
-              panes={panes.filter((pane) => available.some((entry) => entry.slot === pane.slot))}
-              busy={busy || quitFence}
-              onCommand={paneCommand}
-              onRename={editPane}
-              onMove={movePane}
-              onPrepare={canPrepare ? () => void prepare() : undefined}
-            />
-          )}
-          <div className="feature-surface">
-            {canvas ? (
-              <FeatureCanvas
-                key={selected?.featureId ?? 'unassigned'}
-                agents={canvasAgents.filter((agent) =>
-                  agent.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-                )}
-                groups={canvasGroups}
-                busy={busy || quitFence}
-                onOpen={(agent) => paneCommand(agent.slot, 'focus')}
-                onPrepare={canPrepare ? () => void prepare() : undefined}
-              />
-            ) : canPrepare && !available.length ? (
-              <div className="feature-empty">
-                <h1>{t('studio.setupTitle')}</h1>
-                <p>{t('features.noUnassigned')}</p>
-                <button disabled={busy} onClick={() => void prepare()}>
-                  {t('studio.prepareTerminals')}
-                </button>
-              </div>
-            ) : !available.length ? (
-              <p>
-                {t(
-                  selected
-                    ? selected.terminalIds.length
-                      ? 'features.noAvailableMembers'
-                      : 'features.empty'
-                    : 'features.noUnassigned',
-                )}
-              </p>
-            ) : null}
-            {!canvas && !nativeWorkspace && available.length > 0 && (
-              <div>
-                <p>{t('features.nativeView')}</p>
-                {!selected && <p role="status">{t('terminalStudio.unassigned.notice')}</p>}
-                <ul>
-                  {available.map((slot) => (
-                    <li key={slot.terminalId}>
-                      <strong>
-                        {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
-                      </strong>{' '}
-                      <code>{slot.terminalId}</code>
-                      {!selected && moveTargets[0] && (
-                        <>
-                          {' '}
-                          <button
-                            type="button"
-                            disabled={busy || quitFence}
-                            onClick={() =>
-                              void moveUnassignedTerminal(slot.terminalId, moveTargets[0]!.id)
-                            }
-                          >
-                            {t('terminalStudio.unassigned.moveAction')}
-                          </button>
-                        </>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-          <footer className="feature-bottom">
-            {canvas ? (
-              <CanvasStatusBar agents={canvasAgents} connected={coreState === 'online'} />
-            ) : nativeWorkspace && dock.length > 0 ? (
-              <div className="feature-dock" role="region" aria-label={t('features.dockLabel')}>
-                <span className="feature-dock-label">{t('features.dockLabel')}</span>
-                {dock
-                  .filter((pane) => available.some((entry) => entry.slot === pane.slot))
-                  .map((pane) => (
-                    <button
-                      key={pane.slot}
-                      type="button"
-                      disabled={busy || quitFence}
-                      onClick={() => void window.orqstTerminalDock?.restore(pane.slot, dockEpoch)}
-                      title={t('features.dockRestore', { name: pane.label })}
-                    >
-                      ▣ {pane.label}
-                    </button>
-                  ))}
-              </div>
+      <div
+        className="feature-studio"
+        ref={studioRef}
+        onFocusCapture={(event) => {
+          if (!(event.target instanceof HTMLElement)) return;
+          const id = event.target
+            .closest('.ts-pane')
+            ?.querySelector<HTMLElement>('.ts-body[data-terminal-id]')?.dataset.terminalId;
+          if (id) focusedTerminals.current.set(scopeKey, id);
+        }}
+      >
+        <FeatureStudioStage
+          key={scopeKey}
+          storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
+          terminals={terminals}
+          messages={messages}
+          recentMessage={recentMessage}
+          endingTerminal={endingTerminal}
+          onNewTerminal={canPrepare && snapshot ? (slot) => void prepare(slot) : undefined}
+          renderBody={(terminal) =>
+            nativeWorkspace ? (
+              <div className="ts-hole" aria-hidden="true" />
             ) : (
-              <span>{t('features.members', { count: members.length })}</span>
-            )}
-            <span>
-              {t(snapshot?.layoutSaved ? 'features.layoutSaved' : 'features.layoutUnsaved')}
-            </span>
-          </footer>
-        </>
-      )}
+              <div className="ts-open">
+                <button
+                  type="button"
+                  disabled={busy || quitFence}
+                  onClick={() => {
+                    const slot = snapshot?.slots.find((entry) => entry.terminalId === terminal.id);
+                    if (slot) paneCommand(slot.slot, 'focus');
+                  }}
+                >
+                  {t('terminalStudio.openTerminal')}
+                </button>
+                <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
+              </div>
+            )
+          }
+          emptyHint={
+            !snapshot ? (
+              <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
+            ) : selected?.status === 'archived' ? (
+              <span>{t('feature.archived')}</span>
+            ) : undefined
+          }
+          v6={{
+            featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
+            layoutControlsRef: layoutControls,
+            ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
+              ? {
+                  onRename: (id: string) => {
+                    const slot = available.find(({ terminalId }) => terminalId === id);
+                    if (slot) editPane(slot.slot);
+                  },
+                }
+              : {}),
+          }}
+          toolbarStart={breadcrumb}
+          toolbarEnd={
+            <>
+              {layoutActions(
+                () => layoutControls.current?.toggleGrid(),
+                () => layoutControls.current?.restore(),
+              )}
+              {actions}
+              {nativeWorkspace ? (
+                <AccountLimits
+                  accounts={limits}
+                  shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
+                  caps={limitPrefs.caps}
+                  now={now}
+                  source={t('accountLimits.sourceApp')}
+                  onOpenChange={setLimitsOpen}
+                  onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
+                  onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
+                  onRefresh={(accountId) =>
+                    void request({ action: 'accountLimits', command: 'refresh', accountId })
+                  }
+                  onToggleLock={(accountId) =>
+                    void request({
+                      action: 'accountLimits',
+                      command: limits.find((entry) => entry.id === accountId)?.locked
+                        ? 'unlock'
+                        : 'lock',
+                      accountId,
+                    })
+                  }
+                />
+              ) : null}
+              {toolbarUtilities}
+            </>
+          }
+          {...(nativeWorkspace && selected?.status !== 'archived'
+            ? {
+                closePending: busy || quitFence,
+                onCloseTerminal: (terminalId: string) => {
+                  const member = available.find((entry) => entry.terminalId === terminalId);
+                  if (!member) return;
+                  setCloseIssue(false);
+                  setEndingTerminal(terminalId);
+                  void request({
+                    action: 'pane',
+                    slot: member.slot,
+                    terminalId,
+                    command: 'close',
+                  })
+                    .then((status) => {
+                      if (status && status !== 'ok' && status !== 'cancelled') setCloseIssue(true);
+                    })
+                    .finally(() => setEndingTerminal(undefined));
+                },
+              }
+            : {})}
+          {...(!selected && snapshot && moveTargets.length > 0
+            ? {
+                unassignedMove: {
+                  targets: moveTargets.map(({ id, name: targetName }) => ({
+                    id,
+                    name: targetName,
+                  })),
+                  pending: busy || quitFence,
+                  onMove: (terminalId: string, featureId: string) =>
+                    void moveUnassignedTerminal(terminalId, featureId),
+                },
+              }
+            : {})}
+          onMention={
+            mentionScope && canWrite && selected?.status !== 'archived'
+              ? (message: MentionSend) => sendMention(mentionScope, message)
+              : undefined
+          }
+          {...(nativeWorkspace
+            ? {
+                native: {
+                  onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) =>
+                    arrange(layout, mode, scopeKey),
+                  // The limits panel hides only the views under it (data-native-overlay).
+                  overlayOpen: !!editor || !!renamePane || structuredOpen || quitFence,
+                },
+              }
+            : {})}
+          orchestratorLabel={selected?.orchestratorTerminalId ?? null}
+          onOrchestratorChange={
+            selected
+              ? (terminalId) =>
+                  void request({
+                    action: 'update',
+                    featureId: selected.featureId,
+                    input: {
+                      expectedRevision: selected.revision,
+                      orchestratorTerminalId: terminalId,
+                    },
+                  })
+              : undefined
+          }
+        />
+      </div>
+      {nativeWorkspace &&
+        renamePane &&
+        available.some((entry) => entry.terminalId === renamePane.terminalId) && (
+          <Modal
+            label={t('studio.pane.settings')}
+            className="mc-dialog"
+            initialFocus="input"
+            onClose={() => setRenamePane(null)}
+          >
+            <form
+              data-native-overlay=""
+              className="ts-pane-edit-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const editing = renamePane;
+                void request({ action: 'renamePane', ...editing }).then((result) => {
+                  if (result === 'ok') setRenamePane((value) => (value === editing ? null : value));
+                });
+              }}
+            >
+              <label>
+                {t('managedTerminal.displayName')}
+                <input
+                  value={renamePane.name}
+                  maxLength={48}
+                  required
+                  onChange={(event) => setRenamePane({ ...renamePane, name: event.target.value })}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') setRenamePane(null);
+                  }}
+                />
+              </label>
+              <button disabled={busy} type="submit">
+                {t('managedTerminal.rename')}
+              </button>{' '}
+              <button type="button" onClick={() => setRenamePane(null)}>
+                {t('features.cancel')}
+              </button>
+            </form>
+          </Modal>
+        )}
       {(quitWait || quitFence || quitClosing) && (
         <div className="quit-blocked" role="alert">
           <strong>
@@ -1612,6 +1485,53 @@ export function FeatureWorkspace({
           )}
         </div>
       )}
+      {creator && creation && !creation.advanced && (
+        <NativeTerminalCreator
+          native={creator}
+          workspace={{
+            id: creation.scope.workspaceId,
+            name:
+              creation.scope.workspaceName ??
+              workspaces.find((workspace) => workspace.id === creation.scope.workspaceId)?.name ??
+              t('studio.create.workspaceUnknown'),
+          }}
+          featureId={creation.scope.featureId}
+          featureName={creation.scope.featureName}
+          onAdvanced={() => setCreation({ ...creation, advanced: true })}
+          onClose={closePreparation}
+        />
+      )}
+      {creation?.advanced && (
+        <Modal
+          className="studio-preparation-dialog"
+          label={t('studio.tauri.openTitle')}
+          onClose={() => closePreparation(advancedStarted.current)}
+        >
+          <div className="studio-preparation-heading">
+            <h2>{t('studio.tauri.openTitle')}</h2>
+            <button
+              className="icon-button"
+              aria-label={t('close')}
+              onClick={() => closePreparation(advancedStarted.current)}
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <section className="panel studio-setup" aria-labelledby="studio-setup-title">
+            {!creator && <p className="notice">{t('studio.tauri.unavailable')}</p>}
+            <TauriStudioPreparation
+              native={creator}
+              context={creation.scope}
+              onReviewPending={(pending) => {
+                advancedPending.current = pending;
+                if (pending) advancedStarted.current = true;
+              }}
+            />
+            <p className="studio-boundary">{t('studio.grantsHelp')}</p>
+          </section>
+        </Modal>
+      )}
     </section>
   );
+  return nativeWorkspace ? workspace : <div className="studio-workspace">{workspace}</div>;
 }
