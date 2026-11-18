@@ -1,12 +1,23 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Settings2 } from 'lucide-react';
+import { ArrowLeft, Settings2 } from 'lucide-react';
 import { Modal } from './Modal';
 import {
   defaultAppearancePreferences,
   readingSize,
   type AppearancePreferences,
 } from './appearance-preferences';
+import './account-limits.css';
+
+export interface SettingsProps {
+  appearance: AppearancePreferences;
+  onAppearance: (value: AppearancePreferences) => void;
+  storageUnavailable: boolean;
+  systemReducedMotion: boolean;
+  notifications: ReactNode;
+  onGuide: () => void;
+  returnAction?: { label: string; onReturn: () => void };
+}
 
 export function Settings({
   appearance,
@@ -15,25 +26,25 @@ export function Settings({
   systemReducedMotion,
   notifications,
   onGuide,
-}: {
-  appearance: AppearancePreferences;
-  onAppearance: (value: AppearancePreferences) => void;
-  storageUnavailable: boolean;
-  systemReducedMotion: boolean;
-  notifications: ReactNode;
-  onGuide: () => void;
-}) {
+  returnAction,
+}: SettingsProps) {
   const { t, i18n } = useTranslation();
   const [resetOpen, setResetOpen] = useState(false);
   return (
-    <div className="settings-page">
+    <div className="settings-page lane-settings">
       <div className="page-heading">
         <div>
           <h1>
-            <Settings2 size={24} /> {t('shell.views.settings')}
+            <Settings2 size={14} aria-hidden="true" /> {t('shell.views.settings')}
           </h1>
           <p>{t('settings.description')}</p>
         </div>
+        {returnAction && (
+          <button type="button" className="button" onClick={returnAction.onReturn}>
+            <ArrowLeft size={14} aria-hidden="true" />
+            {returnAction.label}
+          </button>
+        )}
       </div>
       <div className="settings-groups">
         <section className="panel settings-group" aria-labelledby="settings-general">
@@ -202,7 +213,7 @@ export function Settings({
       {resetOpen && (
         <Modal
           label={t('settings.reset')}
-          className="settings-reset panel shell-dialog"
+          className="settings-reset panel shell-dialog lane-settings-reset"
           initialFocus=".reset-cancel"
           onClose={() => setResetOpen(false)}
         >

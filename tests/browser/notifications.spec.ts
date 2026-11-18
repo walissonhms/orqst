@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -184,3 +184,91 @@ test.describe('Tauri dashboard user-agent', () => {
     );
   });
 });
+
+for (const [locale, width, height] of [
+  ['en-US', 1440, 900],
+  ['pt-BR', 1440, 900],
+  ['pt-BR', 1280, 800],
+] as const) {
+  test.describe(`Attention Center in ${locale} at ${width}×${height}`, () => {
+    test.use({ locale, viewport: { width, height }, colorScheme: 'dark', reducedMotion: 'reduce' });
+    const portuguese = locale === 'pt-BR';
+    const title = portuguese ? 'Notificações' : 'Notifications';
+    const capture = (page: Page, name: string) =>
+      page.screenshot({
+        path: test.info().outputPath(locale, `${width}x${height}`, 'observer', `${name}.png`),
+      });
+
+    test('empty and unread filters preserve an empty history and restore focus', async ({
+      page,
+    }) => {
+      await page.route('**/api/snapshot', async (route) => {
+        const response = await route.fetch();
+        const snapshot = (await response.json()) as Snapshot;
+        await route.fulfill({ response, json: { ...snapshot, notifications: [] } });
+      });
+      await page.goto('/overview');
+      const bell = page.getByRole('button', { name: title, exact: true });
+      const dialog = page.getByRole('dialog', { name: title, exact: true });
+      const filter = dialog.getByRole('combobox');
+      await expect(bell).toHaveAccessibleDescription(portuguese ? '0 não lidas' : '0 unread');
+      await bell.click();
+      await expect(
+        dialog.getByText(/No live notifications|Nenhuma notificação ao vivo/),
+      ).toBeVisible();
+      await capture(page, '04-notifications-empty');
+      await filter.selectOption('unread');
+      await expect(dialog.locator('.notification-item')).toHaveCount(0);
+      await capture(page, '05-notifications-unread-empty');
+      await page.keyboard.press('Escape');
+      await expect(bell).toBeFocused();
+    });
+
+    test('filters preserve the unread count and open the exact source', async ({ page }) => {
+      await page.route('**/api/snapshot', async (route) => {
+        const response = await route.fetch();
+        const snapshot = (await response.json()) as Snapshot;
+        snapshot.notifications = [
+          {
+            id: 'synthetic-lane5-failed',
+            sessionId: 'synthetic-browser-session',
+            type: 'agent.failed',
+            timestamp: '2026-11-18T12:00:00.000Z',
+            read: false,
+          },
+          {
+            id: 'synthetic-lane5-missing-source',
+            sessionId: 'synthetic-browser-session-missing',
+            type: 'agent.completed',
+            timestamp: '2026-11-18T11:00:00.000Z',
+            read: true,
+          },
+        ];
+        await route.fulfill({ response, json: snapshot });
+      });
+      await page.goto('/overview');
+      const bell = page.getByRole('button', { name: title, exact: true });
+      const dialog = page.getByRole('dialog', { name: title, exact: true });
+      const filter = dialog.getByRole('combobox');
+      await expect(bell).toHaveAccessibleDescription(portuguese ? '1 não lidas' : '1 unread');
+      await bell.click();
+      await filter.selectOption('agent.completed');
+      await expect(dialog.locator('.notification-item')).toHaveCount(1);
+      await expect(dialog.locator('.notification-item')).toBeDisabled();
+      await filter.selectOption('unread');
+      const source = dialog.locator('.notification-item');
+      await expect(source).toHaveCount(1);
+      await expect(source).toHaveAccessibleName(
+        /Execution failed.*Unread|Falha na execução.*Não lida/i,
+      );
+      await capture(page, '09-notifications-unread');
+      await source.click();
+      await expect(dialog).toHaveCount(0);
+      await expect(page).toHaveURL(/\/overview\/sessions\/synthetic-browser-session$/);
+      await expect(
+        page.getByRole('region', { name: portuguese ? 'Detalhes da sessão' : 'Session details' }),
+      ).toContainText('synthetic-browser-session');
+      await capture(page, '10-notification-source-session');
+    });
+  });
+}

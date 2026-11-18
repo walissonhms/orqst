@@ -1,5 +1,13 @@
 import { desktopNotificationSelectionSchema, type Snapshot } from '@orqst/protocol';
 
+/** An ambiguous or missing snapshot member cannot be a notification source. */
+export function findNotificationSource(snapshot: Snapshot, id: string) {
+  const index = snapshot.sessions.findIndex((session) => session.id === id);
+  if (index < 0 || snapshot.sessions.findLastIndex((session) => session.id === id) !== index)
+    return undefined;
+  return snapshot.sessions[index];
+}
+
 /** View selection only. Native provenance never grants execution or process ownership. */
 export class NativeSessionNavigation {
   private generation = 0;
@@ -20,8 +28,7 @@ export class NativeSessionNavigation {
 
   observe(snapshot: Snapshot | undefined): void {
     if (!snapshot || !this.target) return;
-    const matches = snapshot.sessions.filter((session) => session.id === this.target);
-    if (matches.length !== 1 || matches[0]?.adapter !== 'codex') this.cancel();
+    if (findNotificationSource(snapshot, this.target)?.adapter !== 'codex') this.cancel();
   }
 
   async request(detail: unknown): Promise<void> {
@@ -35,8 +42,7 @@ export class NativeSessionNavigation {
       const snapshot = await this.actions.refresh();
       if (!current() || !Array.isArray(snapshot.sessions) || snapshot.sessions.length > 10000)
         return;
-      const matches = snapshot.sessions.filter((session) => session.id === request.data.sessionId);
-      if (matches.length !== 1 || matches[0]?.adapter !== 'codex') return;
+      if (findNotificationSource(snapshot, request.data.sessionId)?.adapter !== 'codex') return;
       this.target = request.data.sessionId;
       this.actions.open(request.data.sessionId, snapshot, current);
     } catch {

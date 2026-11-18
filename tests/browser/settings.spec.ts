@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { build } from 'esbuild';
+import { resolve } from 'node:path';
 import type { Preferences, SessionMetricsResult, Snapshot } from '@orqst/protocol';
 
 async function settings(page: Page) {
@@ -285,3 +287,267 @@ test('comfortable appearance carries across observed-data views without changing
     }
   }
 });
+
+for (const locale of ['en-US', 'pt-BR'] as const) {
+  test.describe(`V6 settings in ${locale}`, () => {
+    test.use({ locale, colorScheme: 'dark', reducedMotion: 'reduce' });
+
+    test('opens settings from Studio through Overview and restores guide focus', async ({
+      page,
+    }) => {
+      await page.addInitScript(() => {
+        // Dashboard Studio routing uses the native facade when present.
+        Reflect.set(window, 'orqstFeatures', {
+          contractVersion: 1,
+          request: async () => ({ status: 'unavailable' }),
+        });
+      });
+      const portuguese = locale === 'pt-BR';
+      const sizes = portuguese
+        ? [
+            [1440, 900],
+            [1280, 800],
+          ]
+        : [[1440, 900]];
+      for (const [width, height] of sizes) {
+        await page.setViewportSize({ width: width!, height: height! });
+        await page.goto('/studio');
+        await page
+          .getByRole('button', { name: portuguese ? 'Visão geral' : 'Overview', exact: true })
+          .click();
+        await expect(page).toHaveURL(/\/overview$/);
+        await page
+          .getByRole('button', { name: portuguese ? 'Configurações' : 'Settings', exact: true })
+          .click();
+        await expect(page).toHaveURL(/\/settings$/);
+        const capture = (name: string) =>
+          page.screenshot({
+            path: test.info().outputPath(`${width}x${height}`, 'observer', `${name}.png`),
+          });
+        const guideLabel = portuguese ? 'Guia de observação' : 'Observation guide';
+        const guide = page.getByRole('button', { name: guideLabel, exact: true });
+        await expect(guide).toBeVisible();
+        await capture('settings');
+        await guide.click();
+        const dialog = page.getByRole('dialog', { name: guideLabel });
+        await expect(dialog.getByRole('heading', { name: guideLabel })).toBeFocused();
+        await capture('08-settings-guide');
+        await page.keyboard.press('Shift+Tab');
+        await expect(dialog.getByRole('button').last()).toBeFocused();
+        await page.keyboard.press('Escape');
+        await expect(guide).toBeFocused();
+        await page.goBack();
+        await expect(page).toHaveURL(/\/overview$/);
+        await page.goBack();
+        await expect(page).toHaveURL(/\/studio$/);
+      }
+    });
+  });
+}
+
+for (const [locale, width, height] of [
+  ['en-US', 1440, 900],
+  ['pt-BR', 1440, 900],
+  ['pt-BR', 1280, 800],
+] as const) {
+  test(`native Feature chrome keeps limit evidence and thresholds distinct in ${locale} at ${width}×${height}`, async ({
+    browser,
+  }) => {
+    const bundle = await build({
+      stdin: {
+        contents: `
+        import { mountFeatureWorkspace } from './src/feature-workspace-mount.tsx';
+        mountFeatureWorkspace();
+      `,
+        resolveDir: resolve('apps/dashboard'),
+        loader: 'tsx',
+      },
+      bundle: true,
+      platform: 'browser',
+      format: 'iife',
+      target: 'safari17',
+      outdir: 'out',
+      write: false,
+      logLevel: 'silent',
+    });
+    const snapshot = {
+      contractVersion: 1,
+      storage: 'core',
+      generation: 7,
+      workspace: { id: 'synthetic-lane5-workspace', name: 'Synthetic workspace' },
+      features: [
+        {
+          featureId: '00000000-0000-4000-8000-000000000005',
+          workspaceId: 'synthetic-lane5-workspace',
+          name: 'Synthetic Feature',
+          description: '',
+          status: 'active',
+          revision: 1,
+          terminalIds: [11, 12, 13, 14].map((id) => `00000000-0000-4000-8000-0000000000${id}`),
+          schemaVersion: 1,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      activeFeatureId: '00000000-0000-4000-8000-000000000005',
+      slots: (['codex', 'claude', 'opencode', 'codex'] as const).map((provider, slot) => ({
+        slot,
+        provider,
+        terminalId: `00000000-0000-4000-8000-0000000000${11 + slot}`,
+      })),
+      layoutSaved: true,
+    };
+
+    const portuguese = locale === 'pt-BR';
+    const unknown = portuguese ? 'Nenhum limite informado ainda' : 'No limits reported yet';
+    const page = await browser.newPage({
+      locale,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      viewport: { width, height },
+    });
+    try {
+      await page.setContent('<div id="root"></div>');
+      const mount = async (withReport: boolean) => {
+        await page.evaluate(
+          ({ snapshot, withReport }) => {
+            const now = Date.now();
+            Reflect.set(window, 'orqstFeatures', {
+              contractVersion: 1,
+              request: async () => ({
+                status: 'ok',
+                snapshot,
+                ...(withReport
+                  ? {
+                      accountLimits: {
+                        readAt: now,
+                        accounts: [
+                          {
+                            id: 'synthetic-claude',
+                            provider: 'claude',
+                            index: 1,
+                            locked: false,
+                            windows: [],
+                          },
+                          {
+                            id: 'synthetic-codex',
+                            provider: 'codex',
+                            index: 1,
+                            locked: false,
+                            updatedAt: now,
+                            windows: [
+                              {
+                                id: 'synthetic-week',
+                                label: '7d',
+                                usedPercent: 45,
+                                resetsAt: now + 3600000,
+                              },
+                              { id: 'synthetic-zero', label: '1d', usedPercent: 0 },
+                              { id: 'synthetic-unknown', label: '1h', resetsAt: now + 1200000 },
+                              {
+                                id: 'synthetic-expired',
+                                label: '5h',
+                                usedPercent: 99,
+                                resetsAt: now - 1000,
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    }
+                  : {}),
+              }),
+              arrange: async () => ({ status: 'ok', snapshot }),
+            });
+          },
+          { snapshot, withReport },
+        );
+        for (const file of bundle.outputFiles) {
+          if (file.path.endsWith('.css')) await page.addStyleTag({ content: file.text });
+          else await page.addScriptTag({ content: file.text });
+        }
+        await expect(page.locator('.al-trigger')).toBeVisible();
+      };
+      const capture = (name: string) =>
+        page.screenshot({
+          path: test.info().outputPath(locale, `${width}x${height}`, 'tauri-chrome', `${name}.png`),
+        });
+      const trigger = page.locator('.al-trigger');
+      const dialog = page.getByRole('dialog', {
+        name: portuguese ? 'Limites das contas' : 'Account limits',
+      });
+      const close = dialog.getByRole('button', {
+        name: portuguese ? 'Fechar' : 'Close',
+        exact: true,
+      });
+      const accounts = dialog.getByRole('button', {
+        name: portuguese ? 'Escolher contas' : 'Choose accounts',
+      });
+      const caps = dialog.getByRole('button', {
+        name: portuguese ? 'Ajustar tetos' : 'Adjust caps',
+      });
+
+      await mount(false);
+      await trigger.click();
+      await expect(close).toBeFocused();
+      await expect(dialog).toContainText(unknown);
+      await expect(dialog.locator('.al-bar, .al-percent, .al-reset')).toHaveCount(0);
+      await expect(accounts).toBeDisabled();
+      await capture('24-limits-unavailable');
+      await page.keyboard.press('Shift+Tab');
+      await expect(caps).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+
+      // Replace only the disposable fixture document before supplying provider evidence.
+      await page.goto('about:blank');
+      await page.setContent('<div id="root"></div>');
+      await mount(true);
+      await trigger.click();
+      await expect(dialog.locator('.al-percent')).toHaveText(['45%', '0%']);
+      await expect(
+        dialog.locator('.al-window').filter({ has: page.getByText('1h', { exact: true }) }),
+      ).toContainText(unknown);
+      await expect(
+        dialog.locator('.al-window').filter({ has: page.getByText('5h', { exact: true }) }),
+      ).toContainText(portuguese ? 'janela encerrada' : 'window ended');
+      await capture('19-limits');
+      await accounts.click();
+      const accountList = dialog.getByRole('region', {
+        name: portuguese ? 'Escolher contas' : 'Choose accounts',
+      });
+      const codex = accountList.getByRole('checkbox', { name: /Codex/ });
+      await expect(codex).toBeChecked();
+      await capture('20-limit-accounts');
+      await codex.uncheck();
+      await expect(trigger.locator('.al-bar')).toHaveCount(0);
+      await codex.check();
+      await expect(trigger.locator('.al-bar')).toHaveCount(1);
+      await caps.click();
+      const form = dialog.getByRole('form');
+      const warning = form.getByRole('spinbutton', {
+        name: portuguese ? 'Atenção a partir de' : 'Attention from',
+      });
+      const critical = form.getByRole('spinbutton', {
+        name: portuguese ? 'Crítico a partir de' : 'Critical from',
+      });
+      const save = form.getByRole('button', { name: portuguese ? 'Salvar' : 'Save' });
+      await expect(warning).toBeFocused();
+      await capture('21-limit-caps');
+      await warning.fill('40');
+      await critical.fill('39');
+      await expect(save).toBeDisabled();
+      await critical.fill('80');
+      await save.click();
+      await expect(caps).toBeFocused();
+      await expect(dialog.locator('.al-percent').first()).toHaveClass(/al-warn/);
+      await caps.click();
+      await expect(warning).toHaveValue('40');
+      await expect(critical).toHaveValue('80');
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+    } finally {
+      await page.close();
+    }
+  });
+}
