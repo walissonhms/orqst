@@ -105,7 +105,7 @@
   "showAll": "Todas as sessões",
   "loadMore": "Carregar mais atividade",
   "historyEnd": "Fim da atividade capturada",
-  "createWorkspace": "Adicionar workspace",
+  "createWorkspace": "Novo Workspace",
   "workspaceName": "Nome do workspace",
   "workspacePath": "Caminho do projeto (apenas identificação)",
   "save": "Salvar",
@@ -404,7 +404,10 @@
     "identifier": "Identificador de modelo observado",
     "notRecorded": "Não registrado",
     "limits": "Limites da evidência de modelo",
-    "historyNote": "Resumo histórico da sessão. O horário da observação do modelo está indisponível; este identificador pode diferir do modelo mais recente na origem.",
+    "historyNote": {
+      "label": "Identificador histórico do modelo.",
+      "detail": "Resumo histórico da sessão. O horário da observação do modelo está indisponível; este identificador pode diferir do modelo mais recente na origem."
+    },
     "availabilityNote": "A descoberta de modelos não está implementada. Disponibilidade, capacidades e seleção não foram verificadas."
   },
   "modelHistory": {
@@ -453,27 +456,32 @@
       "comunicacao": "Comunicação",
       "overview": "Visão geral",
       "workspaces": "Diretório de workspaces",
-      "agents": "Agentes e integrações",
-      "models": "Modelos mais usados",
+      "agents": "Agentes",
+      "models": "Métricas",
       "settings": "Configurações",
-      "artifacts": "Biblioteca de artefatos",
-      "studio": "Terminais / Studio"
+      "artifacts": "Artefatos",
+      "studio": "Studio",
+      "communication": "Comunicação"
     },
     "skip": "Ir para o conteúdo principal",
     "collapse": "Recolher navegação",
     "expand": "Expandir navegação",
-    "loading": "Carregando observações locais…",
+    "loading": "Carregando…",
     "palette": {
       "studioScope": "{{workspace}} / {{feature}}",
       "title": "Busca e comandos",
       "shortLabel": "Buscar",
-      "search": "Buscar telas, workspaces, agentes, modelos ou IDs de sessão",
-      "help": "Busca no retrato local carregado. ↑ / ↓ para mover, Enter para abrir, Escape para fechar. Nenhum comando é enviado aos agentes.",
+      "search": "Buscar Features e terminais",
+      "help": {
+        "label": "↑ / ↓ para mover · Enter para abrir · Esc para fechar",
+        "detail": "Busca no retrato local carregado. ↑ / ↓ para mover, Enter para abrir, Escape para fechar. Nenhum comando é enviado aos agentes."
+      },
       "navigation": "Navegação",
       "actions": "Ações locais",
-      "empty": "Nenhuma tela, workspace ou sessão corresponde à busca.",
+      "empty": "Nenhum resultado",
       "count": "Mostrando {{shown}} de {{count}} resultados",
-      "shortcut": "⌘ / Ctrl K"
+      "shortcut": "⌘ / Ctrl K",
+      "goTo": "Ir para {{route}}"
     },
     "workspaces": {
       "description": "Explore projetos observados e suas sessões, com um contexto separado para cada workspace.",
@@ -570,6 +578,28 @@
       "runningCount_other": "{{count}} em execução",
       "needsYouCount_one": "{{count}} precisa de você",
       "needsYouCount_other": "{{count}} precisam de você"
+    },
+    "frame": {
+      "connected": "CORE ONLINE",
+      "connecting": "CONECTANDO…",
+      "offline": "CORE OFFLINE",
+      "disconnected": "Core desconectado · Reconectando…",
+      "retry": "Tentar agora",
+      "reconnect": "Reconectar",
+      "general": "Geral",
+      "newTerminal": "Novo terminal",
+      "delegate": "Delegar",
+      "communicationUnavailable": "Comunicação indisponível",
+      "featureOptions": "Opções de {{name}}",
+      "rename": "Renomear",
+      "duplicate": "Duplicar configuração",
+      "archive": "Arquivar",
+      "remove": "Remover",
+      "removeDetail": "O Core ainda não permite remover Features.",
+      "archiveConfirm": "Arquivar {{name}}?",
+      "featureError": "Falha na Feature. Tente novamente.",
+      "observedWorkspace": "Workspace apenas observado.",
+      "workspaceEvidence": "Adiciona um Workspace ao observador local."
     }
   },
   "settings": {
@@ -599,7 +629,10 @@
     "resetHelp": "Restaurar tema escuro, contraste padrão, espaçamento compacto, movimento do sistema, tamanhos de texto padrão e tipografia de leitura original? Idioma, workspace selecionado, preferências de notificação, histórico capturado e rascunhos de artefatos permanecem iguais.",
     "resetConfirm": "Restaurar aparência padrão",
     "notificationScope": "Categorias e som são salvos pelo Bridge local e compartilhados pelos painéis conectados. A permissão é gerenciada pelo navegador; o áudio pode exigir nova ativação após recarregar.",
-    "notificationsUnavailable": "As preferências de notificações exigem uma conexão atual com o Bridge. O conforto de leitura e o idioma continuam disponíveis.",
+    "notificationsUnavailable": {
+      "label": "Reconecte para editar notificações.",
+      "detail": "As preferências de notificações exigem uma conexão atual com o Bridge. O conforto de leitura e o idioma continuam disponíveis."
+    },
     "privacy": "Privacidade e armazenamento",
     "privacyHelp": "O histórico observado é armazenado no banco SQLite do Bridge local. As preferências da interface ficam neste navegador ou perfil do Desktop. O texto capturado não é confiável e a ocultação de dados sensíveis é uma proteção parcial.",
     "privacyLimit": "Redefinir a aparência altera apenas as preferências de aparência. Esta tela não exclui histórico, altera retenção, acessa credenciais de provedores ou modifica sessões nativas de agentes.",
@@ -1057,7 +1090,10 @@
     "eyebrow": "ESPAÇO DE DESENVOLVIMENTO LOCAL",
     "intro": "Prepare os terminais, revise as permissões e trabalhe lado a lado.",
     "local": "Desktop nativo",
-    "oldDesktop": "Este Desktop está com a interface anterior de terminais. O Studio atualizado exige um relançamento posterior do Desktop. Preserve seus rascunhos e agentes em execução; nada será reiniciado aqui.",
+    "oldDesktop": {
+      "label": "Reabra o Desktop para usar o Studio.",
+      "detail": "Este Desktop está com a interface anterior de terminais. O Studio atualizado exige um relançamento posterior do Desktop. Preserve seus rascunhos e agentes em execução; nada será reiniciado aqui."
+    },
     "desktopOnly": "A preparação de terminais está disponível no aplicativo ORQST Desktop. Este navegador continua como observador.",
     "setupTitle": "Preparação de terminais",
     "prepareTerminals": "Preparar terminais…",
@@ -1076,12 +1112,18 @@
     "next_reviewed": "{{count}} terminais revisados. Próximo: abra os painéis e autorize cada início separadamente.",
     "next_opened": "Os painéis estão disponíveis nesta janela. O status de cada um informa se há um processo em execução ou bloqueado.",
     "reviewing": "Conclua ou cancele a revisão nativa para continuar.",
-    "capacityOne": "Este Desktop está configurado para um terminal. Preparar um par exige limite de pelo menos dois em um próximo lançamento.",
+    "capacityOne": {
+      "label": "Apenas um terminal configurado.",
+      "detail": "Este Desktop está configurado para um terminal. Preparar um par exige limite de pelo menos dois em um próximo lançamento."
+    },
     "otherOptions": "Outras opções de preparação",
     "createOther": "Preparar outro provedor…",
     "select": "Revisar arquivos existentes…",
     "refresh": "Atualizar seleção",
-    "advancedHelp": "Seleções existentes e reservas de capacidade são preservadas. Equipes maiores do mesmo provedor continuam no menu nativo Terminal quando configuradas.",
+    "advancedHelp": {
+      "label": "A preparação avançada preserva seleções.",
+      "detail": "Seleções existentes e reservas de capacidade são preservadas. Equipes maiores do mesmo provedor continuam no menu nativo Terminal quando configuradas."
+    },
     "guideTitle": "Da preparação ao primeiro comando",
     "step_prepare": "Preparar e revisar",
     "step_prepare_help": "Escolha uma pasta de teste vazia. Revise caminhos, hashes, identidade nativa compartilhada e a decisão separada de início do OpenCode.",
@@ -1089,12 +1131,21 @@
     "step_open_help": "Abra a seleção revisada. Use abas A/B, controles de divisão e a ação Painel sem descartar o documento carregado.",
     "step_start": "Iniciar, conectar, digitar",
     "step_start_help": "Em cada painel: abra o CLI revisado uma vez. Início, saída e teclado normais não exigem nova revisão.",
-    "boundary": "OpenCode pode modificar seu banco nativo compartilhado e realizar atividade de início somente após seu consentimento explícito. Modelo, login e delegação entre provedores continuam sem validação.",
+    "boundary": {
+      "label": "O OpenCode exige confirmação.",
+      "detail": "OpenCode pode modificar seu banco nativo compartilhado e realizar atividade de início somente após seu consentimento explícito. Modelo, login e delegação entre provedores continuam sem validação."
+    },
     "capabilities": "Recursos dos terminais",
     "layoutTitle": "Abas e divisões",
-    "layoutHelp": "Uma janela com grade de terminais revisados, ou um painel selecionado em janelas estreitas. Trocar de visão preserva rascunhos carregados e revoga a entrada de teclado. A ordem dos painéis e as preferências de layout são salvas localmente.",
+    "layoutHelp": {
+      "label": "Layouts são salvos localmente.",
+      "detail": "Uma janela com grade de terminais revisados, ou um painel selecionado em janelas estreitas. Trocar de visão preserva rascunhos carregados e revoga a entrada de teclado. A ordem dos painéis e as preferências de layout são salvas localmente."
+    },
     "grantsTitle": "Permissões separadas",
-    "grantsHelp": "Preparar, abrir, iniciar e habilitar teclado são etapas separadas. Sem prompt, login ou execução automática de provedor.",
+    "grantsHelp": {
+      "label": "Ações do terminal exigem aprovação.",
+      "detail": "Preparar, abrir, iniciar e habilitar teclado são etapas separadas. Sem prompt, login ou execução automática de provedor."
+    },
     "focus_required": "Clique na página do Studio para dar foco a ela e clique novamente na ação.",
     "denied": "A permissão do clique expirou ou a ação não está disponível para esta seleção. Clique no Studio e tente novamente; atualize a seleção se continuar bloqueada.",
     "busy": "Outra operação nativa está em andamento. Conclua ou cancele primeiro.",
@@ -1105,7 +1156,10 @@
     "state_blocked": "Preparação precisa de atenção",
     "next_blocked": "A preparação não pôde terminar com segurança. Arquivos e reservas existentes foram preservados. Não há nova tentativa automática; consulte o menu nativo Terminal antes de prosseguir.",
     "tauri": {
-      "unavailable": "A preparação de terminais Tauri está indisponível neste documento. Use o menu nativo Preparar terminais Tauri; arquivos e seleções existentes foram preservados.",
+      "unavailable": {
+        "label": "Preparação indisponível aqui.",
+        "detail": "A preparação de terminais Tauri está indisponível neste documento. Use o menu nativo Preparar terminais Tauri; arquivos e seleções existentes foram preservados."
+      },
       "setupHelp": "Prepare de 1 a 8 terminais Codex ou Claude em uma pasta de teste vazia. O mesmo fluxo do menu nativo revisa o executável, o Node 24 incluído e a identidade compartilhada antes de criar arquivos; a abertura tem revisão separada. O MCP do ORQST fica desativado.",
       "provider": "Provedor CLI",
       "count": "Quantidade de terminais",
@@ -1750,7 +1804,8 @@
     "warn": "Atenção a partir de",
     "critical": "Crítico a partir de",
     "hidden_one": "{{count}} conta oculta da barra",
-    "hidden_other": "{{count}} contas ocultas da barra"
+    "hidden_other": "{{count}} contas ocultas da barra",
+    "sourceApp": "último reporte da CLI"
   },
   "studioNotifications": {
     "empty": "Nenhuma notificação",

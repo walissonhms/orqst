@@ -38,9 +38,9 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.goto('/studio');
   const workspace = page.locator('.studio-workspace > .feature-workspace');
   await expect(workspace).toBeVisible();
-  await expect(workspace.locator('.feature-core')).toHaveAttribute('data-state', 'unavailable');
-  await expect(page.locator('#app-sidebar')).toBeHidden();
-  await expect(page.locator('.main-shell > .topbar')).toBeHidden();
+  await expect(workspace.locator('.ts-loading')).toHaveText('CORE UNAVAILABLE');
+  await expect(page.locator('#app-sidebar')).toBeVisible();
+  await expect(page.locator('.main-shell > .topbar')).toHaveCSS('height', '45px');
   await expect(page.locator('.app-footer')).toBeHidden();
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
   for (const [width, height] of [
@@ -50,7 +50,15 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
     [320, 600],
   ]) {
     await page.setViewportSize({ width: width!, height: height! });
-    await expect.poll(() => workspace.boundingBox()).toEqual({ x: 0, y: 0, width, height });
+    const sidebarWidth = width! < 720 ? 46 : 155;
+    await expect
+      .poll(() => workspace.boundingBox())
+      .toEqual({
+        x: sidebarWidth,
+        y: 45,
+        width: width! - sidebarWidth,
+        height: height! - 45,
+      });
     expect(
       await page.evaluate(() => ({
         width: document.documentElement.scrollWidth,
@@ -78,10 +86,11 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-en.png') });
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
   await expect(page.locator('#app-sidebar')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
-  await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
+  await page.getByRole('link', { name: 'Studio', exact: true }).click();
   await expect(workspace).toBeVisible();
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Novos terminais', exact: true })).toBeVisible();
@@ -111,19 +120,19 @@ test('Studio has one Overview action and a compact Feature sidebar at narrow wid
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/studio');
   const overview = page.getByRole('link', { name: 'Overview', exact: true });
-  const sidebar = page.locator('.feature-sidebar');
+  const sidebar = page.locator('#app-sidebar');
   await expect(overview).toHaveCount(1);
   await expect(page.locator('.ts-features')).toHaveCount(0);
-  await expect(page.locator('.feature-topbar, .ts-toolbar')).toHaveCount(1);
+  await expect(page.locator('.topbar, .feature-topbar, .ts-toolbar')).toHaveCount(1);
   await expect(sidebar).toHaveCSS('width', '155px');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toHaveCSS('width', '46px');
   await expect(overview).toBeInViewport({ ratio: 1 });
-  await expect(
-    page.locator('.ts-toolbar').getByRole('button', { name: '＋ Terminal' }),
-  ).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('.topbar').getByRole('button', { name: '＋ Terminal' })).toBeInViewport(
+    { ratio: 1 },
+  );
   await overview.click();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
 });
 
 const workspace = { id: 'lane2-synthetic', name: 'Workspace sintético' };
@@ -171,10 +180,13 @@ function syntheticSnapshot(): FeatureNativeSnapshot {
   });
 }
 
-async function openNativeFixture(page: Page, nativeWorkspace = true) {
-  const bundle = await build({
-    stdin: {
-      contents: `
+async function openNativeFixture(page: Page, nativeWorkspace: boolean | 'dashboard' = true) {
+  const bundle =
+    nativeWorkspace === 'dashboard'
+      ? undefined
+      : await build({
+          stdin: {
+            contents: `
         import { createRoot } from 'react-dom/client';
         import { FeatureStudio } from './src/FeatureStudio.tsx';
         import './src/feature-shell.css';
@@ -183,16 +195,16 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
           <FeatureStudio nativeWorkspace={${nativeWorkspace}} workspaces={window.fixtureWorkspaces} />
         );
       `,
-      resolveDir: join(process.cwd(), 'apps/dashboard'),
-      loader: 'tsx',
-    },
-    outdir: 'out',
-    bundle: true,
-    platform: 'browser',
-    format: 'iife',
-    jsx: 'automatic',
-    write: false,
-  });
+            resolveDir: join(process.cwd(), 'apps/dashboard'),
+            loader: 'tsx',
+          },
+          outdir: 'out',
+          bundle: true,
+          platform: 'browser',
+          format: 'iife',
+          jsx: 'automatic',
+          write: false,
+        });
   await page.addInitScript(
     ({ snapshot, newFeatureId, observerWorkspace }) => {
       localStorage.setItem('i18nextLng', 'pt-BR');
@@ -220,7 +232,7 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
                 .filter((slot) => members.includes(slot.terminalId))
                 .map((slot) => ({
                   slot: slot.slot,
-                  label: `T-${String(slot.slot + 1).padStart(3, '0')}`,
+                  label: slot.slot === 0 ? '@T-001' : `T-${String(slot.slot + 1).padStart(3, '0')}`,
                   provider: slot.provider,
                   active: slot.terminalId === active,
                   minimized: false,
@@ -294,6 +306,10 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
     },
     { snapshot: syntheticSnapshot(), newFeatureId: featureId(5), observerWorkspace },
   );
+  if (!bundle) {
+    await page.goto('/studio');
+    return;
+  }
   await page.route('**/lane2-native-fixture', (route) =>
     route.fulfill({ contentType: 'text/html', body: '<!doctype html><div id="root"></div>' }),
   );
@@ -546,7 +562,8 @@ for (const [width, height] of [
     }
     await expect(page.locator('.ts-modes, .ts-features, .ts-mention-open')).toHaveCount(0);
     await expect(first.locator('.ts-head')).toHaveCSS('height', '31px');
-    await expect(first.locator('.ts-name')).toHaveAttribute('title', /^@T-001/);
+    await expect(first.locator('.ts-name')).toHaveCount(0);
+    await expect(first.locator('.ts-cli')).toHaveAttribute('title', /^@T-001/);
     await expect(first.locator('.ts-card-model, .ts-card-tokens')).toHaveCount(2);
     await expect(dock).toHaveCSS('height', '33px');
     await expect(dock.locator('.ts-dock-title')).toHaveText('Minimizados');
@@ -658,5 +675,45 @@ for (const [width, height] of [
     await menu.getByRole('menuitem', { name: 'Definir orquestrador', exact: true }).click();
     await expect(first.locator('.ts-role')).toBeVisible();
     await capture('15-role');
+  });
+}
+
+for (const [width, height] of [
+  [1440, 900],
+  [1280, 800],
+] as const) {
+  test(`the shared shell opens the same Delegate dialog from the Studio header and pane menu at ${width}x${height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await openNativeFixture(page, 'dashboard');
+    const header = page.locator('.topbar');
+    const first = page.locator(`[data-pane-id="${terminalId(1)}"]`);
+    const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
+    const capture = (name: string) =>
+      integrated &&
+      page.screenshot({
+        path: join(integrated, `${width}x${height}`, `${name}.png`),
+        animations: 'disabled',
+      });
+    const dialog = page.getByRole('dialog', { name: 'Delegar' });
+
+    await expect(page.locator('.topbar, .ts-toolbar, .feature-topbar')).toHaveCount(1);
+    await expect(page.locator('#app-sidebar')).toHaveCSS('width', '155px');
+    await expect(header).toHaveCSS('height', '45px');
+    await expect(first.locator('.ts-head .ts-label')).toHaveText('T-001');
+    await expect(first.locator('.ts-name')).toHaveCount(0);
+    await expect(page.locator(`[data-pane-id="${terminalId(2)}"] .ts-name`)).toHaveCount(0);
+    await capture('studio-grid');
+    await header.getByRole('button', { name: 'Delegar', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: /T-001/ })).not.toBeChecked();
+    await page.keyboard.press('Escape');
+    await first.locator('.ts-more').click();
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await capture('pane-menu');
+    await menu.getByRole('menuitem', { name: 'Enviar mensagem…' }).click();
+    await expect(dialog.getByRole('radio', { name: /T-001/ })).toBeChecked();
   });
 }

@@ -61,7 +61,9 @@ export function LegacyStudioPreparation() {
         <div className="studio-browser-card">
           <Terminal size={28} aria-hidden="true" />
           <h1 id="studio-title">{t('shell.views.studio')}</h1>
-          <p>{t(desktop ? 'studio.oldDesktop' : 'studio.browserOnly')}</p>
+          <p title={desktop ? t('studio.oldDesktop.detail') : undefined}>
+            {t(desktop ? 'studio.oldDesktop.label' : 'studio.browserOnly')}
+          </p>
           {import.meta.env?.DEV && !desktop && (
             <a className="button" href="/preview/terminals.html">
               {t('studio.layoutPreview')}
@@ -72,7 +74,7 @@ export function LegacyStudioPreparation() {
     );
   return (
     <section className="studio-page" aria-labelledby="studio-title">
-      <header className="studio-heading">
+      <div className="studio-heading">
         <div>
           <p className="studio-eyebrow">{t('studio.eyebrow')}</p>
           <h1 id="studio-title">{t('shell.views.studio')}</h1>
@@ -82,7 +84,7 @@ export function LegacyStudioPreparation() {
           <ShieldCheck size={16} />
           {t('studio.local')}
         </span>
-      </header>
+      </div>
       {notice && (
         <p className="notice" role="status">
           {t(`studio.${notice}`)}
@@ -151,7 +153,11 @@ export function LegacyStudioPreparation() {
               ? t('studio.reviewing')
               : t(`studio.next_${stage}`, { count: snapshot?.count ?? 0 })}
           </p>
-          {snapshot && snapshot.limit < 2 && <p className="notice">{t('studio.capacityOne')}</p>}
+          {snapshot && snapshot.limit < 2 && (
+            <p className="notice" title={t('studio.capacityOne.detail')}>
+              {t('studio.capacityOne.label')}
+            </p>
+          )}
           <details className="studio-advanced">
             <summary>{t('studio.otherOptions')}</summary>
             <div className="studio-actions">
@@ -178,7 +184,7 @@ export function LegacyStudioPreparation() {
                 {t('studio.refresh')}
               </button>
             </div>
-            <p>{t('studio.advancedHelp')}</p>
+            <p title={t('studio.advancedHelp.detail')}>{t('studio.advancedHelp.label')}</p>
           </details>
         </section>
         <aside className="panel studio-guide" aria-labelledby="studio-guide-title">
@@ -194,7 +200,9 @@ export function LegacyStudioPreparation() {
               </li>
             ))}
           </ol>
-          <p className="studio-boundary">{t('studio.boundary')}</p>
+          <p className="studio-boundary" title={t('studio.boundary.detail')}>
+            {t('studio.boundary.label')}
+          </p>
         </aside>
       </div>
       <section className="studio-capabilities" aria-label={t('studio.capabilities')}>
@@ -202,14 +210,14 @@ export function LegacyStudioPreparation() {
           <Columns2 size={18} />
           <span>
             <strong>{t('studio.layoutTitle')}</strong>
-            {t('studio.layoutHelp')}
+            {t('studio.layoutHelp.label')}
           </span>
         </p>
         <p>
           <ShieldCheck size={18} />
           <span>
             <strong>{t('studio.grantsTitle')}</strong>
-            {t('studio.grantsHelp')}
+            {t('studio.grantsHelp.label')}
           </span>
         </p>
       </section>

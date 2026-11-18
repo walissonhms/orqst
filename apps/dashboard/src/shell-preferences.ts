@@ -1,26 +1,31 @@
 import { dashboardViewSchema, type DashboardView } from '@orqst/protocol';
 
-export const appViews = dashboardViewSchema.options;
+export const appViews = [
+  'studio',
+  'overview',
+  'communication',
+  'models',
+  'artifacts',
+  'settings',
+] as const;
 export type AppView = DashboardView;
 export interface ShellPreferences {
   view: AppView;
   workspaceId: string;
-  collapsed: boolean;
   status: string;
   workspaceLayout: 'grid' | 'list';
   workspaceSort: 'recent' | 'name';
 }
 export const shellStorageKey = 'orqst.shell.v1';
 export const defaultShellPreferences: ShellPreferences = {
-  view: 'overview',
+  view: 'studio',
   workspaceId: '',
-  collapsed: false,
   status: '',
   workspaceLayout: 'grid',
   workspaceSort: 'recent',
 };
 export function viewFromHash(hash: string): AppView | undefined {
-  return appViews.find((view) => hash === `#${view}`);
+  return dashboardViewSchema.options.find((view) => hash === `#${view}`);
 }
 export function parseShellPreferences(value: string | null): ShellPreferences {
   try {
@@ -28,12 +33,11 @@ export function parseShellPreferences(value: string | null): ShellPreferences {
     if (!data || typeof data !== 'object' || Array.isArray(data)) return defaultShellPreferences;
     const record = data as Record<string, unknown>;
     return {
-      view: appViews.find((view) => view === record.view) ?? 'overview',
+      view: dashboardViewSchema.options.find((view) => view === record.view) ?? 'studio',
       workspaceId:
         typeof record.workspaceId === 'string' && record.workspaceId.length <= 200
           ? record.workspaceId
           : '',
-      collapsed: record.collapsed === true,
       status:
         typeof record.status === 'string' &&
         ['running', 'waiting_for_user', 'completed', 'failed', 'interrupted', 'unknown'].includes(

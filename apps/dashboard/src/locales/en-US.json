@@ -105,7 +105,7 @@
   "showAll": "All sessions",
   "loadMore": "Load more activity",
   "historyEnd": "End of captured activity",
-  "createWorkspace": "Add workspace",
+  "createWorkspace": "New Workspace",
   "workspaceName": "Workspace name",
   "workspacePath": "Project path (label only)",
   "save": "Save",
@@ -404,7 +404,10 @@
     "identifier": "Observed model identifier",
     "notRecorded": "Not recorded",
     "limits": "Model evidence limits",
-    "historyNote": "Historical session summary. The model observation time is unavailable; this identifier may differ from the latest model in the source.",
+    "historyNote": {
+      "label": "Historical model identifier.",
+      "detail": "Historical session summary. The model observation time is unavailable; this identifier may differ from the latest model in the source."
+    },
     "availabilityNote": "Model discovery is not implemented. Availability, capabilities and selection have not been verified."
   },
   "modelHistory": {
@@ -453,27 +456,32 @@
       "comunicacao": "Communication",
       "overview": "Overview",
       "workspaces": "Workspace directory",
-      "agents": "Agents & integrations",
-      "models": "Most used models",
+      "agents": "Agents",
+      "models": "Metrics",
       "settings": "Settings",
-      "artifacts": "Artifact library",
-      "studio": "Terminals / Studio"
+      "artifacts": "Artifacts",
+      "studio": "Studio",
+      "communication": "Communication"
     },
     "skip": "Skip to main content",
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
-    "loading": "Loading local observations…",
+    "loading": "Loading…",
     "palette": {
       "studioScope": "{{workspace}} / {{feature}}",
       "title": "Search & commands",
       "shortLabel": "Search",
-      "search": "Search views, workspaces, agents, models or session IDs",
-      "help": "Searches the loaded local snapshot. ↑ / ↓ to move, Enter to open, Escape to close. No agent commands are sent.",
+      "search": "Search Features and terminals",
+      "help": {
+        "label": "↑ / ↓ to move · Enter to open · Esc to close",
+        "detail": "Searches the loaded local snapshot. ↑ / ↓ to move, Enter to open, Escape to close. No agent commands are sent."
+      },
       "navigation": "Navigation",
       "actions": "Local actions",
-      "empty": "No matching views, workspaces or sessions.",
+      "empty": "No matches",
       "count": "Showing {{shown}} of {{count}} matches",
-      "shortcut": "⌘ / Ctrl K"
+      "shortcut": "⌘ / Ctrl K",
+      "goTo": "Go to {{route}}"
     },
     "workspaces": {
       "description": "Explore observed projects and their sessions, with a separate context for each workspace.",
@@ -570,6 +578,28 @@
       "runningCount_other": "{{count}} running",
       "needsYouCount_one": "{{count}} needs you",
       "needsYouCount_other": "{{count}} need you"
+    },
+    "frame": {
+      "connected": "CORE ONLINE",
+      "connecting": "CONNECTING…",
+      "offline": "CORE OFFLINE",
+      "disconnected": "Core disconnected · Reconnecting…",
+      "retry": "Try now",
+      "reconnect": "Reconnect",
+      "general": "General",
+      "newTerminal": "New terminal",
+      "delegate": "Delegate",
+      "communicationUnavailable": "Communication unavailable",
+      "featureOptions": "Options for {{name}}",
+      "rename": "Rename",
+      "duplicate": "Duplicate configuration",
+      "archive": "Archive",
+      "remove": "Remove",
+      "removeDetail": "The Core has no Feature removal operation.",
+      "archiveConfirm": "Archive {{name}}?",
+      "featureError": "Feature change failed. Try again.",
+      "observedWorkspace": "This Workspace is observed only.",
+      "workspaceEvidence": "This adds a Workspace to the local observer."
     }
   },
   "settings": {
@@ -599,7 +629,10 @@
     "resetHelp": "Restore dark theme, standard contrast, compact spacing, system motion, standard text sizes and original reading typography? Language, workspace selection, notification preferences, captured history and artifact drafts are unchanged.",
     "resetConfirm": "Restore appearance defaults",
     "notificationScope": "Categories and sound are saved by the local Bridge and shared by connected dashboards. Browser permission is managed by the browser; audio may need activation again after reload.",
-    "notificationsUnavailable": "Notification preferences require a current Bridge connection. Reading comfort and language remain available.",
+    "notificationsUnavailable": {
+      "label": "Reconnect to edit notifications.",
+      "detail": "Notification preferences require a current Bridge connection. Reading comfort and language remain available."
+    },
     "privacy": "Privacy & storage",
     "privacyHelp": "Observation history is stored in the local Bridge SQLite database. Interface preferences stay in this browser or Desktop profile. Captured text is untrusted and redaction is best-effort.",
     "privacyLimit": "Appearance reset changes only appearance preferences. This screen does not delete history, change retention, access provider credentials or modify native agent sessions.",
@@ -1057,7 +1090,10 @@
     "eyebrow": "LOCAL DEVELOPER WORKSPACE",
     "intro": "Prepare your terminals, review the permissions, then work side by side.",
     "local": "Native Desktop",
-    "oldDesktop": "This Desktop is running an older terminal interface. The updated Studio needs a later Desktop relaunch. Keep your drafts and running agents safe; nothing will restart here.",
+    "oldDesktop": {
+      "label": "Relaunch Desktop to use Studio.",
+      "detail": "This Desktop is running an older terminal interface. The updated Studio needs a later Desktop relaunch. Keep your drafts and running agents safe; nothing will restart here."
+    },
     "desktopOnly": "Terminal preparation is available in the ORQST Desktop app. This browser remains an observer.",
     "setupTitle": "Terminal preparation",
     "prepareTerminals": "Prepare terminals…",
@@ -1076,12 +1112,18 @@
     "next_reviewed": "{{count}} terminals reviewed. Next: open the panels, then authorize each start separately.",
     "next_opened": "Panels are available in this window. Their own status shows whether a process is running or blocked.",
     "reviewing": "Complete or cancel the native review to continue.",
-    "capacityOne": "This Desktop is configured for one terminal. Pair preparation requires a limit of at least two on a later launch.",
+    "capacityOne": {
+      "label": "Only one terminal configured.",
+      "detail": "This Desktop is configured for one terminal. Pair preparation requires a limit of at least two on a later launch."
+    },
     "otherOptions": "Other preparation options",
     "createOther": "Prepare another provider…",
     "select": "Review existing files…",
     "refresh": "Refresh selection",
-    "advancedHelp": "Existing selections and capacity reservations are preserved. Larger same-provider teams remain available in the native Terminal menu when configured.",
+    "advancedHelp": {
+      "label": "Advanced preparation preserves selections.",
+      "detail": "Existing selections and capacity reservations are preserved. Larger same-provider teams remain available in the native Terminal menu when configured."
+    },
     "guideTitle": "From setup to the first command",
     "step_prepare": "Prepare and review",
     "step_prepare_help": "Choose an empty test folder. Review paths, hashes, shared native identity and the separate OpenCode startup choice.",
@@ -1089,12 +1131,21 @@
     "step_open_help": "Open the reviewed selection. Use the A/B tabs, split controls and Dashboard action without discarding the loaded document.",
     "step_start": "Start, connect, type",
     "step_start_help": "In each panel: open the reviewed CLI once. Normal launch, output and keyboard use need no further review.",
-    "boundary": "OpenCode may modify its shared native database and perform startup activity only after your explicit consent. Model, login and cross-provider delegation remain unverified.",
+    "boundary": {
+      "label": "OpenCode requires confirmation.",
+      "detail": "OpenCode may modify its shared native database and perform startup activity only after your explicit consent. Model, login and cross-provider delegation remain unverified."
+    },
     "capabilities": "Terminal capabilities",
     "layoutTitle": "Tabs and splits",
-    "layoutHelp": "One window with a grid of reviewed terminals, or one selected pane on narrow windows. Switching views preserves loaded drafts and revokes keyboard input. Pane order and layout preferences are saved locally.",
+    "layoutHelp": {
+      "label": "Layouts are saved locally.",
+      "detail": "One window with a grid of reviewed terminals, or one selected pane on narrow windows. Switching views preserves loaded drafts and revokes keyboard input. Pane order and layout preferences are saved locally."
+    },
     "grantsTitle": "Separate permissions",
-    "grantsHelp": "Preparing, opening, starting and enabling keyboard input are separate steps. No automatic prompt, login or provider launch.",
+    "grantsHelp": {
+      "label": "Terminal actions require approval.",
+      "detail": "Preparing, opening, starting and enabling keyboard input are separate steps. No automatic prompt, login or provider launch."
+    },
     "focus_required": "Click the Studio page to bring it into focus, then click the action again.",
     "denied": "The click permission expired or this action is unavailable for the selection. Click Studio and try again; refresh the selection if it remains blocked.",
     "busy": "Another native operation is in progress. Finish or cancel it first.",
@@ -1105,7 +1156,10 @@
     "state_blocked": "Preparation needs attention",
     "next_blocked": "Preparation could not finish safely. Existing files and reservations were preserved. Automatic retry is unavailable; inspect the native Terminal menu before proceeding.",
     "tauri": {
-      "unavailable": "Tauri terminal preparation is unavailable in this document. Use the native Prepare Tauri terminals menu; existing files and selections are preserved.",
+      "unavailable": {
+        "label": "Preparation unavailable here.",
+        "detail": "Tauri terminal preparation is unavailable in this document. Use the native Prepare Tauri terminals menu; existing files and selections are preserved."
+      },
       "setupHelp": "Prepare 1–8 Codex or Claude terminals in one empty test folder. The same native menu flow reviews the executable, bundled Node 24 and shared identity before creating files, then separately reviews opening. ORQST MCP is disabled.",
       "provider": "CLI provider",
       "count": "Terminal count",
@@ -1750,7 +1804,8 @@
     "warn": "Attention from",
     "critical": "Critical from",
     "hidden_one": "{{count}} account hidden from the toolbar",
-    "hidden_other": "{{count}} accounts hidden from the toolbar"
+    "hidden_other": "{{count}} accounts hidden from the toolbar",
+    "sourceApp": "last report from the CLI"
   },
   "studioNotifications": {
     "empty": "No notifications",

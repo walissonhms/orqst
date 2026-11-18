@@ -5,6 +5,12 @@ pub fn dashboard_path_allowed(path: &str) -> bool {
     if matches!(
         path,
         "/" | "/overview"
+            | "/visao-geral"
+            | "/communication"
+            | "/metricas"
+            | "/artefatos"
+            | "/configuracoes"
+            | "/configuracoes/agentes"
             | "/studio"
             | "/workspaces"
             | "/agents"
@@ -76,6 +82,12 @@ mod tests {
         for path in [
             "/",
             "/overview",
+            "/visao-geral",
+            "/comunicacao",
+            "/metricas",
+            "/artefatos",
+            "/configuracoes",
+            "/configuracoes/agentes",
             "/studio",
             "/workspaces",
             "/agents",

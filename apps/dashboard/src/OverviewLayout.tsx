@@ -1,3 +1,5 @@
+import { viewPath } from './navigation';
+import { RouteHeaderActions } from './AppShell';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
@@ -61,12 +63,16 @@ export function OverviewLayout({
   online,
   onRefresh,
   onOpen,
+  workspaceId,
+  onOpenObserved,
 }: {
   scope?: FeatureNativeSnapshot;
   snapshot?: Snapshot;
   online: boolean;
   onRefresh: () => Promise<unknown>;
   onOpen: (target: StudioCardTarget) => Promise<boolean>;
+  workspaceId?: string;
+  onOpenObserved?: (id: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const { period, setPeriod } = useOverviewPeriod();
@@ -198,7 +204,10 @@ export function OverviewLayout({
       return t(state === 'ended' ? 'screens.overview.ended' : 'screens.overview.waiting');
     return t(`statusLabels.${state}`);
   }
-  const observed = snapshot?.sessions.filter((session) => !owned.has(session.id)) ?? [];
+  const observed =
+    snapshot?.sessions.filter(
+      (session) => !owned.has(session.id) && (!workspaceId || session.workspaceId === workspaceId),
+    ) ?? [];
   const formatDate = (at: number) => (at ? date.format(at) : '—');
   function open(target: StudioCardTarget) {
     setFailure(undefined);
@@ -240,7 +249,9 @@ export function OverviewLayout({
     <section className="spec-screen" aria-labelledby="overview-title">
       <div className="spec-head">
         <h1 id="overview-title">{t('overviewPage.title')}</h1>
-        <div className="spec-actions">{tools}</div>
+        <RouteHeaderActions>
+          <div className="spec-actions">{tools}</div>
+        </RouteHeaderActions>
       </div>
       {failure && <p role="alert">{t(`screens.overview.${failure}`)}</p>}
       <dl className="spec-counters">
@@ -359,7 +370,25 @@ export function OverviewLayout({
             <tbody>
               {observed.map((session) => (
                 <tr key={session.id}>
-                  <td>{session.agentName}</td>
+                  <td>
+                    <a
+                      href={viewPath('overview', session.id)}
+                      onClick={(event) => {
+                        if (
+                          !onOpenObserved ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.altKey ||
+                          event.shiftKey
+                        )
+                          return;
+                        event.preventDefault();
+                        onOpenObserved(session.id);
+                      }}
+                    >
+                      {session.agentName}
+                    </a>
+                  </td>
                   <td>{t(`screens.cli.${session.adapter}`, { defaultValue: session.adapter })}</td>
                   <td>{session.model ?? '—'}</td>
                   <td>

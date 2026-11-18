@@ -1175,17 +1175,7 @@ fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bo
     if label == "feature-workspace" {
         return parent == "main" && source == CHROME_URL;
     }
-    let Ok(url) = tauri::Url::parse(source) else {
-        return false;
-    };
-    label == "main"
-        && parent == "main"
-        && url.origin().ascii_serialization() == origin
-        && matches!(url.path(), "/" | "/studio" | "/comunicacao")
-        && url.query().is_none()
-        && url.fragment().is_none()
-        && url.username().is_empty()
-        && url.password().is_none()
+    dashboard_document_matches(label, parent, source, origin)
 }
 fn document_version(state: &State, main: bool) -> u64 {
     if main {
@@ -2187,6 +2177,35 @@ fn changes_presentation(request: &Value) -> bool {
         )
 }
 
+fn inspector_request_source_allowed(source: &str, request: &Value) -> bool {
+    if inspector_document_url(source) {
+        return true;
+    }
+    let command = request["command"]["kind"].as_str();
+    (source == CHROME_URL && command != Some("retry"))
+        || (matches!(command, Some("read" | "send"))
+            && tauri::Url::parse(source)
+                .is_ok_and(|url| matches!(url.path(), "/" | "/studio")))
+}
+
+/// Feature tree actions are available on every dashboard route. Other actions keep
+/// the previous Studio source restriction and all request checks still apply.
+fn feature_action_source_allowed(source: &str, request: &Value) -> bool {
+    if request["action"] == "inspector" {
+        return inspector_request_source_allowed(source, request);
+    }
+    if source == CHROME_URL {
+        return true;
+    }
+    if request["action"] == "arrange" || is_terminal_close(request) {
+        return false;
+    }
+    matches!(
+        request["action"].as_str(),
+        Some("snapshot" | "select" | "create" | "update")
+    ) || tauri::Url::parse(source).is_ok_and(|url| matches!(url.path(), "/" | "/studio"))
+}
+
 #[tauri::command]
 pub async fn feature_request(window: Webview, request: Value) -> Value {
     let denied = || json!({"status":"denied"});
@@ -2208,13 +2227,8 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((source, document)) = identity(&window) else {
         return deny("identity");
     };
-    if request["action"] == "inspector" && !inspector_document_url(&source)
-        && !(source == CHROME_URL && request["command"]["kind"] != "retry")
-    {
-        return deny("source");
-    }
     let close = is_terminal_close(&request);
-    if (request["action"] == "arrange" || close) && source != CHROME_URL {
+    if !feature_action_source_allowed(&source, &request) {
         return deny("source");
     }
     let app = window.app_handle();
@@ -2564,6 +2578,11 @@ pub fn configure(
             .remote(format!("{origin}/"))
             .remote(format!("{origin}/studio"))
             .remote(format!("{origin}/comunicacao"))
+            .remote(format!("{origin}/visao-geral"))
+            .remote(format!("{origin}/metricas"))
+            .remote(format!("{origin}/artefatos"))
+            .remote(format!("{origin}/configuracoes"))
+            .remote(format!("{origin}/configuracoes/agentes"))
             .webview("main")
             .permission("allow-feature-request"),
     )?;
@@ -3458,6 +3477,40 @@ mod tests {
             ));
         }
     }
+    #[test]
+    fn dashboard_feature_tree_keeps_terminal_actions_in_studio() {
+        let origin = "http://127.0.0.1:4319";
+        for path in [
+            "/visao-geral",
+            "/comunicacao",
+            "/metricas",
+            "/artefatos",
+            "/configuracoes/agentes",
+        ] {
+            let source = format!("{origin}{path}");
+            assert!(document_matches("main", "main", &source, origin));
+            for action in ["snapshot", "select", "create", "update"] {
+                assert!(feature_action_source_allowed(&source, &json!({"action":action})));
+            }
+            for action in [
+                "organize", "arrange", "pane", "renamePane", "movePane", "mention",
+            ] {
+                assert!(!feature_action_source_allowed(&source, &json!({"action":action})));
+            }
+        }
+        let studio = format!("{origin}/studio");
+        assert!(feature_action_source_allowed(
+            &studio,
+            &json!({"action":"pane","command":"focus"})
+        ));
+        assert!(!feature_action_source_allowed(
+            &studio,
+            &json!({"action":"pane","command":"close"})
+        ));
+        assert!(!feature_action_source_allowed(&studio, &json!({"action":"arrange"})));
+        assert!(feature_action_source_allowed(CHROME_URL, &json!({"action":"arrange"})));
+    }
+
     #[test]
     fn metadata_actions_never_accept_execution_or_renderer_identity() {
         let valid = json!({"contractVersion":1,"generation":0,"action":"snapshot"});

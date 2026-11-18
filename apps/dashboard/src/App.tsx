@@ -1,28 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Activity,
   Bell,
   Check,
-  ChevronRight,
   Circle,
-  Command,
   ExternalLink,
   Folder,
-  FileText,
   GitBranch,
-  Globe2,
-  Layers3,
-  Menu,
-  MessagesSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
-  BarChart3,
-  Plus,
-  Pin,
-  Search,
-  Settings2,
-  ShieldCheck,
   Terminal,
   X,
   Zap,
@@ -33,6 +17,7 @@ import type {
   Preferences,
   SessionView,
   Snapshot,
+  WorkspaceFeature,
   StoredEvent,
 } from '@orqst/protocol';
 import {
@@ -59,86 +44,27 @@ import {
   viewFromLocation,
   viewPath,
   type StudioTreeProps,
+  type StudioShellCommand,
 } from './navigation';
 import { findNotificationSource, NativeSessionNavigation } from './native-session-navigation';
-import { FeatureStudio } from './FeatureStudio';
+import { FeatureStudio, type StudioFocus } from './FeatureStudio';
+import { CommunicationInspector } from './CommunicationInspector';
+import { AppShell } from './AppShell';
+import { ShellSidebar, type FeatureOperation } from './ShellSidebar';
+import { studioTerminals } from './studio-native';
 import { Workspaces } from './Workspaces';
-import { pinnedFirst, useWorkspacePins } from './workspace-pins';
+import { useWorkspacePins } from './workspace-pins';
 import { OverviewLayout, type StudioCardTarget } from './OverviewLayout';
 import { CommandPalette } from './CommandPalette';
-import { CommunicationInspector } from './CommunicationInspector';
 import { useFeatureShell } from './use-feature-shell.js';
-import { unassignedTerminalCount } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { Modal } from './Modal';
-import { Settings, readStartup } from './Settings';
+import { readStartup, Settings } from './Settings';
 import { needsOnboarding, ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
-import { isTemporaryWorkspace, shellSections, shortAge, STALE_MS } from './shell-sections';
-import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
-
-const viewIcons = {
-  overview: Activity,
-  studio: Terminal,
-  workspaces: Folder,
-  agents: Terminal,
-  models: BarChart3,
-  artifacts: FileText,
-  comunicacao: MessagesSquare,
-  settings: Settings2,
-} satisfies Record<AppView, typeof Activity>;
-
-const studioRoutes: readonly AppView[] = [
-  'overview',
-  'studio',
-  'workspaces',
-  'comunicacao',
-  'settings',
-];
-
-function RouteLinks({
-  views,
-  current,
-  onNavigate,
-  compact = false,
-}: {
-  views: readonly AppView[];
-  current: AppView;
-  onNavigate: (view: AppView) => void;
-  compact?: boolean;
-}) {
-  const { t } = useTranslation();
-  return (
-    <nav
-      aria-label={t('analytics.navigation')}
-      className={compact ? 'studio-route-links' : undefined}
-    >
-      {views.map((view) => {
-        const Icon = viewIcons[view];
-        const label = t(`shell.views.${view}`);
-        return (
-          <a
-            key={view}
-            className={`workspace-link${view === current ? ' active' : ''}`}
-            href={viewPath(view)}
-            title={label}
-            aria-label={label}
-            aria-current={view === current ? 'page' : undefined}
-            onClick={(event) => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-              event.preventDefault();
-              onNavigate(view);
-            }}
-          >
-            <Icon size={16} aria-hidden="true" />
-            <span>{label}</span>
-          </a>
-        );
-      })}
-    </nav>
-  );
-}
+import { STALE_MS } from './shell-sections';
+import { readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -412,7 +338,9 @@ function SessionDetail({
           <code>{session.model ?? t('modelObservation.notRecorded')}</code>
           <details>
             <summary>{t('modelObservation.limits')}</summary>
-            <p>{t('modelObservation.historyNote')}</p>
+            <p title={t('modelObservation.historyNote.detail')}>
+              {t('modelObservation.historyNote.label')}
+            </p>
             <p>{t('modelObservation.availabilityNote')}</p>
           </details>
         </div>
@@ -552,7 +480,6 @@ export function App() {
   const appearance = useAppearancePreferences();
   const workspacePins = useWorkspacePins();
   const [shell, setShell] = useState(readShellPreferences);
-  const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -566,7 +493,8 @@ export function App() {
     const startup = readStartup();
     return startup === 'last' ? shell.view : startup;
   });
-  const [studioReturn, setStudioReturn] = useState(false);
+  const [studioCommand, setStudioCommand] = useState<StudioShellCommand>();
+  const [featureError, setFeatureError] = useState(false);
   const [preparationRequest, setPreparationRequest] = useState<FeaturePreparationRequest>();
   const showPreparation = useRef<(detail: unknown) => void>(() => {});
   useEffect(() => {
@@ -574,13 +502,11 @@ export function App() {
     window.addEventListener('orqst-show-preparation', show);
     return () => window.removeEventListener('orqst-show-preparation', show);
   }, []);
+  const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(
     () => location.pathname === '/' && !location.hash && needsOnboarding(),
   );
-  function openGuide() {
-    if (needsOnboarding()) setGuideOpen(true);
-  }
   function closeGuide() {
     setGuideOpen(false);
     requestAnimationFrame(() => {
@@ -603,10 +529,13 @@ export function App() {
       window.removeEventListener('orqst-terminal-fence', fenced);
     };
   }, []);
-  const featureShell = useFeatureShell(view === 'comunicacao');
+  const featureShell = useFeatureShell(view === 'communication');
   const featureSnapshot = featureShell.snapshot;
   const managedShell = window.orqstFeatures?.contractVersion === 1;
-  const managedStudio = managedShell && view === 'studio';
+  const managedStudio =
+    managedShell &&
+    view === 'studio' &&
+    (!workspaceId || workspaceId === featureSnapshot?.workspace.id);
   const managedFeature = featureSnapshot?.features.find(
     (feature) => feature.featureId === featureSnapshot.activeFeatureId,
   );
@@ -628,11 +557,14 @@ export function App() {
   });
   useEffect(() => {
     try {
-      localStorage.setItem(shellStorageKey, JSON.stringify({ ...shell, view, workspaceId }));
+      localStorage.setItem(
+        shellStorageKey,
+        JSON.stringify({ ...shell, view, workspaceId, status }),
+      );
     } catch {
       // Disabled or full browser storage must not prevent observation.
     }
-  }, [shell, view, workspaceId]);
+  }, [shell, view, workspaceId, status]);
   const [selected, setSelected] = useState<string>();
   const [headerMetrics, setHeaderMetrics] = useState<{
     sessionId: string;
@@ -643,22 +575,18 @@ export function App() {
   }, []);
   const nativeDesktop = navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [ownedNotificationsOpen, setOwnedNotificationsOpen] = useState(false);
+  const [ownedUnread, setOwnedUnread] = useState(0);
+  const studioFocus = useRef<StudioFocus>(null);
+
+  function openNotifications() {
+    if (managedShell) setOwnedNotificationsOpen(true);
+    else setNotificationOpen(true);
+  }
   const [notificationFilter, setNotificationFilter] = useState('all');
   const [markingRead, setMarkingRead] = useState(false);
   const [markReadError, setMarkReadError] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuTrigger = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;
-      setMenuOpen(false);
-      menuTrigger.current?.focus();
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [menuOpen]);
   const [notice, setNotice] = useState('');
   const audioRef = useRef<AudioContext | null>(null);
   const [saveError, setSaveError] = useState(false);
@@ -723,7 +651,7 @@ export function App() {
     },
     [nativeDesktop, sound, t],
   );
-  const { snapshot, connection, error, refresh } = useObservatory(onLive);
+  const { snapshot, connection, error, refresh, reconnect } = useObservatory(onLive);
   const nativeNavigation = useRef<NativeSessionNavigation | null>(null);
   const nativeNavigationContext = useRef({ key: '', token: {} });
   const nativeNavigationKey = JSON.stringify([connection, workspaceId, view, selected]);
@@ -775,12 +703,12 @@ export function App() {
     if (id) {
       applySession(id);
       setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
+      setStatus('');
     } else if (page === 'overview') applySession(undefined);
     if (page !== 'overview') setArtifactRequest(undefined);
-    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
+    if (page !== 'studio') setStudioCommand(undefined);
     setView(page);
     navigation.current?.replace(viewPath(page, id));
-    setMenuOpen(false);
   }
   routeActions.current = {
     traverse: linkedDestination,
@@ -854,10 +782,9 @@ export function App() {
   }
   function applyView(page: AppView, sessionId = selected) {
     if (page !== 'overview') setArtifactRequest(undefined);
-    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
+    if (page !== 'studio') setStudioCommand(undefined);
     setView(page);
     navigation.current?.push(viewPath(page, sessionId));
-    setMenuOpen(false);
   }
   function navigate(page: AppView, focusContent = false) {
     if (page === view) return;
@@ -872,12 +799,11 @@ export function App() {
     if (!parsed.success) return;
     if (parsed.data.destination && managedShell) {
       const destination = parsed.data.destination;
-      if (destination === 'notifications') setNotificationOpen(true);
+      if (destination === 'notifications') openNotifications();
       else if (destination === 'search') setPaletteOpen(true);
       else
         requestNavigation(() => {
           applyView(destination, destination === 'overview' ? selected : undefined);
-          setStudioReturn(true);
           requestAnimationFrame(() => document.getElementById('main-content')?.focus());
         });
       return;
@@ -893,6 +819,7 @@ export function App() {
     requestNavigation(() => {
       setWorkspaceId(id);
       applySession(undefined);
+      setStatus('');
       applyView(page, '');
     });
   }
@@ -906,6 +833,7 @@ export function App() {
     const transition = () => {
       if (native && !native.current()) return;
       setWorkspaceId(session.workspaceId);
+      setStatus('');
       applySession(id);
       applyView('overview', id);
       if (artifact) setArtifactRequest(artifact);
@@ -924,63 +852,189 @@ export function App() {
       notificationFilter === 'all' ||
       (notificationFilter === 'unread' ? !item.read : item.type === notificationFilter),
   );
-  async function openStudioCard(target: StudioCardTarget): Promise<boolean> {
-    const native = featureShell.native;
-    let current = featureShell.snapshot;
-    if (!native || !current) return false;
-    if (current.activeFeatureId !== target.featureId) {
-      const selection = await native.request({
-        action: 'select',
-        contractVersion: 1,
-        generation: current.generation,
-        featureId: target.featureId,
-        expectedRevision: current.view.revision,
-      });
-      if (selection.status !== 'ok' || !selection.snapshot) return false;
-      current = selection.snapshot;
+  async function markNotificationsRead() {
+    setMarkingRead(true);
+    setMarkReadError(false);
+    try {
+      await api('/api/notifications/read', { method: 'POST' });
+      await refresh();
+    } catch {
+      setMarkReadError(true);
+    } finally {
+      setMarkingRead(false);
     }
-    const member = current.features.some(
-      (feature) =>
-        feature.featureId === target.featureId && feature.terminalIds.includes(target.terminalId),
-    );
-    const slot = current.slots.find(
-      (entry) => entry.terminalId === target.terminalId && !entry.closed,
-    );
-    if (!member || !slot || current.activeFeatureId !== target.featureId) return false;
-    navigate('studio', true);
-    // Resolve the slot again after Studio mounts so a concurrent layout update cannot retarget focus.
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-    const reading = await native.request({
-      action: 'snapshot',
-      contractVersion: 1,
-      generation: current.generation,
+  }
+  async function preferences(next: Preferences) {
+    setLocalPrefs(next);
+    setPrefsSaving(true);
+    try {
+      await api('/api/preferences', { method: 'PUT', body: JSON.stringify(next) });
+      await refresh();
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+      if (snapshot) setLocalPrefs(snapshot.preferences);
+    } finally {
+      setPrefsSaving(false);
+    }
+  }
+  async function createWorkspace(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    try {
+      const { id } = await api<{ id: string }>('/api/workspaces', {
+        method: 'POST',
+        body: JSON.stringify({ name: data.get('name'), path: data.get('path') }),
+      });
+      await refresh();
+      openWorkspace(id, 'studio');
+      setWorkspaceOpen(false);
+      setSaveError(false);
+    } catch {
+      setSaveError(true);
+    }
+  }
+  async function desktop() {
+    try {
+      if (!('Notification' in window)) throw new Error('Unavailable');
+      const permission = await Notification.requestPermission();
+      setNotice(permission === 'granted' ? 'desktopEnabled' : 'desktopBlocked');
+    } catch {
+      setNotice('desktopBlocked');
+    }
+  }
+  const notificationPreferences = (settings = false) => (
+    <>
+      {(!snapshot || error || connection !== 'connected') && (
+        <p className="notice" role="status" title={t('settings.notificationsUnavailable.detail')}>
+          {t('settings.notificationsUnavailable.label')}
+        </p>
+      )}
+      <NotificationPreferences
+        value={localPrefs}
+        disabled={prefsSaving || !snapshot || error || connection !== 'connected'}
+        nativeDesktop={nativeDesktop}
+        settings={settings}
+        onChange={(next) => {
+          void preferences(next);
+        }}
+        onTestSound={() => {
+          void sound(true);
+        }}
+        onPermission={() => {
+          void desktop();
+        }}
+      />
+    </>
+  );
+  const unreadCount = managedShell ? ownedUnread : unread;
+  const notificationControl = (
+    <button
+      className="shell-icon shell-bell"
+      title={
+        managedShell
+          ? `${t('notifications')} · ${t('notificationCounts', { count: unreadCount })}`
+          : t('notifications')
+      }
+      aria-label={t('notifications')}
+      aria-description={
+        snapshot || managedShell
+          ? t(!managedShell && offline ? 'shell.notifications.staleCount' : 'notificationCounts', {
+              count: unreadCount,
+            })
+          : undefined
+      }
+      aria-haspopup="dialog"
+      onClick={openNotifications}
+    >
+      <Bell size={16} aria-hidden="true" />
+      {unreadCount > 0 && (
+        <span className="shell-unread" aria-hidden="true">
+          {unreadCount > 99 ? '99+' : unreadCount}
+        </span>
+      )}
+    </button>
+  );
+  const studioTree: StudioTreeProps = {
+    scope: studioScope,
+    observedWorkspaces: snapshot?.workspaces ?? [],
+    observedWorkspaceId: workspaceId,
+    onObservedWorkspaceChange: (id) => openWorkspace(id),
+  };
+  const managedWorkspace = featureSnapshot?.workspace;
+  const shellWorkspaceId = workspaceId || managedWorkspace?.id || '';
+  const shellWorkspace =
+    currentWorkspace ?? (shellWorkspaceId === managedWorkspace?.id ? managedWorkspace : undefined);
+  const managedSelected = !!managedWorkspace && shellWorkspaceId === managedWorkspace.id;
+  const coreConnection = offline ? 'offline' : connection;
+  const featureWritable =
+    managedSelected && coreConnection !== 'offline' && !quitFence && !featureShell.busy;
+  const openSlots = new Set(
+    featureSnapshot?.slots.filter((slot) => !slot.closed).map((slot) => slot.terminalId),
+  );
+  const managedFeatures = (featureSnapshot?.features ?? []).filter(
+    (feature) => feature.status !== 'archived',
+  );
+
+  function selectWorkspace(id: string) {
+    setFeatureError(false);
+    openWorkspace(id === managedWorkspace?.id ? '' : id, 'studio');
+  }
+  function openFeature(id: string, terminalId?: string) {
+    requestNavigation(() => {
+      setFeatureError(false);
+      void (async () => {
+        if (terminalId) {
+          if (!(await openStudioCard({ featureId: id, terminalId }))) setFeatureError(true);
+          return;
+        }
+        if (!(await featureShell.select(id))) {
+          setFeatureError(true);
+          return;
+        }
+        setWorkspaceId('');
+        applyView('studio');
+      })();
     });
-    const next = reading.snapshot;
-    const currentSlot = next?.slots.find(
-      (entry) => entry.terminalId === target.terminalId && !entry.closed,
+  }
+  async function editFeature(
+    { action, feature }: { action: FeatureOperation; feature?: WorkspaceFeature },
+    name: string,
+    description: string,
+    featureStatus: WorkspaceFeature['status'],
+  ) {
+    if (!featureWritable || !featureSnapshot) return false;
+    const input = { name, description, status: featureStatus };
+    if (action === 'archive' || action === 'rename') {
+      if (!feature) return false;
+      const reply = await featureShell.request({
+        action: 'update',
+        featureId: feature.featureId,
+        input:
+          action === 'archive'
+            ? { status: 'archived', expectedRevision: feature.revision }
+            : { ...input, expectedRevision: feature.revision },
+      });
+      if (reply?.status !== 'ok') return false;
+      if (action === 'archive' && feature.featureId === featureSnapshot.activeFeatureId)
+        openFeature(defaultFeatureId(featureSnapshot.workspace.id));
+      return true;
+    }
+    const reply = await featureShell.request({ action: 'create', input });
+    if (reply?.status !== 'ok') return false;
+    const existing = new Set(featureSnapshot.features.map((feature) => feature.featureId));
+    const created = reply.snapshot?.features.filter(
+      (candidate) =>
+        !existing.has(candidate.featureId) &&
+        candidate.name === name &&
+        candidate.description === description &&
+        candidate.status === featureStatus,
     );
-    if (
-      reading.status !== 'ok' ||
-      !next ||
-      !currentSlot ||
-      next.activeFeatureId !== target.featureId ||
-      !next.features.some(
-        (feature) =>
-          feature.featureId === target.featureId && feature.terminalIds.includes(target.terminalId),
-      )
-    )
-      return false;
-    const focus = await native.request({
-      action: 'pane',
-      contractVersion: 1,
-      generation: next.generation,
-      slot: currentSlot.slot,
-      terminalId: target.terminalId,
-      command: 'focus',
-    });
-    return focus.status === 'ok';
+    if (created?.length === 1) openFeature(created[0]!.featureId);
+    return true;
+  }
+  async function openStudioCard(target: StudioCardTarget): Promise<boolean> {
+    return (await studioFocus.current?.(target.featureId, target.terminalId)) ?? false;
   }
 
   async function startOnboarding(path: string | undefined, skip: boolean) {
@@ -1013,646 +1067,257 @@ export function App() {
     }
     navigate('studio', true);
   }
-  async function markNotificationsRead() {
-    setMarkingRead(true);
-    setMarkReadError(false);
-    try {
-      await api('/api/notifications/read', { method: 'POST' });
-      await refresh();
-    } catch {
-      setMarkReadError(true);
-    } finally {
-      setMarkingRead(false);
-    }
+  function runStudioCommand(command: StudioShellCommand) {
+    requestNavigation(() => {
+      setFeatureError(false);
+      setWorkspaceId('');
+      applyView('studio');
+      setStudioCommand(command);
+    });
   }
-  async function preferences(next: Preferences) {
-    setLocalPrefs(next);
-    setPrefsSaving(true);
-    try {
-      await api('/api/preferences', { method: 'PUT', body: JSON.stringify(next) });
-      await refresh();
-      setSaveError(false);
-    } catch {
-      setSaveError(true);
-      if (snapshot) setLocalPrefs(snapshot.preferences);
-    } finally {
-      setPrefsSaving(false);
-    }
-  }
-  async function createWorkspace(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget);
-    try {
-      await api('/api/workspaces', {
-        method: 'POST',
-        body: JSON.stringify({ name: data.get('name'), path: data.get('path') }),
-      });
-      await refresh();
-      setWorkspaceOpen(false);
-      setSaveError(false);
-    } catch {
-      setSaveError(true);
-    }
-  }
-  async function desktop() {
-    try {
-      if (!('Notification' in window)) throw new Error('Unavailable');
-      const permission = await Notification.requestPermission();
-      setNotice(permission === 'granted' ? 'desktopEnabled' : 'desktopBlocked');
-    } catch {
-      setNotice('desktopBlocked');
-    }
-  }
-  const notificationPreferences = (settings = false) => (
+
+  const paletteWorkspaces = new Map(
+    (snapshot?.workspaces ?? []).map(({ id, name }) => [id, { id, name }]),
+  );
+  if (managedWorkspace) paletteWorkspaces.set(managedWorkspace.id, managedWorkspace);
+  const workspaceRows = [...paletteWorkspaces.values()].map((workspace) => ({
+    ...workspace,
+    count: workspace.id === managedWorkspace?.id ? managedFeatures.length : 0,
+  }));
+  const settingsRoute = view === 'settings' || view === 'agents';
+  const routeTitle = t(`shell.views.${settingsRoute ? 'settings' : view}`);
+  const featureName = managedSelected ? studioScope?.featureName : undefined;
+  const breadcrumb = [shellWorkspace?.name ?? t('allWorkspaces'), featureName]
+    .filter(Boolean)
+    .join(' / ');
+  const subtitle =
+    view === 'studio' && managedSelected && managedFeature
+      ? t(`features.status_${managedFeature.status}`).toLocaleLowerCase(i18n.resolvedLanguage)
+      : routeTitle;
+  const sidebar = (
+    <ShellSidebar
+      view={view}
+      workspaces={workspaceRows}
+      workspaceId={shellWorkspaceId}
+      features={
+        managedSelected
+          ? managedFeatures.map((feature) => ({
+              feature,
+              count: feature.terminalIds.filter((id) => openSlots.has(id)).length,
+            }))
+          : []
+      }
+      featureId={featureSnapshot?.activeFeatureId}
+      featureWritable={featureWritable}
+      onWorkspace={selectWorkspace}
+      onFeature={openFeature}
+      onEditFeature={editFeature}
+      featureError={featureError}
+      onNavigate={(page) => navigate(page, true)}
+      onCreateWorkspace={() => {
+        setSaveError(false);
+        setWorkspaceOpen(true);
+      }}
+      onSearch={() => setPaletteOpen(true)}
+      notificationControl={notificationControl}
+      connection={coreConnection}
+      onReconnect={reconnect}
+    />
+  );
+  const headerActions = view === 'overview' && selectedSession && (
+    <SessionTokenBadge
+      state={headerMetrics?.sessionId === selectedSession.id ? headerMetrics.metrics : undefined}
+      offline={connection !== 'connected' || error}
+    />
+  );
+  const studioOutlet = managedShell && (
+    <div className="studio-workspace" hidden={!managedStudio}>
+      <StudioShellContext.Provider
+        value={{
+          tree: studioTree,
+          active: managedStudio,
+          command: studioCommand,
+          onCommandHandled: (activated) => {
+            setStudioCommand(undefined);
+            if (!activated) setFeatureError(true);
+          },
+          navigate,
+          openNotifications,
+          openSearch: () => setPaletteOpen(true),
+        }}
+      >
+        <FeatureStudio
+          focusRef={studioFocus}
+          notificationsOpen={ownedNotificationsOpen}
+          onNotificationsOpen={setOwnedNotificationsOpen}
+          onUnreadChange={setOwnedUnread}
+          onRevealStudio={() => {
+            setWorkspaceId('');
+            applyView('studio');
+          }}
+          notificationPreferences={notificationPreferences()}
+          onObservedNotifications={() => setNotificationOpen(true)}
+          preparationRequest={preparationRequest}
+          onPreparationHandled={() => setPreparationRequest(undefined)}
+          workspaces={studioTree.observedWorkspaces}
+          workspaceId={studioTree.observedWorkspaceId}
+          onWorkspace={studioTree.onObservedWorkspaceChange}
+        />
+      </StudioShellContext.Provider>
+    </div>
+  );
+  const outlet = (
     <>
-      {(!snapshot || error || connection !== 'connected') && (
-        <p className="notice" role="status">
-          {t('settings.notificationsUnavailable')}
-        </p>
+      {(quitWait || quitFence) && (
+        <div className="quit-blocked" role="alert">
+          <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
+          {quitWait && (
+            <>
+              <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
+              {quitWait.uncertain.length > 0 && (
+                <ul>
+                  {quitWait.uncertain.map((entry) => (
+                    <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
+                  ))}
+                </ul>
+              )}
+              <span>{t('quitBlocked.retry')}</span>
+            </>
+          )}
+        </div>
       )}
-      <NotificationPreferences
-        value={localPrefs}
-        disabled={prefsSaving || !snapshot || error || connection !== 'connected'}
-        nativeDesktop={nativeDesktop}
-        settings={settings}
-        onChange={(next) => {
-          void preferences(next);
-        }}
-        onTestSound={() => {
-          void sound(true);
-        }}
-        onPermission={() => {
-          void desktop();
-        }}
-      />
+      {!managedStudio && notice && !notificationOpen && (
+        <div className="notice" role="status">
+          {t(notice)}
+          <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {studioOutlet}
+      {view === 'studio' ? (
+        managedStudio ? null : managedShell ? (
+          <p className="notice" role="status">
+            {t('shell.frame.observedWorkspace')}
+          </p>
+        ) : (
+          <FeatureStudio />
+        )
+      ) : view === 'settings' || view === 'agents' ? (
+        <Settings
+          appearance={appearance.appearance}
+          onAppearance={appearance.setAppearance}
+          storageUnavailable={appearance.storageUnavailable}
+          systemReducedMotion={appearance.systemReducedMotion}
+          key={view}
+          initialTab={view === 'agents' ? 'agents' : undefined}
+          notifications={notificationPreferences(true)}
+          catalogScope={
+            featureSnapshot && {
+              workspaceId: featureSnapshot.workspace.id,
+              featureId: featureSnapshot.activeFeatureId,
+            }
+          }
+          defaultFolder={currentWorkspace?.path}
+          snapshot={snapshot}
+        />
+      ) : view === 'communication' ? (
+        <CommunicationInspector snapshot={featureSnapshot} onOpenStudio={openStudioCard} />
+      ) : view === 'models' ? (
+        <ModelAnalytics
+          scope={featureSnapshot}
+          workspaceId={workspaceId}
+          snapshot={snapshot}
+          connection={connection}
+          snapshotError={error}
+        />
+      ) : view === 'artifacts' ? (
+        <ArtifactLibrary
+          key={workspaceId}
+          snapshot={snapshot}
+          scope={featureSnapshot}
+          workspaceId={workspaceId}
+          online={connection === 'connected' && !error}
+          selection={artifactRequest}
+          closeGuard={artifactCloseGuard}
+          onOpen={(request) => requestNavigation(() => setArtifactRequest(request), false)}
+          onClose={() => setArtifactRequest(undefined)}
+        />
+      ) : view === 'workspaces' ? (
+        snapshot && (
+          <Workspaces
+            snapshot={snapshot}
+            activeId={workspaceId}
+            pins={workspacePins}
+            layout={shell.workspaceLayout}
+            sort={shell.workspaceSort}
+            onLayout={(value) => setShell((previous) => ({ ...previous, workspaceLayout: value }))}
+            onSort={(value) => setShell((previous) => ({ ...previous, workspaceSort: value }))}
+            onOpen={(id) => openWorkspace(id, 'overview')}
+            onAnalytics={(id) => openWorkspace(id, 'models')}
+            onCreate={() => setWorkspaceOpen(true)}
+          />
+        )
+      ) : selectedSession && snapshot ? (
+        <SessionDetail
+          key={selectedSession.id}
+          session={selectedSession}
+          snapshot={snapshot}
+          connection={connection}
+          snapshotError={error}
+          onMetrics={updateHeaderMetrics}
+          artifactCloseGuard={artifactCloseGuard}
+          artifactRequest={artifactRequest}
+          onArtifact={setArtifactRequest}
+          onClose={() => selectSession(undefined)}
+          onSave={() => {
+            void refresh();
+          }}
+        />
+      ) : (
+        <OverviewLayout
+          scope={featureSnapshot}
+          snapshot={snapshot}
+          online={connection === 'connected' && !error}
+          onRefresh={refresh}
+          onOpen={openStudioCard}
+          workspaceId={workspaceId}
+          onOpenObserved={openSession}
+        />
+      )}
     </>
   );
-  const languageControl = (
-    <label className="language-select">
-      <Globe2 size={14} />
-      <select
-        aria-label={t('language')}
-        value={i18n.resolvedLanguage ?? 'en-US'}
-        onChange={(event) => {
-          void i18n.changeLanguage(event.target.value);
-        }}
-      >
-        <option value="en-US">EN</option>
-        <option value="pt-BR">PT-BR</option>
-      </select>
-    </label>
-  );
-  const notificationControl = (
-    <button
-      className={`icon-button bell-button ${unread ? 'has-unread' : ''}`}
-      aria-label={t('notifications')}
-      aria-description={
-        snapshot &&
-        t(offline ? 'shell.notifications.staleCount' : 'notificationCounts', {
-          count: unread,
-        })
-      }
-      aria-haspopup="dialog"
-      onClick={() => setNotificationOpen(true)}
-    >
-      <Bell size={17} />
-    </button>
-  );
-  const studioTree: StudioTreeProps = {
-    scope: studioScope,
-    observedWorkspaces: snapshot?.workspaces ?? [],
-    observedWorkspaceId: workspaceId,
-    onObservedWorkspaceChange: (id) => openWorkspace(id),
-  };
-  const sideSections = shellSections(snapshot?.sessions ?? [], now);
-  const hiddenWorkspaces = snapshot
-    ? snapshot.workspaces.filter(
-        (workspace) =>
-          !workspacePins.pins.includes(workspace.id) &&
-          workspace.id !== workspaceId &&
-          isTemporaryWorkspace(workspace),
-      ).length + Math.max(0, snapshot.workspaces.filter((w) => !isTemporaryWorkspace(w)).length - 8)
-    : 0;
-  return (
-    <div
-      className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${managedShell ? ' managed-shell' : ''}${managedStudio ? ' studio-shell' : ''}`}
-    >
-      <a
-        className="skip-link"
-        href="#main-content"
-        onClick={(event) => {
-          event.preventDefault();
-          document.getElementById('main-content')?.focus();
-        }}
-      >
-        {t('shell.skip')}
-      </a>
-      <aside id="app-sidebar" className={`sidebar ${menuOpen ? 'mobile-open' : ''}`}>
-        <a
-          className="brand"
-          href="/overview"
-          aria-label={t('brand')}
-          onClick={(event) => {
-            event.preventDefault();
-            navigate('overview');
-          }}
-        >
-          <img
-            className="brand-logo"
-            src={
-              appearance.resolvedTheme === 'dark'
-                ? '/brand/orqst-logo-dark.svg'
-                : '/brand/orqst-logo.svg'
-            }
-            width={880}
-            height={270}
-            alt={t('brand')}
-          />
-        </a>
-        <button
-          className="icon-button sidebar-collapse"
-          aria-label={t(shell.collapsed ? 'shell.expand' : 'shell.collapse')}
-          aria-expanded={!shell.collapsed}
-          onClick={() => setShell((value) => ({ ...value, collapsed: !value.collapsed }))}
-        >
-          {shell.collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
-        <div className="side-actions">
-          <button className="side-row" onClick={() => setPaletteOpen(true)}>
-            <Search size={15} />
-            <span>{t('shell.side.search')}</span>
-            <kbd>⌘K</kbd>
-          </button>
-          <button className="side-row" onClick={() => navigate('studio')}>
-            <Plus size={15} />
-            <span>{t('shell.side.newSession')}</span>
-            <kbd>⌘N</kbd>
-          </button>
-        </div>
-        <RouteLinks
-          views={managedShell ? appViews.filter((page) => !studioRoutes.includes(page)) : appViews}
-          current={view}
-          onNavigate={navigate}
-        />
-        {(
-          [
-            ['needsYou', sideSections.needsYou],
-            ['running', sideSections.running],
-            ['recent', sideSections.recent],
-          ] as const
-        ).map(([key, list]) => (
-          <details key={key} className="side-section" open>
-            <summary>
-              <span>{t(`shell.side.${key}`)}</span>
-              <small>{key === 'recent' ? list.length : list.length}</small>
-            </summary>
-            {list.length === 0 ? (
-              <p className="side-empty">
-                {key === 'running' && sideSections.stale > 0
-                  ? t('shell.side.staleOnly', { count: sideSections.stale })
-                  : '—'}
-              </p>
-            ) : (
-              list.map((session) => (
-                <button
-                  key={session.id}
-                  className={`side-session side-${key === 'recent' && session.status === 'running' ? 'stale' : session.status}${selected === session.id ? ' active' : ''}`}
-                  title={session.task ?? session.agentName}
-                  onClick={() => openSession(session.id)}
-                >
-                  <span className="side-dot" aria-hidden="true" />
-                  <span className="side-title">{session.task ?? session.agentName}</span>
-                  <small>{shortAge(session.lastActivity, now)}</small>
-                </button>
-              ))
-            )}
-            {key === 'running' && sideSections.stale > 0 && list.length > 0 && (
-              <p className="side-empty">{t('shell.side.stale', { count: sideSections.stale })}</p>
-            )}
-          </details>
-        ))}
-        <div className="nav-heading">
-          <span>{t('workspaceNav')}</span>
-          <button
-            className="icon-button"
-            aria-label={t('createWorkspace')}
-            onClick={() => setWorkspaceOpen(true)}
-          >
-            <Plus size={15} />
-          </button>
-        </div>
-        <nav aria-label={t('workspaceNav')}>
-          <button
-            aria-label={t('allWorkspaces')}
-            title={t('allWorkspaces')}
-            className={`workspace-link ${!workspaceId ? 'active' : ''}`}
-            onClick={() => {
-              openWorkspace('');
-            }}
-          >
-            <Layers3 size={16} />
-            <span>{t('allWorkspaces')}</span>
-            <small>{snapshot?.sessions.length ?? 0}</small>
-          </button>
-          {snapshot &&
-            pinnedFirst(snapshot.workspaces, workspacePins.pins)
-              .filter(
-                (workspace) =>
-                  showAllWorkspaces ||
-                  workspace.id === workspaceId ||
-                  workspacePins.pins.includes(workspace.id) ||
-                  !isTemporaryWorkspace(workspace),
-              )
-              .slice(0, showAllWorkspaces ? undefined : 8)
-              .map((workspace) => (
-                <button
-                  key={workspace.id}
-                  className={`workspace-link ${workspaceId === workspace.id ? 'active' : ''}`}
-                  title={workspace.path}
-                  aria-label={
-                    workspacePins.pins.includes(workspace.id)
-                      ? t('shell.workspaces.pinnedName', { name: workspace.name })
-                      : workspace.name
-                  }
-                  onClick={() => {
-                    openWorkspace(workspace.id);
-                  }}
-                >
-                  {workspacePins.pins.includes(workspace.id) ? (
-                    <Pin size={16} aria-hidden="true" />
-                  ) : (
-                    <Folder size={16} />
-                  )}
-                  <span>{workspace.name}</span>
-                  <small>{workspace.sessions}</small>
-                </button>
-              ))}
-          {snapshot && hiddenWorkspaces > 0 && (
-            <button className="side-more" onClick={() => setShowAllWorkspaces((value) => !value)}>
-              {showAllWorkspaces
-                ? t('shell.side.showFewer')
-                : t('shell.side.showAll', { count: hiddenWorkspaces })}
-            </button>
-          )}
-        </nav>
-        {featureShell.snapshot && (
-          <>
-            <div className="nav-heading">
-              <span>{t('features.heading')}</span>
-            </div>
-            <nav aria-label={t('features.heading')}>
-              {featureShell.snapshot.features.map((feature) => (
-                <button
-                  key={feature.featureId}
-                  className={`workspace-link ${feature.featureId === featureShell.snapshot?.activeFeatureId ? 'active' : ''}`}
-                  aria-current={
-                    feature.featureId === featureShell.snapshot?.activeFeatureId
-                      ? 'page'
-                      : undefined
-                  }
-                  disabled={featureShell.busy}
-                  title={`${feature.description}\n${t(`features.status_${feature.status}`)}`}
-                  onClick={() => void featureShell.select(feature.featureId)}
-                >
-                  <Layers3 size={16} />
-                  <span>{feature.name}</span>
-                  <small>{feature.terminalIds.length}</small>
-                </button>
-              ))}
-              <button
-                className={`workspace-link ${featureShell.snapshot.activeFeatureId === null ? 'active' : ''}`}
-                disabled={featureShell.busy}
-                onClick={() => void featureShell.select(null)}
-              >
-                <Layers3 size={16} />
-                <span>{t('features.unassigned')}</span>
-                <small>{unassignedTerminalCount(featureShell.snapshot)}</small>
-              </button>
-            </nav>
-          </>
-        )}
-        <div className="sidebar-bottom">
-          <div className="local-badge" title={t('localPrivacy')}>
-            <ShieldCheck size={14} />
-            <span>{t('localEdition')}</span>
-          </div>
-        </div>
-      </aside>
-      <div className="main-shell">
-        {!managedStudio && (
-          <header className="topbar">
-            {managedShell && (
-              <RouteLinks views={studioRoutes} current={view} onNavigate={navigate} compact />
-            )}
-            <div className="breadcrumbs">
-              <button
-                ref={menuTrigger}
-                className="icon-button menu-toggle"
-                aria-label={t('workspaceNav')}
-                aria-controls="app-sidebar"
-                aria-expanded={menuOpen}
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                <Menu size={18} />
-              </button>
-              <Command size={15} aria-hidden="true" />
-              <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
-              <ChevronRight size={14} aria-hidden="true" />
-              <strong>{t(`shell.views.${view}`)}</strong>
-            </div>
-            <div className="topbar-actions">
-              {window.orqstManagedAgents?.contractVersion === 1 && (
-                <button
-                  className="button"
-                  onClick={() => {
-                    void window.orqstManagedAgents
-                      ?.open()
-                      .then((reply) => {
-                        if (reply?.status && reply.status !== 'ok')
-                          setNotice(
-                            reply.status === 'focus_required'
-                              ? 'managedAgents.open_focus_required'
-                              : 'managedAgents.open_unavailable',
-                          );
-                        else setNotice('');
-                      })
-                      .catch(() => setNotice('managedAgents.open_unavailable'));
-                  }}
-                >
-                  <Terminal size={15} />
-                  {t('managedAgents.title')}
-                </button>
-              )}
-              <button
-                className="button command-trigger"
-                aria-label={t('shell.palette.title')}
-                aria-keyshortcuts="Meta+K Control+K"
-                onClick={() => setPaletteOpen(true)}
-              >
-                <Search size={15} />
-                <span>{t('shell.palette.shortLabel')}</span>
-                <kbd>{t('shell.palette.shortcut')}</kbd>
-              </button>
-              <span className={`connection connection-${connection}`} role="status">
-                <span className="tiny-dot" />
-                {t(connection)}
-              </span>
-              {!managedShell && (
-                <button
-                  className="icon-button"
-                  aria-label={t('shell.views.settings')}
-                  onClick={() => navigate('settings')}
-                >
-                  <Settings2 size={17} />
-                </button>
-              )}
-              {languageControl}
-              {notificationControl}
-            </div>
-          </header>
-        )}
-        {(quitWait || quitFence) && (
-          <div className="quit-blocked" role="alert">
-            <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
-            {quitWait && (
-              <>
-                <span>{t(`quitBlocked.${quitWait.reason}`)}</span>
-                {quitWait.uncertain.length > 0 && (
-                  <ul>
-                    {quitWait.uncertain.map((entry) => (
-                      <li key={entry.slot}>{`${entry.slot}: ${entry.reason}`}</li>
-                    ))}
-                  </ul>
-                )}
-                <span>{t('quitBlocked.retry')}</span>
-              </>
-            )}
-          </div>
-        )}
-        {selectedSession && view === 'overview' && (
-          <div
-            className="session-context-bar"
-            aria-label={t('shell.metrics.context')}
-            role="region"
-          >
-            <span className="session-context-name" title={selectedSession.agentName}>
-              {selectedSession.agentName}
-            </span>
-            <span className="session-context-model" title={t('modelObservation.availabilityNote')}>
-              {selectedSession.adapter} · {t('modelObservation.identifier')}:{' '}
-              <code>{selectedSession.model ?? t('modelObservation.notRecorded')}</code>
-            </span>
-            <Status status={selectedSession.status} />
-            <SessionTokenBadge
-              state={
-                headerMetrics?.sessionId === selectedSession.id ? headerMetrics.metrics : undefined
-              }
-              offline={connection !== 'connected' || error}
-            />
-          </div>
-        )}
-        <main id="main-content" tabIndex={-1}>
-          {!managedStudio && (error || saveError) && view !== 'overview' && (
-            <p className="notice" role="alert">
-              {t(saveError ? 'savedError' : 'error')}
-            </p>
-          )}
-          {!managedStudio && !snapshot && !error && view !== 'models' && view !== 'settings' && (
-            <p className="notice" role="status">
-              {t('shell.loading')}
-            </p>
-          )}
-          {!managedStudio && initialScan && (
-            <p className="notice" role="status">
-              {t('syncing')}
-            </p>
-          )}
-          {!managedStudio && notice && !notificationOpen && (
-            <div className="notice" role="status">
-              {t(notice)}
-              <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
-                <X size={14} />
-              </button>
-            </div>
-          )}
-
-          {view === 'studio' ? (
-            managedStudio ? (
-              <StudioShellContext.Provider
-                value={{
-                  tree: studioTree,
-                  navigate,
-                  openNotifications: () => setNotificationOpen(true),
-                  openSearch: () => setPaletteOpen(true),
-                }}
-              >
-                <FeatureStudio
-                  preparationRequest={preparationRequest}
-                  onPreparationHandled={() => setPreparationRequest(undefined)}
-                  navigation={
-                    <>
-                      <RouteLinks
-                        views={studioRoutes.filter((route) => route !== 'studio')}
-                        current={view}
-                        onNavigate={(page) => navigate(page, true)}
-                        compact
-                      />
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title={t('shell.palette.title')}
-                        aria-label={t('shell.palette.title')}
-                        aria-keyshortcuts="Meta+K Control+K"
-                        aria-haspopup="dialog"
-                        onClick={() => setPaletteOpen(true)}
-                      >
-                        <Search size={16} aria-hidden="true" />
-                      </button>
-                    </>
-                  }
-                  notificationPreferences={notificationPreferences()}
-                  onObservedNotifications={() => setNotificationOpen(true)}
-                  toolbarUtilities={
-                    <div className="feature-toolbar-utilities">{languageControl}</div>
-                  }
-                  workspaces={studioTree.observedWorkspaces}
-                  workspaceId={studioTree.observedWorkspaceId}
-                  onWorkspace={studioTree.onObservedWorkspaceChange}
-                />
-              </StudioShellContext.Provider>
-            ) : (
-              <FeatureStudio />
-            )
-          ) : view === 'comunicacao' ? (
-            <CommunicationInspector
-              snapshot={featureSnapshot}
-              onOpenStudio={() => navigate('studio', true)}
-            />
-          ) : view === 'settings' || view === 'agents' ? (
-            <Settings
-              appearance={appearance.appearance}
-              onAppearance={appearance.setAppearance}
-              storageUnavailable={appearance.storageUnavailable}
-              systemReducedMotion={appearance.systemReducedMotion}
-              key={view}
-              initialTab={view === 'agents' ? 'agents' : undefined}
-              notifications={notificationPreferences(true)}
-              catalogScope={
-                featureSnapshot && {
-                  workspaceId: featureSnapshot.workspace.id,
-                  featureId: featureSnapshot.activeFeatureId,
-                }
-              }
-              defaultFolder={currentWorkspace?.path}
-              snapshot={snapshot}
-              returnAction={
-                studioReturn
-                  ? { label: t('shell.views.studio'), onReturn: () => navigate('studio', true) }
-                  : undefined
-              }
-            />
-          ) : view === 'models' ? (
-            <ModelAnalytics
-              scope={featureSnapshot}
-              workspaceId={workspaceId}
-              snapshot={snapshot}
-              connection={connection}
-              snapshotError={error}
-            />
-          ) : view === 'artifacts' ? (
-            <ArtifactLibrary
-              key={workspaceId}
-              snapshot={snapshot}
-              scope={featureSnapshot}
-              workspaceId={workspaceId}
-              online={connection === 'connected' && !error}
-              selection={artifactRequest}
-              closeGuard={artifactCloseGuard}
-              onOpen={(request) => requestNavigation(() => setArtifactRequest(request), false)}
-              onClose={() => setArtifactRequest(undefined)}
-            />
-          ) : view === 'workspaces' ? (
-            snapshot && (
-              <Workspaces
-                snapshot={snapshot}
-                activeId={workspaceId}
-                pins={workspacePins}
-                layout={shell.workspaceLayout}
-                sort={shell.workspaceSort}
-                onLayout={(value) =>
-                  setShell((previous) => ({ ...previous, workspaceLayout: value }))
-                }
-                onSort={(value) => setShell((previous) => ({ ...previous, workspaceSort: value }))}
-                onOpen={(id) => openWorkspace(id, 'overview')}
-                onAnalytics={(id) => openWorkspace(id, 'models')}
-                onCreate={() => setWorkspaceOpen(true)}
-              />
-            )
-          ) : selectedSession && snapshot ? (
-            <SessionDetail
-              key={selectedSession.id}
-              session={selectedSession}
-              snapshot={snapshot}
-              connection={connection}
-              snapshotError={error}
-              onMetrics={updateHeaderMetrics}
-              artifactCloseGuard={artifactCloseGuard}
-              artifactRequest={artifactRequest}
-              onArtifact={setArtifactRequest}
-              onClose={() => selectSession(undefined)}
-              onSave={() => {
-                void refresh();
-              }}
-            />
-          ) : (
-            <OverviewLayout
-              scope={featureSnapshot}
-              snapshot={snapshot}
-              online={connection === 'connected' && !error}
-              onRefresh={refresh}
-              onOpen={openStudioCard}
-            />
-          )}
-        </main>
-        <footer className="status-bar" aria-label={t('shell.side.status')}>
-          <span className="status-item status-running">
-            <span className="side-dot" aria-hidden="true" />
-            {t('shell.side.runningCount', { count: sideSections.running.length })}
-          </span>
-          {sideSections.needsYou.length > 0 && (
-            <span className="status-item status-attention">
-              {t('shell.side.needsYouCount', { count: sideSections.needsYou.length })}
-            </span>
-          )}
-          <span className="status-spacer" />
-          <span className={`status-item connection-${connection}`}>
-            <span className="tiny-dot" />
-            {t(connection)}
-          </span>
-          <span className="status-item">{t('localEdition')}</span>
-        </footer>
-        <footer className="app-footer">
-          <span>
-            <span className="brand-dot" />
-            {t('brand')}
-            <span className="version">v0.1.0</span>
-          </span>
-          <span>
-            <ShieldCheck size={12} />
-            {t('localPrivacy')}
-          </span>
-        </footer>
-      </div>
+  const overlays = (
+    <>
       {paletteOpen && (
         <CommandPalette
           snapshot={snapshot}
           studioScope={studioScope}
           onNavigate={navigate}
-          onWorkspace={(id) => openWorkspace(id, 'overview')}
+          workspaces={workspaceRows}
+          features={managedFeatures.map((feature) => ({
+            id: feature.featureId,
+            name: featureDisplayName(feature, t('features.defaultName')),
+            description: feature.description,
+            terminals: featureSnapshot
+              ? studioTerminals(
+                  { ...featureSnapshot, activeFeatureId: feature.featureId },
+                  featureShell.panes,
+                  undefined,
+                  now,
+                )
+              : [],
+          }))}
+          onWorkspace={selectWorkspace}
+          onFeature={openFeature}
+          onStudioCommand={managedShell ? runStudioCommand : undefined}
           onSession={openSession}
-          onNotifications={() => setNotificationOpen(true)}
-          onCreate={() => setWorkspaceOpen(true)}
-          onGuide={openGuide}
+          onNotifications={openNotifications}
+          onCreate={() => {
+            setSaveError(false);
+            setWorkspaceOpen(true);
+          }}
           onClose={() => setPaletteOpen(false)}
         />
       )}
@@ -1817,6 +1482,7 @@ export function App() {
               </button>
             </div>
             <div className="modal-body">
+              <p>{t('shell.frame.workspaceEvidence')}</p>
               {saveError && (
                 <p className="notice" role="alert">
                   {t('savedError')}
@@ -1842,6 +1508,23 @@ export function App() {
           </form>
         </Modal>
       )}
-    </div>
+    </>
+  );
+  return (
+    <AppShell
+      sidebar={sidebar}
+      breadcrumb={breadcrumb}
+      subtitle={subtitle}
+      headerActions={headerActions}
+      connection={coreConnection}
+      onReconnect={reconnect}
+      loading={
+        !offline && (managedStudio ? featureShell.loading : !snapshot || Boolean(initialScan))
+      }
+      studio={managedStudio}
+      overlays={overlays}
+    >
+      {outlet}
+    </AppShell>
   );
 }

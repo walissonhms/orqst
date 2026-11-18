@@ -1,4 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import { Activity, Bell, Folder, Search, Settings2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
@@ -46,6 +57,8 @@ import {
   nativeChrome,
   type NativePaneLayout,
 } from './studio-native.js';
+import { RouteHeaderActions } from './AppShell';
+import { StudioShellContext } from './navigation';
 import type { ArrangementMode } from './terminal-arrangement.js';
 
 export interface StudioCreationScope {
@@ -69,8 +82,15 @@ function featureScopeKey(snapshot: FeatureNativeSnapshot | undefined, workspaceI
 }
 
 /** Shared native chrome/Studio metadata UI. Terminals remain retained native documents. */
+export type StudioFocus = (featureId: string | null, terminalId: string) => Promise<boolean>;
+
 export function FeatureStudio({
   nativeWorkspace = false,
+  focusRef,
+  notificationsOpen,
+  onNotificationsOpen,
+  onUnreadChange,
+  onRevealStudio,
   navigation,
   toolbarUtilities,
   preparationRequest,
@@ -81,6 +101,11 @@ export function FeatureStudio({
   workspaceId = '',
 }: {
   nativeWorkspace?: boolean;
+  focusRef?: Ref<StudioFocus>;
+  notificationsOpen?: boolean;
+  onNotificationsOpen?: (open: boolean) => void;
+  onUnreadChange?: (count: number) => void;
+  onRevealStudio?: () => void;
   navigation?: ReactNode;
   toolbarUtilities?: ReactNode;
   preparationRequest?: FeaturePreparationRequest;
@@ -92,6 +117,8 @@ export function FeatureStudio({
   onWorkspace?: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const shell = useContext(StudioShellContext);
+  const [shellActions, setShellActions] = useState<HTMLDivElement | null>(null);
   const creator =
     window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
   const [creation, setCreation] = useState<{
@@ -140,7 +167,11 @@ export function FeatureStudio({
   const [limits, setLimits] = useState<AccountLimit[]>([]);
   const priorLimits = useRef<FeatureNativeReply['accountLimits']>(undefined);
   const liveSince = useRef<number | undefined>(undefined);
-  const [studioNotificationsOpen, setStudioNotificationsOpen] = useState(false);
+  const [standaloneNotificationsOpen, setStandaloneNotificationsOpen] = useState(false);
+  const studioNotificationsOpen = notificationsOpen ?? standaloneNotificationsOpen;
+  const setStudioNotificationsOpen = onNotificationsOpen ?? setStandaloneNotificationsOpen;
+  const revealStudio = useRef(onRevealStudio);
+  revealStudio.current = onRevealStudio;
   const [focusAlertTarget, setFocusAlertTarget] = useState<{
     terminalId: string;
     at: number;
@@ -148,6 +179,8 @@ export function FeatureStudio({
   }>();
   const studioNotifications = useStudioNotifications();
   const addNotifications = studioNotifications.add;
+  const unreadCount = studioNotifications.unreadCount;
+  useEffect(() => onUnreadChange?.(unreadCount), [onUnreadChange, unreadCount]);
   /** Last refused native frame, shown so a hidden terminal is never silent. */
   const [arrangeIssue, setArrangeIssue] = useState('');
   const [closeIssue, setCloseIssue] = useState(false);
@@ -317,6 +350,7 @@ export function FeatureStudio({
         .safeParse((event as CustomEvent<unknown>).detail);
       if (result.success) {
         setStudioNotificationsOpen(false);
+        revealStudio.current?.();
         setFocusAlertTarget({
           terminalId: result.data.terminalId,
           at: Date.now(),
@@ -326,9 +360,16 @@ export function FeatureStudio({
     };
     window.addEventListener('orqst-owned-notification-click', tap);
     return () => window.removeEventListener('orqst-owned-notification-click', tap);
-  }, [native]);
+  }, [native, setStudioNotificationsOpen]);
   useEffect(() => {
-    if (!focusAlertTarget || !layoutControls.current || busy || studioNotificationsOpen) return;
+    if (
+      (shell && !shell.active) ||
+      !focusAlertTarget ||
+      !layoutControls.current ||
+      busy ||
+      studioNotificationsOpen
+    )
+      return;
     const { terminalId, at, nativeTap } = focusAlertTarget;
     if (Date.now() - at > liveAlertMs) {
       setFocusAlertTarget(undefined);
@@ -339,7 +380,7 @@ export function FeatureStudio({
       return;
     layoutControls.current.focusTerminal(terminalId);
     setFocusAlertTarget(undefined);
-  }, [focusAlertTarget, studioNotificationsOpen, busy, snapshot, panes]);
+  }, [focusAlertTarget, studioNotificationsOpen, busy, snapshot, panes, shell]);
   const arranging = useRef<{
     layout: NativePaneLayout[];
     mode: ArrangementMode;
@@ -780,6 +821,7 @@ export function FeatureStudio({
     }
     const slot = focusTarget(current.current, featureId, terminalId);
     if (!slot || current.current?.activeFeatureId !== featureId) return false;
+    onRevealStudio?.();
     const status = await request({ action: 'pane', command: 'focus', slot: slot.slot, terminalId });
     if (status !== 'ok') return false;
     setFocusAlertTarget({ terminalId, at: Date.now() });
@@ -1099,331 +1141,383 @@ export function FeatureStudio({
       </button>
     </>
   );
+  useImperativeHandle(focusRef, () => focusTerminal);
+  useEffect(() => {
+    if (!shell?.active || !shell.command || !shellActions || coreState === 'connecting') return;
+    const selector = shell.command === 'delegate' ? '.mc-delegate' : '.feature-add-terminal';
+    const button = shellActions.querySelector<HTMLButtonElement>(selector);
+    const activated =
+      !!button && !button.disabled && button.getAttribute('aria-disabled') !== 'true';
+    if (activated) button.click();
+    shell.onCommandHandled?.(activated);
+  }, [shell, shellActions, coreState]);
+
+  const studioActions = (
+    <>
+      {layoutActions(
+        () => layoutControls.current?.toggleGrid(),
+        () => layoutControls.current?.restore(),
+      )}
+      {actions}
+      {native && (
+        <span className="studio-limits-control">
+          <LimitsChip
+            accounts={limits}
+            shown={limitPrefs.shown ?? limits.map((entry) => entry.id)}
+            caps={limitPrefs.caps}
+            now={now}
+            onRefresh={(accountId) =>
+              void request({ action: 'accountLimits', command: 'refresh', accountId })
+            }
+            canRefresh={(accountId) => accountId === 'codex-default'}
+          />
+        </span>
+      )}
+    </>
+  );
   if (!studio) return <LegacyStudioPreparation />;
+  const feedback = (notice ||
+    prepareIssue ||
+    closeIssue ||
+    arrangeIssue ||
+    (snapshot && !snapshot.layoutSaved)) && (
+    <div className="feature-feedback" role="status">
+      {notice && <p>{t(`features.${notice}`)}</p>}
+      {prepareIssue && prepareIssue !== notice && <p>{t(`features.${prepareIssue}`)}</p>}
+      {closeIssue && <p>{t('terminalStudio.closeTerminal.unconfirmed')}</p>}
+      {arrangeIssue && (
+        <p>
+          {t(
+            arrangeIssue === 'denied'
+              ? 'terminalStudio.arrangeFocus'
+              : 'terminalStudio.arrangeIssue',
+            { status: arrangeIssue },
+          )}
+        </p>
+      )}
+      {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
+    </div>
+  );
+  const notificationsDrawer = (
+    <NotificationsDrawer
+      items={studioNotifications.items}
+      unreadCount={studioNotifications.unreadCount}
+      open={studioNotificationsOpen}
+      onClose={() => setStudioNotificationsOpen(false)}
+      onMarkRead={studioNotifications.markRead}
+      onClearAll={studioNotifications.clearAll}
+      canFocus={(featureId, terminalId) =>
+        coreState === 'online' && !!focusTarget(snapshot, featureId, terminalId)
+      }
+      focusTerminal={focusTerminal}
+      preferences={
+        <>
+          {notificationPreferences}
+          {(onObservedNotifications || (nativeWorkspace && native?.showDashboard)) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStudioNotificationsOpen(false);
+                if (onObservedNotifications) onObservedNotifications();
+                else void openDashboard('notifications');
+              }}
+            >
+              {t('studioNotifications.observedHistory')}
+            </button>
+          )}
+          {nativeWorkspace && native?.showDashboard && (
+            <button
+              type="button"
+              onClick={() => {
+                setStudioNotificationsOpen(false);
+                void openDashboard('settings');
+              }}
+            >
+              {t('studioNotifications.settings')}
+            </button>
+          )}
+        </>
+      }
+    />
+  );
   const workspace = (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${shell ? ' feature-in-shell' : ''}`}
       aria-label={t('features.workspace')}
     >
-      <NotificationsDrawer
-        items={studioNotifications.items}
-        unreadCount={studioNotifications.unreadCount}
-        open={studioNotificationsOpen}
-        onClose={() => setStudioNotificationsOpen(false)}
-        onMarkRead={studioNotifications.markRead}
-        onClearAll={studioNotifications.clearAll}
-        canFocus={(featureId, terminalId) =>
-          coreState === 'online' && !!focusTarget(snapshot, featureId, terminalId)
-        }
-        focusTerminal={focusTerminal}
-        preferences={
-          <>
-            {notificationPreferences}
-            {(onObservedNotifications || (nativeWorkspace && native?.showDashboard)) && (
+      {shell?.active && (
+        <RouteHeaderActions>
+          <div className="studio-header-actions" ref={setShellActions}>
+            {studioActions}
+          </div>
+        </RouteHeaderActions>
+      )}
+      {shell ? createPortal(notificationsDrawer, document.body) : notificationsDrawer}
+      {!shell && (
+        <aside className="feature-sidebar" ref={scopeTree}>
+          <div className="feature-brand">
+            <img
+              src={
+                nativeWorkspace ? 'orqst-features://local/logo.svg' : '/brand/orqst-logo-dark.svg'
+              }
+              alt={t('brand')}
+              width={117}
+              height={36}
+            />
+          </div>
+          <div className="feature-tree">
+            <h2 id="feature-workspaces-heading">{t('features.workspaces')}</h2>
+            <nav aria-labelledby="feature-workspaces-heading">
+              {[...workspaceCatalog.values()].map((workspace) => {
+                const managed = workspace.id === snapshot?.workspace.id;
+                return (
+                  <button
+                    key={workspace.id}
+                    type="button"
+                    className="feature-scope"
+                    data-managed-workspace={managed || undefined}
+                    aria-current={managed || undefined}
+                    aria-disabled={!managed || !canWrite || busy}
+                    title={
+                      managed
+                        ? workspace.name
+                        : t('feature.workspace.unmanaged', { name: workspace.name })
+                    }
+                    onClick={() => {
+                      if (managed && canWrite && !busy) void selectScope(null, true);
+                    }}
+                  >
+                    <span>{workspace.name}</span>
+                    <small>{managed ? snapshot.features.length : '—'}</small>
+                  </button>
+                );
+              })}
               <button
                 type="button"
-                onClick={() => {
-                  setStudioNotificationsOpen(false);
-                  if (onObservedNotifications) onObservedNotifications();
-                  else void openDashboard('notifications');
-                }}
+                className="feature-create"
+                aria-disabled="true"
+                title={t('feature.workspace.creationUnavailable')}
               >
-                {t('studioNotifications.observedHistory')}
+                {t('feature.workspace.create')}
               </button>
-            )}
-            {nativeWorkspace && native?.showDashboard && (
-              <button
-                type="button"
-                onClick={() => {
-                  setStudioNotificationsOpen(false);
-                  void openDashboard('settings');
-                }}
-              >
-                {t('studioNotifications.settings')}
-              </button>
-            )}
-          </>
-        }
-      />
-      <aside className="feature-sidebar" ref={scopeTree}>
-        <div className="feature-brand">
-          <img
-            src={nativeWorkspace ? 'orqst-features://local/logo.svg' : '/brand/orqst-logo-dark.svg'}
-            alt={t('brand')}
-            width={117}
-            height={36}
-          />
-        </div>
-        <div className="feature-tree">
-          <h2 id="feature-workspaces-heading">{t('features.workspaces')}</h2>
-          <nav aria-labelledby="feature-workspaces-heading">
-            {[...workspaceCatalog.values()].map((workspace) => {
-              const managed = workspace.id === snapshot?.workspace.id;
-              return (
+            </nav>
+            <h2 id="feature-tree-heading">{t('features.heading')}</h2>
+            <nav aria-labelledby="feature-tree-heading">
+              {snapshot?.features.map((feature) => {
+                const label = displayFeatureName(feature);
+                return (
+                  <button
+                    key={feature.featureId}
+                    type="button"
+                    className="feature-scope"
+                    data-feature-scope={feature.featureId}
+                    aria-current={snapshot.activeFeatureId === feature.featureId || undefined}
+                    aria-disabled={!canWrite || busy}
+                    title={
+                      feature.status === 'archived'
+                        ? t('feature.archivedName', { name: label })
+                        : feature.description || label
+                    }
+                    onClick={() => {
+                      if (canWrite && !busy) void selectScope(feature.featureId);
+                    }}
+                  >
+                    <span>
+                      {label}
+                      {feature.status === 'archived' && ' · ' + t('features.status_archived')}
+                    </span>
+                    <small>{feature.terminalIds.length}</small>
+                  </button>
+                );
+              })}
+              {snapshot && unassigned.length > 0 && (
                 <button
-                  key={workspace.id}
                   type="button"
                   className="feature-scope"
-                  data-managed-workspace={managed || undefined}
-                  aria-current={managed || undefined}
-                  aria-disabled={!managed || !canWrite || busy}
-                  title={
-                    managed
-                      ? workspace.name
-                      : t('feature.workspace.unmanaged', { name: workspace.name })
-                  }
-                  onClick={() => {
-                    if (managed && canWrite && !busy) void selectScope(null, true);
-                  }}
-                >
-                  <span>{workspace.name}</span>
-                  <small>{managed ? snapshot.features.length : '—'}</small>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className="feature-create"
-              aria-disabled="true"
-              title={t('feature.workspace.creationUnavailable')}
-            >
-              {t('feature.workspace.create')}
-            </button>
-          </nav>
-          <h2 id="feature-tree-heading">{t('features.heading')}</h2>
-          <nav aria-labelledby="feature-tree-heading">
-            {snapshot?.features.map((feature) => {
-              const label = displayFeatureName(feature);
-              return (
-                <button
-                  key={feature.featureId}
-                  type="button"
-                  className="feature-scope"
-                  data-feature-scope={feature.featureId}
-                  aria-current={snapshot.activeFeatureId === feature.featureId || undefined}
+                  data-feature-scope="unassigned"
+                  aria-current={snapshot.activeFeatureId === null || undefined}
                   aria-disabled={!canWrite || busy}
-                  title={
-                    feature.status === 'archived'
-                      ? t('feature.archivedName', { name: label })
-                      : feature.description || label
-                  }
                   onClick={() => {
-                    if (canWrite && !busy) void selectScope(feature.featureId);
+                    if (canWrite && !busy) void selectScope(null);
                   }}
                 >
-                  <span>
-                    {label}
-                    {feature.status === 'archived' && ' · ' + t('features.status_archived')}
-                  </span>
-                  <small>{feature.terminalIds.length}</small>
+                  <span>{t('features.unassigned')}</span>
+                  <small>{unassigned.length}</small>
                 </button>
-              );
-            })}
-            {snapshot && unassigned.length > 0 && (
+              )}
               <button
                 type="button"
-                className="feature-scope"
-                data-feature-scope="unassigned"
-                aria-current={snapshot.activeFeatureId === null || undefined}
-                aria-disabled={!canWrite || busy}
+                ref={createTrigger}
+                className="feature-create"
+                aria-disabled={busy || !canWrite}
+                title={canWrite ? undefined : t('feature.coreRequired')}
                 onClick={() => {
-                  if (canWrite && !busy) void selectScope(null);
+                  if (canWrite && !busy) openEditor('new');
                 }}
               >
-                <span>{t('features.unassigned')}</span>
-                <small>{unassigned.length}</small>
+                ＋ {t('features.create')}
               </button>
+            </nav>
+            {editor && (
+              <form
+                className="feature-editor"
+                aria-label={t(editor === 'new' ? 'features.create' : 'features.edit')}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void save();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && !busy) {
+                    event.stopPropagation();
+                    closeEditor();
+                  }
+                }}
+              >
+                <h3>{t(editor === 'new' ? 'features.create' : 'features.edit')}</h3>
+                <label>
+                  {t('features.name')}
+                  <input
+                    ref={input}
+                    required
+                    maxLength={48}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  {t('features.description')}
+                  <textarea
+                    aria-label={t('features.description')}
+                    maxLength={2048}
+                    rows={3}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    disabled={busy}
+                  />
+                </label>
+                <label>
+                  {t('features.status')}
+                  <select
+                    aria-label={t('features.status')}
+                    value={status}
+                    onChange={(event) =>
+                      setStatus(event.target.value as WorkspaceFeature['status'])
+                    }
+                    disabled={busy}
+                  >
+                    {(editor === 'new'
+                      ? ['planned', 'active', 'blocked', 'completed']
+                      : ['planned', 'active', 'blocked', 'completed', 'archived']
+                    ).map((value) => (
+                      <option key={value} value={value}>
+                        {t(`features.status_${value}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="feature-form-actions">
+                  <button type="button" disabled={busy} onClick={closeEditor}>
+                    {t('features.cancel')}
+                  </button>
+                  <button type="submit" disabled={busy || !canWrite || !name.trim()}>
+                    {t(busy ? 'features.saving' : 'features.save')}
+                  </button>
+                </div>
+              </form>
             )}
-            <button
-              type="button"
-              ref={createTrigger}
-              className="feature-create"
-              aria-disabled={busy || !canWrite}
-              title={canWrite ? undefined : t('feature.coreRequired')}
-              onClick={() => {
-                if (canWrite && !busy) openEditor('new');
-              }}
-            >
-              ＋ {t('features.create')}
-            </button>
-          </nav>
-          {editor && (
-            <form
-              className="feature-editor"
-              aria-label={t(editor === 'new' ? 'features.create' : 'features.edit')}
-              onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && !busy) {
-                  event.stopPropagation();
-                  closeEditor();
-                }
-              }}
-            >
-              <h3>{t(editor === 'new' ? 'features.create' : 'features.edit')}</h3>
-              <label>
-                {t('features.name')}
-                <input
-                  ref={input}
-                  required
-                  maxLength={48}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label>
-                {t('features.description')}
-                <textarea
-                  aria-label={t('features.description')}
-                  maxLength={2048}
-                  rows={3}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  disabled={busy}
-                />
-              </label>
-              <label>
-                {t('features.status')}
-                <select
-                  aria-label={t('features.status')}
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value as WorkspaceFeature['status'])}
-                  disabled={busy}
+            {feedback}
+            {snapshot && (
+              <details className="feature-permissions-disclosure">
+                <summary>{t('feature.options')}</summary>
+                <button
+                  ref={editTrigger}
+                  type="button"
+                  disabled={busy || !canWrite || !selected || !!editor}
+                  onClick={() => selected && openEditor(selected)}
                 >
-                  {(editor === 'new'
-                    ? ['planned', 'active', 'blocked', 'completed']
-                    : ['planned', 'active', 'blocked', 'completed', 'archived']
-                  ).map((value) => (
-                    <option key={value} value={value}>
-                      {t(`features.status_${value}`)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="feature-form-actions">
-                <button type="button" disabled={busy} onClick={closeEditor}>
-                  {t('features.cancel')}
+                  {t('features.edit')}
                 </button>
-                <button type="submit" disabled={busy || !canWrite || !name.trim()}>
-                  {t(busy ? 'features.saving' : 'features.save')}
-                </button>
-              </div>
-            </form>
-          )}
-          {(notice ||
-            prepareIssue ||
-            closeIssue ||
-            arrangeIssue ||
-            (snapshot && !snapshot.layoutSaved)) && (
-            <div className="feature-feedback" role="status">
-              {notice && <p>{t(`features.${notice}`)}</p>}
-              {prepareIssue && prepareIssue !== notice && <p>{t(`features.${prepareIssue}`)}</p>}
-              {closeIssue && <p>{t('terminalStudio.closeTerminal.unconfirmed')}</p>}
-              {arrangeIssue && (
-                <p>
-                  {t(
-                    arrangeIssue === 'denied'
-                      ? 'terminalStudio.arrangeFocus'
-                      : 'terminalStudio.arrangeIssue',
-                    { status: arrangeIssue },
-                  )}
-                </p>
-              )}
-              {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
+                {structured && (
+                  <button
+                    type="button"
+                    disabled={busy || !canWrite || selected?.status === 'archived'}
+                    onClick={() => {
+                      if (selected) {
+                        setStructuredFeature(selected.featureId);
+                        return;
+                      }
+                      const featureId = defaultFeatureId(snapshot.workspace.id);
+                      void selectScope(featureId).then((accepted) => {
+                        if (accepted) setStructuredFeature(featureId);
+                      });
+                    }}
+                  >
+                    {t('structuredAgents.title')}
+                  </button>
+                )}
+                {selected && !editor && (
+                  <div className="feature-members">
+                    <p>{t('features.members', { count: selected.terminalIds.length })}</p>
+                    <p>{t('features.available', { count: available.length })}</p>
+                    {selected.terminalIds.length > available.length && (
+                      <p>
+                        {t('features.missing', {
+                          count: selected.terminalIds.length - available.length,
+                        })}
+                      </p>
+                    )}
+                    {unassigned.length > 0 && selected.status !== 'archived' && (
+                      <form
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          if (assignSlot)
+                            void request({
+                              action: 'assign',
+                              featureId: selected.featureId,
+                              slot: Number(assignSlot),
+                              expectedRevision: selected.revision,
+                            }).then((result) => {
+                              if (result === 'ok') setAssignSlot('');
+                            });
+                        }}
+                      >
+                        <label>
+                          {t('features.assign')}
+                          <select
+                            value={assignSlot}
+                            disabled={busy}
+                            onChange={(event) => setAssignSlot(event.target.value)}
+                          >
+                            <option value="">{t('features.choose')}</option>
+                            {unassigned.map((slot) => (
+                              <option key={slot.terminalId} value={String(slot.slot)}>
+                                {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button disabled={busy || !assignSlot}>{t('features.addMember')}</button>
+                      </form>
+                    )}
+                  </div>
+                )}
+                {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
+              </details>
+            )}
+          </div>
+          {(navigation || nativeNavigation || notificationsBell) && (
+            <div className="feature-navigation">
+              {navigation ?? nativeNavigation}
+              {notificationsBell}
             </div>
           )}
-          {snapshot && (
-            <details className="feature-permissions-disclosure">
-              <summary>{t('feature.options')}</summary>
-              <button
-                ref={editTrigger}
-                type="button"
-                disabled={busy || !canWrite || !selected || !!editor}
-                onClick={() => selected && openEditor(selected)}
-              >
-                {t('features.edit')}
-              </button>
-              {structured && (
-                <button
-                  type="button"
-                  disabled={busy || !canWrite || selected?.status === 'archived'}
-                  onClick={() => {
-                    if (selected) {
-                      setStructuredFeature(selected.featureId);
-                      return;
-                    }
-                    const featureId = defaultFeatureId(snapshot.workspace.id);
-                    void selectScope(featureId).then((accepted) => {
-                      if (accepted) setStructuredFeature(featureId);
-                    });
-                  }}
-                >
-                  {t('structuredAgents.title')}
-                </button>
-              )}
-              {selected && !editor && (
-                <div className="feature-members">
-                  <p>{t('features.members', { count: selected.terminalIds.length })}</p>
-                  <p>{t('features.available', { count: available.length })}</p>
-                  {selected.terminalIds.length > available.length && (
-                    <p>
-                      {t('features.missing', {
-                        count: selected.terminalIds.length - available.length,
-                      })}
-                    </p>
-                  )}
-                  {unassigned.length > 0 && selected.status !== 'archived' && (
-                    <form
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        if (assignSlot)
-                          void request({
-                            action: 'assign',
-                            featureId: selected.featureId,
-                            slot: Number(assignSlot),
-                            expectedRevision: selected.revision,
-                          }).then((result) => {
-                            if (result === 'ok') setAssignSlot('');
-                          });
-                      }}
-                    >
-                      <label>
-                        {t('features.assign')}
-                        <select
-                          value={assignSlot}
-                          disabled={busy}
-                          onChange={(event) => setAssignSlot(event.target.value)}
-                        >
-                          <option value="">{t('features.choose')}</option>
-                          {unassigned.map((slot) => (
-                            <option key={slot.terminalId} value={String(slot.slot)}>
-                              {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button disabled={busy || !assignSlot}>{t('features.addMember')}</button>
-                    </form>
-                  )}
-                </div>
-              )}
-              {nativeWorkspace && <FeaturePermissions snapshot={snapshot} feature={selected} />}
-            </details>
-          )}
-        </div>
-        {(navigation || nativeNavigation || notificationsBell) && (
-          <div className="feature-navigation">
-            {navigation ?? nativeNavigation}
-            {notificationsBell}
-          </div>
-        )}
-        <footer className="feature-core" role="status" data-state={coreState}>
-          <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
-        </footer>
-      </aside>
+          <footer className="feature-core" role="status" data-state={coreState}>
+            <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
+          </footer>
+        </aside>
+      )}
+      {shell && feedback}
       {structuredOpen && (
         <StructuredAgents
           key={selected.featureId}
@@ -1494,30 +1588,15 @@ export function FeatureStudio({
                 }
               : {}),
           }}
-          toolbarStart={breadcrumb}
+          showToolbar={!shell}
+          toolbarStart={shell ? undefined : breadcrumb}
           toolbarEnd={
-            <>
-              {layoutActions(
-                () => layoutControls.current?.toggleGrid(),
-                () => layoutControls.current?.restore(),
-              )}
-              {actions}
-              {native && (
-                <span className="studio-limits-control">
-                  <LimitsChip
-                    accounts={limits}
-                    shown={limitPrefs.shown ?? limits.map((entry) => entry.id)}
-                    caps={limitPrefs.caps}
-                    now={now}
-                    onRefresh={(accountId) =>
-                      void request({ action: 'accountLimits', command: 'refresh', accountId })
-                    }
-                    canRefresh={(accountId) => accountId === 'codex-default'}
-                  />
-                </span>
-              )}
-              {toolbarUtilities}
-            </>
+            shell ? undefined : (
+              <>
+                {studioActions}
+                {toolbarUtilities}
+              </>
+            )
           }
           {...(nativeWorkspace && selected?.status !== 'archived'
             ? {

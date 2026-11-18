@@ -148,6 +148,8 @@ test('alerts deduplicate, navigate by immutable terminal ID and persist read and
 }) => {
   await openStudio(page, 'en-US');
   await ownedAlerts(page);
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(page).toHaveURL('/visao-geral');
   const bell = page.getByRole('button', { name: 'Notifications', exact: true });
   await expect(bell).toHaveAttribute('title', /2 unread/);
   await bell.click();
@@ -155,6 +157,7 @@ test('alerts deduplicate, navigate by immutable terminal ID and persist read and
   await expect(drawer.getByRole('listitem')).toHaveCount(2);
   const waiting = drawer.getByRole('button', { name: /Waiting for you T-002.*Integração/ });
   await waiting.click();
+  await expect(page).toHaveURL('/studio');
   await expect(drawer).toBeHidden();
   await expect(page.locator(`[data-pane-id="${terminalId(2)}"]`)).toBeFocused();
   const calls = await page.evaluate(
@@ -205,9 +208,10 @@ for (const [width, height] of [
   test(`limits and drawer at ${width} × ${height}`, async ({ page, browser }) => {
     await page.setViewportSize({ width, height });
     await openStudio(page);
-    const root = `docs/development/spec-l6/${width}x${height}`;
+    const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
+    const root = `${integrated ?? 'docs/development/spec-l6'}/${width}x${height}`;
     const capture = async (name: string) => {
-      if (process.env.ORQST_CAPTURE_SPEC_L6 === '1')
+      if (integrated || process.env.ORQST_CAPTURE_SPEC_L6 === '1')
         await page.screenshot({ path: `${root}/${name}.png`, animations: 'disabled' });
     };
     const chip = page.locator('.al-trigger');
@@ -282,7 +286,7 @@ for (const [width, height] of [
     await drawer.getByRole('button', { name: 'Limpar tudo' }).click();
     await capture('05-notifications-empty');
 
-    if (process.env.ORQST_CAPTURE_SPEC_L6 === '1') {
+    if (!integrated && process.env.ORQST_CAPTURE_SPEC_L6 === '1') {
       const reference = await browser.newPage({ viewport: { width, height } });
       try {
         await reference.setContent(

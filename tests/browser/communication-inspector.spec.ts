@@ -141,9 +141,12 @@ for (const viewport of [
     await expect(rows).toHaveCount(3);
     await expect(rows.filter({ hasText: 'Revise a validação' })).toContainText('Concluída');
     await expect(rows.filter({ hasText: 'Confira a migração' })).toContainText('Na fila');
-    if (process.env.ORQST_SPEC_L4_SCREENSHOTS)
+    const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
+    if (integrated || process.env.ORQST_SPEC_L4_SCREENSHOTS)
       await page.screenshot({
-        path: `docs/development/spec-l4/communication-${viewport.width}x${viewport.height}.png`,
+        path: integrated
+          ? `${integrated}/${viewport.width}x${viewport.height}/communication.png`
+          : `docs/development/spec-l4/communication-${viewport.width}x${viewport.height}.png`,
       });
     await page.getByRole('tab', { name: 'Fila' }).click();
     await expect(rows).toHaveCount(1);
@@ -169,9 +172,11 @@ for (const viewport of [
     await dialog
       .getByRole('textbox', { name: 'Mensagem' })
       .fill('Confira também a expiração do token.');
-    if (process.env.ORQST_SPEC_L4_SCREENSHOTS)
+    if (integrated || process.env.ORQST_SPEC_L4_SCREENSHOTS)
       await page.screenshot({
-        path: `docs/development/spec-l4/delegate-${viewport.width}x${viewport.height}.png`,
+        path: integrated
+          ? `${integrated}/${viewport.width}x${viewport.height}/delegate.png`
+          : `docs/development/spec-l4/delegate-${viewport.width}x${viewport.height}.png`,
       });
     await dialog.getByRole('button', { name: 'Enviar', exact: true }).click();
     await expect(dialog).toHaveCount(0);

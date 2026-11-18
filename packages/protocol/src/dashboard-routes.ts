@@ -3,14 +3,25 @@ import { z } from 'zod';
 export const dashboardViewSchema = z.enum([
   'overview',
   'studio',
+  'communication',
   'workspaces',
   'agents',
   'models',
   'artifacts',
-  'comunicacao',
   'settings',
 ]);
 export type DashboardView = z.infer<typeof dashboardViewSchema>;
+
+export const dashboardRoutePaths = {
+  overview: '/visao-geral',
+  studio: '/studio',
+  communication: '/comunicacao',
+  models: '/metricas',
+  artifacts: '/artefatos',
+  settings: '/configuracoes',
+  agents: '/configuracoes/agentes',
+  workspaces: '/workspaces',
+} satisfies Record<DashboardView, string>;
 
 /** URL representation only: this schema does not prove an observed session exists. */
 export const dashboardSessionPathSchema = z
@@ -43,6 +54,7 @@ export const dashboardPathSchema = z
   .refine(
     (path) =>
       path === '/' ||
+      Object.values(dashboardRoutePaths).includes(path) ||
       dashboardViewSchema.options.some((view) => path === `/${view}`) ||
       dashboardSessionPathSchema.safeParse(path).success,
   );

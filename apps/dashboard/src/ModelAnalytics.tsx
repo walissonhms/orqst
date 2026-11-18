@@ -1,3 +1,4 @@
+import { RouteHeaderActions } from './AppShell';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
@@ -328,102 +329,108 @@ function AnalyticsReadingView({
   };
   return (
     <div className="analytics spec-metrics">
-      <div className="spec-actions spec-metrics-controls">
-        {tab === 'usage' && (
-          <label>
-            {t('screens.feature')}{' '}
-            <select
-              value={feature?.featureId ?? ''}
-              onChange={(event) => setFeatureId(event.target.value)}
-            >
-              <option value="">{t('screens.metrics.observedHistory')}</option>
-              {features.map((entry) => (
-                <option key={entry.featureId} value={entry.featureId}>
-                  {featureDisplayName(entry, t('features.defaultName'))}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {!feature && (
-          <>
+      <RouteHeaderActions>
+        <div className="spec-actions spec-metrics-controls">
+          {tab === 'usage' && (
             <label>
-              {t('analytics.period')}
+              {t('screens.feature')}{' '}
               <select
-                aria-label={t('analytics.period')}
-                value={period}
-                onChange={(event) => setPeriod(event.target.value as Period)}
+                value={feature?.featureId ?? ''}
+                onChange={(event) => setFeatureId(event.target.value)}
               >
-                {(['today', 'week', 'month', 'custom', 'all'] as const).map((value) => (
-                  <option value={value} key={value}>
-                    {t(`analytics.periods.${value}`)}
+                <option value="">{t('screens.metrics.observedHistory')}</option>
+                {features.map((entry) => (
+                  <option key={entry.featureId} value={entry.featureId}>
+                    {featureDisplayName(entry, t('features.defaultName'))}
                   </option>
                 ))}
               </select>
             </label>
-            {period === 'custom' && (
-              <>
-                <label>
-                  {t('analytics.start')}
-                  <input
-                    type="date"
-                    value={start}
-                    onChange={(event) => setStart(event.target.value)}
-                  />
-                </label>
-                <label>
-                  {t('analytics.end')}
-                  <input type="date" value={end} onChange={(event) => setEnd(event.target.value)} />
-                </label>
-              </>
-            )}
-            <label>
-              {t('analytics.agent')}
-              <input
-                value={agent}
-                placeholder={t('analytics.allAgents')}
-                onChange={(event) => setAgent(event.target.value)}
-              />
-            </label>
-            <label>
-              {t('analytics.adapter')}
-              <select
-                aria-label={t('analytics.adapter')}
-                value={adapter}
-                onChange={(event) => setAdapter(event.target.value)}
-              >
-                <option value="">{t('analytics.allAdapters')}</option>
-                {adapters.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {t(`screens.cli.${item.id}`, { defaultValue: item.id })}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t('analytics.model')}
-              <input
-                value={model}
-                disabled={unidentified}
-                placeholder={t('analytics.allModels')}
-                onChange={(event) => setModel(event.target.value)}
-              />
-            </label>
-            <label className="analytics-checkbox">
-              <input
-                type="checkbox"
-                checked={unidentified}
-                onChange={(event) => setUnidentified(event.target.checked)}
-              />
-              {t('analytics.unidentifiedOnly')}
-            </label>
-            <button className="button" onClick={() => setRevision((value) => value + 1)}>
-              <RefreshCw size={13} />
-              {t('analytics.refresh')}
-            </button>
-          </>
-        )}
-      </div>
+          )}
+          {!feature && (
+            <>
+              <label>
+                {t('analytics.period')}
+                <select
+                  aria-label={t('analytics.period')}
+                  value={period}
+                  onChange={(event) => setPeriod(event.target.value as Period)}
+                >
+                  {(['today', 'week', 'month', 'custom', 'all'] as const).map((value) => (
+                    <option value={value} key={value}>
+                      {t(`analytics.periods.${value}`)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {period === 'custom' && (
+                <>
+                  <label>
+                    {t('analytics.start')}
+                    <input
+                      type="date"
+                      value={start}
+                      onChange={(event) => setStart(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    {t('analytics.end')}
+                    <input
+                      type="date"
+                      value={end}
+                      onChange={(event) => setEnd(event.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              <label>
+                {t('analytics.agent')}
+                <input
+                  value={agent}
+                  placeholder={t('analytics.allAgents')}
+                  onChange={(event) => setAgent(event.target.value)}
+                />
+              </label>
+              <label>
+                {t('analytics.adapter')}
+                <select
+                  aria-label={t('analytics.adapter')}
+                  value={adapter}
+                  onChange={(event) => setAdapter(event.target.value)}
+                >
+                  <option value="">{t('analytics.allAdapters')}</option>
+                  {adapters.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {t(`screens.cli.${item.id}`, { defaultValue: item.id })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t('analytics.model')}
+                <input
+                  value={model}
+                  disabled={unidentified}
+                  placeholder={t('analytics.allModels')}
+                  onChange={(event) => setModel(event.target.value)}
+                />
+              </label>
+              <label className="analytics-checkbox">
+                <input
+                  type="checkbox"
+                  checked={unidentified}
+                  onChange={(event) => setUnidentified(event.target.checked)}
+                />
+                {t('analytics.unidentifiedOnly')}
+              </label>
+              <button className="button" onClick={() => setRevision((value) => value + 1)}>
+                <RefreshCw size={13} />
+                {t('analytics.refresh')}
+              </button>
+            </>
+          )}
+        </div>
+      </RouteHeaderActions>
       {feature ? (
         <FeatureUsage scope={scope} featureId={feature.featureId} />
       ) : (

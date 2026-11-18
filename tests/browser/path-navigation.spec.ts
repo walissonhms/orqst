@@ -5,13 +5,13 @@ const sourceId = 'synthetic-browser-session';
 const sessionPath = `/overview/sessions/${sourceId}`;
 const draftText = 'Synthetic route draft — exact text\n<script>inert</script>';
 const views = [
-  ['overview', 'Overview'],
-  ['studio', 'Terminals / Studio'],
-  ['workspaces', 'Workspace directory'],
-  ['agents', 'Agents & integrations'],
-  ['models', 'Most used models'],
-  ['settings', 'Settings'],
-  ['artifacts', 'Artifact library'],
+  ['overview', '/visao-geral', 'Overview'],
+  ['studio', '/studio', 'Studio'],
+  ['communication', '/comunicacao', 'Communication'],
+  ['models', '/metricas', 'Metrics'],
+  ['settings', '/configuracoes', 'Settings'],
+  ['artifacts', '/artefatos', 'Artifacts'],
+  ['agents', '/configuracoes/agentes', 'Agents'],
 ] as const;
 
 async function editDraft(page: Page) {
@@ -33,53 +33,58 @@ async function confirm(page: Page) {
     .click();
 }
 
-for (const [view, label] of views) {
+for (const [view, path, label] of views) {
   test(`${view} supports direct entry, reload and old hash links without a redirect history entry`, async ({
     page,
   }) => {
-    await page.goto(`/${view}`);
+    await page.goto(path);
     const link = page.getByRole('link', { name: label, exact: true });
     await expect(link).toHaveAttribute('aria-current', 'page');
-    await expect(link).toHaveAttribute('href', `/${view}`);
+    await expect(link).toHaveAttribute('href', path);
     await page.reload();
     await expect(link).toHaveAttribute('aria-current', 'page');
-    await expect(page).toHaveURL(`/${view}`);
+    await expect(page).toHaveURL(path);
     await page.goto(`/#${view}`);
-    await expect(page).toHaveURL(`/${view}`);
+    await expect(page).toHaveURL(path);
     const length = await page.evaluate(() => history.length);
-    const next = view === 'settings' ? 'overview' : 'settings';
+    const next = view === 'settings' || view === 'agents' ? 'overview' : 'settings';
     await page
       .getByRole('link', { name: next === 'settings' ? 'Settings' : 'Overview', exact: true })
       .click();
     expect(await page.evaluate(() => history.length)).toBe(length + 1);
     await page.goBack();
-    await expect(page).toHaveURL(`/${view}`);
+    await expect(page).toHaveURL(path);
     await expect(link).toHaveAttribute('aria-current', 'page');
   });
 }
 
-test('root restores preferences, explicit routes win and SPA Back/Forward keeps the document', async ({
+test('Studio opens by default and SPA Back/Forward retains the document and language', async ({
   page,
 }) => {
   await page.goto('/settings');
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
   await page.goto('/');
-  await expect(page).toHaveURL('/settings');
-  await expect(page.getByLabel('Idioma', { exact: true })).toHaveValue('pt-BR');
+  await expect(page).toHaveURL('/studio');
   await page.goto('/agents');
-  await expect(
-    page.getByRole('link', { name: 'Agentes e integrações', exact: true }),
-  ).toHaveAttribute('aria-current', 'page');
-  await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
+  await expect(page).toHaveURL('/configuracoes/agentes');
+  await expect(page.getByRole('link', { name: 'Agentes', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await page.getByRole('link', { name: 'Geral', exact: true }).click();
+  const idioma = page.getByRole('combobox', { name: 'Idioma', exact: true });
+  await expect(idioma).toHaveValue('pt-BR');
+  await idioma.selectOption('en-US');
   await page.evaluate(() => Reflect.set(window, 'syntheticNavigationDocument', 'retained'));
-  for (const [view, label] of views) {
+  for (const [view, path, label] of views) {
+    if (view === 'agents') continue;
     await page.getByRole('link', { name: label, exact: true }).click();
-    await expect(page).toHaveURL(`/${view}`);
+    await expect(page).toHaveURL(path);
   }
   await page.evaluate(() => history.go(-4));
-  await expect(page).toHaveURL('/workspaces');
+  await expect(page).toHaveURL('/studio');
   await page.evaluate(() => history.go(2));
-  await expect(page).toHaveURL('/models');
+  await expect(page).toHaveURL('/metricas');
   expect(await page.evaluate(() => Reflect.get(window, 'syntheticNavigationDocument'))).toBe(
     'retained',
   );
@@ -109,7 +114,7 @@ test('legacy session identity waits for source evidence, survives reload and rem
   );
   for (const hash of ['#session=missing', '#session=%', '#session=' + 'x'.repeat(201)]) {
     await page.goto('/' + hash);
-    await expect(page).toHaveURL('/overview');
+    await expect(page).toHaveURL('/visao-geral');
     await expect(page.getByRole('region', { name: 'Session details', exact: true })).toHaveCount(0);
   }
 });
@@ -133,7 +138,7 @@ test('cancelled Back and Forward preserve the exact history entries and draft, c
   }
   await page.evaluate(() => history.back());
   await confirm(page);
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toHaveCount(0);
   // Reopen the same source from the preserved forward entry, then test forward cancellation.
   await page.goForward();
@@ -150,15 +155,15 @@ test('cancelled Back and Forward preserve the exact history entries and draft, c
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
   await page.evaluate(() => history.forward());
   await confirm(page);
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL('/configuracoes');
   expect(await page.evaluate(() => history.length)).toBe(withSettings);
   expect(withSettings).toBe(length + 1);
   await page.goBack();
   await expect(page).toHaveURL(sessionPath);
   await page.goBack();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
   await page.goBack();
-  await expect(page).toHaveURL('/agents');
+  await expect(page).toHaveURL('/configuracoes/agentes');
 });
 
 test('view hashes on clean paths share draft confirmation and accepted session links remain reloadable', async ({
@@ -177,7 +182,7 @@ test('view hashes on clean paths share draft confirmation and accepted session l
     location.hash = 'settings';
   });
   await confirm(page);
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL('/configuracoes');
   await page.goBack();
   await expect(page).toHaveURL(sessionPath);
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toContainText(
@@ -191,7 +196,7 @@ test('address-bar legacy session navigation and copied-index duplicate events ap
   await page.goto('/overview');
   const length = await page.evaluate(() => history.length);
   // Same-document page.goto follows Chromium's address-bar fragment navigation.
-  await page.goto(`/overview#session=${sourceId}`);
+  await page.goto(`/visao-geral#session=${sourceId}`);
   await expect(page).toHaveURL(sessionPath);
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toContainText(
     sourceId,
@@ -215,15 +220,15 @@ test('address-bar legacy session navigation and copied-index duplicate events ap
   await copyIndexAndNavigate();
   await expect(dialog(page)).toHaveCount(1);
   await confirm(page);
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL('/configuracoes');
   await page.goBack();
   await expect(page).toHaveURL(sessionPath);
   await page.goBack();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
   await page.goForward();
   await expect(page).toHaveURL(sessionPath);
   await page.goForward();
-  await expect(page).toHaveURL('/settings');
+  await expect(page).toHaveURL('/configuracoes');
 });
 
 test('safe Unicode session IDs use canonical paths while unsafe historical IDs keep their exact fragment', async ({

@@ -203,6 +203,7 @@ interface Props {
   };
   /** Host controls shown at the start of the toolbar (e.g. the Feature panel toggle). */
   toolbarStart?: ReactNode;
+  showToolbar?: boolean;
   /** Extra guidance under the empty state (e.g. terminals in another Feature). */
   emptyHint?: ReactNode;
   /** Host scope switcher shown after the start controls (e.g. Feature tabs). */
@@ -436,6 +437,7 @@ export function FeatureStudioStage({
   accountSuggestions = [],
   native,
   toolbarStart,
+  showToolbar = true,
   toolbarScopes,
   toolbarEnd,
   emptyHint,
@@ -1186,58 +1188,60 @@ export function FeatureStudioStage({
         }
       }}
     >
-      <header className="ts-toolbar">
-        {toolbarStart}
-        {toolbarScopes}
-        {!canonical && (
-          <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
-            {arrangementModes.map((mode) => {
-              const Icon = modeIcons[mode];
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  role="radio"
-                  aria-checked={state.mode === mode}
-                  className={state.mode === mode ? 'active' : ''}
-                  title={t(`terminalStudio.mode.${mode}`)}
-                  onClick={() => setMode(mode)}
-                >
-                  <Icon size={15} />
-                  <span>{t(`terminalStudio.mode.${mode}`)}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {!canonical && minimized.length > 0 && (
-          <button
-            type="button"
-            className="ts-ghost"
-            onClick={() =>
-              setState((current) =>
-                scope === 'all'
-                  ? restoreAll(current)
-                  : {
-                      ...current,
-                      panes: current.panes.map((pane) =>
-                        inScope(byId.get(pane.id)) ? { ...pane, minimized: false } : pane,
-                      ),
-                    },
-              )
-            }
-          >
-            {t('terminalStudio.restoreAll')}
-          </button>
-        )}
-        {toolbarEnd}
-        {!canonical && onNewTerminal && (
-          <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
-            <Plus size={15} />
-            {t('terminalStudio.newTerminal')}
-          </button>
-        )}
-      </header>
+      {showToolbar && (
+        <header className="ts-toolbar">
+          {toolbarStart}
+          {toolbarScopes}
+          {!canonical && (
+            <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
+              {arrangementModes.map((mode) => {
+                const Icon = modeIcons[mode];
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={state.mode === mode}
+                    className={state.mode === mode ? 'active' : ''}
+                    title={t(`terminalStudio.mode.${mode}`)}
+                    onClick={() => setMode(mode)}
+                  >
+                    <Icon size={15} />
+                    <span>{t(`terminalStudio.mode.${mode}`)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {!canonical && minimized.length > 0 && (
+            <button
+              type="button"
+              className="ts-ghost"
+              onClick={() =>
+                setState((current) =>
+                  scope === 'all'
+                    ? restoreAll(current)
+                    : {
+                        ...current,
+                        panes: current.panes.map((pane) =>
+                          inScope(byId.get(pane.id)) ? { ...pane, minimized: false } : pane,
+                        ),
+                      },
+                )
+              }
+            >
+              {t('terminalStudio.restoreAll')}
+            </button>
+          )}
+          {toolbarEnd}
+          {!canonical && onNewTerminal && (
+            <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
+              <Plus size={15} />
+              {t('terminalStudio.newTerminal')}
+            </button>
+          )}
+        </header>
+      )}
 
       {workspaces.length > 1 && (
         <nav className="ts-scopes" aria-label={t('terminalStudio.workspaces')}>

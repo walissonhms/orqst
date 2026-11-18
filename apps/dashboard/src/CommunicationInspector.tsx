@@ -1,3 +1,4 @@
+import { RouteHeaderActions } from './AppShell';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, ArrowUpRight, Copy, RotateCw } from 'lucide-react';
@@ -33,7 +34,7 @@ export function CommunicationInspector({
   onOpenStudio,
 }: {
   snapshot?: FeatureNativeSnapshot;
-  onOpenStudio: () => void;
+  onOpenStudio: (target: { featureId: string; terminalId: string }) => Promise<boolean>;
 }) {
   const { t, i18n } = useTranslation();
   const key = useId();
@@ -156,35 +157,19 @@ export function CommunicationInspector({
   }
 
   async function openDestination(row: InspectorRow) {
-    const target = slots.find((slot) => slot.terminalId === row.to && !slot.closed);
-    if (!target || !native || !snapshot || !featureId || action.current) return;
+    if (
+      !slots.some((slot) => slot.terminalId === row.to && !slot.closed) ||
+      !featureId ||
+      action.current
+    )
+      return;
     action.current = true;
     setActing(true);
     try {
-      const selection = active
-        ? snapshot
-        : (
-            await native.request({
-              contractVersion: 1,
-              generation: snapshot.generation,
-              action: 'select',
-              featureId,
-              expectedRevision: snapshot.view.revision,
-            })
-          ).snapshot;
-      if (selection?.activeFeatureId !== featureId) throw new Error('Stale Feature');
-      const result = await native.request({
-        contractVersion: 1,
-        generation: selection.generation,
-        action: 'pane',
-        command: 'focus',
-        slot: target.slot,
-        terminalId: target.terminalId,
-      });
-      if (result.status !== 'ok') throw new Error('Destination unavailable');
-      onOpenStudio();
+      if (!(await onOpenStudio({ featureId, terminalId: row.to })))
+        setNotice(t('communication.refused.unavailable'));
     } catch {
-      setNotice(t('communication.openFailed'));
+      setNotice(t('communication.refused.unavailable'));
     } finally {
       action.current = false;
       setActing(false);
@@ -204,18 +189,20 @@ export function CommunicationInspector({
     <section className="communication-inspector" aria-labelledby={key + '-title'}>
       <header className="communication-head">
         <h1 id={key + '-title'}>{t('shell.views.comunicacao')}</h1>
-        <button
-          className="button primary"
-          type="button"
-          aria-haspopup="dialog"
-          disabled={!available || acting}
-          onClick={() => {
-            setNotice('');
-            setDelegate(true);
-          }}
-        >
-          <ArrowUpRight size={14} aria-hidden="true" /> {t('mention.delegate')}
-        </button>
+        <RouteHeaderActions>
+          <button
+            className="button primary"
+            type="button"
+            aria-haspopup="dialog"
+            disabled={!available || acting}
+            onClick={() => {
+              setNotice('');
+              setDelegate(true);
+            }}
+          >
+            <ArrowUpRight size={14} aria-hidden="true" /> {t('mention.delegate')}
+          </button>
+        </RouteHeaderActions>
       </header>
       <div className="communication-tabs" role="tablist" aria-label={t('shell.views.comunicacao')}>
         {tabs.map((entry, index) => (

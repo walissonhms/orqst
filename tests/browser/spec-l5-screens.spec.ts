@@ -106,6 +106,7 @@ function nativeFixture() {
       provider,
       status: index < 3 ? 'available' : 'unavailable',
       reason: index < 3 ? 'ready' : 'executable_not_found',
+      ...(provider === 'codex' ? { path: '/synthetic/bin/codex', version: '0.169.0' } : {}),
       models:
         index < 3
           ? [
@@ -246,6 +247,9 @@ test('Overview uses owned evidence and focuses the matching terminal across Feat
   await page.goto('/overview');
   const overview = page.locator('.spec-screen');
   await expect(overview.locator('.spec-counters > div')).toHaveCount(5);
+  await expect(
+    page.locator('.topbar-actions').getByRole('button', { name: 'Refresh' }),
+  ).toBeVisible();
   await expect(overview.getByRole('row', { name: /Revisão.*T-002.*Claude/ })).toBeVisible();
   await expect(overview.locator('.spec-counters dd').first()).toHaveText('2');
   const observed = overview.locator('details').filter({ hasText: 'Observed sessions' });
@@ -325,6 +329,9 @@ test('Settings includes all tabs, discovers the current CLI catalog, and persist
   await screen.getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(screen.getByRole('columnheader', { name: 'Claude', exact: true })).toBeVisible();
   await expect(screen.getByText('Not installed', { exact: true })).toBeVisible();
+  await expect(screen.getByText('/synthetic/bin/codex', { exact: true })).toBeVisible();
+  await expect(screen.getByText('0.169.0', { exact: true })).toBeVisible();
+  await expect(screen.getByRole('link', { name: /How to install/ })).toHaveCount(1);
   await expect
     .poll(() => calls.filter(({ action }) => action === 'catalog').length)
     .toBeGreaterThan(0);
@@ -355,14 +362,18 @@ for (const [width, height] of [
   [1280, 800],
 ] as const) {
   test(`V6 comparison captures at ${width}x${height}`, async ({ page }) => {
-    test.skip(process.env.ORQST_SPEC_L5_SCREENSHOTS !== '1', 'Explicit screenshot run');
+    const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
+    test.skip(
+      !integrated && process.env.ORQST_SPEC_L5_SCREENSHOTS !== '1',
+      'Explicit screenshot run',
+    );
     await page.setViewportSize({ width, height });
     await page.addInitScript(() => localStorage.setItem('i18nextLng', 'pt-BR'));
     await installNative(page);
     await installAnalytics(page);
     const capture = (name: string) =>
       page.screenshot({
-        path: `docs/development/spec-l5/${width}x${height}/${name}.png`,
+        path: `${integrated ?? 'docs/development/spec-l5'}/${width}x${height}/${name}.png`,
         animations: 'disabled',
       });
     const screen = page.locator('.spec-screen');
