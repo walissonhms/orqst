@@ -1216,16 +1216,16 @@ button:disabled {
   overflow: auto;
 }
 .shell-tree h2 {
-  display: flex;
-  justify-content: space-between;
-  position: relative;
   padding: 18px 11px 8px;
   color: var(--orqst-muted);
   font-size: 9px;
   letter-spacing: 1.6px;
   text-transform: uppercase;
 }
-.shell-tree h2 > button {
+.shell-feature-heading {
+  position: relative;
+}
+.shell-feature-heading > button {
   position: absolute;
   right: 4px;
   bottom: 3px;
@@ -1235,8 +1235,9 @@ button:disabled {
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 8px 10px 8px 9px;
+  padding: 9px 10px 9px 9px;
   border-left: 2px solid transparent;
+  line-height: 14px;
   color: var(--orqst-muted);
   text-align: left;
 }
@@ -1271,11 +1272,12 @@ button:disabled {
   padding-left: 14px;
   padding-right: 26px;
   font-size: 11px;
+  line-height: 13px;
 }
 .shell-feature-list > .shell-tree-row {
   padding-left: 14px;
 }
-.shell-feature-menu {
+.shell-feature-row > .shell-feature-menu {
   position: absolute;
   right: 2px;
   top: 50%;
@@ -1551,7 +1553,7 @@ button:disabled {
   .shell-brand > span:first-child,
   .shell-tree-name,
   .shell-tree-row small,
-  .shell-tree h2 button,
+  .shell-feature-heading > button,
   .shell-core-label,
   .shell-subtitle {
     display: none;
@@ -1566,7 +1568,7 @@ button:disabled {
     padding-left: 8px;
     padding-right: 2px;
   }
-  .shell-feature-menu {
+  .shell-feature-row > .shell-feature-menu {
     right: 0;
     opacity: 1;
   }

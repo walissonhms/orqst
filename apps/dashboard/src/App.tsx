@@ -1124,7 +1124,7 @@ export function App() {
     .join(' / ');
   const subtitle =
     view === 'studio' && managedSelected && managedFeature
-      ? t(`features.status_${managedFeature.status}`)
+      ? t(`features.status_${managedFeature.status}`).toLocaleLowerCase(i18n.resolvedLanguage)
       : routeTitle;
   const sidebar = (
     <ShellSidebar

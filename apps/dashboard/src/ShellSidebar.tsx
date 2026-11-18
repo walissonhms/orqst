@@ -163,8 +163,8 @@ export function ShellSidebar({
             <span className="shell-tree-name">{t('createWorkspace')}</span>
           </button>
         </nav>
-        <h2 id="shell-features">
-          {t('features.heading')}
+        <div className="shell-feature-heading">
+          <h2 id="shell-features">{t('features.heading')}</h2>
           <button
             type="button"
             className="shell-icon"
@@ -175,7 +175,7 @@ export function ShellSidebar({
           >
             <Plus size={13} aria-hidden="true" />
           </button>
-        </h2>
+        </div>
         <nav className="shell-feature-list" aria-labelledby="shell-features">
           {features.map(({ feature, count }) => (
             <div
