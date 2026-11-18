@@ -28,11 +28,23 @@ import {
 import { FeaturePermissions } from './FeaturePermissions.js';
 import { StructuredAgents } from './StructuredAgents.js';
 import { SavedTerminalList } from './SavedTerminalList.js';
+import { TerminalOpeningCard } from './TerminalOpeningCard.js';
+import {
+  requestTerminalRetry,
+  useTerminalLifecycle,
+  useOwnedPaneEvidence,
+} from './use-terminal-lifecycle.js';
+import { PaneLifecycleStatus } from './PaneLifecycleContent.js';
+import { projectPaneLifecycle } from './terminal-lifecycle.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
 import { canvasMembers } from './feature-canvas.js';
-import { TerminalStudio, type StudioLayoutControls } from './TerminalStudio.js';
+import {
+  TerminalStudio,
+  type StudioLayoutControls,
+  type StudioTerminal,
+} from './TerminalStudio.js';
 import { AccountLimits } from './AccountLimits.js';
 import { FeatureDelegate, type FeatureDelegateProps, type MentionSend } from './MentionComposer.js';
 import type { StudioCreationScope } from './StudioWorkspace.js';
@@ -248,10 +260,52 @@ export function FeatureWorkspace({
     !!snapshot;
 
   const hasSnapshot = !!snapshot;
-  const terminals = useMemo(
-    () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
-    [studio, snapshot, panes, evidence, now],
+  const openingWorkspaceId = snapshot?.workspace.id ?? workspaceId;
+  const openingTerminals = useTerminalLifecycle(
+    openingWorkspaceId,
+    snapshot?.activeFeatureId ?? null,
+    !nativeWorkspace && studio ? window.orqstTauriStudio : undefined,
   );
+  const paneEvidence = useOwnedPaneEvidence();
+  const terminals = useMemo<StudioTerminal[]>(() => {
+    if (!studio) return [];
+    const current = studioTerminals(snapshot, panes, evidence, now).filter((terminal) => {
+      const owned = paneEvidence.get(terminal.id);
+      return !owned || projectPaneLifecycle(owned).state !== 'ended';
+    });
+    return [
+      ...current,
+      ...openingTerminals
+        .filter(
+          (card) =>
+            card.state !== 'ended' &&
+            !snapshot?.slots.some((slot) => slot.terminalId === card.terminalId),
+        )
+        .map((card) => ({
+          id: card.id,
+          uuid: card.id,
+          label: '—',
+          name: card.name,
+          provider: card.provider,
+          status: 'unknown' as const,
+          workspace: snapshot?.workspace ??
+            workspaces.find(({ id }) => id === openingWorkspaceId) ?? {
+              id: openingWorkspaceId,
+              name: '',
+            },
+        })),
+    ];
+  }, [
+    studio,
+    snapshot,
+    panes,
+    evidence,
+    now,
+    openingTerminals,
+    openingWorkspaceId,
+    workspaces,
+    paneEvidence,
+  ]);
   const measuredTerminals = terminals.flatMap(({ tokens }) =>
     tokens?.total === undefined ? [] : [tokens.total],
   );
@@ -268,10 +322,6 @@ export function FeatureWorkspace({
   const arrangeRef =
     useRef<(layout: NativePaneLayout[], mode: ArrangementMode, scope: string) => void>(undefined);
   const arrangeRetry = useRef<{ timer?: number; attempt: number }>({ attempt: 0 });
-  // Read through a ref: a new terminals array (clock tick, dock event) must not
-  // re-create arrange, or the resend effect below would loop with native dock events.
-  const terminalsRef = useRef(terminals);
-  terminalsRef.current = terminals;
   /** Send the Studio geometry to native views; the bridge keeps only the latest frame. */
   const arrange = useCallback(
     (layout: NativePaneLayout[], mode: ArrangementMode, frameScope: string) => {
@@ -296,11 +346,19 @@ export function FeatureWorkspace({
           width: window.innerWidth - chrome.sidebar,
           height: window.innerHeight - chrome.top - chrome.bottom,
         };
-        const memberIds = snapshotNow.slots
-          .filter((slot) =>
-            terminalsRef.current.some((terminal) => terminal.id === slot.terminalId),
-          )
-          .map((slot) => slot.terminalId);
+        const selectedNow = snapshotNow.features.find(
+          (feature) => feature.featureId === snapshotNow.activeFeatureId,
+        );
+        const memberIds =
+          selectedNow?.terminalIds ??
+          snapshotNow.slots
+            .filter(
+              (slot) =>
+                !snapshotNow.features.some((feature) =>
+                  feature.terminalIds.includes(slot.terminalId),
+                ),
+            )
+            .map((slot) => slot.terminalId);
         return native.arrange!({
           ...arrangeRequest(snapshotNow, memberIds, layout, mode, viewport, chrome),
           contractVersion: 1,
@@ -829,7 +887,23 @@ export function FeatureWorkspace({
   );
   const savedMembers = members.flatMap((id) => {
     const slot = snapshot?.slots.find((entry) => entry.terminalId === id);
-    return !slot || slot.closed ? [{ id, closed: slot?.closed === true }] : [];
+    const facts = paneEvidence.get(id);
+    const exited = facts && projectPaneLifecycle(facts).state === 'ended';
+    return !slot || slot.closed || exited
+      ? [
+          {
+            id,
+            closed: slot?.closed === true || !!exited,
+            confirmedExit: !!exited,
+            ...(slot
+              ? {
+                  displayId: `T-${String(slot.slot + 1).padStart(3, '0')}`,
+                  provider: slot.provider,
+                }
+              : {}),
+          },
+        ]
+      : [];
   });
   const savedTerminalList = (
     <SavedTerminalList
@@ -1341,8 +1415,23 @@ export function FeatureWorkspace({
             storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
             terminals={terminals}
             messages={messages}
-            renderBody={(terminal) =>
-              nativeWorkspace ? (
+            renderBody={(terminal) => {
+              const opening = openingTerminals.find(({ id }) => id === terminal.id);
+              if (opening)
+                return (
+                  <TerminalOpeningCard
+                    card={opening}
+                    onRetry={
+                      canPrepare && !busy
+                        ? () => {
+                            requestTerminalRetry(opening);
+                            void prepare();
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              return nativeWorkspace ? (
                 <div className="ts-hole" aria-hidden="true" />
               ) : (
                 <div className="ts-open">
@@ -1358,10 +1447,26 @@ export function FeatureWorkspace({
                   >
                     {t('terminalStudio.openTerminal')}
                   </button>
-                  <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
+                  {(() => {
+                    const facts = paneEvidence.get(terminal.id);
+                    if (!facts)
+                      return <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>;
+                    return (
+                      <PaneLifecycleStatus
+                        lifecycle={projectPaneLifecycle({
+                          ...facts,
+                          transport: coreState === 'unavailable' ? 'lost' : facts.transport,
+                          turn:
+                            terminal.status === 'running' || terminal.status === 'waiting_for_user'
+                              ? terminal.status
+                              : 'unknown',
+                        })}
+                      />
+                    );
+                  })()}
                 </div>
-              )
-            }
+              );
+            }}
             emptyHint={
               !snapshot ? (
                 <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>

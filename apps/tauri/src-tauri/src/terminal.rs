@@ -55,6 +55,8 @@ struct Running {
     pending_open: Vec<Option<OpeningIntent>>,
     // Optional diagnostic correlation only; never consulted by an authority/lifecycle gate.
     opening_diagnostics: Vec<Option<Attempt>>,
+    first_output_diagnostics: Vec<Option<Attempt>>,
+    lifecycle_reports: Vec<Option<(String, &'static str)>>,
     pending: HashMap<String, oneshot::Sender<Value>>,
     quit_pending: crate::quit_orchestration::PendingReplies,
     metadata_pending: HashMap<String, MetadataPending>,
@@ -1157,7 +1159,7 @@ async fn dispatch_terminal_request(
     if let Some(diagnostic) = &diagnostic {
         diagnostic.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
     }
-    let value = dispatch_terminal_request_inner(window, request, expected).await;
+    let value = dispatch_terminal_request_inner(window, request, expected, diagnostic.as_ref()).await;
     if let Some(diagnostic) = &diagnostic {
         let outcome = opening_outcome(value["status"].as_str(), value["opening"].as_str());
         diagnostic.record(Stage::CliOpening, outcome, Effects::Possible);
@@ -1165,10 +1167,70 @@ async fn dispatch_terminal_request(
     value
 }
 
+fn observe_owned_terminal_reply(app: &tauri::AppHandle, slot: usize, value: &Value) {
+    let snapshot = &value["snapshot"];
+    if value["status"] != "ok"
+        || !crate::features::uuid(&snapshot["instanceId"])
+        || value["instanceId"] != snapshot["instanceId"]
+    {
+        return;
+    }
+    let instance = snapshot["instanceId"].as_str().unwrap();
+    let first_output = value["output"]["bytes"].as_array().is_some_and(|bytes| !bytes.is_empty());
+    let phase = match snapshot["state"].as_str() {
+        Some("running") if first_output => "live",
+        Some("exited") => "exited",
+        Some("ownership_lost") => "uncertain",
+        _ => return,
+    };
+    let context = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(running) = guard.as_mut() else {
+            return;
+        };
+        if snapshot["epoch"] != running.epoch
+            || running.released_slots.contains(&slot)
+            || running.lifecycle_reports.get(slot).is_none()
+            || running.lifecycle_reports[slot]
+                .as_ref()
+                .is_some_and(|(id, report)| id == instance && *report == phase)
+        {
+            return;
+        }
+        if first_output {
+            if let Some(diagnostic) = running.first_output_diagnostics[slot].take() {
+                diagnostic.record(Stage::FirstPtyOutput, Outcome::Ready, Effects::Possible);
+            }
+        }
+        (running.epoch.clone(), running.layout_generation)
+    };
+    let mut evidence = json!({
+        "transport":"connected", "process":phase, "firstFrame":first_output
+    });
+    if phase == "exited" {
+        if let Some(code) = snapshot["exit"]["exitCode"].as_i64().filter(|code| {
+            (-9_007_199_254_740_991..=9_007_199_254_740_991).contains(code)
+        }) {
+            evidence["exitCode"] = json!(code);
+        }
+    }
+    if crate::features::publish_terminal_lifecycle(app, slot, &context.0, context.1, &evidence) {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        if let Some(running) = guard.as_mut().filter(|running| {
+            running.epoch == context.0 && running.layout_generation == context.1
+        }) {
+            running.lifecycle_reports[slot] = Some((instance.into(), phase));
+        }
+    }
+}
+
 async fn dispatch_terminal_request_inner(
     window: Webview,
     request: Value,
     expected: Option<(u64, u64, Instant)>,
+    diagnostic: Option<&Attempt>,
 ) -> Value {
     let denied = || json!({"status": "denied"});
     let Some(slot) = slot(&window) else {
@@ -1238,6 +1300,7 @@ async fn dispatch_terminal_request_inner(
         running.sequence += 1;
         if request["action"] == "open" {
             running.pending_open[slot] = None;
+            running.first_output_diagnostics[slot] = diagnostic.cloned();
         }
         let id = format!("00000000-0000-4000-8000-{:012x}", running.sequence);
         let bytes = format!(
@@ -1302,7 +1365,12 @@ async fn dispatch_terminal_request_inner(
         return denied();
     }
     match result {
-        Ok(Ok(value)) => value,
+        Ok(Ok(value)) => {
+            if matches!(request["action"].as_str(), Some("open" | "read" | "snapshot")) {
+                observe_owned_terminal_reply(&app, slot, &value);
+            }
+            value
+        }
         _ => {
             // An uncertain transport is permanently fenced; never retry a mutation.
             revoke(&app, slot, true);
@@ -3161,6 +3229,8 @@ async fn enroll_selected_inner(
         r.revoked.push(false);
         r.pending_open.push(None);
         r.opening_diagnostics.push(Some(diagnostic.clone()));
+        r.first_output_diagnostics.push(None);
+        r.lifecycle_reports.push(None);
         r.busy.push(false);
         r.reviewing.push(false);
         value
@@ -3508,6 +3578,8 @@ async fn start_selected_inner(
         released_slots: Vec::new(),
         pending_open: (0..count).map(|_| None).collect(),
         opening_diagnostics: (0..count).map(|_| Some(diagnostic.clone())).collect(),
+        first_output_diagnostics: vec![None; count],
+        lifecycle_reports: vec![None; count],
         pending: HashMap::new(),
         quit_pending: crate::quit_orchestration::PendingReplies::default(),
         metadata_pending: HashMap::new(),

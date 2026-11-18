@@ -1441,6 +1441,37 @@
     "relayUnknown": "Relay status unavailable",
     "for": "for {{duration}}"
   },
+  "paneLifecycle": {
+    "state": {
+      "starting": "Starting",
+      "ready": "Ready",
+      "running": "Running",
+      "waiting_for_user": "Waiting for you",
+      "unknown": "No turn signal",
+      "failed": "Failed",
+      "disconnected": "Disconnected",
+      "ended": "Ended"
+    },
+    "failure": {
+      "cli_not_installed": "CLI not installed",
+      "not_authenticated": "Sign in to the CLI",
+      "model_missing": "Model unavailable",
+      "catalog_changed": "Catalog changed",
+      "native_authority_refused": "Action refused",
+      "process_crashed": "Process exited (code {{exitCode}})",
+      "open_refused": "Terminal could not open",
+      "opening_uncertain": "Opening could not be verified"
+    },
+    "retry": "Try again",
+    "changeCli": "Change CLI",
+    "viewLogs": "View logs",
+    "reconnect": "Reconnect",
+    "endedList": "Ended ({{count}})",
+    "ownershipUncertain": "Ownership uncertain",
+    "inspect": "View details",
+    "reopen": "Reopen",
+    "remove": "Remove from Feature"
+  },
   "terminalStudio": {
     "featureTokens": "{{tokens}} tokens · {{measured}} of {{total}} Feature terminals",
     "title": "Terminals",

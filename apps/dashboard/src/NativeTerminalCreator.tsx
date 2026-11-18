@@ -17,6 +17,13 @@ import {
 import { Modal } from './Modal.js';
 import { SavedTerminalList } from './SavedTerminalList.js';
 import { catalogModelId, dialogCatalog } from './native-terminal-catalog.js';
+import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catalog-cache.js';
+import {
+  hasTerminalLifecycleConsumer,
+  registerTerminalOpens,
+  finishTerminalOpens,
+  consumeTerminalRetry,
+} from './use-terminal-lifecycle.js';
 
 type Native = TauriStudio;
 type Entry = TerminalPreparationCatalog['providers'][number];
@@ -76,56 +83,60 @@ export function NativeTerminalCreator({
   const opening = useRef(false);
   const requestId = useRef(0);
   const savedList = useRef<HTMLDivElement>(null);
+  const [retry] = useState(() => consumeTerminalRetry(workspace.id, featureId));
 
-  const load = useCallback(async () => {
-    if (opening.current) return;
-    const current = ++requestId.current;
-    setSelection(undefined);
-    setFailure(undefined);
-    setResults([]);
-    setState('loading');
-    try {
-      const reply = await native.request({
-        action: 'catalog',
-        workspaceId: workspace.id,
-        featureId,
-      });
-      if (current !== requestId.current) return;
-      if (
-        reply.status === 'catalog' &&
-        reply.catalog.workspaceId === workspace.id &&
-        reply.catalog.featureId === featureId &&
-        reply.snapshot
-      ) {
-        // Catalog and snapshot are one native admission generation.
-        setSelection({ catalog: reply.catalog, snapshot: reply.snapshot });
-        setState('ready');
-        return;
+  const load = useCallback(
+    async (force = false) => {
+      if (opening.current) return;
+      const current = ++requestId.current;
+      setSelection(undefined);
+      setFailure(undefined);
+      setResults([]);
+      setState('loading');
+      try {
+        const reply = await loadTerminalCatalog(
+          native,
+          { workspaceId: workspace.id, featureId },
+          force,
+        );
+        if (current !== requestId.current) return;
+        if (
+          reply.status === 'catalog' &&
+          reply.catalog.workspaceId === workspace.id &&
+          reply.catalog.featureId === featureId &&
+          reply.snapshot
+        ) {
+          // Catalog and snapshot are one native admission generation.
+          setSelection({ catalog: reply.catalog, snapshot: reply.snapshot });
+          setState('ready');
+          return;
+        }
+        setMessage(
+          t(
+            reply.status === 'catalog'
+              ? 'studio.create.catalogUnverified'
+              : reply.status === 'denied' || reply.status === 'ok'
+                ? 'studio.tauri.denied'
+                : reply.status === 'batch'
+                  ? 'studio.unavailable'
+                  : `studio.${reply.status}`,
+          ),
+        );
+      } catch {
+        if (current !== requestId.current) return;
+        setMessage(t('studio.unavailable'));
       }
-      setMessage(
-        t(
-          reply.status === 'catalog'
-            ? 'studio.create.catalogUnverified'
-            : reply.status === 'denied' || reply.status === 'ok'
-              ? 'studio.tauri.denied'
-              : reply.status === 'batch'
-                ? 'studio.unavailable'
-                : `studio.${reply.status}`,
-        ),
-      );
-    } catch {
-      if (current !== requestId.current) return;
-      setMessage(t('studio.unavailable'));
-    }
-    setState('error');
-  }, [native, workspace.id, featureId, t]);
+      setState('error');
+    },
+    [native, workspace.id, featureId, t],
+  );
 
   useEffect(() => {
-    void load();
+    void load(!!retry);
     return () => {
       requestId.current++;
     };
-  }, [load]);
+  }, [load, retry]);
 
   const catalog = selection?.catalog;
   const snapshot = selection?.snapshot;
@@ -157,7 +168,7 @@ export function NativeTerminalCreator({
       counts.set(request.provider, n);
       return {
         request,
-        id: crypto.randomUUID(),
+        id: requests.length === 1 && retry ? retry.id : crypto.randomUUID(),
         workspaceId: request.workspaceId,
         provider: request.provider as Entry['provider'],
         entry,
@@ -185,8 +196,25 @@ export function NativeTerminalCreator({
       reason: 'opening_uncertain',
       effects: 'possible',
     });
+    const publishCards = hasTerminalLifecycleConsumer();
+    const targetFeatureId =
+      catalog.restoredFeature?.featureId ?? featureId ?? defaultFeatureId(workspace.id);
+    const ids = new Set(items.map(({ id }) => id));
+    if (publishCards)
+      registerTerminalOpens(
+        items.map(({ id, workspaceId, provider, name }) => ({
+          id,
+          workspaceId,
+          provider,
+          name,
+          featureId,
+          targetFeatureId,
+          state: 'starting',
+        })),
+      );
     try {
-      const reply = await native.request({
+      // Dispatch while the submit gesture is active. The enrollment reply does not gate rendering.
+      const pending = native.request({
         action: 'create-batch',
         generation: snapshot.generation,
         workspaceId: workspace.id,
@@ -200,6 +228,30 @@ export function NativeTerminalCreator({
           name,
         })),
       });
+      if (publishCards) onClose(true);
+      const reply = await pending;
+      invalidateTerminalCatalog(native, { workspaceId: workspace.id, featureId });
+      if (publishCards && reply.status !== 'batch') {
+        const refusal =
+          reply.status === 'focus_required' || reply.status === 'busy'
+            ? reply.status
+            : reply.status === 'denied' && reply.failure?.effects !== 'possible'
+              ? 'admission_invalid'
+              : undefined;
+        finishTerminalOpens(
+          ids,
+          refusal
+            ? items.map(({ id }) => ({
+                id,
+                status: 'refused',
+                reason: refusal,
+                effects: 'not_started',
+              }))
+            : [],
+        );
+        return;
+      }
+      if (publishCards && reply.status === 'batch') finishTerminalOpens(ids, reply.items);
       if (reply.status !== 'batch') {
         const details = reply.status === 'catalog' ? undefined : reply.failure;
         if (
@@ -221,7 +273,7 @@ export function NativeTerminalCreator({
         ...(reply.items.find((result) => result.id === id) ?? unknownItem(id)),
         name,
       }));
-      setResults(outcomes);
+      if (!publishCards) setResults(outcomes);
       // The orchestrator label needs the new terminal ID; it grants nothing.
       const lead = outcomes.find(
         (result) =>
@@ -234,11 +286,15 @@ export function NativeTerminalCreator({
           catalog.restoredFeature?.featureId ?? featureId ?? defaultFeatureId(workspace.id),
           lead.terminalId,
         );
-      setState('done');
+      if (!publishCards) setState('done');
       // Every terminal enrolled: go back to the managed terminal views. Refusals keep the dialog
       // open with their reasons.
-      if (outcomes.every((result) => result.status === 'accepted')) onClose(true);
+      if (!publishCards && outcomes.every((result) => result.status === 'accepted')) onClose(true);
     } catch {
+      if (publishCards) {
+        finishTerminalOpens(ids, []);
+        return;
+      }
       setResults(items.map(({ id, name }) => ({ ...unknownItem(id), name })));
       setState('done');
     } finally {
@@ -285,6 +341,7 @@ export function NativeTerminalCreator({
         ) : (
           <CompactTerminalForm
             catalog={choices}
+            initial={retry}
             workspace={workspace}
             featureName={
               featureName ?? (featureId === null ? t('features.defaultName') : undefined)
@@ -345,7 +402,7 @@ export function NativeTerminalCreator({
               </button>
             )}
             {canRefresh && (
-              <button type="button" className="ntd-secondary" onClick={() => void load()}>
+              <button type="button" className="ntd-secondary" onClick={() => void load(true)}>
                 {t('studio.refresh')}
               </button>
             )}

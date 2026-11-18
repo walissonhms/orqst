@@ -2447,6 +2447,44 @@ fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &
     }
     crate::terminal::publish_workspace_projection(app);
 }
+/// Bounded lifecycle facts from an accepted owned PTY reply. No output bytes cross documents.
+pub(crate) fn publish_terminal_lifecycle(
+    app: &tauri::AppHandle,
+    slot: usize,
+    epoch: &str,
+    presentation: u64,
+    evidence: &Value,
+) -> bool {
+    let terminal_id = {
+        let guard = app.state::<Features>();
+        let state = guard.0.lock().unwrap();
+        if !state.preparation_scope.as_ref().is_some_and(|(_, owner, revision)| {
+            owner == epoch && *revision == presentation
+        }) {
+            return false;
+        }
+        state.close_targets.get(&(slot as u64)).cloned()
+    };
+    let Some(terminal_id) = terminal_id else {
+        return false;
+    };
+    let detail = json!({"terminalId":terminal_id, "evidence":evidence});
+    let mut published = false;
+    for label in ["main", "feature-workspace"] {
+        if let Some(view) = app.get_webview(label) {
+            if identity(&view).is_some()
+                && !crate::terminal::presentation_blocked(app)
+                && crate::terminal::metadata_context(app) == Some((epoch.into(), presentation))
+            {
+                published |= view.eval(format!(
+                    "window.dispatchEvent(new CustomEvent('orqst-owned-pty-lifecycle',{{detail:{detail}}}));"
+                )).is_ok();
+            }
+        }
+    }
+    published
+}
+
 pub fn invalidate(app: &tauri::AppHandle, label: &str) {
     let state = app.state::<Features>();
     let mut guard = state.0.lock().unwrap();

@@ -1441,6 +1441,37 @@
     "relayUnknown": "Estado do relay indisponível",
     "for": "há {{duration}}"
   },
+  "paneLifecycle": {
+    "state": {
+      "starting": "Iniciando",
+      "ready": "Pronto",
+      "running": "Executando",
+      "waiting_for_user": "Aguardando você",
+      "unknown": "Sem sinal",
+      "failed": "Falhou",
+      "disconnected": "Desconectado",
+      "ended": "Encerrado"
+    },
+    "failure": {
+      "cli_not_installed": "CLI não instalada",
+      "not_authenticated": "Faça login na CLI",
+      "model_missing": "Modelo indisponível",
+      "catalog_changed": "Catálogo mudou",
+      "native_authority_refused": "Ação recusada",
+      "process_crashed": "Processo terminou (código {{exitCode}})",
+      "open_refused": "Falha ao abrir terminal",
+      "opening_uncertain": "Abertura não confirmada"
+    },
+    "retry": "Tentar novamente",
+    "changeCli": "Alterar CLI",
+    "viewLogs": "Ver logs",
+    "reconnect": "Reconectar",
+    "endedList": "Encerrados ({{count}})",
+    "ownershipUncertain": "Estado incerto",
+    "inspect": "Ver detalhes",
+    "reopen": "Reabrir",
+    "remove": "Remover da Feature"
+  },
   "terminalStudio": {
     "featureTokens": "{{tokens}} tokens · {{measured}} de {{total}} terminais da Feature",
     "title": "Terminais",

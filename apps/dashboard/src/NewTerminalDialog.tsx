@@ -621,6 +621,7 @@ function BatchDialogFrame({
 
 export function CompactTerminalForm({
   catalog,
+  initial,
   workspace,
   featureName,
   max,
@@ -631,6 +632,7 @@ export function CompactTerminalForm({
   onAdvanced,
 }: {
   catalog: ProviderCatalog[];
+  initial?: { provider: TerminalProvider; name: string };
   workspace: WorkspaceOption;
   featureName?: string;
   max: number;
@@ -641,9 +643,14 @@ export function CompactTerminalForm({
   onAdvanced?: () => void;
 }) {
   const { t } = useTranslation();
-  const [provider, setProvider] = useState(() => firstAvailable(catalog)?.provider ?? '');
+  const [provider, setProvider] = useState(
+    () =>
+      catalog.find((entry) => entry.provider === initial?.provider && entry.available)?.provider ??
+      firstAvailable(catalog)?.provider ??
+      '',
+  );
   const [model, setModel] = useState<string | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
   const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => nameInput.current?.focus(), []);
 

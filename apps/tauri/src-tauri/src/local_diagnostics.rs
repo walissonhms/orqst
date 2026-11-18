@@ -37,7 +37,7 @@ vocabulary!(Stage {
     Bootstrap => "bootstrap", Request => "request", Catalog => "catalog", Selection => "selection",
     Plan => "plan", Review => "review", Revalidation => "revalidation", Commit => "commit",
     Provision => "provision", Inspection => "inspection", FeatureAssignment => "feature_assignment",
-    Opening => "opening", CliOpening => "cli_opening", AdmissionPreflight => "admission_preflight", CoreAdmission => "core_admission", CoreStartup => "core_startup",
+    Opening => "opening", CliOpening => "cli_opening", FirstPtyOutput => "first_pty_output", AdmissionPreflight => "admission_preflight", CoreAdmission => "core_admission", CoreStartup => "core_startup",
     HostSpawn => "host_spawn", HostStream => "host_stream", Enrollment => "enrollment",
     Presentation => "presentation", Unconfirmed => "unconfirmed",
 });
