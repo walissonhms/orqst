@@ -102,6 +102,25 @@ impl FeatureContext {
             )
         })
     }
+    pub fn assign_to_open_or_default(
+        &self,
+        requested_feature_id: Option<&str>,
+        terminal_ids: &[String],
+        default_name: Option<&str>,
+    ) -> Result<(
+        WorkspaceFeature,
+        FeatureViewState,
+        Option<TerminalLayoutRecord>,
+    )> {
+        self.with(|db| {
+            Features::open(db, &self.env)?.assign_to_open_or_default(
+                &self.workspace_id,
+                requested_feature_id,
+                terminal_ids,
+                default_name,
+            )
+        })
+    }
     pub fn read_permissions(&self, feature_id: &str) -> Result<FeaturePermissionState> {
         self.with_feature(feature_id, |db, env, _| {
             FeaturePermissions::open(Features::open(db, env)?)?.read(&self.workspace_id, feature_id)

@@ -29,6 +29,9 @@ use crate::features::store::terminal_directory;
 /// Instructive refusal text for the agent (Anywh roomManager.ts:1334-1336 style).
 pub fn refusal_text(code: &str) -> &'static str {
     match code {
+        "sender_unassigned" => {
+            "This terminal is not in a Feature, so it cannot talk to other terminals. Ask the owner to use \"Move to Feature\" in the Studio."
+        }
         "unknown_terminal" => {
             "No such terminal in your Feature. Use list_terminals; other Features and yourself are not reachable."
         }

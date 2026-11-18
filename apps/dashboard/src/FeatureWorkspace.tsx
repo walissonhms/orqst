@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  FeatureNativeRequest,
-  FeatureNativeSnapshot,
-  FeatureCanvasEvidence,
-  WorkspaceFeature,
+import {
+  defaultFeatureId,
+  featureDisplayName,
+  type FeatureNativeRequest,
+  type FeatureNativeSnapshot,
+  type FeatureCanvasEvidence,
+  type WorkspaceFeature,
 } from '@orqst/protocol';
 import './feature-workspace.css';
 import {
@@ -177,16 +179,45 @@ export function FeatureWorkspace({
   const members = selected ? selected.terminalIds : unassigned.map((slot) => slot.terminalId);
   const available =
     snapshot?.slots.filter((slot) => !slot.closed && members.includes(slot.terminalId)) ?? [];
+  const displayFeatureName = useCallback(
+    (feature: Pick<WorkspaceFeature, 'workspaceId' | 'featureId' | 'name'>) =>
+      featureDisplayName(feature, t('features.defaultName')),
+    [t],
+  );
   const canvasAgents = useMemo(
     () => canvasMembers(snapshot, panes, evidence, now),
     [snapshot, panes, evidence, now],
   );
   const canvasGroups = useMemo(
     () => [
-      { id: selected?.featureId ?? 'unassigned', name: selected?.name ?? t('features.unassigned') },
+      {
+        id: selected?.featureId ?? 'unassigned',
+        name: selected ? displayFeatureName(selected) : t('features.unassigned'),
+      },
     ],
-    [selected, t],
+    [selected, displayFeatureName, t],
   );
+  const moveTargets = useMemo(() => {
+    if (!snapshot) return [];
+    const eligible = snapshot.features
+      .filter((feature) => feature.status !== 'archived' && feature.terminalIds.length < 8)
+      .map((feature) => ({
+        id: feature.featureId,
+        name: displayFeatureName(feature),
+        expectedRevision: feature.revision,
+      }));
+    if (eligible.length > 0) return eligible;
+    const defaultId = defaultFeatureId(snapshot.workspace.id);
+    const existingDefault = snapshot.features.find((feature) => feature.featureId === defaultId);
+    if (existingDefault && existingDefault.terminalIds.length >= 8) return [];
+    return [
+      {
+        id: defaultId,
+        name: existingDefault ? displayFeatureName(existingDefault) : t('features.defaultName'),
+        expectedRevision: existingDefault?.revision ?? 1,
+      },
+    ];
+  }, [snapshot, displayFeatureName, t]);
 
   const studio = !canvas && (nativeWorkspace || !!native);
   const [structuredFeature, setStructuredFeature] = useState<string>();
@@ -575,10 +606,34 @@ export function FeatureWorkspace({
       });
   }
 
+  async function moveUnassignedTerminal(terminalId: string, featureId: string) {
+    const member = unassigned.find((entry) => entry.terminalId === terminalId);
+    const target = moveTargets.find((entry) => entry.id === featureId);
+    if (!member || !target) return;
+    const status = await request({
+      action: 'assign',
+      featureId: target.id,
+      slot: member.slot,
+      expectedRevision: target.expectedRevision,
+    });
+    const next = current.current;
+    if (status !== 'ok' || !next || next.activeFeatureId !== null) return;
+    const nextAssigned = new Set(next.features.flatMap((entry) => entry.terminalIds));
+    const remainingUnassigned = next.slots.some(
+      (entry) => !entry.closed && !nextAssigned.has(entry.terminalId),
+    );
+    if (!remainingUnassigned) {
+      await request({
+        action: 'select',
+        featureId: target.id,
+        expectedRevision: next.view.revision,
+      });
+    }
+  }
   function openEditor(feature: WorkspaceFeature | 'new') {
     editorVersion.current++;
     setEditor(feature);
-    setName(feature === 'new' ? '' : feature.name);
+    setName(feature === 'new' ? '' : displayFeatureName(feature));
     setDescription(feature === 'new' ? '' : feature.description);
     setStatus(feature === 'new' ? 'planned' : feature.status);
   }
@@ -898,11 +953,25 @@ export function FeatureWorkspace({
               </button>
             </form>
           )}
-        {structured && selected && selected.status !== 'archived' && studio && (
+        {structured && snapshot && (!selected || selected.status !== 'archived') && studio && (
           <button
             className="feature-refresh"
             type="button"
-            onClick={() => setStructuredFeature(selected.featureId)}
+            disabled={busy}
+            onClick={() => {
+              if (selected) {
+                setStructuredFeature(selected.featureId);
+                return;
+              }
+              const defaultId = defaultFeatureId(snapshot.workspace.id);
+              void request({
+                action: 'select',
+                featureId: defaultId,
+                expectedRevision: snapshot.view.revision,
+              }).then((result) => {
+                if (result === 'ok') setStructuredFeature(defaultId);
+              });
+            }}
           >
             {t('structuredAgents.title')}
           </button>
@@ -919,7 +988,7 @@ export function FeatureWorkspace({
           key={selected.featureId}
           client={structured}
           scope={{ workspaceId: snapshot.workspace.id, featureId: selected.featureId }}
-          featureName={selected.name}
+          featureName={displayFeatureName(selected)}
           onClose={() => setStructuredFeature(undefined)}
         />
       )}
@@ -929,7 +998,7 @@ export function FeatureWorkspace({
           {snapshot?.workspace.name ??
             workspaces.find((workspace) => workspace.id === workspaceId)?.name ??
             t('features.workspace')}{' '}
-          / {selected?.name ?? t('features.unassigned')}
+          / {selected ? displayFeatureName(selected) : t('features.unassigned')}
         </strong>
         <div>
           <button
@@ -1045,7 +1114,7 @@ export function FeatureWorkspace({
                             }
                             aria-pressed={snapshot.activeFeatureId === feature.featureId}
                             disabled={busy}
-                            title={feature.description || feature.name}
+                            title={feature.description || displayFeatureName(feature)}
                             onClick={() =>
                               void request({
                                 action: 'select',
@@ -1054,11 +1123,13 @@ export function FeatureWorkspace({
                               })
                             }
                           >
-                            {feature.name}
+                            {displayFeatureName(feature)}
                             <small>{feature.terminalIds.length}</small>
                           </button>
                         ))}
-                        {(unassigned.length > 0 || !snapshot.features.length) && (
+                        {(unassigned.length > 0 ||
+                          !snapshot.features.length ||
+                          !snapshot.activeFeatureId) && (
                           <button
                             type="button"
                             className={!snapshot.activeFeatureId ? 'active' : ''}
@@ -1177,26 +1248,51 @@ export function FeatureWorkspace({
                   },
                 }
               : {})}
-            onMention={async ({ from, to, text }) => {
-              // v1 records the attempt; no structured route exists yet, so nothing is delivered.
-              lastMention.current = null;
-              const status = await request({
-                action: 'mention',
-                from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
-                to,
-                text,
-              });
-              // Set by request() when the reply carries the recorded mention.
-              const recorded = lastMention.current as {
-                outcomes: { delivery: string }[];
-              } | null;
-              const outcomes = recorded?.outcomes;
-              if (status !== 'ok' || !outcomes) return 'unknown';
-              if (outcomes.some((outcome) => outcome.delivery === 'denied')) return 'denied';
-              // Placed in each terminal's hub inbox; the terminal reads it with read_messages.
-              if (outcomes.every((outcome) => outcome.delivery === 'queued')) return 'queued';
-              return 'unsupported';
-            }}
+            {...(!selected && snapshot && moveTargets.length > 0
+              ? {
+                  unassignedMove: {
+                    targets: moveTargets.map(({ id, name: targetName }) => ({
+                      id,
+                      name: targetName,
+                    })),
+                    pending: busy || quitFence,
+                    onMove: (terminalId: string, featureId: string) =>
+                      void moveUnassignedTerminal(terminalId, featureId),
+                  },
+                }
+              : {})}
+            {...(selected && selected.status !== 'archived'
+              ? {
+                  onMention: async ({
+                    from,
+                    to,
+                    text,
+                  }: {
+                    from: string | null;
+                    to: string[];
+                    text: string;
+                  }) => {
+                    // v1 records the attempt; no structured route exists yet, so nothing is delivered.
+                    lastMention.current = null;
+                    const status = await request({
+                      action: 'mention',
+                      from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
+                      to,
+                      text,
+                    });
+                    // Set by request() when the reply carries the recorded mention.
+                    const recorded = lastMention.current as {
+                      outcomes: { delivery: string }[];
+                    } | null;
+                    const outcomes = recorded?.outcomes;
+                    if (status !== 'ok' || !outcomes) return 'unknown';
+                    if (outcomes.some((outcome) => outcome.delivery === 'denied')) return 'denied';
+                    // Placed in each terminal's hub inbox; the terminal reads it with read_messages.
+                    if (outcomes.every((outcome) => outcome.delivery === 'queued')) return 'queued';
+                    return 'unsupported';
+                  },
+                }
+              : {})}
             {...(nativeWorkspace
               ? {
                   native: {
@@ -1243,7 +1339,7 @@ export function FeatureWorkspace({
                     })
                   }
                 >
-                  {feature.name}
+                  {displayFeatureName(feature)}
                   {canvasAgents.some(
                     (agent) =>
                       agent.featureId === feature.featureId &&
@@ -1256,21 +1352,23 @@ export function FeatureWorkspace({
                   )}
                 </button>
               ))}
-              <button
-                className={!selected ? 'active' : ''}
-                disabled={busy || !snapshot}
-                aria-pressed={!selected}
-                onClick={() =>
-                  snapshot &&
-                  void request({
-                    action: 'select',
-                    featureId: null,
-                    expectedRevision: snapshot.view.revision,
-                  })
-                }
-              >
-                {t('features.unassigned')}
-              </button>
+              {(!snapshot?.features.length || unassigned.length > 0 || !selected) && (
+                <button
+                  className={!selected ? 'active' : ''}
+                  disabled={busy || !snapshot}
+                  aria-pressed={!selected}
+                  onClick={() =>
+                    snapshot &&
+                    void request({
+                      action: 'select',
+                      featureId: null,
+                      expectedRevision: snapshot.view.revision,
+                    })
+                  }
+                >
+                  {t('features.unassigned')}
+                </button>
+              )}
             </nav>
           ) : nativeWorkspace ? (
             <TerminalWorkspaceBar
@@ -1318,6 +1416,7 @@ export function FeatureWorkspace({
             {!canvas && !nativeWorkspace && available.length > 0 && (
               <div>
                 <p>{t('features.nativeView')}</p>
+                {!selected && <p role="status">{t('terminalStudio.unassigned.notice')}</p>}
                 <ul>
                   {available.map((slot) => (
                     <li key={slot.terminalId}>
@@ -1325,6 +1424,20 @@ export function FeatureWorkspace({
                         {slot.slot + 1} · {t(`shell.adapters.${slot.provider}`)}
                       </strong>{' '}
                       <code>{slot.terminalId}</code>
+                      {!selected && moveTargets[0] && (
+                        <>
+                          {' '}
+                          <button
+                            type="button"
+                            disabled={busy || quitFence}
+                            onClick={() =>
+                              void moveUnassignedTerminal(slot.terminalId, moveTargets[0]!.id)
+                            }
+                          >
+                            {t('terminalStudio.unassigned.moveAction')}
+                          </button>
+                        </>
+                      )}
                     </li>
                   ))}
                 </ul>

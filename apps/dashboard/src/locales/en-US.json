@@ -1214,6 +1214,7 @@
     "restore": "Restore",
     "delegate": "Delegate",
     "terminal": "Terminal",
+    "defaultName": "General",
     "unassigned": "Unassigned",
     "members": "{{count}} terminals",
     "available": "{{count}} in this selection",
@@ -1383,6 +1384,11 @@
       "label": "Close terminal {{terminal}}",
       "message": "Closing this terminal ends its owned CLI process and may interrupt work. ORQST keeps the journal and exit evidence.",
       "unconfirmed": "ORQST could not confirm that the terminal closed. Check its current state before trying again."
+    },
+    "unassigned": {
+      "notice": "This terminal is not in a Feature, so it cannot talk to other terminals",
+      "moveAction": "Move to Feature",
+      "targetFeature": "Target Feature"
     },
     "noActivity": "No activity evidence yet",
     "resizeSplit": "Resize terminals",

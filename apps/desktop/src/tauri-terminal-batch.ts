@@ -1,11 +1,14 @@
-import type {
-  TerminalBatchItem,
-  TerminalBatchRequest,
-  TerminalLayoutRecord,
-} from '@orqst/protocol';
 import {
+  DEFAULT_FEATURE_NAME,
+  defaultFeatureId,
+  type TerminalBatchItem,
+  type TerminalBatchRequest,
+  type TerminalLayoutRecord,
+} from '@orqst/protocol';
+import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
+import {
+  resolveTerminalPreparationContext,
   terminalPreparationBindingSchema,
-  validateTerminalPreparationBinding,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
@@ -69,10 +72,17 @@ export async function prepareTauriBatch(
     modelId: string;
     plan: ReturnType<typeof prepareTerminalCreation>;
   }> = [];
-  const capacity = Math.min(
-    availableSlots,
-    8 - (discovered.workspace.feature?.terminalIds.length ?? 0),
-  );
+  const defaultFeatureTitle = context.environment.LANG?.toLowerCase().startsWith('pt')
+    ? 'Geral'
+    : DEFAULT_FEATURE_NAME;
+  const existingCount =
+    request.featureId !== null
+      ? (discovered.workspace.feature?.terminalIds.length ?? 0)
+      : (discovered.workspace.features
+          .list()
+          .find((entry) => entry.featureId === defaultFeatureId(request.workspaceId))?.terminalIds
+          .length ?? 0);
+  const capacity = Math.min(availableSlots, 8 - existingCount);
   for (const [index, input] of request.requests.entries()) {
     const item = items[index]!;
     if (unsupportedOpenCode && input.provider === 'opencode') {
@@ -124,16 +134,18 @@ export async function prepareTauriBatch(
   }
   const expires = now() + 60_000;
   const reviewed = () => current() && now() < expires;
+  let activeFeatureId = request.featureId;
+  let expectedCatalogId = request.catalogId;
   const revalidate = () => {
     if (!reviewed()) throw new Error('Batch context changed');
     const fresh = inspectTerminalPreparationCatalog(
-      scope,
+      { action: 'catalog', workspaceId: request.workspaceId, featureId: activeFeatureId },
       trusted,
       context,
       plans.map(({ provider }) => provider),
     );
     if (
-      fresh.catalogId !== request.catalogId ||
+      fresh.catalogId !== expectedCatalogId ||
       plans.some(({ provider, modelId }) => !resolveCatalogSelection(fresh, provider, modelId))
     )
       throw new Error('Batch catalog changed');
@@ -151,13 +163,45 @@ export async function prepareTauriBatch(
     for (const { index } of plans) items[index]!.reason = 'context_changed';
     return result();
   }
-  // All plans are provisioned before Feature revision changes invalidate the catalogue.
+  let previousLayout: TerminalLayoutRecord | null = null;
+  let capturedLayout = false;
   for (const { index, plan } of plans) {
     const item = items[index]!;
     try {
       revalidate();
       item.effects = 'possible';
-      const files = plan.provision(reviewed);
+      const files = plan.provision(reviewed, (terminalIds) => {
+        if (!reviewed()) throw new Error('Batch context changed');
+        const assigned = discovered.workspace.features.assignToOpenOrDefault(
+          activeFeatureId,
+          terminalIds,
+          defaultFeatureTitle,
+        );
+        if (!capturedLayout) {
+          previousLayout = assigned.previousLayout;
+          capturedLayout = true;
+        }
+        const resolved = resolveTerminalPreparationContext(
+          trusted,
+          request.workspaceId,
+          assigned.feature.featureId,
+        );
+        activeFeatureId = assigned.feature.featureId;
+        expectedCatalogId = terminalDigest(
+          JSON.stringify([
+            trusted.observerDatabase,
+            trusted.preferencesDirectory,
+            resolved.fence,
+            assigned.feature.revision,
+          ]),
+        );
+        return terminalPreparationBindingSchema.parse({
+          ...trusted,
+          workspaceId: request.workspaceId,
+          featureId: assigned.feature.featureId,
+          fence: resolved.fence,
+        });
+      });
       const inspected = inspectManagedTerminalFiles(files, 8);
       const member = inspected[0];
       if (files.length !== 1 || !member || member.blocker || !member.config.identity)
@@ -171,32 +215,6 @@ export async function prepareTauriBatch(
       item.status = item.effects === 'possible' ? 'unknown' : 'refused';
       item.reason = item.effects === 'possible' ? 'preparation_failed' : 'context_changed';
       break;
-    }
-  }
-  let previousLayout: TerminalLayoutRecord | null = null;
-  if (request.featureId !== null) {
-    try {
-      previousLayout = discovered.workspace.features.readLayout(request.featureId);
-      let feature = discovered.workspace.feature!;
-      for (const item of items.filter((item) => item.status === 'prepared')) {
-        try {
-          if (!reviewed()) throw new Error('Batch context changed');
-          validateTerminalPreparationBinding(binding, discovered.workspace.project);
-          feature = discovered.workspace.features.assignTerminal(
-            request.featureId,
-            item.terminalId!,
-            feature.revision,
-          );
-        } catch {
-          item.status = 'unknown';
-          item.reason = 'preparation_failed';
-        }
-      }
-    } catch {
-      for (const item of items.filter((item) => item.status === 'prepared')) {
-        item.status = 'unknown';
-        item.reason = 'preparation_failed';
-      }
     }
   }
   return result(previousLayout);

@@ -182,3 +182,83 @@ fn feature_rpc_matches_the_typescript_core() {
     assert_eq!(dump(&file(&rs)), expected);
     std::fs::remove_dir_all(base).unwrap();
 }
+
+#[test]
+fn default_feature_and_layout_move_match_the_typescript_core() {
+    use orqst_terminal_core::features::model::{default_feature_id, TerminalLayoutRecord};
+
+    let base = std::env::temp_dir().join(format!(
+        "orqst-synthetic-default-feature-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let (ts, rs) = (private_dir(&base.join("ts")), private_dir(&base.join("rs")));
+    let out = Command::new("pnpm")
+        .args(["-s", "exec", "tsx"])
+        .arg(manifest().join("tests/golden/default-feature.ts"))
+        .arg(&ts)
+        .current_dir(manifest())
+        .output()
+        .expect("tsx (Node 24 toolchain on PATH)");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let node: Value = serde_json::from_slice(&out.stdout).unwrap();
+
+    let workspace_id = "synthetic-ws-default";
+    let default_id = default_feature_id(workspace_id).unwrap();
+    assert_eq!(node["defaultId"].as_str().unwrap(), default_id.as_str());
+
+    let t1 = "00000000-0000-4000-8000-0000000000a1".to_string();
+    let t2 = "00000000-0000-4000-8000-0000000000b1".to_string();
+    let t3 = "00000000-0000-4000-8000-0000000000c1".to_string();
+    let clock = Arc::new(AtomicU64::new(5_000));
+    let tick = clock.clone();
+    let mut db = FeatureContext::new(
+        rs.clone(),
+        workspace_id.into(),
+        "0".repeat(64),
+        vec![t1.clone(), t2.clone(), t3.clone()],
+    );
+    db.env = Env {
+        now: Box::new(move || tick.fetch_add(11, Ordering::SeqCst) + 11),
+        new_id: Box::new(|| uuid::Uuid::new_v4().to_string()),
+    };
+    let (first_feature, first_view, _) = db
+        .assign_to_open_or_default(None, std::slice::from_ref(&t1), Some("Geral"))
+        .unwrap();
+    assert_eq!(first_feature.feature_id, default_id);
+    assert_eq!(first_view.feature_id.as_deref(), Some(default_id.as_str()));
+    let record: TerminalLayoutRecord = serde_json::from_value(serde_json::json!({
+        "version": 1,
+        "order": [t1],
+        "shown": [t1],
+        "active": t1,
+        "maximized": t1,
+        "axis": "columns",
+        "columns": 1,
+        "percent": 50,
+        "names": [],
+    }))
+    .unwrap();
+    db.save_layout(&default_id, &record).unwrap();
+    let moved = db
+        .assign_terminal(&default_id, &t2, first_feature.revision)
+        .unwrap();
+    assert_eq!(moved.terminal_ids, vec![t1.clone(), t2.clone()]);
+    let (reused_feature, reused_view, _) = db
+        .assign_to_open_or_default(None, std::slice::from_ref(&t3), Some("General"))
+        .unwrap();
+    assert_eq!(reused_feature.name, "Geral");
+    assert_eq!(reused_feature.terminal_ids, vec![t1, t2, t3]);
+    assert_eq!(reused_view.feature_id.as_deref(), Some(default_id.as_str()));
+    assert_eq!(
+        serde_json::to_value(db.read_layout(&default_id).unwrap()).unwrap(),
+        node["layout"]
+    );
+
+    let file = |root: &Path| root.join("terminal-layouts/preferences.sqlite");
+    assert_eq!(dump(&file(&rs)), dump(&file(&ts)));
+    std::fs::remove_dir_all(base).unwrap();
+}

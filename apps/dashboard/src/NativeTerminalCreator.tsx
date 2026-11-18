@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type {
-  TerminalBatchItem,
-  TauriStudio,
-  TauriStudioSnapshot,
-  TerminalPreparationCatalog,
-  TerminalPreparationFailure,
+import {
+  defaultFeatureId,
+  type TerminalBatchItem,
+  type TauriStudio,
+  type TauriStudioSnapshot,
+  type TerminalPreparationCatalog,
+  type TerminalPreparationFailure,
 } from '@orqst/protocol';
 import { NewTerminalDialog, type TerminalRequest } from './NewTerminalDialog.js';
 import { Modal } from './Modal.js';
@@ -173,7 +174,8 @@ export function NativeTerminalCreator({
           result.terminalId &&
           items.find((item) => item.id === result.id)?.request.orchestrator,
       );
-      if (lead?.terminalId && featureId) void labelOrchestrator(featureId, lead.terminalId);
+      if (lead?.terminalId)
+        void labelOrchestrator(featureId ?? defaultFeatureId(workspace.id), lead.terminalId);
       setState('done');
       // Every terminal opened: go back to the live terminal views. Refusals keep the dialog
       // open with their reasons.
@@ -192,7 +194,7 @@ export function NativeTerminalCreator({
         workspaces={[workspace]}
         initialWorkspaceId={workspace.id}
         max={Math.max(0, (snapshot?.limit ?? 8) - (snapshot?.count ?? 0))}
-        allowOrchestrator={featureId !== null && !!window.orqstFeatures}
+        allowOrchestrator={!!window.orqstFeatures}
         busy={state === 'opening'}
         onCancel={() => onClose()}
         onAdvanced={onAdvanced}

@@ -1,5 +1,36 @@
 # Native terminal client boundary
 
+## Always inside a Feature and `sender_unassigned` refusal — 2026-11-18
+
+Every new managed terminal—PTY (`create-batch`, `create-selected`, `create-mcp-pair`,
+`create`) and structured (`StructuredAgents`)—is created inside the Feature currently
+open in the Studio. When the Studio view is on "Unassigned" / "Sem Feature"
+(`featureId: null`) or no Feature exists yet, the Core creates or reuses the
+workspace's deterministic default Feature (`defaultFeatureId(workspaceId)`, RFC 9562
+v8 UUID derived from `['default-feature', workspaceId]`, independent of its localized
+or edited title `"General"` / `"Geral"`), assigns the terminal(s) and switches
+`feature_views` to that Feature in the same SQLite transaction before publishing
+`terminal.json`. Structured agents opened from "Sem Feature" select/create that
+default Feature first so `StructuredAgents` binds to the same Feature scope.
+
+Existing unassigned terminals are never silently migrated. In Studio they display a
+localized notice (`terminalStudio.unassigned.notice`) and a "Move to Feature" action
+(`terminalStudio.unassigned.moveAction`) that uses the existing `assign` action,
+preserves any saved Feature layout via `appendFeatureMember` (Node and Rust Cores),
+and switches the active tab once the last unassigned live terminal is moved.
+
+In both Node (`packages/core/src/terminal/mcp-hub.ts`) and Rust
+(`apps/tauri/terminal-core/src/hub/hub.rs`) MCP hubs, when the calling terminal itself
+has `featureId: null`, `list_terminals`, `send_message` and `delegate_task` return
+`{ refused: 'sender_unassigned', message }` explaining that the terminal is not in a
+Feature and instructing the agent to ask the owner to use "Move to Feature" in the
+Studio. `unknown_terminal` remains the refusal for missing, self, cross-Feature and
+unassigned targets.
+
+Security review: no cross-Feature reach and no reach from or to unassigned terminals
+is introduced; no HTTP/WebSocket route, cookie, Origin/Host policy or native execution
+capability changes. Native desktop UI and real-CLI validation remain an owner gate.
+
 ## Native Stop/Retire/Quit — 2026-11-06
 
 The native owned terminal Quit action now reviews interruption, attempted safe

@@ -165,6 +165,12 @@ interface Props {
   orchestratorLabel?: string | null;
   /** Persist the orchestrator label for this Feature (descriptive only). */
   onOrchestratorChange?: (id: string | null) => void;
+  /** Notice and explicit Feature assignment for existing unassigned terminals. */
+  unassignedMove?: {
+    targets: ReadonlyArray<{ id: string; name: string }>;
+    pending?: boolean;
+    onMove: (terminalId: string, featureId: string) => void;
+  };
   /** Called once per evidenced end of work, for native/OS notifications. */
   onStatusEvent?: (event: StudioStatusEvent, terminal: StudioTerminal) => void;
 }
@@ -364,6 +370,7 @@ export function TerminalStudio({
   onStatusEvent,
   orchestratorLabel,
   onOrchestratorChange,
+  unassignedMove,
   onMention,
   accounts = [],
   supportedActions = [],
@@ -382,6 +389,7 @@ export function TerminalStudio({
   const [details, setDetails] = useState<string | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [moveTargets, setMoveTargets] = useState<Record<string, string>>({});
   const supported = useMemo(
     () => new Set<PaneActionType>(onTerminalAction ? supportedActions : []),
     [onTerminalAction, supportedActions],
@@ -1098,10 +1106,29 @@ export function TerminalStudio({
                 </span>
                 {pane.compact && (
                   <span className="ts-compact-activity">
-                    {terminal.lastActivity ?? t('terminalStudio.noActivity')}
+                    {unassignedMove
+                      ? t('terminalStudio.unassigned.notice')
+                      : (terminal.lastActivity ?? t('terminalStudio.noActivity'))}
                   </span>
                 )}
                 <span className="ts-actions">
+                  {pane.compact && unassignedMove && unassignedMove.targets[0] && (
+                    <button
+                      type="button"
+                      className="ts-secondary"
+                      disabled={unassignedMove.pending}
+                      title={t('terminalStudio.unassigned.notice')}
+                      onClick={() => {
+                        const chosen = moveTargets[pane.id];
+                        const target =
+                          unassignedMove.targets.find((entry) => entry.id === chosen) ??
+                          unassignedMove.targets[0]!;
+                        unassignedMove.onMove(pane.id, target.id);
+                      }}
+                    >
+                      {t('terminalStudio.unassigned.moveAction')}
+                    </button>
+                  )}
                   {onMention && terminals.length > 1 && (
                     <button
                       type="button"
@@ -1270,6 +1297,45 @@ export function TerminalStudio({
                   </div>
                 );
               })()}
+              {!pane.compact &&
+                unassignedMove &&
+                (() => {
+                  const chosen = moveTargets[pane.id];
+                  const target =
+                    unassignedMove.targets.find((entry) => entry.id === chosen) ??
+                    unassignedMove.targets[0];
+                  return (
+                    <div className="ts-suggest ts-unassigned" role="status">
+                      <span>{t('terminalStudio.unassigned.notice')}</span>
+                      {unassignedMove.targets.length > 1 && target && (
+                        <select
+                          aria-label={t('terminalStudio.unassigned.targetFeature')}
+                          value={target.id}
+                          disabled={unassignedMove.pending}
+                          onChange={(event) =>
+                            setMoveTargets((current) => ({
+                              ...current,
+                              [pane.id]: event.target.value,
+                            }))
+                          }
+                        >
+                          {unassignedMove.targets.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        disabled={unassignedMove.pending || !target}
+                        onClick={() => target && unassignedMove.onMove(pane.id, target.id)}
+                      >
+                        {t('terminalStudio.unassigned.moveAction')}
+                      </button>
+                    </div>
+                  );
+                })()}
               {pane.compact ? null : (
                 <div className="ts-body" data-terminal-id={pane.id}>
                   {renderBody(terminal)}
@@ -1360,7 +1426,7 @@ export function TerminalStudio({
       )}
 
       <footer className="ts-dock" aria-label={t('terminalStudio.dock')}>
-        {onMention && !composer && terminals.length > 1 && (
+        {onMention && !composer && terminals.length > 0 && (
           <button
             type="button"
             className="ts-mention-open"

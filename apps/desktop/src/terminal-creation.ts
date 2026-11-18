@@ -323,7 +323,10 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       })),
     } satisfies TerminalCreationOverview,
     root,
-    provision(current: () => boolean): string[] {
+    provision(
+      current: () => boolean,
+      beforePublish?: (terminalIds: string[]) => TerminalPreparationBinding | undefined,
+    ): string[] {
       if (attempted || !current()) throw new Error('Creation unavailable');
       if (JSON.stringify(directoryIdentities()) !== identities)
         throw new Error('Creation directories changed');
@@ -334,38 +337,45 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         throw new Error('Tool PATH directory identity changed');
       if (JSON.stringify(configs) !== snapshot || !current()) throw new Error('Creation changed');
       validateModels();
-      validateTerminalPreparationBinding(input.preparation, input.project);
+      if (!beforePublish) validateTerminalPreparationBinding(input.preparation, input.project);
       if (!input.preparation && readdirSync(input.project).length)
         throw new Error('Project is no longer empty');
       attempted = true; // Partial provisioning is retained; never delete/retry uncertain writes.
       const staging = root + '.pending';
       mkdirSync(staging, { mode: 0o700 });
+      const effectivePreparation = beforePublish
+        ? (beforePublish(configs.map((config) => config.identity!.terminalId)) ?? input.preparation)
+        : input.preparation;
+      validateTerminalPreparationBinding(effectivePreparation, input.project);
       const files = configs.map((config, slot) => {
+        const boundConfig = effectivePreparation
+          ? { ...config, preparation: effectivePreparation }
+          : config;
         const state = join(staging, String.fromCharCode(65 + slot));
         mkdirSync(state, { mode: 0o700 });
-        for (const name of config.version === 1 ? ['home', 'codex', 'tmp'] : ['tmp'])
+        for (const name of boundConfig.version === 1 ? ['home', 'codex', 'tmp'] : ['tmp'])
           mkdirSync(join(state, name), { mode: 0o700 });
-        if (config.version === 2 && config.ownedHooks) {
-          for (const [name, bytes] of Object.entries(claudeOwnedHookFiles(config)))
+        if (boundConfig.version === 2 && boundConfig.ownedHooks) {
+          for (const [name, bytes] of Object.entries(claudeOwnedHookFiles(boundConfig)))
             writeFileSync(join(state, name), bytes, { flag: 'wx', mode: 0o600 });
           writeFileSync(join(state, claudeOwnedHookChannelName), '', { flag: 'wx', mode: 0o600 });
         }
-        if (config.version === 1)
-          writeFileSync(join(state, 'codex/config.toml'), managedCodexSettings(config), {
+        if (boundConfig.version === 1)
+          writeFileSync(join(state, 'codex/config.toml'), managedCodexSettings(boundConfig), {
             flag: 'wx',
             mode: 0o600,
           });
-        const stagedConfig = { ...config, state };
+        const stagedConfig = { ...boundConfig, state };
         if (stagedConfig.version === 1)
           validateManagedCodexConfig(stagedConfig, cachedTerminalExecutableSha256);
         else if (stagedConfig.version === 2)
           validateManagedClaudeConfig(stagedConfig, cachedTerminalExecutableSha256);
         else validateManagedOpenCodeConfig(stagedConfig, cachedTerminalExecutableSha256);
-        writeFileSync(join(state, 'terminal.json'), JSON.stringify(config, null, 2) + '\n', {
+        writeFileSync(join(state, 'terminal.json'), JSON.stringify(boundConfig, null, 2) + '\n', {
           flag: 'wx',
           mode: 0o600,
         });
-        return join(config.state, 'terminal.json');
+        return join(boundConfig.state, 'terminal.json');
       });
       // Publish both completed slots together. Orphans point at the absent final root and fail validation.
       try {
@@ -375,11 +385,11 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       }
       validateModels();
-      validateTerminalPreparationBinding(input.preparation, input.project);
+      validateTerminalPreparationBinding(effectivePreparation, input.project);
       if (
         !current() ||
         JSON.stringify(directoryIdentities()) !== identities ||
-        (!input.preparation && readdirSync(input.project).length)
+        (!effectivePreparation && readdirSync(input.project).length)
       )
         throw new Error('Creation expired or changed before publication');
       renameSync(staging, root);

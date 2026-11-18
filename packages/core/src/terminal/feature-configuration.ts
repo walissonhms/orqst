@@ -125,6 +125,21 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withTerminalPreferences(directory, (store) =>
         store.features().assignTerminal(scope(featureId), terminalId, expectedRevision),
       ),
+    assignToOpenOrDefault: (
+      requestedFeatureId: string | null,
+      terminalIds: readonly string[],
+      defaultName?: string,
+    ) =>
+      withTerminalPreferences(directory, (store) =>
+        store
+          .features()
+          .assignToOpenOrDefault(
+            workspaceId,
+            requestedFeatureId,
+            terminalIds,
+            defaultName ? { defaultName } : undefined,
+          ),
+      ),
     readTeam: (featureId: string) =>
       withFeature(featureId, (store, ids) =>
         ids.length

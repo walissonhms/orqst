@@ -2,6 +2,7 @@ import { basename } from 'node:path';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
+  defaultFeatureId,
   featureNativeRequestSchema,
   featurePermissionNativeRequestSchema,
   featureNativeSnapshotSchema,
@@ -164,7 +165,7 @@ export class TauriFeatureService {
     this.busy = true;
     try {
       await this.refresh();
-      await this.present(this.activeFeatureId, !this.layout.snapshot().suspended, presentation);
+      await this.present(this.view.featureId, !this.layout.snapshot().suspended, presentation);
       if (presentation + 1 !== this.layout.presentationRevision()) return false;
       this.generation++;
       this.changed(this.snapshot());
@@ -345,9 +346,10 @@ export class TauriFeatureService {
           const open = !this.layout.snapshot().suspended;
           if (!this.core.identities.some((identity) => identity.slot === request.slot))
             return { status: 'denied' };
+          const isDefault = request.featureId === defaultFeatureId(this.view.workspaceId);
           const feature = this.catalog.find((entry) => entry.featureId === request.featureId);
-          if (!feature) return { status: 'denied' };
-          if (feature.revision !== request.expectedRevision)
+          if (!feature && !isDefault) return { status: 'denied' };
+          if ((feature ? feature.revision : 1) !== request.expectedRevision)
             return { status: 'stale', snapshot: this.snapshot() };
           // Drain saves for the old membership before the assignment changes its layout key.
           await this.layout.flush();
@@ -372,8 +374,12 @@ export class TauriFeatureService {
         case 'select': {
           if (request.expectedRevision !== this.view.revision)
             return { status: 'stale', snapshot: this.snapshot() };
+          const isDefault =
+            request.featureId !== null &&
+            request.featureId === defaultFeatureId(this.view.workspaceId);
           if (
             request.featureId !== null &&
+            !isDefault &&
             !this.catalog.some((feature) => feature.featureId === request.featureId)
           )
             return { status: 'denied' };

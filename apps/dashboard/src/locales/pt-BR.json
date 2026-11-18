@@ -1214,6 +1214,7 @@
     "restore": "Restaurar",
     "delegate": "Delegar",
     "terminal": "Terminal",
+    "defaultName": "Geral",
     "unassigned": "Sem Feature",
     "members": "{{count}} terminais",
     "available": "{{count}} nesta seleção",
@@ -1383,6 +1384,11 @@
       "label": "Fechar terminal {{terminal}}",
       "message": "Fechar este terminal encerra seu processo de CLI e pode interromper o trabalho. O ORQST preserva o diário e as evidências de saída.",
       "unconfirmed": "O ORQST não conseguiu confirmar o fechamento do terminal. Confira o estado atual antes de tentar novamente."
+    },
+    "unassigned": {
+      "notice": "Este terminal não está em uma Feature, então não pode conversar com outros terminais",
+      "moveAction": "Mover para Feature",
+      "targetFeature": "Feature de destino"
     },
     "noActivity": "Ainda sem evidência de atividade",
     "resizeSplit": "Redimensionar terminais",

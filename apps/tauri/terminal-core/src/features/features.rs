@@ -1,9 +1,10 @@
 //! Port of `openFeatures` (`packages/database/src/features.ts`). Additive metadata only.
 use rusqlite::{params, OptionalExtension};
 
-use super::error::{refused, Result};
+use super::error::{invalid, refused, Result};
 use super::model::*;
 use super::store::Db;
+use super::teams::TerminalLayouts;
 
 /// Clock and id source; injectable so golden tests are deterministic.
 pub struct Env {
@@ -195,6 +196,103 @@ impl<'a> Features<'a> {
         Ok(())
     }
 
+    fn ensure_default_row(
+        &self,
+        workspace_id: &str,
+        default_name: &str,
+        expected_revision: Option<u64>,
+    ) -> Result<WorkspaceFeature> {
+        if !is_identifier(workspace_id) {
+            return Err(invalid("Invalid workspace"));
+        }
+        if !is_display_name(default_name) {
+            return Err(invalid("Invalid display name"));
+        }
+        let feature_id = default_feature_id(workspace_id)?;
+        let exists: Option<String> = self
+            .db
+            .conn
+            .query_row("SELECT id FROM features WHERE id=?", [&feature_id], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        if exists.is_none() {
+            if expected_revision.is_some_and(|rev| rev != 1) {
+                return Err(refused("Stale feature revision"));
+            }
+            if self.db.count("SELECT COUNT(*) AS count FROM features")? >= 1024 {
+                return Err(refused("Feature capacity exceeded"));
+            }
+            let timestamp = (self.env.now)() as i64;
+            self.db.conn.execute(
+                "INSERT INTO features VALUES (?,?,?,?,?,?,?,?)",
+                params![
+                    feature_id,
+                    workspace_id,
+                    default_name,
+                    "",
+                    "active",
+                    1,
+                    timestamp,
+                    timestamp
+                ],
+            )?;
+            let created = self.read(workspace_id, &feature_id)?;
+            self.audit(&created, "feature.created", None)?;
+            return Ok(created);
+        }
+        let existing = self.read(workspace_id, &feature_id)?;
+        if expected_revision.is_some_and(|rev| existing.revision != rev) {
+            return Err(refused("Stale feature revision"));
+        }
+        if existing.status == FeatureStatus::Archived {
+            self.db.conn.execute(
+                "UPDATE features SET status=? WHERE id=?",
+                params!["active", &feature_id],
+            )?;
+            self.advance(&existing)?;
+            let reopened = self.read(workspace_id, &feature_id)?;
+            self.audit(&reopened, "feature.updated", None)?;
+            return Ok(reopened);
+        }
+        Ok(existing)
+    }
+
+    fn insert_assignment(
+        &self,
+        feature: &WorkspaceFeature,
+        terminal_id: &str,
+    ) -> Result<WorkspaceFeature> {
+        if feature.terminal_ids.len() >= 8 {
+            return Err(refused("Feature terminal capacity exceeded"));
+        }
+        // A stable terminal belongs to one Feature. No move/adoption/reassignment.
+        let assigned: Option<i64> = self
+            .db
+            .conn
+            .query_row(
+                "SELECT 1 FROM feature_terminal_assignments WHERE terminal_id=?",
+                [terminal_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        if assigned.is_some() {
+            return Err(refused("Terminal already assigned to a Feature"));
+        }
+        self.db.conn.execute(
+            "INSERT INTO feature_terminal_assignments VALUES (?,?)",
+            [terminal_id, &feature.feature_id],
+        )?;
+        if !feature.terminal_ids.is_empty() {
+            TerminalLayouts::open(self.db, Some(&feature.feature_id))?
+                .append_feature_member(&feature.terminal_ids, terminal_id)?;
+        }
+        self.advance(feature)?;
+        let after = self.read(&feature.workspace_id, &feature.feature_id)?;
+        self.audit(&after, "feature.terminal_added", Some(terminal_id))?;
+        Ok(after)
+    }
+
     pub fn save_view(
         &self,
         workspace_id: &str,
@@ -208,13 +306,17 @@ impl<'a> Features<'a> {
             if before.revision >= MAX_SAFE {
                 return Err(refused("Feature view revision exhausted"));
             }
-            if let Some(feature_id) = &input.feature_id {
-                self.read(workspace_id, feature_id)?;
-            }
             if before.revision == 0
                 && self.db.count("SELECT COUNT(*) AS n FROM feature_views")? >= 1024
             {
                 return Err(refused("Feature view capacity exceeded"));
+            }
+            if let Some(feature_id) = &input.feature_id {
+                if *feature_id == default_feature_id(workspace_id)? {
+                    self.ensure_default_row(workspace_id, DEFAULT_FEATURE_NAME, None)?;
+                } else {
+                    self.read(workspace_id, feature_id)?;
+                }
             }
             self.db.conn.execute(
                 "INSERT INTO feature_views VALUES (?,?,?) ON CONFLICT(workspace_id)
@@ -332,40 +434,89 @@ impl<'a> Features<'a> {
     ) -> Result<WorkspaceFeature> {
         self.db.transaction(|| {
             if !is_uuid(terminal_id) {
-                return Err(super::error::invalid("Invalid terminal"));
+                return Err(invalid("Invalid terminal"));
             }
-            let feature = self.read(workspace_id, feature_id)?;
+            check_scope(workspace_id, feature_id)?;
             check_safe(expected_revision, true)?;
-            if feature.revision != expected_revision {
-                return Err(refused("Stale feature revision"));
+            let feature = if feature_id == default_feature_id(workspace_id)? {
+                self.ensure_default_row(workspace_id, DEFAULT_FEATURE_NAME, Some(expected_revision))?
+            } else {
+                let existing = self.read(workspace_id, feature_id)?;
+                if existing.revision != expected_revision {
+                    return Err(refused("Stale feature revision"));
+                }
+                if existing.status == FeatureStatus::Archived {
+                    return Err(refused("Archived feature"));
+                }
+                existing
+            };
+            self.insert_assignment(&feature, terminal_id)
+        })
+    }
+
+    pub fn assign_to_open_or_default(
+        &self,
+        workspace_id: &str,
+        requested_feature_id: Option<&str>,
+        terminal_ids: &[String],
+        default_name: Option<&str>,
+    ) -> Result<(
+        WorkspaceFeature,
+        FeatureViewState,
+        Option<TerminalLayoutRecord>,
+    )> {
+        self.db.transaction(|| {
+            if !is_identifier(workspace_id) {
+                return Err(invalid("Invalid workspace"));
             }
-            if feature.status == FeatureStatus::Archived {
-                return Err(refused("Archived feature"));
+            if terminal_ids.is_empty() || !valid_ids(terminal_ids) {
+                return Err(invalid("Invalid terminal selection"));
             }
-            if feature.terminal_ids.len() >= 8 {
-                return Err(refused("Feature terminal capacity exceeded"));
+            let mut feature = match requested_feature_id {
+                None => self.ensure_default_row(
+                    workspace_id,
+                    default_name.unwrap_or(DEFAULT_FEATURE_NAME),
+                    None,
+                )?,
+                Some(id) => {
+                    check_scope(workspace_id, id)?;
+                    let existing = self.read(workspace_id, id)?;
+                    if existing.status == FeatureStatus::Archived {
+                        return Err(refused("Archived feature"));
+                    }
+                    existing
+                }
+            };
+            let previous_layout = if feature.terminal_ids.is_empty() {
+                None
+            } else {
+                TerminalLayouts::open(self.db, Some(&feature.feature_id))?
+                    .read(&feature.terminal_ids)?
+            };
+            for terminal_id in terminal_ids {
+                feature = self.insert_assignment(&feature, terminal_id)?;
             }
-            // A stable terminal belongs to one Feature. No move/adoption/reassignment.
-            let assigned: Option<i64> = self
-                .db
-                .conn
-                .query_row(
-                    "SELECT 1 FROM feature_terminal_assignments WHERE terminal_id=?",
-                    [terminal_id],
-                    |row| row.get(0),
-                )
-                .optional()?;
-            if assigned.is_some() {
-                return Err(refused("Terminal already assigned to a Feature"));
+            let before_view = self.read_view(workspace_id)?;
+            if before_view.feature_id.as_deref() != Some(feature.feature_id.as_str()) {
+                if before_view.revision >= MAX_SAFE {
+                    return Err(refused("Feature view revision exhausted"));
+                }
+                if before_view.revision == 0
+                    && self.db.count("SELECT COUNT(*) AS n FROM feature_views")? >= 1024
+                {
+                    return Err(refused("Feature view capacity exceeded"));
+                }
+                self.db.conn.execute(
+                    "INSERT INTO feature_views VALUES (?,?,?) ON CONFLICT(workspace_id)
+          DO UPDATE SET feature_id=excluded.feature_id, revision=excluded.revision",
+                    params![
+                        workspace_id,
+                        &feature.feature_id,
+                        (before_view.revision + 1) as i64
+                    ],
+                )?;
             }
-            self.db.conn.execute(
-                "INSERT INTO feature_terminal_assignments VALUES (?,?)",
-                [terminal_id, &feature.feature_id],
-            )?;
-            self.advance(&feature)?;
-            let after = self.read(workspace_id, feature_id)?;
-            self.audit(&after, "feature.terminal_added", Some(terminal_id))?;
-            Ok(after)
+            Ok((feature, self.read_view(workspace_id)?, previous_layout))
         })
     }
 }

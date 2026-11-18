@@ -291,6 +291,7 @@ export class TerminalMessageHub {
     const call = hubToolCallSchema.parse(raw);
     switch (call.name) {
       case 'list_terminals':
+        if (!sender.featureId) throw new HubRefusal('sender_unassigned');
         return {
           terminals: this.peers(sender, members).map((member) => ({
             handle: member.alias,
@@ -305,6 +306,7 @@ export class TerminalMessageHub {
           })),
         };
       case 'send_message': {
+        if (!sender.featureId) throw new HubRefusal('sender_unassigned');
         const recipients = Array.isArray(call.arguments.to)
           ? call.arguments.to
           : [call.arguments.to];
@@ -335,6 +337,7 @@ export class TerminalMessageHub {
         return { sent: ids, state: 'queued', truncated: cut.truncated };
       }
       case 'delegate_task': {
+        if (!sender.featureId) throw new HubRefusal('sender_unassigned');
         const target = this.resolveTarget(sender, members, call.arguments.to);
         const depth = this.nextDepth(senderId);
         const pending = (task: Task) =>
