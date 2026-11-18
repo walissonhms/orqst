@@ -112,8 +112,11 @@ once, under all existing document/focus/generation guards. Never replay creation
 The preparation `catalog` uses the separate Studio helper, not the selected Core's
 feature facade. No Core is valid (`preparation_admission = None`); an active Core
 may cause `busy`/refusal during preparation, enrollment, review, full pool or
-changed admission identity/presentation/revision. Optional provider `path` and `version` describe a unique reviewed installation and are display-only. Reading the catalog does not
-bypass those checks. A catalog failure is distinct from feature snapshot startup
+changed admission identity/presentation/revision. Optional provider `path` and
+`version` describe a unique reviewed installation and are display-only. The
+canonical Settings documents may request the read-only catalog through the Studio
+helper. Launch, review and preparation calls still require a Studio document.
+Reading the catalog does not bypass those checks. A catalog failure is distinct from feature snapshot startup
 unavailability; the exact owner-reported invocation remains untraced.
 
 ## Studio readiness and hidden geometry — 2026-11-05

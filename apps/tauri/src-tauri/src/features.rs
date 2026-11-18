@@ -3498,7 +3498,13 @@ mod tests {
                 assert!(!feature_action_source_allowed(&source, &json!({"action":action})));
             }
         }
+        let communication = format!("{origin}/comunicacao");
+        let inspector_request = |kind| json!({ "action": "inspector", "command": { "kind": kind } });
+        assert!(feature_action_source_allowed(&communication, &inspector_request("retry")));
+        assert!(!feature_action_source_allowed(CHROME_URL, &inspector_request("retry")));
         let studio = format!("{origin}/studio");
+        assert!(feature_action_source_allowed(&studio, &inspector_request("send")));
+        assert!(!feature_action_source_allowed(&studio, &inspector_request("retry")));
         assert!(feature_action_source_allowed(
             &studio,
             &json!({"action":"pane","command":"focus"})

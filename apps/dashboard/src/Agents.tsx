@@ -1,3 +1,4 @@
+import { RouteHeaderActions } from './AppShell';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
@@ -73,7 +74,7 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
   return (
     <div className="spec-cli">
       {!compact && (
-        <div className="spec-actions">
+        <RouteHeaderActions>
           <button
             className="button"
             type="button"
@@ -83,9 +84,9 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
             <RefreshCw size={13} />
             {t('analytics.refresh')}
           </button>
-          {failed && <span role="alert">{t('screens.agents.failed')}</span>}
-        </div>
+        </RouteHeaderActions>
       )}
+      {!compact && failed && <p role="alert">{t('screens.agents.failed')}</p>}
       {pending && <p role="status">{t('screens.agents.checking')}</p>}
       {compact ? (
         <ul className="spec-rows">

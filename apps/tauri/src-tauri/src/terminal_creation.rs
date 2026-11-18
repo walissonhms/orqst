@@ -434,11 +434,18 @@ fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bo
     label == "main"
         && parent == "main"
         && url.origin().ascii_serialization() == origin
-        && matches!(url.path(), "/" | "/studio")
+        && matches!(url.path(), "/" | "/studio" | "/configuracoes" | "/configuracoes/agentes")
         && url.username().is_empty()
         && url.password().is_none()
         && url.query().is_none()
         && url.fragment().is_none()
+}
+fn studio_action_allowed(source: &str, action: &Value) -> bool {
+    tauri::Url::parse(source).is_ok_and(|url| {
+        matches!(url.path(), "/" | "/studio")
+            || (matches!(url.path(), "/configuracoes" | "/configuracoes/agentes")
+                && action == "catalog")
+    })
 }
 // The URL getter may wait for the UI thread. Never retain Preparation across it.
 fn identity_from(
@@ -741,6 +748,9 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     let Some((source, generation)) = identity(&window) else {
         return denied();
     };
+    if !studio_action_allowed(&source, &request["action"]) {
+        return denied();
+    }
     let app = window.app_handle().clone();
     if request["action"] == "snapshot" {
         return json!({"status":"ok", "snapshot":snapshot(&app)});
@@ -1077,6 +1087,8 @@ pub fn configure(
             .local(false)
             .remote(format!("{origin}/"))
             .remote(format!("{origin}/studio"))
+            .remote(format!("{origin}/configuracoes"))
+            .remote(format!("{origin}/configuracoes/agentes"))
             .webview("main")
             .permission("allow-studio-request"),
     )?;
@@ -2048,12 +2060,29 @@ mod catalog_tests {
         assert!(!valid_catalog(&catalog, &request));
     }
     #[test]
+    fn settings_reads_catalog_but_cannot_start_terminals() {
+        let origin = "http://127.0.0.1:4317";
+        let source = format!("{origin}/configuracoes/agentes");
+        assert!(super::document_matches("main", "main", &source, origin));
+        assert!(super::studio_action_allowed(&source, &json!("catalog")));
+        for action in ["snapshot", "create-selected", "create-batch", "review", "open"] {
+            assert!(!super::studio_action_allowed(&source, &json!(action)));
+        }
+    }
+
+    #[test]
     fn catalogs_accept_all_reviewed_sources_but_never_entitlement_or_cross_scope() {
         let request =
             json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
         let providers: Vec<_>=["codex","claude","opencode","antigravity"].iter().map(|provider|json!({"provider":provider,"status":"available","reason":"ready","models":[{"id":"b".repeat(64),"label":"SYNTHETIC model","source":"official-alias","isDefault":false,"availability":"unverified"}]})).collect();
         let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
         assert!(valid_catalog(&catalog, &request));
+        catalog["providers"][0]["path"] = json!("/synthetic/bin/codex");
+        catalog["providers"][0]["version"] = json!("0.169.0");
+        assert!(valid_catalog(&catalog, &request));
+        let mut relative = catalog.clone();
+        relative["providers"][0]["path"] = json!("codex");
+        assert!(!valid_catalog(&relative, &request));
         for source in [
             "cli-default",
             "native-config",

@@ -932,12 +932,12 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
       assert.equal(await page.locator('.ts-unassigned').count(), 0);
       assert.equal(await page.getByRole('button', { name: mentionOpen, exact: true }).count(), 1);
 
-      // MentionComposer resolves @T-002 inside the new default Feature and dispatches a queued mention.
+      // Delegate selects T-002 inside the new default Feature and dispatches a queued mention.
       await page.getByRole('button', { name: mentionOpen, exact: true }).click();
-      const composerBox = page.locator('.mc-field textarea');
-      await composerBox.waitFor({ state: 'visible' });
-      await composerBox.fill('Check @T-002 now');
-      await page.locator('.mc-send').click();
+      const delegate = page.getByRole('dialog', { name: mentionOpen });
+      await delegate.getByRole('radio', { name: /T-002/ }).check();
+      await delegate.locator('textarea').fill('Check @T-002 now');
+      await delegate.locator('button[type="submit"]').click();
       await page.waitForFunction(() =>
         (Reflect.get(window, 'requests') as { action: string }[]).some(
           (entry) => entry.action === 'mention',

@@ -284,7 +284,7 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
         const visible = list.at(-1)!.panes.filter((pane) => pane.visible);
         return visible.length === 1 && visible[0]?.terminalId === id;
       }, terminalId);
-    await page.getByRole('button', { name: 'Account limits', exact: true }).click();
+    await page.getByTitle('Show account limits', { exact: true }).click();
     const limits = page.locator('.al-panel[data-native-overlay]');
     await limits.waitFor();
     await waitForVisiblePane(t1);

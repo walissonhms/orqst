@@ -1242,7 +1242,7 @@ export function FeatureStudio({
   );
   const workspace = (
     <section
-      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}${shell ? ' feature-in-shell' : ''}`}
+      className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
       aria-label={t('features.workspace')}
     >
       {shell?.active && (
@@ -1768,7 +1768,11 @@ export function FeatureStudio({
             </button>
           </div>
           <section className="panel studio-setup" aria-labelledby="studio-setup-title">
-            {!creator && <p className="notice">{t('studio.tauri.unavailable')}</p>}
+            {!creator && (
+              <p className="notice" title={t('studio.tauri.unavailable.detail')}>
+                {t('studio.tauri.unavailable.label')}
+              </p>
+            )}
             <TauriStudioPreparation
               native={creator}
               context={creation.scope}
@@ -1777,7 +1781,9 @@ export function FeatureStudio({
                 if (pending) advancedStarted.current = true;
               }}
             />
-            <p className="studio-boundary">{t('studio.grantsHelp')}</p>
+            <p className="studio-boundary" title={t('studio.grantsHelp.detail')}>
+              {t('studio.grantsHelp.label')}
+            </p>
           </section>
         </Modal>
       )}

@@ -74,7 +74,10 @@ async function openStudio(page: Page, locale = 'pt-BR') {
     { snapshot, locale },
   );
   await page.goto('/studio');
-  await expect(page.locator('.feature-core')).toHaveAttribute('data-state', 'online');
+  await expect(page.locator('.shell-core [role=status]')).toHaveAttribute(
+    'data-connection',
+    'connected',
+  );
 }
 
 async function reportLimits(page: Page, usedPercent: number, ageMs = 0) {

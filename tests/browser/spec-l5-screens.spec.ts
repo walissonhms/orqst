@@ -275,7 +275,8 @@ test('Metrics shows known limits, unknowns, and cache as a subset', async ({ pag
   await installAnalytics(page);
   await page.goto('/models');
   const screen = page.locator('.spec-screen');
-  await screen
+  await page
+    .locator('.topbar-actions')
     .getByRole('combobox', { name: 'Feature', exact: true })
     .selectOption(secondFeatureId);
   const row = screen.getByRole('row', { name: /Claude.*fixture-sonnet/ });
@@ -303,7 +304,7 @@ test('Artifact preview stays in the library and leaves hostile markup inert', as
   await page.goto('/artifacts');
   const screen = page.locator('.spec-screen');
   await screen.getByRole('button', { name: /Synthetic browser result/ }).click();
-  await expect(page).toHaveURL(/\/artifacts$/);
+  await expect(page).toHaveURL(/\/artefatos$/);
   const preview = screen.locator('.spec-artifact-preview');
   await expect(preview.getByRole('button', { name: 'Rendered' })).toHaveAttribute(
     'aria-pressed',
@@ -336,7 +337,10 @@ test('Settings includes all tabs, discovers the current CLI catalog, and persist
     .poll(() => calls.filter(({ action }) => action === 'catalog').length)
     .toBeGreaterThan(0);
   const seen = calls.filter(({ action }) => action === 'catalog').length;
-  await screen.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await page
+    .locator('.topbar-actions')
+    .getByRole('button', { name: 'Refresh', exact: true })
+    .click();
   await expect
     .poll(() => calls.filter(({ action }) => action === 'catalog').length)
     .toBeGreaterThan(seen);
