@@ -1,11 +1,10 @@
-import { FeatureWorkspace } from './FeatureWorkspace.js';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Columns2, FileCheck2, FolderOpen, ShieldCheck, Terminal } from 'lucide-react';
 import type { StudioRequest, StudioSnapshot } from '@orqst/protocol';
 
 /** Navigation/preparation only. All choices and grants stay in the existing native flow. */
-export function Studio({ preparationOnly = false }: { preparationOnly?: boolean }) {
+export function Studio() {
   const { t } = useTranslation();
   const native = window.orqstStudio?.contractVersion === 1 ? window.orqstStudio : undefined;
   const desktop = !!window.orqstManagedAgents || navigator.userAgent.includes(' ORQSTDesktop/0.1');
@@ -55,7 +54,7 @@ export function Studio({ preparationOnly = false }: { preparationOnly?: boolean 
           : snapshot.canCreate
             ? 'empty'
             : 'blocked';
-  if (!native && !window.orqstFeatures)
+  if (!native)
     // Browser observer: terminals run only in ORQST Desktop. One short, honest state.
     return (
       <section className="studio-page studio-browser" aria-labelledby="studio-title">
@@ -73,7 +72,6 @@ export function Studio({ preparationOnly = false }: { preparationOnly?: boolean 
     );
   return (
     <section className="studio-page" aria-labelledby="studio-title">
-      {!preparationOnly && window.orqstFeatures && <FeatureWorkspace />}
       <header className="studio-heading">
         <div>
           <p className="studio-eyebrow">{t('studio.eyebrow')}</p>
@@ -85,17 +83,6 @@ export function Studio({ preparationOnly = false }: { preparationOnly?: boolean 
           {t('studio.local')}
         </span>
       </header>
-      {!native && (
-        <p className="notice" role="status">
-          {t(desktop ? 'studio.oldDesktop' : 'studio.desktopOnly')}
-          {import.meta.env.DEV && !desktop && (
-            <>
-              {' '}
-              <a href="/preview/terminals.html">{t('studio.layoutPreview')}</a>
-            </>
-          )}
-        </p>
-      )}
       {notice && (
         <p className="notice" role="status">
           {t(`studio.${notice}`)}

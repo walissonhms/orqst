@@ -3,10 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, Search, X } from 'lucide-react';
 import type { Snapshot } from '@orqst/protocol';
 import { Modal } from './Modal';
+import type { StudioScope } from './navigation';
 import { appViews, type AppView } from './shell-preferences';
 
 export function CommandPalette({
   snapshot,
+  studioScope,
   onNavigate,
   onWorkspace,
   onSession,
@@ -16,6 +18,7 @@ export function CommandPalette({
   onClose,
 }: {
   snapshot?: Snapshot;
+  studioScope?: StudioScope;
   onNavigate: (view: AppView) => void;
   onWorkspace: (id: string) => void;
   onSession: (id: string) => void;
@@ -30,7 +33,13 @@ export function CommandPalette({
     ...appViews.map((view) => ({
       id: `view:${view}`,
       label: t(`shell.views.${view}`),
-      detail: t('shell.palette.navigation'),
+      detail:
+        view === 'studio' && studioScope
+          ? t('shell.palette.studioScope', {
+              workspace: studioScope.workspace.name,
+              feature: studioScope.featureName ?? t('features.unassigned'),
+            })
+          : t('shell.palette.navigation'),
       action: () => onNavigate(view),
     })),
     {

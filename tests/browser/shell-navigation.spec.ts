@@ -1,5 +1,245 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { Snapshot } from '@orqst/protocol';
+import { featureNativeSnapshotSchema, type Snapshot } from '@orqst/protocol';
+
+const sourceId = 'synthetic-browser-session';
+const captureRoot = 'docs/development/v6-parity/lane1';
+const screenSizes = [
+  { width: 1440, height: 900 },
+  { width: 1280, height: 800 },
+] as const;
+
+async function capture(page: Page, surface: string, name: string) {
+  if (process.env.ORQST_LANE1_CAPTURES !== '1') return;
+  const size = page.viewportSize()!;
+  await page.screenshot({
+    path: `${captureRoot}/${size.width}x${size.height}/${surface}/${name}.png`,
+    animations: 'disabled',
+  });
+}
+
+async function studioFixture(page: Page) {
+  const workspace = { id: 'synthetic-managed-workspace', name: 'Workspace de teste' };
+  const slots = ['codex', 'claude', 'opencode', 'codex'].map((provider, slot) => ({
+    slot,
+    provider,
+    terminalId: `00000000-0000-4000-8000-00000000001${slot}`,
+  }));
+  const features = ['Planejamento de teste', 'Revisão de teste'].map((name, index) => ({
+    featureId: `00000000-0000-4000-8000-00000000000${index + 2}`,
+    workspaceId: workspace.id,
+    name,
+    description: '',
+    status: 'active',
+    revision: 1,
+    terminalIds: index === 0 ? [] : slots.map((item) => item.terminalId),
+    schemaVersion: 1,
+    createdAt: 1,
+    updatedAt: 1,
+  }));
+  const snapshot = featureNativeSnapshotSchema.parse({
+    contractVersion: 1,
+    storage: 'core',
+    generation: 1,
+    workspace,
+    features,
+    activeFeatureId: features[0]!.featureId,
+    view: {
+      contractVersion: 1,
+      storage: 'core',
+      workspaceId: workspace.id,
+      featureId: features[0]!.featureId,
+      revision: 1,
+    },
+    slots,
+    layoutSaved: true,
+  });
+  await page.addInitScript((snapshot) => {
+    const calls: string[] = [];
+    Reflect.set(window, 'syntheticFeatureCalls', calls);
+    Object.defineProperty(window, 'orqstFeatures', {
+      value: {
+        contractVersion: 1,
+        async request({ action, featureId }: { action: string; featureId?: string }) {
+          calls.push(action);
+          if (action === 'snapshot') return { status: 'ok', snapshot: structuredClone(snapshot) };
+          if (
+            action !== 'select' ||
+            !snapshot.features.some((item) => item.featureId === featureId)
+          )
+            return { status: 'denied' };
+          snapshot.generation++;
+          snapshot.activeFeatureId = snapshot.view.featureId = featureId!;
+          snapshot.view.revision++;
+          window.dispatchEvent(
+            new CustomEvent('orqst-feature-state', { detail: structuredClone(snapshot) }),
+          );
+          return { status: 'ok', snapshot: structuredClone(snapshot) };
+        },
+      },
+    });
+  }, snapshot);
+}
+
+test('observer Studio shows the Desktop requirement and keeps the shared navigation', async ({
+  page,
+}) => {
+  await page.goto('/studio');
+  await expect(
+    page.getByText('Terminals run in the ORQST Desktop app.', { exact: false }),
+  ).toBeVisible();
+  await expect(page.locator('.feature-workspace')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await page.goBack();
+  await expect(page).toHaveURL('/studio');
+  await expect(page.getByRole('link', { name: 'Terminals / Studio' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Notifications' })).toBeVisible();
+});
+
+test('managed Studio route shares the unsaved draft guard on click and history traversal', async ({
+  page,
+}) => {
+  await studioFixture(page);
+  await page.goto('/studio');
+  await page.locator('.topbar').getByRole('link', { name: 'Overview', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .first()
+    .click();
+  const editor = page.getByRole('region', { name: 'Manual artifact', exact: true });
+  await editor.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  await editor.getByRole('textbox').fill('Synthetic Studio route draft');
+  const review = page.getByRole('dialog', { name: 'Discard artifact draft?' });
+  const studio = page.locator('.topbar').getByRole('link', { name: 'Terminals / Studio' });
+  await studio.click();
+  await expect(review).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(editor.getByRole('textbox')).toHaveValue('Synthetic Studio route draft');
+  await page.evaluate(() => history.go(-2));
+  await expect(review).toBeVisible();
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
+  await review.getByRole('button', { name: 'Discard draft and continue' }).click();
+  await expect(page).toHaveURL('/studio');
+  await expect(studio).toHaveAttribute('aria-current', 'page');
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.studio-workspace .feature-sidebar')).toHaveCSS('width', '46px');
+  await expect(studio).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('button', { name: 'Notifications', exact: true })).toBeInViewport({
+    ratio: 1,
+  });
+  await expect(page.getByLabel('Language', { exact: true })).toBeInViewport({ ratio: 1 });
+});
+
+for (const size of screenSizes) {
+  test(`managed Studio shares routes and retains the exact native selection at ${size.width}×${size.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await studioFixture(page);
+    await fixture(page);
+    await page.goto('/studio');
+    const topbar = page.locator('.topbar');
+    const sidebar = page.locator('.studio-workspace .feature-sidebar');
+    await expect(sidebar).toHaveCSS('width', '155px');
+    await expect(topbar).toHaveCSS('height', '45px');
+    await expect(page.getByRole('button', { name: 'Show the Feature panel' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeHidden();
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Planejamento de teste');
+
+    await page.getByRole('link', { name: 'Overview', exact: true }).click();
+    await page
+      .locator('.sidebar')
+      .getByRole('button', { name: 'browser-test', exact: true })
+      .click();
+    await page.getByRole('link', { name: 'Terminals / Studio' }).click();
+    await page.getByRole('button', { name: /Revisão de teste/ }).click();
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Workspace de teste');
+    await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+    await topbar.getByRole('link', { name: 'Visão geral', exact: true }).click();
+    await expect(topbar.locator('.breadcrumbs')).toContainText('browser-test');
+    await capture(page, 'tauri-studio', '20-overview-return');
+
+    await topbar.getByRole('link', { name: 'Diretório de workspaces', exact: true }).click();
+    await expect(page).toHaveURL('/workspaces');
+    await capture(page, 'tauri-studio', '20a-workspaces');
+
+    const settings = topbar.getByRole('link', { name: 'Configurações', exact: true });
+    await settings.focus();
+    await page.keyboard.press('Enter');
+    await expect(settings).toHaveAttribute('aria-current', 'page');
+    await capture(page, 'tauri-studio', '21-settings');
+    await page.goBack();
+    await expect(page).toHaveURL('/workspaces');
+    await page.goForward();
+    await expect(page).toHaveURL('/settings');
+
+    const studio = topbar.getByRole('link', { name: 'Terminais / Studio', exact: true });
+    await studio.click();
+    await expect(studio).toHaveAttribute('aria-current', 'page');
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Workspace de teste');
+    await capture(page, 'tauri-studio', '22-studio-return');
+
+    await page.keyboard.press('Control+k');
+    const palette = page.getByRole('dialog');
+    await expect(
+      palette.locator('.palette-result').filter({ hasText: 'Terminais / Studio' }),
+    ).toContainText('Workspace de teste / Revisão de teste');
+    await page.keyboard.press('Escape');
+    await expect(studio).toBeFocused();
+
+    const bell = topbar.getByRole('button', { name: 'Notificações', exact: true });
+    await bell.click();
+    await page.getByRole('dialog', { name: 'Notificações' }).locator('.notification-item').click();
+    await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
+    await page.goBack();
+    await expect(studio).toHaveAttribute('aria-current', 'page');
+    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
+    expect(
+      await page.evaluate(() =>
+        (Reflect.get(window, 'syntheticFeatureCalls') as string[]).filter(
+          (action) => action !== 'snapshot',
+        ),
+      ),
+    ).toEqual(['select']);
+  });
+
+  test(`observer shell visual comparison at ${size.width}×${size.height}`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await page.goto('/overview');
+    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+    await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+    await capture(page, 'observer', '01-overview');
+    await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
+    await page.getByRole('link', { name: 'Visão geral', exact: true }).click();
+    await expect(page).toHaveURL('/overview');
+    await capture(page, 'observer', '02-overview-return');
+    await page.locator('.sidebar-collapse').click();
+    await expect(page.locator('#app-sidebar')).toHaveCSS('width', '68px');
+    await capture(page, 'observer', '03-sidebar-collapsed');
+    await page.locator('.sidebar-collapse').click();
+    await page.getByRole('button', { name: 'Notificações', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Notificações' });
+    await expect(drawer.getByText('Nenhuma notificação ao vivo.', { exact: false })).toBeVisible();
+    await capture(page, 'observer', '04-notifications-empty');
+    await drawer.locator('select').selectOption('unread');
+    await capture(page, 'observer', '05-notifications-unread-empty');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Control+k');
+    await expect(page.getByRole('dialog').getByRole('textbox')).toBeFocused();
+    await capture(page, 'observer', '06-search-menu');
+  });
+}
 
 async function fixture(page: Page) {
   await page.route('**/api/snapshot', async (route) => {
@@ -46,7 +286,7 @@ test('workspace directory, layout, sidebar and scope restore without claiming pr
   await expect(page.getByText('No workspaces match this search.')).toBeVisible();
   await page.getByRole('textbox', { name: 'Search workspace names or paths' }).fill('');
   await card.getByRole('button', { name: 'Open sessions' }).click();
-  await expect(page.getByRole('heading', { name: 'Your agents, in focus.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
   const workspace = await page.evaluate(
     () => JSON.parse(localStorage.getItem('orqst.shell.v1')!).workspaceId as string,
   );
@@ -96,14 +336,21 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
   await expect(page.getByRole('heading', { name: 'Agents & integrations' })).toBeVisible();
   const matrix = page.getByRole('region', { name: 'Observation capability matrix' });
   await expect(
-    matrix.getByRole('row', { name: 'Session control Unavailable Unavailable Unavailable' }),
-  ).toBeVisible();
-  await expect(
-    matrix.getByRole('row', { name: 'Mode Observation only Planned Planned' }),
+    matrix.getByRole('row', {
+      name: 'Session control Unavailable Unavailable Unavailable Unavailable',
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(
     matrix.getByRole('row', {
-      name: 'External session discovery Supported Unavailable Unavailable',
+      name: 'Mode Observation only Not observed yet Not observed yet Observation only',
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    matrix.getByRole('row', {
+      name: 'External session discovery Supported Unavailable Unavailable Supported',
+      exact: true,
     }),
   ).toBeVisible();
   await expect(matrix).toContainText('not a machine installation scan');
@@ -113,7 +360,10 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
   await page.getByLabel('Language').selectOption('pt-BR');
   await expect(page.getByRole('heading', { name: 'Agentes e integrações' })).toBeVisible();
   await expect(
-    page.getByRole('row', { name: 'Controle de sessão Indisponível Indisponível Indisponível' }),
+    page.getByRole('row', {
+      name: 'Controle de sessão Indisponível Indisponível Indisponível Indisponível',
+      exact: true,
+    }),
   ).toBeVisible();
 });
 
@@ -141,7 +391,7 @@ test('workspace and notification dialogs contain focus, close with Escape and li
     .getByRole('button', { name: /Execution failed/ })
     .click();
   await expect(page.getByRole('region', { name: 'Session details' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Your agents, in focus.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
 });
 
 test('new views and dialogs fit desktop, laptop and mobile with reduced motion', async ({
@@ -206,7 +456,11 @@ test('compact token disclosure reuses confirmed readings, remains visible on scr
   await expect(header).toContainText('Metrics could not be refreshed');
   await expect(badge.locator('summary')).toContainText('Out of date');
   await expect(badge.locator('strong')).toHaveText(values[3]!);
-  await page.locator('.session-detail').getByRole('button', { name: 'Close', exact: true }).click();
+  await badge.locator('summary').click();
+  await page
+    .locator('.session-detail')
+    .getByRole('button', { name: 'Close', exact: true })
+    .press('Enter');
   await expect(badge).toHaveCount(0);
   failed = false;
   unavailable = true;

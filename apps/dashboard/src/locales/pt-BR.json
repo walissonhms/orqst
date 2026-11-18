@@ -463,6 +463,7 @@
     "expand": "Expandir navegação",
     "loading": "Carregando observações locais…",
     "palette": {
+      "studioScope": "{{workspace}} / {{feature}}",
       "title": "Busca e comandos",
       "shortLabel": "Buscar",
       "search": "Buscar telas, workspaces, agentes, modelos ou IDs de sessão",

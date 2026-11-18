@@ -17,6 +17,19 @@ The V6 Studio separates Hide from native-confirmed Close terminal. The Node
 and Rust terminal Cores retain journal evidence and fence each confirmed closed
 slot. See [workflow, capacity limits and native acceptance](../development/terminal-close.md).
 
+## Dashboard shell and routes — 2026-11-18
+
+- [x] Show Overview, Studio, Workspaces and Settings routes, search, notifications
+      and language in the Desktop dashboard shell.
+- [x] Preserve the observed workspace filter and the independent, Core-supplied
+      managed Workspace/Feature context across dashboard route changes.
+- [x] Reuse dashboard history, session links, snapshot authorization and the
+      unsaved draft guard. Browser Studio retains its Desktop requirement.
+- [ ] Integrate the final V6 tree and action row, the standalone native Feature
+      document and its placement contract. Verify the matching packaged Desktop.
+
+See the [lane 1 contract and evidence](../development/v6-parity/lane1/).
+
 ## Workspace and Agentic Mode audit — 2026-11-17
 
 - [x] Carry the existing Feature layout through a terminal membership addition.
