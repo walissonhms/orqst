@@ -3,7 +3,12 @@ import { terminalIdentity } from './identity.js';
 import type { terminalExecutableSha256 } from './codex-profile.js';
 import { lstatSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { readInteractiveTerminalConfig, interactiveProvider } from './interactive-profile.js';
+import {
+  interactiveHub,
+  interactiveMcp,
+  interactiveProvider,
+  readInteractiveTerminalConfig,
+} from './interactive-profile.js';
 
 /** Inspect the complete selection before creating a Core, journal or admission marker. */
 export function inspectManagedTerminalFiles(
@@ -53,7 +58,7 @@ export function inspectManagedTerminalFiles(
     return { config, blocker };
   });
   const providers = new Set(selection.map(({ config }) => interactiveProvider(config)));
-  const hub = selection.some(({ config }) => config.interactive?.hub);
+  const hub = selection.some(({ config }) => interactiveHub(config));
   // Heterogeneous teams: the two-member Codex/OpenCode pair, an explicit MCP pair of two
   // distinct CLIs, or the Feature-scoped hub (docs/design/mcp-n-terminals.md).
   const codexOpenCodePair =
@@ -61,18 +66,18 @@ export function inspectManagedTerminalFiles(
   const mcpPair =
     selection.length === 2 &&
     providers.size === 2 &&
-    selection.every(({ config }) => config.interactive?.mcp && !config.interactive.hub);
+    selection.every(({ config }) => interactiveMcp(config) && !interactiveHub(config));
   if (providers.size !== 1 && !codexOpenCodePair && !mcpPair && !hub)
     throw new Error('Terminal team requires one provider except for a reviewed pair or the hub');
   if (selection.some(({ config }) => config.project !== selection[0]!.config.project))
     throw new Error('Terminal team requires one workspace');
   if (hub) {
-    if (selection.some(({ config }) => !config.interactive?.hub))
+    if (selection.some(({ config }) => config.version !== 4 && !interactiveHub(config)))
       throw new Error('Hub terminals cannot share a Core with non-hub terminals');
   } else if (
-    selection.some(({ config }) => config.interactive?.mcp) &&
+    selection.some(({ config }) => interactiveMcp(config)) &&
     (selection.length !== 2 ||
-      selection.some(({ config }) => !config.interactive?.mcp) ||
+      selection.some(({ config }) => !interactiveMcp(config)) ||
       selection[0]!.config.project !== selection[1]!.config.project)
   )
     throw new Error('MCP requires two opted-in terminals in one workspace');

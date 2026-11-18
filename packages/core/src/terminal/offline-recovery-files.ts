@@ -33,6 +33,7 @@ import {
 } from './codex-profile.js';
 import { managedClaudeConfigSchema } from './interactive-profile.js';
 import { managedOpenCodeConfigSchema } from './opencode-profile.js';
+import { managedAntigravityConfigSchema } from './antigravity-profile.js';
 import { terminalEnrollmentFile } from './enrollment-files.js';
 import {
   historicalBindingSnapshotSchema,
@@ -358,7 +359,12 @@ export function snapshotOfflineReservation(
     files.push(manifest);
     const raw = json(manifest);
     const config = z
-      .union([managedCodexConfigSchema, managedClaudeConfigSchema, managedOpenCodeConfigSchema])
+      .union([
+        managedCodexConfigSchema,
+        managedClaudeConfigSchema,
+        managedOpenCodeConfigSchema,
+        managedAntigravityConfigSchema,
+      ])
       .parse(raw);
     terminalDirectory(config.project);
     assertSeparateTerminalState(config.project, config.state);

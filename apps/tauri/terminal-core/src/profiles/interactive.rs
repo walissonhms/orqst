@@ -1,5 +1,9 @@
 //! Port of the dispatch in `interactive-profile.ts` plus the validate inputs of
 //! `pty-backend.ts`. This is the entry point the Core dispatcher calls.
+use super::antigravity::{
+    antigravity_terminal_environment, antigravity_terminal_profiles,
+    validate_managed_antigravity_config,
+};
 use super::claude::{
     claude_terminal_environment, claude_terminal_profiles, validate_managed_claude_config,
 };
@@ -7,8 +11,8 @@ use super::codex::{
     managed_codex_environment, managed_codex_profiles, validate_managed_codex_config,
 };
 use super::config::{
-    parse_claude_config, parse_codex_config, parse_opencode_config, InteractiveConfig, McpLaunch,
-    PreparationBinding,
+    parse_antigravity_config, parse_claude_config, parse_codex_config, parse_opencode_config,
+    InteractiveConfig, McpLaunch, PreparationBinding,
 };
 use super::fsx::{terminal_file, DEFAULT_FILE_BUDGET};
 use super::hooks::validate_claude_owned_hooks;
@@ -109,6 +113,7 @@ pub fn interactive_provider(config: &InteractiveConfig) -> &'static str {
         InteractiveConfig::Codex(_) => "codex",
         InteractiveConfig::Claude(_) => "claude",
         InteractiveConfig::OpenCode(_) => "opencode",
+        InteractiveConfig::Antigravity(_) => "antigravity",
     }
 }
 
@@ -139,6 +144,11 @@ pub fn parse_and_validate_interactive_config(
 ) -> Result<InteractiveConfig> {
     let raw = js::parse_bytes(bytes).map_err(ProfileError::schema)?;
     match raw.get("version") {
+        Some(Js::Num(v)) if *v == 4.0 => {
+            let config = parse_antigravity_config(&raw)?;
+            validate_managed_antigravity_config(&config, prep)?;
+            Ok(InteractiveConfig::Antigravity(config))
+        }
         Some(Js::Num(v)) if *v == 3.0 => {
             let config = parse_opencode_config(&raw)?;
             validate_managed_open_code_config(&config, prep)?;
@@ -169,6 +179,7 @@ pub fn interactive_terminal_profiles(
         InteractiveConfig::Codex(c) => managed_codex_profiles(c, mcp, prep),
         InteractiveConfig::OpenCode(c) => open_code_terminal_profiles(c, mcp),
         InteractiveConfig::Claude(c) => claude_terminal_profiles(c, mcp),
+        InteractiveConfig::Antigravity(c) => antigravity_terminal_profiles(c, mcp),
     }
 }
 
@@ -182,6 +193,7 @@ pub fn interactive_terminal_environment(
         InteractiveConfig::Codex(c) => managed_codex_environment(c),
         InteractiveConfig::OpenCode(c) => open_code_terminal_environment(c, mcp),
         InteractiveConfig::Claude(c) => claude_terminal_environment(c),
+        InteractiveConfig::Antigravity(c) => antigravity_terminal_environment(c, mcp),
     }
 }
 

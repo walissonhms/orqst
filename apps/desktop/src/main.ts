@@ -320,8 +320,8 @@ async function start(): Promise<void> {
     try {
       const providers =
         count === 2
-          ? (['codex', 'claude', 'opencode', 'codexOpenCode'] as const)
-          : (['codex', 'claude', 'opencode'] as const);
+          ? (['codex', 'claude', 'opencode', 'codexOpenCode', 'antigravity'] as const)
+          : (['codex', 'claude', 'opencode', 'antigravity'] as const);
       const providerResult = mixed
         ? { response: 4 }
         : await dialog.showMessageBox(context.target!, {
@@ -405,7 +405,7 @@ async function start(): Promise<void> {
       const project = await choose('createProject', true);
       if (!project) return;
       const mcpResult =
-        count !== 2
+        count !== 2 || choice === 'antigravity'
           ? { response: 1 }
           : await dialog.showMessageBox(context.target!, {
               title: i18n.t(

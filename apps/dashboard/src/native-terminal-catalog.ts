@@ -4,10 +4,16 @@ import type { ProviderCatalog, TerminalRequest } from './NewTerminalDialog.js';
 type Entry = TerminalPreparationCatalog['providers'][number];
 
 /** Map the native catalog to the dialog; only confirmed providers and models appear. */
-export function dialogCatalog(catalog: TerminalPreparationCatalog): ProviderCatalog[] {
+export function dialogCatalog(
+  catalog: TerminalPreparationCatalog,
+  translateReason?: (reason: Entry['reason']) => string,
+): ProviderCatalog[] {
   return catalog.providers.map((entry) => ({
     provider: entry.provider,
     available: entry.status === 'available',
+    ...(entry.status === 'unavailable' && translateReason
+      ? { reason: translateReason(entry.reason) }
+      : {}),
     models: entry.models
       .filter((model) => model.source !== 'cli-default')
       .map((model) => ({ id: model.id, label: model.label })),

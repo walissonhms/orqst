@@ -37,9 +37,12 @@ export function studioTerminals(
     .map((slot) => {
       const label = `T-${String(slot.slot + 1).padStart(3, '0')}`;
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
-      const fallback = { codex: 'Codex', claude: 'Claude Code', opencode: 'OpenCode' }[
-        slot.provider
-      ];
+      const fallback = {
+        codex: 'Codex',
+        claude: 'Claude Code',
+        opencode: 'OpenCode',
+        antigravity: 'Antigravity',
+      }[slot.provider];
       const pane = panes.find((entry) => entry.slot === slot.slot);
       const entry = fresh?.entries.find(
         (candidate) => candidate.slot === slot.slot && candidate.terminalId === slot.terminalId,

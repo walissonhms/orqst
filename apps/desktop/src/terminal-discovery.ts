@@ -12,7 +12,10 @@ import {
   terminalFile,
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
-import { reviewedClaudeTuiBinary } from '../../../packages/core/src/terminal/interactive-profile.js';
+import {
+  reviewedAntigravityBinary,
+  reviewedClaudeTuiBinary,
+} from '../../../packages/core/src/terminal/interactive-profile.js';
 import { reviewedDesktopCodexBinaries } from './terminal-creation.js';
 
 export function inspectReviewedExecutables(
@@ -42,8 +45,8 @@ export function inspectReviewedExecutables(
       continue;
     }
     executables.push(canonical);
-    // OpenCode already selects the first reviewed PATH candidate, even with separate installs.
-    if (provider === 'opencode') break;
+    // Providers without manual path pickers select the first reviewed PATH candidate.
+    if (provider === 'opencode' || provider === 'antigravity') break;
   }
   const refusal = failed
     ? 'executable_inspection_failed'
@@ -63,7 +66,9 @@ export function inspectTerminalExecutables(
       ? reviewedDesktopCodexBinaries
       : provider === 'claude'
         ? [reviewedClaudeTuiBinary]
-        : [reviewedProviderMcpBinaries.opencode];
+        : provider === 'antigravity'
+          ? [reviewedAntigravityBinary]
+          : [reviewedProviderMcpBinaries.opencode];
   return inspectReviewedExecutables(provider, searchPath, home, pins);
 }
 

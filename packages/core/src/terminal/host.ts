@@ -20,7 +20,7 @@ import { createPublicKey, randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { Store, FeaturePermissionRevisionConflict } from '@orqst/database';
 import { TerminalAuthority } from './authority.js';
-import { interactiveProvider } from './interactive-profile.js';
+import { interactiveHub, interactiveMcp, interactiveProvider } from './interactive-profile.js';
 import { interactiveCliAdapter } from './interactive-adapters.js';
 import { ManagedTerminalPair } from './managed-pair.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
@@ -92,12 +92,14 @@ async function start() {
   let pair!: ManagedTerminalPair;
   // Feature-scoped hub for every terminal (docs/design/mcp-n-terminals.md); the disposable
   // pair session remains for manifests that opted into the pair only.
-  const usesHub = selection.some(({ config }) => !!config.interactive?.hub);
-  const pairMcp = !usesHub && !!selection[0]!.config.interactive?.mcp;
+  const usesHub = selection.some(
+    ({ config }) => interactiveHub(config) || (config.version === 4 && !!config.preparation),
+  );
+  const pairMcp = !usesHub && selection.some(({ config }) => interactiveMcp(config));
   const hubWorkspace = stableId('workspace', selection[0]!.config.project);
   const hubSlots: Array<{ terminalId: string; provider: string } | undefined> = selection.map(
     ({ config }) =>
-      config.interactive?.hub
+      interactiveHub(config)
         ? { terminalId: terminalIdentity(config).terminalId, provider: interactiveProvider(config) }
         : undefined,
   );
@@ -105,6 +107,7 @@ async function start() {
     codex: 'Codex',
     claude: 'Claude Code',
     opencode: 'OpenCode',
+    antigravity: 'Antigravity',
   };
   // Metadata-only recent events for the Studio projection (no text, owner sends excluded).
   const hubJournal = usesHub ? hubMessageJournal(process.argv[4]!, authority.epoch) : undefined;
@@ -239,13 +242,13 @@ async function start() {
         return {
           profiles: adapter.profiles(
             config,
-            hub ? (config.interactive?.hub ? launches[slot] : undefined) : launches[slot],
+            hub ? (interactiveHub(config) ? launches[slot] : undefined) : launches[slot],
           ),
           backend: (() => {
             const backend = adapter.backend(
               files[slot]!,
               join(__dirname, 'managed-terminal-host.cjs'),
-              hub ? (config.interactive?.hub ? launches[slot] : undefined) : launches[slot],
+              hub ? (interactiveHub(config) ? launches[slot] : undefined) : launches[slot],
             );
             return mcp ? mcp.wrap(slot, backend) : backend;
           })(),
@@ -343,11 +346,11 @@ async function start() {
               );
               // Enrolled slots take the next index; hub terminals use that slot's endpoint.
               const enrolledSlot = selection.length;
-              const hubLaunch = hub && config.interactive?.hub ? launches[enrolledSlot] : undefined;
-              if (hub && config.interactive?.hub && !hubLaunch)
-                throw new Error('No free hub endpoint');
-              // A hub Core only admits hub terminals: every terminal has ORQST messaging.
-              if (hub && !config.interactive?.hub)
+              const isHubMember = interactiveHub(config);
+              const hubLaunch = hub && isHubMember ? launches[enrolledSlot] : undefined;
+              if (hub && isHubMember && !hubLaunch) throw new Error('No free hub endpoint');
+              // MCP-capable providers must join as hub members; Antigravity has no per-session MCP.
+              if ((hub && config.version !== 4 && !isHubMember) || (!hub && isHubMember))
                 throw new Error('Hub Core requires hub terminals');
               const profiles = adapter.profiles(config, hubLaunch);
               const backend = adapter.backend(
@@ -393,7 +396,7 @@ async function start() {
               if (receipt.status === 'ready') {
                 files.push(request.manifestFile);
                 const config = inspected.candidate.config;
-                if (hub && config.interactive?.hub)
+                if (hub && interactiveHub(config))
                   hubSlots[selection.length] = {
                     terminalId: terminalIdentity(config).terminalId,
                     provider: interactiveProvider(config),

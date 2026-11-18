@@ -29,17 +29,29 @@ const catalog = {
     },
     { provider: 'claude', status: 'available', reason: 'ready', models: [model(3, 'cli-cache')] },
     { provider: 'opencode', status: 'unavailable', reason: 'executable_not_found', models: [] },
+    {
+      provider: 'antigravity',
+      status: 'unavailable',
+      reason: 'executable_unreviewed',
+      models: [],
+    },
   ],
 } as unknown as TerminalPreparationCatalog;
 
-test('dialog catalog shows confirmed models and hides the CLI-default entry', () => {
-  const result = dialogCatalog(catalog);
+test('dialog catalog shows confirmed models, hides CLI-default and forwards localized unavailable reasons', () => {
+  const result = dialogCatalog(catalog, (reason) => `localized:${reason}`);
   assert.deepEqual(
-    result.map((entry) => [entry.provider, entry.available, entry.models.map((m) => m.id)]),
+    result.map((entry) => [
+      entry.provider,
+      entry.available,
+      entry.reason ?? null,
+      entry.models.map((m) => m.id),
+    ]),
     [
-      ['codex', true, [id(2)]],
-      ['claude', true, [id(3)]],
-      ['opencode', false, []],
+      ['codex', true, null, [id(2)]],
+      ['claude', true, null, [id(3)]],
+      ['opencode', false, 'localized:executable_not_found', []],
+      ['antigravity', false, 'localized:executable_unreviewed', []],
     ],
   );
 });

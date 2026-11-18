@@ -188,7 +188,7 @@ export function NativeTerminalCreator({
   if (state === 'ready' || state === 'opening')
     return (
       <NewTerminalDialog
-        catalog={dialogCatalog(catalog!)}
+        catalog={dialogCatalog(catalog!, (reason) => t(`terminalStudio.create.reason_${reason}`))}
         workspaces={[workspace]}
         initialWorkspaceId={workspace.id}
         max={Math.max(0, (snapshot?.limit ?? 8) - (snapshot?.count ?? 0))}

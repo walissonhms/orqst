@@ -4,8 +4,12 @@ import { join } from 'node:path';
 import { localCliPathDirectories, localCliPathPolicy } from './local-cli-path.js';
 import { interactiveCliStatus } from './interactive-adapters.js';
 
-export const localCliProviders = ['codex', 'claude', 'opencode'] as const;
+export const localCliProviders = ['codex', 'claude', 'opencode', 'antigravity'] as const;
 export type LocalCliProvider = (typeof localCliProviders)[number];
+
+export function localCliExecutableName(provider: LocalCliProvider): string {
+  return provider === 'antigravity' ? 'agy' : provider;
+}
 export const localCliDiscoveryPolicy = Object.freeze({
   ...localCliPathPolicy,
   maximumCandidates: 16,
@@ -39,7 +43,7 @@ export function discoverLocalClis(
         incomplete = true;
         break;
       }
-      const launcher = join(directory.path, provider);
+      const launcher = join(directory.path, localCliExecutableName(provider));
       try {
         const entry = lstatSync(launcher);
         if (!entry.isFile() && !entry.isSymbolicLink()) continue;
@@ -78,6 +82,11 @@ const reuseBlockers = {
     'opencode_native_database_credentials_and_sessions_coupled',
     'native_database_startup_migrations_not_authorized',
     'native_standalone_descendant_lifecycle_unvalidated',
+    'native_provider_acceptance_pending',
+  ],
+  antigravity: [
+    'antigravity_native_gemini_state_shared',
+    'per_session_mcp_configuration_unavailable',
     'native_provider_acceptance_pending',
   ],
 } as const;

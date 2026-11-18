@@ -2964,7 +2964,12 @@ fn valid_enrollment(value: &Value, id: &str, epoch: &str, slot: usize, capacity:
             .is_some_and(|n| n > 0 && receipt["revision"].as_u64() == Some(n))
         && matches!(
             value["pane"]["profileId"].as_str(),
-            Some("codex-terminal-v1" | "claude-terminal-v1" | "opencode-terminal-v1")
+            Some(
+                "codex-terminal-v1"
+                    | "claude-terminal-v1"
+                    | "opencode-terminal-v1"
+                    | "antigravity-terminal-v1"
+            )
         )
         && value["pane"]["html"]
             .as_str()
@@ -3457,7 +3462,10 @@ async fn start_selected_inner(
                         .filter(|id| {
                             matches!(
                                 *id,
-                                "codex-terminal-v1" | "claude-terminal-v1" | "opencode-terminal-v1"
+                                "codex-terminal-v1"
+                                    | "claude-terminal-v1"
+                                    | "opencode-terminal-v1"
+                                    | "antigravity-terminal-v1"
                             )
                         })
                         .map(str::to_owned)

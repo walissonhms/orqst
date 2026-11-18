@@ -164,7 +164,7 @@ pub fn config_value(file: &str) -> R<Value> {
     ];
     let tail: &[&str] = match version {
         Some(2) => &["sessionId", "ownedHooks", "authentication", "interactive"],
-        Some(3) => &["authentication", "interactive"],
+        Some(3 | 4) => &["authentication", "interactive"],
         _ => &["interactive", "authentication"],
     };
     let keys: Vec<&str> = head.iter().chain(tail).copied().collect();
@@ -220,6 +220,10 @@ pub fn config_value(file: &str) -> R<Value> {
                 "hub",
             ],
             &["mode", "nativeIdentity", "sharedNativeConfiguration"],
+        ),
+        Some(4) => (
+            &["sharedNativeSessions"],
+            &["mode", "home", "sharedNativeConfiguration"],
         ),
         _ => (
             &["sharedNativeSessions", "mcp", "hub"],
@@ -583,7 +587,9 @@ impl HostExtensions {
                     .cloned()
                     .map(Some)
                     .ok_or_else(|| "No free hub endpoint".into()),
+                Some(_) if config.version() == 4 => Ok(None),
                 Some(_) => Err("Hub Core requires hub terminals".into()),
+                None if config.hub() => Err("Hub Core requires hub terminals".into()),
                 None => Ok(None),
             }
         };
@@ -855,8 +861,10 @@ pub fn start(
     if selection.iter().any(|s| s.blocker.is_some()) {
         return Err(Failure::startup("Terminal profile blocked"));
     }
-    let uses_hub = selection.iter().any(|s| s.config.hub());
-    if !uses_hub && selection[0].config.mcp() {
+    let uses_hub = selection
+        .iter()
+        .any(|s| s.config.hub() || (s.config.version() == 4 && s.config.preparation().is_some()));
+    if !uses_hub && selection.iter().any(|s| s.config.mcp()) {
         return Err(Failure::startup(
             "Legacy pair MCP is not available in the Rust Core",
         ));

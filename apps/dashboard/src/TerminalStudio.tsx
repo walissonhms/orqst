@@ -72,7 +72,7 @@ import './terminal-studio.css';
 import './mention-composer.css';
 import './pane-menu.css';
 
-export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'shell';
+export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'antigravity' | 'shell';
 export type TerminalStatus =
   'running' | 'waiting_for_user' | 'completed' | 'failed' | 'interrupted' | 'unknown';
 

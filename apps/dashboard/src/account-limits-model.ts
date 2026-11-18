@@ -60,7 +60,7 @@ export function worstWindow(account: AccountLimit, now: number): LimitWindow | u
     .sort((a, b) => b.usedPercent! - a.usedPercent!)[0];
 }
 
-const providers = new Set(['codex', 'claude', 'opencode', 'shell']);
+const providers = new Set(['codex', 'claude', 'opencode', 'antigravity', 'shell']);
 const finite = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 

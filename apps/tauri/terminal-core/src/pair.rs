@@ -112,7 +112,8 @@ pub fn member_schema_order(member: &Map<String, Value>) -> R<Value> {
         && member
             .get("alias")
             .is_none_or(|a| a.as_str().is_some_and(|a| length(a, 128)))
-        && text("provider").is_some_and(|p| ["codex", "claude", "opencode"].contains(&p))
+        && text("provider")
+            .is_some_and(|p| ["codex", "claude", "opencode", "antigravity"].contains(&p))
         && member
             .get("requestedModel")
             .is_none_or(|m| m.is_null() || m.as_str().is_some_and(|m| length(m, 160)))

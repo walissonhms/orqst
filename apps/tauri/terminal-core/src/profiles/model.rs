@@ -507,6 +507,12 @@ pub fn discover_terminal_models(
             join2(project, ".claude/settings.json"),
             join2(project, ".claude/settings.local.json"),
         ],
+        "antigravity" => vec![super::nodepath::join(&[
+            home,
+            ".gemini",
+            "antigravity-cli",
+            "settings.json",
+        ])],
         _ => vec![
             join2(&opencode_home, "opencode.json"),
             join2(&opencode_home, "opencode.jsonc"),

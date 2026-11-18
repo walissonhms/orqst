@@ -2,7 +2,9 @@
 //! `opencode-launch-plan.ts`, `mcp-launch.ts`, `model-selection.ts` and
 //! `preparation-context.ts`, parsed from [`Js`] with the same accept/refuse decisions.
 use super::js::{js_len, Js};
-use super::mcp::{REVIEWED_CLAUDE_MCP, REVIEWED_CLAUDE_TUI, REVIEWED_OPENCODE};
+use super::mcp::{
+    REVIEWED_ANTIGRAVITY, REVIEWED_CLAUDE_MCP, REVIEWED_CLAUDE_TUI, REVIEWED_OPENCODE,
+};
 use super::validate::*;
 use super::{ProfileError, Result};
 
@@ -157,12 +159,27 @@ pub struct OpenCodeConfig {
     pub interactive: OpenCodeInteractive,
 }
 
-/// `InteractiveTerminalConfig` (manifest versions 1, 2 and 3).
+#[derive(Clone, Debug, PartialEq)]
+pub struct AntigravityConfig {
+    pub executable: Binary,
+    pub executable_version: String,
+    pub node: Binary,
+    pub tool_path: Option<String>,
+    pub identity: Option<String>,
+    pub project: String,
+    pub state: String,
+    pub model: Option<ModelSelection>,
+    pub preparation: Option<PreparationBinding>,
+    pub home: String,
+}
+
+/// `InteractiveTerminalConfig` (manifest versions 1, 2, 3 and 4).
 #[derive(Clone, Debug, PartialEq)]
 pub enum InteractiveConfig {
     Codex(CodexConfig),
     Claude(ClaudeConfig),
     OpenCode(OpenCodeConfig),
+    Antigravity(AntigravityConfig),
 }
 
 impl InteractiveConfig {
@@ -171,6 +188,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(_) => 1,
             InteractiveConfig::Claude(_) => 2,
             InteractiveConfig::OpenCode(_) => 3,
+            InteractiveConfig::Antigravity(_) => 4,
         }
     }
     pub fn project(&self) -> &str {
@@ -178,6 +196,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => &c.project,
             InteractiveConfig::Claude(c) => &c.project,
             InteractiveConfig::OpenCode(c) => &c.project,
+            InteractiveConfig::Antigravity(c) => &c.project,
         }
     }
     pub fn state(&self) -> &str {
@@ -185,6 +204,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => &c.state,
             InteractiveConfig::Claude(c) => &c.state,
             InteractiveConfig::OpenCode(c) => &c.state,
+            InteractiveConfig::Antigravity(c) => &c.state,
         }
     }
     pub fn identity(&self) -> Option<&str> {
@@ -192,6 +212,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => c.identity.as_deref(),
             InteractiveConfig::Claude(c) => c.identity.as_deref(),
             InteractiveConfig::OpenCode(c) => c.identity.as_deref(),
+            InteractiveConfig::Antigravity(c) => c.identity.as_deref(),
         }
     }
     pub fn node(&self) -> &Binary {
@@ -199,9 +220,10 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => &c.node,
             InteractiveConfig::Claude(c) => &c.node,
             InteractiveConfig::OpenCode(c) => &c.node,
+            InteractiveConfig::Antigravity(c) => &c.node,
         }
     }
-    /// `config.interactive` is present (always for versions 2 and 3).
+    /// `config.interactive` is present (always for versions 2, 3 and 4).
     pub fn has_interactive(&self) -> bool {
         match self {
             InteractiveConfig::Codex(c) => c.interactive.is_some(),
@@ -220,6 +242,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => c.interactive.as_ref().is_some_and(|i| i.mcp),
             InteractiveConfig::Claude(c) => c.interactive.mcp,
             InteractiveConfig::OpenCode(c) => c.interactive.mcp,
+            InteractiveConfig::Antigravity(_) => false,
         }
     }
     /// `config.interactive?.hub`.
@@ -228,6 +251,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => c.interactive.as_ref().is_some_and(|i| i.hub),
             InteractiveConfig::Claude(c) => c.interactive.hub,
             InteractiveConfig::OpenCode(c) => c.interactive.hub,
+            InteractiveConfig::Antigravity(_) => false,
         }
     }
     pub fn preparation(&self) -> Option<&PreparationBinding> {
@@ -235,6 +259,7 @@ impl InteractiveConfig {
             InteractiveConfig::Codex(c) => c.preparation.as_ref(),
             InteractiveConfig::Claude(c) => c.preparation.as_ref(),
             InteractiveConfig::OpenCode(c) => c.preparation.as_ref(),
+            InteractiveConfig::Antigravity(c) => c.preparation.as_ref(),
         }
     }
 }
@@ -731,9 +756,77 @@ pub fn parse_opencode_config(value: &Js) -> Result<OpenCodeConfig> {
     })
 }
 
+/// `managedAntigravityConfigSchema`.
+pub fn parse_antigravity_config(value: &Js) -> Result<AntigravityConfig> {
+    strict(
+        value,
+        "config",
+        &[
+            "version",
+            "provider",
+            "trust",
+            "executable",
+            "executableVersion",
+            "node",
+            "toolPath",
+            "identity",
+            "project",
+            "state",
+            "model",
+            "preparation",
+            "authentication",
+            "interactive",
+        ],
+    )?;
+    if *required(value, "version")? != Js::Num(4.0) {
+        return schema("version");
+    }
+    literal_str(required(value, "provider")?, "provider", "antigravity")?;
+    literal_str(required(value, "trust")?, "trust", "native-same-user")?;
+    literal_str(
+        required(value, "executableVersion")?,
+        "executableVersion",
+        REVIEWED_ANTIGRAVITY.version,
+    )?;
+    let c = common(value, slash_path)?;
+    if c.executable.sha256 != REVIEWED_ANTIGRAVITY.sha256 {
+        return schema("executable.sha256");
+    }
+    let a = required(value, "authentication")?;
+    strict(
+        a,
+        "authentication",
+        &["mode", "home", "sharedNativeConfiguration"],
+    )?;
+    literal_str(required(a, "mode")?, "mode", "reuse-existing")?;
+    let home = slash_path(required(a, "home")?, "home")?;
+    literal_true(
+        required(a, "sharedNativeConfiguration")?,
+        "sharedNativeConfiguration",
+    )?;
+    let i = required(value, "interactive")?;
+    strict(i, "interactive", &["sharedNativeSessions"])?;
+    literal_true(required(i, "sharedNativeSessions")?, "sharedNativeSessions")?;
+    Ok(AntigravityConfig {
+        executable: c.executable,
+        executable_version: REVIEWED_ANTIGRAVITY.version.to_owned(),
+        node: c.node,
+        tool_path: c.tool_path,
+        identity: c.identity,
+        project: c.project,
+        state: c.state,
+        model: c.model,
+        preparation: c.preparation,
+        home,
+    })
+}
+
 /// Version dispatch of `readInteractiveTerminalConfig` (schema only).
 pub fn parse_interactive_config(value: &Js) -> Result<InteractiveConfig> {
     match value.get("version") {
+        Some(Js::Num(v)) if *v == 4.0 => {
+            parse_antigravity_config(value).map(InteractiveConfig::Antigravity)
+        }
         Some(Js::Num(v)) if *v == 3.0 => {
             parse_opencode_config(value).map(InteractiveConfig::OpenCode)
         }

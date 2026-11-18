@@ -28,7 +28,10 @@ import {
 } from '../apps/desktop/src/tauri-terminal-preparation.js';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
-import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
+import {
+  interactiveMcp,
+  reviewedClaudeTuiBinary,
+} from '../packages/core/src/terminal/interactive-profile.js';
 
 const bundle = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-synthetic-tauri-preparation-')));
 const nativePreparationSupported =
@@ -121,7 +124,7 @@ for (const provider of ['codex', 'claude']) {
         const members = inspectManagedTerminalFiles(result.files, 8);
         assert.equal(members.length, count);
         assert.equal(new Set(members.map(({ config }) => config.identity!.terminalId)).size, count);
-        assert.ok(members.every(({ config, blocker }) => !blocker && !config.interactive?.mcp));
+        assert.ok(members.every(({ config, blocker }) => !blocker && !interactiveMcp(config)));
         assert.ok(members.every(({ config }) => config.node.path === f.context.node));
         assert.equal(f.confirmations[0], 'create');
         assert.ok(f.confirmations.indexOf('acknowledge') < f.confirmations.indexOf('open'));

@@ -50,11 +50,12 @@ fn signal(value: &Value) -> bool {
     matches!(value.as_str(), Some("SIGTERM" | "SIGKILL"))
 }
 
-pub const PROFILES: [&str; 4] = [
+pub const PROFILES: [&str; 5] = [
     "codex-login-v1",
     "codex-terminal-v1",
     "claude-terminal-v1",
     "opencode-terminal-v1",
+    "antigravity-terminal-v1",
 ];
 
 /// A validated terminal request: `{ id, operation, args }`.
@@ -134,6 +135,7 @@ mod tests {
         );
         assert!(parse(&json!({"id": U, "operation": "stop", "args": [U, "SIGHUP", {"challengeId": U, "signature": "s"}]})).is_none());
         assert!(parse(&json!({"id": U, "operation": "prepare", "args": ["desktop-managed", "claude-terminal-v1"]})).is_some());
+        assert!(parse(&json!({"id": U, "operation": "prepare", "args": ["desktop-managed", "antigravity-terminal-v1"]})).is_some());
         assert!(
             parse(&json!({"id": "not-a-uuid", "operation": "snapshot", "args": [U]})).is_none()
         );

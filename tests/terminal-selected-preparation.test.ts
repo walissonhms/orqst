@@ -35,7 +35,11 @@ import {
 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedProviderMcpBinaries } from '../packages/core/src/terminal/provider-mcp-config.js';
-import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
+import {
+  interactiveHub,
+  interactiveMcp,
+  reviewedClaudeTuiBinary,
+} from '../packages/core/src/terminal/interactive-profile.js';
 import { discoverLocalClis } from '../packages/core/src/terminal/local-cli.js';
 import { featureConfigurationDatabase } from '../packages/core/src/terminal/feature-configuration.js';
 
@@ -707,7 +711,7 @@ for (const sourceProvider of ['codex', 'opencode'] as const) {
       );
       const relay = { path: binary, sha256: hash };
       for (const config of configs) {
-        assert.equal(config.interactive?.mcp, true);
+        assert.equal(interactiveMcp(config), true);
         assert.equal(config.project, f.project);
         assert.equal(config.preparation?.featureId, feature.featureId);
         assert.deepEqual(
@@ -857,8 +861,8 @@ for (const provider of ['codex', 'claude', 'opencode'] as const) {
       assert.equal(prepared.files.length, 1);
       assert.deepEqual(f.confirmations, []);
       const config = readInteractiveTerminalConfig(prepared.files[0]!);
-      assert.equal(config.interactive?.mcp, true);
-      assert.equal(config.interactive?.hub, true);
+      assert.equal(interactiveMcp(config), true);
+      assert.equal(interactiveHub(config), true);
       assert.equal(config.project, f.project);
       assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
     } finally {
@@ -962,8 +966,8 @@ for (const selected of ['native-config', 'cli-default', 'cli-cache'] as const) {
           config.model!.expiresAt,
           selected === 'cli-cache' ? originalExpiry : undefined,
         );
-        assert.equal(config.interactive?.mcp, true);
-        assert.equal(config.interactive?.hub, true);
+        assert.equal(interactiveMcp(config), true);
+        assert.equal(interactiveHub(config), true);
         // A successful preparation is files only; it never initializes a runtime journal.
         assert.ok(!readdirSync(config.state).includes('terminal.sqlite'));
         if (selected === 'cli-cache') {

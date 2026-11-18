@@ -105,6 +105,7 @@ export async function prepareTauriBatch(
       continue;
     }
     try {
+      const supportsHub = input.provider !== 'antigravity';
       const plan = prepareTerminalCreation({
         ...context,
         ...selected,
@@ -112,9 +113,9 @@ export async function prepareTauriBatch(
         limit: 8,
         project: discovered.workspace.project,
         preparation: binding,
-        // Every terminal talks through the Feature-scoped hub (owner decision 2026-11-06).
-        mcp: true,
-        hub: true,
+        // MCP-capable terminals talk through the Feature-scoped hub; Antigravity has no per-session MCP.
+        mcp: supportsHub,
+        ...(supportsHub ? { hub: true } : {}),
         ...(input.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
       plans.push({ index, provider: input.provider, modelId: modelId!, plan });

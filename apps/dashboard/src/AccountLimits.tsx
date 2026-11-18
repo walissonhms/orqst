@@ -25,7 +25,7 @@ interface Props {
   onOpenChange?: (open: boolean) => void;
 }
 
-const providerOrder: TerminalProvider[] = ['claude', 'codex', 'opencode', 'shell'];
+const providerOrder: TerminalProvider[] = ['claude', 'codex', 'opencode', 'antigravity', 'shell'];
 
 function short(resetsAt: number | undefined, now: number): string {
   const full = renewsIn(resetsAt, now);

@@ -22,7 +22,7 @@ export const terminalEnrollmentMemberSchema = z.strictObject({
     .max(TERMINAL_SLOT_CEILING - 1),
   terminalId: z.uuid(),
   alias: z.string().min(1).max(128).optional(),
-  provider: z.enum(['codex', 'claude', 'opencode']),
+  provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
   requestedModel: z.string().min(1).max(160).nullable().optional(),
   workspaceId: digest,
   featureId: z.uuid().nullable(),

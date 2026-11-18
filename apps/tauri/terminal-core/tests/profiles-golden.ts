@@ -25,6 +25,11 @@ import {
 } from '../../../../packages/core/src/terminal/interactive-profile.js';
 import { managedOpenCodeConfigSchema } from '../../../../packages/core/src/terminal/opencode-profile.js';
 import { opencodeInteractiveLaunchPlan } from '../../../../packages/core/src/terminal/opencode-launch-plan.js';
+import { managedAntigravityConfigSchema } from '../../../../packages/core/src/terminal/antigravity-profile.js';
+import {
+  antigravityInteractiveLaunchPlan,
+  reviewedAntigravityBinary,
+} from '../../../../packages/core/src/terminal/antigravity-launch-plan.js';
 import {
   claudeInteractiveMcpConfiguration,
   opencodeInteractiveMcpConfiguration,
@@ -92,7 +97,8 @@ function materialize(list: Fixture[]) {
 const pendingModes: [string, number][] = [];
 for (const d of ['bin', 'bin2', 'bin-open', 'project', 'project/.codex', 'project/.claude']) dir(d);
 chmodLater('bin-open', 0o777);
-for (const name of ['node', 'codex', 'claude', 'opencode']) file(`bin/${name}`, macho(name), 0o755);
+for (const name of ['node', 'codex', 'claude', 'opencode', 'agy'])
+  file(`bin/${name}`, macho(name), 0o755);
 file('bin2/codex', macho('codex-2'), 0o755);
 file('bin2/notes.txt', 'SYNTHETIC not executable\n', 0o644);
 file('bin/relay.cjs', '// SYNTHETIC ORQST golden relay fixture\n');
@@ -111,6 +117,8 @@ for (const d of [
   'home',
   'home/.codex',
   'home/.claude',
+  'home/.gemini',
+  'home/.gemini/antigravity-cli',
   'home/.config',
   'home/.config/opencode',
   'home/.local',
@@ -134,6 +142,7 @@ file(
   }),
 );
 file('home/.claude/settings.json', '{"model":"opus","other":1}');
+file('home/.gemini/antigravity-cli/settings.json', '{"model":"gemini-synthetic-pro","other":1}');
 file(
   'home/.config/opencode/opencode.json',
   JSON.stringify({ model: 'synthetic/model-z', providers: { '2': { models: { x: {} } } } }),
@@ -153,12 +162,14 @@ for (const s of [
   'state-claude',
   'state-claude2',
   'state-opencode',
+  'state-antigravity',
   'manifests',
 ])
   dir(s, 0o700);
 for (const s of ['state-codex', 'state-codex2', 'state-native'])
   for (const d of ['home', 'codex', 'tmp']) dir(`${s}/${d}`, 0o700);
-for (const s of ['state-claude', 'state-claude2', 'state-opencode']) dir(`${s}/tmp`, 0o700);
+for (const s of ['state-claude', 'state-claude2', 'state-opencode', 'state-antigravity'])
+  dir(`${s}/tmp`, 0o700);
 file('state-codex/codex/auth.json', '{"synthetic":true}', 0o600);
 file('state-codex2/codex/auth.json', '{"synthetic":true}', 0o644);
 function chmodLater(path: string, mode: number) {
@@ -278,14 +289,32 @@ const opencodeHub = {
   ...opencodeBase,
   interactive: { ...opencodeBase.interactive, mcp: true, mergedMcpAcknowledged: true, hub: true },
 };
+const antigravityBase = {
+  version: 4,
+  provider: 'antigravity',
+  trust: 'native-same-user',
+  executable: { path: join(ROOT, 'bin/agy'), sha256: reviewedAntigravityBinary.sha256 },
+  executableVersion: reviewedAntigravityBinary.version,
+  node: binary('node'),
+  project: join(ROOT, 'project'),
+  state: join(ROOT, 'state-antigravity'),
+  authentication: {
+    mode: 'reuse-existing',
+    home: join(ROOT, 'home'),
+    sharedNativeConfiguration: true,
+  },
+  interactive: { sharedNativeSessions: true },
+};
 
 // Pass 2: generated private files that depend on the configs.
 const parse = (config: object) =>
-  ('version' in config && config.version === 3
-    ? managedOpenCodeConfigSchema.parse(config)
-    : 'version' in config && config.version === 2
-      ? managedClaudeConfigSchema.parse(config)
-      : managedCodexConfigSchema.parse(config)) as InteractiveTerminalConfig;
+  ('version' in config && config.version === 4
+    ? managedAntigravityConfigSchema.parse(config)
+    : 'version' in config && config.version === 3
+      ? managedOpenCodeConfigSchema.parse(config)
+      : 'version' in config && config.version === 2
+        ? managedClaudeConfigSchema.parse(config)
+        : managedCodexConfigSchema.parse(config)) as InteractiveTerminalConfig;
 for (const [config, state] of [
   [codexSeparate, 'state-codex'],
   [codexSeparate2, 'state-codex2'],
@@ -317,6 +346,7 @@ manifest('unknown-key.json', { ...codexSeparate, extra: true });
 manifest('public.json', codexSeparate);
 fixtures.at(-1)!.mode = 0o644;
 manifest('opencode.json', opencodeBase);
+manifest('antigravity.json', antigravityBase);
 for (const [path, mode] of pendingModes)
   fixtures.find((f) => f.path === join(ROOT, path))!.mode = mode;
 materialize(fixtures);
@@ -459,6 +489,30 @@ for (const [name, config, withMcp] of [
     false,
   ],
   ['opencode mcp mismatch', opencodeMcp, false],
+  ['antigravity', antigravityBase, false],
+  ['antigravity mcp refused', antigravityBase, true],
+  [
+    'antigravity model',
+    {
+      ...antigravityBase,
+      model: {
+        value: 'gemini-synthetic-pro',
+        source: 'native-config',
+        files: [
+          {
+            path: join(ROOT, 'home/.gemini/antigravity-cli/settings.json'),
+            sha256: terminalDigest('{"model":"gemini-synthetic-pro","other":1}'),
+          },
+        ],
+      },
+    },
+    false,
+  ],
+  [
+    'antigravity unreviewed hash',
+    { ...antigravityBase, executable: { path: join(ROOT, 'bin/agy'), sha256: sha('agy') } },
+    false,
+  ],
 ] as const) {
   const useMcp =
     withMcp === 'relay'
@@ -496,6 +550,7 @@ for (const name of [
   'unknown-key.json',
   'public.json',
   'opencode.json',
+  'antigravity.json',
   'missing.json',
 ])
   add(`read ${name}`, 'readProfiles', { file: join(ROOT, 'manifests', name) }, () =>
@@ -566,6 +621,51 @@ for (const withMcp of [false, true]) {
     opencodeInteractiveLaunchPlan(raw),
   );
 }
+for (const [name, raw] of [
+  [
+    'antigravity launch plan default',
+    {
+      executable: '/bin/agy',
+      executableVersion: reviewedAntigravityBinary.version,
+      executableSha256: reviewedAntigravityBinary.sha256,
+      project: '/p',
+      home: '/h',
+    },
+  ],
+  [
+    'antigravity launch plan model',
+    {
+      executable: '/bin/agy',
+      executableVersion: reviewedAntigravityBinary.version,
+      executableSha256: reviewedAntigravityBinary.sha256,
+      project: '/p',
+      home: '/h',
+      model: 'gemini-synthetic-pro',
+    },
+  ],
+  [
+    'antigravity launch plan unreviewed',
+    {
+      executable: '/bin/agy',
+      executableVersion: '1.5.11',
+      executableSha256: reviewedAntigravityBinary.sha256,
+      project: '/p',
+      home: '/h',
+    },
+  ],
+  [
+    'antigravity launch plan mcp rejected',
+    {
+      executable: '/bin/agy',
+      executableVersion: reviewedAntigravityBinary.version,
+      executableSha256: reviewedAntigravityBinary.sha256,
+      project: '/p',
+      home: '/h',
+      mcp,
+    },
+  ],
+] as const)
+  add(name, 'antigravityLaunchPlan', { raw }, () => antigravityInteractiveLaunchPlan(raw));
 
 const bin = join(ROOT, 'bin');
 const bin2 = join(ROOT, 'bin2');
@@ -605,7 +705,7 @@ for (const reviewed of [
   add(`tool path ${String(reviewed)}`, 'toolPath', reviewed === undefined ? {} : { reviewed }, () =>
     terminalToolPath(reviewed),
   );
-for (const provider of ['codex', 'claude', 'opencode'] as const) {
+for (const provider of ['codex', 'claude', 'opencode', 'antigravity'] as const) {
   add(`status ${provider}`, 'cliStatus', { provider }, () => interactiveCliStatus(provider));
   for (const authentication of ['reuse-existing', 'separate-login'] as const)
     for (const ack of [false, true])
@@ -626,6 +726,7 @@ for (const [provider, environment] of [
   ['codex', {}],
   ['claude', {}],
   ['opencode', {}],
+  ['antigravity', {}],
   [
     'opencode',
     { OPENCODE_CONFIG_DIR: join(ROOT, 'project'), XDG_STATE_HOME: join(ROOT, 'missing') },

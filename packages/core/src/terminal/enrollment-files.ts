@@ -7,6 +7,8 @@ import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
 import { terminalIdentity } from './identity.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
 import {
+  interactiveHub,
+  interactiveMcp,
   interactiveProvider,
   readInteractiveTerminalConfig,
   type InteractiveTerminalConfig,
@@ -64,8 +66,8 @@ export function inspectTerminalEnrollment(
     !config.model ||
     !config.preparation ||
     !config.interactive ||
-    // Only hub MCP may enroll; the disposable pair is never extended.
-    (config.interactive.mcp && !config.interactive.hub)
+    // Only hub MCP (or MCP-unavailable Antigravity) may enroll; the disposable pair is never extended.
+    (interactiveMcp(config) && !interactiveHub(config))
   )
     throw new Error('Enrollment requires a prepared independent native profile');
   if (

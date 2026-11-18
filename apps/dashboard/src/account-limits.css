@@ -56,6 +56,9 @@
 .al-mark-opencode {
   background: var(--orqst-success);
 }
+.al-mark-antigravity {
+  background: var(--orqst-neon);
+}
 .al-mark-shell {
   background: var(--orqst-muted);
 }

@@ -286,6 +286,9 @@
 .ntd-provider-opencode {
   --ntd-brand: var(--orqst-success);
 }
+.ntd-provider-antigravity {
+  --ntd-brand: var(--orqst-neon);
+}
 .ntd-provider-shell {
   --ntd-brand: var(--orqst-muted);
 }

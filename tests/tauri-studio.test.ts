@@ -163,7 +163,7 @@ const syntheticCatalog = {
   workspaceId: 'synthetic-workspace',
   featureId: null,
   catalogId: 'a'.repeat(64),
-  providers: ['codex', 'claude', 'opencode'].map((provider) => ({
+  providers: ['codex', 'claude', 'opencode', 'antigravity'].map((provider) => ({
     provider,
     status: 'available',
     reason: 'ready',

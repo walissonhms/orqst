@@ -229,7 +229,10 @@ pub fn member(value: &Value) -> Result<EnrollmentMember> {
         }
     };
     let provider = string(map.get("provider"), "provider")?;
-    if !matches!(provider.as_str(), "codex" | "claude" | "opencode") {
+    if !matches!(
+        provider.as_str(),
+        "codex" | "claude" | "opencode" | "antigravity"
+    ) {
         return Err(invalid("provider"));
     }
     let requested_model = match map.get("requestedModel") {
@@ -580,6 +583,16 @@ fn config_shape(version: f64) -> Shape {
                     "hub",
                 ]),
             ),
+        ]);
+        Shape::Obj(keys)
+    } else if version == 4.0 {
+        let mut keys = common(&["version", "provider", "trust"]);
+        keys.extend([
+            (
+                "authentication",
+                leafs(&["mode", "home", "sharedNativeConfiguration"]),
+            ),
+            ("interactive", leafs(&["sharedNativeSessions"])),
         ]);
         Shape::Obj(keys)
     } else {

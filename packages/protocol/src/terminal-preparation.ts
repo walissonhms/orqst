@@ -3,7 +3,7 @@ import { featureScopeSchema } from './features.js';
 import { terminalDisplayNameSchema } from './terminal-workspace.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
-export const terminalProviderSchema = z.enum(['codex', 'claude', 'opencode']);
+export const terminalProviderSchema = z.enum(['codex', 'claude', 'opencode', 'antigravity']);
 const scope = {
   workspaceId: featureScopeSchema.shape.workspaceId,
   featureId: z.uuid().nullable(),
@@ -193,7 +193,7 @@ export const terminalPreparationCatalogSchema = z.strictObject({
           .max(128),
       }),
     )
-    .length(3),
+    .length(4),
 });
 export type TerminalPreparationCatalog = z.infer<typeof terminalPreparationCatalogSchema>;
 export type TerminalSelectedRequest = z.infer<typeof terminalSelectedRequestSchema>;

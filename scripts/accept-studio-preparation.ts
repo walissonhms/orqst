@@ -78,7 +78,7 @@ try {
       workspaceId: 'synthetic-workspace',
       featureId: null,
       catalogId: 'a'.repeat(64),
-      providers: ['codex', 'claude', 'opencode'].map((provider, index) => ({
+      providers: ['codex', 'claude', 'opencode', 'antigravity'].map((provider, index) => ({
         provider,
         status: 'available',
         reason: 'ready',

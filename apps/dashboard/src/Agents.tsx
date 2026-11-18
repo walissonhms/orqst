@@ -3,7 +3,7 @@ import { Eye, ShieldCheck, Terminal } from 'lucide-react';
 import type { AdapterCapabilities, Snapshot } from '@orqst/protocol';
 
 /** CLIs with an owned terminal integration in ORQST Desktop (CLI → model → Open). */
-const managed = new Set(['codex', 'claude', 'opencode']);
+const managed = new Set(['codex', 'claude', 'opencode', 'antigravity']);
 const capabilities: (keyof AdapterCapabilities)[] = [
   'sessionDiscovery',
   'realtimeEvents',

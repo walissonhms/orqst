@@ -7,6 +7,7 @@ import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
 import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
 import {
+  interactiveMcp,
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
   readInteractiveTerminalConfig,
@@ -22,7 +23,7 @@ async function start(): Promise<void> {
   const mcp = process.argv[4]
     ? terminalMcpLaunchSchema.parse(JSON.parse(process.argv[4]))
     : undefined;
-  if (!!config.interactive?.mcp !== !!mcp) throw new Error('MCP launch composition required');
+  if (interactiveMcp(config) !== !!mcp) throw new Error('MCP launch composition required');
   const profile = interactiveTerminalProfiles(config, mcp).find(
     (value) => value.id === process.argv[3],
   );

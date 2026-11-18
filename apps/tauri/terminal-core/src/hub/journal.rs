@@ -170,6 +170,7 @@ pub fn provider_name(provider: &str) -> String {
         "codex" => "Codex".into(),
         "claude" => "Claude Code".into(),
         "opencode" => "OpenCode".into(),
+        "antigravity" => "Antigravity".into(),
         other => other.into(),
     }
 }
