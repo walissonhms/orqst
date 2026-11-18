@@ -131,18 +131,25 @@ test('L3 projects the submit before the native reply and preserves failure on th
   const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
   const evidence = process.env.ORQST_SPEC_L3_SCREENSHOTS;
   async function capture(state: string, width: 1440 | 1280) {
-    if (evidence || integrated)
+    if (evidence || integrated) {
+      await page.mouse.move(0, 0);
       await page.evaluate(
         () =>
           new Promise<void>((resolve) => {
             requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
           }),
       );
+    }
     if (integrated)
       await page.screenshot({
+        animations: 'disabled',
         path: resolve(integrated, width === 1440 ? '1440x900' : '1280x800', state + '.png'),
       });
-    else if (evidence) await page.screenshot({ path: resolve(evidence, `${state}-${width}.png`) });
+    else if (evidence)
+      await page.screenshot({
+        path: resolve(evidence, `${state}-${width}.png`),
+        animations: 'disabled',
+      });
   }
   if (evidence) await mkdir(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
