@@ -104,6 +104,10 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withFeature(featureId, (store) => store.featurePermissions().events(scope(featureId), after)),
     readView: () =>
       withTerminalPreferences(directory, (store) => store.features().readView(workspaceId)),
+    readAssignmentScope: () =>
+      withTerminalPreferences(directory, (store) =>
+        store.features().readAssignmentScope(workspaceId),
+      ),
     saveView: (input: unknown) =>
       withTerminalPreferences(directory, (store) => store.features().saveView(workspaceId, input)),
     read: (featureId: string) =>
@@ -129,16 +133,13 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       requestedFeatureId: string | null,
       terminalIds: readonly string[],
       defaultName?: string,
+      expected?: { viewRevision: number; featureRevision: number | null },
     ) =>
       withTerminalPreferences(directory, (store) =>
-        store
-          .features()
-          .assignToOpenOrDefault(
-            workspaceId,
-            requestedFeatureId,
-            terminalIds,
-            defaultName ? { defaultName } : undefined,
-          ),
+        store.features().assignToOpenOrDefault(workspaceId, requestedFeatureId, terminalIds, {
+          ...(defaultName ? { defaultName } : {}),
+          expected,
+        }),
       ),
     readTeam: (featureId: string) =>
       withFeature(featureId, (store, ids) =>

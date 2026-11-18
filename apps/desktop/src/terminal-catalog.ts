@@ -79,15 +79,21 @@ export function inspectTerminalPreparationCatalog(
     };
     return { provider, executables, models, identity, refusal };
   });
-  const catalogId = terminalDigest(
+  return { request, catalogId: terminalCatalogId(trusted, workspace), providers, workspace };
+}
+
+export function terminalCatalogId(
+  trusted: TerminalPreparationContext,
+  workspace: Pick<ReturnType<typeof resolveTerminalPreparationContext>, 'fence' | 'target'>,
+) {
+  return terminalDigest(
     JSON.stringify([
       trusted.observerDatabase,
       trusted.preferencesDirectory,
       workspace.fence,
-      workspace.feature?.revision ?? null,
+      workspace.target?.revision ?? null,
     ]),
   );
-  return { request, catalogId, providers, workspace };
 }
 
 /** Read-only public projection with every provider, no launch paths or arguments. */

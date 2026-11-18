@@ -21,6 +21,7 @@ import {
   defaultFeatureId,
   featureDisplayName,
   type StructuredAgentsSnapshot,
+  type TauriStudioRequest,
 } from '../packages/protocol/src/index.js';
 import { resolveMentions } from '../apps/dashboard/src/MentionComposer.js';
 import { Store } from '../packages/database/src/index.js';
@@ -155,6 +156,208 @@ function preparationFixture(locale = 'en-US') {
     close: () => rmSync(root, { recursive: true, force: true }),
   };
 }
+
+test('Studio opens Codex through the reviewed native batch in Sem Feature and an existing Feature', async () => {
+  const uiBundle = await build({
+    stdin: {
+      contents: `
+        import React from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { createInstance } from 'i18next';
+        import { I18nextProvider } from 'react-i18next';
+        import { NativeTerminalCreator } from './src/NativeTerminalCreator.tsx';
+        import { createTauriStudioClient } from '../tauri/src/studio-bridge.ts';
+        import en from './src/locales/en-US.json';
+
+        window.mountCreator = async (workspaceId, featureId) => {
+          const i18n = createInstance();
+          await i18n.init({ lng: 'en-US', resources: { 'en-US': { translation: en } } });
+          const native = createTauriStudioClient(window.nativeRequest, () => true);
+          createRoot(document.querySelector('#root')).render(
+            <I18nextProvider i18n={i18n}>
+              <NativeTerminalCreator native={native} workspace={{ id: workspaceId, name: 'Synthetic' }}
+                featureId={featureId} onClose={(opened) => { window.terminalOpened = opened; }} />
+            </I18nextProvider>,
+          );
+        };
+      `,
+      resolveDir: resolve('apps/dashboard'),
+      loader: 'tsx',
+    },
+    bundle: true,
+    platform: 'browser',
+    loader: { '.css': 'empty' },
+    write: false,
+    logLevel: 'silent',
+  });
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const existing of [false, true]) {
+      const f = preparationFixture();
+      const page = await browser.newPage();
+      page.setDefaultTimeout(5000);
+      try {
+        const features = featureConfigurationDatabase(f.preferencesDirectory, f.workspaceId);
+        const feature = existing ? features.create({ name: 'Synthetic reviewed Feature' }) : null;
+        if (feature) features.saveView({ featureId: feature.featureId, expectedRevision: 0 });
+        const featureId = feature?.featureId ?? null;
+        const targetId = featureId ?? defaultFeatureId(f.workspaceId);
+        const view = features.readView();
+        let commits = 0;
+        let openedId: string | undefined;
+        const olderSnapshot = {
+          generation: 1,
+          limit: 8,
+          count: 0,
+          busy: false,
+          canCreate: true,
+          canReview: false,
+          selectionLocked: false,
+        };
+        const catalogSnapshot = { ...olderSnapshot, generation: 2 };
+        await page.exposeFunction('nativeRequest', async (request: TauriStudioRequest) => {
+          if (request.action === 'snapshot') return { status: 'ok', snapshot: olderSnapshot };
+          if (request.action === 'catalog') {
+            const result = await prepareTauriTerminals(
+              request,
+              f.context,
+              f.ports,
+              Date.now,
+              f.trusted,
+            );
+            assert.equal(result.status, 'catalog');
+            return { ...result, snapshot: catalogSnapshot };
+          }
+          assert.equal(request.action, 'create-batch');
+          const { generation, ...batch } = request;
+          // The native command can invalidate an earlier standalone snapshot while the catalog
+          // request is in flight. The create request must use the generation of its own catalog.
+          if (generation !== catalogSnapshot.generation) return { status: 'denied' };
+          assert.equal(request.featureId, featureId);
+          assert.equal(request.requests.length, 1);
+          assert.equal(request.requests[0]!.provider, 'codex');
+          const result = await prepareTauriTerminals(
+            batch,
+            f.context,
+            {
+              ...f.ports,
+              commit: async () => {
+                commits++;
+                assert.deepEqual(features.readView(), view);
+                if (!existing) assert.equal(features.list().length, 0);
+                return true;
+              },
+            },
+            Date.now,
+            f.trusted,
+          );
+          assert.equal(result.status, 'batch');
+          const item = result.items[0]!;
+          assert.equal(item.status, 'prepared');
+          const manifest = readInteractiveTerminalConfig(item.file!);
+          assert.equal(manifest.preparation?.featureId, targetId);
+          validateTerminalPreparationBinding(manifest.preparation, f.project);
+          openedId = item.terminalId;
+          // Simulate the final native ACK. The real Node helper above prepares the manifest.
+          return {
+            status: 'batch',
+            items: [
+              {
+                id: item.id,
+                status: 'accepted',
+                reason: 'core_enrolled',
+                effects: 'possible',
+                terminalId: openedId,
+                slot: 0,
+              },
+            ],
+          };
+        });
+        await page.route('http://localhost/**', (route) =>
+          route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }),
+        );
+        await page.goto('http://localhost/studio');
+        await page.addScriptTag({ content: uiBundle.outputFiles[0]!.text });
+        await page.evaluate(
+          ({ workspaceId, featureId }) =>
+            (
+              window as unknown as {
+                mountCreator: (workspaceId: string, featureId: string | null) => Promise<void>;
+              }
+            ).mountCreator(workspaceId, featureId),
+          { workspaceId: f.workspaceId, featureId },
+        );
+        await page.getByRole('button', { name: 'Open terminal', exact: true }).click();
+        await page.waitForFunction(() => Reflect.get(window, 'terminalOpened') === true);
+        assert.equal(commits, 1);
+        assert.equal(features.readView().featureId, targetId);
+        assert.deepEqual(features.read(targetId).terminalIds, [openedId]);
+      } finally {
+        await page.close();
+        f.close();
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+});
+
+test('Sem Feature catalog refuses all providers if the reviewed General destination changed', async () => {
+  const f = preparationFixture();
+  try {
+    const features = featureConfigurationDatabase(f.preferencesDirectory, f.workspaceId);
+    const scope = { workspaceId: f.workspaceId, featureId: null };
+    const catalog = await prepareTauriTerminals(
+      { action: 'catalog', ...scope },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(catalog.status, 'catalog');
+    const targetId = defaultFeatureId(f.workspaceId);
+    const otherTerminalId = randomUUID();
+    features.assignTerminal(targetId, otherTerminalId, 1);
+    assert.equal(features.readView().featureId, null);
+
+    let commits = 0;
+    const result = await prepareTauriTerminals(
+      {
+        action: 'create-batch',
+        ...scope,
+        catalogId: catalog.catalog.catalogId,
+        requests: catalog.catalog.providers.map(({ provider }) => ({
+          id: randomUUID(),
+          workspaceId: f.workspaceId,
+          provider,
+          modelId: null,
+          name: `Synthetic ${provider}`,
+        })),
+      },
+      f.context,
+      {
+        ...f.ports,
+        commit: async () => {
+          commits++;
+          return true;
+        },
+      },
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'batch');
+    assert.equal(commits, 0);
+    assert.deepEqual(
+      result.items.map(({ status, reason, effects }) => [status, reason, effects]),
+      Array.from({ length: 4 }, () => ['refused', 'catalog_changed', 'not_started']),
+    );
+    assert.equal(features.readView().featureId, null);
+    assert.deepEqual(features.read(targetId).terminalIds, [otherTerminalId]);
+  } finally {
+    f.close();
+  }
+});
 
 test('defaultFeatureId is stable per workspace and featureDisplayName localizes General/Geral while keeping user renames', () => {
   const idA = defaultFeatureId('synthetic-workspace-a');
