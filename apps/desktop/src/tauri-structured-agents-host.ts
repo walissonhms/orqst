@@ -5,23 +5,24 @@ import {
   structuredAgentsRequestSchema,
   structuredAgentsReviewSchema,
   structuredAgentsScopeSchema,
-  type StructuredProvider,
+  type StructuredAgentsUnavailableReason,
 } from '@orqst/protocol';
 import { redact } from '@orqst/shared';
-import { terminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
-import { discoverLocalClis } from '../../../packages/core/src/terminal/local-cli.js';
+import {
+  reviewedCodex169Binary,
+  terminalExecutableSha256,
+} from '../../../packages/core/src/terminal/codex-profile.js';
 import { resolveTerminalPreparationContext } from '../../../packages/core/src/terminal/preparation-context.js';
 import { BoundedLineSplitter } from '../../../packages/core/src/managed-codex/line-splitter.js';
 import { structuredCodexEnvironment } from '../../../packages/core/src/structured-agents/codex-process.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import { openCodeArgs } from '../../../packages/core/src/structured-agents/opencode-process.js';
 import { StructuredAgents } from '../../../packages/core/src/structured-agents/service.js';
+import { StructuredStartupFailure } from '../../../packages/core/src/structured-agents/session.js';
+import { inspectReviewedExecutables } from './terminal-discovery.js';
 
 const reviewed = {
-  codex: {
-    version: '0.169.0',
-    sha256: '739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002',
-  },
+  codex: reviewedCodex169Binary,
   opencode: reviewedProviderMcpBinaries.opencode,
 };
 const correlation = z.object({ id: z.number().int().safe().positive() });
@@ -32,20 +33,6 @@ const envelope = z.strictObject({
   operation: z.enum(['snapshot', 'prepare', 'apply']),
   token: z.uuid().optional(),
 });
-
-function executable(provider: StructuredProvider): string {
-  const candidates = discoverLocalClis(process.env.PATH ?? '', process.env.HOME).find(
-    (entry) => entry.provider === provider,
-  )!.candidates;
-  for (const { canonical } of candidates) {
-    try {
-      if (terminalExecutableSha256(canonical) === reviewed[provider].sha256) return canonical;
-    } catch {
-      // Inaccessible and unreviewed executables cannot be used.
-    }
-  }
-  throw new Error('Reviewed structured executable unavailable');
-}
 
 async function run(): Promise<void> {
   process.umask(0o077);
@@ -87,6 +74,7 @@ async function run(): Promise<void> {
     const { id, scope, request, operation, token } = message;
     if (operation === 'apply' && mutating) return send(id, { status: 'busy' });
     if (operation === 'apply') mutating = true;
+    let failure: StructuredAgentsUnavailableReason = 'workspace_context_unavailable';
     try {
       const { project, feature, fence } = resolveTerminalPreparationContext(
         trusted,
@@ -94,6 +82,7 @@ async function run(): Promise<void> {
         scope.featureId,
       );
       if (!feature) return send(id, { status: 'denied' });
+      failure = 'operation_failed';
       if (operation === 'snapshot' && request.action === 'snapshot')
         return send(id, { status: 'ok', snapshot: service.snapshot(scope) });
       if (request.action === 'snapshot' || operation === 'snapshot')
@@ -101,14 +90,24 @@ async function run(): Promise<void> {
       const action = service.review(scope, request);
       if (!action) return send(id, { status: 'denied' });
       const provider = request.action === 'start' ? (request.provider ?? 'codex') : undefined;
-      const launch = provider
-        ? {
-            executable: executable(provider),
-            cwd: project,
-            env: provider === 'opencode' ? process.env : structuredCodexEnvironment(process.env),
-            provider,
-          }
-        : undefined;
+      let launch;
+      if (provider) {
+        const { executables, refusal } = inspectReviewedExecutables(
+          provider,
+          process.env.PATH ?? '',
+          process.env.HOME,
+          [reviewed[provider]],
+          terminalExecutableSha256,
+        );
+        const executable = executables[0];
+        if (!executable) return send(id, { status: 'unavailable', reason: refusal });
+        launch = {
+          executable,
+          cwd: project,
+          env: provider === 'opencode' ? process.env : structuredCodexEnvironment(process.env),
+          provider,
+        };
+      }
       const review = {
         feature: feature.name,
         featureId: scope.featureId,
@@ -150,9 +149,14 @@ async function run(): Promise<void> {
         confirmed.expiresAt <= Date.now()
       )
         return send(id, { status: 'denied' });
+      if (provider) failure = 'session_start_failed';
       send(id, await service.apply(scope, request, launch));
-    } catch {
-      send(id, { status: 'unavailable' });
+    } catch (error) {
+      // Exception text can contain provider content, paths or configuration. Report only a fixed code.
+      send(id, {
+        status: 'unavailable',
+        reason: error instanceof StructuredStartupFailure ? error.reason : failure,
+      });
     } finally {
       if (operation === 'apply') mutating = false;
     }

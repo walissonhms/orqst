@@ -13,7 +13,7 @@ import {
   localCliProviders,
   type LocalCliProvider,
 } from '../../../packages/core/src/terminal/local-cli.js';
-import { discoverTerminalExecutable } from './terminal-discovery.js';
+import { inspectTerminalExecutables } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
 
 /** Resolve the scope and re-read only providers participating in the request. */
@@ -30,7 +30,7 @@ export function inspectTerminalPreparationCatalog(
     request.featureId,
   );
   const providers = [...new Set(requestedProviders)].map((provider) => {
-    const executables = discoverTerminalExecutable(
+    const { executables, refusal } = inspectTerminalExecutables(
       provider,
       context.environment.PATH ?? '',
       context.home,
@@ -45,7 +45,7 @@ export function inspectTerminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables: [], models: null };
+      return { provider, executables: [], models: null, refusal };
     }
     const executable = executables.length === 1 ? executables[0]! : null;
     const identity = JSON.stringify([
@@ -75,7 +75,7 @@ export function inspectTerminalPreparationCatalog(
         id: selectionId(identity, option.label, option.selection),
       })),
     };
-    return { provider, executables, models, identity };
+    return { provider, executables, models, identity, refusal };
   });
   const catalogId = terminalDigest(
     JSON.stringify([
@@ -105,13 +105,13 @@ export function terminalPreparationCatalog(
     workspaceId: request.workspaceId,
     featureId: request.featureId,
     catalogId,
-    providers: providers.map(({ provider, executables, models }) => ({
+    providers: providers.map(({ provider, executables, models, refusal }) => ({
       provider,
       status: executables.length === 1 && models ? 'available' : 'unavailable',
       reason: !models
         ? 'catalog_limited'
         : !executables.length
-          ? 'executable_not_found'
+          ? refusal
           : executables.length > 1
             ? 'ambiguous_executable'
             : models.limited

@@ -7,6 +7,8 @@ import {
   type StructuredAgentsRequest,
   type StructuredAgentsScope,
   type StructuredAgentsSnapshot,
+  type StructuredAgentsUnavailableReason,
+  type StructuredSession,
   type StructuredProvider,
   structuredProviderSchema,
 } from '@orqst/protocol';
@@ -19,6 +21,26 @@ interface Props {
   onClose(): void;
 }
 
+type Feedback = {
+  status: StructuredAgentsReply['status'];
+  reason?: StructuredAgentsUnavailableReason;
+};
+
+function feedback(reply: StructuredAgentsReply): Feedback {
+  return {
+    status: reply.status,
+    reason: reply.status === 'unavailable' ? reply.reason : undefined,
+  };
+}
+
+function sessionState(session: StructuredSession): string {
+  if (session.lifecycle !== 'ready') return session.lifecycle;
+  if (session.approvals.some(({ state }) => state === 'pending')) return 'waiting';
+  const turn = session.turn?.state;
+  if (session.busy && turn !== 'accepted' && turn !== 'running') return 'busy';
+  return turn ?? session.lifecycle;
+}
+
 export function StructuredAgents({ client, scope, featureName, onClose }: Props) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<StructuredAgentsSnapshot>();
@@ -28,8 +50,8 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
   const [provider, setProvider] = useState<StructuredProvider>('codex');
   const [text, setText] = useState('');
   const [task, setTask] = useState('');
-  const [notice, setNotice] = useState<StructuredAgentsReply['status']>();
-  const [readStatus, setReadStatus] = useState<StructuredAgentsReply['status']>();
+  const [notice, setNotice] = useState<Feedback>();
+  const [readStatus, setReadStatus] = useState<Feedback>();
   const [busy, setBusy] = useState(false);
   const { workspaceId, featureId } = scope;
 
@@ -41,7 +63,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
         .request({ workspaceId, featureId }, { action: 'snapshot' })
         .catch(() => ({ status: 'unavailable' as const }));
       if (!current) return;
-      setReadStatus(reply.status);
+      setReadStatus(feedback(reply));
       if (reply.status === 'ok' && reply.snapshot) {
         setSnapshot(reply.snapshot);
         setSessionId((selected) =>
@@ -65,7 +87,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
     setNotice(undefined);
     try {
       const response = await client.request(scope, request);
-      setNotice(response.status);
+      setNotice(feedback(response));
       if (response.status === 'ok' && request.action === 'start') setLabel('');
       if (response.status === 'ok' && request.action === 'turn') setText('');
       if (response.status === 'ok' && request.action === 'grant') {
@@ -84,7 +106,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
         setTask('');
       }
     } catch {
-      setNotice('unavailable');
+      setNotice({ status: 'unavailable' });
     } finally {
       setBusy(false);
     }
@@ -97,7 +119,8 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
     ) ?? [];
   const workerReady = workers.some((entry) => entry.sessionId === workerId);
   const ready = session?.lifecycle === 'ready';
-  const waiting = session?.approvals.some(({ state }) => state === 'pending');
+  const statusText = ({ status, reason }: Feedback) =>
+    reason ? t(`structuredAgents.reason_${reason}`) : t(`structuredAgents.reply_${status}`);
 
   return (
     <Modal label={t('structuredAgents.title')} className="structured-agents" onClose={onClose}>
@@ -110,16 +133,17 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
         </button>
       </header>
       <p role="status">
-        {notice && notice !== 'ok'
-          ? t(`structuredAgents.reply_${notice}`)
+        {notice && notice.status !== 'ok'
+          ? statusText(notice)
           : !readStatus
             ? t('features.loading')
-            : readStatus !== 'ok'
-              ? t(`structuredAgents.reply_${readStatus}`)
+            : readStatus.status !== 'ok'
+              ? statusText(readStatus)
               : busy
                 ? t('structuredAgents.reviewPending')
                 : ''}
       </p>
+      <p>{t('structuredAgents.workflow')}</p>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -130,7 +154,10 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
           {t('structuredAgents.provider')}
           <select
             value={provider}
-            onChange={(event) => setProvider(structuredProviderSchema.parse(event.target.value))}
+            onChange={(event) => {
+              setProvider(structuredProviderSchema.parse(event.target.value));
+              setNotice(undefined);
+            }}
           >
             {structuredProviderSchema.options.map((entry) => (
               <option value={entry} key={entry}>
@@ -166,15 +193,14 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
               >
                 {snapshot?.sessions.map((entry) => (
                   <option key={entry.sessionId} value={entry.sessionId}>
-                    {entry.label} · {t(`structuredAgents.provider_${entry.provider}`)}
+                    {entry.label} · {t(`structuredAgents.provider_${entry.provider}`)} ·{' '}
+                    {t(`structuredAgents.state_${sessionState(entry)}`)}
                   </option>
                 ))}
               </select>
             </label>
             <span>
-              {t(
-                `structuredAgents.state_${!ready ? session.lifecycle : waiting ? 'waiting' : (session.turn?.state ?? session.lifecycle)}`,
-              )}
+              {t(`structuredAgents.state_${sessionState(session)}`)}
               {session.reportedModel ? ` · ${session.reportedModel}` : ''}
             </span>
             <button

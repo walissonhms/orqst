@@ -17,7 +17,7 @@ export const dynamicCallSchema = z.strictObject({
   threadId: z.string().min(1).max(200),
   turnId: z.string().min(1).max(200),
   callId: z.string().min(1).max(200),
-  namespace: z.null(),
+  namespace: z.null().optional(),
   tool: z.literal('orqst_delegate_task'),
   arguments: delegationArgumentsSchema,
 });

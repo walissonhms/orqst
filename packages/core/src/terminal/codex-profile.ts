@@ -136,6 +136,12 @@ export function terminalFile(
   }
 }
 
+/** Exact native binary reviewed for the Studio app-server and PTY launch contracts. */
+export const reviewedCodex169Binary = Object.freeze({
+  version: '0.169.0',
+  sha256: '739cda86e15d30a6e2b40cf8dcbbfb988aaf48b305b27065573bb8e9fd41d002',
+});
+
 /** Finite native-file budget: reviewed standalone CLIs can exceed 256 MiB. */
 export const terminalExecutableMaximumBytes = 512 * 1024 * 1024;
 
@@ -247,6 +253,10 @@ export function managedCodexSettings(config: ManagedCodexConfig): string {
   ].join('\n');
 }
 
+function supportsCodexMcpVersion(version: string): boolean {
+  return /^(codex-cli )?0\.(162\.1|169\.0)$/.test(version);
+}
+
 export function validateManagedCodexConfig(
   config: ManagedCodexConfig,
   verifyExecutable = terminalExecutableSha256,
@@ -260,7 +270,7 @@ export function validateManagedCodexConfig(
   assertSeparateTerminalState(config.project, config.state);
   if (config.interactive && !config.authentication)
     throw new Error('Interactive native reuse requires existing authentication');
-  if (config.interactive?.mcp && !/^(codex-cli )?0\.162\.1$/.test(config.executableVersion))
+  if (config.interactive?.mcp && !supportsCodexMcpVersion(config.executableVersion))
     throw new Error('No reviewed interactive MCP configuration for this Codex version');
   if (config.authentication) {
     terminalDirectory(config.authentication.home);
@@ -357,7 +367,7 @@ export function managedCodexProfiles(
 /** Version-scoped inline table; never writes or replaces the user's native MCP configuration. */
 function codexMcpArguments(config: ManagedCodexConfig, raw: TerminalMcpLaunch): string[] {
   const mcp = terminalMcpLaunchSchema.parse(raw);
-  if (!/^(codex-cli )?0\.162\.1$/.test(config.executableVersion))
+  if (!supportsCodexMcpVersion(config.executableVersion))
     throw new Error('Unreviewed Codex MCP version');
   if (terminalDigest(terminalFile(mcp.relay.path, false, 16 * 1024 * 1024)) !== mcp.relay.sha256)
     throw new Error('MCP relay changed');

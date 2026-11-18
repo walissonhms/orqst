@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -138,6 +139,37 @@ test(
   },
 );
 
+test('synthetic Codex sees fresh peer lifecycle and busy state within its Feature', async (t) => {
+  const { service } = synthetic();
+  t.after(() => service.close());
+  const foreign = { ...scope, workspaceId: 'b'.repeat(64) };
+  await service.apply(scope, { action: 'start', label: 'A' }, created);
+  await service.apply(scope, { action: 'start', label: 'B' }, created);
+  await service.apply(other, { action: 'start', label: 'Other Feature' }, created);
+  await service.apply(foreign, { action: 'start', label: 'Other workspace' }, created);
+  const [source, peer] = ids(service);
+  assert.ok(source && peer);
+  await service.apply(scope, { action: 'turn', sessionId: peer, text: 'turn:wait' });
+  const list = async () => {
+    await service.apply(scope, { action: 'turn', sessionId: source, text: 'peers:view' });
+    await until(() => session(service, source).turn?.state === 'completed');
+    return JSON.parse(session(service, source).items.at(-1)!.text) as unknown;
+  };
+  assert.deepEqual(await list(), [
+    {
+      sessionId: peer,
+      label: 'B',
+      provider: 'codex',
+      lifecycle: 'ready',
+      busy: true,
+      turnState: 'running',
+      awaitingApproval: false,
+    },
+  ]);
+  await service.apply(scope, { action: 'stop', sessionId: peer });
+  assert.deepEqual(await list(), []);
+});
+
 test(
   'synthetic A → B → A uses the exact one-shot grant and native result evidence',
   { timeout: 12_000 },
@@ -238,5 +270,140 @@ test(
       await service.close();
       await rm(root, { recursive: true, force: true });
     }
+  },
+);
+
+test(
+  '[real Codex, synthetic loopback model] transports an A → B → A tool result',
+  { skip: !realCodex, timeout: 30_000 },
+  async (t) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-codex-loopback-')));
+    const service = new StructuredAgents();
+    const task = 'SYNTHETIC worker request: return the number 42';
+    const workerResult = 'SYNTHETIC worker result 42';
+    const sourceResult = 'SYNTHETIC source received worker result 42';
+    let targetSessionId = '';
+    let requests = 0;
+    let failure: unknown;
+    const server = createServer(async (request, response) => {
+      try {
+        assert.equal(request.method, 'POST');
+        assert.equal(request.url?.split('?')[0], '/v1/responses');
+        assert.equal(request.headers.authorization, undefined);
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+          input: unknown;
+          tools: Array<{ name: string }>;
+        };
+        const input = JSON.stringify(body.input);
+        const index = ++requests;
+        assert.ok(index <= 3, 'Unexpected inference request');
+        assert.match(input, /ORQST peer sessions at dispatch/);
+        if (index === 1) {
+          assert.ok(input.includes(targetSessionId));
+          assert.ok(body.tools.some(({ name }) => name === 'orqst_delegate_task'));
+        } else if (index === 2) {
+          assert.ok(input.includes(task));
+        } else {
+          assert.ok(input.includes(workerResult) && input.includes('untrustedWorkerResult'));
+        }
+        const item =
+          index === 1
+            ? {
+                type: 'function_call',
+                call_id: 'call_synthetic',
+                name: 'orqst_delegate_task',
+                arguments: JSON.stringify({ targetPaneId: targetSessionId, task }),
+              }
+            : {
+                type: 'message',
+                role: 'assistant',
+                id: 'msg_synthetic_' + index,
+                phase: 'final_answer',
+                content: [
+                  {
+                    type: 'output_text',
+                    text: index === 2 ? workerResult : sourceResult,
+                    annotations: [],
+                  },
+                ],
+              };
+        const state = {
+          id: 'resp_synthetic_' + index,
+          usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
+        };
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        for (const event of [
+          { type: 'response.created', response: state },
+          { type: 'response.output_item.done', item },
+          { type: 'response.completed', response: state },
+        ])
+          response.write('data: ' + JSON.stringify(event) + '\n\n');
+        response.end();
+      } catch (error) {
+        failure = error;
+        response.writeHead(400).end();
+      }
+    });
+    t.after(async () => {
+      try {
+        await service.close();
+      } finally {
+        server.closeAllConnections();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+        await rm(root, { recursive: true, force: true });
+      }
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    assert.ok(address && typeof address !== 'string');
+    const cwd = join(root, 'project');
+    await mkdir(cwd);
+    await writeFile(
+      join(root, 'config.toml'),
+      `model = "gpt-5.4"
+model_provider = "synthetic"
+[model_providers.synthetic]
+name = "Synthetic local endpoint"
+base_url = "http://127.0.0.1:${address.port}/v1"
+wire_api = "responses"
+requires_openai_auth = false
+supports_websockets = false
+`,
+    );
+    assert.ok(realCodex);
+    const launch = {
+      executable: await realpath(realCodex),
+      cwd,
+      env: { HOME: root, CODEX_HOME: root, PATH: '/usr/bin:/bin' },
+    };
+    for (const label of ['A', 'B'])
+      assert.equal((await service.apply(scope, { action: 'start', label }, launch)).status, 'ok');
+    const [source, target] = ids(service);
+    assert.ok(source && target);
+    targetSessionId = target;
+    assert.equal(
+      (
+        await service.apply(scope, {
+          action: 'grant',
+          sourceSessionId: source,
+          targetSessionId,
+          task,
+        })
+      ).status,
+      'ok',
+    );
+    await service.apply(scope, {
+      action: 'turn',
+      sessionId: source,
+      text: 'SYNTHETIC source request: use the authorized tool.',
+    });
+    await until(() => !!failure || !session(service, source).busy);
+    assert.ifError(failure);
+    assert.equal(service.snapshot(scope).delegations[0]?.state, 'returned');
+    assert.equal(session(service, source).items.at(-1)?.text, sourceResult);
+    assert.equal(session(service, target).items.at(-1)?.text, workerResult);
+    assert.equal(requests, 3);
   },
 );

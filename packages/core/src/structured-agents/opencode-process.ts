@@ -8,10 +8,12 @@ import { z } from 'zod';
 import { BoundedLineSplitter } from '../managed-codex/line-splitter.js';
 import { reviewedProviderMcpBinaries } from '../terminal/provider-mcp-config.js';
 import { processTransport, type StructuredProcessExit } from './codex-process.js';
+import { StructuredStartupFailure } from './session.js';
 
 const wireBytes = 24 * 1024 * 1024;
 const lineBytes = 1024 * 1024;
 const requestMs = 8_000;
+const startupMs = 36_000;
 export const openCodePermissions = [
   { action: '*', resource: '*', effect: 'deny' },
   ...['read', 'edit', 'glob', 'grep'].map((action) => ({ action, resource: '*', effect: 'ask' })),
@@ -121,7 +123,11 @@ export class OwnedOpenCode {
     });
     this.endpoint = new Promise<number>((resolve, reject) => {
       const lines = new BoundedLineSplitter(4096);
-      const expire = setTimeout(reject, requestMs, new Error('OpenCode startup timed out'));
+      const expire = setTimeout(
+        reject,
+        startupMs,
+        new StructuredStartupFailure('provider_startup_timeout'),
+      );
       let ready = false;
       const finish = () => clearTimeout(expire);
       this.process.listen(
@@ -156,6 +162,8 @@ export class OwnedOpenCode {
   }
 
   async verify(): Promise<void> {
+    // Cold process startup has its own deadline and must not spend an HTTP request budget.
+    await this.endpoint;
     const untrusted = await this.http(
       '/api/event',
       'GET',

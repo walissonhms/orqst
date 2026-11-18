@@ -15,8 +15,10 @@ import { delegationTool, dynamicCallSchema } from '../managed-codex/dynamic-tool
 import {
   display,
   StructuredProjection,
+  StructuredStartupFailure,
   type DelegationResult,
   type StructuredDelegate,
+  type StructuredTurnOptions,
 } from './session.js';
 import type { StructuredProcessTransport } from './codex-process.js';
 
@@ -86,12 +88,14 @@ export class StructuredCodexSession extends StructuredProjection {
   }
 
   async initialize(cwd: string): Promise<void> {
+    let failure: StructuredStartupFailure['reason'] = 'provider_connection_failed';
     try {
       await this.channel.request('initialize', {
         clientInfo: { name: 'orqst', title: 'ORQST', version: '0.1.0' },
         capabilities: { experimentalApi: true },
       });
       this.channel.initialized();
+      failure = 'provider_session_rejected';
       const reply = z
         .object({
           thread: z.object({ id, ephemeral: z.literal(true) }),
@@ -118,7 +122,7 @@ export class StructuredCodexSession extends StructuredProjection {
       this.state.lifecycle = 'ready';
     } catch {
       await this.stop(true);
-      throw new Error('Codex thread unavailable');
+      throw new StructuredStartupFailure(failure);
     }
   }
 
@@ -126,7 +130,7 @@ export class StructuredCodexSession extends StructuredProjection {
     text: string,
     origin: StructuredTurn['origin'],
     report?: Active['report'],
-    { parentTurnId }: { parentTurnId?: string } = {},
+    { parentTurnId, peerContext, delegation }: StructuredTurnOptions = {},
   ): Promise<void> {
     if (!this.ready || !text.trim() || Buffer.byteLength(text) > limits.turnText * 4)
       throw new Error('Codex turn unavailable');
@@ -144,7 +148,20 @@ export class StructuredCodexSession extends StructuredProjection {
       const reply = z.object({ turn }).parse(
         await this.channel.request('turn/start', {
           threadId: this.state.threadId,
-          input: [{ type: 'text', text }],
+          input: [
+            { type: 'text', text },
+            ...(peerContext ? [{ type: 'text', text: peerContext }] : []),
+            ...(delegation && origin === 'human'
+              ? [
+                  {
+                    type: 'text',
+                    text:
+                      'ORQST one-use grant. To use it, call orqst_delegate_task with exactly these arguments: ' +
+                      JSON.stringify(delegation),
+                  },
+                ]
+              : []),
+          ],
           ...(parentTurnId ? { parentTurnId, rootTurnId: parentTurnId } : {}),
         }),
       );

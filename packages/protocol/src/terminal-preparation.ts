@@ -169,6 +169,8 @@ export const terminalPreparationCatalogSchema = z.strictObject({
         reason: z.enum([
           'ready',
           'executable_not_found',
+          'executable_unreviewed',
+          'executable_inspection_failed',
           'ambiguous_executable',
           'catalog_limited',
         ]),

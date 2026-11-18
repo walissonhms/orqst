@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { redact } from '@orqst/shared';
 import {
   structuredAgentsLimits as limits,
+  type StructuredAgentsUnavailableReason,
   type StructuredApproval,
   type StructuredDecision,
   type StructuredItem,
@@ -28,6 +29,18 @@ export type StructuredDelegate = (call: {
   turnId: string;
 }) => Promise<DelegationResult>;
 
+export class StructuredStartupFailure extends Error {
+  constructor(readonly reason: Extract<StructuredAgentsUnavailableReason, `provider_${string}`>) {
+    super(reason);
+  }
+}
+
+export interface StructuredTurnOptions {
+  parentTurnId?: string;
+  delegation?: DelegationTask;
+  peerContext?: string;
+}
+
 export interface OwnedStructuredSession {
   readonly id: string;
   readonly ready: boolean;
@@ -38,7 +51,7 @@ export interface OwnedStructuredSession {
     text: string,
     origin: StructuredTurn['origin'],
     report?: TurnReport,
-    options?: { parentTurnId?: string; delegation?: DelegationTask },
+    options?: StructuredTurnOptions,
   ): Promise<void>;
   approval(id: string, decision: StructuredDecision): StructuredApproval | undefined;
   answer(id: string, decision: StructuredDecision): void | Promise<void>;

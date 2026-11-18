@@ -1,5 +1,14 @@
 # Changelog
 
+## Diag21 Codex and structured peer sessions — 2026-11-17
+
+The native terminal picker accepts the exact reviewed Apple Silicon Codex
+0.169.0 binary alongside 0.162.1 and distinguishes missing, unreviewed and
+unverifiable executables. Native Structured agents sends same-Feature session
+metadata with Codex and OpenCode turns and exposes bounded refusal codes.
+Delegation still uses a native one-time grant and correlated result evidence.
+See the [pilot record](docs/design/structured-codex-pilot.md#diag21-findings--2026-11-17).
+
 ## Native startup and terminal opening — 2026-11-17
 
 The native dashboard can load during the initial Codex history scan. Terminal

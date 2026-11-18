@@ -18,6 +18,7 @@ import {
   terminalDirectory,
   terminalExecutableSha256,
   cachedTerminalExecutableSha256,
+  reviewedCodex169Binary,
   validateManagedCodexConfig,
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
@@ -52,6 +53,10 @@ export const reviewedDesktopCodexBinary = Object.freeze({
   version: '0.162.1',
   sha256: '74c6a6d263f40d65f99c27a815275f5b4ed0bcc2baecc396b4cf3255498bdfc0',
 });
+export const reviewedDesktopCodexBinaries = Object.freeze([
+  reviewedDesktopCodexBinary,
+  reviewedCodex169Binary,
+]);
 
 export interface TerminalCreationInput {
   count?: number;
@@ -156,15 +161,15 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       state: join(root, slot),
     };
     if (provider === 'codex') {
-      if (executable.sha256 !== reviewedDesktopCodexBinary.sha256)
-        throw new Error('No reviewed Codex binary');
+      const pin = reviewedDesktopCodexBinaries.find(({ sha256 }) => sha256 === executable.sha256);
+      if (!pin) throw new Error('No reviewed Codex binary');
       const codexHome = input.environment.CODEX_HOME ?? join(input.home, '.codex');
       directories.add(codexHome);
       nativeRoots.push(codexHome);
       return managedCodexConfigSchema.parse({
         ...common,
         version: 1,
-        executableVersion: reviewedDesktopCodexBinary.version,
+        executableVersion: pin.version,
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
