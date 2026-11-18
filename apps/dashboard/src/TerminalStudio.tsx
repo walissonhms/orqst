@@ -159,6 +159,8 @@ interface Props {
   accountSuggestions?: AccountSuggestion[];
   /** Send a structured message that mentions other terminals (never typed into a PTY). */
   onMention?: (message: MentionSend) => Promise<DeliveryState>;
+  /** A managed Feature's authoritative label. Null explicitly clears it. */
+  orchestratorLabel?: string | null;
   /** Persist the orchestrator label for this Feature (descriptive only). */
   onOrchestratorChange?: (id: string | null) => void;
   /** Called once per evidenced end of work, for native/OS notifications. */
@@ -356,6 +358,7 @@ export function TerminalStudio({
   storageKey,
   now: fixedNow,
   onStatusEvent,
+  orchestratorLabel,
   onOrchestratorChange,
   onMention,
   accounts = [],
@@ -382,7 +385,14 @@ export function TerminalStudio({
   const [notices, setNotices] = useState<StudioStatusEvent[]>([]);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Rect>({ x: 0, y: 0, width: 1200, height: 700 });
-  const [state, setState] = useState(() => initialState(storageKey, terminals));
+  const [localState, setState] = useState(() => initialState(storageKey, terminals));
+  const state = useMemo(
+    () =>
+      orchestratorLabel === undefined
+        ? localState
+        : { ...localState, orchestrator: orchestratorLabel },
+    [localState, orchestratorLabel],
+  );
   const [stack, setStack] = useState<string[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [split, setSplit] = useState<{ index: number; last: number; pointer: number } | null>(null);
@@ -417,9 +427,9 @@ export function TerminalStudio({
       setState(initialState(storageKey, terminals));
       return;
     }
-    saveState(storageKey, state);
+    saveState(storageKey, localState);
     // terminals is read only when the key changes; reconcile handles later changes.
-  }, [storageKey, state]);
+  }, [storageKey, localState]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -1099,28 +1109,31 @@ export function TerminalStudio({
                       <AtSign size={14} />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className={`ts-crown${state.orchestrator === pane.id ? ' active' : ''}`}
-                    aria-pressed={state.orchestrator === pane.id}
-                    title={
-                      state.orchestrator === pane.id
-                        ? t('terminalStudio.unsetOrchestrator')
-                        : t('terminalStudio.setOrchestrator')
-                    }
-                    aria-label={
-                      state.orchestrator === pane.id
-                        ? t('terminalStudio.unsetOrchestrator')
-                        : t('terminalStudio.setOrchestrator')
-                    }
-                    onClick={() => {
-                      const next = state.orchestrator === pane.id ? null : pane.id;
-                      setState((current) => setOrchestrator(current, pane.id));
-                      onOrchestratorChange?.(next);
-                    }}
-                  >
-                    <Crown size={14} />
-                  </button>
+                  {onOrchestratorChange && (
+                    <button
+                      type="button"
+                      className={`ts-crown${state.orchestrator === pane.id ? ' active' : ''}`}
+                      aria-pressed={state.orchestrator === pane.id}
+                      title={
+                        state.orchestrator === pane.id
+                          ? t('terminalStudio.unsetOrchestrator')
+                          : t('terminalStudio.setOrchestrator')
+                      }
+                      aria-label={
+                        state.orchestrator === pane.id
+                          ? t('terminalStudio.unsetOrchestrator')
+                          : t('terminalStudio.setOrchestrator')
+                      }
+                      onClick={() => {
+                        const next = state.orchestrator === pane.id ? null : pane.id;
+                        if (orchestratorLabel === undefined)
+                          setState((current) => setOrchestrator(current, pane.id));
+                        onOrchestratorChange(next);
+                      }}
+                    >
+                      <Crown size={14} />
+                    </button>
+                  )}
                   {state.mode === 'mosaic' && !isMax && (
                     <button
                       className="ts-secondary"

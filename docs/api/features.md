@@ -19,6 +19,14 @@ Feature metadata is saved intent, not a session, execution grant or provider sta
 Concurrent metadata/team edits use expected revisions. Assignment is exclusive;
 archive with assigned terminals is refused until lifecycle review exists.
 
+When a Feature already has a saved layout, a successful terminal assignment
+moves the SQLite record to the expanded exact-membership key in the same
+transaction as the assignment, revision and audit. The new reviewed UUID is
+appended to the saved pane order and shown list. The native facade drains pending
+layout writes and rechecks the presentation before assigning. The request/reply
+schema and authorization are unchanged. See the
+[Workspace and Agentic Mode audit](../development/workspace-agentic-audit.md).
+
 Communication pane/message/audit schemas accept optional `featureId` for legacy
 v1 compatibility. When present it is immutable on pane identity and must match
 source/target/grant throughout admission, dispatch and result visibility. An absent

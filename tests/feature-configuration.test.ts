@@ -258,6 +258,50 @@ test('Feature assignment/revision/archive safeguards preserve legacy JSON, layou
   }
 });
 
+test('assigning another member carries the saved Feature layout to the new membership', () => {
+  const f = fixture();
+  try {
+    let feature = f.core.create({ name: 'SYNTHETIC layout growth' });
+    const [first, second, third] = Array.from({ length: 3 }, () => randomUUID());
+    feature = f.core.assignTerminal(feature.featureId, first!, feature.revision);
+    feature = f.core.assignTerminal(feature.featureId, second!, feature.revision);
+    const previous = terminalLayoutRecordSchema.parse({
+      ...layout([second!, first!], 3),
+      shown: [second!],
+      active: second,
+      maximized: second,
+      axis: 'rows',
+      percent: 63,
+      names: [{ id: first, name: 'SYNTHETIC hidden' }],
+    });
+    const other = f.core.create({ name: 'SYNTHETIC other layout' });
+    const otherId = randomUUID();
+    f.core.assignTerminal(other.featureId, otherId, other.revision);
+    f.core.saveLayout(other.featureId, layout([otherId]));
+    f.core.saveLayout(feature.featureId, previous);
+
+    const result = f.core.assignTerminal(feature.featureId, third!, feature.revision);
+    assert.deepEqual(result.terminalIds, [first, second, third]);
+    const reopened = featureConfigurationDatabase(f.directory, workspace);
+    assert.deepEqual(reopened.readLayout(feature.featureId), {
+      ...previous,
+      order: [second, first, third],
+      shown: [second, third],
+    });
+    assert.deepEqual(reopened.readLayout(other.featureId), layout([otherId]));
+    assert.throws(() => reopened.saveLayout(feature.featureId, previous), /selection/);
+    assert.equal(reopened.events(feature.featureId).at(-1)?.terminalId, third);
+    const db = new Store(join(f.directory, 'terminal-layouts/preferences.sqlite'));
+    try {
+      assert.equal(db.terminalLayouts(feature.featureId).read([first!, second!]), undefined);
+    } finally {
+      db.close();
+    }
+  } finally {
+    f.close();
+  }
+});
+
 test('private Feature command schema fixes workspace externally and assigns only reviewed numeric slots', () => {
   const id = randomUUID();
   assert.equal(

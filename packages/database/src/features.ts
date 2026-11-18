@@ -12,6 +12,7 @@ import {
   type WorkspaceFeature,
 } from '@orqst/protocol';
 import { z } from 'zod';
+import { openTerminalLayouts } from './terminal-layouts.js';
 
 /** Additive metadata only. No process/session table, journal ownership or restored authority. */
 export function openFeatures(
@@ -229,6 +230,11 @@ export function openFeatures(
           terminalId,
           feature.featureId,
         );
+        if (feature.terminalIds.length)
+          openTerminalLayouts(db, transaction, feature.featureId).appendFeatureMember(
+            feature.terminalIds,
+            terminalId,
+          );
         advance(feature);
         const after = read(scope);
         audit(after, 'feature.terminal_added', terminalId);

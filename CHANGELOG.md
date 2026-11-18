@@ -1,5 +1,12 @@
 # Changelog
 
+## Feature layout and orchestrator label — 2026-11-17
+
+An explicit terminal assignment carries the saved Feature layout to its expanded
+membership. Studio shows the Core's saved orchestrator label and offers the
+control only on Feature members. See the
+[Workspace and Agentic Mode audit](docs/development/workspace-agentic-audit.md).
+
 ## Native startup and terminal opening — 2026-11-17
 
 The native dashboard can load during the initial Codex history scan. Terminal

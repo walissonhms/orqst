@@ -870,6 +870,11 @@ pending; Terminal and provider development retain their separate gates. See the
 
 ### Agentic Mode communication foundation — 2026-11-03
 
+The [2026-11-17 source audit](docs/development/workspace-agentic-audit.md)
+documents the Studio label, same-Feature MCP inbox/results and opt-in structured
+controls. Typed planning, plan review, workflow cancellation and automatic
+allocation remain open.
+
 [ADR-033](docs/architecture/decisions.md#adr-033--opt-in-durable-pane-communication-without-terminal-injection)
 adds a private Core pane registry and bounded durable structured queue, explicit
 workspace/actor grants, independent delivery/task evidence, idempotency, result

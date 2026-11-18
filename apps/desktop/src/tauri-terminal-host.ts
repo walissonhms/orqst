@@ -317,7 +317,12 @@ async function start() {
       service.append(slot, core.supervisors[slot]!);
       layout.append(slot);
       selection.push({ config, blocker: undefined });
-      if (receipt.featureId !== null && message.previousLayout) {
+      // Core normally carries the current layout through assignment. Only fill a missing row.
+      if (
+        receipt.featureId !== null &&
+        message.previousLayout &&
+        !(await core.features.readLayout(receipt.featureId))
+      ) {
         const feature = await core.features.read(receipt.featureId);
         await core.features.saveLayout(
           receipt.featureId,

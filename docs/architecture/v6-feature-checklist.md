@@ -1,5 +1,14 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Workspace and Agentic Mode audit — 2026-11-17
+
+- [x] Carry the existing Feature layout through a terminal membership addition.
+- [x] Drive the Studio orchestrator badge from the saved Feature metadata.
+- [ ] Owner native validation of view switching, restart persistence and label controls.
+- [ ] Managed multi-Workspace switching, lifecycle-aware archive and Agentic plan execution.
+
+See the [source findings and owner test cases](../development/workspace-agentic-audit.md).
+
 ## Native startup and terminal-opening performance — 2026-11-17
 
 - [x] Desktop snapshot availability during the initial scan with a localized history status.

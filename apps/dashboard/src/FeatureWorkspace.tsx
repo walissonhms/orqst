@@ -416,7 +416,10 @@ export function FeatureWorkspace({
         if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
         if (reply.mention) lastMention.current = reply.mention;
         if (reply.communication) setCommunication(reply.communication.events);
-        if (reply.snapshot) {
+        if (
+          reply.snapshot &&
+          (!current.current || reply.snapshot.generation >= current.current.generation)
+        ) {
           current.current = reply.snapshot;
           setSnapshot(reply.snapshot);
         }
@@ -1149,16 +1152,19 @@ export function FeatureWorkspace({
                   },
                 }
               : {})}
-            onOrchestratorChange={(terminalId) =>
-              selected &&
-              void request({
-                action: 'update',
-                featureId: selected.featureId,
-                input: {
-                  expectedRevision: selected.revision,
-                  orchestratorTerminalId: terminalId,
-                },
-              })
+            orchestratorLabel={selected?.orchestratorTerminalId ?? null}
+            onOrchestratorChange={
+              selected
+                ? (terminalId) =>
+                    void request({
+                      action: 'update',
+                      featureId: selected.featureId,
+                      input: {
+                        expectedRevision: selected.revision,
+                        orchestratorTerminalId: terminalId,
+                      },
+                    })
+                : undefined
             }
           />
         </div>
