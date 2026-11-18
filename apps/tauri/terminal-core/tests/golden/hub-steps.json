@@ -52,6 +52,39 @@
   },
   {
    "op": "call",
+   "from": "00000000-0000-4000-8000-0000000000d1",
+   "call": {
+    "name": "send_message",
+    "arguments": {
+     "to": "T-001",
+     "text": "from unassigned"
+    }
+   }
+  },
+  {
+   "op": "call",
+   "from": "00000000-0000-4000-8000-0000000000d1",
+   "call": {
+    "name": "delegate_task",
+    "arguments": {
+     "to": "T-001",
+     "task": "from unassigned"
+    }
+   }
+  },
+  {
+   "op": "call",
+   "from": "00000000-0000-4000-8000-0000000000a1",
+   "call": {
+    "name": "send_message",
+    "arguments": {
+     "to": "T-004",
+     "text": "to unassigned"
+    }
+   }
+  },
+  {
+   "op": "call",
    "from": "00000000-0000-4000-8000-0000000000a1",
    "call": {
     "name": "send_message",

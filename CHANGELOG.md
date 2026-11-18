@@ -1,5 +1,17 @@
 # Changelog
 
+## Always inside a Feature — 2026-11-18 (source)
+
+New managed PTY and structured terminals always open inside the active Studio
+Feature; when "Sem Feature" is selected or no Feature exists, Node and Rust
+Cores create or reuse a deterministic per-project default Feature (`General` /
+`Geral`) and switch the active tab in the same transaction. Existing unassigned
+terminals stay untouched, show a localized notice with a layout-preserving
+"Move to Feature" action, and receive an explicit `sender_unassigned` refusal
+from `list_terminals`, `send_message` and `delegate_task` in both hubs while
+`unknown_terminal` remains for missing or out-of-scope targets. See
+[contract](docs/api/terminal-native.md#always-inside-a-feature-and-sender_unassigned-refusal--2026-11-18).
+
 ## Diag21 Codex and structured peer sessions — 2026-11-17
 
 The native terminal picker accepts the exact reviewed Apple Silicon Codex

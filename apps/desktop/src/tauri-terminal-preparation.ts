@@ -1,5 +1,7 @@
 import { inspectPendingOwnedExits } from '../../../packages/core/src/terminal/exit-pending.js';
 import {
+  DEFAULT_FEATURE_NAME,
+  defaultFeatureId,
   terminalPreparationFailureSchema,
   type TerminalPreparationFailure,
   terminalCatalogRequestSchema,
@@ -11,8 +13,11 @@ import {
   type TerminalPreparationCatalog,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
+import { stableId } from '@orqst/shared';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
+import { featureConfigurationDatabase } from '../../../packages/core/src/terminal/feature-configuration.js';
 import {
+  resolveTerminalPreparationContext,
   terminalPreparationBindingSchema,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
@@ -184,8 +189,17 @@ export async function prepareTauriTerminals(
         pair && members
           ? select(members[1], terminalMcpPairModelId(request, members[1]))
           : undefined;
-      if ((discovered.workspace.feature?.terminalIds.length ?? 0) + count > 8)
-        fail('capacity_exceeded');
+      const defaultFeatureTitle = context.environment.LANG?.toLowerCase().startsWith('pt')
+        ? 'Geral'
+        : DEFAULT_FEATURE_NAME;
+      const targetExisting =
+        request.featureId !== null
+          ? (discovered.workspace.feature?.terminalIds.length ?? 0)
+          : (discovered.workspace.features
+              .list()
+              .find((entry) => entry.featureId === defaultFeatureId(request.workspaceId))
+              ?.terminalIds.length ?? 0);
+      if (targetExisting + count > 8) fail('capacity_exceeded');
       stage = 'plan';
       const preparation = terminalPreparationBindingSchema.parse({
         ...trusted,
@@ -243,24 +257,32 @@ export async function prepareTauriTerminals(
       preflight();
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
-      files = plan.provision(reviewed);
+      let previousLayout: TerminalLayoutRecord | null = null;
+      files = plan.provision(reviewed, (terminalIds) => {
+        if (!reviewed()) throw new Error('Feature enrollment expired');
+        stage = 'feature_assignment';
+        const assigned = discovered.workspace.features.assignToOpenOrDefault(
+          request.featureId,
+          terminalIds,
+          defaultFeatureTitle,
+        );
+        previousLayout = assigned.previousLayout;
+        const resolved = resolveTerminalPreparationContext(
+          trusted,
+          request.workspaceId,
+          assigned.feature.featureId,
+        );
+        stage = 'provision';
+        return terminalPreparationBindingSchema.parse({
+          ...trusted,
+          workspaceId: request.workspaceId,
+          featureId: assigned.feature.featureId,
+          fence: resolved.fence,
+        });
+      });
       stage = 'inspection';
       const selection = inspectManagedTerminalFiles(files, 8);
       if (selection.some((entry) => entry.blocker)) fail('selection_blocked');
-      let previousLayout: TerminalLayoutRecord | null = null;
-      if (request.featureId !== null) {
-        stage = 'feature_assignment';
-        let feature = discovered.workspace.features.read(request.featureId);
-        previousLayout = discovered.workspace.features.readLayout(request.featureId);
-        for (const member of selection) {
-          if (!reviewed()) throw new Error('Feature enrollment expired');
-          feature = discovered.workspace.features.assignTerminal(
-            request.featureId,
-            member.config.identity!.terminalId,
-            feature.revision,
-          );
-        }
-      }
       return { status: 'open', files, ...(previousLayout ? { previousLayout } : {}) };
     }
     if (request.action === 'create') {
@@ -294,6 +316,21 @@ export async function prepareTauriTerminals(
       stage = 'provision';
       effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
       files = plan.provision(reviewed);
+      if (trusted) {
+        stage = 'inspection';
+        const selection = inspectManagedTerminalFiles(files, 8);
+        if (selection.some((entry) => entry.blocker)) fail('selection_blocked');
+        stage = 'feature_assignment';
+        const workspaceId = stableId('workspace', project);
+        const features = featureConfigurationDatabase(trusted.preferencesDirectory, workspaceId);
+        const view = features.readView();
+        const openFeature = view.featureId !== null ? features.read(view.featureId) : null;
+        features.assignToOpenOrDefault(
+          openFeature && openFeature.status !== 'archived' ? view.featureId : null,
+          selection.map((entry) => entry.config.identity!.terminalId),
+          context.environment.LANG?.toLowerCase().startsWith('pt') ? 'Geral' : DEFAULT_FEATURE_NAME,
+        );
+      }
     } else files = request.files;
 
     // Selection is a second transaction. Cancelling it preserves the completed manifests.

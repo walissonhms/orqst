@@ -15,6 +15,8 @@ const hash = (secret: string) => createHash('sha256').update(secret).digest();
 
 /** Instructive refusal text for the agent (Anywh roomManager.ts:1334-1336 style). */
 export const hubRefusalText: Record<string, string> = {
+  sender_unassigned:
+    'This terminal is not in a Feature, so it cannot talk to other terminals. Ask the owner to use "Move to Feature" in the Studio.',
   unknown_terminal:
     'No such terminal in your Feature. Use list_terminals; other Features and yourself are not reachable.',
   inbox_full: 'That terminal has too many unread messages. Try later.',

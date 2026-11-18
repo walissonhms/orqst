@@ -1,5 +1,15 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Always inside a Feature — 2026-11-18
+
+- [x] Deterministic per-workspace default Feature ID (`defaultFeatureId(workspaceId)`, localized `"General"` / `"Geral"`, rename-preserving) shared across Node and Rust Cores.
+- [x] Every new managed terminal (PTY and structured) opens inside the active Feature, or creates/reuses the default Feature and switches the Studio tab in the same Core transaction when opened from "Sem Feature".
+- [x] Existing unassigned terminals remain untouched, show a localized notice plus "Move to Feature" preserving saved Feature layouts (`appendFeatureMember` in Node and Rust), and resolve composer/structured `@mentions` in the default Feature like any other.
+- [x] Node and Rust MCP hubs return `sender_unassigned` with an explicit message on `list_terminals`, `send_message` and `delegate_task` when the sender has no Feature, keeping `unknown_terminal` for missing/cross-Feature/unassigned targets.
+- [ ] Owner native validation of default-Feature creation, Move to Feature and `sender_unassigned` refusal in Tauri.
+
+See [contract and security notes](../api/terminal-native.md#always-inside-a-feature-and-sender_unassigned-refusal--2026-11-18).
+
 ## Confirmed terminal close
 
 The V6 Studio separates Hide from native-confirmed Close terminal. The Node

@@ -1,11 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import {
+  DEFAULT_FEATURE_NAME,
+  defaultFeatureId,
   featureScopeSchema,
   featureViewStateSchema,
   featureViewSaveSchema,
   featureCreateSchema,
   featureUpdateSchema,
+  terminalDisplayNameSchema,
   workspaceFeatureSchema,
   featureConfigurationEventSchema,
   type FeatureScope,
@@ -124,6 +127,68 @@ export function openFeatures(
       feature.featureId,
     );
   };
+  const ensureDefaultRow = (
+    workspaceId: string,
+    defaultName: string = DEFAULT_FEATURE_NAME,
+    expectedRevision?: number,
+  ): WorkspaceFeature => {
+    featureScopeSchema.shape.workspaceId.parse(workspaceId);
+    const title = terminalDisplayNameSchema.parse(defaultName);
+    const featureId = defaultFeatureId(workspaceId);
+    const row = db.prepare('SELECT id FROM features WHERE id=?').get(featureId);
+    if (!row) {
+      if (expectedRevision !== undefined && expectedRevision !== 1)
+        throw new Error('Stale feature revision');
+      if (Number(db.prepare('SELECT COUNT(*) AS count FROM features').get()?.count) >= 1024)
+        throw new Error('Feature capacity exceeded');
+      const timestamp = now();
+      db.prepare('INSERT INTO features VALUES (?,?,?,?,?,?,?,?)').run(
+        featureId,
+        workspaceId,
+        title,
+        '',
+        'active',
+        1,
+        timestamp,
+        timestamp,
+      );
+      const created = read({ workspaceId, featureId });
+      audit(created, 'feature.created');
+      return created;
+    }
+    const existing = read({ workspaceId, featureId });
+    if (expectedRevision !== undefined && existing.revision !== expectedRevision)
+      throw new Error('Stale feature revision');
+    if (existing.status === 'archived') {
+      db.prepare('UPDATE features SET status=? WHERE id=?').run('active', featureId);
+      advance(existing);
+      const reopened = read({ workspaceId, featureId });
+      audit(reopened, 'feature.updated');
+      return reopened;
+    }
+    return existing;
+  };
+  const insertAssignment = (feature: WorkspaceFeature, terminalId: string): WorkspaceFeature => {
+    if (feature.terminalIds.length >= 8) throw new Error('Feature terminal capacity exceeded');
+    // A stable terminal belongs to one Feature. No move/adoption/reassignment from metadata.
+    if (
+      db.prepare('SELECT 1 FROM feature_terminal_assignments WHERE terminal_id=?').get(terminalId)
+    )
+      throw new Error('Terminal already assigned to a Feature');
+    db.prepare('INSERT INTO feature_terminal_assignments VALUES (?,?)').run(
+      terminalId,
+      feature.featureId,
+    );
+    if (feature.terminalIds.length)
+      openTerminalLayouts(db, transaction, feature.featureId).appendFeatureMember(
+        feature.terminalIds,
+        terminalId,
+      );
+    advance(feature);
+    const after = read({ workspaceId: feature.workspaceId, featureId: feature.featureId });
+    audit(after, 'feature.terminal_added', terminalId);
+    return after;
+  };
   return {
     read,
     readView,
@@ -135,12 +200,15 @@ export function openFeatures(
           throw new Error('Stale feature view revision');
         if (before.revision >= Number.MAX_SAFE_INTEGER)
           throw new Error('Feature view revision exhausted');
-        if (value.featureId !== null) read({ workspaceId, featureId: value.featureId });
         if (
           before.revision === 0 &&
           Number(db.prepare('SELECT COUNT(*) AS n FROM feature_views').get()?.n) >= 1024
         )
           throw new Error('Feature view capacity exceeded');
+        if (value.featureId !== null) {
+          if (value.featureId === defaultFeatureId(workspaceId)) ensureDefaultRow(workspaceId);
+          else read({ workspaceId, featureId: value.featureId });
+        }
         db.prepare(
           `INSERT INTO feature_views VALUES (?,?,?) ON CONFLICT(workspace_id)
         DO UPDATE SET feature_id=excluded.feature_id, revision=excluded.revision`,
@@ -214,31 +282,64 @@ export function openFeatures(
     assignTerminal: (scope: FeatureScope, terminalId: string, expectedRevision: number) =>
       transaction(() => {
         z.uuid().parse(terminalId);
-        const feature = read(scope);
-        if (feature.revision !== z.number().int().positive().safe().parse(expectedRevision))
-          throw new Error('Stale feature revision');
-        if (feature.status === 'archived') throw new Error('Archived feature');
-        if (feature.terminalIds.length >= 8) throw new Error('Feature terminal capacity exceeded');
-        // A stable terminal belongs to one Feature. No move/adoption/reassignment from metadata.
-        if (
-          db
-            .prepare('SELECT 1 FROM feature_terminal_assignments WHERE terminal_id=?')
-            .get(terminalId)
-        )
-          throw new Error('Terminal already assigned to a Feature');
-        db.prepare('INSERT INTO feature_terminal_assignments VALUES (?,?)').run(
-          terminalId,
-          feature.featureId,
-        );
-        if (feature.terminalIds.length)
-          openTerminalLayouts(db, transaction, feature.featureId).appendFeatureMember(
-            feature.terminalIds,
-            terminalId,
-          );
-        advance(feature);
-        const after = read(scope);
-        audit(after, 'feature.terminal_added', terminalId);
-        return after;
+        const parsedScope = featureScopeSchema.parse(scope);
+        const expected = z.number().int().positive().safe().parse(expectedRevision);
+        const feature =
+          parsedScope.featureId === defaultFeatureId(parsedScope.workspaceId)
+            ? ensureDefaultRow(parsedScope.workspaceId, DEFAULT_FEATURE_NAME, expected)
+            : (() => {
+                const existing = read(parsedScope);
+                if (existing.revision !== expected) throw new Error('Stale feature revision');
+                if (existing.status === 'archived') throw new Error('Archived feature');
+                return existing;
+              })();
+        return insertAssignment(feature, terminalId);
+      }),
+    assignToOpenOrDefault: (
+      workspaceId: string,
+      requestedFeatureId: string | null,
+      terminalIds: readonly string[],
+      options?: { defaultName?: string },
+    ) =>
+      transaction(() => {
+        featureScopeSchema.shape.workspaceId.parse(workspaceId);
+        const ids = z
+          .array(z.uuid())
+          .min(1)
+          .max(8)
+          .refine((list) => new Set(list).size === list.length)
+          .parse(terminalIds);
+        let feature =
+          requestedFeatureId === null
+            ? ensureDefaultRow(workspaceId, options?.defaultName ?? DEFAULT_FEATURE_NAME)
+            : (() => {
+                const existing = read({
+                  workspaceId,
+                  featureId: z.uuid().parse(requestedFeatureId),
+                });
+                if (existing.status === 'archived') throw new Error('Archived feature');
+                return existing;
+              })();
+        const previousLayout = feature.terminalIds.length
+          ? (openTerminalLayouts(db, transaction, feature.featureId).read(feature.terminalIds) ??
+            null)
+          : null;
+        for (const terminalId of ids) feature = insertAssignment(feature, terminalId);
+        const beforeView = readView(workspaceId);
+        if (beforeView.featureId !== feature.featureId) {
+          if (beforeView.revision >= Number.MAX_SAFE_INTEGER)
+            throw new Error('Feature view revision exhausted');
+          if (
+            beforeView.revision === 0 &&
+            Number(db.prepare('SELECT COUNT(*) AS n FROM feature_views').get()?.n) >= 1024
+          )
+            throw new Error('Feature view capacity exceeded');
+          db.prepare(
+            `INSERT INTO feature_views VALUES (?,?,?) ON CONFLICT(workspace_id)
+          DO UPDATE SET feature_id=excluded.feature_id, revision=excluded.revision`,
+          ).run(workspaceId, feature.featureId, beforeView.revision + 1);
+        }
+        return { feature, view: readView(workspaceId), previousLayout };
       }),
     events: (scope: FeatureScope, after = 0) => {
       read(scope);

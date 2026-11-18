@@ -466,3 +466,11 @@ Owned hook `unmatched` metadata invalidates the current displayed turn state unt
 a new explicit prompt. It contains no mismatching path/content. Notification
 dedupe uses terminal UUID, prompt UUID and category independently in Node/Rust;
 a waiting alert never consumes that turn's later completion/failure category.
+
+## Default Feature identity helper — 2026-11-18
+
+`packages/protocol/src/features.ts` exports additive pure helpers `DEFAULT_FEATURE_NAME`
+(`'General'`), `defaultFeatureId(workspaceId)` (deterministic RFC 9562 v8 UUID over
+`['default-feature', workspaceId]`, matched byte-for-byte in Rust `terminal-core`) and
+`featureDisplayName(feature, localizedDefaultName)` (renders `"General"` / `"Geral"`
+while preserving user renames). No `eventSchema`, REST or WebSocket wire shape changes.

@@ -624,25 +624,33 @@ impl TerminalMessageHub {
             return Err(HubError::Refused("unavailable"));
         }
         match call {
-            Call::List => Ok(HubReply::Terminals {
-                terminals: Self::peers(&members, sender)
-                    .into_iter()
-                    .map(|m| TerminalListing {
-                        handle: m.alias.clone(),
-                        name: m.name.clone(),
-                        cli: m.provider.clone(),
-                        state: if !m.running {
-                            "stopped"
-                        } else if state.relays.contains(&m.terminal_id) {
-                            "mcp_connected"
-                        } else {
-                            "unconfirmed"
-                        },
-                        queued: Self::inbox(&mut state, m, &members).len(),
-                    })
-                    .collect(),
-            }),
+            Call::List => {
+                if sender.feature_id.is_none() {
+                    return Err(HubError::Refused("sender_unassigned"));
+                }
+                Ok(HubReply::Terminals {
+                    terminals: Self::peers(&members, sender)
+                        .into_iter()
+                        .map(|m| TerminalListing {
+                            handle: m.alias.clone(),
+                            name: m.name.clone(),
+                            cli: m.provider.clone(),
+                            state: if !m.running {
+                                "stopped"
+                            } else if state.relays.contains(&m.terminal_id) {
+                                "mcp_connected"
+                            } else {
+                                "unconfirmed"
+                            },
+                            queued: Self::inbox(&mut state, m, &members).len(),
+                        })
+                        .collect(),
+                })
+            }
             Call::Send { to, text } => {
+                if sender.feature_id.is_none() {
+                    return Err(HubError::Refused("sender_unassigned"));
+                }
                 let mut seen = HashSet::new();
                 let mut targets = to
                     .iter()
@@ -680,6 +688,9 @@ impl TerminalMessageHub {
                 })
             }
             Call::Delegate { to, task } => {
+                if sender.feature_id.is_none() {
+                    return Err(HubError::Refused("sender_unassigned"));
+                }
                 let target = Self::resolve_target(&members, sender, &to)?;
                 let depth = self.next_depth(&state, sender_id)?;
                 let pending = |task: &Task| {

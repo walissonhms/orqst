@@ -12,11 +12,34 @@ use super::error::{invalid, FeatureError, Result};
 pub const MAX_SAFE: u64 = 9_007_199_254_740_991;
 /// `TERMINAL_SLOT_CEILING` (`terminal-capacity.ts`).
 pub const TERMINAL_SLOT_CEILING: usize = 8;
+pub const DEFAULT_FEATURE_NAME: &str = "General";
 
 /// `stableId` (`packages/shared`): sha256 hex of `JSON.stringify(parts)`.
 pub fn stable_id(parts: &[&str]) -> String {
     let text = serde_json::to_string(parts).expect("string array serializes");
     hex(&Sha256::digest(text.as_bytes()))
+}
+
+/// `defaultFeatureId(workspaceId)` (`packages/protocol/src/features.ts`): RFC 9562 v8 UUID.
+pub fn default_feature_id(workspace_id: &str) -> Result<String> {
+    if !is_identifier(workspace_id) {
+        return Err(invalid("Invalid workspace"));
+    }
+    let text =
+        serde_json::to_string(&["default-feature", workspace_id]).expect("string array serializes");
+    let digest = Sha256::digest(text.as_bytes());
+    let mut b = [0u8; 16];
+    b.copy_from_slice(&digest[..16]);
+    b[6] = (b[6] & 0x0f) | 0x80;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        hex(&b[0..4]),
+        hex(&b[4..6]),
+        hex(&b[6..8]),
+        hex(&b[8..10]),
+        hex(&b[10..16]),
+    ))
 }
 
 pub fn hex(bytes: &[u8]) -> String {

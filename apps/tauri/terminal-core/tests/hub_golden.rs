@@ -227,4 +227,48 @@ fn node_relay_transport_talks_to_the_rust_endpoint() {
     let directory = endpoint.socket_path.parent().unwrap().to_path_buf();
     endpoint.close();
     assert!(!directory.exists());
+
+    let unassigned_id = "00000000-0000-4000-8000-0000000000d1";
+    let unassigned_members = vec![
+        HubMember {
+            terminal_id: unassigned_id.into(),
+            alias: "T-004".into(),
+            name: "Codex".into(),
+            provider: "codex".into(),
+            feature_id: None,
+            running: true,
+        },
+        HubMember {
+            terminal_id: a.into(),
+            alias: "T-001".into(),
+            name: "Codex".into(),
+            provider: "codex".into(),
+            feature_id: Some(feature.into()),
+            running: true,
+        },
+    ];
+    let unassigned_hub = Arc::new(TerminalMessageHub::new(
+        move || Ok(unassigned_members.clone()),
+        |_| {},
+    ));
+    let mut unassigned_endpoint = open_hub_endpoint(
+        unassigned_hub,
+        TerminalBinding::Fixed(unassigned_id.into()),
+        &parent,
+    )
+    .unwrap();
+    let unassigned_node = tsx(&[
+        manifest().join("tests/golden/relay.ts").as_os_str(),
+        unassigned_endpoint.socket_path.as_os_str(),
+        unassigned_endpoint.capability_file.as_os_str(),
+    ]);
+    let unassigned_results = unassigned_node["results"].as_array().unwrap();
+    assert_eq!(unassigned_results[0]["ok"]["refused"], "sender_unassigned");
+    assert!(unassigned_results[0]["ok"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("not in a Feature"));
+    assert_eq!(unassigned_results[1]["ok"]["refused"], "sender_unassigned");
+    assert_eq!(unassigned_results[2]["ok"]["refused"], "sender_unassigned");
+    unassigned_endpoint.close();
 }

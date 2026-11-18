@@ -214,6 +214,15 @@
 .ts-suggest button:disabled {
   opacity: 0.5;
 }
+.ts-suggest select {
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--orqst-warning) 45%, var(--orqst-border));
+  background: var(--orqst-surface);
+  color: var(--orqst-text);
+  font-size: 12px;
+}
 .ts-suggest .ts-suggest-later {
   background: transparent;
   color: var(--orqst-warning);

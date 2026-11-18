@@ -99,13 +99,24 @@ test('terminals in one Feature message each other by @alias; the audit has no co
   );
 });
 
-test('other Features, self, unknown handles and unassigned terminals are refused alike', async () => {
+test('other Features, self, unknown handles and unassigned targets return unknown_terminal; unassigned senders return sender_unassigned', async () => {
   const f = fixture();
   await refused(f.hub.call(ids.a, send('@T-004', 'x')), 'unknown_terminal');
   await refused(f.hub.call(ids.a, send('@T-001', 'x')), 'unknown_terminal');
   await refused(f.hub.call(ids.a, send('@T-999', 'x')), 'unknown_terminal');
+  f.members[2]!.featureId = null;
+  await refused(f.hub.call(ids.a, send('@T-003', 'x')), 'unknown_terminal');
+  await refused(
+    f.hub.call(ids.a, { name: 'delegate_task', arguments: { to: '@T-003', task: 'x' } }),
+    'unknown_terminal',
+  );
   f.members[0]!.featureId = null;
-  await refused(f.hub.call(ids.a, send('@T-002', 'x')), 'unknown_terminal');
+  await refused(f.hub.call(ids.a, { name: 'list_terminals', arguments: {} }), 'sender_unassigned');
+  await refused(f.hub.call(ids.a, send('@T-002', 'x')), 'sender_unassigned');
+  await refused(
+    f.hub.call(ids.a, { name: 'delegate_task', arguments: { to: '@T-002', task: 'x' } }),
+    'sender_unassigned',
+  );
   await refused(f.hub.call('00000000-0000-4000-8000-000000000999', read), 'not_member');
   assert.equal(f.evidence.length, 0);
 });
@@ -305,6 +316,19 @@ test('a hub endpoint serves one terminal over its private socket, refusals inclu
     };
     assert.equal(refusal.refused, 'unknown_terminal');
     assert.match(refusal.message, /list_terminals/);
+    f.members[0]!.featureId = null;
+    for (const call of [
+      { name: 'list_terminals', arguments: {} },
+      send('@T-002', 'x'),
+      { name: 'delegate_task', arguments: { to: '@T-002', task: 'x' } },
+    ] as const) {
+      const unassignedRefusal = (await client.call(crypto.randomUUID(), call)) as {
+        refused: string;
+        message: string;
+      };
+      assert.equal(unassignedRefusal.refused, 'sender_unassigned');
+      assert.match(unassignedRefusal.message, /not in a Feature/i);
+    }
     client.close();
   } finally {
     await endpoint.close();

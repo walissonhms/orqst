@@ -249,6 +249,27 @@ impl<'a> TerminalLayouts<'a> {
         self.db.transaction(|| self.write(ids, record))
     }
 
+    /// Carry the existing row forward inside the Feature assignment transaction.
+    pub fn append_feature_member(&self, ids: &[String], terminal_id: &str) -> Result<()> {
+        self.db.transaction(|| {
+            if self.feature_id.is_none() {
+                return Err(invalid("Feature layout required"));
+            }
+            let Some(mut previous) = self.read(ids)? else {
+                return Ok(());
+            };
+            let mut next_ids = ids.to_vec();
+            next_ids.push(terminal_id.to_owned());
+            self.db.conn.execute(
+                "UPDATE terminal_layouts SET selection_id=? WHERE selection_id=?",
+                params![self.selection(&next_ids)?, self.selection(ids)?],
+            )?;
+            previous.order.push(terminal_id.to_owned());
+            previous.shown.push(terminal_id.to_owned());
+            self.write(&next_ids, &previous)
+        })
+    }
+
     /// First valid import wins atomically; never overwrite SQLite with a stale JSON copy.
     pub fn import(
         &self,
