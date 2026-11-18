@@ -1,4 +1,4 @@
-import type { TerminalProvider } from './TerminalStudio';
+import type { TerminalProvider } from './FeatureStudioStage';
 
 /** One usage window reported by a provider (e.g. 5 hours, week, a model-specific cap). */
 export interface LimitWindow {

@@ -704,7 +704,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
         import { createRoot } from 'react-dom/client';
         import { createInstance } from 'i18next';
         import { I18nextProvider } from 'react-i18next';
-        import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
+        import { FeatureStudio } from './src/FeatureStudio.tsx';
         import { defaultFeatureId, featureNativeSnapshotSchema } from '@orqst/protocol';
         import en from './src/locales/en-US.json';
         import pt from './src/locales/pt-BR.json';
@@ -834,7 +834,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
           });
           createRoot(document.getElementById('root')).render(
             <I18nextProvider i18n={i18n}>
-              <FeatureWorkspace nativeWorkspace />
+              <FeatureStudio nativeWorkspace />
             </I18nextProvider>,
           );
           window.dispatchEvent(

@@ -13,8 +13,7 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
         import { createRoot } from 'react-dom/client';
         import { createInstance } from 'i18next';
         import { I18nextProvider } from 'react-i18next';
-        import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
-        import { StudioWorkspace } from './src/StudioWorkspace.tsx';
+        import { FeatureStudio } from './src/FeatureStudio.tsx';
         import { featureNativeSnapshotSchema } from '@orqst/protocol';
         import en from './src/locales/en-US.json';
         import pt from './src/locales/pt-BR.json';
@@ -57,8 +56,8 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
               },
             };
             return <I18nextProvider i18n={i18n}>
-              <div id="chrome"><FeatureWorkspace nativeWorkspace /></div>
-              <div id="main"><StudioWorkspace
+              <div id="chrome"><FeatureStudio nativeWorkspace /></div>
+              <div id="main"><FeatureStudio
                 preparationRequest={request} onPreparationHandled={() => setRequest(undefined)} /></div>
             </I18nextProvider>;
           }
@@ -103,14 +102,14 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
       await page.addScriptTag({ content: result.outputFiles[0]!.text });
       await page.evaluate((language) => Reflect.get(window, 'startFixture')(language), language);
       const button = page
-        .locator('#chrome')
+        .locator('#chrome .ts-toolbar')
         .getByRole('button', { name: '＋ Terminal', exact: true });
       await button.waitFor();
       await page.waitForFunction(
         () =>
           !document
-            .querySelector('#chrome .feature-topbar button:last-child')
-            ?.hasAttribute('disabled'),
+            .querySelector('#chrome .ts-toolbar .feature-add-terminal')
+            ?.matches('[aria-disabled="true"]'),
       );
       await button.click();
       // The guided dialog opens first; the previous detailed form stays one click away.

@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, X } from 'lucide-react';
 import { Modal } from './Modal';
-import { useStudioPaneText } from './PaneMenu';
-import type { StudioTerminal } from './TerminalStudio';
+import type { StudioTerminal } from './FeatureStudioStage';
 
 /** Read-only facts about one terminal; unknown values stay `—`. */
 export function TerminalDetails({
@@ -14,13 +13,12 @@ export function TerminalDetails({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const paneText = useStudioPaneText();
   const [copied, setCopied] = useState(false);
   const dash = '—';
   const rows: [string, string][] = [
     [t('terminalStudio.details.label'), terminal.label],
     [t('terminalStudio.details.name'), terminal.name],
-    [paneText('studio.pane.alias'), terminal.alias ?? dash],
+    [t('studio.pane.alias'), terminal.alias ?? dash],
     [t('terminalStudio.details.cli'), t(`terminalStudio.providers.${terminal.provider}`)],
     [
       t('terminalStudio.details.model'),
@@ -32,6 +30,8 @@ export function TerminalDetails({
     ],
     [t('terminalStudio.details.account'), terminal.account?.label ?? dash],
     [t('terminalStudio.details.workspace'), terminal.workspace.name],
+    [t('studio.pane.cwd'), terminal.cwd ?? dash],
+    [t('studio.pane.session'), terminal.sessionId ?? dash],
     [t('terminalStudio.details.status'), t(`terminalStudio.status.${terminal.status}`)],
     [
       t('terminalStudio.details.started'),
@@ -43,8 +43,8 @@ export function TerminalDetails({
     ],
   ];
   return (
-    <Modal label={t('terminalStudio.details.title')} className="ntd td" onClose={onClose}>
-      <div className="td-body">
+    <Modal label={t('studio.pane.details')} className="ntd td ts-details-drawer" onClose={onClose}>
+      <div className="td-body" data-native-overlay="">
         <header className="ntd-head">
           <div>
             <h2>
@@ -86,6 +86,22 @@ export function TerminalDetails({
             </dd>
           </div>
         </dl>
+        {!!terminal.activity?.length && (
+          <section>
+            <h3>{t('studio.pane.timeline')}</h3>
+            <ol>
+              {terminal.activity.map((event, index) => (
+                <li key={`${event.at}-${index}`}>
+                  <time dateTime={new Date(event.at).toISOString()}>
+                    {new Date(event.at).toLocaleTimeString()}
+                  </time>
+                  {' · '}
+                  {event.label}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
       </div>
     </Modal>
   );

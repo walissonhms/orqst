@@ -321,3 +321,8 @@
   color: #d9c9ff;
   background: #3d3052;
 }
+
+.pm-menu.pm-v6 .pm-danger,
+.pm-menu.pm-v6 .pm-danger svg {
+  color: #ff9bab;
+}

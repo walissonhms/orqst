@@ -1170,11 +1170,37 @@
       "float": "Tornar flutuante",
       "dock": "Encaixar na grade",
       "gridFull": "A grade está cheia",
-      "hide": "Minimizar painel",
+      "hide": "Minimizar",
       "maximize": "Maximizar / restaurar",
       "duplicateConfig": "Duplicar configuração",
-      "layouts": "Layouts",
-      "emptySlot": "＋ Espaço livre"
+      "layouts": "Layout",
+      "emptySlot": "＋ Espaço livre",
+      "pilot": "PILOTO",
+      "sendMessage": "Enviar mensagem…",
+      "restart": "Reiniciar",
+      "restartQuestion": "Reiniciar {{label}}?",
+      "details": "Detalhes e logs",
+      "terminate": "Encerrar processo",
+      "closeQuestion": "Fechar {{label}}?",
+      "hideView": "Ocultar",
+      "emptyFeature": "Nenhum terminal nesta Feature",
+      "ending": "Encerrando…",
+      "startingCli": "Iniciando {{cli}}…",
+      "session": "ID da sessão",
+      "cwd": "Diretório de trabalho",
+      "timeline": "Linha do tempo",
+      "event": "↗ @{{from}} → @{{to}} · entregue",
+      "terminalCount": "● {{count}} terminais · {{feature}}",
+      "state": {
+        "starting": "Iniciando",
+        "ready": "Pronto",
+        "running": "Executando",
+        "waiting_for_user": "Aguardando você",
+        "unknown": "Desconhecido",
+        "failed": "Falhou",
+        "disconnected": "Desconectado",
+        "ended": "Encerrado"
+      }
     }
   },
   "tauriPreparation": {
@@ -1509,7 +1535,7 @@
     "announce": "{{from}} para {{to}}: {{kind}}",
     "providers": {
       "codex": "Codex",
-      "claude": "Claude Code",
+      "claude": "Claude",
       "opencode": "OpenCode",
       "antigravity": "Antigravity",
       "shell": "Shell"
@@ -1582,8 +1608,8 @@
     "resizeRows": "Redimensionar linhas",
     "orchestrator": "Orquestrador",
     "orchestratorHint": "Só um rótulo: não concede permissões. A delegação segue as permissões da Feature.",
-    "setOrchestrator": "Marcar como Orquestrador",
-    "unsetOrchestrator": "Remover rótulo de Orquestrador",
+    "setOrchestrator": "Definir orquestrador",
+    "unsetOrchestrator": "Remover orquestrador",
     "mention": {
       "open": "Mencionar um terminal",
       "fromThis": "Mencionar outro terminal a partir deste",

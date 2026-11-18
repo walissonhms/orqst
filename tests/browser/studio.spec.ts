@@ -483,7 +483,7 @@ const mentionBundle = () =>
       contents: `
       import React from 'react';
       import { createRoot } from 'react-dom/client';
-      import { FeatureWorkspace } from './src/FeatureWorkspace';
+      import { FeatureStudio } from './src/FeatureStudio';
       import './src/i18n';
       window.mountLane4Delegate = (snapshot) => {
         const calls = [];
@@ -507,7 +507,7 @@ const mentionBundle = () =>
             };
           },
         };
-        createRoot(document.querySelector('#root')).render(<FeatureWorkspace nativeWorkspace />);
+        createRoot(document.querySelector('#root')).render(<FeatureStudio nativeWorkspace />);
       };
     `,
       resolveDir: resolve('apps/dashboard'),

@@ -5,7 +5,8 @@
  * meant to drive both the DOM preview and, later, native terminal Webview bounds.
  */
 
-export const arrangementModes = ['mosaic', 'columns', 'rows', 'focus', 'list', 'free'] as const;
+export const studioArrangementModes = ['mosaic', 'columns', 'rows', 'focus'] as const;
+export const arrangementModes = [...studioArrangementModes, 'list', 'free'] as const;
 export type ArrangementMode = (typeof arrangementModes)[number];
 
 /** Relative size inside mosaic: small = 1 cell, large = 2×2 cells, wide = 2×1 cells. */
@@ -36,6 +37,8 @@ export interface ArrangementState {
   panes: ArrangedPane[];
   /** Pane shown in focus mode or maximized over any other mode. */
   maximized: string | null;
+  active?: string;
+  closedEnded?: string[];
   /** Split ratios for columns/rows mode, one weight per visible pane. */
   weights: Record<string, number>;
   /** Mosaic track weights, changed by dragging the borders between terminals. */
@@ -61,6 +64,8 @@ export interface PlacedPane {
 export const GAP = 5;
 export const LIST_ROW = 44;
 export const MIN_PANE = { width: 260, height: 160 };
+const STUDIO_DOCK_MIN = { width: 320, height: 180 };
+export const STUDIO_FLOAT_MIN = { width: 250, height: 160 };
 
 export function visiblePanes(state: ArrangementState): ArrangedPane[] {
   const lead = state.orchestrator;
@@ -238,7 +243,7 @@ export function resizeTrack(
   const b = sizes[index + 1];
   if (a === undefined || b === undefined) return state;
   const min = docked
-    ? Math.min(axis === 'cols' ? 250 : 160, (a + b) / 2)
+    ? Math.max(axis === 'cols' ? STUDIO_DOCK_MIN.width : STUDIO_DOCK_MIN.height, (a + b) * 0.2)
     : axis === 'cols'
       ? MIN_PANE.width
       : MIN_PANE.height;
@@ -268,17 +273,23 @@ export function setOrchestrator(state: ArrangementState, id: string | null): Arr
 
 /** Resize a free-mode rectangle from one of its edges or corners. */
 export type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
-export function resizeFromEdge(rect: Rect, edge: Edge, dx: number, dy: number): Rect {
+export function resizeFromEdge(
+  rect: Rect,
+  edge: Edge,
+  dx: number,
+  dy: number,
+  minimum = MIN_PANE,
+): Rect {
   let { x, y, width, height } = rect;
-  if (edge.includes('e')) width = Math.max(MIN_PANE.width, width + dx);
-  if (edge.includes('s')) height = Math.max(MIN_PANE.height, height + dy);
+  if (edge.includes('e')) width = Math.max(minimum.width, width + dx);
+  if (edge.includes('s')) height = Math.max(minimum.height, height + dy);
   if (edge.includes('w')) {
-    const w = Math.max(MIN_PANE.width, width - dx);
+    const w = Math.max(minimum.width, width - dx);
     x += width - w;
     width = w;
   }
   if (edge.includes('n')) {
-    const h = Math.max(MIN_PANE.height, height - dy);
+    const h = Math.max(minimum.height, height - dy);
     y += height - h;
     height = h;
   }
@@ -330,9 +341,9 @@ export function cascade(index: number, view: Rect): Rect {
 }
 
 /** Keep a free rectangle inside the viewport and above the minimum size. */
-export function containRect(rect: Rect, view: Rect): Rect {
-  const width = clamp(rect.width, MIN_PANE.width, view.width);
-  const height = clamp(rect.height, MIN_PANE.height, view.height);
+export function containRect(rect: Rect, view: Rect, minimum = MIN_PANE): Rect {
+  const width = clamp(rect.width, minimum.width, view.width);
+  const height = clamp(rect.height, minimum.height, view.height);
   return {
     width,
     height,
@@ -357,6 +368,7 @@ function free(panes: ArrangedPane[], view: Rect, stack: string[], v6 = false): P
             }
           : cascade(index, view)),
       view,
+      v6 ? STUDIO_FLOAT_MIN : MIN_PANE,
     ),
   }));
 }
@@ -389,7 +401,7 @@ export function arrange(state: ArrangementState, view: Rect, stack: string[] = [
         true,
       )
         .sort((a, b) => a.z - b.z)
-        .map((pane, index) => ({ ...pane, z: index + 4, floating: true })),
+        .map((pane, index) => ({ ...pane, z: index + slots.length, floating: true })),
     ];
   }
   switch (state.mode) {
@@ -407,13 +419,17 @@ export function arrange(state: ArrangementState, view: Rect, stack: string[] = [
   }
 }
 
-/** Stable four-slot V6 grid. A hidden or floating document leaves its slot open. */
+/** Keep the initial four slots and add tracks as docked membership grows. */
 export function studioDockGeometry(state: ArrangementState, view: Rect) {
-  const columns = state.mode === 'columns' ? 4 : view.width < 640 ? 1 : 2;
-  const rows = 4 / columns;
-  const cx = tracks(state.grid?.cols, columns, view.width, 1);
-  const ry = tracks(state.grid?.rows, rows, view.height, 1);
-  const slots = Array.from({ length: 4 }, (_, index) => {
+  const count = state.panes.reduce(
+    (count, pane) => (pane.floating ? count : Math.max(count, (pane.dockSlot ?? 0) + 1)),
+    4,
+  );
+  const columns = state.mode === 'columns' ? count : count > 4 ? 3 : 2;
+  const rows = Math.ceil(count / columns);
+  const cx = tracks(state.grid?.cols, columns, view.width, STUDIO_DOCK_MIN.width);
+  const ry = tracks(state.grid?.rows, rows, view.height, STUDIO_DOCK_MIN.height);
+  const slots = Array.from({ length: columns * rows }, (_, index) => {
     const col = index % columns;
     const row = Math.floor(index / columns);
     return {
@@ -443,7 +459,12 @@ export function assignStudioSlots(state: ArrangementState): ArrangementState {
   const panes = state.panes.map((pane) => {
     if (pane.floating) return pane;
     const slot = pane.dockSlot;
-    if (Number.isInteger(slot) && slot! >= 0 && slot! < 4 && !used.has(slot!)) {
+    if (
+      Number.isInteger(slot) &&
+      slot! >= 0 &&
+      slot! < Math.max(4, state.panes.length + 2) &&
+      !used.has(slot!)
+    ) {
       used.add(slot!);
       return pane;
     }
@@ -453,12 +474,17 @@ export function assignStudioSlots(state: ArrangementState): ArrangementState {
     ...state,
     panes: panes.map((pane) => {
       if (pane.floating || pane.dockSlot !== undefined) return pane;
-      const slot = [0, 1, 2, 3].find((index) => !used.has(index));
-      if (slot === undefined) return { ...pane, floating: true };
+      const slot = firstFreeSlot(used);
       used.add(slot);
       return { ...pane, dockSlot: slot };
     }),
   };
+}
+
+function firstFreeSlot(used: Set<number | undefined>): number {
+  let slot = 0;
+  while (used.has(slot)) slot++;
+  return slot;
 }
 
 /** Swap dock positions, or move into an empty position, without changing identity. */
@@ -470,9 +496,8 @@ export function dockStudioPane(
   const pane = state.panes.find((item) => item.id === id);
   if (!pane) return state;
   const other = state.panes.filter((item) => item.id !== id && !item.floating);
-  const target =
-    slot ?? [0, 1, 2, 3].find((index) => !other.some((item) => item.dockSlot === index));
-  if (target === undefined || target < 0 || target > 3) return state;
+  const target = slot ?? firstFreeSlot(new Set(other.map((item) => item.dockSlot)));
+  if (!Number.isInteger(target) || target < 0) return state;
   const occupied = other.find((item) => item.dockSlot === target);
   let next = updatePane(state, id, { dockSlot: target, floating: false });
   if (occupied)

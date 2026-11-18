@@ -176,11 +176,11 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
     stdin: {
       contents: `
         import { createRoot } from 'react-dom/client';
-        import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
+        import { FeatureStudio } from './src/FeatureStudio.tsx';
         import './src/feature-shell.css';
         import './src/i18n.ts';
         createRoot(document.getElementById('root')).render(
-          <FeatureWorkspace nativeWorkspace={${nativeWorkspace}} workspaces={window.fixtureWorkspaces} />
+          <FeatureStudio nativeWorkspace={${nativeWorkspace}} workspaces={window.fixtureWorkspaces} />
         );
       `,
       resolveDir: join(process.cwd(), 'apps/dashboard'),
@@ -320,9 +320,12 @@ for (const [width, height] of [
     await openNativeFixture(page);
     const size = `${width}x${height}`;
     const capture = async (name: string) => {
-      const folder = process.env.ORQST_LANE2_SCREENSHOTS;
+      const folder = process.env.ORQST_SPEC_L2_CAPTURES;
+      if (folder && name !== '04-empty-feature') return;
       await page.screenshot({
-        path: folder ? join(folder, size, `${name}.png`) : testInfo.outputPath(`${name}.png`),
+        path: folder
+          ? join(folder, size, 'dashboard', 'empty-feature.png')
+          : testInfo.outputPath(`${name}.png`),
       });
     };
     const paneIds = () =>
@@ -437,7 +440,7 @@ for (const [width, height] of [
     await expect.poll(paneIds).toEqual([]);
     await capture('07-created-empty');
 
-    await page.getByRole('button', { name: '＋ Terminal' }).click();
+    await page.locator('.ts-empty').getByRole('button', { name: '＋ Terminal' }).click();
     const prepares = await page.evaluate(() => Reflect.get(window, 'fixturePrepares'));
     expect(prepares).toMatchObject([{ featureId: featureId(5), expectedRevision: 6 }]);
     await expect(page.locator('.feature-feedback')).toBeVisible();
@@ -465,9 +468,8 @@ for (const [width, height] of [
     await expect(page.locator('.feature-feedback')).toContainText(/arquiv/i);
     await capture('09-archive-refused');
     await editor.getByRole('button', { name: 'Cancelar' }).click();
-    await page.getByRole('button', { name: 'Canvas' }).click();
-    await expect(page.locator('.feature-canvas-mode')).toBeVisible();
-    await capture('10-canvas');
+    await expect(page.getByRole('button', { name: 'Canvas', exact: true })).toHaveCount(0);
+    await expect(page.locator('.ts-stage')).toHaveCount(1);
     await page.locator('[data-managed-workspace]').click();
     await expect(page.locator('.feature-canvas-mode')).toHaveCount(0);
     await expect.poll(paneIds).toEqual([]);
@@ -510,19 +512,23 @@ for (const [width, height] of [
     const second = page.locator(`[data-pane-id="${terminalId(2)}"]`);
     const dock = page.locator('.ts-dock');
     const menu = page.getByRole('menu');
-    const capture = (name: string) =>
-      page.screenshot({
-        path:
-          process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
-            ? join(
-                'docs/development/v6-parity/integrated',
-                `${width}x${height}`,
-                'panes',
-                `${name}.png`,
-              )
-            : testInfo.outputPath(`${name}.png`),
+    const capture = (name: string) => {
+      const folder = process.env.ORQST_SPEC_L2_CAPTURES;
+      const states: Record<string, string> = {
+        '01-grid': 'grid',
+        '06-pane-menu': 'menu',
+        '08-floating': 'floating',
+        '11-maximized': 'maximized',
+        '12-minimized': 'minimized',
+      };
+      if (folder && !states[name]) return;
+      return page.screenshot({
+        path: folder
+          ? join(folder, `${width}x${height}`, 'dashboard', `${states[name]}.png`)
+          : testInfo.outputPath(`${name}.png`),
         animations: 'disabled',
       });
+    };
     const openMenu = async () => {
       await first.locator('.ts-more').click();
       await expect(menu).toBeVisible();
@@ -540,11 +546,12 @@ for (const [width, height] of [
     }
     await expect(page.locator('.ts-modes, .ts-features, .ts-mention-open')).toHaveCount(0);
     await expect(first.locator('.ts-head')).toHaveCSS('height', '31px');
-    await expect(first.locator('.ts-alias')).toHaveText('@T-001');
+    await expect(first.locator('.ts-name')).toHaveAttribute('title', /^@T-001/);
+    await expect(first.locator('.ts-card-model, .ts-card-tokens')).toHaveCount(2);
     await expect(dock).toHaveCSS('height', '33px');
     await expect(dock.locator('.ts-dock-title')).toHaveText('Minimizados');
     await expect(dock.locator('.ts-dock-title')).toHaveCSS('text-transform', 'uppercase');
-    await expect(dock.locator('.ts-summary')).toHaveText('4 terminais · Feature A');
+    await expect(dock.locator('.ts-summary')).toHaveText('● 4 terminais · Feature A');
     const origin = (await first.boundingBox())!;
     expect([origin.x, origin.y]).toEqual([159, 49]);
     await capture('01-grid');
@@ -573,12 +580,25 @@ for (const [width, height] of [
     await openMenu();
     await expect(menu).toHaveCSS('width', '215px');
     await capture('06-pane-menu');
-    const layouts = menu.getByRole('menuitem', { name: 'Layouts', exact: true });
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      'Configurações / renomear',
+      'Definir orquestrador',
+      'Tornar flutuante',
+      'Minimizar',
+      'Maximizar / restaurar',
+      'Duplicar configuração',
+      'Enviar mensagem…',
+      'Reiniciar',
+      'Detalhes e logs',
+      'Layout',
+      'Encerrar processo',
+    ]);
+    const layouts = menu.getByRole('menuitem', { name: 'Layout', exact: true });
     await expect(layouts).toHaveAttribute('aria-expanded', 'false');
     await expect(menu.getByRole('menuitemradio')).toHaveCount(0);
     await layouts.click();
     await expect(layouts).toHaveAttribute('aria-expanded', 'true');
-    for (const name of ['Colunas', 'Linhas', 'Foco', 'Lista', 'Livre']) {
+    for (const name of ['Mosaico', 'Colunas', 'Linhas', 'Foco']) {
       await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeVisible();
     }
     await capture('06a-layouts');
@@ -588,7 +608,7 @@ for (const [width, height] of [
     await expect.poll(mode).toBe('mosaic');
     await openMenu();
     await menu.getByRole('menuitem', { name: 'Configurações / renomear', exact: true }).click();
-    const editor = page.locator('.feature-pane-editor');
+    const editor = page.getByRole('dialog', { name: 'Configurações / renomear' });
     await expect(editor).toBeVisible();
     await capture('07-rename');
     await editor.locator('input').press('Escape');
@@ -635,7 +655,7 @@ for (const [width, height] of [
     await openMenu();
     await expect(menu.getByRole('menuitem', { name: 'Duplicar configuração' })).toBeDisabled();
     await capture('14-duplicate-availability');
-    await menu.getByRole('menuitem', { name: 'Marcar como Orquestrador', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Definir orquestrador', exact: true }).click();
     await expect(first.locator('.ts-role')).toBeVisible();
     await capture('15-role');
   });

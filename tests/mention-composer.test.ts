@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { resolveMentions } from '../apps/dashboard/src/MentionComposer.js';
-import type { StudioTerminal } from '../apps/dashboard/src/TerminalStudio.js';
+import type { StudioTerminal } from '../apps/dashboard/src/FeatureStudioStage.js';
 
 const terminal = (n: number): StudioTerminal => ({
   id: `id-${n}`,

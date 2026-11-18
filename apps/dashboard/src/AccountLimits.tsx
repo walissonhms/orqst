@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Lock, LockOpen, RefreshCw, X } from 'lucide-react';
-import type { TerminalProvider } from './TerminalStudio';
+import type { TerminalProvider } from './FeatureStudioStage';
 import './account-limits.css';
 import { expiredWindow, level, renewsIn, worstWindow } from './account-limits-model';
 
