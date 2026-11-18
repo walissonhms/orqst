@@ -70,7 +70,7 @@ export function PaneCard({
             <span aria-hidden="true">★</span> {t('studio.pane.pilot')}
           </span>
         )}
-        <span className="ts-label">{terminal.label}</span>
+        {terminal.label && <span className="ts-label">{terminal.label}</span>}
         {showName && (
           <span className="ts-name" title={description || undefined}>
             {terminal.name}
@@ -78,9 +78,11 @@ export function PaneCard({
         )}
         {canonical && (
           <>
-            <span className="ts-card-model" title={terminal.model ?? undefined}>
-              {terminal.model ?? '—'}
-            </span>
+            {terminal.model && (
+              <span className="ts-card-model" title={terminal.model}>
+                {terminal.model}
+              </span>
+            )}
             <span className="ts-card-tokens" title={t('terminalStudio.menu.total')}>
               {total === undefined
                 ? '—'

@@ -39,6 +39,7 @@ test('local shell preferences reject malformed storage and unsupported capabilit
       }),
     ),
     {
+      ...defaultShellPreferences,
       view: 'agents',
       workspaceId: 'synthetic-workspace',
       status: 'unknown',

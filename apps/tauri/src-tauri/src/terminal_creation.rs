@@ -42,6 +42,7 @@ struct State {
     generation: u64,
     origin: String,
     busy: bool,
+    passive: bool,
     committed: bool,
     opened: bool,
     prepared: Vec<String>,
@@ -231,7 +232,7 @@ fn valid_request(value: &Value) -> bool {
         .as_u64()
         .is_some_and(|n| n <= 9_007_199_254_740_991);
     match value["action"].as_str() {
-        Some("snapshot") => exact(value, &["action"]),
+        Some("snapshot" | "startup" | "discovery") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
         Some("remove-terminal") => {
             exact(value, &["action", "generation", "workspaceId", "featureId", "catalogId", "terminalId"])
@@ -556,12 +557,13 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
         return None;
     }
     let running = crate::terminal::is_running(app);
+    let metadata = startup_metadata(request);
     let incremental = running
         && matches!(
             request["action"].as_str(),
             Some("catalog" | "create-selected" | "create-batch" | "remove-terminal" | "review-cli")
         );
-    if running
+    if running && !metadata
         && (!incremental
             || !crate::terminal::enrollment_available(app)
             || (request["action"] == "create-selected" && request["count"] != 1))
@@ -571,8 +573,8 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let state = app.state::<Preparation>();
     let mut guard = state.0.lock().unwrap();
     if expected.is_some_and(|generation| generation != guard.generation)
-        || if incremental {
-            if guard.busy || guard.committed {
+        || if metadata || incremental {
+            if guard.busy || (!metadata && guard.committed) {
                 true
             } else {
                 guard.busy = true;
@@ -590,6 +592,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     {
         return None;
     }
+    guard.passive = passive_read(request);
     Some(guard.generation)
 }
 /// Only fixed identifiers cross back to the renderer/dialog. No raw host or Core error is shown.
@@ -763,6 +766,7 @@ fn execute(
     let state = app.state::<Preparation>();
     let mut guard = state.0.lock().unwrap();
     guard.busy = false;
+    guard.passive = false;
     if review_cli {
         guard.committed = false;
     }
@@ -803,13 +807,65 @@ fn execute(
         Err(_) => json!({"status":"denied", "failure":failure.unwrap().0}),
     }
 }
+fn startup_metadata(request: &Value) -> bool {
+    matches!(request["action"].as_str(), Some("startup" | "discovery"))
+}
+
+fn passive_read(request: &Value) -> bool {
+    request["action"] == "catalog" || startup_metadata(request)
+}
+
+fn can_begin_document(request: &Value, focused: bool, current: bool) -> bool {
+    current && (focused || passive_read(request))
+}
+
+fn passive_metadata_reply(request: &Value, result: &Value) -> Option<Value> {
+    match request["action"].as_str()? {
+        "startup" if exact(result, &["kind", "status", "startup"])
+            && result["status"] == "startup"
+            && exact(&result["startup"], &["workspaces"]) => {
+            let workspaces = result["startup"]["workspaces"].as_array()?;
+            let mut seen = std::collections::HashSet::new();
+            if workspaces.len() > 1024 || !workspaces.iter().all(|workspace| {
+                exact(workspace, &["id", "name", "features", "view"])
+                    && seen.insert(workspace["id"].to_string())
+                    && crate::features::valid_snapshot_shape(&json!({
+                        "contractVersion": 1, "storage": "core", "generation": 0,
+                        "workspace": {"id": workspace["id"], "name": workspace["name"]},
+                        "features": workspace["features"], "view": workspace["view"],
+                        "activeFeatureId": workspace["view"]["featureId"],
+                        "slots": [], "layoutSaved": false,
+                    }), true)
+            }) {
+                return None;
+            }
+            Some(json!({"status":"startup", "startup":result["startup"]}))
+        }
+        "discovery" if exact(result, &["kind", "status", "clis"])
+            && result["status"] == "discovery" => {
+            let clis = result["clis"].as_array()?;
+            let mut seen = std::collections::HashSet::new();
+            if clis.len() != 4 || !clis.iter().all(|cli| {
+                exact(cli, &["provider", "lookup"])
+                    && matches!(cli["provider"].as_str(), Some("codex" | "opencode" | "claude" | "antigravity"))
+                    && seen.insert(cli["provider"].to_string())
+                    && matches!(cli["lookup"].as_str(), Some("candidate_found" | "not_found" | "incomplete"))
+            }) {
+                return None;
+            }
+            Some(json!({"status":"discovery", "clis":clis}))
+        }
+        _ => None,
+    }
+}
+
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
     if !valid_request(&request) {
         return json!({"status":"denied"});
     }
     let app = window.app_handle().clone();
-    let settings = matches!(request["action"].as_str(), Some("catalog" | "review-cli"));
+    let settings = passive_read(&request) || request["action"] == "review-cli";
     let identity = || identity(&window, settings);
     if request["action"] == "snapshot" {
         return if identity().is_some() {
@@ -833,7 +889,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return denied();
     };
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
-    if request["action"] != "catalog" && !crate::features::focused(&window).await {
+    if !passive_read(&request) && !crate::features::focused(&window).await {
         diagnostic.record(entry, Outcome::Refused, Effects::NotStarted);
         if request["action"] == "create-batch" {
             return batch_failure(&request, "focus_required", false);
@@ -841,7 +897,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return json!({"status":"focus_required"});
     }
     if identity() != Some((source.clone(), generation))
-        || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
+        || (!passive_read(&request) && request["generation"].as_u64() != Some(generation))
     {
         if request["action"] == "create-batch" {
             diagnostic.record(entry, Outcome::CatalogChanged, Effects::NotStarted);
@@ -874,7 +930,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"review", "files":files})
     } else if matches!(
         request["action"].as_str(),
-        Some("catalog" | "create-selected" | "create-mcp-pair" | "create-batch" | "remove-terminal" | "review-cli")
+        Some("catalog" | "startup" | "discovery" | "create-selected" | "create-mcp-pair" | "create-batch" | "remove-terminal" | "review-cli")
     ) {
         let mut native = request.clone();
         native.as_object_mut().unwrap().remove("generation");
@@ -916,7 +972,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     })
     .await;
     if identity() != Some((source, generation)) {
-        if requested["action"] == "catalog" {
+        if passive_read(&requested) {
             return denied();
         }
         diagnostic.record(entry, Outcome::Uncertain, Effects::Possible);
@@ -929,6 +985,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         }});
     }
     match result {
+        Ok(value) if matches!(value["status"].as_str(), Some("startup" | "discovery")) => value,
         Ok(value) if value["status"] == "batch" => value,
         Ok(value) if requested["action"] == "create-batch" => {
             batch_helper_failure(&requested, &value)
@@ -1220,8 +1277,12 @@ pub fn configure(
 /// Called on the AppKit thread by the existing process-lifetime observer.
 #[cfg(target_os = "macos")]
 pub(crate) fn native_key_changed(app: &tauri::AppHandle) {
-    if !app.state::<Preparation>().0.lock().unwrap().busy {
-        return;
+    {
+        let state = app.state::<Preparation>();
+        let guard = state.0.lock().unwrap();
+        if !guard.busy || guard.passive {
+            return;
+        }
     }
     let owned = app
         .get_window("main")
@@ -1242,7 +1303,8 @@ fn run(
     diagnostic: &Attempt,
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
-    let admission = crate::terminal::preparation_admission(app)?;
+    let metadata = startup_metadata(&request);
+    let admission = if metadata { None } else { crate::terminal::preparation_admission(app)? };
     // Native modal dialogs temporarily receive focus. Bind to the original visible
     // document and expiry, not the dialog's focus transition. CLI starts retain the
     // separate existing exact-document/focus/one-shot signed authorization.
@@ -1253,15 +1315,15 @@ fn run(
             && window.window().is_visible().unwrap_or(false)
             && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
-            && (!crate::terminal::is_running(app)
+            && (metadata || !crate::terminal::is_running(app)
                 || (matches!(
                     request["action"].as_str(),
                     Some("catalog" | "create-selected" | "create-batch" | "remove-terminal" | "review-cli")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
-            && crate::terminal::preparation_admission_current(app, &admission)
+            && (metadata || crate::terminal::preparation_admission_current(app, &admission))
     };
-    if !window.window().is_focused().unwrap_or(false) || !current() {
+    if !can_begin_document(&request, window.window().is_focused().unwrap_or(false), current()) {
         return Err("Preparation document unavailable".into());
     }
     let script = app
@@ -1375,6 +1437,9 @@ fn run(
                 if value["kind"] == "complete" {
                     complete = Some(value);
                     continue;
+                }
+                if passive_read(&request) {
+                    return Err("Unexpected interactive message for a passive read".into());
                 }
                 let id = value["id"].as_u64().ok_or("Invalid dialog sequence")?;
                 sequence += 1;
@@ -1599,6 +1664,9 @@ fn run(
             diagnostic,
         );
     }
+    if matches!(request["action"].as_str(), Some("startup" | "discovery")) {
+        return passive_metadata_reply(&request, &result).ok_or("Invalid startup metadata".into());
+    }
     if request["action"] == "catalog" {
         if result["status"] != "catalog"
             || !valid_catalog(&result["catalog"], &request)
@@ -1819,6 +1887,21 @@ mod tests {
     use super::{create_action, document_matches, invalidates_preparation, valid_request, State};
     use serde_json::json;
     use tauri::WindowEvent;
+
+    #[test]
+    fn unfocused_startup_allows_only_passive_reads_on_the_current_document() {
+        for action in ["catalog", "startup", "discovery"] {
+            let request = json!({"action":action});
+            assert!(super::can_begin_document(&request, false, true));
+            assert!(!super::can_begin_document(&request, true, false));
+        }
+        for action in ["create", "create-selected", "create-batch", "create-mcp-pair", "review", "review-cli", "remove-terminal"] {
+            let request = json!({"action":action});
+            assert!(!super::can_begin_document(&request, false, true));
+            assert!(super::can_begin_document(&request, true, true));
+        }
+        assert!(!super::valid_request(&json!({"action":"startup","workspaceId":"injected"})));
+    }
 
     #[test]
     fn failure_contract_is_bounded_and_native_commit_evidence_cannot_be_downgraded() {

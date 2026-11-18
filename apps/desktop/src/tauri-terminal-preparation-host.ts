@@ -1,4 +1,12 @@
-import { terminalPreparationContextSchema } from '../../../packages/core/src/terminal/preparation-context.js';
+import {
+  inspectPreparationDatabases,
+  terminalPreparationContextSchema,
+} from '../../../packages/core/src/terminal/preparation-context.js';
+import { readStudioFeatureTree } from '../../../packages/core/src/terminal/layout-database.js';
+import { discoverLocalClis } from '../../../packages/core/src/terminal/local-cli.js';
+import { lookupTerminalWorkspace } from '@orqst/database';
+import { cliDiscoverySchema, studioStartupSchema } from '@orqst/protocol';
+import { basename } from 'node:path';
 import { desktopAdmissionContextSchema } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 import { createInstance } from 'i18next';
 import { z } from 'zod';
@@ -14,6 +22,36 @@ async function main() {
   if (!/^v24\./.test(process.version)) throw new Error('Node 24 required');
   const parent = z.string().min(1).max(2048).parse(process.argv[3]);
   const home = z.string().min(1).max(2048).parse(process.env.HOME);
+  const raw: unknown = JSON.parse(process.argv[2]!);
+  const passive = z.strictObject({ action: z.enum(['startup', 'discovery']) }).safeParse(raw);
+  if (passive.success) {
+    const trusted = terminalPreparationContextSchema.parse(JSON.parse(process.argv[4]!));
+    const data =
+      passive.data.action === 'startup'
+        ? (() => {
+            inspectPreparationDatabases(trusted);
+            const workspaces = readStudioFeatureTree(trusted.preferencesDirectory).map(
+              (workspace) => {
+                const path = lookupTerminalWorkspace(trusted.observerDatabase, workspace.id);
+                return { ...workspace, name: (path && basename(path)) || workspace.id };
+              },
+            );
+            return { status: 'startup', startup: studioStartupSchema.parse({ workspaces }) };
+          })()
+        : {
+            status: 'discovery',
+            clis: cliDiscoverySchema.parse(
+              discoverLocalClis(process.env.PATH ?? '', home).map(({ provider, lookup }) => ({
+                provider,
+                lookup,
+              })),
+            ),
+          };
+    const line = JSON.stringify({ kind: 'complete', ...data }) + '\n';
+    if (Buffer.byteLength(line) > 96 * 1024) throw new Error('Studio startup metadata too large');
+    process.stdout.write(line);
+    return;
+  }
   const i18n = createInstance();
   await i18n.init({
     lng: process.env.LANG?.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en-US',
@@ -82,7 +120,7 @@ async function main() {
   process.stdin.resume();
   try {
     const result = await prepareTauriTerminals(
-      JSON.parse(process.argv[2]!),
+      raw,
       { parent, home, node: process.execPath, environment: process.env },
       {
         current: () => live,

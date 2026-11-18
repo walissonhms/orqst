@@ -40,10 +40,18 @@
 
 .pane-lifecycle-content {
   display: grid;
-  min-height: 130px;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  text-align: center;
   align-content: center;
   justify-items: center;
   gap: 8px;
+}
+
+.pane-lifecycle-actions {
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .pane-lifecycle-ended {

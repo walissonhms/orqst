@@ -14,6 +14,7 @@ import {
 import type {
   AgentStatus,
   ArtifactExtractionRequest,
+  FeatureCanvasEvidence,
   Preferences,
   SessionView,
   Snapshot,
@@ -485,13 +486,17 @@ export function App() {
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
+  const managedShell = window.orqstFeatures?.contractVersion === 1;
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
+  const [managedWorkspaceId, setManagedWorkspaceId] = useState(shell.managedWorkspaceId);
+  const [viewedFeatureId, setViewedFeatureId] = useState(shell.managedFeatureId);
+  const [newManagedWorkspace, setNewManagedWorkspace] = useState<{ id: string; name: string }>();
   const [view, setView] = useState<AppView>(() => {
     const explicit = viewFromLocation(location);
     if (explicit) return explicit;
     if (location.hash) return 'overview';
     const startup = readStartup();
-    return startup === 'last' ? shell.view : startup;
+    return startup === 'last' ? (managedShell ? 'studio' : shell.view) : startup;
   });
   const [studioCommand, setStudioCommand] = useState<StudioShellCommand>();
   const [featureError, setFeatureError] = useState(false);
@@ -530,19 +535,49 @@ export function App() {
     };
   }, []);
   const featureShell = useFeatureShell(view === 'communication');
-  const featureSnapshot = featureShell.snapshot;
-  const managedShell = window.orqstFeatures?.contractVersion === 1;
-  const managedStudio =
-    managedShell &&
-    view === 'studio' &&
-    (!workspaceId || workspaceId === featureSnapshot?.workspace.id);
-  const managedFeature = featureSnapshot?.features.find(
-    (feature) => feature.featureId === featureSnapshot.activeFeatureId,
+  const liveSnapshot = featureShell.snapshot;
+  const [studioCanvas, setStudioCanvas] = useState<{
+    workspaceId: string;
+    canvas: FeatureCanvasEvidence;
+  }>();
+  const managedWorkspaces = featureShell.startup?.workspaces ?? [];
+  const liveWorkspace = liveSnapshot?.workspace;
+  const savedWorkspace =
+    managedWorkspaces.find(({ id }) => id === shell.workspaceId) ?? managedWorkspaces[0];
+  const activeWorkspace =
+    managedWorkspaces.find(({ id }) => id === managedWorkspaceId) ??
+    liveWorkspace ??
+    newManagedWorkspace ??
+    savedWorkspace;
+  const activeSaved = managedWorkspaces.find(({ id }) => id === activeWorkspace?.id);
+  const usingLiveWorkspace = liveWorkspace?.id === activeWorkspace?.id && !!liveSnapshot;
+  const features = usingLiveWorkspace ? liveSnapshot.features : (activeSaved?.features ?? []);
+  const defaultId = activeWorkspace && defaultFeatureId(activeWorkspace.id);
+  const savedFeatureId = activeSaved?.view.featureId;
+  const selectedSavedFeature = [viewedFeatureId, savedFeatureId, defaultId].find((id) =>
+    features.some((feature) => feature.featureId === id && feature.status !== 'archived'),
   );
-  const studioScope = featureSnapshot
+  const displayFeatureId = usingLiveWorkspace
+    ? liveSnapshot.activeFeatureId
+    : (selectedSavedFeature ?? null);
+  const featureSnapshot = usingLiveWorkspace ? liveSnapshot : undefined;
+  const managedStudio = !!managedShell && view === 'studio';
+  const savedStudio =
+    activeSaved && !usingLiveWorkspace
+      ? {
+          workspace: { id: activeSaved.id, name: activeSaved.name },
+          features: activeSaved.features,
+          view: activeSaved.view,
+          activeFeatureId: displayFeatureId,
+        }
+      : undefined;
+  const managedFeature = features.find((feature) => feature.featureId === displayFeatureId);
+  const studioScope = activeWorkspace
     ? {
-        workspace: featureSnapshot.workspace,
-        featureId: featureSnapshot.activeFeatureId,
+        workspace: activeWorkspace,
+        featureId: usingLiveWorkspace
+          ? liveSnapshot.activeFeatureId
+          : (activeSaved?.view.featureId ?? null),
         featureName: managedFeature
           ? featureDisplayName(managedFeature, t('features.defaultName'))
           : undefined,
@@ -559,12 +594,19 @@ export function App() {
     try {
       localStorage.setItem(
         shellStorageKey,
-        JSON.stringify({ ...shell, view, workspaceId, status }),
+        JSON.stringify({
+          ...shell,
+          view,
+          workspaceId,
+          managedWorkspaceId,
+          managedFeatureId: viewedFeatureId,
+          status,
+        }),
       );
     } catch {
       // Disabled or full browser storage must not prevent observation.
     }
-  }, [shell, view, workspaceId, status]);
+  }, [shell, view, workspaceId, managedWorkspaceId, viewedFeatureId, status]);
   const [selected, setSelected] = useState<string>();
   const [headerMetrics, setHeaderMetrics] = useState<{
     sessionId: string;
@@ -961,24 +1003,40 @@ export function App() {
     observedWorkspaceId: workspaceId,
     onObservedWorkspaceChange: (id) => openWorkspace(id),
   };
-  const managedWorkspace = featureSnapshot?.workspace;
-  const shellWorkspaceId = workspaceId || managedWorkspace?.id || '';
-  const shellWorkspace =
-    currentWorkspace ?? (shellWorkspaceId === managedWorkspace?.id ? managedWorkspace : undefined);
-  const managedSelected = !!managedWorkspace && shellWorkspaceId === managedWorkspace.id;
+  const managedWorkspace = activeWorkspace;
+  const shellWorkspaceId = managedShell ? (managedWorkspace?.id ?? '') : workspaceId;
+  const shellWorkspace = managedShell ? managedWorkspace : currentWorkspace;
+  const managedSelected = !!managedWorkspace;
   const coreConnection = offline ? 'offline' : connection;
   const featureWritable =
-    managedSelected && coreConnection !== 'offline' && !quitFence && !featureShell.busy;
+    usingLiveWorkspace && coreConnection !== 'offline' && !quitFence && !featureShell.busy;
   const openSlots = new Set(
-    featureSnapshot?.slots.filter((slot) => !slot.closed).map((slot) => slot.terminalId),
+    studioCanvas?.workspaceId === featureSnapshot?.workspace.id
+      ? studioCanvas?.canvas.entries
+          .filter(
+            ({ slot, terminalId, state }) =>
+              state === 'running' &&
+              featureSnapshot?.slots.some(
+                (entry) => entry.slot === slot && entry.terminalId === terminalId && !entry.closed,
+              ),
+          )
+          .map(({ terminalId }) => terminalId)
+      : [],
   );
-  const managedFeatures = (featureSnapshot?.features ?? []).filter(
-    (feature) => feature.status !== 'archived',
-  );
+  const managedFeatures = features.filter((feature) => feature.status !== 'archived');
 
   function selectWorkspace(id: string) {
     setFeatureError(false);
-    openWorkspace(id === managedWorkspace?.id ? '' : id, 'studio');
+    if (!managedShell) {
+      openWorkspace(id, 'studio');
+      return;
+    }
+    requestNavigation(() => {
+      if (id !== shellWorkspaceId) setViewedFeatureId('');
+      setManagedWorkspaceId(id);
+      applySession(undefined);
+      applyView('studio', '');
+    });
   }
   function openFeature(id: string, terminalId?: string) {
     requestNavigation(() => {
@@ -988,10 +1046,17 @@ export function App() {
           if (!(await openStudioCard({ featureId: id, terminalId }))) setFeatureError(true);
           return;
         }
+        if (!usingLiveWorkspace && features.some((feature) => feature.featureId === id)) {
+          if (activeWorkspace) setManagedWorkspaceId(activeWorkspace.id);
+          setViewedFeatureId(id);
+          applyView('studio');
+          return;
+        }
         if (!(await featureShell.select(id))) {
           setFeatureError(true);
           return;
         }
+        setViewedFeatureId('');
         setWorkspaceId('');
         applyView('studio');
       })();
@@ -1037,7 +1102,7 @@ export function App() {
     return (await studioFocus.current?.(target.featureId, target.terminalId)) ?? false;
   }
 
-  async function startOnboarding(path: string | undefined, skip: boolean) {
+  async function startOnboarding(path: string | undefined) {
     if (path) {
       const name = path.split(/[\\/]/).filter(Boolean).at(-1)?.slice(0, 100) ?? path.slice(0, 100);
       const workspace = await api<{ id: string }>('/api/workspaces', {
@@ -1046,24 +1111,7 @@ export function App() {
       });
       await refresh();
       setWorkspaceId(workspace.id);
-    } else if (!skip && featureSnapshot && featureShell.native) {
-      const general = defaultFeatureId(featureSnapshot.workspace.id);
-      if (
-        featureSnapshot.activeFeatureId !== general &&
-        featureSnapshot.features.some(
-          (feature) => feature.featureId === general && feature.status !== 'archived',
-        )
-      ) {
-        const selection = await featureShell.native.request({
-          action: 'select',
-          contractVersion: 1,
-          generation: featureSnapshot.generation,
-          featureId: general,
-          expectedRevision: featureSnapshot.view.revision,
-        });
-        if (selection.status !== 'ok' || selection.snapshot?.activeFeatureId !== general)
-          throw new Error('Workspace Feature unavailable');
-      }
+      if (managedShell) setNewManagedWorkspace({ id: workspace.id, name });
     }
     navigate('studio', true);
   }
@@ -1076,14 +1124,22 @@ export function App() {
     });
   }
 
-  const paletteWorkspaces = new Map(
-    (snapshot?.workspaces ?? []).map(({ id, name }) => [id, { id, name }]),
+  const catalogue = new Map(
+    managedWorkspaces.map(({ id, name, features }) => [
+      id,
+      { id, name, count: features.filter(({ status }) => status !== 'archived').length },
+    ]),
   );
-  if (managedWorkspace) paletteWorkspaces.set(managedWorkspace.id, managedWorkspace);
-  const workspaceRows = [...paletteWorkspaces.values()].map((workspace) => ({
-    ...workspace,
-    count: workspace.id === managedWorkspace?.id ? managedFeatures.length : 0,
-  }));
+  if (liveSnapshot)
+    catalogue.set(liveSnapshot.workspace.id, {
+      ...liveSnapshot.workspace,
+      count: liveSnapshot.features.filter(({ status }) => status !== 'archived').length,
+    });
+  if (newManagedWorkspace && !catalogue.has(newManagedWorkspace.id))
+    catalogue.set(newManagedWorkspace.id, { ...newManagedWorkspace, count: 0 });
+  const workspaceRows = managedShell
+    ? [...catalogue.values()]
+    : (snapshot?.workspaces ?? []).map(({ id, name }) => ({ id, name, count: 0 }));
   const settingsRoute = view === 'settings' || view === 'agents';
   const routeTitle = t(`shell.views.${settingsRoute ? 'settings' : view}`);
   const featureName = managedSelected ? studioScope?.featureName : undefined;
@@ -1107,7 +1163,7 @@ export function App() {
             }))
           : []
       }
-      featureId={featureSnapshot?.activeFeatureId}
+      featureId={displayFeatureId}
       featureWritable={featureWritable}
       onWorkspace={selectWorkspace}
       onFeature={openFeature}
@@ -1152,6 +1208,7 @@ export function App() {
           onNotificationsOpen={setOwnedNotificationsOpen}
           onUnreadChange={setOwnedUnread}
           onRevealStudio={() => {
+            if (liveWorkspace) setManagedWorkspaceId(liveWorkspace.id);
             setWorkspaceId('');
             applyView('studio');
           }}
@@ -1159,8 +1216,12 @@ export function App() {
           onObservedNotifications={() => setNotificationOpen(true)}
           preparationRequest={preparationRequest}
           onPreparationHandled={() => setPreparationRequest(undefined)}
-          workspaces={studioTree.observedWorkspaces}
-          workspaceId={studioTree.observedWorkspaceId}
+          savedStudio={savedStudio}
+          onSavedMetadataChange={featureShell.retryStartup}
+          onCanvas={setStudioCanvas}
+          workspaces={managedWorkspace ? [managedWorkspace] : []}
+          workspaceId={managedWorkspace?.id}
+          liveWorkspaceId={liveWorkspace?.id}
           onWorkspace={studioTree.onObservedWorkspaceChange}
         />
       </StudioShellContext.Provider>
@@ -1197,10 +1258,17 @@ export function App() {
 
       {studioOutlet}
       {view === 'studio' ? (
-        managedStudio ? null : managedShell ? (
-          <p className="notice" role="status">
-            {t('shell.frame.observedWorkspace')}
-          </p>
+        managedStudio ? (
+          !featureSnapshot &&
+          !featureShell.startupPending &&
+          !featureShell.startup && (
+            <div className="notice" role="alert">
+              {t('features.creationUnavailable')}
+              <button type="button" className="button" onClick={featureShell.retryStartup}>
+                {t('paneLifecycle.retry')}
+              </button>
+            </div>
+          )
         ) : (
           <FeatureStudio />
         )
@@ -1214,9 +1282,9 @@ export function App() {
           initialTab={view === 'agents' ? 'agents' : undefined}
           notifications={notificationPreferences(true)}
           catalogScope={
-            featureSnapshot && {
-              workspaceId: featureSnapshot.workspace.id,
-              featureId: featureSnapshot.activeFeatureId,
+            studioScope && {
+              workspaceId: studioScope.workspace.id,
+              featureId: studioScope.featureId,
             }
           }
           defaultFolder={currentWorkspace?.path}
@@ -1321,20 +1389,16 @@ export function App() {
           onClose={() => setPaletteOpen(false)}
         />
       )}
-      {guideOpen && (
-        <ObservationGuide
-          scope={
-            featureSnapshot && {
-              workspaceId: featureSnapshot.workspace.id,
-              featureId: featureSnapshot.activeFeatureId,
-            }
-          }
-          workspaceName={featureSnapshot?.workspace.name}
-          canCreateWorkspace={!managedShell && !!snapshot && connection === 'connected' && !error}
-          onStart={startOnboarding}
-          onClose={closeGuide}
-        />
-      )}
+      {guideOpen &&
+        (managedShell
+          ? featureShell.startup?.workspaces.length === 0 && !liveSnapshot && !featureShell.loading
+          : !!snapshot) && (
+          <ObservationGuide
+            canCreateWorkspace={!!snapshot && connection === 'connected' && !error}
+            onStart={startOnboarding}
+            onClose={closeGuide}
+          />
+        )}
       {notificationOpen && (
         <Modal
           label={t('notifications')}
@@ -1519,7 +1583,10 @@ export function App() {
       connection={coreConnection}
       onReconnect={reconnect}
       loading={
-        !offline && (managedStudio ? featureShell.loading : !snapshot || Boolean(initialScan))
+        !offline &&
+        (managedStudio
+          ? featureShell.loading || (!liveSnapshot && featureShell.startupPending)
+          : !snapshot || Boolean(initialScan))
       }
       studio={managedStudio}
       overlays={overlays}

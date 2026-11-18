@@ -183,7 +183,10 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
                 window.featureUpdates.push(input);
                 return { status: 'denied', snapshot: { ...snapshot, generation: window.generation } };
               }
-              return { status: 'ok', snapshot: { ...snapshot, generation: window.generation } };
+              const at = Date.now();
+              const canvas = { observedAt: at, entries: snapshot.slots.map(({ slot, terminalId }) =>
+                ({ slot, terminalId, state: 'running', startedAt: at - 1000 })) };
+              return { status: 'ok', snapshot: { ...snapshot, generation: window.generation }, canvas };
             },
             arrange: async (input) => { window.arrangeFrames.push(input); return { status: 'ok', snapshot }; },
           };

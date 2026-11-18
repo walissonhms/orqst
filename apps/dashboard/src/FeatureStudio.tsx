@@ -23,6 +23,7 @@ import {
   type FeatureNativeSnapshot,
   type FeatureCanvasEvidence,
   type WorkspaceFeature,
+  type TerminalPreparationCatalog,
 } from '@orqst/protocol';
 import './feature-workspace.css';
 import { dockGeneration, workspacePanes, type WorkspacePane } from './feature-workspace-dock.js';
@@ -41,6 +42,7 @@ import {
   useOwnedPaneEvidence,
 } from './use-terminal-lifecycle.js';
 import { PaneLifecycleContent } from './PaneLifecycleContent.js';
+import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catalog-cache.js';
 import {
   projectPaneLifecycle,
   reconcileEndedTerminals,
@@ -87,8 +89,6 @@ export interface StudioCreationScope {
   workspaceName?: string;
 }
 
-type PaneCommand = Extract<FeatureNativeRequest, { action: 'pane' }>['command'];
-
 type Action = FeatureNativeRequest extends infer R
   ? R extends FeatureNativeRequest
     ? Omit<R, 'contractVersion' | 'generation'>
@@ -117,6 +117,10 @@ export function FeatureStudio({
   onObservedNotifications,
   workspaces = [],
   workspaceId = '',
+  savedStudio,
+  liveWorkspaceId,
+  onSavedMetadataChange,
+  onCanvas,
 }: {
   nativeWorkspace?: boolean;
   focusRef?: Ref<StudioFocus>;
@@ -132,6 +136,10 @@ export function FeatureStudio({
   onObservedNotifications?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
+  savedStudio?: Pick<FeatureNativeSnapshot, 'workspace' | 'features' | 'view' | 'activeFeatureId'>;
+  liveWorkspaceId?: string;
+  onSavedMetadataChange?: () => void;
+  onCanvas?: (evidence: { workspaceId: string; canvas: FeatureCanvasEvidence }) => void;
   onWorkspace?: (id: string) => void;
 }) {
   const { t } = useTranslation();
@@ -179,7 +187,22 @@ export function FeatureStudio({
   }, [preparationRequest, onPreparationHandled, openPreparation]);
 
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
-  const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
+  const [liveSnapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
+  const snapshot = useMemo<FeatureNativeSnapshot | undefined>(
+    () =>
+      savedStudio
+        ? {
+            ...savedStudio,
+            contractVersion: 1,
+            storage: 'core',
+            generation: 0,
+            slots: [],
+            layoutSaved: false,
+          }
+        : liveSnapshot,
+    [savedStudio, liveSnapshot],
+  );
+  const nativeSnapshot = savedStudio ? undefined : liveSnapshot;
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
   // Provider-reported limits only.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
@@ -330,13 +353,47 @@ export function FeatureStudio({
     !!structured &&
     !!snapshot;
 
-  const hasSnapshot = !!snapshot;
+  const hasSnapshot = !!liveSnapshot;
+  const reconciling = !!nativeSnapshot?.slots.some(({ closed }) => !closed) && !evidence;
   const openingWorkspaceId = snapshot?.workspace.id ?? workspaceId;
+  const preparationFeatureId = savedStudio
+    ? savedStudio.view.featureId
+    : (snapshot?.activeFeatureId ?? null);
+  const preparationMatchesView =
+    !savedStudio || !preparationFeatureId || preparationFeatureId === selected?.featureId;
   const openingTerminals = useTerminalLifecycle(
     openingWorkspaceId,
     snapshot?.activeFeatureId ?? null,
-    !nativeWorkspace && studio ? window.orqstTauriStudio : undefined,
+    !nativeWorkspace && studio && (!liveWorkspaceId || !savedStudio) ? creator : undefined,
+    preparationFeatureId,
   );
+  const [history, setHistory] = useState<TerminalPreparationCatalog>();
+  useEffect(() => {
+    if (
+      !creator ||
+      !openingWorkspaceId ||
+      !selected?.terminalDisplays?.some(({ released }) => released)
+    )
+      return;
+    let active = true;
+    void loadTerminalCatalog(creator, {
+      workspaceId: openingWorkspaceId,
+      featureId: preparationFeatureId,
+    })
+      .then((reply) => {
+        if (active && reply.status === 'catalog') setHistory(reply.catalog);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [
+    creator,
+    openingWorkspaceId,
+    preparationFeatureId,
+    selected?.revision,
+    selected?.terminalDisplays,
+  ]);
   const paneEvidence = useOwnedPaneEvidence();
   const openingByTerminal = useMemo(
     () => new Map(openingTerminals.map((card) => [card.terminalId ?? card.id, card])),
@@ -373,8 +430,15 @@ export function FeatureStudio({
     });
   }, [snapshot, selected, panes, evidence, now, paneEvidence, openingByTerminal, coreState]);
   const ownedTerminals = useMemo(
-    () => existing.filter(({ cardState }) => cardState !== 'ended'),
-    [existing],
+    () =>
+      existing.filter(({ id, cardState }) => {
+        if (cardState === 'ended') return false;
+        const facts = paneEvidence.get(id);
+        if (facts?.process === 'uncertain') return false;
+        if (openingByTerminal.has(id) || facts?.process === 'live') return true;
+        return ['ready', 'running', 'waiting_for_user', 'failed'].includes(cardState);
+      }),
+    [existing, openingByTerminal, paneEvidence],
   );
   const terminals = useMemo<StudioTerminal[]>(
     () => [
@@ -388,7 +452,7 @@ export function FeatureStudio({
         .map((card): StudioTerminal => ({
           id: card.id,
           correlationId: card.id,
-          label: '—',
+          label: '',
           name: card.name,
           provider: card.provider,
           status: 'unknown',
@@ -649,9 +713,13 @@ export function FeatureStudio({
           setCommunication([]);
           setEvidence(undefined);
         }
-        if (accepted && reply.canvas) setEvidence(reply.canvas);
+        if (accepted && reply.snapshot && reply.canvas) {
+          setEvidence(reply.canvas);
+          onCanvas?.({ workspaceId: reply.snapshot.workspace.id, canvas: reply.canvas });
+        }
         if (accepted && reply.communication) setCommunication(reply.communication.events);
         const observedAt = Date.now();
+        if (accepted && reply.canvas) setNow(observedAt);
         if (reply.status === 'ok' && accepted && reply.snapshot) {
           if (readsLimits) {
             const prior = priorLimits.current;
@@ -710,7 +778,7 @@ export function FeatureStudio({
         }
       }
     },
-    [native, acceptSnapshot, addNotifications],
+    [native, acceptSnapshot, addNotifications, onCanvas],
   );
 
   useEffect(() => {
@@ -822,10 +890,6 @@ export function FeatureStudio({
     return () => window.removeEventListener('orqst-terminal-dock', update);
   }, []);
 
-  function paneCommand(slot: number, command: PaneCommand) {
-    const member = available.find((entry) => entry.slot === slot);
-    if (member) void request({ action: 'pane', slot, terminalId: member.terminalId, command });
-  }
   function editPane(slot: number) {
     const member = available.find((entry) => entry.slot === slot);
     if (member)
@@ -870,7 +934,7 @@ export function FeatureStudio({
     const target =
       terminalId &&
       studioRef.current?.querySelector<HTMLElement>(
-        `.ts-body[data-terminal-id="${CSS.escape(terminalId)}"] .ts-open button`,
+        `.ts-pane[data-pane-id="${CSS.escape(terminalId)}"]`,
       );
     const scope = focusScope.workspace
       ? '[data-managed-workspace]'
@@ -969,11 +1033,13 @@ export function FeatureStudio({
       if (created) await selectScope(created);
     }
   }
-  const canWrite = coreState === 'online' && !!snapshot && !quitFence;
+  const canWrite = coreState === 'online' && !!nativeSnapshot && !quitFence;
   const canPrepare =
     !quitFence &&
     selected?.status !== 'archived' &&
-    (!nativeWorkspace || (canWrite && !!native?.showPreparationDrawer));
+    (nativeWorkspace
+      ? canWrite && !!native?.showPreparationDrawer
+      : (!liveWorkspaceId || !!nativeSnapshot) && preparationMatchesView && !!openingWorkspaceId);
   // The New terminal dialog has its own latch: snapshot polling must not refuse the click.
   async function prepare(slot?: number, reopenTerminalId?: string) {
     if (preparing.current) {
@@ -993,7 +1059,7 @@ export function FeatureStudio({
     if (!nativeWorkspace) {
       openPreparation({
         workspaceId: snapshot?.workspace.id ?? workspaceId,
-        featureId: snapshot?.activeFeatureId ?? null,
+        featureId: preparationFeatureId,
         workspaceName: snapshot?.workspace.name,
         featureName: selected ? displayFeatureName(selected) : undefined,
         reopenTerminalId,
@@ -1110,32 +1176,66 @@ export function FeatureStudio({
     </button>
   );
   const savedMembers = reconcileEndedTerminals(
-    members.flatMap((id): EndedTerminal[] => {
+    members.map((id): EndedTerminal => {
       const slot = snapshot?.slots.find((entry) => entry.terminalId === id);
       const terminal = existing.find(({ id: terminalId }) => terminalId === id);
       const display = selected?.terminalDisplays?.find(({ terminalId }) => terminalId === id);
-      const exited = display?.released || terminal?.cardState === 'ended';
-      return !slot || slot.closed || exited
-        ? [
-            {
-              terminalId: id,
-              disposition: exited ? 'exit_confirmed' : 'uncertain',
-              released: display?.released,
-              displayId:
-                display?.displayId ??
-                (slot ? `T-${String(slot.slot + 1).padStart(3, '0')}` : undefined),
-              ...(slot ? { provider: slot.provider } : {}),
-              name: terminal?.name ?? slot?.displayName,
-            },
-          ]
-        : [];
+      const release =
+        history?.workspaceId === openingWorkspaceId && history.featureId === preparationFeatureId
+          ? history.reopenable?.find(({ terminalId }) => terminalId === id)
+          : undefined;
+      const exit = evidence?.entries.find(
+        ({ terminalId, state }) => terminalId === id && state === 'exited',
+      );
+      return {
+        terminalId: id,
+        disposition:
+          exit || paneEvidence.get(id)?.process === 'exited'
+            ? 'exit_confirmed'
+            : display?.released
+              ? 'kernel_absent'
+              : 'uncertain',
+        released: display?.released,
+        displayId: display?.displayId ?? terminal?.label,
+        provider: slot?.provider ?? release?.provider,
+        name: slot?.displayName ?? terminal?.name ?? release?.name,
+        exitedAt: exit?.exitedAt,
+      };
     }),
     new Set(ownedTerminals.map(({ id }) => id)),
   );
+  async function removeSavedTerminal(terminalId: string) {
+    if (!creator || !savedStudio || !selected || !preparationMatchesView || quitFence) return;
+    const scope = { workspaceId: savedStudio.workspace.id, featureId: preparationFeatureId };
+    try {
+      const catalog = await loadTerminalCatalog(creator, scope, true);
+      if (catalog.status !== 'catalog' || !catalog.snapshot || !catalog.catalog.restoredFeature) {
+        setPrepareIssue('unavailable');
+        return;
+      }
+      const result = await creator.request({
+        action: 'remove-terminal',
+        workspaceId: scope.workspaceId,
+        featureId: catalog.catalog.restoredFeature.featureId,
+        terminalId,
+        catalogId: catalog.catalog.catalogId,
+        generation: catalog.snapshot.generation,
+      });
+      if (result.status === 'ok') {
+        invalidateTerminalCatalog(creator, scope);
+        onSavedMetadataChange?.();
+      } else if (result.status !== 'denied' || result.failure) {
+        setPrepareIssue(result.status);
+      }
+    } catch {
+      setPrepareIssue('unavailable');
+    }
+  }
   const savedTerminalList = (
     <EndedTerminalList
       key={scopeKey}
       terminals={savedMembers}
+      now={now}
       onRemove={
         canWrite && selected && !busy
           ? ({ terminalId }) =>
@@ -1145,7 +1245,9 @@ export function FeatureStudio({
                 terminalId,
                 expectedRevision: selected.revision,
               })
-          : undefined
+          : savedStudio && !liveWorkspaceId && canPrepare && creator
+            ? ({ terminalId }) => void removeSavedTerminal(terminalId)
+            : undefined
       }
       onReopen={
         canPrepare && !busy ? ({ terminalId }) => void prepare(undefined, terminalId) : undefined
@@ -1258,6 +1360,12 @@ export function FeatureStudio({
       <FeatureDelegate
         scope={mentionScope}
         terminals={ownedTerminals}
+        hasAntigravity={
+          snapshot?.slots.some(
+            ({ terminalId, provider }) =>
+              members.includes(terminalId) && provider === 'antigravity',
+          ) || savedMembers.some(({ provider }) => provider === 'antigravity')
+        }
         onSend={sendMention}
         openForRecipient={openDelegate}
         disabled={!canWrite || selected?.status === 'archived'}
@@ -1680,20 +1788,19 @@ export function FeatureStudio({
         ref={studioRef}
         onFocusCapture={(event) => {
           if (!(event.target instanceof HTMLElement)) return;
-          const id = event.target
-            .closest('.ts-pane')
-            ?.querySelector<HTMLElement>('.ts-body[data-terminal-id]')?.dataset.terminalId;
+          const id = event.target.closest<HTMLElement>('.ts-pane[data-pane-id]')?.dataset.paneId;
           if (id) focusedTerminals.current.set(scopeKey, id);
         }}
       >
         <FeatureStudioStage
           key={scopeKey}
+          reconciling={reconciling || !!savedStudio}
           storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}
           terminals={terminals}
           messages={messages}
           recentMessage={recentMessage}
           endingTerminal={endingTerminal}
-          onNewTerminal={canPrepare && snapshot ? (slot) => void prepare(slot) : undefined}
+          onNewTerminal={canPrepare ? (slot) => void prepare(slot) : undefined}
           dockEnd={
             savedMembers.length > 0 && (
               <div className="pane-lifecycle-dock">{savedTerminalList}</div>
@@ -1728,24 +1835,10 @@ export function FeatureStudio({
                   />
                 )
               );
-            return (
-              <div className="ts-open">
-                <button
-                  type="button"
-                  disabled={busy || quitFence}
-                  onClick={() => {
-                    const slot = available.find(({ terminalId }) => terminalId === terminal.id);
-                    if (slot) paneCommand(slot.slot, 'focus');
-                  }}
-                >
-                  {t('terminalStudio.openTerminal')}
-                </button>
-                <span>{terminal.lastActivity ?? t('terminalStudio.noActivity')}</span>
-              </div>
-            );
+            return terminal.lifecycle && <PaneLifecycleContent lifecycle={terminal.lifecycle} />;
           }}
           emptyHint={
-            !snapshot ? (
+            !snapshot && !openingWorkspaceId ? (
               <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
             ) : selected?.status === 'archived' ? (
               <span>{t('feature.archived')}</span>

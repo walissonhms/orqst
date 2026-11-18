@@ -56,7 +56,7 @@ export function studioTerminals(
         label,
         // The Feature composer resolves exactly this Core slot handle.
         ...(selected ? { alias: label } : {}),
-        name: pane?.label && pane.label !== label ? pane.label : fallback,
+        name: slot.displayName ?? (pane?.label && pane.label !== label ? pane.label : fallback),
         provider: slot.provider,
         ...(pane?.active ? { active: true } : {}),
         ...(pane?.minimized ? { nativeMinimized: true } : {}),
@@ -66,15 +66,17 @@ export function studioTerminals(
         cardState:
           entry?.state === 'exited'
             ? 'ended'
-            : entry?.agentState === 'waiting_for_user'
-              ? 'waiting_for_user'
-              : entry?.agentState === 'failed'
-                ? 'failed'
-                : entry?.agentState === 'running'
-                  ? 'running'
-                  : entry?.state === 'running'
-                    ? 'ready'
-                    : 'unknown',
+            : entry?.state !== 'running'
+              ? 'unknown'
+              : entry.agentState === 'waiting_for_user'
+                ? 'waiting_for_user'
+                : entry?.agentState === 'failed'
+                  ? 'failed'
+                  : entry?.agentState === 'running'
+                    ? 'running'
+                    : entry?.state === 'running'
+                      ? 'ready'
+                      : 'unknown',
         ...(entry?.session ? { sessionId: entry.session.sessionId } : {}),
         ...(entry?.activities ? { activity: entry.activities } : {}),
         ...(entry?.startedAt !== undefined && entry.state === 'running'

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from './Modal';
-import { Agents, type CatalogScope } from './Agents';
+import { CliDiscovery } from './Agents';
 
 const onboardedKey = 'orqst.onboarding.v1';
 
@@ -14,13 +14,11 @@ export function needsOnboarding() {
 }
 
 export function ObservationGuide({
-  scope,
   canCreateWorkspace,
   workspaceName,
   onStart,
   onClose,
 }: {
-  scope?: CatalogScope;
   canCreateWorkspace: boolean;
   workspaceName?: string;
   onStart: (path: string | undefined, skip: boolean) => Promise<void>;
@@ -66,7 +64,7 @@ export function ObservationGuide({
         </h1>
         <section className="spec-panel">
           <h2>{t('screens.onboarding.detected')}</h2>
-          <Agents compact scope={scope} />
+          <CliDiscovery />
         </section>
         <label className="spec-field">
           {t('screens.onboarding.folder')}

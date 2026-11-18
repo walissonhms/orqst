@@ -347,6 +347,7 @@ export interface FeatureDelegateProps {
   scope: FeatureMentionScope | null;
   /** Membership from the active Feature's authoritative snapshot only. */
   terminals: StudioTerminal[];
+  hasAntigravity?: boolean;
   onSend: (scope: FeatureMentionScope, message: MentionSend) => Promise<DeliveryState>;
   disabled?: boolean;
   openForRecipient?: Ref<(terminalId: string) => void>;
@@ -365,6 +366,7 @@ export function FeatureDelegate(props: FeatureDelegateProps) {
 function FeatureDelegateAction({
   scope,
   terminals,
+  hasAntigravity,
   onSend,
   disabled,
   openForRecipient,
@@ -456,13 +458,11 @@ function FeatureDelegateAction({
       </button>
       {open && scope && (
         <DelegateDialog
+          hasAntigravity={
+            hasAntigravity ?? members.some(({ provider }) => provider === 'antigravity')
+          }
           terminals={
-            dispatch
-              ? members.filter(
-                  ({ id, provider }) =>
-                    dispatch.recipients.includes(id) || provider === 'antigravity',
-                )
-              : members
+            dispatch ? members.filter(({ id }) => dispatch.recipients.includes(id)) : members
           }
           from={defaultSender?.id}
           to={recipient}

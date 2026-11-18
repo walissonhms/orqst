@@ -12,6 +12,8 @@ export type AppView = DashboardView;
 export interface ShellPreferences {
   view: AppView;
   workspaceId: string;
+  managedWorkspaceId: string;
+  managedFeatureId: string;
   status: string;
   workspaceLayout: 'grid' | 'list';
   workspaceSort: 'recent' | 'name';
@@ -20,6 +22,8 @@ export const shellStorageKey = 'orqst.shell.v1';
 export const defaultShellPreferences: ShellPreferences = {
   view: 'studio',
   workspaceId: '',
+  managedWorkspaceId: '',
+  managedFeatureId: '',
   status: '',
   workspaceLayout: 'grid',
   workspaceSort: 'recent',
@@ -37,6 +41,14 @@ export function parseShellPreferences(value: string | null): ShellPreferences {
       workspaceId:
         typeof record.workspaceId === 'string' && record.workspaceId.length <= 200
           ? record.workspaceId
+          : '',
+      managedWorkspaceId:
+        typeof record.managedWorkspaceId === 'string' && record.managedWorkspaceId.length <= 200
+          ? record.managedWorkspaceId
+          : '',
+      managedFeatureId:
+        typeof record.managedFeatureId === 'string' && record.managedFeatureId.length <= 36
+          ? record.managedFeatureId
           : '',
       status:
         typeof record.status === 'string' &&

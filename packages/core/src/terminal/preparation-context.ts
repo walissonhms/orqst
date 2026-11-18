@@ -14,12 +14,7 @@ export const terminalPreparationContextSchema = z.strictObject({
 });
 export type TerminalPreparationContext = z.infer<typeof terminalPreparationContextSchema>;
 
-export function resolveTerminalPreparationContext(
-  trusted: TerminalPreparationContext,
-  workspaceId: string,
-  featureId: string | null,
-  restoreSavedFeature = false,
-) {
+export function inspectPreparationDatabases(trusted: TerminalPreparationContext) {
   terminalPreparationContextSchema.parse(trusted);
   // Bounded metadata validation without reading/copying captured session content.
   const db = lstatSync(trusted.observerDatabase);
@@ -35,6 +30,16 @@ export function resolveTerminalPreparationContext(
     throw new Error('Unsafe workspace catalogue');
   terminalDirectory(dirname(trusted.observerDatabase), true);
   terminalDirectory(trusted.preferencesDirectory, true);
+  return db;
+}
+
+export function resolveTerminalPreparationContext(
+  trusted: TerminalPreparationContext,
+  workspaceId: string,
+  featureId: string | null,
+  restoreSavedFeature = false,
+) {
+  const db = inspectPreparationDatabases(trusted);
   const project = readTerminalWorkspace(trusted.observerDatabase, workspaceId);
   terminalDirectory(project);
   if (stableId('workspace', project) !== workspaceId) throw new Error('Workspace identity changed');
