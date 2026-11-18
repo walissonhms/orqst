@@ -1493,9 +1493,10 @@ export function App() {
                       >
                         <Search size={16} aria-hidden="true" />
                       </button>
-                      {notificationControl}
                     </>
                   }
+                  notificationPreferences={notificationPreferences}
+                  onObservedNotifications={() => setNotificationOpen(true)}
                   toolbarUtilities={
                     <div className="feature-toolbar-utilities">{languageControl}</div>
                   }

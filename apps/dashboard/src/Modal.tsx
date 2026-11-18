@@ -5,12 +5,14 @@ export function Modal({
   label,
   className,
   initialFocus,
+  nativeOverlay,
   onClose,
   children,
 }: {
   label: string;
   className: string;
   initialFocus?: string;
+  nativeOverlay?: boolean;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -30,6 +32,7 @@ export function Modal({
       ref={ref}
       className={className}
       aria-label={label}
+      data-native-overlay={nativeOverlay ? '' : undefined}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

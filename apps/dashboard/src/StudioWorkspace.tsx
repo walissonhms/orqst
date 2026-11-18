@@ -19,6 +19,8 @@ export interface StudioCreationScope {
 export function StudioWorkspace({
   navigation,
   toolbarUtilities,
+  notificationPreferences,
+  onObservedNotifications,
   preparationRequest,
   onPreparationHandled,
   workspaces = [],
@@ -27,6 +29,8 @@ export function StudioWorkspace({
 }: {
   navigation?: ReactNode;
   toolbarUtilities?: ReactNode;
+  notificationPreferences?: ReactNode;
+  onObservedNotifications?: () => void;
   preparationRequest?: FeaturePreparationRequest;
   onPreparationHandled?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
@@ -83,6 +87,8 @@ export function StudioWorkspace({
         onWorkspace={onWorkspace}
         navigation={navigation}
         toolbarUtilities={toolbarUtilities}
+        notificationPreferences={notificationPreferences}
+        onObservedNotifications={onObservedNotifications}
         onPrepare={openPreparation}
       />
       {native && creation && !creation.advanced && (
