@@ -1,5 +1,16 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Studio Workspace and Feature tree — 2026-11-18
+
+- [x] Persistent Workspace and Feature navigation with Core-backed counts and availability.
+- [x] One breadcrumb/action row shared by the renderer and native Feature chrome.
+- [x] Scoped Studio layout and renderer focus return by stable IDs.
+- [x] Core-confirmed Feature creation, revision checks, archive refusal and retained permission review.
+- [ ] Managed multi-Workspace switching and creation through a reviewed Core contract.
+- [ ] Signed Tauri/WebKit acceptance of retained PTYs, terminal keyboard focus and live geometry after scope switches.
+
+See the [Lane 2 evidence and integration notes](../development/v6-parity/lane2/README.md).
+
 ## Studio terminal cards — 2026-11-18
 
 - [x] Keep live PTY bodies free from legacy pair setup controls in both locales.
