@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Activity, Bell, Folder, Search, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   defaultFeatureId,
   featureDisplayName,
   type FeatureNativeRequest,
+  type FeatureDashboardDestination,
   type FeatureNativeReply,
   type FeatureNativeSnapshot,
   type FeatureCanvasEvidence,
@@ -34,8 +36,8 @@ import { AccountLimits } from './AccountLimits.js';
 import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account-limits-model.js';
 import {
   arrangeRequest,
-  nativeChrome,
   studioTerminals,
+  type NativeChrome,
   type NativePaneLayout,
 } from './studio-native.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
@@ -54,12 +56,14 @@ function featureScopeKey(snapshot: FeatureNativeSnapshot | undefined, workspaceI
 export function FeatureWorkspace({
   nativeWorkspace = false,
   navigation,
+  toolbarUtilities,
   onPrepare,
   workspaces = [],
   workspaceId = '',
 }: {
   nativeWorkspace?: boolean;
   navigation?: ReactNode;
+  toolbarUtilities?: ReactNode;
   onPrepare?: (context: { workspaceId: string; featureId: string | null }) => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
@@ -71,6 +75,7 @@ export function FeatureWorkspace({
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
   // Provider-reported limits only; the panel stays hidden until the host reports some.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
+  const [, setLimitsOpen] = useState(false);
   /** Last refused native frame, shown so a hidden terminal is never silent. */
   const [arrangeIssue, setArrangeIssue] = useState('');
   const [closeIssue, setCloseIssue] = useState(false);
@@ -134,10 +139,8 @@ export function FeatureWorkspace({
   const canvasIntent = useRef(wantsCanvas);
   canvasIntent.current = wantsCanvas;
   const canvas = wantsCanvas && (!nativeWorkspace || nativeCanvas);
-  const [showLayouts, setShowLayouts] = useState(false);
   const [search, setSearch] = useState('');
   const searchInput = useRef<HTMLInputElement>(null);
-  const gridTrigger = useRef<HTMLButtonElement>(null);
   const scopeTree = useRef<HTMLElement>(null);
   const [coreState, setCoreState] = useState<'connecting' | 'online' | 'unavailable'>(
     native ? 'connecting' : 'unavailable',
@@ -285,9 +288,10 @@ export function FeatureWorkspace({
       const send = (snapshotNow: FeatureNativeSnapshot) => {
         // Viewport and members are read at send time, next to the request they describe.
         if (featureScopeKey(snapshotNow) !== frameScope) return;
-        const chrome = {
-          ...nativeChrome(true, window.innerWidth),
-          sidebar: window.innerWidth > 720 ? (155 as const) : (46 as const),
+        const chrome: NativeChrome = {
+          sidebar: window.innerWidth > 720 ? 155 : 46,
+          top: 47,
+          bottom: 38,
         };
         // The V2 native allowlist uses a 47 px top inset. The visible header is 45 px.
         // Translate from TerminalStudio's measured toolbar bottom into the allowed base.
@@ -666,7 +670,6 @@ export function FeatureWorkspace({
       setCloseIssue(false);
     }
     setWantsCanvas(false);
-    setShowLayouts(false);
     setFocusScope({ featureId, workspace });
     return true;
   }
@@ -786,54 +789,94 @@ export function FeatureWorkspace({
   });
   const workspaceCatalog = new Map(workspaces.map((workspace) => [workspace.id, workspace]));
   if (snapshot) workspaceCatalog.set(snapshot.workspace.id, snapshot.workspace);
+  async function openDashboard(destination: FeatureDashboardDestination) {
+    if (!snapshot || !native?.showDashboard || preparing.current || quitFence) return;
+    preparing.current = true;
+    setPrepareIssue('');
+    try {
+      const reply = await native.showDashboard({
+        contractVersion: 1,
+        generation: snapshot.generation,
+        workspaceId: snapshot.workspace.id,
+        featureId: snapshot.activeFeatureId,
+        expectedRevision: snapshot.view.revision,
+        destination,
+      });
+      if (reply.status !== 'ok') setPrepareIssue('navigationUnavailable');
+    } catch {
+      setPrepareIssue('navigationUnavailable');
+    } finally {
+      preparing.current = false;
+    }
+  }
+  const dashboardEntries = [
+    ['overview', 'shell.views.overview', Activity],
+    ['workspaces', 'shell.views.workspaces', Folder],
+    ['settings', 'shell.views.settings', Settings2],
+    ['search', 'shell.palette.title', Search],
+    ['notifications', 'notifications', Bell],
+  ] as const;
+  const nativeNavigation = nativeWorkspace && native?.showDashboard && (
+    <nav aria-label={t('analytics.navigation')} className="studio-route-links">
+      {dashboardEntries.map(([destination, key, Icon]) => (
+        <button
+          key={destination}
+          type="button"
+          className="icon-button feature-nav-control"
+          aria-label={t(key)}
+          title={t(key)}
+          disabled={!snapshot || quitFence}
+          onClick={() => void openDashboard(destination)}
+        >
+          <Icon size={16} aria-hidden="true" />
+        </button>
+      ))}
+    </nav>
+  );
   const gridReason = t('feature.noLayout');
   const delegateReason = t('features.delegationUnavailable');
   const prepareReason = t(
     selected?.status === 'archived' ? 'feature.archived' : 'features.creationUnavailable',
   );
   const breadcrumb = (
+    <strong className="feature-crumb" title={selected?.featureId}>
+      <span aria-hidden="true">◈ </span>
+      {snapshot?.workspace.name ??
+        workspaceCatalog.get(workspaceId)?.name ??
+        t('features.workspace')}
+      {selected ? ` / ${displayFeatureName(selected)}` : ''}
+    </strong>
+  );
+  const layoutActions = (onGrid: () => void, onRestore: () => void, mode?: ArrangementMode) => (
     <>
-      {navigation}
-      <strong className="feature-crumb" title={selected?.featureId}>
-        <span aria-hidden="true">◈ </span>
-        {snapshot?.workspace.name ??
-          workspaceCatalog.get(workspaceId)?.name ??
-          t('features.workspace')}
-        {selected ? ` / ${displayFeatureName(selected)}` : ''}
-      </strong>
       <button
-        ref={gridTrigger}
         type="button"
         className="feature-action feature-grid"
-        aria-expanded={studio ? showLayouts : undefined}
         aria-disabled={!available.length || busy || quitFence}
         title={!available.length ? gridReason : undefined}
         onClick={() => {
-          if (!available.length || busy || quitFence) return;
-          if (studio) setShowLayouts((shown) => !shown);
-          else void request({ action: 'organize', command: 'columns-2' });
+          if (available.length && !busy && !quitFence) onGrid();
         }}
       >
         <span aria-hidden="true">▦ </span>
-        {t('features.grid')}
+        {t(mode === 'columns' ? 'terminalStudio.mode.columns' : 'features.grid')}
       </button>
-    </>
-  );
-  const actions = (
-    <>
       <button
         type="button"
         className="feature-action feature-restore"
-        aria-disabled={studio || !available.length || busy || quitFence}
-        title={studio || !available.length ? t('feature.noRestore') : undefined}
+        aria-disabled={!available.length || busy || quitFence}
+        title={!available.length ? t('feature.noRestore') : undefined}
         onClick={() => {
-          if (!studio && available.length && !busy && !quitFence)
-            void request({ action: 'organize', command: 'show-all' });
+          if (available.length && !busy && !quitFence) onRestore();
         }}
       >
         <span aria-hidden="true">↺ </span>
         {t('features.restore')}
       </button>
+    </>
+  );
+  const actions = (
+    <>
       <button
         type="button"
         className="feature-action feature-delegate"
@@ -1205,6 +1248,9 @@ export function FeatureWorkspace({
             </details>
           )}
         </div>
+        {(navigation || nativeNavigation) && (
+          <div className="feature-navigation">{navigation ?? nativeNavigation}</div>
+        )}
         <footer className="feature-core" role="status" data-state={coreState}>
           <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
         </footer>
@@ -1221,6 +1267,11 @@ export function FeatureWorkspace({
       {!studio && (
         <header className="feature-topbar">
           {breadcrumb}
+          {toolbarUtilities}
+          {layoutActions(
+            () => void request({ action: 'organize', command: 'columns-2' }),
+            () => void request({ action: 'organize', command: 'show-all' }),
+          )}
           {actions}
         </header>
       )}
@@ -1228,30 +1279,12 @@ export function FeatureWorkspace({
         <div
           className="feature-studio"
           ref={studioRef}
-          data-layout-menu={showLayouts || undefined}
           onFocusCapture={(event) => {
             if (!(event.target instanceof HTMLElement)) return;
             const id = event.target
               .closest('.ts-pane')
               ?.querySelector<HTMLElement>('.ts-body[data-terminal-id]')?.dataset.terminalId;
             if (id) focusedTerminals.current.set(scopeKey, id);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape' && showLayouts) {
-              event.stopPropagation();
-              setShowLayouts(false);
-              gridTrigger.current?.focus();
-            }
-          }}
-          onBlur={(event) => {
-            if (
-              showLayouts &&
-              !(
-                event.relatedTarget instanceof Element &&
-                event.relatedTarget.closest('.feature-grid, .ts-modes')
-              )
-            )
-              setShowLayouts(false);
           }}
         >
           <TerminalStudio
@@ -1280,7 +1313,6 @@ export function FeatureWorkspace({
                 </div>
               )
             }
-            toolbarStart={breadcrumb}
             emptyHint={
               !snapshot ? (
                 <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
@@ -1288,9 +1320,15 @@ export function FeatureWorkspace({
                 <span>{t('feature.archived')}</span>
               ) : undefined
             }
-            toolbarEnd={
+            renderToolbar={({ mode, setMode, restore }) => (
               <>
-                {actions}
+                {breadcrumb}
+                {toolbarUtilities}
+                {layoutActions(
+                  () => setMode(mode === 'mosaic' ? 'columns' : 'mosaic'),
+                  restore,
+                  mode,
+                )}
                 {selected &&
                   measuredTerminals.length > 0 &&
                   Number.isSafeInteger(featureTokens) && (
@@ -1309,6 +1347,7 @@ export function FeatureWorkspace({
                     caps={limitPrefs.caps}
                     now={now}
                     source={t('accountLimits.sourceApp')}
+                    onOpenChange={setLimitsOpen}
                     onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
                     onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
                     onRefresh={(accountId) =>
@@ -1325,8 +1364,9 @@ export function FeatureWorkspace({
                     }
                   />
                 ) : null}
+                {actions}
               </>
-            }
+            )}
             {...(nativeWorkspace && selected?.status !== 'archived'
               ? {
                   closePending: busy || quitFence,
@@ -1396,8 +1436,7 @@ export function FeatureWorkspace({
                     onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) =>
                       arrange(layout, mode, scopeKey),
                     // The limits panel hides only the views under it (data-native-overlay).
-                    overlayOpen:
-                      !!editor || !!renamePane || structuredOpen || quitFence || showLayouts,
+                    overlayOpen: !!editor || !!renamePane || structuredOpen || quitFence,
                   },
                 }
               : {})}

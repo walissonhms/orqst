@@ -1221,6 +1221,7 @@
     }
   },
   "features": {
+    "navigationUnavailable": "Não foi possível abrir o painel. Tente novamente na Feature atual.",
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",
     "heading": "FEATURES",

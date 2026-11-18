@@ -39,6 +39,8 @@ test('passive preparation accepts only IDs/CAS and never enters the metadata all
     { ...scope, expectedRevision: -1 },
     { ...scope, generation: Number.MAX_SAFE_INTEGER + 1 },
     { ...scope, generation: undefined },
+    { ...scope, destination: 'studio' },
+    { ...scope, destination: '/settings' },
   ])
     assert.equal(featurePreparationRequestSchema.safeParse(invalid).success, false);
   assert.equal(
@@ -68,6 +70,10 @@ test('chrome navigation is opt-in, activation-bound, serialized with metadata an
     },
   );
   assert.equal((await client.showPreparationDrawer!(scope)).status, 'denied');
+  assert.equal(
+    (await client.showDashboard!({ ...scope, destination: 'notifications' })).status,
+    'denied',
+  );
   active = true;
   assert.equal(
     (await client.showPreparationDrawer!({ ...scope, path: '/SYNTHETIC' } as never)).status,
@@ -154,10 +160,15 @@ test('only the exact top-level chrome receives passive navigation; Studio author
     });
     const client = owned.orqstFeatures as ReturnType<typeof createFeatureClient> | undefined;
     assert.equal(typeof client?.showPreparationDrawer === 'function', enabled);
+    assert.equal(typeof client?.showDashboard === 'function', enabled);
     assert.equal(owned.orqstTauriStudio, undefined);
     if (enabled) {
       assert.equal((await client!.showPreparationDrawer!(scope)).status, 'ok');
-      assert.deepEqual(calls, ['feature_prepare']);
+      assert.equal(
+        (await client!.showDashboard!({ ...scope, destination: 'settings' })).status,
+        'ok',
+      );
+      assert.deepEqual(calls, ['feature_prepare', 'feature_prepare']);
     } else assert.deepEqual(calls, []);
   }
 });

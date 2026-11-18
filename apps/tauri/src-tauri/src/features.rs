@@ -1376,7 +1376,7 @@ fn diagnostic_code(code: &str) -> bool {
 }
 
 #[tauri::command]
-pub async fn feature_prepare(window: Webview, request: Value) -> Value {
+pub async fn feature_prepare(window: Webview, mut request: Value) -> Value {
     let denied = || json!({"status":"denied"});
     // ORQST_TAURI_FOCUS_DIAGNOSTICS=1: why opening the New terminal dialog was refused.
     let refused = |reason: &str, value: Value| {
@@ -1385,6 +1385,17 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
         }
         value
     };
+    let destination = request
+        .as_object_mut()
+        .and_then(|request| request.remove("destination"));
+    if destination.as_ref().is_some_and(|destination| {
+        !matches!(
+            destination.as_str(),
+            Some("overview" | "workspaces" | "settings" | "notifications" | "search")
+        )
+    }) {
+        return refused("p1", denied());
+    }
     if window.label() != "feature-workspace" || !valid_preparation_request(&request) {
         return refused("p1", denied());
     }
@@ -1475,6 +1486,9 @@ pub async fn feature_prepare(window: Webview, request: Value) -> Value {
     crate::terminal::suspend_surface(app);
     if main.set_focus().is_err() {
         return refused("p12", json!({"status":"unavailable"}));
+    }
+    if let Some(destination) = destination {
+        request["destination"] = destination;
     }
     if main
         .eval(format!(

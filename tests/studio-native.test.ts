@@ -242,14 +242,14 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
     )) as unknown as Frame[];
     const last = frames.at(-1)!;
     assert.equal(last.generation, 7);
-    // Compact immersive Studio keeps the toolbar and dock in the native insets.
+    // The 45 px row maps to the compatible 47 px native inset.
     assert.deepEqual((last as unknown as { chrome: unknown }).chrome, {
-      sidebar: 0,
-      top: 36,
-      bottom: 34,
+      sidebar: 155,
+      top: 47,
+      bottom: 38,
     });
-    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 70 });
-    assert.equal((await page.locator('.ts-toolbar').boundingBox())?.height, 36);
+    assert.deepEqual(last.viewport, { width: 1440 - 155, height: 900 - 47 - 38 });
+    assert.equal((await page.locator('.ts-toolbar').boundingBox())?.height, 45);
     assert.equal((await page.locator('.ts-dock').boundingBox())?.height, 34);
     assert.equal((await page.locator('.ts-head').first().boundingBox())?.height, 31);
     assert.deepEqual(last.panes.map((pane) => pane.terminalId).sort(), [t1, t2]);
@@ -301,7 +301,7 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
       return updates.length === 1;
     });
     await page
-      .getByRole('region', { name: 'Terminals' })
+      .locator('.feature-feedback')
       .getByText('Request refused. Check the current Feature and reviewed selection.', {
         exact: true,
       })

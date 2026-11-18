@@ -1079,3 +1079,16 @@ cannot be restored through native view actions.
 The private Tauri host acknowledges a confirmed whole-cohort retirement or
 durable pending OpenCode exit after the Core has stopped. See the
 [operator workflow and acceptance checks](../development/terminal-close.md).
+
+## Feature chrome to dashboard navigation — 2026-11-18
+
+The owned Feature chrome reuses the view-only `feature_prepare` handoff for
+Overview, the Workspace directory, Settings, notifications and search. The
+contract still carries the accepted scope IDs, generation and view revision.
+An optional `destination` accepts only `overview`, `workspaces`, `settings`,
+`notifications` or `search`. Omitting it opens terminal preparation. The
+native handler checks the destination separately and compares the unchanged
+scope against the accepted presentation. It authenticates both WebViews,
+checks current focus and admission, and suspends the terminal surface before
+dispatching the event to the retained dashboard. The dashboard routes through
+its draft guard or opens the existing dialog. An `ok` receipt records dispatch.

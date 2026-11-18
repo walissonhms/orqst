@@ -926,7 +926,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
       await page.getByRole('button', { name: moveText, exact: true }).first().click();
       await page.waitForFunction(() => document.querySelectorAll('.ts-unassigned').length === 1);
       await page.getByRole('button', { name: moveText, exact: true }).click();
-      const tab = page.locator('.ts-features button.active');
+      const tab = page.locator('#feature-tree-heading + nav > .feature-scope[aria-current=true]');
       await tab.waitFor({ state: 'visible' });
       assert.match((await tab.textContent()) ?? '', new RegExp(`^${defaultTab}`));
       assert.equal(await page.locator('.ts-unassigned').count(), 0);
@@ -965,7 +965,7 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
       for (const file of css.outputFiles) await page2.addStyleTag({ content: file.text });
       await page2.addScriptTag({ content: uiBundle.outputFiles[0]!.text });
       await page2.evaluate((lng) => Reflect.get(window, 'startFixture')(lng), language);
-      await page2.locator('.ts-panel-toggle').click();
+      await page2.locator('.feature-permissions-disclosure summary').click();
       await page2.getByRole('button', { name: structuredLabel, exact: true }).click();
       await page2.waitForFunction(
         () => (Reflect.get(window, 'structuredScopes') as unknown[]).length > 0,

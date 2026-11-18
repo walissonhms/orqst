@@ -145,6 +145,12 @@ interface Props {
     onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) => void;
     overlayOpen?: boolean;
   };
+  /** A composing host can supply the single breadcrumb/action row. */
+  renderToolbar?: (layout: {
+    mode: ArrangementMode;
+    setMode: (mode: ArrangementMode) => void;
+    restore: () => void;
+  }) => ReactNode;
   /** Host controls shown at the start of the toolbar (e.g. the Feature panel toggle). */
   toolbarStart?: ReactNode;
   /** Extra guidance under the empty state (e.g. terminals in another Feature). */
@@ -373,6 +379,7 @@ export function TerminalStudio({
   onTerminalAction,
   accountSuggestions = [],
   native,
+  renderToolbar,
   toolbarStart,
   toolbarScopes,
   toolbarEnd,
@@ -782,21 +789,41 @@ export function TerminalStudio({
   // marked data-native-overlay (pane menu, limits) hide only the views under them.
   const covered = !!native && (!!details || !!native.overlayOpen);
   const [, setOverlayTick] = useState(0);
-  // Popovers are portals that position themselves after mounting: measure again on the
-  // next frame whenever one opens or closes, so only the views under them are hidden.
+  // Portaled overlays can resize or move without React updating the Studio.
   useEffect(() => {
-    if (!native) return;
+    if (!nativeLayout.current) return;
     let frame = 0;
-    const observer = new MutationObserver(() => {
+    const measure = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => setOverlayTick((tick) => tick + 1));
-    });
-    observer.observe(document.body, { childList: true });
+    };
+    const resize = new ResizeObserver(measure);
+    const changes = new MutationObserver(measure);
+    const observed = new Set<HTMLElement>();
+    const children = new MutationObserver(sync);
+    function sync() {
+      const overlays = Array.from(document.querySelectorAll<HTMLElement>('[data-native-overlay]'));
+      if (overlays.length === observed.size && overlays.every((overlay) => observed.has(overlay)))
+        return;
+      resize.disconnect();
+      changes.disconnect();
+      observed.clear();
+      for (const overlay of overlays) {
+        observed.add(overlay);
+        resize.observe(overlay);
+        changes.observe(overlay, { attributes: true, attributeFilter: ['style'] });
+      }
+      measure();
+    }
+    children.observe(document.body, { childList: true, subtree: true });
+    sync();
     return () => {
-      observer.disconnect();
+      children.disconnect();
+      changes.disconnect();
+      resize.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [native]);
+  }, []);
   const lastLayout = useRef('');
   const lastRects = useRef(new Map<string, NonNullable<NativePaneLayout['rect']>>());
   const nativeLayout = useRef(native?.onLayout);
@@ -838,7 +865,7 @@ export function TerminalStudio({
       const box = hole?.getBoundingClientRect();
       // Tiled modes may not overlap natively, and a null rect revokes the view (and its
       // pending opening). Keep the dragged view at its last sent place until it drops.
-      if (drag?.id === pane.id && scoped.mode !== 'free' && !covered) {
+      if (drag?.id === pane.id && scoped.mode !== 'free' && !covered && box && !underOverlay(box)) {
         const kept = lastRects.current.get(pane.id);
         if (kept) return { id: pane.id, z: pane.z, rect: kept };
       }
@@ -898,57 +925,68 @@ export function TerminalStudio({
       }}
     >
       <header className="ts-toolbar">
-        {toolbarStart}
-        {toolbarScopes}
-        <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
-          {arrangementModes.map((mode) => {
-            const Icon = modeIcons[mode];
-            return (
+        {renderToolbar ? (
+          renderToolbar({
+            mode: state.mode,
+            setMode,
+            restore: () =>
+              setState((current) => ({ ...restoreAll(current), mode: 'mosaic', maximized: null })),
+          })
+        ) : (
+          <>
+            {toolbarStart}
+            {toolbarScopes}
+            <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
+              {arrangementModes.map((mode) => {
+                const Icon = modeIcons[mode];
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={state.mode === mode}
+                    className={state.mode === mode ? 'active' : ''}
+                    title={t(`terminalStudio.mode.${mode}`)}
+                    onClick={() => setMode(mode)}
+                  >
+                    <Icon size={15} />
+                    <span>{t(`terminalStudio.mode.${mode}`)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {minimized.length > 0 && (
               <button
-                key={mode}
                 type="button"
-                role="radio"
-                aria-checked={state.mode === mode}
-                className={state.mode === mode ? 'active' : ''}
-                title={t(`terminalStudio.mode.${mode}`)}
-                onClick={() => setMode(mode)}
+                className="ts-ghost"
+                onClick={() =>
+                  setState((current) =>
+                    scope === 'all'
+                      ? restoreAll(current)
+                      : {
+                          ...current,
+                          panes: current.panes.map((pane) =>
+                            inScope(byId.get(pane.id)) ? { ...pane, minimized: false } : pane,
+                          ),
+                        },
+                  )
+                }
               >
-                <Icon size={15} />
-                <span>{t(`terminalStudio.mode.${mode}`)}</span>
+                {t('terminalStudio.restoreAll')}
               </button>
-            );
-          })}
-        </div>
-        {minimized.length > 0 && (
-          <button
-            type="button"
-            className="ts-ghost"
-            onClick={() =>
-              setState((current) =>
-                scope === 'all'
-                  ? restoreAll(current)
-                  : {
-                      ...current,
-                      panes: current.panes.map((pane) =>
-                        inScope(byId.get(pane.id)) ? { ...pane, minimized: false } : pane,
-                      ),
-                    },
-              )
-            }
-          >
-            {t('terminalStudio.restoreAll')}
-          </button>
-        )}
-        {toolbarEnd}
-        {onNewTerminal && (
-          <button type="button" className="ts-primary" onClick={onNewTerminal}>
-            <Plus size={15} />
-            {t('terminalStudio.newTerminal')}
-          </button>
+            )}
+            {toolbarEnd}
+            {onNewTerminal && (
+              <button type="button" className="ts-primary" onClick={onNewTerminal}>
+                <Plus size={15} />
+                {t('terminalStudio.newTerminal')}
+              </button>
+            )}
+          </>
         )}
       </header>
 
-      {workspaces.length > 1 && (
+      {!renderToolbar && workspaces.length > 1 && (
         <nav className="ts-scopes" aria-label={t('terminalStudio.workspaces')}>
           <button
             type="button"
@@ -1067,7 +1105,7 @@ export function TerminalStudio({
                 {terminal.name !== t(`terminalStudio.providers.${terminal.provider}`) && (
                   <span className="ts-name">{terminal.name}</span>
                 )}
-                {workspaces.length > 1 && (
+                {!renderToolbar && workspaces.length > 1 && (
                   <span className="ts-ws" title={terminal.workspace.name}>
                     <span className="ts-ws-dot" aria-hidden="true" />
                     {terminal.workspace.name}

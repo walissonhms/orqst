@@ -4,6 +4,7 @@ import {
   featurePreparationRequestSchema,
   featurePreparationReplySchema,
   type DesktopFeatures,
+  type FeaturePreparationRequest,
 } from '@orqst/protocol';
 
 /** The native command authenticates the actual Webview. Activation here is defense in depth. */
@@ -72,6 +73,36 @@ export function createFeatureClient(
       Math.max(1, 17 - (Date.now() - last)),
     );
   };
+  async function handoffToDashboard(input: FeaturePreparationRequest) {
+    if (!showPreparation) return { status: 'unavailable' as const };
+    if (!featurePreparationRequestSchema.safeParse(input, { jitless: true }).success) {
+      note('bridge:prepare:invalid');
+      return { status: 'denied' as const };
+    }
+    if (!activated()) {
+      note('bridge:prepare:inactive');
+      return { status: 'denied' as const };
+    }
+    // Serialized with metadata, except a background snapshot read: it never edits,
+    // so it must not refuse the owner's click.
+    if (preparing || (busy && busyAction !== 'snapshot')) {
+      note('bridge:prepare:busy');
+      return { status: 'busy' as const };
+    }
+    preparing = true;
+    try {
+      const reply = featurePreparationReplySchema.safeParse(await showPreparation(input), {
+        jitless: true,
+      });
+      if (!reply.success) note('bridge:prepare:reply-invalid');
+      return reply.success ? reply.data : { status: 'unavailable' as const };
+    } catch {
+      note('bridge:prepare:invoke-failed');
+      return { status: 'unavailable' as const };
+    } finally {
+      preparing = false;
+    }
+  }
   return Object.freeze({
     contractVersion: 1 as const,
     ...(allowArrangement
@@ -93,37 +124,8 @@ export function createFeatureClient(
       : {}),
     ...(showPreparation
       ? {
-          async showPreparationDrawer(
-            input: Parameters<NonNullable<DesktopFeatures['showPreparationDrawer']>>[0],
-          ) {
-            if (!featurePreparationRequestSchema.safeParse(input, { jitless: true }).success) {
-              note('bridge:prepare:invalid');
-              return { status: 'denied' as const };
-            }
-            if (!activated()) {
-              note('bridge:prepare:inactive');
-              return { status: 'denied' as const };
-            }
-            // Serialized with metadata, except a background snapshot read: it never edits,
-            // so it must not refuse the owner's click.
-            if (preparing || (busy && busyAction !== 'snapshot')) {
-              note('bridge:prepare:busy');
-              return { status: 'busy' as const };
-            }
-            preparing = true;
-            try {
-              const reply = featurePreparationReplySchema.safeParse(await showPreparation(input), {
-                jitless: true,
-              });
-              if (!reply.success) note('bridge:prepare:reply-invalid');
-              return reply.success ? reply.data : { status: 'unavailable' as const };
-            } catch {
-              note('bridge:prepare:invoke-failed');
-              return { status: 'unavailable' as const };
-            } finally {
-              preparing = false;
-            }
-          },
+          showPreparationDrawer: handoffToDashboard,
+          showDashboard: handoffToDashboard,
         }
       : {}),
     async request(input: Parameters<DesktopFeatures['request']>[0]) {

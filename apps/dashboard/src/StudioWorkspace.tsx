@@ -1,21 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { FeaturePreparationRequest } from '@orqst/protocol';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { FeatureWorkspace } from './FeatureWorkspace.js';
 import { TauriStudioPreparation } from './TauriStudioPreparation.js';
 import { NativeTerminalCreator } from './NativeTerminalCreator.js';
 
 /** One viewport shell; preparation never replaces or remounts the workspace. */
 export function StudioWorkspace({
-  onOverview,
+  navigation,
+  toolbarUtilities,
   preparationRequest,
   onPreparationHandled,
   workspaces = [],
   workspaceId = '',
   onWorkspace,
 }: {
-  onOverview: () => void;
+  navigation?: ReactNode;
+  toolbarUtilities?: ReactNode;
   preparationRequest?: FeaturePreparationRequest;
   onPreparationHandled?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
@@ -68,16 +70,8 @@ export function StudioWorkspace({
         workspaces={workspaces}
         workspaceId={workspaceId}
         onWorkspace={onWorkspace}
-        navigation={
-          <button
-            className="studio-overview"
-            aria-label={t('shell.views.overview')}
-            title={t('shell.views.overview')}
-            onClick={onOverview}
-          >
-            <ArrowLeft size={16} aria-hidden="true" />
-          </button>
-        }
+        navigation={navigation}
+        toolbarUtilities={toolbarUtilities}
         onPrepare={openPreparation}
       />
       {native && creating && (

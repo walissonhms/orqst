@@ -17,6 +17,15 @@ async function capture(page: Page, surface: string, name: string) {
   });
 }
 
+async function captureIntegrated(page: Page, name: string) {
+  if (process.env.ORQST_V6_INTEGRATED_CAPTURES !== '1') return;
+  const { width, height } = page.viewportSize()!;
+  await page.screenshot({
+    path: `docs/development/v6-parity/integrated/${width}x${height}/${name}.png`,
+    animations: 'disabled',
+  });
+}
+
 async function studioFixture(page: Page) {
   const workspace = { id: 'synthetic-managed-workspace', name: 'Workspace de teste' };
   const slots = ['codex', 'claude', 'opencode', 'codex'].map((provider, slot) => ({
@@ -104,7 +113,10 @@ test('managed Studio route shares the unsaved draft guard on click and history t
 }) => {
   await studioFixture(page);
   await page.goto('/studio');
-  await page.locator('.topbar').getByRole('link', { name: 'Overview', exact: true }).click();
+  await page
+    .locator('.feature-navigation')
+    .getByRole('link', { name: 'Overview', exact: true })
+    .click();
   await page
     .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
     .click();
@@ -126,11 +138,13 @@ test('managed Studio route shares the unsaved draft guard on click and history t
   await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
   await review.getByRole('button', { name: 'Discard draft and continue' }).click();
   await expect(page).toHaveURL('/studio');
-  await expect(studio).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.feature-workspace')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.studio-workspace .feature-sidebar')).toHaveCSS('width', '46px');
-  await expect(studio).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toBeInViewport({
+    ratio: 1,
+  });
   await expect(page.getByRole('button', { name: 'Notifications', exact: true })).toBeInViewport({
     ratio: 1,
   });
@@ -148,11 +162,14 @@ for (const size of screenSizes) {
     await page.goto('/studio');
     const topbar = page.locator('.topbar');
     const sidebar = page.locator('.studio-workspace .feature-sidebar');
+    const row = page.locator('.feature-topbar, .ts-toolbar');
+    const breadcrumb = row.locator('.feature-crumb');
     await expect(sidebar).toHaveCSS('width', '155px');
-    await expect(topbar).toHaveCSS('height', '45px');
-    await expect(page.getByRole('button', { name: 'Show the Feature panel' })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Overview', exact: true })).toBeHidden();
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Planejamento de teste');
+    await expect(topbar).toHaveCount(0);
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveCSS('height', '45px');
+    await expect(row.locator('.ts-modes, .ts-features')).toHaveCount(0);
+    await expect(breadcrumb).toContainText('Planejamento de teste');
 
     await page.getByRole('link', { name: 'Overview', exact: true }).click();
     await page
@@ -161,12 +178,13 @@ for (const size of screenSizes) {
       .click();
     await page.getByRole('link', { name: 'Terminals / Studio' }).click();
     await page.getByRole('button', { name: /Revisão de teste/ }).click();
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Workspace de teste');
+    await expect(breadcrumb).toContainText('Revisão de teste');
+    await expect(breadcrumb).toContainText('Workspace de teste');
     await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-    await topbar.getByRole('link', { name: 'Visão geral', exact: true }).click();
+    await sidebar.getByRole('link', { name: 'Visão geral', exact: true }).click();
     await expect(topbar.locator('.breadcrumbs')).toContainText('browser-test');
     await capture(page, 'tauri-studio', '20-overview-return');
+    await captureIntegrated(page, '02-overview');
 
     await topbar.getByRole('link', { name: 'Diretório de workspaces', exact: true }).click();
     await expect(page).toHaveURL('/workspaces');
@@ -177,33 +195,39 @@ for (const size of screenSizes) {
     await page.keyboard.press('Enter');
     await expect(settings).toHaveAttribute('aria-current', 'page');
     await capture(page, 'tauri-studio', '21-settings');
+    await captureIntegrated(page, '03-settings');
     await page.goBack();
     await expect(page).toHaveURL('/workspaces');
     await page.goForward();
     await expect(page).toHaveURL('/settings');
 
-    const studio = topbar.getByRole('link', { name: 'Terminais / Studio', exact: true });
-    await studio.click();
-    await expect(studio).toHaveAttribute('aria-current', 'page');
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Workspace de teste');
+    await page.getByRole('button', { name: 'Terminais / Studio', exact: true }).click();
+    await expect(page).toHaveURL('/studio');
+    await expect(breadcrumb).toContainText('Workspace de teste / Revisão de teste');
     await capture(page, 'tauri-studio', '22-studio-return');
+    await captureIntegrated(page, '01a-studio-dashboard');
 
+    const search = sidebar.getByRole('button', { name: 'Busca e comandos', exact: true });
+    await search.focus();
     await page.keyboard.press('Control+k');
     const palette = page.getByRole('dialog');
     await expect(
       palette.locator('.palette-result').filter({ hasText: 'Terminais / Studio' }),
     ).toContainText('Workspace de teste / Revisão de teste');
     await page.keyboard.press('Escape');
-    await expect(studio).toBeFocused();
+    await expect(search).toBeFocused();
 
-    const bell = topbar.getByRole('button', { name: 'Notificações', exact: true });
+    const bell = sidebar.getByRole('button', { name: 'Notificações', exact: true });
     await bell.click();
-    await page.getByRole('dialog', { name: 'Notificações' }).locator('.notification-item').click();
+    const notifications = page.getByRole('dialog', { name: 'Notificações' });
+    const item = notifications.locator('.notification-item');
+    await expect(item).toBeVisible();
+    await captureIntegrated(page, '04-notifications');
+    await item.click();
     await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
     await page.goBack();
-    await expect(studio).toHaveAttribute('aria-current', 'page');
-    await expect(topbar.locator('.breadcrumbs')).toContainText('Revisão de teste');
+    await expect(page).toHaveURL('/studio');
+    await expect(breadcrumb).toContainText('Revisão de teste');
     expect(
       await page.evaluate(() =>
         (Reflect.get(window, 'syntheticFeatureCalls') as string[]).filter(

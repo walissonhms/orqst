@@ -232,7 +232,6 @@
   }
 }
 @media (max-width: 720px) {
-  .studio-shell .topbar > .breadcrumbs,
   .managed-shell .topbar .language-select > svg,
   .managed-shell .topbar .connection {
     display: none;

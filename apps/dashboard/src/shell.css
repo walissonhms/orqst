@@ -1080,7 +1080,7 @@ button:disabled {
   }
 }
 
-/* The embedded Studio fills the space beneath the dashboard header. */
+/* The managed Studio owns the full dashboard viewport. */
 .app-shell.studio-shell {
   position: fixed;
   inset: 0;
@@ -1093,6 +1093,7 @@ button:disabled {
 }
 .app-shell.studio-shell > .main-shell {
   margin-left: 0;
+  padding-top: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1119,21 +1120,6 @@ button:disabled {
   height: auto;
   min-height: 0;
   border: 0;
-}
-/* Compatibility for the embedded Feature workspace until its tree lands. The
-   standalone Feature document owns its own layout and native pane geometry. */
-.studio-workspace > .studio-immersive > .feature-sidebar {
-  display: block;
-}
-.studio-workspace > .studio-immersive > .feature-topbar {
-  display: flex;
-}
-.studio-workspace > .studio-immersive > .feature-studio {
-  grid-column: 2;
-  grid-row: 2 / 5;
-}
-.studio-workspace > .feature-workspace :is(.studio-overview, .ts-panel-toggle) {
-  display: none;
 }
 .studio-workspace .feature-empty {
   min-height: 100%;

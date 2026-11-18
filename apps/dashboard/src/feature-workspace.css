@@ -78,7 +78,8 @@
     .mc-root button,
     .feature-action,
     .feature-scope,
-    .feature-create
+    .feature-create,
+    .feature-navigation button
   ) {
   cursor: pointer;
   border: 1px solid #493856;
@@ -97,7 +98,8 @@
     .mc-root button,
     .feature-action,
     .feature-scope,
-    .feature-create
+    .feature-create,
+    .feature-navigation button
   ):hover {
   background: #382847;
 }
@@ -185,8 +187,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feature-workspace .feature-action,
-.feature-studio .ts-toolbar > .ts-ghost {
+.feature-workspace .feature-action {
   flex: none;
   height: 28px;
   padding: 0 9px;
@@ -202,8 +203,7 @@
   border-color: #8156d6;
   color: white;
 }
-.feature-workspace .feature-action:hover,
-.feature-studio .ts-toolbar > .ts-ghost:hover {
+.feature-workspace .feature-action:hover {
   background: #30283f;
 }
 .feature-workspace .feature-action[aria-disabled='true'],
@@ -214,44 +214,56 @@
 .feature-workspace .feature-action[aria-disabled='true']:hover {
   background: #1b1b29;
 }
-.feature-studio .ts-toolbar:has(> .ts-ghost) > .feature-restore,
-.feature-studio .ts-toolbar > .ts-summary,
-.feature-studio .ts-scopes {
-  display: none;
-}
-.feature-studio .ts-toolbar {
-  position: relative;
-}
-.feature-studio .ts-modes {
-  display: none;
-}
-.feature-studio[data-layout-menu] .ts-modes {
-  position: absolute;
-  z-index: 20;
-  top: calc(100% - 1px);
-  right: 12px;
+.feature-navigation {
   display: flex;
-  flex-wrap: wrap;
-  max-width: calc(100% - 24px);
-  background: #201a2d;
-  border: 1px solid #4a3c64;
-  box-shadow: 0 12px 24px #0008;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 5px 4px;
+  border-top: 1px solid var(--feature-line);
 }
-.feature-studio .ts-modes button span {
-  display: inline;
+.feature-navigation .studio-route-links {
+  display: contents;
 }
-.feature-workspace .studio-overview {
+.feature-navigation .workspace-link,
+.feature-navigation .icon-button {
+  position: relative;
   display: grid;
   place-items: center;
-  flex: none;
-  width: 28px;
+  width: 27px;
   height: 28px;
+  padding: 0;
   border-radius: 4px;
-  color: var(--orqst-muted);
+  color: var(--feature-muted);
+  text-decoration: none;
 }
-.feature-workspace .studio-overview:hover {
-  background: var(--orqst-elevated);
-  color: var(--orqst-text);
+.feature-navigation .workspace-link span {
+  display: none;
+}
+.feature-navigation :is(.workspace-link, .icon-button):hover {
+  background: #30283f;
+  color: var(--feature-text);
+}
+.feature-toolbar-utilities {
+  flex: none;
+}
+.feature-toolbar-utilities .language-select {
+  padding-inline: 4px;
+}
+@media (max-width: 720px) {
+  .feature-navigation {
+    display: grid;
+    grid-template-columns: repeat(2, 20px);
+    padding: 4px 0;
+  }
+  .feature-navigation :is(.workspace-link, .icon-button) {
+    width: 20px;
+    height: 26px;
+  }
+  .feature-toolbar-utilities .language-select > svg,
+  .feature-studio .ts-toolbar > .fine-print {
+    display: none;
+  }
 }
 .feature-editor,
 .feature-members,
@@ -351,7 +363,7 @@
     font-size: 9px;
     overflow-wrap: anywhere;
   }
-  .feature-sidebar nav > .feature-sidebar nav > .feature-scope:not([aria-disabled='true']):hover,
+  .feature-sidebar nav > .feature-scope:not([aria-disabled='true']):hover,
   .feature-sidebar nav > .feature-create:not([aria-disabled='true']):hover {
     background: #30283f;
   }
@@ -369,8 +381,7 @@
     gap: 3px;
     padding: 0 4px;
   }
-  .feature-workspace .feature-action,
-  .feature-studio .ts-toolbar > .ts-ghost {
+  .feature-workspace .feature-action {
     padding: 0 3px;
     font-size: 9px;
   }
@@ -649,6 +660,35 @@
 .feature-studio .ts-root .ts-stage {
   margin: 4px;
 }
+.feature-studio .ts-pane {
+  border-radius: 3px;
+  border-color: var(--feature-line);
+  background: var(--feature-panel);
+}
+.feature-studio .ts-head {
+  background: #111018;
+  border-color: var(--feature-line);
+}
+.feature-studio .ts-orchestrator {
+  border-top: 2px solid var(--feature-purple);
+}
+.feature-studio .ts-dock {
+  box-sizing: border-box;
+  flex: none;
+  height: 34px;
+  gap: 7px;
+  padding-inline: 9px;
+  background: #0e0d15;
+}
+.feature-studio .ts-dock-title {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.feature-studio .ts-chip {
+  height: 23px;
+  padding-inline: 7px;
+}
+
 .ts-loading {
   color: var(--orqst-muted);
   font-size: 12px;

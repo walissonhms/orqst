@@ -58,7 +58,7 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
             };
             return <I18nextProvider i18n={i18n}>
               <div id="chrome"><FeatureWorkspace nativeWorkspace /></div>
-              <div id="main"><StudioWorkspace onOverview={() => {}}
+              <div id="main"><StudioWorkspace
                 preparationRequest={request} onPreparationHandled={() => setRequest(undefined)} /></div>
             </I18nextProvider>;
           }

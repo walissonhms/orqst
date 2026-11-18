@@ -1911,3 +1911,13 @@ remain unverified.
   OpenCode declares MIT, with no root NOTICE at the reviewed pin. Provider
   settings are applied through existing ORQST profiles. This change imports
   no upstream code, assets or dependencies.
+
+## Feature chrome dashboard handoff — 2026-11-18
+
+The owned Feature document can request five fixed dashboard destinations via
+the existing `feature_prepare` command. Rust validates the destination
+before applying the existing document, current scope, presentation, focus
+and admission checks. The dashboard receives the same scope payload plus the
+destination. It keeps its draft guard for route changes. The command's
+authority is limited to navigating the retained dashboard or opening its
+existing dialogs.

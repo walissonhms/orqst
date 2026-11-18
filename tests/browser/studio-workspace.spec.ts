@@ -5,6 +5,7 @@ import {
   featureNativeSnapshotSchema,
   type FeatureNativeRequest,
   type FeatureNativeSnapshot,
+  type FeaturePreparationRequest,
   type WorkspaceFeature,
 } from '@orqst/protocol';
 
@@ -76,7 +77,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await expect(drawer).toBeHidden();
   await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-en.png') });
-  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await expect(page).toHaveURL('/overview');
   await expect(page.locator('#app-sidebar')).toBeVisible();
   await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
@@ -109,7 +110,7 @@ test('Studio has one Overview action and a compact Feature sidebar at narrow wid
   });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/studio');
-  const overview = page.getByRole('button', { name: 'Overview', exact: true });
+  const overview = page.getByRole('link', { name: 'Overview', exact: true });
   const sidebar = page.locator('.feature-sidebar');
   await expect(overview).toHaveCount(1);
   await expect(page.locator('.ts-features')).toHaveCount(0);
@@ -202,6 +203,8 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
       Reflect.set(window, 'fixtureCalls', calls);
       Reflect.set(window, 'fixtureFrames', frames);
       Reflect.set(window, 'fixturePrepares', prepares);
+      const dashboardRequests: FeaturePreparationRequest[] = [];
+      Reflect.set(window, 'dashboardRequests', dashboardRequests);
       const publishDock = (canvas: boolean) => {
         const members =
           snapshot.features.find((feature) => feature.featureId === snapshot.activeFeatureId)
@@ -276,6 +279,10 @@ async function openNativeFixture(page: Page, nativeWorkspace = true) {
             return { status: 'stale', snapshot: structuredClone(snapshot) };
           publishDock(false);
           return { status: 'ok', snapshot: structuredClone(snapshot) };
+        },
+        async showDashboard(input: FeaturePreparationRequest) {
+          dashboardRequests.push(input);
+          return { status: 'ok' };
         },
         async showPreparationDrawer(input: { featureId: string | null; expectedRevision: number }) {
           prepares.push(input);
@@ -353,9 +360,26 @@ for (const [width, height] of [
     expect(original.chrome).toEqual({ sidebar: 155, top: 47, bottom: 38 });
     expect(original.panes[0]!.rect!.y + 47).toBe(Math.ceil(measured!.y));
     await capture('01-four-panes');
+    await page.getByRole('button', { name: 'Configurações', exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => Reflect.get(window, 'dashboardRequests')))
+      .toEqual([
+        {
+          contractVersion: 1,
+          generation: 1,
+          workspaceId: workspace.id,
+          featureId: featureId(1),
+          expectedRevision: 1,
+          destination: 'settings',
+        },
+      ]);
+    if (process.env.ORQST_V6_INTEGRATED_CAPTURES === '1') {
+      await page.screenshot({
+        path: join('docs/development/v6-parity/integrated', size, '01-studio.png'),
+        animations: 'disabled',
+      });
+    }
     await page.getByRole('button', { name: 'Grade' }).click();
-    await page.getByRole('radio', { name: 'Colunas' }).click();
-    await page.keyboard.press('Escape');
     await expect.poll(async () => (await frames()).at(-1)?.mode).toBe('columns');
     const saved = (await frames()).at(-1)!;
 
@@ -388,16 +412,15 @@ for (const [width, height] of [
       })),
     );
 
-    await page.getByRole('button', { name: 'Grade' }).click();
-    await expect(page.getByRole('radiogroup')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('radiogroup')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Grade' })).toBeFocused();
+    await expect(page.getByRole('radiogroup')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Restaurar' }).click();
+    await expect.poll(async () => (await frames()).at(-1)?.mode).toBe('mosaic');
+    await expect(page.getByRole('button', { name: 'Grade' })).toBeVisible();
     const firstPane = page.locator('.ts-pane').first();
     await firstPane.hover();
     await firstPane.getByRole('button', { name: 'Minimizar', exact: true }).click();
     await expect.poll(paneIds).toEqual([2, 3, 4].map(terminalId));
-    await header.getByRole('button', { name: 'Restaurar todos' }).click();
+    await header.getByRole('button', { name: 'Restaurar', exact: true }).click();
     await expect.poll(paneIds).toEqual([1, 2, 3, 4].map(terminalId));
 
     const create = page.getByRole('button', { name: '＋ Nova Feature' });

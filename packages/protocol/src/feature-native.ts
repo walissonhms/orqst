@@ -442,11 +442,20 @@ export const featureNativeStateEnvelopeSchema = z.strictObject({
   snapshot: featureNativeSnapshotSchema,
 });
 /** Passive native navigation only; deliberately separate from Core metadata requests. */
+export const featureDashboardDestinationSchema = z.enum([
+  'overview',
+  'workspaces',
+  'settings',
+  'notifications',
+  'search',
+]);
+export type FeatureDashboardDestination = z.infer<typeof featureDashboardDestinationSchema>;
 export const featurePreparationRequestSchema = z.strictObject({
   ...base,
   workspaceId: featureViewStateSchema.shape.workspaceId,
   featureId: featureId.nullable(),
   expectedRevision: z.number().int().nonnegative().safe(),
+  destination: featureDashboardDestinationSchema.optional(),
 });
 export type FeaturePreparationRequest = z.infer<typeof featurePreparationRequestSchema>;
 export const featurePreparationReplySchema = z.strictObject({
@@ -461,5 +470,10 @@ export interface DesktopFeatures {
   arrange?(
     input: Extract<FeatureNativeRequest, { action: 'arrange' }>,
   ): Promise<FeatureNativeReply>;
-  showPreparationDrawer?(input: FeaturePreparationRequest): Promise<FeaturePreparationReply>;
+  showPreparationDrawer?(
+    input: Omit<FeaturePreparationRequest, 'destination'>,
+  ): Promise<FeaturePreparationReply>;
+  showDashboard?(
+    input: FeaturePreparationRequest & { destination: FeatureDashboardDestination },
+  ): Promise<FeaturePreparationReply>;
 }

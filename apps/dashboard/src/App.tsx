@@ -63,7 +63,7 @@ import {
   viewPath,
   type StudioTreeProps,
 } from './navigation';
-import { NativeSessionNavigation } from './native-session-navigation';
+import { findNotificationSource, NativeSessionNavigation } from './native-session-navigation';
 import { Agents } from './Agents';
 import { Studio } from './Studio';
 import { StudioWorkspace } from './StudioWorkspace';
@@ -605,6 +605,7 @@ export function App() {
   const [view, setView] = useState<AppView>(
     viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
   );
+  const [studioReturn, setStudioReturn] = useState(false);
   const [preparationRequest, setPreparationRequest] = useState<FeaturePreparationRequest>();
   const showPreparation = useRef<(detail: unknown) => void>(() => {});
   useEffect(() => {
@@ -817,6 +818,7 @@ export function App() {
       setStatus('');
     } else if (page === 'overview') applySession(undefined);
     if (page !== 'overview') setArtifactRequest(undefined);
+    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
     setView(page);
     navigation.current?.replace(viewPath(page, id));
     setMenuOpen(false);
@@ -893,6 +895,7 @@ export function App() {
   }
   function applyView(page: AppView, sessionId = selected) {
     if (page !== 'overview') setArtifactRequest(undefined);
+    if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
     setView(page);
     navigation.current?.push(viewPath(page, sessionId));
     setMenuOpen(false);
@@ -906,9 +909,21 @@ export function App() {
     });
   }
   showPreparation.current = (detail) => {
-    if (window.orqstTauriStudio?.contractVersion !== 1) return;
     const parsed = featurePreparationRequestSchema.safeParse(detail);
     if (!parsed.success) return;
+    if (parsed.data.destination && managedShell) {
+      const destination = parsed.data.destination;
+      if (destination === 'notifications') setNotificationOpen(true);
+      else if (destination === 'search') setPaletteOpen(true);
+      else
+        requestNavigation(() => {
+          applyView(destination, destination === 'overview' ? selected : undefined);
+          setStudioReturn(true);
+          requestAnimationFrame(() => document.getElementById('main-content')?.focus());
+        });
+      return;
+    }
+    if (parsed.data.destination || window.orqstTauriStudio?.contractVersion !== 1) return;
     requestNavigation(() => {
       setPreparationRequest(parsed.data);
       applyView('studio');
@@ -1055,6 +1070,37 @@ export function App() {
         }}
       />
     </>
+  );
+  const languageControl = (
+    <label className="language-select">
+      <Globe2 size={14} />
+      <select
+        aria-label={t('language')}
+        value={i18n.resolvedLanguage ?? 'en-US'}
+        onChange={(event) => {
+          void i18n.changeLanguage(event.target.value);
+        }}
+      >
+        <option value="en-US">EN</option>
+        <option value="pt-BR">PT-BR</option>
+      </select>
+    </label>
+  );
+  const notificationControl = (
+    <button
+      className={`icon-button bell-button ${unread ? 'has-unread' : ''}`}
+      aria-label={t('notifications')}
+      aria-description={
+        snapshot &&
+        t(offline ? 'shell.notifications.staleCount' : 'notificationCounts', {
+          count: unread,
+        })
+      }
+      aria-haspopup="dialog"
+      onClick={() => setNotificationOpen(true)}
+    >
+      <Bell size={17} />
+    </button>
   );
   const studioTree: StudioTreeProps = {
     scope: studioScope,
@@ -1278,12 +1324,12 @@ export function App() {
         </div>
       </aside>
       <div className="main-shell">
-        <header className="topbar">
-          {managedShell && (
-            <RouteLinks views={studioRoutes} current={view} onNavigate={navigate} compact />
-          )}
-          <div className="breadcrumbs">
-            {!managedStudio && (
+        {!managedStudio && (
+          <header className="topbar">
+            {managedShell && (
+              <RouteLinks views={studioRoutes} current={view} onNavigate={navigate} compact />
+            )}
+            <div className="breadcrumbs">
               <button
                 ref={menuTrigger}
                 className="icon-button menu-toggle"
@@ -1294,95 +1340,62 @@ export function App() {
               >
                 <Menu size={18} />
               </button>
-            )}
-            {!managedStudio && <Command size={15} aria-hidden="true" />}
-            <span>
-              {managedStudio
-                ? (studioScope?.workspace.name ?? currentWorkspace?.name ?? t('features.workspace'))
-                : (currentWorkspace?.name ?? t('allWorkspaces'))}
-            </span>
-            <ChevronRight size={14} aria-hidden="true" />
-            <strong>
-              {managedStudio && studioScope
-                ? (studioScope.featureName ?? t('features.unassigned'))
-                : t(`shell.views.${view}`)}
-            </strong>
-          </div>
-          <div className="topbar-actions">
-            {window.orqstManagedAgents?.contractVersion === 1 && (
+              <Command size={15} aria-hidden="true" />
+              <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
+              <ChevronRight size={14} aria-hidden="true" />
+              <strong>{t(`shell.views.${view}`)}</strong>
+            </div>
+            <div className="topbar-actions">
+              {window.orqstManagedAgents?.contractVersion === 1 && (
+                <button
+                  className="button"
+                  onClick={() => {
+                    void window.orqstManagedAgents
+                      ?.open()
+                      .then((reply) => {
+                        if (reply?.status && reply.status !== 'ok')
+                          setNotice(
+                            reply.status === 'focus_required'
+                              ? 'managedAgents.open_focus_required'
+                              : 'managedAgents.open_unavailable',
+                          );
+                        else setNotice('');
+                      })
+                      .catch(() => setNotice('managedAgents.open_unavailable'));
+                  }}
+                >
+                  <Terminal size={15} />
+                  {t('managedAgents.title')}
+                </button>
+              )}
               <button
-                className="button"
-                onClick={() => {
-                  void window.orqstManagedAgents
-                    ?.open()
-                    .then((reply) => {
-                      if (reply?.status && reply.status !== 'ok')
-                        setNotice(
-                          reply.status === 'focus_required'
-                            ? 'managedAgents.open_focus_required'
-                            : 'managedAgents.open_unavailable',
-                        );
-                      else setNotice('');
-                    })
-                    .catch(() => setNotice('managedAgents.open_unavailable'));
-                }}
+                className="button command-trigger"
+                aria-label={t('shell.palette.title')}
+                aria-keyshortcuts="Meta+K Control+K"
+                onClick={() => setPaletteOpen(true)}
               >
-                <Terminal size={15} />
-                {t('managedAgents.title')}
+                <Search size={15} />
+                <span>{t('shell.palette.shortLabel')}</span>
+                <kbd>{t('shell.palette.shortcut')}</kbd>
               </button>
-            )}
-            <button
-              className="button command-trigger"
-              aria-label={t('shell.palette.title')}
-              aria-keyshortcuts="Meta+K Control+K"
-              onClick={() => setPaletteOpen(true)}
-            >
-              <Search size={15} />
-              <span>{t('shell.palette.shortLabel')}</span>
-              <kbd>{t('shell.palette.shortcut')}</kbd>
-            </button>
-            <span className={`connection connection-${connection}`} role="status">
-              <span className="tiny-dot" />
-              {t(connection)}
-            </span>
-            {!managedShell && (
-              <button
-                className="icon-button"
-                aria-label={t('shell.views.settings')}
-                onClick={() => navigate('settings')}
-              >
-                <Settings2 size={17} />
-              </button>
-            )}
-            <label className="language-select">
-              <Globe2 size={14} />
-              <select
-                aria-label={t('language')}
-                value={i18n.resolvedLanguage ?? 'en-US'}
-                onChange={(event) => {
-                  void i18n.changeLanguage(event.target.value);
-                }}
-              >
-                <option value="en-US">EN</option>
-                <option value="pt-BR">PT-BR</option>
-              </select>
-            </label>
-            <button
-              className={`icon-button bell-button ${unread ? 'has-unread' : ''}`}
-              aria-label={t('notifications')}
-              aria-description={
-                snapshot &&
-                t(offline ? 'shell.notifications.staleCount' : 'notificationCounts', {
-                  count: unread,
-                })
-              }
-              aria-haspopup="dialog"
-              onClick={() => setNotificationOpen(true)}
-            >
-              <Bell size={17} />
-            </button>
-          </div>
-        </header>
+              <span className={`connection connection-${connection}`} role="status">
+                <span className="tiny-dot" />
+                {t(connection)}
+              </span>
+              {!managedShell && (
+                <button
+                  className="icon-button"
+                  aria-label={t('shell.views.settings')}
+                  onClick={() => navigate('settings')}
+                >
+                  <Settings2 size={17} />
+                </button>
+              )}
+              {languageControl}
+              {notificationControl}
+            </div>
+          </header>
+        )}
         {(quitWait || quitFence) && (
           <div className="quit-blocked" role="alert">
             <strong>{t(quitFence ? 'quitBlocked.fence' : 'quitBlocked.title')}</strong>
@@ -1424,22 +1437,22 @@ export function App() {
           </div>
         )}
         <main id="main-content" tabIndex={-1}>
-          {(error || saveError) && view !== 'overview' && (
+          {!managedStudio && (error || saveError) && view !== 'overview' && (
             <p className="notice" role="alert">
               {t(saveError ? 'savedError' : 'error')}
             </p>
           )}
-          {!snapshot && !error && view !== 'models' && view !== 'settings' && (
+          {!managedStudio && !snapshot && !error && view !== 'models' && view !== 'settings' && (
             <p className="notice" role="status">
               {t('shell.loading')}
             </p>
           )}
-          {initialScan && (
+          {!managedStudio && initialScan && (
             <p className="notice" role="status">
               {t('syncing')}
             </p>
           )}
-          {notice && !notificationOpen && (
+          {!managedStudio && notice && !notificationOpen && (
             <div className="notice" role="status">
               {t(notice)}
               <button className="icon-button" aria-label={t('close')} onClick={() => setNotice('')}>
@@ -1461,7 +1474,31 @@ export function App() {
                 <StudioWorkspace
                   preparationRequest={preparationRequest}
                   onPreparationHandled={() => setPreparationRequest(undefined)}
-                  onOverview={() => navigate('overview')}
+                  navigation={
+                    <>
+                      <RouteLinks
+                        views={studioRoutes.filter((route) => route !== 'studio')}
+                        current={view}
+                        onNavigate={(page) => navigate(page, true)}
+                        compact
+                      />
+                      <button
+                        type="button"
+                        className="icon-button"
+                        title={t('shell.palette.title')}
+                        aria-label={t('shell.palette.title')}
+                        aria-keyshortcuts="Meta+K Control+K"
+                        aria-haspopup="dialog"
+                        onClick={() => setPaletteOpen(true)}
+                      >
+                        <Search size={16} aria-hidden="true" />
+                      </button>
+                      {notificationControl}
+                    </>
+                  }
+                  toolbarUtilities={
+                    <div className="feature-toolbar-utilities">{languageControl}</div>
+                  }
                   workspaces={studioTree.observedWorkspaces}
                   workspaceId={studioTree.observedWorkspaceId}
                   onWorkspace={studioTree.onObservedWorkspaceChange}
@@ -1478,6 +1515,11 @@ export function App() {
               systemReducedMotion={appearance.systemReducedMotion}
               notifications={notificationPreferences}
               onGuide={() => setGuideOpen(true)}
+              returnAction={
+                studioReturn
+                  ? { label: t('shell.views.studio'), onReturn: () => navigate('studio', true) }
+                  : undefined
+              }
             />
           ) : view === 'models' ? (
             <ModelAnalytics
@@ -1978,7 +2020,7 @@ export function App() {
             </label>
             {snapshot && visibleNotifications?.length ? (
               visibleNotifications.map((item) => {
-                const session = snapshot.sessions.find((entry) => entry.id === item.sessionId);
+                const session = findNotificationSource(snapshot, item.sessionId);
                 const workspace = snapshot.workspaces.find(
                   (entry) => entry.id === session?.workspaceId,
                 );

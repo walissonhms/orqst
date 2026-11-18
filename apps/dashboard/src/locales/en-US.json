@@ -1221,6 +1221,7 @@
     }
   },
   "features": {
+    "navigationUnavailable": "The dashboard could not be opened. Try again from the current Feature.",
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",
     "heading": "FEATURES",

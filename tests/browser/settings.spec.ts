@@ -313,11 +313,11 @@ for (const locale of ['en-US', 'pt-BR'] as const) {
         await page.setViewportSize({ width: width!, height: height! });
         await page.goto('/studio');
         await page
-          .getByRole('button', { name: portuguese ? 'Visão geral' : 'Overview', exact: true })
+          .getByRole('link', { name: portuguese ? 'Visão geral' : 'Overview', exact: true })
           .click();
         await expect(page).toHaveURL(/\/overview$/);
         await page
-          .getByRole('button', { name: portuguese ? 'Configurações' : 'Settings', exact: true })
+          .getByRole('link', { name: portuguese ? 'Configurações' : 'Settings', exact: true })
           .click();
         await expect(page).toHaveURL(/\/settings$/);
         const capture = (name: string) =>
