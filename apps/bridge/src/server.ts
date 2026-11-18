@@ -381,7 +381,20 @@ export function createLocalServer(
     server,
     snapshot,
     broadcast(event: StoredEvent, live: boolean): void {
-      const payload = JSON.stringify({ type: 'event', event, live } satisfies StreamMessage);
+      if (!sockets.clients.size) return;
+      const notification =
+        live &&
+        (event.type === 'agent.completed' ||
+          event.type === 'agent.failed' ||
+          event.type === 'agent.intervention.required')
+          ? store.notificationDelivery(event.id)
+          : undefined;
+      const payload = JSON.stringify({
+        type: 'event',
+        event,
+        live,
+        ...(notification && { notification }),
+      } satisfies StreamMessage);
       for (const socket of sockets.clients)
         if (socket.readyState === WebSocket.OPEN) {
           if (socket.bufferedAmount > 1024 * 1024) socket.terminate();

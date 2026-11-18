@@ -102,3 +102,32 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
     'snapshot',
   ]);
 });
+
+test('Studio has one Overview action and a compact Feature sidebar at narrow widths', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, 'orqstFeatures', {
+      value: {
+        contractVersion: 1,
+        request: async () => ({ status: 'unavailable' }),
+      },
+    });
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/studio');
+  const overview = page.getByRole('button', { name: 'Overview', exact: true });
+  const sidebar = page.locator('.feature-sidebar');
+  await expect(overview).toHaveCount(1);
+  await page.getByRole('button', { name: 'Show the Feature panel' }).click();
+  await expect(overview).toHaveCount(1);
+  await expect(sidebar).toHaveCSS('width', '155px');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sidebar).toHaveCSS('width', '46px');
+  await expect(overview).toBeInViewport({ ratio: 1 });
+  await expect(
+    page.locator('.ts-toolbar').getByRole('button', { name: 'New terminal' }),
+  ).toBeInViewport({ ratio: 1 });
+  await overview.click();
+  await expect(page).toHaveURL('/overview');
+});

@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { Snapshot, StoredEvent, StreamMessage } from '@orqst/protocol';
 import { api } from './api';
-export function useObservatory(onLiveEvent: (event: StoredEvent) => void) {
+export function useObservatory(onLiveNotification: (event: StoredEvent, silent: boolean) => void) {
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [connection, setConnection] = useState<'connecting' | 'connected' | 'offline'>(
     'connecting',
   );
   const [error, setError] = useState(false);
-  const liveRef = useRef(onLiveEvent);
-  liveRef.current = onLiveEvent;
+  const liveRef = useRef(onLiveNotification);
+  liveRef.current = onLiveNotification;
   const refresh = useCallback(async () => {
     const next = await api<Snapshot>('/api/snapshot');
     setSnapshot(next);
@@ -56,7 +56,8 @@ export function useObservatory(onLiveEvent: (event: StoredEvent) => void) {
           if (data.type === 'event') {
             if (data.event.sequence <= cursor) return;
             cursor = data.event.sequence;
-            if (data.live) liveRef.current(data.event);
+            if (data.live && typeof data.notification?.silent === 'boolean')
+              liveRef.current(data.event, data.notification.silent);
             scheduleRefresh();
           } else if (data.type === 'resync') {
             cursor = data.cursor;

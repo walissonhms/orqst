@@ -145,7 +145,6 @@
   "notificationCompleted": "Turno concluído",
   "notificationFailed": "Falha na execução",
   "notificationIntervention": "Sua resposta é necessária",
-  "liveOnly": "Alertas ao vivo",
   "resultTitle": "Trabalho entregue",
   "tokenRecords": "Registros de tokens",
   "limitNotice": "Exibindo {{count}} eventos recentes. Abra uma sessão para ver seu histórico retido.",
@@ -534,6 +533,13 @@
       "remoteControl": "Controle de sessão"
     },
     "notifications": {
+      "read": "Lida",
+      "itemUnread": "Não lida",
+      "loading": "Carregando notificações…",
+      "unavailable": "O histórico de notificações está indisponível sem conexão.",
+      "stale": "Exibindo o último histórico de notificações confirmado. Reconecte para atualizá-lo.",
+      "staleCount": "{{count}} não lidas na última atualização",
+      "markReadFailed": "Não foi possível confirmar que as notificações foram marcadas como lidas. Tente novamente.",
       "filter": "Filtrar notificações",
       "all": "Todas as notificações",
       "unread": "Somente não lidas",
@@ -1598,6 +1604,8 @@
     "arrangeFocus": "Clique na área de terminais para exibir o terminal"
   },
   "overviewPage": {
+    "lastObservedState": "Último estado observado das sessões",
+    "measurementUnavailable": "Indisponível",
     "title": "Visão geral",
     "subtitle": "O que está rodando, o que precisa de você e quanto custa, a partir das sessões observadas.",
     "recentActivity": "Com atividade nos últimos 15 min"

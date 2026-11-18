@@ -770,6 +770,17 @@ announce a release; package versions remain `0.1.0` and no 1.0 tag is implied.
 
 ## Unreleased
 
+### Fixed
+
+- Browser alerts use the observer's persisted unread notification and sound
+  preference. Tauri sessions open from eligible notification taps through the
+  dashboard's identity and draft checks.
+- The notification drawer distinguishes loading and disconnected history from a
+  confirmed empty result, announces unread information, and reports when the
+  Bridge cannot confirm marking alerts read.
+- Studio keeps one Overview action and the compact Feature sidebar in narrow
+  dashboard windows.
+
 ### Added
 
 - Optional Observation guide from Settings, Search & commands and the empty welcome:

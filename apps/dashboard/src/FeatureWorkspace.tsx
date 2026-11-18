@@ -1016,7 +1016,7 @@ export function FeatureWorkspace({
               ? {
                   toolbarStart: (
                     <>
-                      {navigation}
+                      {immersive && navigation}
                       <button
                         type="button"
                         className="ts-panel-toggle"

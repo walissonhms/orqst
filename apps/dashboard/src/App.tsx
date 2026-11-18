@@ -602,6 +602,8 @@ export function App() {
   const nativeDesktop = navigator.userAgent.includes(' ORQSTDesktop/0.1');
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationFilter, setNotificationFilter] = useState('all');
+  const [markingRead, setMarkingRead] = useState(false);
+  const [markReadError, setMarkReadError] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTrigger = useRef<HTMLButtonElement>(null);
@@ -616,12 +618,6 @@ export function App() {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [menuOpen]);
   const [notice, setNotice] = useState('');
-  const prefsRef = useRef<Preferences>({
-    sound: false,
-    completed: true,
-    failed: true,
-    intervention: true,
-  });
   const audioRef = useRef<AudioContext | null>(null);
   const [saveError, setSaveError] = useState(false);
   const [localPrefs, setLocalPrefs] = useState<Preferences>({
@@ -654,7 +650,7 @@ export function App() {
     }
   }, []);
   const onLive = useCallback(
-    (event: StoredEvent) => {
+    (event: StoredEvent, silent: boolean) => {
       if (nativeDesktop) return;
       const key =
         event.type === 'agent.completed'
@@ -664,8 +660,8 @@ export function App() {
             : event.type === 'agent.intervention.required'
               ? 'intervention'
               : null;
-      if (!key || !prefsRef.current[key]) return;
-      if (prefsRef.current.sound) void sound();
+      if (!key) return;
+      if (!silent) void sound();
       if ('Notification' in window && Notification.permission === 'granted') {
         try {
           new Notification(
@@ -703,7 +699,7 @@ export function App() {
     open: (id, fresh, current) => openSession(id, undefined, { snapshot: fresh, current }),
   };
   useEffect(() => {
-    if (!navigator.userAgent.includes(' ORQSTTauri/0.1')) return;
+    if (!navigator.userAgent.split(/\s+/).includes('ORQSTTauri/0.1')) return;
     const navigation = new NativeSessionNavigation({
       context: () => nativeNavigationActions.current.context(),
       refresh: () => nativeNavigationActions.current.refresh(),
@@ -773,9 +769,6 @@ export function App() {
   useEffect(() => {
     if (snapshot && !prefsSaving) setLocalPrefs(snapshot.preferences);
   }, [snapshot, prefsSaving]);
-  useEffect(() => {
-    prefsRef.current = localPrefs;
-  }, [localPrefs]);
   useEffect(() => {
     document.documentElement.lang = i18n.resolvedLanguage ?? 'en-US';
   }, [i18n.resolvedLanguage]);
@@ -901,10 +894,29 @@ export function App() {
   const recent = (snapshot?.events ?? []).filter(
     (event) => !workspaceId || sessions.some((session) => session.id === event.sessionId),
   );
+  const initialScan = snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan === null;
+  const historyReady = !!snapshot && !initialScan;
+  const offline = connection === 'offline' || error;
   const unread = snapshot?.notifications.filter((item) => !item.read).length ?? 0;
+  const visibleNotifications = snapshot?.notifications.filter(
+    (item) =>
+      notificationFilter === 'all' ||
+      (notificationFilter === 'unread' ? !item.read : item.type === notificationFilter),
+  );
+  async function markNotificationsRead() {
+    setMarkingRead(true);
+    setMarkReadError(false);
+    try {
+      await api('/api/notifications/read', { method: 'POST' });
+      await refresh();
+    } catch {
+      setMarkReadError(true);
+    } finally {
+      setMarkingRead(false);
+    }
+  }
   async function preferences(next: Preferences) {
     setLocalPrefs(next);
-    prefsRef.current = next;
     setPrefsSaving(true);
     try {
       await api('/api/preferences', { method: 'PUT', body: JSON.stringify(next) });
@@ -1302,7 +1314,14 @@ export function App() {
             <button
               className={`icon-button bell-button ${unread ? 'has-unread' : ''}`}
               aria-label={t('notifications')}
-              onClick={() => setNotificationOpen(!notificationOpen)}
+              aria-description={
+                snapshot &&
+                t(offline ? 'shell.notifications.staleCount' : 'notificationCounts', {
+                  count: unread,
+                })
+              }
+              aria-haspopup="dialog"
+              onClick={() => setNotificationOpen(true)}
             >
               <Bell size={17} />
             </button>
@@ -1359,7 +1378,7 @@ export function App() {
               {t('shell.loading')}
             </p>
           )}
-          {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan === null && (
+          {initialScan && (
             <p className="notice" role="status">
               {t('syncing')}
             </p>
@@ -1458,7 +1477,11 @@ export function App() {
                     {t('sessions')}
                     <Terminal size={15} />
                   </span>
-                  <strong>{f.number(sessions.length)}</strong>
+                  <strong>
+                    {historyReady
+                      ? f.number(sessions.length)
+                      : t('overviewPage.measurementUnavailable')}
+                  </strong>
                   <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
                 </div>
                 <div className="stat">
@@ -1467,8 +1490,10 @@ export function App() {
                     <Activity size={15} />
                   </span>
                   <strong>
-                    {f.number(overviewRunning.running.length)}
-                    {overviewRunning.running.length > 0 && (
+                    {historyReady
+                      ? f.number(overviewRunning.running.length)
+                      : t('overviewPage.measurementUnavailable')}
+                    {historyReady && overviewRunning.running.length > 0 && (
                       <i className="stat-live" aria-hidden="true" />
                     )}
                   </strong>
@@ -1484,19 +1509,30 @@ export function App() {
                     <Bell size={15} />
                   </span>
                   <strong className={attention.length ? 'amber-text' : ''}>
-                    {f.number(attention.length)}
+                    {historyReady
+                      ? f.number(attention.length)
+                      : t('overviewPage.measurementUnavailable')}
                   </strong>
-                  <small>{t('liveOnly')}</small>
+                  <small>{t('overviewPage.lastObservedState')}</small>
                 </div>
                 <div className="stat">
                   <span>
                     {t('tokens')}
                     <Zap size={15} />
                   </span>
-                  <strong>{measuredSessions.length ? f.compact(usage.total) : '—'}</strong>
-                  <small>
-                    {t('tokenScope', { measured: measuredSessions.length, total: sessions.length })}
-                  </small>
+                  <strong>
+                    {historyReady && measuredSessions.length
+                      ? f.compact(usage.total)
+                      : t('overviewPage.measurementUnavailable')}
+                  </strong>
+                  {historyReady && (
+                    <small>
+                      {t('tokenScope', {
+                        measured: measuredSessions.length,
+                        total: sessions.length,
+                      })}
+                    </small>
+                  )}
                 </div>
               </section>
               <section className="panel agents-panel">
@@ -1504,7 +1540,7 @@ export function App() {
                   <h2>
                     <Terminal size={17} />
                     {t('agents')}
-                    <span className="count-badge">{sessions.length}</span>
+                    {historyReady && <span className="count-badge">{sessions.length}</span>}
                   </h2>
                   <span className="subtle-label">{t('latest')}</span>
                 </div>
@@ -1543,7 +1579,7 @@ export function App() {
                     </select>
                   </label>
                 </div>
-                {!sessions.length ? (
+                {!historyReady ? null : !sessions.length ? (
                   <div className="empty-state">
                     <img
                       className="empty-mascot"
@@ -1656,7 +1692,7 @@ export function App() {
                     void refresh();
                   }}
                 />
-              ) : (
+              ) : historyReady ? (
                 <OverviewPanels
                   preferences={overview.preferences}
                   onCustomize={openOverviewLayout}
@@ -1745,7 +1781,7 @@ export function App() {
                     ),
                   }}
                 />
-              )}
+              ) : null}
             </>
           )}
         </main>
@@ -1837,20 +1873,28 @@ export function App() {
                 {t('savedError')}
               </p>
             )}
-            <div className="drawer-subheading">
-              <span>{t('notificationCounts', { count: unread })}</span>
-              <button
-                className="text-button"
-                onClick={() => {
-                  void api('/api/notifications/read', { method: 'POST' })
-                    .then(() => refresh())
-                    .then(() => setSaveError(false))
-                    .catch(() => setSaveError(true));
-                }}
-              >
-                {t('markRead')}
-              </button>
-            </div>
+            {offline && (
+              <p className="notice" role="status">
+                {t(snapshot ? 'shell.notifications.stale' : 'shell.notifications.unavailable')}
+              </p>
+            )}
+            {markReadError && (
+              <p className="notice" role="alert">
+                {t('shell.notifications.markReadFailed')}
+              </p>
+            )}
+            {snapshot && (
+              <div className="drawer-subheading">
+                <span>{t('notificationCounts', { count: unread })}</span>
+                <button
+                  className="text-button"
+                  disabled={connection !== 'connected' || error || markingRead || unread === 0}
+                  onClick={() => void markNotificationsRead()}
+                >
+                  {t('markRead')}
+                </button>
+              </div>
+            )}
             <label className="notification-filter">
               {t('shell.notifications.filter')}
               <select
@@ -1866,55 +1910,40 @@ export function App() {
                 </option>
               </select>
             </label>
-            {snapshot?.notifications.some(
-              (item) =>
-                notificationFilter === 'all' ||
-                (notificationFilter === 'unread' ? !item.read : item.type === notificationFilter),
-            ) ? (
-              snapshot.notifications
-                .filter(
-                  (item) =>
-                    notificationFilter === 'all' ||
-                    (notificationFilter === 'unread'
-                      ? !item.read
-                      : item.type === notificationFilter),
-                )
-                .map((item) => (
+            {snapshot && visibleNotifications?.length ? (
+              visibleNotifications.map((item) => {
+                const session = snapshot.sessions.find((entry) => entry.id === item.sessionId);
+                const workspace = snapshot.workspaces.find(
+                  (entry) => entry.id === session?.workspaceId,
+                );
+                return (
                   <button
                     className={`notification-item notification-${item.type.replaceAll('.', '-')} ${item.read ? 'read' : ''}`}
-                    disabled={!snapshot.sessions.some((session) => session.id === item.sessionId)}
-                    title={
-                      snapshot.sessions.some((session) => session.id === item.sessionId)
-                        ? t('viewSession')
-                        : t('shell.notifications.sourceMissing')
-                    }
+                    disabled={!session}
+                    title={t(session ? 'viewSession' : 'shell.notifications.sourceMissing')}
                     key={item.id}
                     onClick={() => {
                       openSession(item.sessionId);
                       setNotificationOpen(false);
                     }}
                   >
-                    <span className="tiny-dot" />
+                    <span className="tiny-dot" aria-hidden="true" />
                     <span>
                       <strong>{t(`events.${item.type}`)}</strong>
-                      <small>
-                        {snapshot.sessions.find((session) => session.id === item.sessionId)
-                          ?.agentName ?? item.sessionId.slice(0, 8)}
-                      </small>
-                      <small>
-                        {snapshot.workspaces.find(
-                          (workspace) =>
-                            workspace.id ===
-                            snapshot.sessions.find((session) => session.id === item.sessionId)
-                              ?.workspaceId,
-                        )?.name ?? t('unknown')}
-                      </small>
+                      <small>{session?.agentName ?? item.sessionId.slice(0, 8)}</small>
+                      <small>{workspace?.name ?? t('unknown')}</small>
                       <time dateTime={item.timestamp}>{f.date(item.timestamp)}</time>
+                      <span className="sr-only">
+                        {t(
+                          item.read ? 'shell.notifications.read' : 'shell.notifications.itemUnread',
+                        )}
+                      </span>
                     </span>
-                    <ExternalLink size={14} />
+                    <ExternalLink size={14} aria-hidden="true" />
                   </button>
-                ))
-            ) : (
+                );
+              })
+            ) : snapshot?.notifications.length || (historyReady && !offline) ? (
               <p className="empty-copy">
                 {t(
                   snapshot?.notifications.length
@@ -1922,6 +1951,12 @@ export function App() {
                     : 'notificationEmpty',
                 )}
               </p>
+            ) : (
+              !offline && (
+                <p className="empty-copy" role="status">
+                  {t('shell.notifications.loading')}
+                </p>
+              )
             )}
             {notificationPreferences}
           </div>

@@ -213,7 +213,11 @@ test('WebSocket replays ordered events, reconnects without duplicate notificatio
         .map((message) => message.type === 'event' && message.event.sequence),
       [1, 2],
     );
-    assert.ok(messages.every((message) => message.type !== 'event' || !message.live));
+    assert.ok(
+      messages.every(
+        (message) => message.type !== 'event' || (!message.live && !message.notification),
+      ),
+    );
     const stored = ctx.store.ingest(
       {
         ...events[0]!,
@@ -226,6 +230,27 @@ test('WebSocket replays ordered events, reconnects without duplicate notificatio
     ctx.app.broadcast(stored, true);
     await wait(() => messages.some((message) => message.type === 'event' && message.live));
     assert.equal(ctx.store.notifications().length, 1);
+    const completionMessage = messages.at(-1);
+    assert.ok(completionMessage?.type === 'event' && completionMessage.live);
+    assert.equal(completionMessage.event.id, stored.id);
+    assert.deepEqual(completionMessage.notification, { silent: true });
+    ctx.store.setSetting('notifications', { ...ctx.store.preferences(), failed: false });
+    const muted = ctx.store.ingest(
+      {
+        ...events[0]!,
+        id: 'muted-failure',
+        type: 'agent.failed',
+        payload: { status: 'failed' },
+      },
+      true,
+    )!;
+    ctx.app.broadcast(muted, true);
+    await wait(() =>
+      messages.some((message) => message.type === 'event' && message.event.id === muted.id),
+    );
+    const mutedMessage = messages.at(-1);
+    assert.ok(mutedMessage?.type === 'event' && mutedMessage.live);
+    assert.equal(mutedMessage.notification, undefined);
     socket.terminate();
     await once(socket, 'close');
     socket = new WebSocket(`ws://127.0.0.1:${ctx.port}/ws?after=2`, {
@@ -235,8 +260,12 @@ test('WebSocket replays ordered events, reconnects without duplicate notificatio
     socket.on('message', (data) => replay.push(JSON.parse(data.toString()) as StreamMessage));
     await once(socket, 'open');
     await wait(() => replay.some((message) => message.type === 'ready'));
-    assert.equal(replay.filter((message) => message.type === 'event').length, 1);
-    assert.ok(replay.every((message) => message.type !== 'event' || !message.live));
+    assert.equal(replay.filter((message) => message.type === 'event').length, 2);
+    assert.ok(
+      replay.every(
+        (message) => message.type !== 'event' || (!message.live && !message.notification),
+      ),
+    );
     assert.equal(ctx.store.notifications().length, 1);
   } finally {
     socket?.terminate();
