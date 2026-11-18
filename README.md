@@ -1,5 +1,13 @@
 # ORQST
 
+## V6 Studio staging integration — 2026-11-18
+
+The managed Studio uses a persistent Workspace and Feature tree and one
+breadcrumb/action row. The tree links to dashboard routes, search and alerts.
+The row opens reviewed terminal creation and Feature-local delegation. The
+pane menu holds layout choices and the dock shows minimized panes and the
+current Feature. See the [integrated visual comparisons](docs/development/v6-parity/integrated/README.md).
+
 ## V6 Studio terminal cards — 2026-11-18
 
 Open a terminal from Studio to connect its live PTY output. The native terminal

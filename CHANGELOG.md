@@ -1,5 +1,11 @@
 # Changelog
 
+## V6 Studio integration — 2026-11-18
+
+The Studio combines the persistent Workspace and Feature tree, a single action
+row, reviewed creation and Feature-local delegation. The pane menu contains
+additional layouts. Settings and notifications use the retained dashboard.
+
 ## V6 Studio creation and mentions — 2026-11-18
 
 Studio opens a compact Feature-scoped terminal form. The name and catalog

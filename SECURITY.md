@@ -1,5 +1,12 @@
 # Security policy
 
+## Feature chrome dashboard navigation
+
+The existing native navigation handoff accepts a closed set of dashboard
+destinations from the owned Feature document. It verifies the current document,
+presentation, scope revision and focus. The dashboard applies its draft guard.
+See the [native contract](docs/api/terminal-native.md#feature-chrome-to-dashboard-navigation--2026-11-18).
+
 ## Native startup and executable verification
 
 The bridge binds the loopback transport and applies retention before Desktop

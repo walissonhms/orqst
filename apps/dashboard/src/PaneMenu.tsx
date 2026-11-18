@@ -128,6 +128,7 @@ export function PaneMenu({
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [layoutsOpen, setLayoutsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -145,7 +146,7 @@ export function PaneMenu({
           ? Math.max(8, rect.top - height - 6)
           : rect.bottom + 6,
     });
-  }, [open, !!v6]);
+  }, [open, !!v6, layoutsOpen]);
 
   useEffect(() => {
     if (!open) return;
@@ -203,7 +204,10 @@ export function PaneMenu({
         aria-expanded={open}
         aria-label={t('terminalStudio.menu.open')}
         title={t('terminalStudio.menu.open')}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setLayoutsOpen(false);
+          setOpen(!open);
+        }}
       >
         <MoreHorizontal size={15} />
       </button>
@@ -225,7 +229,7 @@ export function PaneMenu({
                 event.preventDefault();
                 const items = [
                   ...(menu.current?.querySelectorAll<HTMLElement>(
-                    '[role="menuitem"]:not([disabled])',
+                    '[role="menuitem"]:not([disabled]), [role="menuitemradio"]',
                   ) ?? []),
                 ];
                 const index = items.indexOf(document.activeElement as HTMLElement);
@@ -296,20 +300,35 @@ export function PaneMenu({
                     t('terminalStudio.mention.fromThis'),
                     v6.onMention,
                   )}
-                <details className="pm-arrangements">
-                  <summary>{paneText('studio.pane.layouts')}</summary>
-                  {arrangementModes.map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={mode === v6.mode}
-                      onClick={run(() => v6.onLayoutMode(mode))}
-                    >
-                      {t(`terminalStudio.mode.${mode}`)}
-                    </button>
-                  ))}
-                </details>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="pm-item"
+                  aria-expanded={layoutsOpen}
+                  onClick={() => setLayoutsOpen(!layoutsOpen)}
+                >
+                  <span aria-hidden="true">{layoutsOpen ? '▾' : '▸'}</span>
+                  {paneText('studio.pane.layouts')}
+                </button>
+                {layoutsOpen && (
+                  <div
+                    className="pm-arrangements"
+                    role="group"
+                    aria-label={paneText('studio.pane.layouts')}
+                  >
+                    {arrangementModes.map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={mode === v6.mode}
+                        onClick={run(() => v6.onLayoutMode(mode))}
+                      >
+                        {t(`terminalStudio.mode.${mode}`)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
             {item('refresh', <RefreshCw size={15} />, t('terminalStudio.menu.refresh'), () =>

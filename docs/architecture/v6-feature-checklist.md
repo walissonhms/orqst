@@ -1,5 +1,15 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Integrated Studio shell and panes — 2026-11-18
+
+- [x] One 45 px breadcrumb/action row, with a 155 px tree at the audited sizes.
+- [x] Grade and Restore in the row, additional layouts in the pane menu and a 33 px dock.
+- [x] Reviewed creation and Feature-local delegation in the row.
+- [x] Guarded dashboard routes, exact notification source navigation and Settings return.
+- [ ] Native WebKit, PTY and provider acceptance.
+
+See the [integrated comparison](../development/v6-parity/integrated/README.md).
+
 ## Settings, notifications and account limits — 2026-11-18
 
 - [x] Compact V6 Settings, observation guide, notification drawer and limits panel.

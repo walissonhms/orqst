@@ -1641,6 +1641,7 @@ export function TerminalStudio({
       {onMention && composer && (
         <MentionComposer
           terminals={terminals}
+          featureScoped={canonical}
           from={composer.from}
           onFromChange={(from) => setComposer({ from })}
           onSend={onMention}
@@ -1697,7 +1698,7 @@ export function TerminalStudio({
         {canonical ? (
           <span className="ts-summary">
             {paneText('dock.total', { count: scopedTotal })}
-            {v6.featureName && <span>· {v6.featureName}</span>}
+            {v6.featureName ? ` · ${v6.featureName}` : null}
           </span>
         ) : (
           <span className="ts-summary">

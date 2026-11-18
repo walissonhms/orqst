@@ -827,37 +827,61 @@ export function FeatureWorkspace({
     </nav>
   );
   const gridReason = t('feature.noLayout');
-  const mentionScope = snapshot && selected
-    ? { workspaceId: snapshot.workspace.id, featureId: selected.featureId }
-    : null;
+  const mentionScope =
+    snapshot && selected
+      ? { workspaceId: snapshot.workspace.id, featureId: selected.featureId }
+      : null;
   const sendMention: FeatureDelegateProps['onSend'] = async (scope, { from, to, text }) => {
     const latest = current.current;
     const feature = latest?.features.find(({ featureId }) => featureId === scope.featureId);
     if (
-      !latest || latest.workspace.id !== scope.workspaceId ||
-      latest.activeFeatureId !== scope.featureId || !feature || feature.status === 'archived' ||
-      quitFence || coreState !== 'online'
-    ) return 'denied';
-    const members = new Set(latest.slots
-      .filter((slot) => !slot.closed && feature.terminalIds.includes(slot.terminalId))
-      .map((slot) => slot.terminalId));
-    if (!to.length || new Set(to).size !== to.length ||
-      to.some((id) => !members.has(id)) || (from && !members.has(from))) return 'denied';
+      !latest ||
+      latest.workspace.id !== scope.workspaceId ||
+      latest.activeFeatureId !== scope.featureId ||
+      !feature ||
+      feature.status === 'archived' ||
+      quitFence ||
+      coreState !== 'online'
+    )
+      return 'denied';
+    const members = new Set(
+      latest.slots
+        .filter((slot) => !slot.closed && feature.terminalIds.includes(slot.terminalId))
+        .map((slot) => slot.terminalId),
+    );
+    if (
+      !to.length ||
+      new Set(to).size !== to.length ||
+      to.some((id) => !members.has(id)) ||
+      (from && !members.has(from))
+    )
+      return 'denied';
 
     let outcomes: NonNullable<FeatureNativeReply['mention']>['outcomes'] | undefined;
-    const status = await request({
-      action: 'mention',
-      from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
-      to,
-      text,
-    }, (reply) => {
-      if (reply.snapshot?.workspace.id === scope.workspaceId &&
-        reply.snapshot.activeFeatureId === scope.featureId) outcomes = reply.mention?.outcomes;
-    });
+    const status = await request(
+      {
+        action: 'mention',
+        from: from ? { kind: 'terminal', terminalId: from } : { kind: 'user' },
+        to,
+        text,
+      },
+      (reply) => {
+        if (
+          reply.snapshot?.workspace.id === scope.workspaceId &&
+          reply.snapshot.activeFeatureId === scope.featureId
+        )
+          outcomes = reply.mention?.outcomes;
+      },
+    );
     if (status === 'denied') return 'denied';
-    if (status !== 'ok' || !outcomes || outcomes.length !== to.length ||
+    if (
+      status !== 'ok' ||
+      !outcomes ||
+      outcomes.length !== to.length ||
       new Set(outcomes.map(({ terminalId }) => terminalId)).size !== to.length ||
-      outcomes.some(({ terminalId }) => !to.includes(terminalId))) return 'unknown';
+      outcomes.some(({ terminalId }) => !to.includes(terminalId))
+    )
+      return 'unknown';
     if (outcomes.every(({ delivery }) => delivery === 'queued')) return 'queued';
     if (outcomes.every(({ delivery }) => delivery === 'denied')) return 'denied';
     if (outcomes.every(({ delivery }) => delivery === 'unsupported')) return 'unsupported';
@@ -1343,10 +1367,12 @@ export function FeatureWorkspace({
               featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
               layoutControlsRef: layoutControls,
               ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
-                ? {onRename: (id: string) => {
-                  const slot = available.find(({ terminalId }) => terminalId === id);
-                  if (slot) editPane(slot.slot);
-                }}
+                ? {
+                    onRename: (id: string) => {
+                      const slot = available.find(({ terminalId }) => terminalId === id);
+                      if (slot) editPane(slot.slot);
+                    },
+                  }
                 : {}),
             }}
             toolbarStart={breadcrumb}

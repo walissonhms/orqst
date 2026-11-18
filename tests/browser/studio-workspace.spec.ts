@@ -62,7 +62,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'New terminals', exact: true });
   await expect(drawer).toBeVisible();
-  await expect(drawer.getByRole('button', { name: 'Open terminal', exact: true })).toBeDisabled();
+  await expect(drawer.getByText(/the action was refused/i)).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Refresh selection' })).toBeVisible();
   await expect(drawer.getByRole('button', { name: 'Open', exact: true })).toHaveCount(0);
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
@@ -512,9 +512,15 @@ for (const [width, height] of [
     const menu = page.getByRole('menu');
     const capture = (name: string) =>
       page.screenshot({
-        path: process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
-          ? join('docs/development/v6-parity/integrated', `${width}x${height}`, 'panes', `${name}.png`)
-          : testInfo.outputPath(`${name}.png`),
+        path:
+          process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
+            ? join(
+                'docs/development/v6-parity/integrated',
+                `${width}x${height}`,
+                'panes',
+                `${name}.png`,
+              )
+            : testInfo.outputPath(`${name}.png`),
         animations: 'disabled',
       });
     const openMenu = async () => {
@@ -522,18 +528,23 @@ for (const [width, height] of [
       await expect(menu).toBeVisible();
     };
     const mode = () =>
-      page.evaluate(() => (Reflect.get(window, 'fixtureFrames') as { mode: string }[]).at(-1)?.mode);
+      page.evaluate(
+        () => (Reflect.get(window, 'fixtureFrames') as { mode: string }[]).at(-1)?.mode,
+      );
     const grade = row.getByRole('button', { name: 'Grade', exact: true });
     const restore = row.getByRole('button', { name: 'Restaurar', exact: true });
-    await expect(row).toHaveCount(1);
-    await expect(grade).toHaveCount(1);
-    await expect(restore).toHaveCount(1);
-    await expect(row.locator('.ts-modes, .ts-features')).toHaveCount(0);
+    await expect(page.locator('.feature-topbar, .ts-toolbar')).toHaveCount(1);
+    for (const name of ['Grade', 'Restaurar', 'Delegar', '＋ Terminal']) {
+      await expect(page.getByRole('button', { name, exact: true })).toHaveCount(1);
+      await expect(row.getByRole('button', { name, exact: true })).toBeVisible();
+    }
+    await expect(page.locator('.ts-modes, .ts-features, .ts-mention-open')).toHaveCount(0);
     await expect(first.locator('.ts-head')).toHaveCSS('height', '31px');
     await expect(first.locator('.ts-alias')).toHaveText('@T-001');
     await expect(dock).toHaveCSS('height', '33px');
-    await expect(dock).toContainText('4 terminais· Feature A');
-    await expect(dock.locator('.ts-mention-open')).toHaveCount(0);
+    await expect(dock.locator('.ts-dock-title')).toHaveText('Minimizados');
+    await expect(dock.locator('.ts-dock-title')).toHaveCSS('text-transform', 'uppercase');
+    await expect(dock.locator('.ts-summary')).toHaveText('4 terminais · Feature A');
     const origin = (await first.boundingBox())!;
     expect([origin.x, origin.y]).toEqual([159, 49]);
     await capture('01-grid');
@@ -562,9 +573,20 @@ for (const [width, height] of [
     await openMenu();
     await expect(menu).toHaveCSS('width', '215px');
     await capture('06-pane-menu');
-    await menu.getByText('Layouts', { exact: true }).click();
-    await expect(menu.getByRole('menuitemradio', { name: 'Colunas', exact: true })).toBeVisible();
+    const layouts = menu.getByRole('menuitem', { name: 'Layouts', exact: true });
+    await expect(layouts).toHaveAttribute('aria-expanded', 'false');
+    await expect(menu.getByRole('menuitemradio')).toHaveCount(0);
+    await layouts.click();
+    await expect(layouts).toHaveAttribute('aria-expanded', 'true');
+    for (const name of ['Colunas', 'Linhas', 'Foco', 'Lista', 'Livre']) {
+      await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeVisible();
+    }
     await capture('06a-layouts');
+    await menu.getByRole('menuitemradio', { name: 'Linhas', exact: true }).click();
+    await expect.poll(mode).toBe('rows');
+    await restore.click();
+    await expect.poll(mode).toBe('mosaic');
+    await openMenu();
     await menu.getByRole('menuitem', { name: 'Configurações / renomear', exact: true }).click();
     const editor = page.locator('.feature-pane-editor');
     await expect(editor).toBeVisible();
@@ -591,9 +613,14 @@ for (const [width, height] of [
     await expect(first).not.toHaveClass(/ts-floating/);
 
     await first.getByRole('button', { name: 'Maximizar', exact: true }).click();
-    await expect.poll(() => first.boundingBox()).toEqual({
-      x: 159, y: 49, width: width - 163, height: height - 86,
-    });
+    await expect
+      .poll(() => first.boundingBox())
+      .toEqual({
+        x: 159,
+        y: 49,
+        width: width - 163,
+        height: height - 86,
+      });
     await capture('11-maximized');
     await first.getByRole('button', { name: 'Restaurar', exact: true }).click();
     await first.getByRole('button', { name: 'Minimizar', exact: true }).click();

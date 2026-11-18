@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## V6 Studio shell and pane integration — 2026-11-18
+
+The staging renderer combines Feature navigation, reviewed creation, scoped
+mentions, pane layout and Settings entry points. The remaining owner review
+covers signed native presentation, live PTY input and provider behavior.
+See the [integrated evidence](docs/development/v6-parity/integrated/README.md).
+
 ## V6 Studio terminal cards — 2026-11-18
 
 The Studio card, dock and compact native geometry are implemented. Headless

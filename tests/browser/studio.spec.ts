@@ -278,9 +278,10 @@ async function installStudioFixture(page: Page, count: number, language: 'pt-BR'
 function captureIntegrated(page: Page, outputPath: string, name: string) {
   const { width, height } = page.viewportSize()!;
   return page.screenshot({
-    path: process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
-      ? join('docs/development/v6-parity/integrated', `${width}x${height}`, name)
-      : outputPath,
+    path:
+      process.env.ORQST_V6_INTEGRATED_CAPTURES === '1'
+        ? join('docs/development/v6-parity/integrated', `${width}x${height}`, name)
+        : outputPath,
     animations: 'disabled',
   });
 }
@@ -329,7 +330,11 @@ for (const [width, height] of [
     await cli.selectOption('codex');
     await name.fill('Terminal de revisão');
     await model.selectOption(explicitModel);
-    await captureIntegrated(page, testInfo.outputPath('creation-filled.png'), 'creation-filled.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('creation-filled.png'),
+      'creation-filled.png',
+    );
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(trigger).toBeFocused();
@@ -345,7 +350,11 @@ for (const [width, height] of [
     await expect(advanced.getByLabel('Provedor CLI').locator('option')).toHaveCount(4);
     await advanced.getByLabel('Modelo', { exact: true }).selectOption(explicitModel);
     await expect(advanced.getByRole('button', { name: 'Abrir', exact: true })).toBeEnabled();
-    await captureIntegrated(page, testInfo.outputPath('creation-advanced.png'), 'creation-advanced.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('creation-advanced.png'),
+      'creation-advanced.png',
+    );
     await page.keyboard.press('Escape');
     await expect(trigger).toBeFocused();
 
@@ -354,7 +363,11 @@ for (const [width, height] of [
     await model.selectOption(explicitModel);
     await submit.click();
     await expect(dialog.getByText('A revisão foi cancelada')).toBeVisible();
-    await captureIntegrated(page, testInfo.outputPath('creation-refused.png'), 'creation-refused.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('creation-refused.png'),
+      'creation-refused.png',
+    );
     await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
     await expect(trigger).toBeFocused();
     const submitted = await page.evaluate(() =>
@@ -390,7 +403,11 @@ for (const [width, height] of [
     expect(
       await originals.first().evaluate((node) => node === Reflect.get(window, 'lane4OriginalPane')),
     ).toBe(true);
-    await captureIntegrated(page, testInfo.outputPath('creation-retained-panes.png'), 'creation-retained-panes.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('creation-retained-panes.png'),
+      'creation-retained-panes.png',
+    );
   });
 
   test(`empty Feature creation opens the first pane at ${width}×${height}`, async ({
@@ -411,7 +428,11 @@ for (const [width, height] of [
     await dialog.getByRole('button', { name: 'Abrir terminal', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator(`.ts-body[data-terminal-id="${createdId}"]`)).toBeVisible();
-    await captureIntegrated(page, testInfo.outputPath('creation-first-pane.png'), 'creation-first-pane.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('creation-first-pane.png'),
+      'creation-first-pane.png',
+    );
   });
 }
 
@@ -552,7 +573,11 @@ for (const [width, height] of [
     const listbox = dialog.getByRole('listbox');
     await expect(listbox.getByRole('option')).toHaveCount(4);
     await expect(listbox.getByText('Modelo desconhecido', { exact: true })).toHaveCount(4);
-    await captureIntegrated(page, testInfo.outputPath('delegate-targets.png'), 'delegate-targets.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('delegate-targets.png'),
+      'delegate-targets.png',
+    );
     await text.fill('@T-002 @T-005 revise o teste');
     await expect(submit).toBeDisabled();
     await text.fill('@T-002 @outra-feature/T-002 revise o teste');
@@ -563,7 +588,11 @@ for (const [width, height] of [
     await submit.click();
     await expect(dialog.getByText('Na fila da caixa de entrada do terminal')).toBeVisible();
     await expect(dialog.getByText('Enviado', { exact: false })).toHaveCount(0);
-    await captureIntegrated(page, testInfo.outputPath('delegate-queued.png'), 'delegate-queued.png');
+    await captureIntegrated(
+      page,
+      testInfo.outputPath('delegate-queued.png'),
+      'delegate-queued.png',
+    );
     expect(await page.evaluate(() => Reflect.get(window, 'lane4Mentions'))).toEqual([
       {
         contractVersion: 1,
@@ -577,6 +606,7 @@ for (const [width, height] of [
     await page.evaluate((id) => Reflect.set(window, 'lane4WrongReceipt', id), fixtureId(5));
     await text.fill('@T-002 confirme o teste');
     await submit.click();
+    await expect(dialog.getByText('Entrega desconhecida', { exact: true })).toBeVisible();
     await expect(dialog.getByText('Na fila da caixa de entrada do terminal')).toHaveCount(0);
     await expect(dialog.getByText('Enviado', { exact: false })).toHaveCount(0);
     await page.keyboard.press('Escape');

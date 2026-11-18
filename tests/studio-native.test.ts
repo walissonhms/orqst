@@ -165,6 +165,7 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
         import { createInstance } from 'i18next';
         import { I18nextProvider } from 'react-i18next';
         import { FeatureWorkspace } from './src/FeatureWorkspace.tsx';
+        import './src/feature-shell.css';
         import en from './src/locales/en-US.json';
         window.startFixture = async (snapshot) => {
           window.arrangeFrames = [];
@@ -200,28 +201,21 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
     platform: 'browser',
     format: 'iife',
     target: 'safari17',
-    loader: { '.css': 'empty' },
     write: false,
+    outdir: 'unused-native-feature-fixture',
     logLevel: 'silent',
   });
+  const script = result.outputFiles.find(({ path }) => path.endsWith('.js'))!;
+  const css = result.outputFiles.find(({ path }) => path.endsWith('.css'))!;
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    // The real layout needs the stylesheet, so load the CSS the bundle left out.
-    const css = await build({
-      entryPoints: [
-        resolve('apps/dashboard/src/feature-workspace.css'),
-        resolve('apps/dashboard/src/terminal-studio.css'),
-        resolve('apps/dashboard/src/pane-menu.css'),
-      ],
-      bundle: true,
-      write: false,
-      logLevel: 'silent',
-      outdir: 'out',
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+      reducedMotion: 'reduce',
     });
-    await page.setContent('<div id="root"></div>');
-    for (const file of css.outputFiles) await page.addStyleTag({ content: file.text });
-    await page.addScriptTag({ content: result.outputFiles[0]!.text });
+    await page.setContent('<!doctype html><div id="root"></div>');
+    await page.addStyleTag({ content: css.text });
+    await page.addScriptTag({ content: script.text });
     await page.evaluate((value) => Reflect.get(window, 'startFixture')(value), snapshot());
     await page.waitForFunction(() =>
       (Reflect.get(window, 'arrangeFrames') as unknown as { panes: { visible: boolean }[] }[]).some(
@@ -284,6 +278,23 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
       const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
       return list.at(-1)!.panes.every((pane) => pane.visible);
     });
+    const waitForVisiblePane = (terminalId: string) =>
+      page.waitForFunction((id) => {
+        const list = Reflect.get(window, 'arrangeFrames') as unknown as Frame[];
+        const visible = list.at(-1)!.panes.filter((pane) => pane.visible);
+        return visible.length === 1 && visible[0]?.terminalId === id;
+      }, terminalId);
+    await page.getByRole('button', { name: 'Account limits', exact: true }).click();
+    const limits = page.locator('.al-panel[data-native-overlay]');
+    await limits.waitFor();
+    await waitForVisiblePane(t1);
+    await limits.evaluate((panel: HTMLElement) => {
+      panel.style.transform = 'translateX(-720px)';
+    });
+    await waitForVisiblePane(t2);
+    await page.keyboard.press('Escape');
+    await limits.waitFor({ state: 'detached' });
+
     // A new native generation hides the views; the Studio must resend its frame with it.
     await page.evaluate(() => Reflect.set(window, 'generation', 9));
     await page.waitForFunction(
@@ -329,7 +340,11 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
     await page.evaluate((value) => Reflect.get(window, 'publishFeature')(value), cleared);
     await rolePane.locator('.ts-role').waitFor({ state: 'detached', timeout: 5000 });
     assert.equal(await page.locator('.ts-role').count(), 0);
-    const unassigned = { ...cleared, activeFeatureId: null, view: { ...cleared.view, featureId: null } };
+    const unassigned = {
+      ...cleared,
+      activeFeatureId: null,
+      view: { ...cleared.view, featureId: null },
+    };
     await page.evaluate((value) => Reflect.get(window, 'publishFeature')(value), unassigned);
     await page.getByRole('article', { name: 'T-003 OpenCode' }).waitFor();
     assert.equal(await page.locator('.ts-crown').count(), 0);
