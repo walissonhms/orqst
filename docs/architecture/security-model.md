@@ -14,6 +14,20 @@ validates the full configuration and CLI digest before spawning. Native focus,
 one-use grants, owner checks and durable receipts still govern effects.
 See the [verification and source review](../development/native-opening-performance.md).
 
+## Structured Claude Studio pilot — 2026-11-18
+
+The Core session layer drives a pinned Claude 2.1.318 binary over `stream-json`
+stdio with `--permission-mode default`, `--permission-prompt-tool stdio`,
+`--strict-mcp-config`, inline `disableAllHooks` and `permissions.ask` rules,
+refusing platform-managed policy directories (`managed-settings.json`,
+`managed-settings.d`, `managed-mcp.json`). Tool approvals and `orqst` SDK MCP
+delegations require the existing native Feature review and one-use grant;
+`can_use_tool` denies unsupported tools and never auto-updates permissions. The
+native host verifies the executable digest first and refuses live session start
+with `provider_terms_unapproved` before spawning or accessing user subscription
+credentials. See the
+[terms audit and protocol boundary](../design/structured-claude-pilot.md).
+
 ## Structured OpenCode Studio pilot
 
 The existing native review token binds the provider, reviewed executable digest,

@@ -3,20 +3,25 @@
 ## Structured Studio session projections
 
 The local Tauri Feature command accepts `start` with an optional `provider`
-(`codex` by default, or `opencode`). Session snapshots expose the provider,
-owned execution lifecycle, latest turn, bounded history, permission decisions
+(`codex` by default, `opencode`, or `claude`). Session snapshots expose the provider,
+owned execution lifecycle, latest turn, bounded history, permission decisions,
+cumulative usage (`cost.source` `'opencode_estimate'` or `'claude_estimate'`)
 and same-Feature delegations. Human and delegated provider turns receive a fresh
 same-Feature roster with other open structured sessions' IDs, labels, provider
 and activity. The roster has no authority to create a turn or exchange messages.
 The private command may return an `unavailable` status with a fixed `reason`
-code for executable discovery, native/workspace context, host transport or
-provider startup. OpenCode's provider session has its own ID.
+code for executable discovery, native/workspace context, host transport,
+provider startup or `provider_terms_unapproved` (when live third-party
+subscription login lacks provider authorization). OpenCode and Claude provider
+sessions carry their own session IDs, and Claude usage counts each main-thread
+response `message.id` once into `session_cumulative` totals.
 Core generates each input ID and uses it only in that owned session. A matched inbox delivery and
 an execution outcome drive terminal turn state. A reconciled outcome also
 requires a fresh busy/idle pair and matching delivered input from provider
 history. Unproved turn loss is `unknown`. The process `exit` field stays `null`
 without an observed exit code or signal. See the
-[OpenCode contract](../design/structured-opencode-pilot.md).
+[OpenCode contract](../design/structured-opencode-pilot.md) and
+[Claude protocol record](../design/structured-claude-pilot.md).
 
 The ORQST protocol is the provider-independent contract between adapters, the
 database, the bridge, and the dashboard. It is defined with zod in

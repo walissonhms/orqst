@@ -6,7 +6,8 @@ the session and confirm the executable, version, SHA-256, project and permission
 policy in the existing native sheet. The same sheet reviews prompts, decisions,
 one-use delegation grants, interruption and stop. The Core uses the existing
 Feature fence and session pool. See the
-[Codex workflow](structured-codex-pilot.md) and
+[Codex workflow](structured-codex-pilot.md),
+[Claude protocol record](structured-claude-pilot.md) and
 [private projection contract](../api/protocol.md#structured-studio-session-projections).
 
 ## Ownership and policy

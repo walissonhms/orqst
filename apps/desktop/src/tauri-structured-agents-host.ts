@@ -14,6 +14,7 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { resolveTerminalPreparationContext } from '../../../packages/core/src/terminal/preparation-context.js';
 import { BoundedLineSplitter } from '../../../packages/core/src/managed-codex/line-splitter.js';
+import { reviewedStructuredClaudeBinary } from '../../../packages/core/src/structured-agents/claude-process.js';
 import { structuredCodexEnvironment } from '../../../packages/core/src/structured-agents/codex-process.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import { openCodeArgs } from '../../../packages/core/src/structured-agents/opencode-process.js';
@@ -25,6 +26,7 @@ import { structuredMentionGrant } from './structured-mention.js';
 const reviewed = {
   codex: reviewedCodex169Binary,
   opencode: reviewedProviderMcpBinaries.opencode,
+  claude: reviewedStructuredClaudeBinary,
 };
 const correlation = z.object({ id: z.number().int().safe().positive() });
 const envelope = z.strictObject({
@@ -107,6 +109,8 @@ async function run(): Promise<void> {
         );
         const executable = executables[0];
         if (!executable) return send(id, { status: 'unavailable', reason: refusal });
+        if (provider === 'claude')
+          return send(id, { status: 'unavailable', reason: 'provider_terms_unapproved' });
         launch = {
           executable,
           cwd: project,

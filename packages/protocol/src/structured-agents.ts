@@ -13,7 +13,7 @@ export const structuredAgentsLimits = Object.freeze({
 
 const uuid = z.uuid();
 const id = z.string().min(1).max(200);
-export const structuredProviderSchema = z.enum(['codex', 'opencode']);
+export const structuredProviderSchema = z.enum(['codex', 'opencode', 'claude']);
 export type StructuredProvider = z.infer<typeof structuredProviderSchema>;
 
 const decision = z.enum(['accept', 'decline', 'cancel']);
@@ -46,7 +46,7 @@ export interface StructuredSessionUsage {
   usage: Usage;
   usageKind: 'session_cumulative';
   turnId?: string;
-  cost?: { amount: number; currency: 'USD'; source: 'opencode_estimate' };
+  cost?: { amount: number; currency: 'USD'; source: 'opencode_estimate' | 'claude_estimate' };
 }
 
 export interface StructuredSession {
@@ -144,6 +144,7 @@ export const structuredAgentsUnavailableReasonSchema = z.enum([
   'executable_not_found',
   'executable_unreviewed',
   'executable_inspection_failed',
+  'provider_terms_unapproved',
   'native_context_unavailable',
   'workspace_context_unavailable',
   'host_unavailable',

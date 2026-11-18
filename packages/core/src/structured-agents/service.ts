@@ -9,6 +9,12 @@ import {
   type StructuredDelegation,
   type StructuredProvider,
 } from '@orqst/protocol';
+import {
+  spawnClaudeStreamJson,
+  type ClaudeLaunch,
+  type OwnedClaudeProcess,
+} from './claude-process.js';
+import { StructuredClaudeSession } from './claude-session.js';
 import { StructuredCodexSession } from './codex-session.js';
 import { OwnedOpenCode } from './opencode-process.js';
 import { StructuredOpenCodeSession } from './opencode-session.js';
@@ -20,6 +26,8 @@ export interface StructuredLaunch {
   cwd: string;
   env: NodeJS.ProcessEnv;
   provider?: StructuredProvider;
+  bare?: boolean;
+  sessionId?: string;
 }
 
 type Mutation = Exclude<StructuredAgentsRequest, { action: 'snapshot' }>;
@@ -44,6 +52,7 @@ export class StructuredAgents {
     ) => StructuredProcessTransport = spawnCodexAppServer,
     private readonly now = Date.now,
     private readonly ownOpenCode = (input: StructuredLaunch) => new OwnedOpenCode(input),
+    private readonly ownClaude: (input: ClaudeLaunch) => OwnedClaudeProcess = spawnClaudeStreamJson,
   ) {}
 
   private find(scope: StructuredAgentsScope, id: string): OwnedStructuredSession | undefined {
@@ -164,7 +173,9 @@ export class StructuredAgents {
       const session: OwnedStructuredSession =
         provider === 'opencode'
           ? new StructuredOpenCodeSession(sessionScope, this.ownOpenCode(launch), delegate)
-          : new StructuredCodexSession(sessionScope, this.ownProcess(launch), delegate);
+          : provider === 'claude'
+            ? new StructuredClaudeSession(sessionScope, this.ownClaude(launch), delegate)
+            : new StructuredCodexSession(sessionScope, this.ownProcess(launch), delegate);
       this.sessions.set(session.id, { scope: { ...scope }, session });
       await session.initialize(launch.cwd);
     } else if (request.action === 'grant') {

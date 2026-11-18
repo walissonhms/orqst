@@ -41,6 +41,7 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                         | "LANG"
                         | "TMPDIR"
                         | "CODEX_HOME"
+                        | "CLAUDE_CONFIG_DIR"
                         | "XDG_CONFIG_HOME"
                         | "XDG_DATA_HOME"
                         | "XDG_STATE_HOME"
@@ -135,6 +136,7 @@ pub fn diagnose_refusal(action: &str, provider: &Value, stage: &str, result: &Va
     let reason = match result["reason"].as_str() {
         Some(reason @ (
             "executable_not_found" | "executable_unreviewed" | "executable_inspection_failed"
+            | "provider_terms_unapproved"
             | "workspace_context_unavailable" | "host_unavailable" | "host_transport_failed"
             | "host_timeout" | "session_start_failed" | "operation_failed"
             | "provider_startup_timeout" | "provider_connection_failed" | "provider_session_rejected"
@@ -144,6 +146,7 @@ pub fn diagnose_refusal(action: &str, provider: &Value, stage: &str, result: &Va
     let provider = match (action, provider.as_str()) {
         ("start", None | Some("codex")) => "codex",
         ("start", Some("opencode")) => "opencode",
+        ("start", Some("claude")) => "claude",
         _ => "unspecified",
     };
     eprintln!("ORQST_STRUCTURED_AGENTS action={action} provider={provider} stage={stage} reason={reason}");
