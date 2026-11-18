@@ -7,6 +7,7 @@ export const dashboardViewSchema = z.enum([
   'agents',
   'models',
   'artifacts',
+  'comunicacao',
   'settings',
 ]);
 export type DashboardView = z.infer<typeof dashboardViewSchema>;

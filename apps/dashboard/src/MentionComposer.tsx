@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { AtSign, Loader2, Send, TriangleAlert, X } from 'lucide-react';
-import { Modal } from './Modal';
+import { DelegateDialog } from './DelegateDialog';
 import type { StudioTerminal } from './TerminalStudio';
 
 /** Delivery is separate from task execution: accepted never means done. */
@@ -20,6 +19,7 @@ interface Props {
   terminals: StudioTerminal[];
   /** Reject the whole draft if any mention is ambiguous, outside scope or self-addressed. */
   featureScoped?: boolean;
+  recipientLimit?: number;
   /** Terminal the message is sent from, or null for the user. */
   from: string | null;
   onFromChange: (id: string | null) => void;
@@ -47,10 +47,18 @@ function mentionHandles(text: string): string[] {
   return [...handles];
 }
 
-export function resolveMentions(text: string, terminals: StudioTerminal[]): StudioTerminal[] {
+export function resolveMentions(
+  text: string,
+  terminals: StudioTerminal[],
+  useAliases = false,
+): StudioTerminal[] {
   const found = new Map<string, StudioTerminal>();
   for (const handle of mentionHandles(text)) {
-    const matches = terminals.filter((candidate) => candidate.label.toLowerCase() === handle);
+    const matches = terminals.filter(
+      (candidate) =>
+        candidate.label.toLowerCase() === handle ||
+        (useAliases && candidate.alias?.toLowerCase() === handle),
+    );
     if (matches.length === 1) {
       const terminal = matches[0]!;
       found.set(terminal.id, terminal);
@@ -72,6 +80,7 @@ function currentQuery(text: string, caret: number): Query | undefined {
 export function MentionComposer({
   terminals,
   featureScoped = false,
+  recipientLimit = 8,
   from,
   onFromChange,
   onSend,
@@ -92,17 +101,19 @@ export function MentionComposer({
   }, [autoFocus]);
 
   const sender = terminals.find((terminal) => terminal.id === from);
-  const recipients = resolveMentions(text, terminals).filter((terminal) => terminal.id !== from);
+  const handles = mentionHandles(text);
+  const recipients = resolveMentions(text, terminals, featureScoped).filter(
+    (terminal) => terminal.id !== from,
+  );
   const crossWorkspace = sender
     ? recipients.filter((terminal) => terminal.workspace.id !== sender.workspace.id)
     : [];
   const invalidTarget =
-    featureScoped &&
-    ((from !== null && !sender) || mentionHandles(text).length !== recipients.length);
+    featureScoped && ((from !== null && !sender) || handles.length !== recipients.length);
   const canSend =
     text.trim().length > 0 &&
     recipients.length > 0 &&
-    recipients.length <= 8 &&
+    recipients.length <= recipientLimit &&
     !invalidTarget &&
     state !== 'sending';
 
@@ -114,6 +125,7 @@ export function MentionComposer({
         [
           terminal.label,
           terminal.name,
+          ...(featureScoped ? [terminal.alias ?? ''] : []),
           terminal.provider,
           terminal.model ?? '',
           terminal.workspace.name,
@@ -123,7 +135,7 @@ export function MentionComposer({
           .includes(query.text),
       )
       .slice(0, 8);
-  }, [query, terminals, from]);
+  }, [query, terminals, from, featureScoped]);
 
   const pick = (terminal: StudioTerminal) => {
     if (!query) return;
@@ -289,7 +301,31 @@ export function MentionComposer({
             {t('terminalStudio.mention.crossWorkspace')}
           </span>
         )}
-        {invalidTarget && <span className="mc-warn">{t('mention.invalidTarget')}</span>}
+        {invalidTarget && (
+          <span className="mc-warn">
+            {from !== null && !sender
+              ? t('communication.refused.sender_unassigned')
+              : handles.some((handle) => handle.includes('/'))
+                ? t('communication.refused.not_permitted', {
+                    target: '@' + handles.find((handle) => handle.includes('/')),
+                  })
+                : t('communication.unknownMention', {
+                    target:
+                      '@' +
+                      handles.find(
+                        (handle) =>
+                          !recipients.some((terminal) =>
+                            [terminal.label, terminal.alias].some(
+                              (alias) => alias?.toLowerCase() === handle,
+                            ),
+                          ),
+                      ),
+                  })}
+          </span>
+        )}
+        {recipients.length > recipientLimit && (
+          <span className="mc-warn">{t('communication.invalidRecipientCount')}</span>
+        )}
         {state && state !== 'sending' && (
           <span className={`mc-state mc-state-${state}`}>
             {t(state === 'queued' ? 'mention.queued' : `terminalStudio.mention.state.${state}`)}
@@ -326,50 +362,121 @@ export function FeatureDelegate(props: FeatureDelegateProps) {
 function FeatureDelegateAction({ scope, terminals, onSend, disabled }: FeatureDelegateProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const [from, setFrom] = useState<string | null>(null);
+  const [opening, setOpening] = useState(false);
+  const [dispatch, setDispatch] = useState<{
+    generation: number;
+    recipients: string[];
+    senders: string[];
+    otherFeatures: boolean;
+  }>();
   const members = terminals.filter((terminal) => terminal.workspace.id === scope?.workspaceId);
-  const available = !!scope && members.length > 0 && !disabled;
+  const available =
+    !!scope &&
+    members.some(({ provider }) => provider !== 'antigravity' && provider !== 'shell') &&
+    !disabled;
 
+  async function openDelegate() {
+    if (!scope || !available || opening) return;
+    setOpening(true);
+    setDispatch(undefined);
+    try {
+      const native = window.orqstFeatures;
+      const snapshot = (
+        await native?.request({
+          contractVersion: 1,
+          generation: 0,
+          action: 'snapshot',
+        })
+      )?.snapshot;
+      if (
+        snapshot?.workspace.id === scope.workspaceId &&
+        snapshot.activeFeatureId === scope.featureId
+      ) {
+        const details = (
+          await native?.request({
+            contractVersion: 1,
+            generation: snapshot.generation,
+            action: 'inspector',
+            command: { kind: 'read', featureId: scope.featureId },
+          })
+        )?.inspector;
+        if (details?.status === 'ok' && details.featureId === scope.featureId)
+          setDispatch({
+            generation: snapshot.generation,
+            recipients: details.recipients,
+            senders: details.senders,
+            otherFeatures: snapshot.features.some(
+              (feature) => feature.featureId !== scope.featureId && feature.status !== 'archived',
+            ),
+          });
+      }
+    } catch {
+      // The existing owner-only composer path still checks the active Feature at submission.
+    } finally {
+      setOpen(true);
+      setOpening(false);
+    }
+  }
+
+  const defaultSender =
+    members.find((terminal) => terminal.orchestrator && dispatch?.senders.includes(terminal.id)) ??
+    members.find((terminal) => terminal.active && dispatch?.senders.includes(terminal.id));
   return (
     <>
       <button
         type="button"
         className="mc-delegate"
         aria-haspopup="dialog"
-        disabled={!available}
+        disabled={!available || opening}
         title={available ? undefined : t('mention.unavailable')}
-        onClick={() => {
-          setFrom(null);
-          setOpen(true);
-        }}
+        onClick={() => void openDelegate()}
       >
         <span aria-hidden="true">↗</span> {t('mention.delegate')}
       </button>
-      {open &&
-        scope &&
-        createPortal(
-          <Modal
-            label={t('mention.delegate')}
-            className="mc-dialog"
-            initialFocus="textarea"
-            onClose={() => setOpen(false)}
-          >
-            <div data-native-overlay="">
-              <h2>{t('mention.delegate')}</h2>
-              <MentionComposer
-                terminals={members}
-                featureScoped
-                from={from}
-                onFromChange={setFrom}
-                onSend={(message) =>
-                  available ? onSend(scope, message) : Promise.resolve('denied')
-                }
-                onClose={() => setOpen(false)}
-              />
-            </div>
-          </Modal>,
-          document.body,
-        )}
+      {open && scope && (
+        <DelegateDialog
+          terminals={
+            dispatch
+              ? members.filter(
+                  ({ id, provider }) =>
+                    dispatch.recipients.includes(id) || provider === 'antigravity',
+                )
+              : members
+          }
+          from={defaultSender?.id}
+          senders={dispatch?.senders ?? []}
+          otherFeatures={dispatch?.otherFeatures}
+          onClose={() => setOpen(false)}
+          onSend={async (from, to, text) => {
+            if (!available) return t('communication.refused.unavailable');
+            if (from && dispatch) {
+              const reply = await window.orqstFeatures?.request({
+                action: 'inspector',
+                contractVersion: 1,
+                generation: dispatch.generation,
+                command: {
+                  kind: 'send',
+                  featureId: scope.featureId,
+                  targetFeatureId: scope.featureId,
+                  from,
+                  to: [to],
+                  text,
+                  task: true,
+                },
+              });
+              if (reply?.inspector?.status === 'queued') return undefined;
+              if (reply?.inspector?.status === 'refused')
+                return t('communication.refused.' + reply.inspector.code, {
+                  target: '@' + (members.find(({ id }) => id === to)?.label ?? ''),
+                });
+              return t('communication.refused.unavailable');
+            }
+            const result = await onSend(scope, { from, to: [to], text });
+            if (result === 'queued' || result === 'accepted') return undefined;
+            return t(`terminalStudio.mention.state.${result}`);
+          }}
+        />
+      )}
     </>
   );
 }

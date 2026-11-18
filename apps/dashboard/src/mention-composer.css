@@ -324,3 +324,290 @@
   background: var(--orqst-surface);
   color: var(--orqst-text);
 }
+
+.communication-inspector {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  font-size: 12px;
+}
+
+.communication-head,
+.communication-filters,
+.communication-row-main,
+.communication-path,
+.communication-actions,
+.delegate-dialog footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.communication-head {
+  justify-content: space-between;
+}
+
+.communication-head h1 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.communication-inspector .button,
+.delegate-dialog .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 27px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.communication-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--orqst-border);
+}
+
+.communication-tabs button {
+  padding: 8px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--orqst-muted);
+  font-size: 12px;
+}
+
+.communication-tabs button[aria-selected='true'] {
+  border-color: var(--orqst-neon);
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-text);
+}
+
+.communication-panel {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.communication-filters {
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--orqst-border);
+  background: var(--orqst-surface);
+}
+
+.communication-filters label {
+  display: grid;
+  gap: 4px;
+  color: var(--orqst-muted);
+}
+
+.communication-filters select,
+.delegate-dialog select,
+.delegate-dialog input[type='search'],
+.delegate-dialog textarea {
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--orqst-border-strong);
+  border-radius: 5px;
+  background: var(--orqst-background);
+  color: var(--orqst-text);
+  font: inherit;
+}
+
+.communication-filters select {
+  max-width: 230px;
+}
+
+.communication-panel .mc-root {
+  margin: 0;
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.communication-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--orqst-border);
+}
+
+.communication-rows li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 12px;
+  padding: 10px 8px;
+  border: solid var(--orqst-border);
+  border-width: 0 1px 1px;
+  background: var(--orqst-surface);
+}
+
+.communication-row-main,
+.communication-preview,
+.communication-audit {
+  grid-column: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.communication-row-main time,
+.communication-audit,
+.communication-empty,
+.delegate-hint,
+.delegate-options small {
+  color: var(--orqst-muted);
+}
+
+.communication-preview summary {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.communication-audit,
+.communication-preview p,
+.communication-empty,
+.communication-feedback,
+.delegate-dialog p {
+  margin: 0;
+}
+
+.communication-preview p {
+  padding-top: 6px;
+  white-space: pre-wrap;
+}
+
+.communication-actions {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: start;
+}
+
+.communication-badge {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--orqst-accent-soft);
+  color: var(--orqst-lavender);
+}
+
+.delivery-delivered,
+.task-done {
+  background: var(--orqst-success-soft);
+  color: var(--orqst-success);
+}
+
+.delivery-target_ended,
+.task-failed {
+  background: var(--orqst-danger-soft);
+  color: var(--orqst-danger);
+}
+
+.delivery-unknown,
+.task-unknown,
+.task-blocked {
+  background: var(--orqst-warning-soft);
+  color: var(--orqst-warning);
+}
+
+.communication-empty,
+.communication-feedback {
+  padding: 12px;
+  border: 1px solid var(--orqst-border);
+}
+
+.communication-inspector :focus-visible,
+.delegate-dialog :focus-visible {
+  outline: 2px solid var(--orqst-neon);
+  outline-offset: 2px;
+}
+
+.delegate-dialog.mc-dialog {
+  width: min(390px, 90vw);
+  max-height: 90dvh;
+  margin: auto;
+  overflow: auto;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.delegate-dialog form {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.delegate-dialog h2 {
+  padding: 0;
+  font-size: 16px;
+}
+
+.delegate-dialog form > label {
+  display: grid;
+  gap: 5px;
+}
+
+.delegate-picker {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+}
+
+.delegate-picker input {
+  grid-column: 1 / -1;
+}
+
+.delegate-other {
+  color: var(--orqst-lavender);
+  text-decoration: underline;
+}
+
+.delegate-options {
+  display: grid;
+  gap: 3px;
+  max-height: 140px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--orqst-border);
+}
+
+.delegate-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 5px;
+}
+
+.delegate-options label:has(:checked) {
+  background: var(--orqst-accent-soft);
+}
+
+.delegate-options small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.delegate-dialog footer {
+  justify-content: flex-end;
+}
+
+.delegate-error {
+  color: var(--orqst-danger);
+}
+
+.feature-permissions-table {
+  overflow-x: auto;
+}
+
+@media (max-width: 800px) {
+  .communication-rows li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .communication-actions {
+    grid-row: auto;
+    grid-column: 1;
+  }
+}

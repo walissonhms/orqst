@@ -450,6 +450,7 @@
   },
   "shell": {
     "views": {
+      "comunicacao": "Communication",
       "overview": "Overview",
       "workspaces": "Workspace directory",
       "agents": "Agents & integrations",
@@ -1727,5 +1728,76 @@
     "restore": "Restore {{name}}",
     "total_one": "{{count}} terminal",
     "total_other": "{{count}} terminals"
+  },
+  "communication": {
+    "permissionToggle": "{{operation}} · {{source}} to {{target}}",
+    "tabs": {
+      "messages": "Messages",
+      "queue": "Queue",
+      "delegations": "Delegations",
+      "audit": "Audit",
+      "permissions": "Permissions"
+    },
+    "states": {
+      "queued": "Queued",
+      "delivered": "Delivered",
+      "dequeued": "Execution unknown",
+      "done": "Completed",
+      "failed": "Failed",
+      "target_ended": "Destination ended",
+      "blocked": "Blocked",
+      "unknown": "Unknown"
+    },
+    "kind": {
+      "message": "Message",
+      "task": "Delegation",
+      "result": "Result"
+    },
+    "refused": {
+      "unavailable": "Communication unavailable",
+      "sender_unassigned": "Terminal has no Feature. Move it to a Feature",
+      "unknown_terminal": "{{target}} does not exist in this Feature",
+      "not_permitted": "No permission for {{target}}",
+      "inbox_full": "Queue full",
+      "rate_limited": "Send limit reached",
+      "too_many_tasks": "Too many pending tasks",
+      "chain_too_deep": "Chain limit reached",
+      "target_ended": "Destination ended"
+    },
+    "empty": {
+      "messages": "No messages found",
+      "queue": "No queued messages",
+      "delegations": "No delegations found",
+      "audit": "No audit events found"
+    },
+    "owner": "You",
+    "to": "To",
+    "message": "Message",
+    "otherFeature": "Another Feature…",
+    "thisFeature": "This Feature",
+    "crossFeatureUnavailable": "Sending across Features requires Core authorization.",
+    "searchTerminal": "ID, name, @alias, CLI, or model",
+    "noTargets": "No available recipients",
+    "antigravity": "Antigravity has no per-session MCP.",
+    "policy": "Delivery to {{target}}’s queue when the current turn ends",
+    "open": "Open destination",
+    "copy": "Copy",
+    "retry": "Retry",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "openFailed": "Destination unavailable",
+    "selectFeature": "Select a Feature",
+    "activePermissions": "Activate the Feature in Studio to edit permissions.",
+    "terminal": "Terminal",
+    "state": "State",
+    "time": "Time",
+    "all": "All",
+    "allTime": "Any time",
+    "lastHour": "Last hour",
+    "lastDay": "Last 24 hours",
+    "deliveryStatus": "Delivery · {{state}}",
+    "taskStatus": "Task · {{state}}",
+    "unknownMention": "{{target}} does not exist in this Feature",
+    "invalidRecipientCount": "Up to 3 recipients per message"
   }
 }

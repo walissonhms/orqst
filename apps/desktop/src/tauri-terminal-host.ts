@@ -26,6 +26,7 @@ import { visualAllowedDuringFence } from './terminal-fence.js';
 import {
   featureCanvasEvidenceSchema,
   featureNativeReplySchema,
+  passiveFeatureRequest,
   featureNativeEnvelopeSchema,
   featurePermissionNativeEnvelopeSchema,
   terminalLayoutRecordSchema,
@@ -429,7 +430,7 @@ async function start() {
         }
         if (feature.success) {
           const message = feature.data;
-          const mutable = message.request.action !== 'snapshot';
+          const mutable = !passiveFeatureRequest(message.request);
           const closedPane =
             message.request.action === 'pane' && message.request.command === 'close';
           const closeReviewed =

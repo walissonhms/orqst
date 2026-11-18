@@ -1,5 +1,7 @@
 import {
   communicationProjectionSchema,
+  inspectorReplySchema,
+  type InspectorCommand,
   composerMentionReplySchema,
   type ComposerMentionInput,
 } from '@orqst/protocol';
@@ -398,6 +400,8 @@ export async function connectManagedTerminalCore(
       return receipt;
     },
     features: {
+      inspector: async (command: InspectorCommand) =>
+        inspectorReplySchema.parse(await call({ kind: 'communicationInspector', command })),
       communication: async (featureId: string | null) => {
         const reply = await call({ kind: 'communicationProjection', featureId });
         return reply === null ? undefined : communicationProjectionSchema.parse(reply);

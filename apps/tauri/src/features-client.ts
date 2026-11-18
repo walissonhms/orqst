@@ -20,13 +20,18 @@ if (
         : undefined,
     ),
   });
-  if (location.href === 'orqst-features://local/index.html') {
+  if (
+    location.href === 'orqst-features://local/index.html' ||
+    location.protocol !== 'orqst-features:'
+  ) {
     Object.defineProperty(window, 'orqstFeaturePermissions', {
       value: Object.freeze({
         read: (featureId: string) =>
           invoke('feature_permissions', { request: { action: 'read', featureId } }),
-        propose: (request: unknown) =>
-          invoke('feature_permissions', { request: { action: 'propose', ...(request as object) } }),
+        propose: (request: object) =>
+          navigator.userActivation.isActive
+            ? invoke('feature_permissions', { request: { ...request, action: 'propose' } })
+            : Promise.resolve({ status: 'denied' }),
       }),
     });
   }

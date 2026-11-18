@@ -1,3 +1,4 @@
+import { inspectorCommandSchema, inspectorReplySchema } from './communication-inspector.js';
 import {
   composerMentionInputSchema,
   composerMentionReplySchema,
@@ -88,6 +89,7 @@ const arrangementPaneSchema = z
 export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('snapshot') }),
   z.strictObject({ ...base, action: z.literal('canvas') }),
+  z.strictObject({ ...base, action: z.literal('inspector'), command: inspectorCommandSchema }),
   z.strictObject({ ...base, action: z.literal('mention'), ...composerMentionInputSchema.shape }),
   z.strictObject({
     ...base,
@@ -192,6 +194,16 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   }),
 ]);
 export type FeatureNativeRequest = z.input<typeof featureNativeRequestSchema>;
+
+export function passiveFeatureRequest(input: { action: string; command?: unknown }): boolean {
+  return (
+    input.action === 'snapshot' ||
+    (input.action === 'inspector' &&
+      !!input.command &&
+      typeof input.command === 'object' &&
+      Reflect.get(input.command, 'kind') === 'read')
+  );
+}
 /** Accepted only on the inherited native-to-host pipe, never by feature_request. */
 export const featurePermissionNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({
@@ -216,7 +228,10 @@ export const featurePermissionNativeEnvelopeSchema = z.strictObject({
   actorId: z.string().regex(/^native-[a-fA-F0-9-]{36}$/),
   id: z.uuid(),
   document: z.number().int().positive().safe(),
-  source: z.literal('orqst-features://local/index.html'),
+  source: z.union([
+    z.literal('orqst-features://local/index.html'),
+    z.string().regex(/^https?:\/\/127\.0\.0\.1(?::[0-9]+)?\/comunicacao$/),
+  ]),
   request: featurePermissionNativeRequestSchema,
 });
 
@@ -239,6 +254,8 @@ export const featureNativeSnapshotSchema = z
           terminalId: z.uuid(),
           provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
           closed: z.literal(true).optional(),
+          displayName: terminalDisplayNameSchema.optional(),
+          focused: z.literal(true).optional(),
           workspace: z
             .strictObject({
               id: featureViewStateSchema.shape.workspaceId,
@@ -370,6 +387,7 @@ export const featureNativeReplySchema = z
     accountLimits: accountLimitsSchema.optional(),
     mention: composerMentionReplySchema.optional(),
     communication: communicationProjectionSchema.optional(),
+    inspector: inspectorReplySchema.optional(),
   })
   .refine(
     (value) => value.status !== 'ok' || value.snapshot !== undefined,

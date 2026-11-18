@@ -103,6 +103,51 @@ fn id_list(value: &Value) -> bool {
             && a.iter().map(Value::to_string).collect::<HashSet<_>>().len() == a.len()
     })
 }
+fn valid_inspector_command(command: &Value) -> bool {
+    uuid(&command["featureId"]) && match command["kind"].as_str() {
+        Some("read") => exact(command, &["kind", "featureId"]),
+        Some("retry") => exact(command, &["kind", "featureId", "id"]) && uuid(&command["id"]),
+        Some("send") => exact(command, &["kind", "featureId", "targetFeatureId", "from", "to", "text", "task"])
+            && uuid(&command["targetFeatureId"])
+            && (uuid(&command["from"]) || command["from"] == "owner")
+            && command["to"].as_array().is_some_and(|ids| (1..=3).contains(&ids.len()))
+            && id_list(&command["to"])
+            && text(&command["text"], 4000, true)
+            && command["task"].is_boolean(),
+        _ => false,
+    }
+}
+
+fn valid_inspector(value: &Value, snapshot: &Value) -> bool {
+    match value["status"].as_str() {
+        Some("queued") => exact(value, &["status"]),
+        Some("refused") => exact(value, &["status", "code"]) && matches!(value["code"].as_str(),
+            Some("unavailable" | "sender_unassigned" | "unknown_terminal" | "not_permitted" |
+                 "inbox_full" | "rate_limited" | "too_many_tasks" | "chain_too_deep" | "target_ended")),
+        Some("ok") => exact(value, &["status", "featureId", "rows", "recipients", "senders"])
+            && uuid(&value["featureId"])
+            && id_list(&value["recipients"]) && id_list(&value["senders"])
+            && value["senders"].as_array().unwrap().iter().all(|id| value["recipients"].as_array().unwrap().contains(id))
+            && snapshot["features"].as_array().is_some_and(|features| features.iter().any(|feature|
+                feature["featureId"] == value["featureId"] && feature["status"] != "archived"
+                && value["recipients"].as_array().unwrap().iter().all(|id|
+                    feature["terminalIds"].as_array().is_some_and(|members| members.contains(id)))))
+            && value["rows"].as_array().is_some_and(|rows| rows.len() <= 20 && rows.iter().all(|row|
+                row.as_object().is_some_and(|fields| fields.keys().all(|key|
+                    matches!(key.as_str(), "id" | "from" | "to" | "kind" | "at" | "text" |
+                        "truncated" | "delivery" | "retryable" | "task" | "taskId")))
+                && uuid(&row["id"]) && uuid(&row["to"]) && (uuid(&row["from"]) || row["from"] == "owner")
+                && safe(&row["at"]).is_some() && row["retryable"].is_boolean() && row["truncated"].is_boolean()
+                && row["text"].as_str().is_some_and(|text| text.len() <= 1200)
+                && matches!(row["kind"].as_str(), Some("message" | "task" | "result"))
+                && matches!(row["delivery"].as_str(), Some("queued" | "delivered" | "target_ended" | "unknown"))
+                && row.get("taskId").is_none_or(uuid)
+                && row.get("task").is_none_or(|task| matches!(task.as_str(),
+                    Some("queued" | "dequeued" | "done" | "failed" | "blocked"))))),
+        _ => false,
+    }
+}
+
 pub(crate) fn valid_request(value: &Value) -> bool {
     if value["contractVersion"] != 1 || safe(&value["generation"]).is_none() {
         return false;
@@ -124,6 +169,8 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                 Some("refresh" | "lock" | "unlock")
             ) && account_limit_id(&value["accountId"])
         }
+        Some("inspector") => exact(value, &["contractVersion", "generation", "action", "command"])
+            && valid_inspector_command(&value["command"]),
         Some("mention") => {
             exact(
                 value,
@@ -475,7 +522,7 @@ pub(crate) fn valid_permission_envelope(value: &Value) -> bool {
     ) || value["kind"] != "feature-permission-request"
         || !uuid(&value["id"])
         || !safe(&value["document"]).is_some_and(|n| n > 0)
-        || value["source"] != CHROME_URL
+        || !(value["source"] == CHROME_URL || value["source"].as_str().is_some_and(inspector_document_url))
         || !value["actorId"].as_str().is_some_and(|id| {
             id.strip_prefix("native-")
                 .is_some_and(|epoch| uuid(&json!(epoch)))
@@ -711,11 +758,15 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
                         | "workspace"
                         | "agentState"
                         | "closed"
+                        | "displayName"
+                        | "focused"
                 )
             }) && o.contains_key("slot")
                 && o.contains_key("terminalId")
                 && o.contains_key("provider")
         }) || (s.get("closed").is_some() && s["closed"] != true)
+            || (s.get("focused").is_some() && s["focused"] != true)
+            || s.get("displayName").is_some_and(|value| !text(value, 48, true))
             || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
             || (s.get("agentState").is_some()
                 && !matches!(
@@ -750,11 +801,13 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
         o.keys().all(|key| {
             matches!(
                 key.as_str(),
-                "status" | "snapshot" | "canvas" | "accountLimits" | "mention" | "communication"
+                "status" | "snapshot" | "canvas" | "accountLimits" | "mention" | "communication" | "inspector"
             )
         }) && o.contains_key("status")
             && value.get("accountLimits").is_none_or(valid_account_limits)
             && value.get("mention").is_none_or(valid_mention_reply)
+            && value.get("inspector").is_none_or(|inspector|
+                value["status"] == "ok" && valid_inspector(inspector, &value["snapshot"]))
             && value.get("communication").is_none_or(|communication| {
                 value["status"] == "ok" && valid_communication(communication, &value["snapshot"])
             })
@@ -1118,7 +1171,7 @@ fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bo
     label == "main"
         && parent == "main"
         && url.origin().ascii_serialization() == origin
-        && matches!(url.path(), "/" | "/studio")
+        && matches!(url.path(), "/" | "/studio" | "/comunicacao")
         && url.query().is_none()
         && url.fragment().is_none()
         && url.username().is_empty()
@@ -1511,8 +1564,20 @@ pub async fn feature_prepare(window: Webview, mut request: Value) -> Value {
     json!({"status":"ok"})
 }
 /// Permission writes are accepted only from the exact chrome child of main.
+fn inspector_document_url(source: &str) -> bool {
+    tauri::Url::parse(source).is_ok_and(|url|
+        matches!(url.scheme(), "http" | "https") && url.host_str() == Some("127.0.0.1")
+        && url.path() == "/comunicacao" && url.query().is_none() && url.fragment().is_none()
+        && url.username().is_empty() && url.password().is_none())
+}
+
 pub(crate) fn permission_source_allowed(label: &str, parent: &str, source: &str) -> bool {
     label == "feature-workspace" && parent == "main" && source == CHROME_URL
+}
+
+fn inspector_permission_source_allowed(label: &str, parent: &str, source: &str) -> bool {
+    permission_source_allowed(label, parent, source)
+        || (label == "main" && parent == "main" && inspector_document_url(source))
 }
 
 fn escape_plain(value: &str) -> String {
@@ -1780,7 +1845,7 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
     let Some((source, document)) = identity(&window) else {
         return denied();
     };
-    if !permission_source_allowed(window.label(), window.window().label(), &source)
+    if !inspector_permission_source_allowed(window.label(), window.window().label(), &source)
         || crate::terminal::presentation_blocked(app)
     {
         return denied();
@@ -1937,7 +2002,7 @@ pub async fn feature_permissions(window: Webview, request: Value) -> Value {
             "Approve this exact policy change? From now on only the checked operations are allowed.".into(),
             detail, "Cancel".into(), "Approve".into(),
         ], crate::terminal::PermissionReviewContext { epoch:epoch.clone(), presentation, document,
-            id:review_id.clone(), feature_id:feature_id.clone(), generation }).await;
+            id:review_id.clone(), feature_id:feature_id.clone(), generation, source:source.clone() }).await;
         if !approved { return json!({"status":"cancelled"}); }
         if !focus_then_current(focused(&window), || identity(&window) == Some((source.clone(), document))
             && crate::terminal::permission_review_current(app, &epoch, presentation, &review_id)
@@ -2058,7 +2123,7 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
             translate("terminalNative.confirm"),
         ], terminal::PermissionReviewContext {
             epoch: epoch.clone(), presentation, document, id: review_id.clone(),
-            feature_id: feature_id.into(), generation,
+            feature_id: feature_id.into(), generation, source: CHROME_URL.into(),
         }).await;
         if !approved {
             return json!({"status":"cancelled"});
@@ -2099,6 +2164,11 @@ pub(crate) fn close_target_current(
             .is_some_and(|id| request["terminalId"] == id.as_str())
 }
 
+pub(crate) fn passive_request(request: &Value) -> bool {
+    request["action"] == "snapshot"
+        || (request["action"] == "inspector" && request["command"]["kind"] == "read")
+}
+
 fn changes_presentation(request: &Value) -> bool {
     !is_terminal_close(request)
         && matches!(
@@ -2128,6 +2198,11 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((source, document)) = identity(&window) else {
         return deny("identity");
     };
+    if request["action"] == "inspector" && !inspector_document_url(&source)
+        && !(source == CHROME_URL && request["command"]["kind"] != "retry")
+    {
+        return deny("source");
+    }
     let close = is_terminal_close(&request);
     if (request["action"] == "arrange" || close) && source != CHROME_URL {
         return deny("source");
@@ -2147,7 +2222,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some(presentation) = presentation else {
         return json!({"status":"unavailable"});
     };
-    let mutable = request["action"] != "snapshot";
+    let mutable = !passive_request(&request);
     if mutable
         && !request_focused(
             &window,
@@ -2478,8 +2553,16 @@ pub fn configure(
             .local(false)
             .remote(format!("{origin}/"))
             .remote(format!("{origin}/studio"))
+            .remote(format!("{origin}/comunicacao"))
             .webview("main")
             .permission("allow-feature-request"),
+    )?;
+    app.add_capability(
+        tauri::ipc::CapabilityBuilder::new("communication-inspector-permissions")
+            .local(false)
+            .remote(format!("{origin}/comunicacao"))
+            .webview("main")
+            .permission("allow-feature-permissions"),
     )?;
     let client = std::fs::read_to_string(app.path().resource_dir()?.join("features/client.js"))?;
     Ok(format!("if(window.top===window.self && location.origin === {} && !location.search) {{\n{client}\n}}",json!(origin)))
@@ -2874,6 +2957,19 @@ mod tests {
         resume.wait();
         assert!(!worker.join().unwrap());
         assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn inspector_permission_source_is_the_exact_main_loopback_route() {
+        let origin = "http://127.0.0.1:4319";
+        let inspector = format!("{origin}/comunicacao");
+        assert!(document_matches("main", "main", &inspector, origin));
+        assert!(inspector_permission_source_allowed("main", "main", &inspector));
+        assert!(!inspector_permission_source_allowed("feature-workspace", "main", &inspector));
+        for suffix in ["/", "/studio", "/comunicacao/", "/comunicacao?x=1", "/comunicacao#x"] {
+            assert!(!inspector_permission_source_allowed("main", "main", &format!("{origin}{suffix}")));
+        }
+        assert!(!document_matches("main", "main", &inspector, "http://127.0.0.1:4318"));
     }
 
     #[test]

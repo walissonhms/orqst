@@ -59,10 +59,13 @@ export class TauriFeatureService {
     > & {
       features: Omit<
         Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'],
-        'communication'
+        'communication' | 'inspector'
       > &
         Partial<
-          Pick<Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'], 'communication'>
+          Pick<
+            Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'],
+            'communication' | 'inspector'
+          >
         >;
     },
     private readonly layout: TauriTerminalLayout,
@@ -209,6 +212,7 @@ export class TauriFeatureService {
   }
 
   private snapshot(): FeatureNativeSnapshot {
+    const layout = this.layout.snapshot();
     const value = featureNativeSnapshotSchema.parse({
       contractVersion: 1,
       storage: 'core',
@@ -225,6 +229,10 @@ export class TauriFeatureService {
           provider,
           workspace: { id: this.view.workspaceId, name: basename(this.project) || this.project },
           agentState: 'unknown',
+          ...(layout.active === slot && !this.layout.releasedSlot(slot)
+            ? { focused: true as const }
+            : {}),
+          ...(layout.names[slot] ? { displayName: layout.names[slot] } : {}),
           ...(this.layout.releasedSlot(slot) ? { closed: true as const } : {}),
           ...(selectedModel === undefined ? {} : { selectedModel }),
         };
@@ -275,6 +283,19 @@ export class TauriFeatureService {
         }
       }
       switch (request.action) {
+        case 'inspector': {
+          const { command } = request;
+          const feature = this.catalog.find((entry) => entry.featureId === command.featureId);
+          if (!this.core.features.inspector) return { status: 'unavailable' };
+          if (!feature || feature.status === 'archived') return { status: 'denied' };
+          if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
+          if (command.kind !== 'read' && this.activeFeatureId !== command.featureId)
+            return { status: 'denied' };
+          const inspector = await this.core.features.inspector(command);
+          if (inspector.status === 'ok' && inspector.featureId !== feature.featureId)
+            return { status: 'unavailable' };
+          return { status: 'ok', snapshot: this.snapshot(), inspector };
+        }
         case 'mention': {
           if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
           try {
