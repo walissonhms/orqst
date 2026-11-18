@@ -152,7 +152,7 @@ test('arrange requests are valid for every mode and clip to the viewport', () =>
   assert.ok(hidden.panes.every((pane) => pane.rect === null && !pane.visible));
 });
 
-test('native Studio sends PTY holes and hides them under overlays', async () => {
+test('native Studio sends PTY holes, hides overlays and follows the saved Feature label', async () => {
   const result = await build({
     stdin: {
       contents: `
@@ -165,10 +165,21 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
         window.startFixture = async (snapshot) => {
           window.arrangeFrames = [];
           window.generation = snapshot.generation;
+          window.featureUpdates = [];
+          window.publishFeature = (changed) => {
+            snapshot = { ...changed, generation: ++window.generation };
+            window.dispatchEvent(new CustomEvent('orqst-feature-state', { detail: snapshot }));
+          };
           window.orqstFeatures = {
             contractVersion: 1,
             // Each read may carry a newer generation, as the native host does.
-            request: async () => ({ status: 'ok', snapshot: { ...snapshot, generation: window.generation } }),
+            request: async (input) => {
+              if (input.action === 'update') {
+                window.featureUpdates.push(input);
+                return { status: 'denied', snapshot: { ...snapshot, generation: window.generation } };
+              }
+              return { status: 'ok', snapshot: { ...snapshot, generation: window.generation } };
+            },
             arrange: async (input) => { window.arrangeFrames.push(input); return { status: 'ok', snapshot }; },
           };
           const i18n = createInstance();
@@ -277,6 +288,49 @@ test('native Studio sends PTY holes and hides them under overlays', async () => 
       undefined,
       { timeout: 10_000 },
     );
+    const marked = page.getByRole('button', { name: 'Remove orchestrator label' });
+    await marked.click();
+    await page.waitForFunction(() => {
+      const updates = Reflect.get(window, 'featureUpdates') as unknown[];
+      return updates.length === 1;
+    });
+    await page
+      .getByRole('region', { name: 'Terminals' })
+      .getByText('Request refused. Check the current Feature and reviewed selection.', {
+        exact: true,
+      })
+      .waitFor({ timeout: 5000 });
+    assert.equal(
+      await page.locator('.ts-crown[aria-pressed="true"]').count(),
+      1,
+      'a denied update leaves the saved label in view',
+    );
+    assert.deepEqual(await page.evaluate(() => Reflect.get(window, 'featureUpdates')), [
+      {
+        action: 'update',
+        contractVersion: 1,
+        generation: 9,
+        featureId,
+        input: { expectedRevision: 2, orchestratorTerminalId: null },
+      },
+    ]);
+
+    const cleared = snapshot();
+    cleared.features[0]!.orchestratorTerminalId = null;
+    cleared.features[0]!.revision = 3;
+    await page.evaluate((value) => Reflect.get(window, 'publishFeature')(value), cleared);
+    await marked.waitFor({ state: 'detached', timeout: 5000 });
+    assert.equal(await page.locator('.ts-role').count(), 0);
+    assert.equal(
+      await page
+        .locator('.ts-pane[aria-label="T-002 Claude Code"] .ts-crown')
+        .getAttribute('aria-pressed'),
+      'false',
+    );
+    const unassigned = { ...cleared, activeFeatureId: null };
+    await page.evaluate((value) => Reflect.get(window, 'publishFeature')(value), unassigned);
+    await page.getByRole('article', { name: 'T-003 OpenCode' }).waitFor();
+    assert.equal(await page.locator('.ts-crown').count(), 0);
     await page.close();
   } finally {
     await browser.close();

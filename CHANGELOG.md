@@ -15,6 +15,13 @@ The V6 Studio separates Hide from native-confirmed Close terminal. The Node
 and Rust terminal Cores retain journal evidence and fence each confirmed closed
 slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
 
+## Feature layout and orchestrator label — 2026-11-17
+
+An explicit terminal assignment carries the saved Feature layout to its expanded
+membership. Studio shows the Core's saved orchestrator label and offers the
+control only on Feature members. See the
+[Workspace and Agentic Mode audit](docs/development/workspace-agentic-audit.md).
+
 ## Native startup and terminal opening — 2026-11-17
 
 The native dashboard can load during the initial Codex history scan. Terminal

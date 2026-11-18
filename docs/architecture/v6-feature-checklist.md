@@ -6,6 +6,15 @@ The V6 Studio separates Hide from native-confirmed Close terminal. The Node
 and Rust terminal Cores retain journal evidence and fence each confirmed closed
 slot. See [workflow, capacity limits and native acceptance](../development/terminal-close.md).
 
+## Workspace and Agentic Mode audit — 2026-11-17
+
+- [x] Carry the existing Feature layout through a terminal membership addition.
+- [x] Drive the Studio orchestrator badge from the saved Feature metadata.
+- [ ] Owner native validation of view switching, restart persistence and label controls.
+- [ ] Managed multi-Workspace switching, lifecycle-aware archive and Agentic plan execution.
+
+See the [source findings and owner test cases](../development/workspace-agentic-audit.md).
+
 ## Native startup and terminal-opening performance — 2026-11-17
 
 - [x] Desktop snapshot availability during the initial scan with a localized history status.

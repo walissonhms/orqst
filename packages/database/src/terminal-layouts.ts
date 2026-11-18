@@ -77,6 +77,24 @@ export function openTerminalLayouts(
   return {
     read,
     save: (ids: string[], record: TerminalLayoutRecord) => transaction(() => write(ids, record)),
+    /** Carry the existing row forward inside the Feature assignment transaction. */
+    appendFeatureMember: (ids: string[], terminalId: string) =>
+      transaction(() => {
+        if (featureId === undefined) throw new Error('Feature layout required');
+        const previous = read(ids);
+        if (!previous) return;
+        const nextIds = [...ids, terminalId];
+        // Move rather than copy the exact-membership key, preserving the layout row budget.
+        db.prepare('UPDATE terminal_layouts SET selection_id=? WHERE selection_id=?').run(
+          selection(nextIds),
+          selection(ids),
+        );
+        write(nextIds, {
+          ...previous,
+          order: [...previous.order, terminalId],
+          shown: [...previous.shown, terminalId],
+        });
+      }),
     /** First valid import wins atomically; never overwrite SQLite with a stale JSON copy. */
     import: (ids: string[], record: TerminalLayoutRecord) =>
       transaction(() => {

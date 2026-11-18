@@ -349,6 +349,10 @@ export class TauriFeatureService {
           if (!feature) return { status: 'denied' };
           if (feature.revision !== request.expectedRevision)
             return { status: 'stale', snapshot: this.snapshot() };
+          // Drain saves for the old membership before the assignment changes its layout key.
+          await this.layout.flush();
+          if (presentation !== this.layout.presentationRevision())
+            return { status: 'stale', snapshot: this.snapshot() };
           await this.core.features.assign(
             request.featureId,
             request.slot,

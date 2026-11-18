@@ -1182,16 +1182,19 @@ export function FeatureWorkspace({
                   },
                 }
               : {})}
-            onOrchestratorChange={(terminalId) =>
-              selected &&
-              void request({
-                action: 'update',
-                featureId: selected.featureId,
-                input: {
-                  expectedRevision: selected.revision,
-                  orchestratorTerminalId: terminalId,
-                },
-              })
+            orchestratorLabel={selected?.orchestratorTerminalId ?? null}
+            onOrchestratorChange={
+              selected
+                ? (terminalId) =>
+                    void request({
+                      action: 'update',
+                      featureId: selected.featureId,
+                      input: {
+                        expectedRevision: selected.revision,
+                        orchestratorTerminalId: terminalId,
+                      },
+                    })
+                : undefined
             }
           />
         </div>
