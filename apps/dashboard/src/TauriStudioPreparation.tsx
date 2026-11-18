@@ -75,6 +75,7 @@ export function TauriStudioPreparation({
             setCatalog(undefined);
             return;
           }
+          if (reply.snapshot) setSnapshot(reply.snapshot);
           setCatalog(reply.catalog);
           setModelId(''); // A refreshed catalog always needs a current explicit choice.
           setMcpPair(false);

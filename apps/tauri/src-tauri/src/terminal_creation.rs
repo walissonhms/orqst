@@ -812,7 +812,16 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         Err(_) if requested["action"] == "create-batch" => {
             batch_failure(&requested, "opening_uncertain", true)
         }
-        Ok(value) if value["status"] == "catalog" => value,
+        Ok(mut value) if value["status"] == "catalog" => {
+            // Keep the renderer's Open gesture bound to the catalog's native generation.
+            // A separate snapshot can belong to an earlier focus or document.
+            let current = snapshot(&app);
+            if current["generation"].as_u64() != Some(generation) {
+                return denied();
+            }
+            value["snapshot"] = current;
+            value
+        }
         Ok(value) if value["status"] == "denied" => {
             json!({"status":"denied", "failure":value["failure"], "snapshot":snapshot(&app)})
         }

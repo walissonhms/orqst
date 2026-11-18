@@ -1,7 +1,6 @@
 import { inspectPendingOwnedExits } from '../../../packages/core/src/terminal/exit-pending.js';
 import {
   DEFAULT_FEATURE_NAME,
-  defaultFeatureId,
   terminalPreparationFailureSchema,
   type TerminalPreparationFailure,
   terminalCatalogRequestSchema,
@@ -192,13 +191,7 @@ export async function prepareTauriTerminals(
       const defaultFeatureTitle = context.environment.LANG?.toLowerCase().startsWith('pt')
         ? 'Geral'
         : DEFAULT_FEATURE_NAME;
-      const targetExisting =
-        request.featureId !== null
-          ? (discovered.workspace.feature?.terminalIds.length ?? 0)
-          : (discovered.workspace.features
-              .list()
-              .find((entry) => entry.featureId === defaultFeatureId(request.workspaceId))
-              ?.terminalIds.length ?? 0);
+      const targetExisting = discovered.workspace.target?.terminalIds.length ?? 0;
       if (targetExisting + count > 8) fail('capacity_exceeded');
       stage = 'plan';
       const preparation = terminalPreparationBindingSchema.parse({
@@ -266,6 +259,10 @@ export async function prepareTauriTerminals(
           request.featureId,
           terminalIds,
           defaultFeatureTitle,
+          {
+            viewRevision: discovered.workspace.view.revision,
+            featureRevision: discovered.workspace.target?.revision ?? null,
+          },
         );
         previousLayout = assigned.previousLayout;
         const resolved = resolveTerminalPreparationContext(
@@ -273,6 +270,12 @@ export async function prepareTauriTerminals(
           request.workspaceId,
           assigned.feature.featureId,
         );
+        if (
+          resolved.project !== discovered.workspace.project ||
+          resolved.view.revision !== assigned.view.revision ||
+          resolved.target?.revision !== assigned.feature.revision
+        )
+          throw new Error('Feature context changed during assignment');
         stage = 'provision';
         return terminalPreparationBindingSchema.parse({
           ...trusted,

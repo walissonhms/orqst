@@ -1,11 +1,9 @@
 import {
   DEFAULT_FEATURE_NAME,
-  defaultFeatureId,
   type TerminalBatchItem,
   type TerminalBatchRequest,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
-import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import {
   resolveTerminalPreparationContext,
   terminalPreparationBindingSchema,
@@ -13,7 +11,11 @@ import {
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
-import { inspectTerminalPreparationCatalog, resolveCatalogSelection } from './terminal-catalog.js';
+import {
+  inspectTerminalPreparationCatalog,
+  resolveCatalogSelection,
+  terminalCatalogId,
+} from './terminal-catalog.js';
 import type { TauriPreparationPorts } from './tauri-terminal-preparation.js';
 
 type Prepared = Omit<TerminalBatchItem, 'status'> & {
@@ -75,13 +77,7 @@ export async function prepareTauriBatch(
   const defaultFeatureTitle = context.environment.LANG?.toLowerCase().startsWith('pt')
     ? 'Geral'
     : DEFAULT_FEATURE_NAME;
-  const existingCount =
-    request.featureId !== null
-      ? (discovered.workspace.feature?.terminalIds.length ?? 0)
-      : (discovered.workspace.features
-          .list()
-          .find((entry) => entry.featureId === defaultFeatureId(request.workspaceId))?.terminalIds
-          .length ?? 0);
+  const existingCount = discovered.workspace.target?.terminalIds.length ?? 0;
   const capacity = Math.min(availableSlots, 8 - existingCount);
   for (const [index, input] of request.requests.entries()) {
     const item = items[index]!;
@@ -151,6 +147,7 @@ export async function prepareTauriBatch(
     )
       throw new Error('Batch catalog changed');
     preflight();
+    return fresh.workspace;
   };
   if (!plans.length) return result();
   try {
@@ -169,7 +166,7 @@ export async function prepareTauriBatch(
   for (const { index, plan } of plans) {
     const item = items[index]!;
     try {
-      revalidate();
+      const workspace = revalidate();
       item.effects = 'possible';
       const files = plan.provision(reviewed, (terminalIds) => {
         if (!reviewed()) throw new Error('Batch context changed');
@@ -177,6 +174,10 @@ export async function prepareTauriBatch(
           activeFeatureId,
           terminalIds,
           defaultFeatureTitle,
+          {
+            viewRevision: workspace.view.revision,
+            featureRevision: workspace.target?.revision ?? null,
+          },
         );
         if (!capturedLayout) {
           previousLayout = assigned.previousLayout;
@@ -187,15 +188,14 @@ export async function prepareTauriBatch(
           request.workspaceId,
           assigned.feature.featureId,
         );
+        if (
+          resolved.project !== workspace.project ||
+          resolved.view.revision !== assigned.view.revision ||
+          resolved.target?.revision !== assigned.feature.revision
+        )
+          throw new Error('Batch context changed during assignment');
         activeFeatureId = assigned.feature.featureId;
-        expectedCatalogId = terminalDigest(
-          JSON.stringify([
-            trusted.observerDatabase,
-            trusted.preferencesDirectory,
-            resolved.fence,
-            assigned.feature.revision,
-          ]),
-        );
+        expectedCatalogId = terminalCatalogId(trusted, resolved);
         return terminalPreparationBindingSchema.parse({
           ...trusted,
           workspaceId: request.workspaceId,

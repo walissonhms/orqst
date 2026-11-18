@@ -1,5 +1,28 @@
 # Native terminal client boundary
 
+## Studio catalog and Feature assignment — 2026-11-18
+
+The native catalog reply carries a Studio snapshot from the same native generation.
+The guided and advanced opening dialogs use that generation for their next Open
+request. Native document, focus and one-shot commit checks still apply.
+
+A scoped catalog binds the current Feature view and the destination Feature
+revision. From Sem Feature, the destination is the deterministic default Feature,
+including the case where it has yet to be created. After native commit, the helper
+uses one SQLite transaction to compare those revisions, assign the terminals and
+select the default when needed. Successful assignment advances the approved context
+for the remaining batch members before manifests are published. A concurrent
+selection or Feature change cannot silently change the destination.
+
+The fix keeps ORQST's reviewed helper and SQLite assignment. Anywh's
+[terminalSession.ts](https://github.com/anywh-sh/anywh/blob/546f189c04415c3c5af5f40e3931a0a90b9aba31/relay/src/host/terminalSession.ts)
+owns a tmux-backed PTY via node-pty, and Tucano's
+[router.ts](https://github.com/eduwxyz/tucano/blob/0501956d127699300209902e889f3e69a0948766/src/core/router.ts)
+routes agent messages. Both audited Apache-2.0 implementations address separate
+contracts. See [reference and license evidence](../research/native-cli-runtime-comparison.md).
+The browser regression uses the production Studio client and Node preparation
+helper with disposable data and a simulated native enrollment acknowledgment.
+
 ## Always inside a Feature and `sender_unassigned` refusal — 2026-11-18
 
 Every new managed terminal—PTY (`create-batch`, `create-selected`, `create-mcp-pair`,

@@ -69,16 +69,20 @@ export function NativeTerminalCreator({
   const load = useCallback(async () => {
     setState('loading');
     try {
-      const [first, reply] = await Promise.all([
-        native.request({ action: 'snapshot' }),
-        native.request({ action: 'catalog', workspaceId: workspace.id, featureId }),
-      ]);
-      if (first.status !== 'catalog' && first.snapshot) setSnapshot(first.snapshot);
+      const reply = await native.request({
+        action: 'catalog',
+        workspaceId: workspace.id,
+        featureId,
+      });
       if (
         reply.status === 'catalog' &&
         reply.catalog.workspaceId === workspace.id &&
         reply.catalog.featureId === featureId
       ) {
+        // Current native hosts return the generation that admitted this catalog.
+        // Keep compatibility with older hosts that expose the snapshot separately.
+        const current = reply.snapshot ?? (await native.request({ action: 'snapshot' })).snapshot;
+        setSnapshot(current);
         setCatalog(reply.catalog);
         setState('ready');
       } else {

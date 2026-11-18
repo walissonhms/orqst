@@ -96,6 +96,12 @@ export function openFeatures(
           .get(scope.featureId)?.terminal_id ?? null,
     });
   };
+  const readAssignmentTarget = (workspaceId: string, featureId: string | null) => {
+    const scope = { workspaceId, featureId: featureId ?? defaultFeatureId(workspaceId) };
+    if (featureId === null && !db.prepare('SELECT 1 FROM features WHERE id=?').get(scope.featureId))
+      return null;
+    return read(scope);
+  };
   const audit = (
     feature: WorkspaceFeature,
     action: z.infer<typeof featureConfigurationEventSchema>['action'],
@@ -192,6 +198,11 @@ export function openFeatures(
   return {
     read,
     readView,
+    readAssignmentScope: (workspaceId: string) =>
+      transaction(() => {
+        const view = readView(workspaceId);
+        return { view, target: readAssignmentTarget(workspaceId, view.featureId) };
+      }),
     saveView: (workspaceId: string, input: unknown) =>
       transaction(() => {
         const value = featureViewSaveSchema.parse(input);
@@ -299,7 +310,10 @@ export function openFeatures(
       workspaceId: string,
       requestedFeatureId: string | null,
       terminalIds: readonly string[],
-      options?: { defaultName?: string },
+      options?: {
+        defaultName?: string;
+        expected?: { viewRevision: number; featureRevision: number | null };
+      },
     ) =>
       transaction(() => {
         featureScopeSchema.shape.workspaceId.parse(workspaceId);
@@ -309,6 +323,18 @@ export function openFeatures(
           .max(8)
           .refine((list) => new Set(list).size === list.length)
           .parse(terminalIds);
+        const beforeView = readView(workspaceId);
+        const expected = options?.expected;
+        if (expected) {
+          if (
+            beforeView.featureId !== requestedFeatureId ||
+            beforeView.revision !== expected.viewRevision
+          )
+            throw new Error('Stale feature view revision');
+          const target = readAssignmentTarget(workspaceId, requestedFeatureId);
+          if ((target?.revision ?? null) !== expected.featureRevision)
+            throw new Error('Stale feature revision');
+        }
         let feature =
           requestedFeatureId === null
             ? ensureDefaultRow(workspaceId, options?.defaultName ?? DEFAULT_FEATURE_NAME)
@@ -325,7 +351,6 @@ export function openFeatures(
             null)
           : null;
         for (const terminalId of ids) feature = insertAssignment(feature, terminalId);
-        const beforeView = readView(workspaceId);
         if (beforeView.featureId !== feature.featureId) {
           if (beforeView.revision >= Number.MAX_SAFE_INTEGER)
             throw new Error('Feature view revision exhausted');

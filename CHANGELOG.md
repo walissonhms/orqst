@@ -1,5 +1,12 @@
 # Changelog
 
+## Studio terminal opening — 2026-11-18
+
+Studio binds each catalog to its native generation and reviews the destination
+Feature revision before commit, including General when starting from Sem Feature.
+The regression test exercises Codex opening in both views through the Studio
+client and Node helper with a simulated native acknowledgment.
+
 ## Structured Claude Studio pilot — 2026-11-18 (protocol increment)
 
 Adds the Core `claude -p` `stream-json` structured session, pinned Apple Silicon

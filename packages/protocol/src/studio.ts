@@ -122,7 +122,11 @@ export const tauriStudioReplySchema = z.union([
     snapshot: tauriStudioSnapshotSchema.optional(),
     failure: z.undefined().optional(),
   }),
-  z.strictObject({ status: z.literal('catalog'), catalog: terminalPreparationCatalogSchema }),
+  z.strictObject({
+    status: z.literal('catalog'),
+    catalog: terminalPreparationCatalogSchema,
+    snapshot: tauriStudioSnapshotSchema.optional(),
+  }),
   z
     .strictObject({
       status: z.enum(['ok', 'denied', 'focus_required', 'busy', 'unavailable']),

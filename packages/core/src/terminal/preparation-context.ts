@@ -40,9 +40,9 @@ export function resolveTerminalPreparationContext(
   const after = lstatSync(trusted.observerDatabase);
   if (db.ino !== after.ino || db.dev !== after.dev) throw new Error('Workspace catalogue changed');
   const features = featureConfigurationDatabase(trusted.preferencesDirectory, workspaceId);
-  const view = features.readView();
+  const { view, target } = features.readAssignmentScope();
   if (view.featureId !== featureId) throw new Error('Selected Feature changed');
-  const feature = featureId === null ? null : features.read(featureId);
+  const feature = featureId === null ? null : target;
   if (feature?.status === 'archived') throw new Error('Selected Feature is archived');
   const directory = lstatSync(project);
   const fence = JSON.stringify([
@@ -55,7 +55,7 @@ export function resolveTerminalPreparationContext(
     db.dev,
     db.ino,
   ]);
-  return { project, feature, features, fence };
+  return { project, feature, features, fence, view, target };
 }
 
 export const terminalPreparationBindingSchema = terminalPreparationContextSchema.extend({
