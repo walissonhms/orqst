@@ -39,6 +39,9 @@ export function PaneCard({
     .filter(Boolean)
     .join(' · ');
   const total = terminal.tokens?.total;
+  const showName =
+    terminal.name.toLowerCase() !== provider.toLowerCase() &&
+    terminal.name.replace(/^@/, '').toLowerCase() !== terminal.label.toLowerCase();
 
   return (
     <article {...article}>
@@ -57,14 +60,16 @@ export function PaneCard({
         ) : (
           statusIcon
         )}
-        <span className="ts-cli">{provider}</span>
+        <span className="ts-cli" title={showName ? undefined : description || undefined}>
+          {provider}
+        </span>
         {orchestrator && (
           <span className="ts-role" title={t('terminalStudio.orchestratorHint')}>
             <span aria-hidden="true">★</span> {t('studio.pane.pilot')}
           </span>
         )}
         <span className="ts-label">{terminal.label}</span>
-        {(canonical || terminal.name !== provider) && (
+        {showName && (
           <span className="ts-name" title={description || undefined}>
             {terminal.name}
           </span>

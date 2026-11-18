@@ -441,6 +441,10 @@ async function start() {
                 : undefined,
             );
             break;
+          case 'communicationInspector':
+            admission.assertOwner();
+            value = hub ? hub.inspect(request.command) : { status: 'refused', code: 'unavailable' };
+            break;
           case 'communicationProjection':
             if (communication || hub) admission.assertOwner();
             value = hub
@@ -529,11 +533,14 @@ async function start() {
           case 'ownedSlotInventory':
             value = pair.ownedSlotInventory(request.slot);
             break;
-          case 'releaseOwnedSlot':
+          case 'releaseOwnedSlot': {
             value = pair.releaseOwnedSlot(request.slot);
+            const releasedMember = hubSlots[request.slot];
             hubSlots[request.slot] = undefined;
+            if (releasedMember) hub?.forget(releasedMember.terminalId);
             mcp?.invalidate();
             break;
+          }
           case 'beginOwnedShutdown':
             draining = true;
             mcp?.invalidate();

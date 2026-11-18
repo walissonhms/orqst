@@ -1,5 +1,6 @@
 import {
   featureNativeRequestSchema,
+  passiveFeatureRequest,
   featureNativeReplySchema,
   featurePreparationRequestSchema,
   featurePreparationReplySchema,
@@ -131,7 +132,8 @@ export function createFeatureClient(
     async request(input: Parameters<DesktopFeatures['request']>[0]) {
       if (!featureNativeRequestSchema.safeParse(input, { jitless: true }).success)
         return { status: 'denied' as const };
-      if (input.action !== 'snapshot' && !activated()) {
+      const passive = passiveFeatureRequest(input);
+      if (!passive && !activated()) {
         note(`bridge:${input.action.toLowerCase()}:inactive`);
         return { status: 'denied' as const };
       }

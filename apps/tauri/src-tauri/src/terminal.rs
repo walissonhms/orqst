@@ -538,7 +538,7 @@ async fn metadata_request_inner(
     if !document_is_current {
         return json!({"status":"denied"});
     }
-    let mutable = envelope["request"]["action"] != "snapshot";
+    let mutable = !crate::features::passive_request(&envelope["request"]);
     let owner = Arc::new(());
     let receiver = {
         let state = app.state::<Terminals>();
@@ -1834,6 +1834,7 @@ pub(crate) struct PermissionReviewContext {
     pub document: u64,
     pub id: String,
     pub feature_id: String,
+    pub source: String,
     pub generation: u64,
 }
 
@@ -1851,6 +1852,7 @@ pub(crate) async fn confirm_permission_sheet(
         id,
         feature_id,
         generation: logical_generation,
+        source,
     } = context;
     let current_app = app.clone();
     let current_epoch = epoch.clone();
@@ -1862,6 +1864,7 @@ pub(crate) async fn confirm_permission_sheet(
         generation,
         document,
         id,
+        source,
         move || {
             crate::features::permission_capture_current(
                 &current_app,
@@ -1884,6 +1887,7 @@ async fn confirm_studio_sheet(
     generation: u64,
     document: u64,
     id: String,
+    source: String,
     target_current: impl FnOnce() -> bool + Send + 'static,
 ) -> bool {
     let current_app = app.clone();
@@ -1897,7 +1901,7 @@ async fn confirm_studio_sheet(
             native_focus::install(&current_app)
                 && crate::features::document_version_current(
                     &current_app,
-                    "orqst-features://local/index.html",
+                    &source,
                     document,
                 )
                 && permission_review_current(&current_app, &current_epoch, generation, &current_id)
@@ -1998,6 +2002,7 @@ pub(crate) async fn confirm_terminal_close(
             presentation,
             document,
             id.into(),
+            "orqst-features://local/index.html".into(),
             move || {
                 crate::features::close_target_current(
                     &current_app,

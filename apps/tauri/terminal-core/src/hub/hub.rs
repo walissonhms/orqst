@@ -9,7 +9,7 @@ use std::sync::{Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::features::model::{is_uuid, utf16_len};
 
@@ -99,8 +99,17 @@ struct Task {
     updated_at: u64,
 }
 
+#[derive(Clone)]
+struct History {
+    message: Message,
+    target: HubMember,
+    delivery: &'static str,
+    retried: bool,
+}
+
 #[derive(Default)]
 struct State {
+    history: VecDeque<History>,
     inboxes: HashMap<String, VecDeque<Message>>,
     sends: HashMap<String, Vec<u64>>,
     // Depth of what each terminal last read, and when; a stale chain counts as a new one.
@@ -391,6 +400,7 @@ impl TerminalMessageHub {
         let mut state = self.lock();
         state.closed = true;
         state.inboxes.clear();
+        state.history.clear();
         state.relays.clear();
         drop(state);
         self.wake.notify_all();
@@ -400,6 +410,12 @@ impl TerminalMessageHub {
     pub fn forget(&self, terminal_id: &str) {
         let mut state = self.lock();
         state.inboxes.remove(terminal_id);
+        state.relays.remove(terminal_id);
+        for entry in &mut state.history {
+            if entry.target.terminal_id == terminal_id && entry.delivery == "queued" {
+                entry.delivery = "target_ended";
+            }
+        }
         state.chain.remove(terminal_id);
         *state.wakes.entry(terminal_id.to_owned()).or_default() += 1;
         drop(state);
@@ -432,6 +448,9 @@ impl TerminalMessageHub {
         sender: &HubMember,
         raw: &str,
     ) -> Result<&'m HubMember, HubError> {
+        if raw.contains('/') {
+            return Err(HubError::Refused("not_permitted"));
+        }
         let wanted = raw.strip_prefix('@').unwrap_or(raw).to_lowercase();
         // Self, other Features/workspaces and unknown handles are all refused the same way.
         let mut targets = Self::peers(members, sender)
@@ -451,12 +470,19 @@ impl TerminalMessageHub {
     ) -> &'s mut VecDeque<Message> {
         let inbox = state.inboxes.entry(target.terminal_id.clone()).or_default();
         inbox.retain(|item| {
+            let keep =
             target.feature_id.as_deref() == Some(&item.feature_id)
                 && (item.from == OWNER_SENDER
                     || members.iter().any(|sender| {
                         sender.terminal_id == item.from
                             && sender.feature_id.as_deref() == Some(&item.feature_id)
-                    }))
+                    }));
+            if !keep {
+                if let Some(entry) = state.history.iter_mut().find(|entry| entry.message.id == item.id) {
+                    entry.delivery = "unknown";
+                }
+            }
+            keep
         });
         inbox
     }
@@ -519,7 +545,7 @@ impl TerminalMessageHub {
             return Err(HubError::Refused("inbox_full"));
         }
         let at = (self.now)();
-        inbox.push_back(Message {
+        let message = Message {
             id: id.clone(),
             kind,
             from_alias: from.1.to_owned(),
@@ -531,7 +557,14 @@ impl TerminalMessageHub {
             depth,
             task_id: task_id.clone(),
             status,
+        };
+        inbox.push_back(message.clone());
+        state.history.push_back(History {
+            message, target: target.clone(), delivery: "queued", retried: false,
         });
+        if state.history.len() > 128 {
+            state.history.pop_front();
+        }
         (self.evidence)(&HubEvidence {
             message_id: id,
             kind,
@@ -607,8 +640,139 @@ impl TerminalMessageHub {
         })
     }
 
+    /// Private native inspector over the same inboxes and task receipts as the relay.
+    pub fn inspect(&self, command: &Value) -> Value {
+        let refused = |code: &str| json!({ "status": "refused", "code": code });
+        let Some(feature) = command["featureId"].as_str().filter(|id| is_uuid(id)) else {
+            return refused("not_permitted");
+        };
+        let Ok(members) = (self.members)() else {
+            return refused("unavailable");
+        };
+        let member = |id: &str| members.iter().find(|m| m.terminal_id == id && m.feature_id.as_deref() == Some(feature));
+        let mut state = self.lock();
+        if state.closed {
+            return refused("unavailable");
+        }
+        let task_state = |state: &State, message: &Message| state.tasks.iter()
+            .find(|task| message.task_id.as_ref() == Some(&task.id)).map(|task| task.state);
+        let live = |state: &State, id: &str| member(id).is_some_and(|m| m.running) && state.relays.contains(id);
+        let retryable = |state: &State, entry: &History| {
+            !entry.retried && entry.message.kind != MessageKind::Result
+                && (entry.delivery == "target_ended" || task_state(state, &entry.message) == Some(TaskState::Failed))
+                && live(state, &entry.target.terminal_id)
+                && member(&entry.target.terminal_id).is_some_and(|m| m.provider == entry.target.provider)
+                && (entry.message.from == OWNER_SENDER || live(state, &entry.message.from))
+        };
+        let exact = |keys: &[&str]| command.as_object().is_some_and(|o| o.len() == keys.len() && keys.iter().all(|k| o.contains_key(*k)));
+        if command["kind"] == "read" && exact(&["kind", "featureId"]) {
+            let rows: Vec<_> = state.history.iter().rev()
+                .filter(|entry| entry.message.feature_id == feature)
+                .take(20)
+                .map(|entry| {
+                    let message = &entry.message;
+                    let (text, truncated) = truncate_text(&message.text, 1200);
+                    let delivery = if entry.delivery == "queued" &&
+                        (member(&entry.target.terminal_id).is_none() || (message.from != OWNER_SENDER && member(&message.from).is_none())) {
+                        "unknown"
+                    } else { entry.delivery };
+                    let mut row = json!({
+                        "id": message.id, "from": message.from, "to": entry.target.terminal_id,
+                        "kind": message.kind, "at": message.at, "text": text,
+                        "truncated": message.truncated || truncated, "delivery": delivery,
+                        "retryable": retryable(&state, entry),
+                    });
+                    if let Some(id) = &message.task_id { row["taskId"] = json!(id); }
+                    if let Some(task) = task_state(&state, message) { row["task"] = json!(task); }
+                    row
+                }).collect();
+            let recipients: Vec<_> = members.iter().filter(|m| m.feature_id.as_deref() == Some(feature))
+                .map(|m| &m.terminal_id).collect();
+            let senders: Vec<_> = recipients.iter().filter(|id| live(&state, id)).collect();
+            return json!({ "status": "ok", "featureId": feature, "rows": rows, "recipients": recipients, "senders": senders });
+        }
+        let (from, to, text, task, retry_id) = match command["kind"].as_str() {
+            Some("send") if exact(&["kind", "featureId", "targetFeatureId", "from", "to", "text", "task"]) => {
+                if command["targetFeatureId"] != feature { return refused("not_permitted"); }
+                let Some(from) = command["from"].as_str().filter(|id| *id == OWNER_SENDER || is_uuid(id)) else {
+                    return refused("not_permitted");
+                };
+                let Some(raw) = command["to"].as_array().filter(|a| (1..=RECIPIENTS).contains(&a.len())) else {
+                    return refused("unknown_terminal");
+                };
+                let Some(to) = raw.iter().map(|id| id.as_str().filter(|id| is_uuid(id) && *id != from)).collect::<Option<Vec<_>>>() else {
+                    return refused("unknown_terminal");
+                };
+                if to.iter().collect::<HashSet<_>>().len() != to.len() { return refused("unknown_terminal"); }
+                let Some(text) = command["text"].as_str().map(str::trim).filter(|text| !text.is_empty() && utf16_len(text) <= 4000) else {
+                    return refused("not_permitted");
+                };
+                let Some(task) = command["task"].as_bool() else { return refused("not_permitted"); };
+                (from.to_owned(), to.into_iter().map(str::to_owned).collect::<Vec<_>>(), text.to_owned(), task, None)
+            }
+            Some("retry") if exact(&["kind", "featureId", "id"]) => {
+                let Some(index) = state.history.iter().position(|entry| command["id"] == entry.message.id
+                    && entry.message.feature_id == feature && retryable(&state, entry)) else {
+                    return refused("not_permitted");
+                };
+                let entry = &mut state.history[index];
+                entry.retried = true;
+                (entry.message.from.clone(), vec![entry.target.terminal_id.clone()], entry.message.text.clone(),
+                    entry.message.kind == MessageKind::Task, entry.message.id.clone().into())
+            }
+            _ => return refused("not_permitted"),
+        };
+        if from != OWNER_SENDER && member(&from).is_none() { return refused("sender_unassigned"); }
+        let Some(targets) = to.iter().map(|id| member(id)).collect::<Option<Vec<_>>>() else {
+            return refused("unknown_terminal");
+        };
+        let result = if from == OWNER_SENDER && !task {
+            let result = self.admit(&mut state, OWNER_SENDER, &targets, &members).and_then(|()| {
+                for target in targets {
+                    self.deliver(&mut state, (OWNER_SENDER, OWNER_SENDER), target, (self.new_id)(),
+                        MessageKind::Message, truncate_text(&text, TEXT_BYTES), 0, None, None)?;
+                }
+                Ok(())
+            });
+            drop(state);
+            result
+        } else if !live(&state, &from) || (task && to.len() != 1) {
+            drop(state);
+            Err(HubError::Refused("not_permitted"))
+        } else {
+            drop(state);
+            let input = if task {
+                json!({"name":"delegate_task","arguments":{"to":to[0],"task":text}})
+            } else {
+                json!({"name":"send_message","arguments":{"to":to,"text":text}})
+            };
+            self.call_scoped(&from, &input, Some(feature)).map(|_| ())
+        };
+        match result {
+            Ok(()) => json!({ "status": "queued" }),
+            Err(error) => {
+                let code = match error {
+                    HubError::Refused(code @ ("sender_unassigned" | "unknown_terminal" | "not_permitted" |
+                        "inbox_full" | "rate_limited" | "too_many_tasks" | "chain_too_deep")) => code,
+                    _ => "unavailable",
+                };
+                // Definitive refusals can be retried again; uncertain failures stay reserved.
+                if let (HubError::Refused(_), Some(id)) = (error, retry_id) {
+                    if let Some(entry) = self.lock().history.iter_mut().find(|entry| entry.message.id == id) {
+                        entry.retried = false;
+                    }
+                }
+                refused(code)
+            }
+        }
+    }
+
     /// One tool call from a bound terminal. `wait_messages` blocks up to its timeout.
     pub fn call(&self, sender_id: &str, raw: &Value) -> Result<HubReply, HubError> {
+        self.call_scoped(sender_id, raw, None)
+    }
+
+    fn call_scoped(&self, sender_id: &str, raw: &Value, scope: Option<&str>) -> Result<HubReply, HubError> {
         if self.lock().closed {
             return Err(HubError::Refused("unavailable"));
         }
@@ -618,11 +782,19 @@ impl TerminalMessageHub {
             .find(|m| m.terminal_id == sender_id)
             .filter(|m| m.running)
             .ok_or(HubError::Refused("not_member"))?;
+        if scope.is_some() && sender.feature_id.as_deref() != scope {
+            return Err(HubError::Refused("sender_unassigned"));
+        }
         let call = parse_call(raw).ok_or(HubError::Failed)?;
         let mut state = self.lock();
         if state.closed {
             return Err(HubError::Refused("unavailable"));
         }
+        if scope.is_some() && !state.relays.contains(sender_id) {
+            return Err(HubError::Refused("not_permitted"));
+        }
+        let owner_alias = scope.map(|_| format!("owner via {}", sender.alias));
+        let alias = owner_alias.as_deref().unwrap_or(&sender.alias);
         match call {
             Call::List => {
                 if sender.feature_id.is_none() {
@@ -657,7 +829,7 @@ impl TerminalMessageHub {
                     .map(|r| Self::resolve_target(&members, sender, r))
                     .collect::<Result<Vec<_>, _>>()?;
                 targets.retain(|target| seen.insert(target.terminal_id.clone()));
-                let depth = self.next_depth(&state, sender_id)?;
+                let depth = if scope.is_some() { 0 } else { self.next_depth(&state, sender_id)? };
                 self.admit(&mut state, sender_id, &targets, &members)?;
                 let (cut, truncated) = truncate_text(&text, TEXT_BYTES);
                 let mut sent = Vec::new();
@@ -665,7 +837,7 @@ impl TerminalMessageHub {
                     let id = (self.new_id)();
                     self.deliver(
                         &mut state,
-                        (&sender.terminal_id, &sender.alias),
+                        (&sender.terminal_id, alias),
                         target,
                         id.clone(),
                         MessageKind::Message,
@@ -680,7 +852,9 @@ impl TerminalMessageHub {
                     });
                 }
                 // The chain travels with the recipients; the sender's next message starts over.
-                state.chain.remove(sender_id);
+                if scope.is_none() {
+                    state.chain.remove(sender_id);
+                }
                 Ok(HubReply::Sent {
                     sent,
                     state: "queued",
@@ -692,7 +866,7 @@ impl TerminalMessageHub {
                     return Err(HubError::Refused("sender_unassigned"));
                 }
                 let target = Self::resolve_target(&members, sender, &to)?;
-                let depth = self.next_depth(&state, sender_id)?;
+                let depth = if scope.is_some() { 0 } else { self.next_depth(&state, sender_id)? };
                 let pending = |task: &Task| {
                     matches!(task.state, TaskState::Queued | TaskState::Dequeued)
                         && Self::task_scope(task, &members)
@@ -732,7 +906,7 @@ impl TerminalMessageHub {
                 let message_id = (self.new_id)();
                 self.deliver(
                     &mut state,
-                    (&sender.terminal_id, &sender.alias),
+                    (&sender.terminal_id, alias),
                     target,
                     message_id,
                     MessageKind::Task,
@@ -741,7 +915,9 @@ impl TerminalMessageHub {
                     Some(task_id.clone()),
                     None,
                 )?;
-                state.chain.remove(sender_id);
+                if scope.is_none() {
+                    state.chain.remove(sender_id);
+                }
                 Ok(HubReply::Delegated {
                     task_id,
                     to: target.alias.clone(),
@@ -851,6 +1027,11 @@ impl TerminalMessageHub {
         let count = limit.min(inbox.len());
         let items = inbox.drain(..count).collect::<Vec<_>>();
         let remaining = inbox.len();
+        for item in &items {
+            if let Some(entry) = state.history.iter_mut().find(|entry| entry.message.id == item.id) {
+                entry.delivery = "delivered";
+            }
+        }
         for item in items.iter().filter(|item| item.kind == MessageKind::Task) {
             if let Some(task) = state.tasks.iter_mut().find(|task| {
                 item.task_id.as_ref() == Some(&task.id) && task.state == TaskState::Queued
@@ -905,6 +1086,41 @@ mod tests {
         };
         let members = vec![member(A, "T-001"), member(B, "T-002")];
         Arc::new(TerminalMessageHub::new(move || Ok(members.clone()), |_| {}))
+    }
+
+    #[test]
+    fn inspector_uses_existing_task_receipts_and_rechecks_retries() {
+        let hub = hub();
+        let feature = "00000000-0000-4000-8000-0000000000f1";
+        hub.relay_connected(A, true);
+        hub.relay_connected(B, true);
+        let send = json!({"kind":"send","featureId":feature,"targetFeatureId":feature,
+            "from":A,"to":[B],"text":"SYNTHETIC task","task":true});
+        assert_eq!(hub.inspect(&send)["status"], "queued");
+        let read = json!({"kind":"read","featureId":feature});
+        let initial = hub.inspect(&read)["rows"][0].clone();
+        assert_eq!(initial["delivery"], "queued");
+        assert_eq!(initial["task"], "queued");
+        assert_eq!(initial["retryable"], false);
+        let messages = serde_json::to_value(
+            hub.call(B, &json!({"name":"read_messages","arguments":{}})).unwrap()
+        ).unwrap();
+        assert_eq!(messages["messages"][0]["from"], "owner via T-001");
+        let received = hub.inspect(&read)["rows"][0].clone();
+        assert_eq!(received["delivery"], "delivered");
+        assert_eq!(received["task"], "dequeued");
+        hub.call(B, &json!({"name":"submit_result","arguments":{
+            "taskId":initial["taskId"],"status":"failed","summary":"SYNTHETIC result"
+        }})).unwrap();
+        assert_eq!(hub.inspect(&read)["rows"][1]["retryable"], true);
+        let retry = json!({"kind":"retry","featureId":feature,"id":initial["id"]});
+        hub.relay_connected(B, false);
+        assert_eq!(hub.inspect(&retry)["code"], "not_permitted");
+        hub.relay_connected(B, true);
+        assert_eq!(hub.inspect(&retry)["status"], "queued");
+        assert_eq!(hub.inspect(&retry)["code"], "not_permitted");
+        hub.forget(B);
+        assert_eq!(hub.inspect(&read)["rows"][0]["delivery"], "target_ended");
     }
 
     #[test]

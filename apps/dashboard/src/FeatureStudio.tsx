@@ -275,6 +275,7 @@ export function FeatureStudio({
   const [endingTerminal, setEndingTerminal] = useState<string>();
   const studioRef = useRef<HTMLDivElement>(null);
   const layoutControls = useRef<StudioLayoutControls>(null);
+  const openDelegate = useRef<(terminalId: string) => void>(null);
   const requestedSlot = useRef<{ scope: string; slot: number; known: Set<string>; until: number }>(
     undefined,
   );
@@ -955,6 +956,7 @@ export function FeatureStudio({
         scope={mentionScope}
         terminals={terminals}
         onSend={sendMention}
+        openForRecipient={openDelegate}
         disabled={!canWrite || selected?.status === 'archived'}
       />
       <button
@@ -1309,6 +1311,10 @@ export function FeatureStudio({
           v6={{
             featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),
             layoutControlsRef: layoutControls,
+            onDelegate:
+              mentionScope && canWrite && selected?.status !== 'archived'
+                ? (terminalId) => openDelegate.current?.(terminalId)
+                : undefined,
             ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
               ? {
                   onRename: (id: string) => {

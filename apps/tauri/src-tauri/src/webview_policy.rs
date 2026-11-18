@@ -10,6 +10,7 @@ pub fn dashboard_path_allowed(path: &str) -> bool {
             | "/agents"
             | "/models"
             | "/artifacts"
+            | "/comunicacao"
             | "/settings"
     ) {
         return true;
@@ -80,6 +81,7 @@ mod tests {
             "/agents",
             "/models",
             "/artifacts",
+            "/comunicacao",
             "/settings",
         ] {
             assert!(dashboard_path_allowed(path), "{path}");

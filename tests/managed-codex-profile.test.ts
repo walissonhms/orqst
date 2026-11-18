@@ -170,6 +170,10 @@ test('opt-in MCP profiles pin the local relay and reviewed version without writi
       },
       launch,
     )[0]!;
+    const hubOverrides = hubProfile.argv.filter((arg) => arg.startsWith('mcp_servers.'));
+    assert.equal(hubOverrides.length, 1);
+    assert.match(hubOverrides[0]!, /default_tools_approval_mode="approve",enabled_tools=/);
+    assert.equal(hubProfile.argv[hubProfile.argv.indexOf('--ask-for-approval') + 1], 'on-request');
     assert.deepEqual(
       hubProfile.argv
         .filter((arg) => arg.startsWith('mcp_servers.'))

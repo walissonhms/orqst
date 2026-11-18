@@ -17,6 +17,7 @@ import {
   Globe2,
   Layers3,
   Menu,
+  MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
   BarChart3,
@@ -71,6 +72,7 @@ import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
 import { useOverviewPreferences } from './overview-preferences';
 import { CommandPalette } from './CommandPalette';
+import { CommunicationInspector } from './CommunicationInspector';
 import { useFeatureShell } from './use-feature-shell.js';
 import { unassignedTerminalCount } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
@@ -89,10 +91,17 @@ const viewIcons = {
   agents: Terminal,
   models: BarChart3,
   artifacts: FileText,
+  comunicacao: MessagesSquare,
   settings: Settings2,
 } satisfies Record<AppView, typeof Activity>;
 
-const studioRoutes: readonly AppView[] = ['overview', 'studio', 'workspaces', 'settings'];
+const studioRoutes: readonly AppView[] = [
+  'overview',
+  'studio',
+  'workspaces',
+  'comunicacao',
+  'settings',
+];
 
 function RouteLinks({
   views,
@@ -638,7 +647,7 @@ export function App() {
       window.removeEventListener('orqst-terminal-fence', fenced);
     };
   }, []);
-  const featureShell = useFeatureShell();
+  const featureShell = useFeatureShell(view === 'comunicacao');
   const featureSnapshot = featureShell.snapshot;
   const managedShell = window.orqstFeatures?.contractVersion === 1;
   const managedStudio = managedShell && view === 'studio';
@@ -1506,6 +1515,11 @@ export function App() {
             ) : (
               <FeatureStudio />
             )
+          ) : view === 'comunicacao' ? (
+            <CommunicationInspector
+              snapshot={featureSnapshot}
+              onOpenStudio={() => navigate('studio', true)}
+            />
           ) : view === 'settings' ? (
             <Settings
               appearance={appearance.appearance}

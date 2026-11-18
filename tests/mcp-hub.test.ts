@@ -397,3 +397,71 @@ test('the durable hub journal keeps metadata only, privately', async () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('Inspector projects real queue and task receipts, and retries an explicit failure once for the same identity', async () => {
+  const { hub, members, evidence } = fixture();
+  hub.relayConnected(ids.a, true);
+  hub.relayConnected(ids.b, true);
+  const featureId = 'f1';
+  const project = () => {
+    const result = hub.inspect({ kind: 'read', featureId });
+    assert.equal(result.status, 'ok');
+    return result.rows;
+  };
+  const send = {
+    kind: 'send' as const,
+    featureId,
+    targetFeatureId: featureId,
+    from: ids.a,
+    to: [ids.b],
+    text: 'Please reply after reviewing the fixture.',
+    task: true,
+  };
+  assert.deepEqual(hub.inspect({ ...send, targetFeatureId: 'f2' }), {
+    status: 'refused',
+    code: 'not_permitted',
+  });
+  assert.deepEqual(hub.inspect({ ...send, to: [ids.x] }), {
+    status: 'refused',
+    code: 'unknown_terminal',
+  });
+  assert.deepEqual(hub.inspect(send), { status: 'queued' });
+  const initial = project()[0]!;
+  assert.equal(initial.delivery, 'queued');
+  assert.equal(initial.task, 'queued');
+  assert.equal(initial.retryable, false);
+  const inbox = (await hub.call(ids.b, read)) as { messages: { from: string }[] };
+  assert.equal(inbox.messages[0]?.from, 'owner via T-001');
+  assert.equal(project()[0]?.delivery, 'delivered');
+  assert.equal(project()[0]?.task, 'dequeued');
+  assert.ok(initial.taskId);
+  await hub.call(ids.b, {
+    name: 'submit_result',
+    arguments: { taskId: initial.taskId, status: 'failed', summary: 'Retryable failure' },
+  });
+  const row = () => project().find(({ id }) => id === initial.id);
+  assert.equal(row()?.task, 'failed');
+  assert.equal(row()?.retryable, true);
+  const retry = { kind: 'retry' as const, featureId, id: initial.id };
+  members[1]!.featureId = 'f2';
+  assert.equal(row()?.retryable, false);
+  assert.deepEqual(hub.inspect(retry), { status: 'refused', code: 'not_permitted' });
+  members[1]!.featureId = featureId;
+  assert.deepEqual(hub.inspect(retry), { status: 'queued' });
+  assert.equal(row()?.retryable, false);
+  assert.deepEqual(hub.inspect(retry), { status: 'refused', code: 'not_permitted' });
+  assert.equal(
+    evidence.some((event) => JSON.stringify(event).includes(send.text)),
+    false,
+  );
+  const replacement = project()[0]!;
+  hub.forget(ids.b);
+  assert.equal(project()[0]?.delivery, 'target_ended');
+  assert.equal(project()[0]?.id, replacement.id);
+  assert.equal(project()[0]?.retryable, false);
+});
+
+test('qualified CLI mentions refuse without a cross-Feature grant', async () => {
+  const { hub } = fixture();
+  await refused(hub.call(ids.a, send('@other/T-004', 'x')), 'not_permitted');
+});

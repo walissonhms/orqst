@@ -450,6 +450,7 @@
   },
   "shell": {
     "views": {
+      "comunicacao": "Comunicação",
       "overview": "Visão geral",
       "workspaces": "Diretório de workspaces",
       "agents": "Agentes e integrações",
@@ -1753,5 +1754,76 @@
     "restore": "Restaurar {{name}}",
     "total_one": "{{count}} terminal",
     "total_other": "{{count}} terminais"
+  },
+  "communication": {
+    "permissionToggle": "{{operation}} · {{source}} para {{target}}",
+    "tabs": {
+      "messages": "Mensagens",
+      "queue": "Fila",
+      "delegations": "Delegações",
+      "audit": "Auditoria",
+      "permissions": "Permissões"
+    },
+    "states": {
+      "queued": "Na fila",
+      "delivered": "Entregue",
+      "dequeued": "Execução desconhecida",
+      "done": "Concluída",
+      "failed": "Falhou",
+      "target_ended": "Destino encerrado",
+      "blocked": "Bloqueada",
+      "unknown": "Desconhecido"
+    },
+    "kind": {
+      "message": "Mensagem",
+      "task": "Delegação",
+      "result": "Resultado"
+    },
+    "refused": {
+      "unavailable": "Comunicação indisponível",
+      "sender_unassigned": "Terminal sem Feature: mova para uma Feature",
+      "unknown_terminal": "{{target}} não existe nesta Feature",
+      "not_permitted": "Sem permissão para {{target}}",
+      "inbox_full": "Fila cheia",
+      "rate_limited": "Limite de envios atingido",
+      "too_many_tasks": "Muitas tarefas na fila",
+      "chain_too_deep": "Limite de encadeamento atingido",
+      "target_ended": "Destino encerrado"
+    },
+    "empty": {
+      "messages": "Nenhuma mensagem encontrada",
+      "queue": "Nenhuma mensagem na fila",
+      "delegations": "Nenhuma delegação encontrada",
+      "audit": "Nenhum evento de auditoria encontrado"
+    },
+    "owner": "Você",
+    "to": "Para",
+    "message": "Mensagem",
+    "otherFeature": "Outra Feature…",
+    "thisFeature": "Esta Feature",
+    "crossFeatureUnavailable": "Envio entre Features exige autorização do Core.",
+    "searchTerminal": "ID, nome, @alias, CLI ou modelo",
+    "noTargets": "Nenhum destino disponível",
+    "antigravity": "Antigravity não tem MCP por sessão.",
+    "policy": "Entrega na fila do {{target}} quando o turno atual terminar",
+    "open": "Abrir destino",
+    "copy": "Copiar",
+    "retry": "Tentar novamente",
+    "copied": "Copiado",
+    "copyFailed": "Falha ao copiar",
+    "openFailed": "Destino indisponível",
+    "selectFeature": "Selecione uma Feature",
+    "activePermissions": "Ative a Feature no Studio para editar as permissões.",
+    "terminal": "Terminal",
+    "state": "Estado",
+    "time": "Hora",
+    "all": "Todos",
+    "allTime": "Qualquer hora",
+    "lastHour": "Última hora",
+    "lastDay": "Últimas 24 horas",
+    "deliveryStatus": "Entrega · {{state}}",
+    "taskStatus": "Tarefa · {{state}}",
+    "unknownMention": "{{target}} não existe nesta Feature",
+    "invalidRecipientCount": "Até 3 destinatários por mensagem"
   }
 }

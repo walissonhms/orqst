@@ -171,6 +171,7 @@ export interface StudioPaneChrome {
   featureName?: string;
   layoutControlsRef?: Ref<StudioLayoutControls>;
   onRename?(terminalId: string): void;
+  onDelegate?(terminalId: string): void;
   onRestart?(terminalId: string): void;
   onDuplicateConfig?(draft: StudioDuplicateConfig): void;
 }
@@ -444,9 +445,7 @@ export function FeatureStudioStage({
   const RestoreIcon = canonical ? SquareStack : Minimize2;
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
-  const [composer, setComposer] = useState<{ from: string | null; recipient?: string } | null>(
-    null,
-  );
+  const [composer, setComposer] = useState<{ from: string | null } | null>(null);
   const [closeTarget, setCloseTarget] = useState<StudioTerminal>();
   const [restartTarget, setRestartTarget] = useState<StudioTerminal>();
   const [closedEnded, setClosedEnded] = useState(() => {
@@ -1504,9 +1503,12 @@ export function FeatureStudioStage({
                                 })
                             : undefined,
                         onHide: () => setState((current) => minimize(current, pane.id)),
-                        onMention: onMention
-                          ? () => setComposer({ from: null, recipient: terminal.label })
-                          : undefined,
+                        onMention:
+                          v6.onDelegate &&
+                          terminal.provider !== 'antigravity' &&
+                          terminal.provider !== 'shell'
+                            ? () => v6.onDelegate?.(pane.id)
+                            : undefined,
                         onRole: onOrchestratorChange
                           ? () =>
                               onOrchestratorChange(state.orchestrator === pane.id ? null : pane.id)
@@ -1790,27 +1792,6 @@ export function FeatureStudioStage({
         />
       )}
 
-      {onMention && composer?.recipient && canonical && (
-        <Modal
-          label={t('mention.delegate')}
-          className="mc-dialog"
-          initialFocus="textarea"
-          onClose={() => setComposer(null)}
-        >
-          <div data-native-overlay="">
-            <h2>{t('mention.delegate')}</h2>
-            <MentionComposer
-              terminals={terminals}
-              featureScoped
-              initialText={`@${composer.recipient} `}
-              from={composer.from}
-              onFromChange={(from) => setComposer({ ...composer, from })}
-              onSend={onMention}
-              onClose={() => setComposer(null)}
-            />
-          </div>
-        </Modal>
-      )}
       {restartTarget && byId.has(restartTarget.id) && (
         <Modal
           label={t('studio.pane.restartQuestion', { label: restartTarget.label })}

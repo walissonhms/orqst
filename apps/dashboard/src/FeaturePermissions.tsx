@@ -103,48 +103,55 @@ function FeaturePermissionsPanel({ snapshot, feature }: FeaturePermissionsProps)
       {terminals.length === 0 ? (
         <p className="muted">{t('features.permissions.empty')}</p>
       ) : (
-        <table className="feature-permissions-matrix">
-          <thead>
-            <tr>
-              <th scope="col">{t('features.permissions.source')}</th>
-              {terminals.map((target) => (
-                <th key={target.terminalId} scope="col">
-                  {target.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {terminals.map((source) => (
-              <tr key={source.terminalId}>
-                <th scope="row">{source.label}</th>
+        <div className="feature-permissions-table">
+          <table className="feature-permissions-matrix">
+            <thead>
+              <tr>
+                <th scope="col">{t('features.permissions.source')}</th>
                 {terminals.map((target) => (
-                  <td key={target.terminalId}>
-                    {source.terminalId === target.terminalId ? (
-                      <span className="muted">{t('features.permissions.selfBlocked')}</span>
-                    ) : (
-                      OPERATIONS.map((op) => (
-                        <label key={op} className="feature-permissions-toggle">
-                          <input
-                            type="checkbox"
-                            checked={operation(source.terminalId, target.terminalId, op)}
-                            disabled={busy}
-                            onChange={() =>
-                              setRules((value) =>
-                                toggleOperation(value, source.terminalId, target.terminalId, op),
-                              )
-                            }
-                          />
-                          {t(`features.permissions.${op}`)}
-                        </label>
-                      ))
-                    )}
-                  </td>
+                  <th key={target.terminalId} scope="col">
+                    {target.label}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {terminals.map((source) => (
+                <tr key={source.terminalId}>
+                  <th scope="row">{source.label}</th>
+                  {terminals.map((target) => (
+                    <td key={target.terminalId}>
+                      {source.terminalId === target.terminalId ? (
+                        <span className="muted">{t('features.permissions.selfBlocked')}</span>
+                      ) : (
+                        OPERATIONS.map((op) => (
+                          <label key={op} className="feature-permissions-toggle">
+                            <input
+                              type="checkbox"
+                              checked={operation(source.terminalId, target.terminalId, op)}
+                              disabled={busy || revision === null}
+                              aria-label={t('communication.permissionToggle', {
+                                operation: t(`features.permissions.${op}`),
+                                source: source.label,
+                                target: target.label,
+                              })}
+                              onChange={() =>
+                                setRules((value) =>
+                                  toggleOperation(value, source.terminalId, target.terminalId, op),
+                                )
+                              }
+                            />
+                            {t(`features.permissions.${op}`)}
+                          </label>
+                        ))
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {problems.length > 0 && (
         <p className="notice" role="alert">
