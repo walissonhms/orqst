@@ -120,11 +120,9 @@ test('Studio documents omit pair guidance and start with silent status', () => {
   assert.doesNotMatch(document(), /data-chrome="studio"/);
   const html = document({ studioChrome: true, operationalOpen: true });
   assert.match(html, /<main data-chrome="studio"/);
-  assert.doesNotMatch(html, /id="guidance"|fresh pair/);
+  assert.doesNotMatch(html, /<header|id="pane-menu"|id="guidance"|fresh pair/);
   assert.match(html, /id="status" hidden/);
-  const end = html.indexOf('</header>');
   for (const id of ['start', 'attach', 'input']) {
-    assert.ok(html.indexOf(`id="${id}"`) > end);
     assert.equal(html.match(new RegExp(`id="${id}"`, 'g'))?.length, 1);
   }
   assert.ok(html.includes(en.managedTerminal.open));

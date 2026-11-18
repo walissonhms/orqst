@@ -51,7 +51,7 @@ const palette = getComputedStyle(document.documentElement);
 const terminal = new Terminal({
   allowProposedApi: false,
   scrollback: 2000,
-  fontSize: studioChrome ? 12 : 14,
+  fontSize: studioChrome ? 11 : 14,
   screenReaderMode: true,
   linkHandler: { activate: () => {} },
   windowOptions: {},
@@ -159,11 +159,13 @@ const updateGuidance = () => {
 const updateButtons = () => {
   updateGuidance();
   for (const action of actions) {
+    const control = document.getElementById(action) as HTMLButtonElement | null;
+    if (!control) continue;
     let disabled =
       (busy && !polling) ||
       actionPending ||
       status.dataset.blocked === 'true' ||
-      document.getElementById(action)!.dataset.unavailable === 'true';
+      control.dataset.unavailable === 'true';
     if (action === 'login' || action === 'start')
       disabled ||=
         live ||
@@ -175,7 +177,7 @@ const updateButtons = () => {
     else if (action === 'detach') disabled ||= !attached;
     else if (action === 'input') disabled ||= !attached || !live || gap;
     else disabled ||= !live;
-    (document.getElementById(action) as HTMLButtonElement).disabled = disabled;
+    control.disabled = disabled;
   }
 };
 const show = (key: string) => {
@@ -238,7 +240,8 @@ async function send(
       terminal.reset();
       instanceId = reply.instanceId;
       status.dataset.instanceId = instanceId;
-      document.getElementById('instance')!.textContent = instanceId;
+      const instance = document.getElementById('instance');
+      if (instance) instance.textContent = instanceId;
       cursor = sequence = 0;
       lastSize = undefined;
       outputProbeUntil = undefined;
@@ -248,10 +251,12 @@ async function send(
     }
     if (reply.snapshot && (!studioChrome || reply.snapshot.instanceId === instanceId)) {
       status.dataset.state = reply.snapshot.state;
-      const lifecycle = document.getElementById('lifecycle')!;
-      lifecycle.textContent = lifecycle.getAttribute(`data-short-${reply.snapshot.state}`) ?? '';
-      lifecycle.title = lifecycle.dataset[reply.snapshot.state] ?? '';
-      lifecycle.dataset.state = reply.snapshot.state;
+      const lifecycle = document.getElementById('lifecycle');
+      if (lifecycle) {
+        lifecycle.textContent = lifecycle.getAttribute(`data-short-${reply.snapshot.state}`) ?? '';
+        lifecycle.title = lifecycle.dataset[reply.snapshot.state] ?? '';
+        lifecycle.dataset.state = reply.snapshot.state;
+      }
       live = ['starting', 'running'].includes(reply.snapshot.state);
       if (!live) {
         input = false;
@@ -401,7 +406,8 @@ container.addEventListener(
 );
 container.addEventListener('drop', (event) => event.preventDefault(), true);
 for (const action of actions) {
-  const button = document.getElementById(action)!;
+  const button = document.getElementById(action);
+  if (!button) continue;
   button.addEventListener('pointerdown', (event) => {
     if (event.isPrimary && event.button === 0) beginGesture();
   });
@@ -583,193 +589,167 @@ const pane = (
     };
   }
 ).orqstTerminalPane;
-const layoutActions = [
-  ['canvas', 'canvas'],
-  ['dashboard', 'dashboard'],
-  ['hide-pane', 'hide'],
-  ['hide-pane-menu', 'hide'],
-  ['split-columns', 'split-columns'],
-  ['split-rows', 'split-rows'],
-  ['maximize', 'maximize'],
-  ['restore', 'restore'],
-  ['focus-other', 'focus-other'],
-  ['show-all', 'show-all'],
-  ['move-earlier', 'move-earlier'],
-  ['move-later', 'move-later'],
-] as const;
-const changeLayout = (action: TerminalViewAction) => {
-  revoke();
-  void pane
-    .show(action)
-    .then((accepted) => {
-      if (!accepted) show('focus_required');
-    })
-    .catch(() => show('denied'));
-};
-for (const [id, action] of layoutActions)
-  document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
-const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-tab]')];
-const slot = Number(document.querySelector<HTMLElement>('main')!.dataset.slot);
-const heading = document.getElementById('pane-title')!;
-const nameInput = document.getElementById('pane-name') as HTMLInputElement;
-const columnChoice = document.getElementById('column-choice') as HTMLSelectElement;
-const feedback = document.getElementById('layout-feedback')!;
-let draggingOwnPane = false;
-heading.addEventListener('dragstart', (event) => {
-  draggingOwnPane = true;
-  event.dataTransfer?.setData('text/plain', String(slot));
-  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-});
-heading.addEventListener('dragend', () => {
-  draggingOwnPane = false;
-});
-function bindTab(tab: HTMLButtonElement) {
-  tab.dataset.provider = tab.textContent ?? '';
-  tab.addEventListener('click', () => changeLayout({ tab: Number(tab.dataset.tab) }));
-  tab.addEventListener('dragover', (event) => {
-    if (draggingOwnPane) event.preventDefault();
-  });
-  tab.addEventListener('drop', (event) => {
-    if (!draggingOwnPane) return;
-    event.preventDefault();
-    draggingOwnPane = false;
-    changeLayout({ moveTo: Number(tab.dataset.tab) });
-  });
-}
-for (const tab of tabs) bindTab(tab);
-columnChoice.addEventListener('change', () =>
-  changeLayout({ columns: Number(columnChoice.value) as TerminalLayoutState['columns'] }),
-);
-document.getElementById('rename-pane')!.addEventListener('submit', (event) => {
-  event.preventDefault();
-  changeLayout({ name: nameInput.value });
-});
-const splitSize = document.getElementById('split-size') as HTMLInputElement;
-splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
-const unsubscribeLayout = pane.onLayout((state) => {
-  if (!state.visible.includes(slot)) revoke();
-  const strip = document.querySelector('.pane-tabs')!;
-  // Add navigation controls in place; never reload an existing xterm document.
-  for (const index of state.order) {
-    if (tabs.some((tab) => Number(tab.dataset.tab) === index)) continue;
-    const tab = document.createElement('button');
-    tab.dataset.tab = String(index);
-    tab.textContent = `T-${String(index + 1).padStart(3, '0')}`;
-    bindTab(tab);
-    tabs.push(tab);
-  }
-  for (const id of ['split-columns', 'split-rows', 'focus-other', 'show-all'])
-    (document.getElementById(id) as HTMLButtonElement).disabled = state.order.length < 2;
-
-  const order = state.order.map((index) => tabs.find((tab) => Number(tab.dataset.tab) === index)!);
-  const currentOrder = [...strip.children];
-  if (order.some((tab, index) => tab !== currentOrder[index])) {
-    const focused = document.activeElement;
-    for (const tab of order) strip.appendChild(tab);
-    if (focused instanceof HTMLButtonElement && tabs.includes(focused)) focused.focus();
-  }
-  for (const tab of tabs) {
-    const index = Number(tab.dataset.tab);
-    tab.hidden = !state.order.includes(index);
-    tab.disabled = !state.order.includes(index);
-    tab.setAttribute('aria-pressed', String(state.visible.includes(index)));
-    tab.dataset.active = String(index === state.active);
-    tab.textContent = state.names[index]
-      ? `${state.names[index]} · ${tab.dataset.provider}`
-      : tab.dataset.provider!;
-  }
-  heading.textContent = state.names[slot] || heading.dataset.slotName!;
-  heading.title = `${heading.textContent} · ${heading.dataset.provider}`;
-  if (document.activeElement !== nameInput) nameInput.value = state.names[slot] ?? '';
-  columnChoice.value = String(state.columns);
-  splitSize.value = String(state.percent);
-  splitSize.disabled =
-    state.visible.length !== 2 || (state.axis === 'columns' && state.columns === 1);
-  document.getElementById('split-value')!.textContent = `${state.percent}%`;
-  for (const axis of ['columns', 'rows'])
-    document
-      .getElementById(`split-${axis}`)!
-      .setAttribute('aria-pressed', String(state.axis === axis));
-  const focused = document.activeElement as HTMLElement | null;
-  (document.getElementById('maximize') as HTMLButtonElement).hidden = state.maximized === slot;
-  (document.getElementById('restore') as HTMLButtonElement).hidden = state.maximized === null;
-  if (focused?.hidden && ['maximize', 'restore'].includes(focused.id))
-    document.getElementById(focused.id === 'maximize' ? 'restore' : 'maximize')!.focus();
-  const position = state.order.indexOf(slot);
-  (document.getElementById('move-earlier') as HTMLButtonElement).disabled = position === 0;
-  (document.getElementById('move-later') as HTMLButtonElement).disabled =
-    position < 0 || position === state.order.length - 1;
-  if (
-    focused instanceof HTMLButtonElement &&
-    focused.disabled &&
-    ['move-earlier', 'move-later'].includes(focused.id)
-  )
-    document.getElementById(focused.id === 'move-earlier' ? 'move-later' : 'move-earlier')!.focus();
-  feedback.textContent = (state.persisted ? feedback.dataset.summary! : feedback.dataset.memory!)
-    .replaceAll('{{visible}}', String(state.visible.length))
-    .replaceAll('{{shown}}', String(state.shown.length))
-    .replaceAll('{{position}}', String(position + 1))
-    .replaceAll('{{count}}', String(state.order.length));
-});
-window.addEventListener('pagehide', unsubscribeLayout, { once: true });
-
-// Native disclosure semantics retain keyboard navigation without intercepting xterm keys.
-const paneMenu = document.getElementById('pane-menu') as HTMLDetailsElement;
 window.addEventListener('orqst-canvas-escape', revoke);
 window.addEventListener('orqst-canvas-escape-denied', () => show('focus_required'));
-const menuToggle = document.getElementById('pane-menu-toggle')!;
-paneMenu.addEventListener('toggle', () => {
-  menuToggle.setAttribute('aria-expanded', String(paneMenu.open));
-});
-paneMenu.addEventListener('keydown', (event) => {
-  if (event.key !== 'Escape' || !paneMenu.open) return;
-  event.preventDefault();
-  event.stopPropagation();
-  paneMenu.open = false;
-  if (studioChrome) terminal.focus();
-  else menuToggle.focus();
-});
-if (studioChrome) {
-  const paneActions = paneMenu.querySelector<HTMLElement>('.pane-actions')!;
-  main.append(paneMenu);
-  for (const [group, help] of [
-    ['viewGroup', 'viewGroupHelp'],
-    ['processGroup', 'processGroupHelp'],
-  ] as const) {
-    const section = paneActions.querySelector<HTMLElement>(
-      `.${group === 'viewGroup' ? 'pane-view-actions' : 'pane-process-actions'}`,
-    )!;
-    section.setAttribute('aria-label', studioLocale.t(group));
-    section.querySelector('p')!.textContent = studioLocale.t(help);
-  }
-  for (const [id, label] of [
-    ['hide-pane-menu', 'hideView'],
-    ['detach', 'detach'],
-    ['stop', 'stop'],
-    ['kill', 'kill'],
-  ] as const)
-    document.getElementById(id)!.textContent = studioLocale.t(label);
 
-  const openProcessMenu = (event: Event) => {
-    if (!event.isTrusted) return;
-    event.preventDefault();
-    paneMenu.open = true;
-    document.getElementById('hide-pane-menu')!.focus();
+if (studioChrome) {
+  // Retained Studio documents still revoke input whenever their view is hidden.
+  const slot = Number(main.dataset.slot);
+  const unsubscribe = pane.onLayout(({ visible }) => {
+    if (!visible.includes(slot)) revoke();
+  });
+  window.addEventListener('pagehide', unsubscribe, { once: true });
+} else {
+  const layoutActions = [
+    ['canvas', 'canvas'],
+    ['dashboard', 'dashboard'],
+    ['hide-pane', 'hide'],
+    ['hide-pane-menu', 'hide'],
+    ['split-columns', 'split-columns'],
+    ['split-rows', 'split-rows'],
+    ['maximize', 'maximize'],
+    ['restore', 'restore'],
+    ['focus-other', 'focus-other'],
+    ['show-all', 'show-all'],
+    ['move-earlier', 'move-earlier'],
+    ['move-later', 'move-later'],
+  ] as const;
+  const changeLayout = (action: TerminalViewAction) => {
+    revoke();
+    void pane
+      .show(action)
+      .then((accepted) => {
+        if (!accepted) show('focus_required');
+      })
+      .catch(() => show('denied'));
   };
-  container.addEventListener('contextmenu', openProcessMenu);
-  container.addEventListener(
-    'keydown',
-    (event) => {
-      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-        event.stopPropagation();
-        openProcessMenu(event);
-      }
-    },
-    true,
+  for (const [id, action] of layoutActions)
+    document.getElementById(id)?.addEventListener('click', () => changeLayout(action));
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-tab]')];
+  const slot = Number(document.querySelector<HTMLElement>('main')!.dataset.slot);
+  const heading = document.getElementById('pane-title')!;
+  const nameInput = document.getElementById('pane-name') as HTMLInputElement;
+  const columnChoice = document.getElementById('column-choice') as HTMLSelectElement;
+  const feedback = document.getElementById('layout-feedback')!;
+  let draggingOwnPane = false;
+  heading.addEventListener('dragstart', (event) => {
+    draggingOwnPane = true;
+    event.dataTransfer?.setData('text/plain', String(slot));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  });
+  heading.addEventListener('dragend', () => {
+    draggingOwnPane = false;
+  });
+  function bindTab(tab: HTMLButtonElement) {
+    tab.dataset.provider = tab.textContent ?? '';
+    tab.addEventListener('click', () => changeLayout({ tab: Number(tab.dataset.tab) }));
+    tab.addEventListener('dragover', (event) => {
+      if (draggingOwnPane) event.preventDefault();
+    });
+    tab.addEventListener('drop', (event) => {
+      if (!draggingOwnPane) return;
+      event.preventDefault();
+      draggingOwnPane = false;
+      changeLayout({ moveTo: Number(tab.dataset.tab) });
+    });
+  }
+  for (const tab of tabs) bindTab(tab);
+  columnChoice.addEventListener('change', () =>
+    changeLayout({ columns: Number(columnChoice.value) as TerminalLayoutState['columns'] }),
   );
-}
-// A header drag starts outside the disclosure; keep its drop targets until a click occurs.
-document.addEventListener('click', (event) => {
-  if (paneMenu.open && event.target instanceof Node && !paneMenu.contains(event.target))
+  document.getElementById('rename-pane')!.addEventListener('submit', (event) => {
+    event.preventDefault();
+    changeLayout({ name: nameInput.value });
+  });
+  const splitSize = document.getElementById('split-size') as HTMLInputElement;
+  splitSize.addEventListener('input', () => changeLayout({ percent: Number(splitSize.value) }));
+  const unsubscribeLayout = pane.onLayout((state) => {
+    if (!state.visible.includes(slot)) revoke();
+    const strip = document.querySelector('.pane-tabs')!;
+    // Add navigation controls in place; never reload an existing xterm document.
+    for (const index of state.order) {
+      if (tabs.some((tab) => Number(tab.dataset.tab) === index)) continue;
+      const tab = document.createElement('button');
+      tab.dataset.tab = String(index);
+      tab.textContent = `T-${String(index + 1).padStart(3, '0')}`;
+      bindTab(tab);
+      tabs.push(tab);
+    }
+    for (const id of ['split-columns', 'split-rows', 'focus-other', 'show-all'])
+      (document.getElementById(id) as HTMLButtonElement).disabled = state.order.length < 2;
+
+    const order = state.order.map((index) =>
+      tabs.find((tab) => Number(tab.dataset.tab) === index)!,
+    );
+    const currentOrder = [...strip.children];
+    if (order.some((tab, index) => tab !== currentOrder[index])) {
+      const focused = document.activeElement;
+      for (const tab of order) strip.appendChild(tab);
+      if (focused instanceof HTMLButtonElement && tabs.includes(focused)) focused.focus();
+    }
+    for (const tab of tabs) {
+      const index = Number(tab.dataset.tab);
+      tab.hidden = !state.order.includes(index);
+      tab.disabled = !state.order.includes(index);
+      tab.setAttribute('aria-pressed', String(state.visible.includes(index)));
+      tab.dataset.active = String(index === state.active);
+      tab.textContent = state.names[index]
+        ? `${state.names[index]} · ${tab.dataset.provider}`
+        : tab.dataset.provider!;
+    }
+    heading.textContent = state.names[slot] || heading.dataset.slotName!;
+    heading.title = `${heading.textContent} · ${heading.dataset.provider}`;
+    if (document.activeElement !== nameInput) nameInput.value = state.names[slot] ?? '';
+    columnChoice.value = String(state.columns);
+    splitSize.value = String(state.percent);
+    splitSize.disabled =
+      state.visible.length !== 2 || (state.axis === 'columns' && state.columns === 1);
+    document.getElementById('split-value')!.textContent = `${state.percent}%`;
+    for (const axis of ['columns', 'rows'])
+      document
+        .getElementById(`split-${axis}`)!
+        .setAttribute('aria-pressed', String(state.axis === axis));
+    const focused = document.activeElement as HTMLElement | null;
+    (document.getElementById('maximize') as HTMLButtonElement).hidden = state.maximized === slot;
+    (document.getElementById('restore') as HTMLButtonElement).hidden = state.maximized === null;
+    if (focused?.hidden && ['maximize', 'restore'].includes(focused.id))
+      document.getElementById(focused.id === 'maximize' ? 'restore' : 'maximize')!.focus();
+    const position = state.order.indexOf(slot);
+    (document.getElementById('move-earlier') as HTMLButtonElement).disabled = position === 0;
+    (document.getElementById('move-later') as HTMLButtonElement).disabled =
+      position < 0 || position === state.order.length - 1;
+    if (
+      focused instanceof HTMLButtonElement &&
+      focused.disabled &&
+      ['move-earlier', 'move-later'].includes(focused.id)
+    )
+      document
+        .getElementById(focused.id === 'move-earlier' ? 'move-later' : 'move-earlier')!
+        .focus();
+    feedback.textContent = (state.persisted ? feedback.dataset.summary! : feedback.dataset.memory!)
+      .replaceAll('{{visible}}', String(state.visible.length))
+      .replaceAll('{{shown}}', String(state.shown.length))
+      .replaceAll('{{position}}', String(position + 1))
+      .replaceAll('{{count}}', String(state.order.length));
+  });
+  window.addEventListener('pagehide', unsubscribeLayout, { once: true });
+
+  // Native disclosure semantics retain keyboard navigation without intercepting xterm keys.
+  const paneMenu = document.getElementById('pane-menu') as HTMLDetailsElement;
+  const menuToggle = document.getElementById('pane-menu-toggle')!;
+  paneMenu.addEventListener('toggle', () => {
+    menuToggle.setAttribute('aria-expanded', String(paneMenu.open));
+  });
+  paneMenu.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !paneMenu.open) return;
+    event.preventDefault();
+    event.stopPropagation();
     paneMenu.open = false;
-});
+    menuToggle.focus();
+  });
+  // A header drag starts outside the disclosure; keep its drop targets until a click occurs.
+  document.addEventListener('click', (event) => {
+    if (paneMenu.open && event.target instanceof Node && !paneMenu.contains(event.target))
+      paneMenu.open = false;
+  });
+}
