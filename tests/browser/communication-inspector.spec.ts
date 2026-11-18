@@ -90,21 +90,21 @@ for (const viewport of [
     await hub.call(originId, read);
     hub.ownerSend(featureId, terminalIds[2]!, 'Confira a migração do índice.');
     await page.setViewportSize(viewport);
-    await page.exposeBinding(
-      'syntheticFeatureRequest',
-      (_source, request: FeatureNativeRequest) => {
-        if (request.action === 'snapshot') return { status: 'ok', snapshot };
-        if (request.action === 'inspector')
-          return {
-            status: 'ok',
-            snapshot,
-            inspector: inspectorReplySchema.parse(
-              hub.inspect(inspectorCommandSchema.parse(request.command)),
-            ),
-          };
-        return { status: 'denied' };
-      },
-    );
+    await page.exposeBinding('syntheticFeatureRequest', (source, request: FeatureNativeRequest) => {
+      if (request.action === 'snapshot')
+        return new URL(source.frame.url()).pathname === '/overview'
+          ? { status: 'denied' }
+          : { status: 'ok', snapshot };
+      if (request.action === 'inspector')
+        return {
+          status: 'ok',
+          snapshot,
+          inspector: inspectorReplySchema.parse(
+            hub.inspect(inspectorCommandSchema.parse(request.command)),
+          ),
+        };
+      return { status: 'denied' };
+    });
     await page.addInitScript(
       ({ workspaceId, featureId }) => {
         localStorage.setItem('i18nextLng', 'pt-BR');
@@ -131,7 +131,11 @@ for (const viewport of [
       },
       { workspaceId: workspace.id, featureId },
     );
-    await page.goto('/comunicacao');
+    if (viewport.width === 1280) {
+      await page.goto('/overview');
+      await page.getByRole('link', { name: 'Comunicação', exact: true }).click();
+      await expect(page).toHaveURL('/comunicacao');
+    } else await page.goto('/comunicacao');
     await expect(page.getByRole('heading', { name: 'Comunicação', exact: true })).toBeVisible();
     const rows = page.locator('.communication-rows li');
     await expect(rows).toHaveCount(3);

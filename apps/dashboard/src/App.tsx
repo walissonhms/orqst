@@ -648,7 +648,7 @@ export function App() {
       window.removeEventListener('orqst-terminal-fence', fenced);
     };
   }, []);
-  const featureShell = useFeatureShell();
+  const featureShell = useFeatureShell(view === 'comunicacao');
   const featureSnapshot = featureShell.snapshot;
   const managedShell = window.orqstFeatures?.contractVersion === 1;
   const managedStudio = managedShell && view === 'studio';

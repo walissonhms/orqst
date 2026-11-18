@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FeatureNativeSnapshot } from '@orqst/protocol';
 
 /** Shared Workspace → Feature view state. Selection changes the view only. */
-export function useFeatureShell() {
+export function useFeatureShell(inspectingCommunication = false) {
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [busy, setBusy] = useState(false);
@@ -26,7 +26,7 @@ export function useFeatureShell() {
       live = false;
       window.removeEventListener('orqst-feature-state', update);
     };
-  }, [native]);
+  }, [native, inspectingCommunication]);
   async function select(featureId: string | null) {
     if (!native || busy || !snapshot) return;
     setBusy(true);
