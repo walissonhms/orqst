@@ -520,7 +520,8 @@
     "adapters": {
       "codex": "Codex CLI",
       "claude": "Claude Code",
-      "opencode": "OpenCode"
+      "opencode": "OpenCode",
+      "antigravity": "Google Antigravity"
     },
     "capabilities": {
       "sessionDiscovery": "External session discovery",

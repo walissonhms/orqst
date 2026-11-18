@@ -1,9 +1,61 @@
+import { AntigravityObserver } from '@orqst/adapter-antigravity';
+import { CodexObserver, type CodexObserverOptions } from '@orqst/adapter-codex';
 import { ObserverCore } from '@orqst/core';
+import type { Snapshot } from '@orqst/protocol';
 import type { Config } from './config.js';
 import { createLocalServer } from './server.js';
 
+function createBridgeObserver(config: Config, options: CodexObserverOptions) {
+  const codex = new CodexObserver(options);
+  if (!config.antigravityDir) return codex;
+  const antigravity = new AntigravityObserver({
+    root: config.antigravityDir,
+    store: options.store,
+    pollMs: options.pollMs,
+    initialScanInBackground: options.initialScanInBackground,
+    onEvent: options.onEvent,
+  });
+  return {
+    get diagnostics(): Snapshot['diagnostics'] {
+      const a = codex.diagnostics;
+      const b = antigravity.diagnostics;
+      const lastScan =
+        a.lastScan && b.lastScan
+          ? a.lastScan >= b.lastScan
+            ? a.lastScan
+            : b.lastScan
+          : (a.lastScan ?? b.lastScan);
+      return {
+        files: a.files + b.files,
+        malformed: a.malformed + b.malformed,
+        skipped: a.skipped + b.skipped,
+        oversized: a.oversized + b.oversized,
+        errors: a.errors + b.errors,
+        lastScan,
+        scanning: a.scanning || b.scanning,
+      };
+    },
+    async start(): Promise<void> {
+      await Promise.all([codex.start(), antigravity.start()]);
+    },
+    async stop(): Promise<void> {
+      const results = await Promise.allSettled([codex.stop(), antigravity.stop()]);
+      const rejected = results.find((result) => result.status === 'rejected');
+      if (rejected) throw rejected.reason;
+    },
+  };
+}
+
 /** Composes one Core with local transports; no client attachment owns the Core. */
-export function createBridge(config: Config, core = new ObserverCore(config)) {
+export function createBridge(
+  config: Config,
+  core = new ObserverCore(
+    config,
+    config.antigravityDir
+      ? { createObserver: (options) => createBridgeObserver(config, options) }
+      : undefined,
+  ),
+) {
   let api: ReturnType<typeof createLocalServer> | undefined;
   let starting: Promise<number> | undefined;
   let stopping: Promise<void> | undefined;

@@ -4,6 +4,7 @@ export interface Config {
   port: number;
   dataDir: string;
   sessionsDir: string;
+  antigravityDir?: string;
   dashboardDir: string;
   retentionDays: number;
   pollMs: number;
@@ -23,6 +24,9 @@ export function loadConfig(): Config {
     sessionsDir: resolve(
       process.env.ORQST_CODEX_SESSIONS ??
         join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions'),
+    ),
+    antigravityDir: resolve(
+      process.env.ORQST_ANTIGRAVITY_HOME ?? join(homedir(), '.gemini', 'antigravity-cli'),
     ),
     dashboardDir: resolve('apps/dashboard/dist'),
     retentionDays: integer(process.env.ORQST_RETENTION_DAYS, 30, 1, 3650),

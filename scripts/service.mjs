@@ -52,6 +52,9 @@ function configuration() {
       process.env.ORQST_CODEX_SESSIONS ??
         join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'sessions'),
     ),
+    ORQST_ANTIGRAVITY_HOME: resolve(
+      process.env.ORQST_ANTIGRAVITY_HOME ?? join(homedir(), '.gemini', 'antigravity-cli'),
+    ),
     ORQST_RETENTION_DAYS: integer('ORQST_RETENTION_DAYS', 30, 1, 3650),
     ORQST_POLL_MS: integer('ORQST_POLL_MS', 3000, 500, 60000),
     ORQST_DEV: '0',

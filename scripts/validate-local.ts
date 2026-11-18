@@ -1,11 +1,12 @@
-/** Read actual local Codex data into an isolated disposable database. Prints aggregates only. */
+/** Read actual local Codex and Antigravity data into isolated disposable databases. Prints aggregates only. */
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readdir, stat, readFile, writeFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdtemp, mkdir, readdir, stat, lstat, readFile, writeFile, rm } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { Store } from '@orqst/database';
 import { CodexObserver } from '@orqst/adapter-codex';
+import { AntigravityObserver } from '@orqst/adapter-antigravity';
 import { object } from '@orqst/shared';
 import { smokeBuilt } from './smoke-built.js';
 const source =
@@ -104,6 +105,129 @@ try {
   }
   const withBrowser = process.argv.includes('--with-browser');
   if (withBrowser) await smokeBuilt(root, dir, sessions.length);
+
+  const antigravitySource =
+    process.env.ORQST_ANTIGRAVITY_HOME ?? join(homedir(), '.gemini', 'antigravity-cli');
+  const antigravityCandidates: {
+    sessionId: string;
+    path: string;
+    name: 'transcript_full.jsonl' | 'transcript.jsonl';
+    mtime: number;
+  }[] = [];
+  try {
+    const brainDir = join(antigravitySource, 'brain');
+    for (const entry of await readdir(brainDir, { withFileTypes: true })) {
+      if (entry.isSymbolicLink() || !entry.isDirectory()) continue;
+      const logsDir = join(brainDir, entry.name, '.system_generated', 'logs');
+      for (const name of ['transcript_full.jsonl', 'transcript.jsonl'] as const) {
+        const candidate = join(logsDir, name);
+        try {
+          const info = await lstat(candidate);
+          if (
+            !info.isSymbolicLink() &&
+            info.isFile() &&
+            info.size > 0 &&
+            info.size < 5 * 1024 * 1024
+          ) {
+            antigravityCandidates.push({
+              sessionId: entry.name,
+              path: candidate,
+              name,
+              mtime: info.mtimeMs,
+            });
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
+  } catch {
+    /* Antigravity transcripts are optional when the CLI has no local sessions yet. */
+  }
+  const selectedAntigravity = antigravityCandidates.sort((a, b) => b.mtime - a.mtime).slice(0, 8);
+  let antigravityValidation: Record<string, unknown> = { status: 'not_present' };
+  if (selectedAntigravity.length > 0) {
+    const agyRoot = join(dir, 'antigravity');
+    const agyDb = join(dir, 'orqst-antigravity.db');
+    await mkdir(agyRoot, { mode: 0o700 });
+    const metadataSource = join(antigravitySource, 'cache', 'conversation_metadata.json');
+    try {
+      const metaStat = await lstat(metadataSource);
+      if (
+        !metaStat.isSymbolicLink() &&
+        metaStat.isFile() &&
+        metaStat.size > 0 &&
+        metaStat.size < 4 * 1024 * 1024
+      ) {
+        await mkdir(join(agyRoot, 'cache'), { mode: 0o700 });
+        await writeFile(
+          join(agyRoot, 'cache', basename(metadataSource)),
+          await readFile(metadataSource),
+          { mode: 0o600 },
+        );
+      }
+    } catch {
+      /* Metadata cache is optional. */
+    }
+    const agySnapshots: { path: string; bytes: Buffer; hash: string }[] = [];
+    for (const item of selectedAntigravity) {
+      const bytes = await readFile(item.path);
+      agySnapshots.push({
+        path: item.path,
+        bytes,
+        hash: createHash('sha256').update(bytes).digest('hex'),
+      });
+      const targetDir = join(agyRoot, 'brain', item.sessionId, '.system_generated', 'logs');
+      await mkdir(targetDir, { recursive: true, mode: 0o700 });
+      await writeFile(join(targetDir, item.name), bytes, { mode: 0o600 });
+    }
+    let agyStore = new Store(agyDb);
+    let agyObserver = new AntigravityObserver({ root: agyRoot, store: agyStore });
+    try {
+      await agyObserver.scan();
+      assert.equal(agyObserver.diagnostics.errors, 0);
+      assert.equal(agyObserver.diagnostics.malformed, 0);
+      const agySessions = agyStore.sessions();
+      assert.equal(agySessions.length, selectedAntigravity.length);
+      assert.equal(agyStore.totals().total, 0);
+      assert.ok(agySessions.every((session) => session.usageRecorded === false));
+      const agyCursor = agyStore.cursor();
+      await agyObserver.scan();
+      assert.equal(agyStore.cursor(), agyCursor);
+      await agyObserver.stop();
+      agyStore.close();
+      agyStore = new Store(agyDb);
+      agyObserver = new AntigravityObserver({ root: agyRoot, store: agyStore });
+      await agyObserver.scan();
+      assert.equal(agyStore.cursor(), agyCursor);
+      for (const snapshot of agySnapshots) {
+        const current = await readFile(snapshot.path);
+        assert.equal(
+          createHash('sha256').update(current.subarray(0, snapshot.bytes.length)).digest('hex'),
+          snapshot.hash,
+        );
+      }
+      antigravityValidation = {
+        status: 'validated',
+        sourceFiles: selectedAntigravity.length,
+        sessions: agySessions.length,
+        workspaces: agyStore.workspaces().length,
+        events: agyCursor,
+        modelsObserved: new Set(agySessions.map((session) => session.model).filter(Boolean)).size,
+        usageRecordedSessions: agySessions.filter((session) => session.usageRecorded).length,
+        malformed: agyObserver.diagnostics.malformed,
+        errors: agyObserver.diagnostics.errors,
+        replayStable: true,
+        restartStable: true,
+        sourcePrefixesUnchanged: true,
+      };
+    } finally {
+      await agyObserver.stop();
+      agyStore.close();
+    }
+  }
+
   result = {
     kind: 'real-local-data-validation',
     sourceFiles: selected.length,
@@ -121,6 +245,7 @@ try {
     sourcePrefixesUnchanged: true,
     builtBridgeSmoke: withBrowser,
     realBrowserSmoke: withBrowser,
+    antigravity: antigravityValidation,
   };
 } finally {
   await observer.stop();

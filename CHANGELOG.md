@@ -1,5 +1,20 @@
 # Changelog
 
+## Google Antigravity read-only observer — 2026-11-18
+
+Added `@orqst/adapter-antigravity` and Bridge observer composition for external
+Google Antigravity CLI (`agy`) transcripts under
+`${ORQST_ANTIGRAVITY_HOME:-~/.gemini/antigravity-cli}/brain/<sessionId>/.system_generated/logs/transcript_full.jsonl`
+(fallback `transcript.jsonl`) plus bounded `cache/conversation_metadata.json`
+workspace resolution. Normalizes user messages, assistant responses, tool calls,
+tool outputs, model identifiers and explicit lifecycle states without opening
+live SQLite files or credentials. Because on-disk `PLANNER_RESPONSE` counters
+are per-step values without a cumulative session snapshot or plan/quota record,
+`tokenUsage` remains `false` and `usageRecorded` remains `false`. Added EN/PT
+`shell.adapters.antigravity` labels, synthetic normalizer/observer/Bridge tests,
+and disposable local validation in `pnpm validate:local`. See
+[docs/adapters/antigravity.md](docs/adapters/antigravity.md).
+
 ## Diag21 Codex and structured peer sessions — 2026-11-17
 
 The native terminal picker accepts the exact reviewed Apple Silicon Codex

@@ -16,7 +16,7 @@ const usage = z
 
 const modelRow = z
   .object({
-    adapter: z.enum(['codex', 'claude', 'opencode', 'manual']),
+    adapter: z.enum(['codex', 'claude', 'opencode', 'antigravity', 'manual']),
     provider: z.null(),
     model: z.string().nullable(),
     sessions: count,
