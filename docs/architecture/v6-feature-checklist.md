@@ -1,5 +1,11 @@
 # V6 feature delivery checklist — 2026-11-04
 
+## Confirmed terminal close
+
+The V6 Studio separates Hide from native-confirmed Close terminal. The Node
+and Rust terminal Cores retain journal evidence and fence each confirmed closed
+slot. See [workflow, capacity limits and native acceptance](../development/terminal-close.md).
+
 ## Native startup and terminal-opening performance — 2026-11-17
 
 - [x] Desktop snapshot availability during the initial scan with a localized history status.

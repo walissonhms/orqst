@@ -22,7 +22,6 @@ const ownedRetirementEvidenceSchema = z.strictObject({
           .optional(),
       }),
     )
-    .min(1)
     .max(1024),
 });
 export type OwnedTerminalRetirementEvidence = z.infer<typeof ownedRetirementEvidenceSchema>;
@@ -72,6 +71,7 @@ export class TauriTerminalRetirement {
     confirm?(detail: string): Promise<boolean>;
     /** Core proves nondispatch/owned exit; this checks known attempt identity, never CLI-use trust. */
     authorizeOwnedRetirement?(evidence: OwnedTerminalRetirementEvidence): boolean;
+    allowEmptyEvidence?: boolean;
     closeBrokers(): void;
   }): Promise<'retired' | 'cancelled' | 'denied' | 'busy'> {
     if (this.fenced || !ports.current()) return this.deny('fence_or_stale');
@@ -96,6 +96,7 @@ export class TauriTerminalRetirement {
         const evidence = ownedRetirementEvidenceSchema.parse(review.evidence);
         if (
           evidence.epoch !== review.challenge.epoch ||
+          (!ports.allowEmptyEvidence && evidence.attempts.length === 0) ||
           evidence.attempts.some(
             (attempt) =>
               attempt.epoch !== evidence.epoch || (attempt.state === 'exited' && !attempt.exit),

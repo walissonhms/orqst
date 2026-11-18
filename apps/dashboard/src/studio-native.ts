@@ -33,7 +33,7 @@ export function studioTerminals(
       ? evidence
       : undefined;
   return snapshot.slots
-    .filter((slot) => members.includes(slot.terminalId))
+    .filter((slot) => !slot.closed && members.includes(slot.terminalId))
     .map((slot) => {
       const label = `T-${String(slot.slot + 1).padStart(3, '0')}`;
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
@@ -106,7 +106,7 @@ export function arrangeRequest(
   const height = Math.max(1, Math.floor(viewport.height));
   const byId = new Map(layout.map((entry) => [entry.id, entry]));
   const panes = snapshot.slots
-    .filter((slot) => memberIds.includes(slot.terminalId))
+    .filter((slot) => !slot.closed && memberIds.includes(slot.terminalId))
     .map((slot) => {
       const entry = byId.get(slot.terminalId);
       const rect = entry?.rect ? clip(entry.rect, width, height) : null;

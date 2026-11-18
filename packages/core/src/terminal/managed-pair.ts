@@ -43,6 +43,7 @@ export class ManagedTerminalPair {
   private journals: TerminalJournal[];
   private attempts: Array<Set<string>>;
   private dispatched = new Set<string>();
+  private releasedSlots = new Set<number>();
   private reserved = false;
   private fenced = false;
   private retired = false;
@@ -219,7 +220,7 @@ export class ManagedTerminalPair {
   dispatch(slot: number, raw: unknown): unknown {
     this.active();
     const supervisor = this.slots[slot];
-    if (!supervisor) throw new Error('Unknown terminal slot');
+    if (!supervisor || this.releasedSlots.has(slot)) throw new Error('Unknown terminal slot');
     if (this.enrolledMembers.some((member) => member.slot === slot && member.status !== 'ready'))
       throw new Error('Terminal enrollment uncertain');
     const request = terminalRPCSchema.parse(raw);
@@ -268,8 +269,9 @@ export class ManagedTerminalPair {
   }
 
   private evidence(): PairEvidence {
-    if (!this.reserved || this.retired) throw new Error('No retirable terminal reservation');
-    this.admission.assertOwner();
+    if (this.retired || (!this.reserved && this.releasedSlots.size !== this.slots.length))
+      throw new Error('No retirable terminal reservation');
+    if (this.reserved) this.admission.assertOwner();
     if (this.retirement) return this.retirement;
     if (this.enrolledMembers.some((member) => member.status !== 'ready'))
       throw new Error('Uncertain enrollment retains terminal capacity');
@@ -277,14 +279,7 @@ export class ManagedTerminalPair {
     const attempts = this.attempts.flatMap((ids, slot) =>
       [...ids].map((id) => this.authoritySnapshot(slot, id)),
     );
-    if (
-      attempts.some(
-        (attempt) =>
-          !['prepared', 'exited', 'start_failed'].includes(attempt.state) ||
-          (this.dispatched.has(attempt.instanceId) &&
-            (attempt.state !== 'exited' || !attempt.exit)),
-      )
-    )
+    if (attempts.some((attempt) => this.unreleased(attempt)))
       throw new Error('Every dispatched terminal requires its owned exit');
     return { epoch: this.authority.epoch, attempts };
   }
@@ -306,6 +301,37 @@ export class ManagedTerminalPair {
         [...ids].map((id) => this.authoritySnapshot(slot, id)),
       ),
     };
+  }
+
+  ownedSlotInventory(slot: number) {
+    this.active();
+    if (
+      !this.slots[slot] ||
+      this.enrolledMembers.some((member) => member.slot === slot && member.status !== 'ready')
+    )
+      throw new Error('Terminal slot unavailable');
+    if (this.reserved) this.admission.assertOwner();
+    this.journals[slot]!.assertOwner();
+    return {
+      epoch: this.authority.epoch,
+      attempts: [...this.attempts[slot]!].map((id) => this.authoritySnapshot(slot, id)),
+    };
+  }
+
+  /** Fence the slot for this epoch while retaining its receipts for cohort retirement. */
+  releaseOwnedSlot(slot: number) {
+    const evidence = this.ownedSlotInventory(slot);
+    if (evidence.attempts.some((attempt) => this.unreleased(attempt)))
+      throw new Error('Every dispatched terminal requires its owned exit');
+    this.releasedSlots.add(slot);
+    return { evidence };
+  }
+
+  private unreleased(attempt: PairEvidence['attempts'][number]): boolean {
+    return (
+      !['prepared', 'exited', 'start_failed'].includes(attempt.state) ||
+      (this.dispatched.has(attempt.instanceId) && (attempt.state !== 'exited' || !attempt.exit))
+    );
   }
 
   /** Current owned exits/nondispatch only; deliberately does not release capacity. */
@@ -333,7 +359,7 @@ export class ManagedTerminalPair {
       digest: terminalDigest(JSON.stringify(evidence)),
     });
     if (!this.finishRetirement) {
-      const finish = this.admission.prepareRelease(evidence);
+      const finish = this.reserved ? this.admission.prepareRelease(evidence) : () => {};
       this.retirement = evidence;
       this.finishRetirement = finish;
       this.close(); // Fence all dispatch before releasing shared capacity.

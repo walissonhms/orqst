@@ -31,6 +31,7 @@ export class TauriTerminalLayout {
   private nativeGeneration = 0;
   private saveError = false;
   private arrangement?: Arrangement;
+  private readonly released = new Set<number>();
 
   constructor(
     private count: number,
@@ -59,6 +60,28 @@ export class TauriTerminalLayout {
     if (slot !== this.count || slot >= 8) throw new Error('Invalid layout append');
     this.count++;
     this.state.names.push('');
+  }
+
+  releasedSlot(slot: number): boolean {
+    return this.released.has(slot);
+  }
+
+  releaseSlot(slot: number): void {
+    this.released.add(slot);
+    this.arrangement = undefined;
+    this.removeReleased();
+    // The persisted layout can still refer to this historical UUID. The new
+    // presentation mapping reconciles it before saving any future edits.
+    this.publish();
+  }
+
+  private removeReleased(): void {
+    this.state.order = this.state.order.filter((slot) => !this.released.has(slot));
+    this.state.shown = this.state.shown.filter((slot) => !this.released.has(slot));
+    if (!this.state.order.includes(this.state.active))
+      this.state.active = this.state.shown[0] ?? this.state.order[0] ?? -1;
+    if (this.state.maximized !== null && !this.state.shown.includes(this.state.maximized))
+      this.state.maximized = null;
   }
 
   snapshot(): TerminalLayoutState {
@@ -351,6 +374,7 @@ export class TauriTerminalLayout {
     this.saveRevision++;
     this.preferences = { initial, save };
     this.state = structuredClone(initial);
+    this.removeReleased();
     this.saveError = false;
     this.persisted = true;
     this.firstOpen = false;
@@ -507,8 +531,9 @@ export class TauriTerminalLayout {
       this.suspended = true;
     } else if (action === 'hide') {
       state.shown = state.shown.filter((index) => index !== slot);
-      state.maximized = null;
-      state.active = state.order.find((index) => state.shown.includes(index)) ?? slot;
+      if (state.maximized === slot) state.maximized = null;
+      if (state.active === slot)
+        state.active = state.order.find((index) => state.shown.includes(index)) ?? slot;
     } else if (action === 'focus-other') {
       return this.open(state.order[(state.order.indexOf(slot) + 1) % state.order.length]!);
     } else if (

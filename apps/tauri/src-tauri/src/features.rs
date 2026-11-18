@@ -23,6 +23,7 @@ struct State {
     workspace_id: Option<String>,
     feature_revisions: HashMap<String, u64>,
     preparation_scope: Option<(Value, String, u64)>,
+    close_targets: HashMap<u64, String>,
     last_arrangement: Option<Instant>,
     arrangement_ticket: u64,
 }
@@ -262,6 +263,7 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                                 | "restore"
                                 | "move-earlier"
                                 | "move-later"
+                                | "close"
                         )
                     ),
                     Some("renamePane") => name(&value["name"]),
@@ -701,11 +703,13 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
                         | "selectedModel"
                         | "workspace"
                         | "agentState"
+                        | "closed"
                 )
             }) && o.contains_key("slot")
                 && o.contains_key("terminalId")
                 && o.contains_key("provider")
-        }) || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
+        }) || (s.get("closed").is_some() && s["closed"] != true)
+            || (s.get("workspace").is_some() && s["workspace"] != v["workspace"])
             || (s.get("agentState").is_some()
                 && !matches!(
                     s["agentState"].as_str(),
@@ -749,7 +753,15 @@ pub(crate) fn valid_reply(value: &Value) -> bool {
             })
             && matches!(
                 value["status"].as_str(),
-                Some("ok" | "denied" | "stale" | "busy" | "unavailable" | "archive_blocked")
+                Some(
+                    "ok" | "denied"
+                        | "stale"
+                        | "busy"
+                        | "unavailable"
+                        | "unknown"
+                        | "archive_blocked"
+                        | "cancelled"
+                )
             )
             && (value.get("snapshot").is_none() || valid_snapshot(&value["snapshot"]))
             && (value.get("canvas").is_none()
@@ -2020,11 +2032,35 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
     }, |cancelled| terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
 }
 
+pub(crate) fn is_terminal_close(request: &Value) -> bool {
+    request["action"] == "pane" && request["command"] == "close"
+}
+
+pub(crate) fn close_target_current(
+    app: &tauri::AppHandle,
+    request: &Value,
+    epoch: &str,
+    presentation: u64,
+) -> bool {
+    let state = app.state::<Features>();
+    let guard = state.0.lock().unwrap();
+    guard
+        .preparation_scope
+        .as_ref()
+        .is_some_and(|(_, known, layout)| known == epoch && *layout == presentation)
+        && request["generation"].as_u64() == Some(guard.snapshot_generation)
+        && request["slot"]
+            .as_u64()
+            .and_then(|slot| guard.close_targets.get(&slot))
+            .is_some_and(|id| request["terminalId"] == id.as_str())
+}
+
 fn changes_presentation(request: &Value) -> bool {
-    matches!(
-        request["action"].as_str(),
-        Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
-    )
+    !is_terminal_close(request)
+        && matches!(
+            request["action"].as_str(),
+            Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
+        )
 }
 
 #[tauri::command]
@@ -2048,7 +2084,8 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
     let Some((source, document)) = identity(&window) else {
         return deny("identity");
     };
-    if request["action"] == "arrange" && source != CHROME_URL {
+    let close = is_terminal_close(&request);
+    if (request["action"] == "arrange" || close) && source != CHROME_URL {
         return deny("source");
     }
     let app = window.app_handle();
@@ -2121,6 +2158,48 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         guard.sequence += 1;
         format!("00000000-6990-4000-8000-{:012x}", guard.sequence)
     };
+    if close {
+        use crate::terminal;
+        let current = || close_target_current(app, &request, &epoch, presentation);
+        if !current() {
+            return json!({"status":"stale"});
+        }
+        if !terminal::permission_review_begin(app, &epoch, presentation, &id) {
+            return json!({"status":"busy"});
+        }
+        return with_metadata_completion(
+            async {
+                if !terminal::confirm_terminal_close(
+                    app,
+                    window.clone(),
+                    request.clone(),
+                    &epoch,
+                    presentation,
+                    document,
+                    &id,
+                )
+                .await
+                {
+                    return json!({"status":"cancelled"});
+                }
+                if !current() {
+                    return denied();
+                }
+                terminal::permission_review_request(
+                    app,
+                    window.clone(),
+                    json!({"kind":"feature-request", "id":id, "source":source,
+                        "document":document, "request":request}),
+                    presentation,
+                    &epoch,
+                    &id,
+                )
+                .await
+            },
+            |cancelled| terminal::permission_review_finish(app, &epoch, &id, cancelled),
+        )
+        .await;
+    }
     // Keep bilateral review exclusion through final focus/context validation and publication.
     let completion_id = id.clone();
     with_metadata_completion(
@@ -2197,7 +2276,8 @@ fn cache_snapshot(guard: &mut State, snapshot: &Value, presentation: u64, epoch:
     {
         return false;
     }
-    for feature in snapshot["features"].as_array().unwrap() {
+    let features = snapshot["features"].as_array().unwrap();
+    for feature in features {
         let id = feature["featureId"].as_str().unwrap();
         let revision = feature["revision"].as_u64().unwrap();
         if guard
@@ -2214,6 +2294,40 @@ fn cache_snapshot(guard: &mut State, snapshot: &Value, presentation: u64, epoch:
             feature["revision"].as_u64().unwrap(),
         );
     }
+    let active = features
+        .iter()
+        .find(|feature| feature["featureId"] == snapshot["activeFeatureId"]);
+    guard.close_targets = snapshot["slots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|slot| slot["closed"] != true)
+        .filter(|slot| {
+            active.map_or_else(
+                || {
+                    !features.iter().any(|f| {
+                        f["terminalIds"]
+                            .as_array()
+                            .unwrap()
+                            .contains(&slot["terminalId"])
+                    })
+                },
+                |f| {
+                    f["status"] != "archived"
+                        && f["terminalIds"]
+                            .as_array()
+                            .unwrap()
+                            .contains(&slot["terminalId"])
+                },
+            )
+        })
+        .map(|slot| {
+            (
+                slot["slot"].as_u64().unwrap(),
+                slot["terminalId"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
     guard.snapshot_generation = generation;
     guard.view_revision = revision;
     guard.workspace_id = Some(workspace.into());

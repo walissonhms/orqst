@@ -152,7 +152,14 @@ fn pair_rpc_drives_a_real_owned_pty() {
         let r = core.handle(&json!({"kind": "terminal", "slot": 0, "request": {"id": uuid::Uuid::new_v4().to_string(), "operation": "snapshot", "args": [id]}})).unwrap();
         r["value"]["state"].as_str().unwrap().to_owned()
     };
+    let member_call = |core: &mut Core, kind: &str| {
+        core.handle(&json!({"kind":kind, "slot":0, "id":uuid::Uuid::new_v4().to_string()}))
+            .unwrap()
+    };
     pump(&mut core, &|c| state(c, &id) == "running");
+    assert_eq!(member_call(&mut core, "releaseOwnedSlot")["ok"], false);
+    assert_eq!(member_call(&mut core, "closeSlot")["ok"], true);
+    assert_eq!(state(&mut core, &id), "running");
     let challenge = call(&mut core, "requestAttach", json!(["desktop-managed", id]));
     let attachment = call(&mut core, "attach", json!([id, sign(&key, &challenge)]));
     let challenge = call(&mut core, "requestInput", json!([id, attachment]));
@@ -206,6 +213,20 @@ fn pair_rpc_drives_a_real_owned_pty() {
     );
     // Invalid request shape is a protocol violation (host shuts the Core down).
     assert!(core.handle(&json!({"kind": "terminal", "slot": 0, "request": {"id": "x", "operation": "snapshot", "args": [id]}})).is_none());
+    let release = member_call(&mut core, "releaseOwnedSlot");
+    assert_eq!(release["ok"], true);
+    assert_eq!(
+        release["value"]["evidence"]["attempts"][0]["instanceId"],
+        id
+    );
+    assert_eq!(
+        release["value"]["evidence"]["attempts"][0]["exit"],
+        snapshot["exit"]
+    );
+    assert_eq!(
+        core.handle(&json!({"kind": "terminal", "slot": 0, "request": {"id": uuid::Uuid::new_v4().to_string(), "operation": "snapshot", "args": [id]}})).unwrap()["ok"],
+        false
+    );
     // Retirement: exits are owned, so the signed retire succeeds once.
     let r = core
         .handle(&json!({"kind": "prepareRetire", "id": uuid::Uuid::new_v4().to_string()}))

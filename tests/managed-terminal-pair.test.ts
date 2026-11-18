@@ -257,3 +257,46 @@ test('one uncertain slot in a six-member team keeps the entire reservation stick
     f.close();
   }
 });
+
+test('release requires owned exit evidence and fences one pane without losing peer or journal', () => {
+  const f = fixture(2, true);
+  try {
+    const first = f.launch(0);
+    const second = f.launch(1);
+    assert.throws(() => f.pair.releaseOwnedSlot(0), /owned exit/);
+    f.events[0]!.exit(0, undefined, { startedAt: 100, exitedAt: 150 });
+    const closed = f.pair.releaseOwnedSlot(0);
+    assert.equal(closed.evidence.attempts[0]?.instanceId, first);
+    assert.throws(() => f.prepare(0), /slot/);
+    assert.equal((f.call(1, 'snapshot', [second]) as { state: string }).state, 'running');
+    assert.equal(f.pair.ownedShutdownInventory().attempts.length, 2);
+    assert.equal(existsSync(join(f.directory, 'active-pair.json')), true);
+    f.events[1]!.exit(0, undefined, { startedAt: 100, exitedAt: 160 });
+    f.pair.releaseOwnedSlot(1);
+    const review = f.pair.prepareRetire();
+    f.pair.retire(f.proof(review.challenge));
+    const archive = readdirSync(f.directory).find((name) => name.startsWith('retired-'))!;
+    assert.match(readFileSync(join(f.directory, archive), 'utf8'), new RegExp(first));
+    assert.match(readFileSync(join(f.directory, archive), 'utf8'), new RegExp(second));
+    assert.equal(existsSync(join(f.directory, 'active-pair.json')), false);
+  } finally {
+    f.close();
+  }
+});
+
+test('a fully released undispatched pool closes without inventing a reservation or exit', () => {
+  const f = fixture(1);
+  try {
+    assert.throws(() => f.pair.prepareRetire(), /reservation/);
+    assert.deepEqual(f.pair.releaseOwnedSlot(0).evidence.attempts, []);
+    const review = f.pair.prepareRetire();
+    f.pair.retire(f.proof(review.challenge));
+    assert.equal(existsSync(join(f.directory, 'active-pair.json')), false);
+    assert.deepEqual(
+      readdirSync(f.directory).filter((name) => name.startsWith('retired-')),
+      [],
+    );
+  } finally {
+    f.close();
+  }
+});

@@ -252,12 +252,18 @@ export async function connectManagedTerminalCore(
         ...(body.kind === 'terminal' ? {} : { id }),
       });
       const enrollment = body.kind === 'enroll' || body.kind === 'enrollmentInspect';
-      if (ownedShutdownMode && shutdownTimeouts.size >= 128)
+      const ownedLifecycle =
+        ownedShutdownMode ||
+        request.kind === 'ownedSlotInventory' ||
+        request.kind === 'releaseOwnedSlot' ||
+        (request.kind === 'terminal' &&
+          ['requestStop', 'stop'].includes(request.request.operation));
+      if (ownedLifecycle && shutdownTimeouts.size >= 128)
         return reject(new Error('Owned shutdown transport budget exhausted'));
       if (enrollment && enrollmentTimeouts.size >= 128)
         return reject(new TerminalEnrollmentUncertain('Enrollment transport budget exhausted'));
       const timer = setTimeout(() => {
-        if (ownedShutdownMode) {
+        if (ownedLifecycle) {
           pending.delete(id);
           shutdownTimeouts.add(id);
           reject(new Error('Owned shutdown reply unconfirmed'));
@@ -482,6 +488,8 @@ export async function connectManagedTerminalCore(
       });
     },
     closeSlot: (slot: number) => call({ kind: 'closeSlot', slot }),
+    ownedSlotInventory: (slot: number) => call({ kind: 'ownedSlotInventory', slot }),
+    releaseOwnedSlot: (slot: number) => call({ kind: 'releaseOwnedSlot', slot }),
     beginOwnedShutdown: () => {
       ownedShutdownMode = true;
       return call({ kind: 'beginOwnedShutdown' });

@@ -67,6 +67,7 @@ export function FeatureWorkspace({
   const [limits, setLimits] = useState<AccountLimit[]>([]);
   /** Last refused native frame, shown so a hidden terminal is never silent. */
   const [arrangeIssue, setArrangeIssue] = useState('');
+  const [closeIssue, setCloseIssue] = useState(false);
   // Proven pair communication only; events older than the view are history, not new effects.
   const [communication, setCommunication] = useState<
     {
@@ -161,13 +162,21 @@ export function FeatureWorkspace({
   const editorVersion = useRef(0);
   const current = useRef<FeatureNativeSnapshot | undefined>(undefined);
   const noticeContext = useRef<FeatureNoticeContext | null>(null);
+  const acceptSnapshot = useCallback((incoming: FeatureNativeSnapshot) => {
+    if (current.current && incoming.generation < current.current.generation) return false;
+    current.current = incoming;
+    setSnapshot(incoming);
+    return true;
+  }, []);
   const selected = snapshot?.features.find(
     (feature) => feature.featureId === snapshot.activeFeatureId,
   );
   const assigned = snapshot?.features.flatMap((feature) => feature.terminalIds) ?? [];
-  const unassigned = snapshot?.slots.filter((slot) => !assigned.includes(slot.terminalId)) ?? [];
+  const unassigned =
+    snapshot?.slots.filter((slot) => !slot.closed && !assigned.includes(slot.terminalId)) ?? [];
   const members = selected ? selected.terminalIds : unassigned.map((slot) => slot.terminalId);
-  const available = snapshot?.slots.filter((slot) => members.includes(slot.terminalId)) ?? [];
+  const available =
+    snapshot?.slots.filter((slot) => !slot.closed && members.includes(slot.terminalId)) ?? [];
   const canvasAgents = useMemo(
     () => canvasMembers(snapshot, panes, evidence, now),
     [snapshot, panes, evidence, now],
@@ -295,9 +304,12 @@ export function FeatureWorkspace({
             // Native keeps one frame per 16 ms: resend the latest one shortly after.
             if (reply.status === 'busy') return resendLatest(40);
             // A newer generation hides the views until a matching frame: resend with it.
-            if (retry && reply.snapshot && reply.snapshot.generation !== snapshotNow.generation) {
-              current.current = reply.snapshot;
-              setSnapshot(reply.snapshot);
+            if (
+              retry &&
+              reply.snapshot &&
+              reply.snapshot.generation > snapshotNow.generation &&
+              acceptSnapshot(reply.snapshot)
+            ) {
               void send(reply.snapshot, false);
               return;
             }
@@ -313,9 +325,7 @@ export function FeatureWorkspace({
                   action: 'snapshot',
                 })
                 .then((fresh) => {
-                  if (!fresh.snapshot) return;
-                  current.current = fresh.snapshot;
-                  setSnapshot(fresh.snapshot);
+                  if (fresh.snapshot) acceptSnapshot(fresh.snapshot);
                 })
                 .catch(() => undefined);
             }
@@ -327,12 +337,15 @@ export function FeatureWorkspace({
           })
           .catch(() => {
             setArrangeIssue('unavailable');
-            resendLatest(2500);
+            if (arrangeRetry.current.attempt < 8) {
+              arrangeRetry.current.attempt++;
+              resendLatest(2500);
+            }
           });
       };
       void send(live, true);
     },
-    [native],
+    [native, acceptSnapshot],
   );
   arrangeRef.current = arrange;
   useEffect(() => () => window.clearTimeout(arrangeRetry.current.timer), []);
@@ -416,11 +429,12 @@ export function FeatureWorkspace({
         if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
         if (reply.mention) lastMention.current = reply.mention;
         if (reply.communication) setCommunication(reply.communication.events);
-        if (reply.snapshot) {
-          current.current = reply.snapshot;
-          setSnapshot(reply.snapshot);
-        }
-        if (reply.status !== 'ok') {
+        if (reply.snapshot) acceptSnapshot(reply.snapshot);
+        if (
+          reply.status !== 'ok' &&
+          reply.status !== 'cancelled' &&
+          !(action.action === 'pane' && action.command === 'close')
+        ) {
           noticeContext.current = featureNoticeContext(
             current.current,
             current.current?.activeFeatureId ?? null,
@@ -439,7 +453,7 @@ export function FeatureWorkspace({
         }
       }
     },
-    [native],
+    [native, acceptSnapshot],
   );
 
   useEffect(() => {
@@ -448,9 +462,7 @@ export function FeatureWorkspace({
     const update = (event: Event) => {
       const incoming = (event as CustomEvent<FeatureNativeSnapshot>).detail;
       // The native client validates this event before dispatching it. Older ACKs are inert.
-      if (!current.current || incoming.generation >= current.current.generation) {
-        current.current = incoming;
-        setSnapshot(incoming);
+      if (acceptSnapshot(incoming)) {
         const context = noticeContext.current;
         if (context) setNotice((value) => featureNoticeAfterSnapshot(value, context, incoming));
       }
@@ -460,7 +472,7 @@ export function FeatureWorkspace({
       live.current = false;
       window.removeEventListener('orqst-feature-state', update);
     };
-  }, [request]);
+  }, [request, acceptSnapshot]);
   useEffect(() => {
     // Native and Studio views keep asking: the first read can arrive before the host is
     // ready, and without a snapshot no layout reaches the native terminal views.
@@ -1086,6 +1098,11 @@ export function FeatureWorkspace({
                     {t(`features.${prepareIssue || notice}`)}
                   </span>
                 )}
+                {closeIssue && (
+                  <span className="ts-arrange-issue" role="status">
+                    {t('terminalStudio.closeTerminal.unconfirmed')}
+                  </span>
+                )}
                 {arrangeIssue && (
                   <span className="ts-arrange-issue" role="status">
                     {arrangeIssue === 'denied'
@@ -1118,8 +1135,24 @@ export function FeatureWorkspace({
                 ) : null}
               </>
             }
-            // Hide from view only: the process keeps running (Hide ≠ Stop ≠ Terminate).
-            onClose={() => 'minimize' as const}
+            {...(nativeWorkspace && selected?.status !== 'archived'
+              ? {
+                  closePending: busy || quitFence,
+                  onCloseTerminal: (terminalId: string) => {
+                    const member = available.find((entry) => entry.terminalId === terminalId);
+                    if (!member) return;
+                    setCloseIssue(false);
+                    void request({
+                      action: 'pane',
+                      slot: member.slot,
+                      terminalId,
+                      command: 'close',
+                    }).then((status) => {
+                      if (status && status !== 'ok' && status !== 'cancelled') setCloseIssue(true);
+                    });
+                  },
+                }
+              : {})}
             onMention={async ({ from, to, text }) => {
               // v1 records the attempt; no structured route exists yet, so nothing is delivered.
               lastMention.current = null;

@@ -70,7 +70,7 @@ export function canvasMembers(
       .filter((slot) => !assigned.includes(slot.terminalId))
       .map((slot) => slot.terminalId);
   return snapshot.slots
-    .filter((slot) => members.includes(slot.terminalId))
+    .filter((slot) => !slot.closed && members.includes(slot.terminalId))
     .map((slot) => {
       const pane = panes.find((entry) => entry.slot === slot.slot);
       const process =

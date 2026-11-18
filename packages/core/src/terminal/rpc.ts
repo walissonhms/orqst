@@ -155,6 +155,15 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('layoutRead'), id }),
   z.strictObject({ kind: z.literal('layoutSave'), id, record: terminalLayoutRecordSchema }),
   z.strictObject({ kind: z.literal('layoutImport'), id, record: terminalLayoutRecordSchema }),
+  z.strictObject({
+    kind: z.enum(['ownedSlotInventory', 'releaseOwnedSlot']),
+    id,
+    slot: z
+      .number()
+      .int()
+      .min(0)
+      .max(TERMINAL_SLOT_CEILING - 1),
+  }),
   z.strictObject({ kind: z.literal('beginOwnedShutdown'), id }),
   z.strictObject({ kind: z.literal('preserveOwnedShutdown'), id }),
   z.strictObject({ kind: z.literal('prepareRetire'), id }),

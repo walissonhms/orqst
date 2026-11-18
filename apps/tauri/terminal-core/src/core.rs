@@ -29,6 +29,10 @@ pub trait Extensions {
     fn close(&mut self) {}
     /// `closeSlot` side effects (MCP invalidation). The hub inbox survives.
     fn slot_closed(&mut self, _slot: usize) {}
+    /// Remove an exited slot from live destination discovery while preserving its mailbox.
+    fn slot_released(&mut self, slot: usize) {
+        self.slot_closed(slot);
+    }
     /// OpenCode slots (initial or enrolled) keep capacity reserved: retirement is refused.
     fn retire_blocked(&self) -> bool {
         false
@@ -156,8 +160,23 @@ impl Core {
                     return None;
                 }
                 self.extensions.slot_closed(slot);
-                self.pair.close_slot(slot);
                 Some(Ok(None))
+            }
+            "ownedSlotInventory" | "releaseOwnedSlot" => {
+                let slot = raw.get("slot")?.as_u64().filter(|s| *s < 8)? as usize;
+                if !exact(&["kind", "id", "slot"]) {
+                    return None;
+                }
+                let result = if kind == "releaseOwnedSlot" {
+                    let result = self.pair.release_owned_slot(slot);
+                    if result.is_ok() {
+                        self.extensions.slot_released(slot);
+                    }
+                    result
+                } else {
+                    self.pair.owned_slot_inventory(slot)
+                };
+                Some(result.map(Some))
             }
             "beginOwnedShutdown" => {
                 if !exact(&["kind", "id"]) {

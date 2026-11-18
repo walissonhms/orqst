@@ -987,3 +987,23 @@ It grants geometry only. Other mutable actions keep exact-document focus.
 Frames inside 16 ms are delayed and coalesced to the latest waiting request;
 superseded frames and bilateral metadata conflicts can still return `busy`.
 See [source diagnosis, research and limits](../research/studio-arrangement-focus.md).
+
+## Confirmed Close terminal
+
+The Feature Chrome accepts `action: "pane", command: "close"` with a current
+metadata generation, native slot and stable terminal UUID. The owning native
+Studio document and exact Feature membership must match before and after the
+native confirmation. The command accepts no PID, path, signal or proof from
+the renderer and is unavailable through the observer API.
+
+The inherited Core pipe admits `ownedSlotInventory` and `releaseOwnedSlot` for
+the exact slot. Release verifies journal ownership and confirms prior attempts
+are undispatched or have owned exit evidence. The process stop uses the
+existing signed `SIGTERM` operation. Close can return `cancelled`, `busy`,
+`denied` or `unknown`. Successful close marks that epoch's terminal snapshot
+slot with `closed: true`. Closed entries retain their historical UUID and
+cannot be restored through native view actions.
+
+The private Tauri host acknowledges a confirmed whole-cohort retirement or
+durable pending OpenCode exit after the Core has stopped. See the
+[operator workflow and acceptance checks](../development/terminal-close.md).

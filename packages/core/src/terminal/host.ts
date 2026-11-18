@@ -519,13 +519,18 @@ async function start() {
           case 'terminal':
             value = pair.dispatch(request.slot, request.request);
             break;
-          case 'closeSlot': {
+          case 'closeSlot':
+            // A lost document invalidates MCP grants while its owned PTY and journal live on.
             mcp?.invalidate();
-            // The terminal's hub inbox survives a view close or reload (unread messages
-            // were already reported as queued to their senders).
-            pair.closeSlot(request.slot);
             break;
-          }
+          case 'ownedSlotInventory':
+            value = pair.ownedSlotInventory(request.slot);
+            break;
+          case 'releaseOwnedSlot':
+            value = pair.releaseOwnedSlot(request.slot);
+            hubSlots[request.slot] = undefined;
+            mcp?.invalidate();
+            break;
           case 'beginOwnedShutdown':
             draining = true;
             mcp?.invalidate();
