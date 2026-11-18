@@ -1140,6 +1140,7 @@
       "choosePaths": "Escolher pasta e executável…",
       "catalog_ready": "O executável instalado corresponde à versão revisada. Escolha um modelo para continuar.",
       "catalog_executable_not_found": "O executável da CLI não foi encontrado na busca local.",
+      "catalog_antigravity_executable_unreviewed": "CLI atualizado · revisão necessária",
       "catalog_executable_unreviewed": "A CLI instalada diverge das versões e somas de verificação revisadas para terminais gerenciados.",
       "catalog_executable_inspection_failed": "Não foi possível verificar o executável local da CLI.",
       "catalog_ambiguous_executable": "Foram encontradas várias instalações. Escolha explicitamente o executável nativo revisado em Avançado.",
@@ -1470,6 +1471,12 @@
     "ownershipUncertain": "Estado incerto",
     "inspect": "Ver detalhes",
     "reopen": "Reabrir",
+    "recoveryIntro": "A propriedade desta sessão ainda não foi verificada.",
+    "recoveryQuit": "Encerre o ORQST normalmente para que a recuperação inicie sem o Core normal.",
+    "recoveryStart": "Execute o binário do ORQST com --offline-recovery para abrir a janela nativa de recuperação.",
+    "recoveryVerify": "Use as revisões nativas para capturar a reserva, verificar as evidências exigidas do kernel e da sessão e autorizar a liberação. Siga a orientação da recuperação caso seja necessário reiniciar o computador.",
+    "reopenBlocked": "A sessão anterior está preservada. A CLI e o modelo revisados precisam estar disponíveis para reabri-la.",
+    "removalUnconfirmed": "Remoção não confirmada. Atualize antes de tentar novamente.",
     "remove": "Remover da Feature"
   },
   "terminalStudio": {
@@ -1572,6 +1579,7 @@
       "unavailable": "Indisponível",
       "reason_ready": "Pronto",
       "reason_executable_not_found": "CLI não encontrada",
+      "reason_antigravity_executable_unreviewed": "CLI atualizado · revisão necessária",
       "reason_executable_unreviewed": "Versão ou checksum da CLI não revisado",
       "reason_executable_inspection_failed": "Falha ao verificar a CLI",
       "reason_ambiguous_executable": "Várias instalações da CLI encontradas",

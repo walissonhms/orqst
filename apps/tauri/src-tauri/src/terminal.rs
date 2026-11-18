@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::menu::{Menu, MenuItem, Submenu};
 use tauri::webview::NewWindowResponse;
 use tauri::webview::WebviewBuilder;
@@ -943,6 +943,84 @@ fn send(app: &tauri::AppHandle, message: Value) -> bool {
     bytes.len() <= 128 * 1024 && running.child.write(bytes.as_bytes()).is_ok()
 }
 
+/// Consume only newly admitted slots of a single native Open gesture. All starts are
+/// issued before awaiting any reply. The Node broker signs only an allowed policy's
+/// start challenge. Each existing foreground intent remains solely for focus/attachment.
+pub(crate) fn dispatch_prepared_starts(app: &tauri::AppHandle, slots: &[usize]) {
+    if slots.len() < 2 || presentation_blocked(app) {
+        return;
+    }
+    let pending = {
+        let state = app.state::<Terminals>();
+        let mut guard = state.0.lock().unwrap();
+        let Some(running) = guard.as_mut() else { return };
+        if running.enrollment_pending || running.retiring || running.confirming_quit
+            || running.exit_authorized || running.native_dialog.is_some()
+            || running.metadata_mutating.is_some() || running.mcp_request.is_some()
+        {
+            return;
+        }
+        let now = Instant::now();
+        let deadline = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default()
+            .as_millis().saturating_add(10_000) as u64;
+        let mut pending = Vec::new();
+        for &slot in slots {
+            let Some(Some(intent)) = running.pending_open.get(slot) else { continue };
+            if !intent.current(running.generations[slot], running.layout_generation, now)
+                || running.busy[slot] || running.revoked[slot]
+                || running.released_slots.contains(&slot) || running.first_output_diagnostics[slot].is_some()
+            {
+                continue;
+            }
+            let profile_id = intent.profile.clone();
+            let diagnostic = running.opening_diagnostics[slot].clone().unwrap_or_default();
+            diagnostic.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
+            running.first_output_diagnostics[slot] = Some(diagnostic.clone());
+            running.busy[slot] = true;
+            running.sequence += 1;
+            let id = format!("00000000-0000-4000-8000-{:012x}", running.sequence);
+            let (sender, receiver) = oneshot::channel();
+            running.pending.insert(id.clone(), sender);
+            let bytes = format!("{}\n", json!({
+                "kind":"startPrepared", "id":id, "slot":slot, "profileId":profile_id,
+                "expiresAt":deadline
+            }));
+            if running.child.write(bytes.as_bytes()).is_err() {
+                // A short or lost write may have reached the broker. Never repeat it here.
+                running.pending.remove(&id);
+                running.busy[slot] = false;
+                diagnostic.record(Stage::CliOpening, Outcome::Uncertain, Effects::Possible);
+                continue;
+            }
+            pending.push((slot, id, receiver, diagnostic, running.epoch.clone()));
+        }
+        pending
+    };
+    for (slot, id, receiver, diagnostic, epoch) in pending {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let reply = tokio::time::timeout(Duration::from_secs(12), receiver).await;
+            let state = app.state::<Terminals>();
+            let mut guard = state.0.lock().unwrap();
+            let Some(running) = guard.as_mut().filter(|running| running.epoch == epoch) else { return };
+            running.pending.remove(&id);
+            running.busy[slot] = false;
+            match reply {
+                Ok(Ok(value)) if value["status"] == "ok" => {
+                    diagnostic.record(Stage::CliOpening, Outcome::Started, Effects::Possible);
+                }
+                Ok(Ok(value)) if matches!(value["status"].as_str(), Some("denied" | "busy")) => {
+                    // No launch occurred. The normal focused path may still request a fresh review.
+                    running.opening_diagnostics[slot] = Some(diagnostic.clone());
+                    running.first_output_diagnostics[slot] = None;
+                    diagnostic.record(Stage::CliOpening, Outcome::Refused, Effects::NotStarted);
+                }
+                _ => diagnostic.record(Stage::CliOpening, Outcome::Uncertain, Effects::Possible),
+            }
+        });
+    }
+}
+
 #[cfg(test)]
 mod presentation_phase_tests {
     use crate::host_phase::Phase;
@@ -965,6 +1043,21 @@ mod tests {
         document_slot, metadata_reply_matches, release_metadata, review_available, MetadataPending,
     };
     use serde_json::json;
+
+    #[test]
+    fn first_pty_output_is_a_nonempty_correlated_read_without_a_snapshot() {
+        let id = "2de8f070-426c-4453-ac70-8ab30fffdecf";
+        let request = json!({"action": "read", "instanceId": id});
+        let mut reply = json!({
+            "status": "ok", "instanceId": id,
+            "output": {"bytes": [111, 107], "nextCursor": 2, "gap": false}
+        });
+        assert!(super::first_pty_frame(&request, &reply));
+        assert!(!super::first_pty_frame(&json!({"action": "snapshot", "instanceId": id}), &reply));
+        assert!(!super::first_pty_frame(&json!({"action": "read", "instanceId": "a7d4f094-67f5-45d1-a44b-19e353395878"}), &reply));
+        reply["output"]["bytes"] = json!([]);
+        assert!(!super::first_pty_frame(&request, &reply));
+    }
 
     #[test]
     fn metadata_cleanup_is_owned_and_snapshot_or_old_guard_cannot_release_another_mutation() {
@@ -1167,46 +1260,61 @@ async fn dispatch_terminal_request(
     value
 }
 
-fn observe_owned_terminal_reply(app: &tauri::AppHandle, slot: usize, value: &Value) {
+/// Only a correlated private broker read with a nonempty frame counts.
+fn first_pty_frame(request: &Value, value: &Value) -> bool {
+    request["action"] == "read"
+        && value["status"] == "ok"
+        && crate::features::uuid(&value["instanceId"])
+        && request["instanceId"] == value["instanceId"]
+        && value["output"]["bytes"].as_array().is_some_and(|bytes| {
+            // The private Node broker validates every byte at its wire boundary.
+            !bytes.is_empty() && bytes.len() <= 64 * 1024
+        })
+}
+
+fn observe_owned_terminal_reply(app: &tauri::AppHandle, slot: usize, request: &Value, value: &Value) {
+    let read_frame = first_pty_frame(request, value);
     let snapshot = &value["snapshot"];
-    if value["status"] != "ok"
-        || !crate::features::uuid(&snapshot["instanceId"])
-        || value["instanceId"] != snapshot["instanceId"]
-    {
-        return;
-    }
-    let instance = snapshot["instanceId"].as_str().unwrap();
-    let first_output = value["output"]["bytes"].as_array().is_some_and(|bytes| !bytes.is_empty());
-    let phase = match snapshot["state"].as_str() {
-        Some("running") if first_output => "live",
-        Some("exited") => "exited",
-        Some("ownership_lost") => "uncertain",
-        _ => return,
-    };
+    let snapshot_matches = value["status"] == "ok"
+        && crate::features::uuid(&snapshot["instanceId"])
+        && value["instanceId"] == snapshot["instanceId"];
+    let instance = value["instanceId"].as_str().unwrap_or_default();
     let context = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(running) = guard.as_mut() else {
             return;
         };
-        if snapshot["epoch"] != running.epoch
-            || running.released_slots.contains(&slot)
-            || running.lifecycle_reports.get(slot).is_none()
-            || running.lifecycle_reports[slot]
-                .as_ref()
-                .is_some_and(|(id, report)| id == instance && *report == phase)
-        {
+        if running.released_slots.contains(&slot) || running.lifecycle_reports.get(slot).is_none() {
             return;
         }
-        if first_output {
+        if read_frame {
             if let Some(diagnostic) = running.first_output_diagnostics[slot].take() {
                 diagnostic.record(Stage::FirstPtyOutput, Outcome::Ready, Effects::Possible);
             }
         }
-        (running.epoch.clone(), running.layout_generation)
+        let previous = running.lifecycle_reports[slot].as_ref();
+        let phase = if snapshot_matches && snapshot["epoch"] == running.epoch {
+            match snapshot["state"].as_str() {
+                Some("exited") => "exited",
+                Some("ownership_lost") => "uncertain",
+                _ => return,
+            }
+        } else if read_frame && !previous.is_some_and(|(id, report)| {
+            id == instance && matches!(*report, "exited" | "uncertain")
+        }) {
+            "live"
+        } else {
+            return;
+        };
+        if previous.is_some_and(|(id, report)| id == instance && *report == phase) {
+            return;
+        }
+        (running.epoch.clone(), running.layout_generation, phase)
     };
+    let (epoch, layout_generation, phase) = context;
     let mut evidence = json!({
-        "transport":"connected", "process":phase, "firstFrame":first_output
+        "transport":"connected", "process":phase, "firstFrame":read_frame
     });
     if phase == "exited" {
         if let Some(code) = snapshot["exit"]["exitCode"].as_i64().filter(|code| {
@@ -1215,11 +1323,11 @@ fn observe_owned_terminal_reply(app: &tauri::AppHandle, slot: usize, value: &Val
             evidence["exitCode"] = json!(code);
         }
     }
-    if crate::features::publish_terminal_lifecycle(app, slot, &context.0, context.1, &evidence) {
+    if crate::features::publish_terminal_lifecycle(app, slot, &epoch, layout_generation, &evidence) {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         if let Some(running) = guard.as_mut().filter(|running| {
-            running.epoch == context.0 && running.layout_generation == context.1
+            running.epoch == epoch && running.layout_generation == layout_generation
         }) {
             running.lifecycle_reports[slot] = Some((instance.into(), phase));
         }
@@ -1300,7 +1408,9 @@ async fn dispatch_terminal_request_inner(
         running.sequence += 1;
         if request["action"] == "open" {
             running.pending_open[slot] = None;
-            running.first_output_diagnostics[slot] = diagnostic.cloned();
+            if running.first_output_diagnostics[slot].is_none() {
+                running.first_output_diagnostics[slot] = diagnostic.cloned();
+            }
         }
         let id = format!("00000000-0000-4000-8000-{:012x}", running.sequence);
         let bytes = format!(
@@ -1367,7 +1477,7 @@ async fn dispatch_terminal_request_inner(
     match result {
         Ok(Ok(value)) => {
             if matches!(request["action"].as_str(), Some("open" | "read" | "snapshot")) {
-                observe_owned_terminal_reply(&app, slot, &value);
+                observe_owned_terminal_reply(&app, slot, &request, &value);
             }
             value
         }
@@ -3228,7 +3338,7 @@ async fn enroll_selected_inner(
         r.loaded.push(false);
         r.revoked.push(false);
         r.pending_open.push(None);
-        r.opening_diagnostics.push(Some(diagnostic.clone()));
+        r.opening_diagnostics.push(Some(diagnostic.member()));
         r.first_output_diagnostics.push(None);
         r.lifecycle_reports.push(None);
         r.busy.push(false);
@@ -3577,7 +3687,7 @@ async fn start_selected_inner(
         revoked: vec![false; count],
         released_slots: Vec::new(),
         pending_open: (0..count).map(|_| None).collect(),
-        opening_diagnostics: (0..count).map(|_| Some(diagnostic.clone())).collect(),
+        opening_diagnostics: (0..count).map(|_| Some(diagnostic.member())).collect(),
         first_output_diagnostics: vec![None; count],
         lifecycle_reports: vec![None; count],
         pending: HashMap::new(),
@@ -4236,7 +4346,7 @@ mod opening_tests {
         OpeningIntent,
     };
     use serde_json::json;
-    use std::time::{Duration, Instant};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn layout_responder_requires_the_same_owned_epoch_presentation_and_loaded_document() {
@@ -4382,7 +4492,7 @@ mod enrollment_tests {
         workspace_detail, OpeningIntent,
     };
     use serde_json::json;
-    use std::time::{Duration, Instant};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
     #[test]
     fn only_exact_ready_receipts_can_append_native_documents() {
         let id = "00000000-0000-4000-8000-000000000010";

@@ -35,7 +35,9 @@ export function studioTerminals(
   return snapshot.slots
     .filter((slot) => !slot.closed && members.includes(slot.terminalId))
     .map((slot) => {
-      const label = `T-${String(slot.slot + 1).padStart(3, '0')}`;
+      const label =
+        selected?.terminalDisplays?.find(({ terminalId }) => terminalId === slot.terminalId)
+          ?.displayId ?? `T-${String(slot.slot + 1).padStart(3, '0')}`;
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
       const fallback = {
         codex: 'Codex',

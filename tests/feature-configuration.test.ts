@@ -63,6 +63,90 @@ const layout = (ids: string[], columns = 2) =>
     names: [],
   });
 
+test('stable terminal identity survives a replacement and a durable unassignment', () => {
+  const f = fixture();
+  try {
+    const original = randomUUID();
+    const peer = randomUUID();
+    const replacement = randomUUID();
+    const newcomer = randomUUID();
+    const epoch = randomUUID();
+    const manifest = join(f.directory, 'SYNTHETIC-original.json');
+    writeFileSync(manifest, '{}', { mode: 0o600 });
+    const created = f.core.create({ name: 'SYNTHETIC lifecycle' });
+    const { featureId } = created;
+    const view = f.core.saveView({ featureId, expectedRevision: 0 });
+    const first = f.core.assignTerminal(featureId, original, created.revision);
+    let feature = f.core.assignTerminal(featureId, peer, first.revision);
+    f.core.saveTeam(featureId, { expectedRevision: 0, configuration: team([original, peer]) });
+    f.core.saveLayout(featureId, {
+      ...layout([peer, original]),
+      names: [{ id: original, name: 'Frontend' }],
+    });
+    feature = f.core.update(featureId, {
+      expectedRevision: feature.revision,
+      orchestratorTerminalId: original,
+    });
+    assert.deepEqual(feature.terminalDisplays, [
+      { terminalId: original, displayId: 'T-001' },
+      { terminalId: peer, displayId: 'T-002' },
+    ]);
+    assert.throws(
+      () => f.core.removeReleasedTerminal(featureId, original, feature.revision),
+      /unconfirmed/,
+    );
+    assert.throws(
+      () =>
+        f.core.replaceReleasedTerminal(featureId, original, replacement, {
+          featureRevision: feature.revision,
+          viewRevision: view.revision,
+        }),
+      /scope changed/,
+    );
+    f.core.recordTerminalRelease(original, manifest, epoch);
+    const reopened = f.core.replaceReleasedTerminal(featureId, original, replacement, {
+      featureRevision: feature.revision,
+      viewRevision: view.revision,
+    }).feature;
+    assert.deepEqual(reopened.terminalDisplays, [
+      { terminalId: replacement, displayId: 'T-001' },
+      { terminalId: peer, displayId: 'T-002' },
+    ]);
+    assert.equal(reopened.orchestratorTerminalId, replacement);
+    assert.deepEqual(f.core.readTeam(featureId).configuration?.members[0], {
+      terminalId: replacement,
+      name: 'SYNTHETIC 0',
+      handle: 'backend',
+      role: 'worker',
+      allowedTargetTerminalIds: [],
+    });
+    assert.deepEqual(f.core.readLayout(featureId)?.names, [{ id: replacement, name: 'Frontend' }]);
+    assert.equal(f.core.releasedTerminal(featureId, original), undefined);
+
+    const saved = featureConfigurationDatabase(f.directory, workspace);
+    saved.recordTerminalRelease(
+      replacement,
+      join(f.directory, 'SYNTHETIC-next.json'),
+      randomUUID(),
+    );
+    assert.throws(
+      () => saved.removeReleasedTerminal(featureId, replacement, feature.revision),
+      /Stale/,
+    );
+    const removed = saved.removeReleasedTerminal(featureId, replacement, reopened.revision);
+    assert.deepEqual(removed.terminalIds, [peer]);
+    assert.deepEqual(saved.readLayout(featureId)?.order, [peer]);
+    const after = saved.assignTerminal(featureId, newcomer, removed.revision);
+    assert.deepEqual(after.terminalDisplays, [
+      { terminalId: peer, displayId: 'T-002' },
+      { terminalId: newcomer, displayId: 'T-003' },
+    ]);
+    assert.equal(readFileSync(manifest, 'utf8'), '{}');
+  } finally {
+    f.close();
+  }
+});
+
 test('orchestrator label is a revisioned, persisted Feature member and grants nothing', () => {
   const f = fixture();
   try {

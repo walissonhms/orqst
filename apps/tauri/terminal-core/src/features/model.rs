@@ -243,6 +243,15 @@ pub fn check_scope(workspace_id: &str, feature_id: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeatureTerminalDisplay {
+    pub terminal_id: String,
+    pub display_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub released: Option<bool>,
+}
+
 /// `workspaceFeatureSchema` output.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -255,6 +264,8 @@ pub struct WorkspaceFeature {
     pub status: FeatureStatus,
     pub revision: u64,
     pub terminal_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub terminal_displays: Vec<FeatureTerminalDisplay>,
     pub orchestrator_terminal_id: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,

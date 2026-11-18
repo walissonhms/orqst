@@ -222,6 +222,14 @@ fn valid_request(value: &Value) -> bool {
     match value["action"].as_str() {
         Some("snapshot") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
+        Some("remove-terminal") => {
+            exact(value, &["action", "generation", "workspaceId", "featureId", "catalogId", "terminalId"])
+                && generation
+                && scope(value)
+                && digest(&value["catalogId"])
+                && crate::features::uuid(&value["featureId"])
+                && crate::features::uuid(&value["terminalId"])
+        }
         Some("create-mcp-pair") => generation && scope(value) && valid_mcp_pair(value),
         Some("create-selected") => {
             exact(
@@ -249,17 +257,15 @@ fn valid_request(value: &Value) -> bool {
                     .is_some_and(|n| (1..=8).contains(&n))
         }
         Some("create-batch") => {
-            exact(
-                value,
-                &[
-                    "action",
-                    "generation",
-                    "workspaceId",
-                    "featureId",
-                    "catalogId",
-                    "requests",
-                ],
-            ) && generation
+            let keys = ["action", "generation", "workspaceId", "featureId", "catalogId", "requests"];
+            let mut reopen_keys = keys.to_vec();
+            reopen_keys.push("reopenTerminalId");
+            (exact(value, &keys)
+                || (exact(value, &reopen_keys)
+                    && crate::features::uuid(&value["reopenTerminalId"])
+                    && crate::features::uuid(&value["featureId"])
+                    && value["requests"].as_array().is_some_and(|items| items.len() == 1)))
+                && generation
                 && scope(value)
                 && digest(&value["catalogId"])
                 && value["requests"].as_array().is_some_and(|items| {
@@ -329,12 +335,14 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
         fields.keys().all(|key| {
             [
                 "contractVersion", "workspaceId", "featureId", "catalogId",
-                "providers", "pendingOwnedExits", "restoredFeature",
+                "providers", "pendingOwnedExits", "restoredFeature", "reopenable",
             ]
             .contains(&key.as_str())
         })
     }) && value.get("restoredFeature").is_none_or(|feature| {
-        exact(feature, &["featureId", "name", "terminalIds"])
+        (exact(feature, &["featureId", "name", "terminalIds"])
+            || exact(feature, &["featureId", "name", "terminalIds", "terminalDisplays"]))
+            && crate::features::valid_terminal_displays(feature)
             && crate::features::uuid(&feature["featureId"])
             && (value["featureId"].is_null() || feature["featureId"] == value["featureId"])
             && crate::features::name(&feature["name"])
@@ -343,6 +351,24 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                     && ids.iter().all(crate::features::uuid)
                     && ids.iter().filter_map(Value::as_str).collect::<std::collections::HashSet<_>>().len() == ids.len()
             })
+    }) && value.get("reopenable").is_none_or(|entries| {
+        entries.as_array().is_some_and(|entries| {
+            entries.len() <= 8 && entries.iter().all(|entry| {
+                exact(entry, &["terminalId", "displayId", "provider", "modelId", "name"])
+                    && crate::features::uuid(&entry["terminalId"])
+                    && crate::features::terminal_display_id(&entry["displayId"])
+                    && crate::features::name(&entry["name"])
+                    && digest(&entry["modelId"])
+                    && value["providers"].as_array().is_some_and(|providers| {
+                        providers.iter().any(|provider| {
+                            provider["provider"] == entry["provider"] && provider["status"] == "available"
+                                && provider["models"].as_array().is_some_and(|models| {
+                                    models.iter().any(|model| model["id"] == entry["modelId"])
+                                })
+                        })
+                    })
+            })
+        })
     }) && value.get("pendingOwnedExits").is_none_or(|pending| {
         pending.as_array().is_some_and(|exits| {
             exits.len() <= 64
@@ -477,7 +503,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let incremental = running
         && matches!(
             request["action"].as_str(),
-            Some("catalog" | "create-selected" | "create-batch")
+            Some("catalog" | "create-selected" | "create-batch" | "remove-terminal")
         );
     if running
         && (!incremental
@@ -500,7 +526,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
             !guard.begin(
                 matches!(
                     request["action"].as_str(),
-                    Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
+                    Some("create" | "create-selected" | "create-mcp-pair" | "create-batch" | "remove-terminal")
                 ),
                 running,
             )
@@ -783,7 +809,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"review", "files":files})
     } else if matches!(
         request["action"].as_str(),
-        Some("catalog" | "create-selected" | "create-mcp-pair" | "create-batch")
+        Some("catalog" | "create-selected" | "create-mcp-pair" | "create-batch" | "remove-terminal")
     ) {
         let mut native = request.clone();
         native.as_object_mut().unwrap().remove("generation");
@@ -1065,6 +1091,13 @@ fn open_batch(
             }
         }
     }
+    if current() {
+        let admitted: Vec<usize> = items.iter()
+            .filter(|item| item["status"] == "accepted")
+            .filter_map(|item| item["slot"].as_u64().map(|slot| slot as usize))
+            .collect();
+        crate::terminal::dispatch_prepared_starts(app, &admitted);
+    }
     let uncertain = items.iter().any(|item| item["status"] == "unknown");
     if !uncertain && !prepared.is_empty() {
         diagnostic.record(Stage::Opening, Outcome::Succeeded, Effects::Possible);
@@ -1143,7 +1176,7 @@ fn run(
             && (!crate::terminal::is_running(app)
                 || (matches!(
                     request["action"].as_str(),
-                    Some("catalog" | "create-selected" | "create-batch")
+                    Some("catalog" | "create-selected" | "create-batch" | "remove-terminal")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
             && crate::terminal::preparation_admission_current(app, &admission)
@@ -1384,7 +1417,7 @@ fn run(
                     Some("commit")
                         if matches!(
                             request["action"].as_str(),
-                            Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
+                            Some("create" | "create-selected" | "create-mcp-pair" | "create-batch" | "remove-terminal")
                         ) =>
                     {
                         let valid = current();
@@ -1458,6 +1491,7 @@ fn run(
             || {
                 Instant::now() < deadline
                     && window.window().is_visible().unwrap_or(false)
+                    && window.window().is_focused().unwrap_or(false)
                     && window.url().is_ok_and(|url| url.as_str() == source)
                     && app.state::<Preparation>().0.lock().unwrap().generation == generation
                     && !crate::terminal::presentation_blocked(app)
@@ -1475,6 +1509,9 @@ fn run(
         if unsupported_opencode {
             // Do not forward config content/test-home or silently ignore their
             // presence. Other providers remain independently usable.
+            if let Some(entries) = result["catalog"].get_mut("reopenable").and_then(Value::as_array_mut) {
+                entries.retain(|entry| entry["provider"] != "opencode");
+            }
             for provider in result["catalog"]["providers"].as_array_mut().unwrap() {
                 if provider["provider"] == "opencode" {
                     provider["status"] = json!("unavailable");
@@ -1484,6 +1521,22 @@ fn run(
             }
         }
         return Ok(json!({"status":"catalog", "catalog":result["catalog"]}));
+    }
+    if request["action"] == "remove-terminal" {
+        if result["status"] == "cancelled" {
+            return Ok(json!({"status":"denied","failure":{
+                "stage":"commit","code":"focus_required","effects":"not_started"
+            }}));
+        }
+        if result["status"] != "removed"
+            || !exact(&result, &["kind", "status", "terminalId"])
+            || result["terminalId"] != request["terminalId"]
+            || !current()
+        {
+            return Err("Unconfirmed released membership removal".into());
+        }
+        app.state::<Preparation>().0.lock().unwrap().committed = false;
+        return Ok(json!({"status":"ok"}));
     }
     let files = result["files"]
         .as_array()

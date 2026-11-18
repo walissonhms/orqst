@@ -297,6 +297,9 @@ function brokerFixture(
     source: (value: boolean) => {
       nativeCurrent = value;
     },
+    allow: () => {
+      state = 'allowed';
+    },
     revoke: () => {
       state = 'revoked';
     },
@@ -308,6 +311,49 @@ function brokerFixture(
     },
   };
 }
+
+test('private native batch starts independently without focus and obtains input only on focused Open', async () => {
+  const first = brokerFixture();
+  const second = brokerFixture();
+  const blocked = brokerFixture();
+  const candidates = [first, second, blocked];
+  try {
+    for (const entry of candidates) entry.focus(false);
+    first.allow();
+    second.allow();
+    const starts = await Promise.all(
+      candidates.map((entry) =>
+        entry.broker.startPrepared(entry.document, profile.id, entry.authority.now() + 1000),
+      ),
+    );
+    assert.deepEqual(
+      starts.map((reply) => reply.status),
+      ['ok', 'ok', 'denied'],
+    );
+    for (const [index, entry] of [first, second].entries()) {
+      const reply = starts[index]!;
+      assert.equal(reply.status, 'ok');
+      if (reply.status !== 'ok') throw new Error('Synthetic batch failed');
+      assert.equal(entry.events.size, 1);
+      assert.equal(entry.reviews(), 0);
+      const fields = { instanceId: reply.instanceId };
+      assert.equal((await entry.send('input', fields)).status, 'denied');
+      assert.equal((await entry.send('open', { profileId: profile.id })).status, 'denied');
+      entry.focus(true);
+      assert.equal(await entry.open(), reply.instanceId);
+      assert.equal(entry.events.size, 1);
+      assert.equal(
+        (await entry.broker.startPrepared(entry.document, profile.id, entry.authority.now() + 1000))
+          .status,
+        'denied',
+      );
+    }
+    assert.equal(blocked.events.size, 0);
+    assert.equal(blocked.reviews(), 0);
+  } finally {
+    candidates.forEach(({ broker }) => broker.close());
+  }
+});
 
 test('one initial authorization opens multiple owned terminals, attaches, inputs, pastes and stops without dialogs', async () => {
   const s = brokerFixture();

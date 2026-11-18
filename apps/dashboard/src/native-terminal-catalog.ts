@@ -3,10 +3,16 @@ import type { ProviderCatalog, TerminalRequest } from './NewTerminalDialog.js';
 
 type Entry = TerminalPreparationCatalog['providers'][number];
 
+export function terminalCatalogReason(entry: Entry) {
+  return entry.provider === 'antigravity' && entry.reason === 'executable_unreviewed'
+    ? 'antigravity_executable_unreviewed'
+    : entry.reason;
+}
+
 /** Map the native catalog to the dialog; only confirmed providers and models appear. */
 export function dialogCatalog(
   catalog: TerminalPreparationCatalog,
-  translateReason?: (reason: Entry['reason']) => string,
+  translateReason?: (reason: ReturnType<typeof terminalCatalogReason>) => string,
 ): ProviderCatalog[] {
   return terminalProviderSchema.options.map((provider) => {
     const entry = catalog.providers.find((candidate) => candidate.provider === provider);
@@ -23,7 +29,7 @@ export function dialogCatalog(
       available: entry.status === 'available',
       modelCatalogLimited: entry.status === 'available' && entry.reason === 'catalog_limited',
       ...(entry.status === 'unavailable' && translateReason
-        ? { reason: translateReason(entry.reason) }
+        ? { reason: translateReason(terminalCatalogReason(entry)) }
         : {}),
       models:
         entry.status === 'available'

@@ -6,12 +6,11 @@ interface Props {
   terminals: readonly EndedTerminal[];
   onReopen?: (terminal: EndedTerminal) => void;
   onRemove?: (terminal: EndedTerminal) => void;
-  onInspect: (terminal: EndedTerminal) => void;
   onHide?: (terminal: EndedTerminal) => void;
 }
 
 /** The caller supplies Core-backed recovery actions. The list grants no authority itself. */
-export function EndedTerminalList({ terminals, onReopen, onRemove, onInspect, onHide }: Props) {
+export function EndedTerminalList({ terminals, onReopen, onRemove, onHide }: Props) {
   const { t, i18n } = useTranslation();
   if (!terminals.length) return null;
   const date = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
@@ -38,19 +37,26 @@ export function EndedTerminalList({ terminals, onReopen, onRemove, onInspect, on
                     : date.format(terminal.exitedAt)}
               </span>
             </span>
-            <span>
-              {terminal.disposition === 'uncertain' ? (
-                <button type="button" onClick={() => onInspect(terminal)}>
-                  {t('paneLifecycle.inspect')}
-                </button>
+            <div className="pane-lifecycle-ended-actions">
+              {!terminal.released ? (
+                <details className="pane-lifecycle-recovery">
+                  <summary>{t('paneLifecycle.inspect')}</summary>
+                  <p>{t('paneLifecycle.recoveryIntro')}</p>
+                  <ol>
+                    <li>{t('paneLifecycle.recoveryQuit')}</li>
+                    <li>{t('paneLifecycle.recoveryStart')}</li>
+                    <li>{t('paneLifecycle.recoveryVerify')}</li>
+                  </ol>
+                  <code>{terminal.terminalId}</code>
+                </details>
               ) : (
                 <>
-                  {onReopen && (
+                  {onReopen && terminal.released && (
                     <button type="button" onClick={() => onReopen(terminal)}>
                       {t('paneLifecycle.reopen')}
                     </button>
                   )}
-                  {onRemove && (
+                  {onRemove && terminal.released && (
                     <button type="button" onClick={() => onRemove(terminal)}>
                       {t('paneLifecycle.remove')}
                     </button>
@@ -62,7 +68,7 @@ export function EndedTerminalList({ terminals, onReopen, onRemove, onInspect, on
                   {t('features.savedTerminals.hide')}
                 </button>
               )}
-            </span>
+            </div>
           </li>
         ))}
       </ul>

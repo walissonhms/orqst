@@ -17,6 +17,7 @@ import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import {
   inspectTerminalPreparationCatalog,
+  inspectReleasedTerminal,
   resolveCatalogSelection,
   terminalCatalogId,
 } from './terminal-catalog.js';
@@ -66,6 +67,19 @@ export async function prepareTauriBatch(
     for (const item of items) item.reason = 'catalog_changed';
     return result();
   }
+  const reopening = request.reopenTerminalId;
+  let saved: ReturnType<typeof inspectReleasedTerminal>;
+  if (reopening) {
+    try {
+      saved = inspectReleasedTerminal(discovered.workspace, reopening);
+    } catch {
+      // The old profile is now inaccessible. Pending data remains in the ended list.
+    }
+    if (request.requests.length !== 1 || !saved || !request.featureId) {
+      for (const item of items) item.reason = 'selection_unavailable';
+      return result();
+    }
+  }
   const binding = terminalPreparationBindingSchema.parse({
     ...trusted,
     workspaceId: request.workspaceId,
@@ -83,7 +97,7 @@ export async function prepareTauriBatch(
     ? 'Geral'
     : DEFAULT_FEATURE_NAME;
   const existingCount = discovered.workspace.target?.terminalIds.length ?? 0;
-  const capacity = Math.min(availableSlots, 8 - existingCount);
+  const capacity = Math.min(availableSlots, 8 - existingCount + Number(!!saved));
   for (const [index, input] of request.requests.entries()) {
     const item = items[index]!;
     if (unsupportedOpenCode && input.provider === 'opencode') {
@@ -111,7 +125,10 @@ export async function prepareTauriBatch(
       modelId === undefined
         ? undefined
         : resolveCatalogSelection(discovered, input.provider, modelId);
-    if (!selected) {
+    if (
+      !selected ||
+      (saved && (saved.provider !== selected.provider || saved.value !== selected.model.value))
+    ) {
       item.reason = 'selection_unavailable';
       continue;
     }
@@ -190,15 +207,29 @@ export async function prepareTauriBatch(
         reviewed,
         (terminalIds) => {
           if (!reviewed()) throw new Error('Batch context changed');
-          const assigned = discovered.workspace.features.assignToOpenOrDefault(
-            activeFeatureId,
-            terminalIds,
-            defaultFeatureTitle,
-            {
-              viewRevision: workspace.view.revision,
-              featureRevision: workspace.target?.revision ?? null,
-            },
-          );
+          const expected = {
+            viewRevision: workspace.view.revision,
+            featureRevision: workspace.target?.revision ?? null,
+          };
+          if (reopening && (!activeFeatureId || !expected.featureRevision))
+            throw new Error('Released terminal Feature changed');
+          const assigned =
+            reopening && activeFeatureId && expected.featureRevision
+              ? workspace.features.replaceReleasedTerminal(
+                  activeFeatureId,
+                  reopening,
+                  terminalIds[0]!,
+                  {
+                    ...expected,
+                    featureRevision: expected.featureRevision,
+                  },
+                )
+              : workspace.features.assignToOpenOrDefault(
+                  activeFeatureId,
+                  terminalIds,
+                  defaultFeatureTitle,
+                  expected,
+                );
           if (!capturedLayout) {
             previousLayout = assigned.previousLayout;
             capturedLayout = true;
@@ -231,7 +262,7 @@ export async function prepareTauriBatch(
         throw new Error('Batch member unavailable');
       item.terminalId = member.config.identity.terminalId;
       item.file = files[0]!;
-      item.name = request.requests[index]!.name;
+      item.name = saved?.name ?? request.requests[index]!.name;
       item.status = 'prepared';
       item.reason = 'not_attempted'; // Core admission has not happened yet.
     } catch {

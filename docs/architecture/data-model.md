@@ -564,6 +564,14 @@ not enroll a process or migrate existing sessions. Updates use expected revision
 metadata audit is bounded and validates its own versioned schema. Observer
 `user_version`, source-backed events and native histories are unchanged.
 
+The additive `feature_terminal_displays` ledger assigns one monotonic display
+ordinal per Workspace. Legacy assignments receive ordinals in persisted
+assignment order. A verified owned release records the physical manifest and
+Core epoch. A reopened physical UUID inherits the previous ordinal and leaves a
+predecessor row. Feature removal tombstones the current display entry and
+removes only its assignment. The Feature audit, previous layout, journals
+and manifests remain available as evidence.
+
 Team configurations reuse `terminal_teams`, namespaced by exact workspace/Feature
 and reviewed terminal selection. Existing `terminal_layouts` gains a separate
 Feature key namespace; unscoped layouts/JSON remain intact and unassigned. Private

@@ -144,6 +144,13 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ ...base, action: z.literal('update'), featureId, input: featureUpdateSchema }),
   z.strictObject({
     ...base,
+    action: z.literal('removeTerminal'),
+    featureId,
+    terminalId: z.uuid(),
+    expectedRevision: z.number().int().positive().safe(),
+  }),
+  z.strictObject({
+    ...base,
     action: z.literal('assign'),
     featureId,
     slot: z.number().int().min(0).max(7),

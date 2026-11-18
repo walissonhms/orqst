@@ -31,11 +31,24 @@ const FEATURE_TABLES: &str = "CREATE TABLE IF NOT EXISTS features (
     ); CREATE INDEX IF NOT EXISTS features_workspace ON features(workspace_id);
     CREATE TABLE IF NOT EXISTS feature_terminal_assignments (
       terminal_id TEXT PRIMARY KEY, feature_id TEXT NOT NULL REFERENCES features(id)
-    ); CREATE TABLE IF NOT EXISTS feature_orchestrator_labels (
+    ); CREATE TABLE IF NOT EXISTS feature_terminal_displays (
+      terminal_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, ordinal INTEGER NOT NULL
+        CHECK (ordinal BETWEEN 1 AND 99999), replaced_by TEXT,
+      released_manifest TEXT, released_epoch TEXT, removed_at INTEGER
+    ); CREATE UNIQUE INDEX IF NOT EXISTS feature_terminal_current_ordinal
+      ON feature_terminal_displays(workspace_id,ordinal) WHERE replaced_by IS NULL;
+    CREATE TABLE IF NOT EXISTS feature_orchestrator_labels (
       feature_id TEXT PRIMARY KEY REFERENCES features(id), terminal_id TEXT NOT NULL REFERENCES feature_terminal_assignments(terminal_id)
     ); CREATE TABLE IF NOT EXISTS feature_configuration_events (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, metadata TEXT NOT NULL CHECK(json_valid(metadata))
     );";
+const IMPORT_TERMINAL_DISPLAYS: &str = "INSERT INTO feature_terminal_displays (terminal_id,workspace_id,ordinal)
+      SELECT a.terminal_id,f.workspace_id,
+        ROW_NUMBER() OVER (PARTITION BY f.workspace_id ORDER BY a.rowid) +
+        COALESCE((SELECT MAX(d.ordinal) FROM feature_terminal_displays d WHERE d.workspace_id=f.workspace_id),0)
+      FROM feature_terminal_assignments a JOIN features f ON f.id=a.feature_id
+      LEFT JOIN feature_terminal_displays d ON d.terminal_id=a.terminal_id
+      WHERE d.terminal_id IS NULL";
 const VIEW_SETUP: &str = "CREATE TABLE IF NOT EXISTS feature_view_schema (
       singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL
     ); INSERT OR IGNORE INTO feature_view_schema VALUES (1,1);";
@@ -73,7 +86,100 @@ impl<'a> Features<'a> {
             VIEW_TABLES,
             "feature view",
         )?;
+        db.conn.execute(IMPORT_TERMINAL_DISPLAYS, [])?;
         Ok(Self { db, env })
+    }
+
+    pub fn record_terminal_release(
+        &self,
+        workspace_id: &str,
+        terminal_id: &str,
+        manifest: &str,
+        epoch: &str,
+    ) -> Result<()> {
+        if !is_identifier(workspace_id) || !is_uuid(terminal_id) || !is_uuid(epoch)
+            || !manifest.starts_with('/') || manifest.len() > 2048 || manifest.contains('\0') {
+            return Err(invalid("Invalid terminal release"));
+        }
+        self.db.transaction(|| {
+            let previous: Option<(Option<String>, Option<String>)> = self.db.conn
+                .query_row(
+                    "SELECT released_manifest,released_epoch FROM feature_terminal_displays
+                     WHERE terminal_id=? AND workspace_id=? AND replaced_by IS NULL AND removed_at IS NULL",
+                    [terminal_id, workspace_id],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .optional()?;
+            let Some((previous_file, previous_epoch)) = previous else {
+                return Ok(());
+            };
+            if previous_epoch.as_deref().is_some_and(|id| {
+                id != epoch || previous_file.as_deref() != Some(manifest)
+            }) {
+                return Err(refused("Terminal release evidence changed"));
+            }
+            self.db.conn.execute(
+                "UPDATE feature_terminal_displays SET released_manifest=?,released_epoch=? WHERE terminal_id=?",
+                [manifest, epoch, terminal_id],
+            )?;
+            Ok(())
+        })
+    }
+
+    pub fn remove_released_terminal(
+        &self,
+        workspace_id: &str,
+        feature_id: &str,
+        terminal_id: &str,
+        expected_revision: u64,
+    ) -> Result<WorkspaceFeature> {
+        if !is_uuid(terminal_id) {
+            return Err(invalid("Invalid terminal identity"));
+        }
+        self.db.transaction(|| {
+            let before = self.read(workspace_id, feature_id)?;
+            if before.status == FeatureStatus::Archived || before.revision != expected_revision {
+                return Err(refused("Feature revision or status changed"));
+            }
+            if !before.terminal_displays.iter().any(|terminal| {
+                terminal.terminal_id == terminal_id && terminal.released == Some(true)
+            }) {
+                return Err(refused("Terminal release is unconfirmed"));
+            }
+            let layouts = TerminalLayouts::open(self.db, Some(feature_id))?;
+            let previous = layouts.read(&before.terminal_ids)?;
+            let conn = &self.db.conn;
+            conn.execute(
+                "DELETE FROM feature_orchestrator_labels WHERE feature_id=? AND terminal_id=?",
+                [feature_id, terminal_id],
+            )?;
+            conn.execute(
+                "DELETE FROM feature_terminal_assignments WHERE feature_id=? AND terminal_id=?",
+                [feature_id, terminal_id],
+            )?;
+            conn.execute(
+                "UPDATE feature_terminal_displays SET removed_at=? WHERE terminal_id=?",
+                params![(self.env.now)(), terminal_id],
+            )?;
+            let remaining: Vec<String> = before.terminal_ids.iter()
+                .filter(|id| id.as_str() != terminal_id).cloned().collect();
+            if let Some(mut layout) = previous.filter(|_| !remaining.is_empty()) {
+                layout.order.retain(|id| id != terminal_id);
+                layout.shown.retain(|id| id != terminal_id);
+                layout.names.retain(|entry| entry.id != terminal_id);
+                if layout.active == terminal_id {
+                    layout.active = layout.shown.first().unwrap_or(&layout.order[0]).clone();
+                }
+                if layout.maximized.as_deref() == Some(terminal_id) {
+                    layout.maximized = None;
+                }
+                layouts.save(&remaining, &layout)?;
+            }
+            self.advance(&before)?;
+            let feature = self.read(workspace_id, feature_id)?;
+            self.audit(&feature, "feature.terminal_removed", Some(terminal_id))?;
+            Ok(feature)
+        })
     }
 
     pub fn read_view(&self, workspace_id: &str) -> Result<FeatureViewState> {
@@ -132,6 +238,24 @@ impl<'a> Features<'a> {
         let terminal_ids = statement
             .query_map([feature_id], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut display = conn.prepare(
+            "SELECT a.terminal_id,d.ordinal,d.released_epoch FROM feature_terminal_assignments a
+             JOIN feature_terminal_displays d ON d.terminal_id=a.terminal_id AND d.workspace_id=?
+             AND d.replaced_by IS NULL AND d.removed_at IS NULL WHERE a.feature_id=? ORDER BY a.rowid",
+        )?;
+        let terminal_displays = display
+            .query_map([workspace_id, feature_id], |row| {
+                let ordinal: u32 = row.get(1)?;
+                Ok(FeatureTerminalDisplay {
+                    terminal_id: row.get(0)?,
+                    display_id: format!("T-{ordinal:03}"),
+                    released: row.get::<_, Option<String>>(2)?.map(|_| true),
+                })
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if terminal_ids.len() != terminal_displays.len() {
+            return Err(invalid("Feature terminal display identity changed"));
+        }
         let orchestrator: Option<String> = conn
             .query_row(
                 "SELECT terminal_id FROM feature_orchestrator_labels WHERE feature_id=?",
@@ -148,6 +272,7 @@ impl<'a> Features<'a> {
             status: FeatureStatus::parse(&status)?,
             revision: nonneg(revision)?,
             terminal_ids,
+            terminal_displays,
             orchestrator_terminal_id: orchestrator,
             created_at: nonneg(created)?,
             updated_at: nonneg(updated)?,
@@ -279,6 +404,11 @@ impl<'a> Features<'a> {
         if assigned.is_some() {
             return Err(refused("Terminal already assigned to a Feature"));
         }
+        self.db.conn.execute(
+            "INSERT INTO feature_terminal_displays (terminal_id,workspace_id,ordinal)
+             SELECT ?, ?, COALESCE(MAX(ordinal),0)+1 FROM feature_terminal_displays WHERE workspace_id=?",
+            params![terminal_id, feature.workspace_id, feature.workspace_id],
+        )?;
         self.db.conn.execute(
             "INSERT INTO feature_terminal_assignments VALUES (?,?)",
             [terminal_id, &feature.feature_id],

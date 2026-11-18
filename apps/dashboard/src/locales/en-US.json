@@ -1140,6 +1140,7 @@
       "choosePaths": "Choose folder and executable…",
       "catalog_ready": "The installed executable matches the reviewed version. Choose a model to continue.",
       "catalog_executable_not_found": "The CLI executable was not found in the local search.",
+      "catalog_antigravity_executable_unreviewed": "CLI updated · review required",
       "catalog_executable_unreviewed": "The installed CLI does not match a reviewed version and checksum for managed terminals.",
       "catalog_executable_inspection_failed": "The local CLI executable could not be verified.",
       "catalog_ambiguous_executable": "Multiple installations were found. Choose the reviewed native executable explicitly in Advanced.",
@@ -1470,6 +1471,12 @@
     "ownershipUncertain": "Ownership uncertain",
     "inspect": "View details",
     "reopen": "Reopen",
+    "recoveryIntro": "Ownership of this session is still unverified.",
+    "recoveryQuit": "Quit ORQST normally so the recovery session starts without the normal Core.",
+    "recoveryStart": "Launch the ORQST app executable with --offline-recovery to open the native recovery window.",
+    "recoveryVerify": "Use the native reviews to capture the reservation, verify the required kernel and session evidence, and authorize the release. Follow any restart requirement shown by native recovery.",
+    "reopenBlocked": "The previous session is preserved. Its reviewed CLI and model must be available to reopen it.",
+    "removalUnconfirmed": "Removal unconfirmed. Refresh before retrying.",
     "remove": "Remove from Feature"
   },
   "terminalStudio": {
@@ -1572,6 +1579,7 @@
       "unavailable": "Not available",
       "reason_ready": "Ready",
       "reason_executable_not_found": "CLI not found",
+      "reason_antigravity_executable_unreviewed": "CLI updated · review required",
       "reason_executable_unreviewed": "Unreviewed CLI version or checksum",
       "reason_executable_inspection_failed": "CLI verification failed",
       "reason_ambiguous_executable": "Multiple CLI installations found",

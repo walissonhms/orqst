@@ -36,6 +36,19 @@ export const tauriTerminalMessageSchema = z.discriminatedUnion('kind', [
     // Native parent pipe only: emitted after consuming the exact prepared opening intent.
     openingAuthorized: z.literal(true).optional(),
   }),
+  // Private native parent pipe only. This action cannot attach output or enable input.
+  z.strictObject({
+    kind: z.literal('startPrepared'),
+    id: z.uuid(),
+    slot,
+    profileId: z.enum([
+      'codex-terminal-v1',
+      'claude-terminal-v1',
+      'opencode-terminal-v1',
+      'antigravity-terminal-v1',
+    ]),
+    expiresAt: z.number().int().positive().safe(),
+  }),
   z.strictObject({ kind: z.literal('retire'), id: z.uuid(), slot, focused: z.boolean() }),
   // Native Quit/CloseRequested private pipe only. Neither action is in terminalNativeRequestSchema.
   z.strictObject({ kind: z.literal('shutdownOwned'), id: z.uuid() }),
@@ -414,6 +427,25 @@ export class TauriTerminalService {
     }
     if (this.retirement?.busy || this.retirement?.fenced) {
       this.send({ kind: 'reply', id: message.id, value: { status: 'denied' } });
+      return;
+    }
+    if (message.kind === 'startPrepared') {
+      if (pane.state.busy || this.mcpBusy) {
+        this.send({ kind: 'reply', id: message.id, value: { status: 'busy' } });
+        return;
+      }
+      pane.state.busy = true;
+      try {
+        const reply = await pane.broker.startPrepared(
+          pane.document,
+          message.profileId,
+          message.expiresAt,
+        );
+        if (reply.status === 'ok') pane.state.instanceId = reply.instanceId;
+        this.send({ kind: 'reply', id: message.id, value: reply });
+      } finally {
+        pane.state.busy = false;
+      }
       return;
     }
     if (message.kind === 'authorizeMcp') {

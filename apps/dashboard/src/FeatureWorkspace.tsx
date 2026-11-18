@@ -888,19 +888,20 @@ export function FeatureWorkspace({
   const savedMembers = members.flatMap((id) => {
     const slot = snapshot?.slots.find((entry) => entry.terminalId === id);
     const facts = paneEvidence.get(id);
-    const exited = facts && projectPaneLifecycle(facts).state === 'ended';
+    const display = selected?.terminalDisplays?.find(({ terminalId }) => terminalId === id);
+    const exited = display?.released || (facts && projectPaneLifecycle(facts).state === 'ended');
     return !slot || slot.closed || exited
       ? [
           {
             id,
             closed: slot?.closed === true || !!exited,
             confirmedExit: !!exited,
-            ...(slot
-              ? {
-                  displayId: `T-${String(slot.slot + 1).padStart(3, '0')}`,
-                  provider: slot.provider,
-                }
-              : {}),
+            released: display?.released,
+            displayId:
+              display?.displayId ??
+              (slot ? `T-${String(slot.slot + 1).padStart(3, '0')}` : undefined),
+            ...(slot ? { provider: slot.provider } : {}),
+            name: slot ? panes.find((pane) => pane.slot === slot.slot)?.label : undefined,
           },
         ]
       : [];
@@ -909,6 +910,17 @@ export function FeatureWorkspace({
     <SavedTerminalList
       key={scopeKey}
       members={savedMembers}
+      onRemove={
+        canWrite && selected && !busy
+          ? (terminalId) =>
+              void request({
+                action: 'removeTerminal',
+                featureId: selected.featureId,
+                terminalId,
+                expectedRevision: selected.revision,
+              })
+          : undefined
+      }
       onReopen={canPrepare && !busy ? () => void prepare() : undefined}
     />
   );
@@ -1331,7 +1343,7 @@ export function FeatureWorkspace({
                 <div className="feature-members">
                   <p>{t('features.members', { count: selected.terminalIds.length })}</p>
                   <p>{t('features.available', { count: available.length })}</p>
-                  {(available.length > 0 || canvas) && savedTerminalList}
+                  {canvas && savedTerminalList}
                   {unassigned.length > 0 && selected.status !== 'archived' && (
                     <form
                       onSubmit={(event) => {
@@ -1472,9 +1484,12 @@ export function FeatureWorkspace({
                 <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
               ) : selected?.status === 'archived' ? (
                 <span>{t('feature.archived')}</span>
-              ) : (
-                savedTerminalList
-              )
+              ) : undefined
+            }
+            dockEnd={
+              savedMembers.length > 0 ? (
+                <div className="pane-lifecycle-dock">{savedTerminalList}</div>
+              ) : undefined
             }
             v6={{
               featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),

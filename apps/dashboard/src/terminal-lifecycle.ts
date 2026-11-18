@@ -106,6 +106,7 @@ export interface EndedTerminal {
   provider?: TerminalProvider;
   exitedAt?: number;
   disposition: 'exit_confirmed' | 'kernel_absent' | 'uncertain';
+  released?: boolean;
 }
 
 /** A closed UI, absent slot or persisted member ID has no process-authority implications. */

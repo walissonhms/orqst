@@ -818,7 +818,7 @@ impl Extensions for HostExtensions {
         }
     }
 
-    fn slot_released(&mut self, slot: usize) {
+    fn slot_released(&mut self, slot: usize) -> R<()> {
         if let Some(hub) = &self.hub {
             let mut slots = hub
                 .slots
@@ -828,6 +828,9 @@ impl Extensions for HostExtensions {
                 *member = None;
             }
         }
+        let manifest = self.files.get(slot).ok_or("Released terminal manifest missing")?;
+        self.features().record_terminal_release(slot, manifest, &self.epoch).map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     fn retire_blocked(&self) -> bool {

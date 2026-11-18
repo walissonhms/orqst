@@ -5,6 +5,7 @@ import {
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
   terminalBatchRequestSchema,
+  terminalRemoveRequestSchema,
   terminalBatchReplySchema,
   terminalPreparationCatalogSchema,
 } from './terminal-preparation.js';
@@ -34,6 +35,9 @@ export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
   terminalCatalogRequestSchema,
   terminalBatchRequestSchema.extend({
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
+  terminalRemoveRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   }),
   terminalSelectedRequestSchema.extend({

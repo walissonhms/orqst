@@ -1,4 +1,6 @@
 import { terminalPreparationCatalogSchema, terminalCatalogRequestSchema } from '@orqst/protocol';
+import { z } from 'zod';
+import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.js';
 import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import {
@@ -98,6 +100,37 @@ export function terminalCatalogId(
   );
 }
 
+/** Fields from the already released immutable member. Every new launch has fresh review. */
+export function inspectReleasedTerminal(
+  workspace: ReturnType<typeof resolveTerminalPreparationContext>,
+  terminalId: string,
+) {
+  if (!workspace.feature) return;
+  const member = workspace.feature.terminalDisplays?.find(
+    (entry) => entry.terminalId === terminalId,
+  );
+  if (!member?.released) return;
+  const receipt = workspace.features.releasedTerminal(workspace.feature.featureId, terminalId);
+  if (!receipt) return;
+  const saved = z
+    .object({
+      version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+      identity: z.object({ terminalId: z.uuid() }),
+      project: z.string(),
+      model: z.object({ value: z.string().nullable() }).optional(),
+    })
+    .parse(JSON.parse(terminalFile(receipt.file, true).toString('utf8')));
+  if (saved.identity.terminalId !== terminalId || saved.project !== workspace.project) return;
+  return {
+    provider: localCliProviders[saved.version - 1]!,
+    value: saved.model?.value ?? null,
+    name:
+      workspace.features
+        .readLayout(workspace.feature.featureId)
+        ?.names.find(({ id }) => id === terminalId)?.name ?? member.displayId,
+  };
+}
+
 /** Read-only public projection with every provider, no launch paths or arguments. */
 export function terminalPreparationCatalog(
   raw: unknown,
@@ -112,17 +145,43 @@ export function terminalPreparationCatalog(
     localCliProviders,
     restoreSavedFeature,
   );
+  const feature = workspace.feature;
+  const reopenable = feature?.terminalDisplays?.flatMap((member) => {
+    if (!member.released) return [];
+    try {
+      const saved = inspectReleasedTerminal(workspace, member.terminalId);
+      const id = providers
+        .find((entry) => entry.provider === saved?.provider)
+        ?.models?.options.find((option) => option.selection.value === saved?.value)?.id;
+      if (!saved || !id) return [];
+      return [
+        {
+          terminalId: member.terminalId,
+          displayId: member.displayId,
+          provider: saved.provider,
+          modelId: id,
+          name: saved.name,
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
   return terminalPreparationCatalogSchema.parse({
     contractVersion: 1,
     workspaceId: request.workspaceId,
     featureId: request.featureId,
     catalogId,
+    ...(reopenable?.length ? { reopenable } : {}),
     ...(restoreSavedFeature && workspace.feature
       ? {
           restoredFeature: {
             featureId: workspace.feature.featureId,
             name: workspace.feature.name,
             terminalIds: workspace.feature.terminalIds,
+            ...(workspace.feature.terminalDisplays?.some((member) => member.released)
+              ? { terminalDisplays: workspace.feature.terminalDisplays }
+              : {}),
           },
         }
       : {}),

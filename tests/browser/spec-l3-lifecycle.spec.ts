@@ -7,13 +7,14 @@ const workspaceId = 'a'.repeat(64);
 const featureId = '00000000-0000-4000-8000-000000000001';
 const terminalId = '00000000-0000-4000-8000-000000000002';
 const savedId = '00000000-0000-4000-8000-000000000003';
+const releasedId = '00000000-0000-4000-8000-000000000004';
 const modelId = 'b'.repeat(64);
 
 test('L3 projects the submit before the native reply and preserves failure on that card', async ({
   page,
 }, info) => {
   await page.addInitScript(
-    ({ workspaceId, featureId, terminalId, savedId, modelId }) => {
+    ({ workspaceId, featureId, terminalId, savedId, releasedId, modelId }) => {
       // Renderer-only fixture, with a controlled native refusal and no CLI or user data.
       localStorage.setItem('i18nextLng', 'pt-BR');
       const workspace = { id: workspaceId, name: 'Projeto sintético' };
@@ -25,7 +26,12 @@ test('L3 projects the submit before the native reply and preserves failure on th
         status: 'active',
         schemaVersion: 1,
         revision: 1,
-        terminalIds: [terminalId, savedId],
+        terminalIds: [terminalId, savedId, releasedId],
+        terminalDisplays: [
+          { terminalId, displayId: 'T-001' },
+          { terminalId: savedId, displayId: 'T-002' },
+          { terminalId: releasedId, displayId: 'T-003', released: true },
+        ],
         createdAt: 1,
         updatedAt: 1,
       };
@@ -120,13 +126,13 @@ test('L3 projects the submit before the native reply and preserves failure on th
         },
       });
     },
-    { workspaceId, featureId, terminalId, savedId, modelId },
+    { workspaceId, featureId, terminalId, savedId, releasedId, modelId },
   );
   const evidence = process.env.ORQST_SPEC_L3_SCREENSHOTS;
   if (evidence) await mkdir(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/studio');
-  await expect(page.getByRole('button', { name: 'Feature sintética 2' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Feature sintética 3' })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'fixtureCatalogs'))).toBe(1);
 
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
@@ -161,11 +167,18 @@ test('L3 projects the submit before the native reply and preserves failure on th
   await expect(dialog).toBeVisible();
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'fixtureCatalogs'))).toBe(2);
   await page.keyboard.press('Escape');
-  await page.locator('.feature-permissions-disclosure > summary').click();
-  const ended = page.getByText('Encerrados (1)', { exact: true });
+  const ended = page.getByText('Encerrados (2)', { exact: true });
   await ended.click();
   await expect(page.getByText('Estado incerto', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ver detalhes' })).toBeVisible();
+  const uncertainRow = page.locator('.pane-lifecycle-ended > ul > li').filter({ hasText: 'T-002' });
+  const recovery = uncertainRow.getByText('Ver detalhes', { exact: true });
+  await expect(recovery).toBeVisible();
+  await expect(uncertainRow.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
+  await recovery.click();
+  await expect(uncertainRow.getByText(/--offline-recovery/)).toBeVisible();
+  if (evidence) await page.screenshot({ path: resolve(evidence, 'recovery-1440.png') });
+  await recovery.click();
+  await expect(page.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();
   await page.evaluate((id) => {
     window.dispatchEvent(
       new CustomEvent('orqst-owned-pty-lifecycle', {
@@ -177,8 +190,8 @@ test('L3 projects the submit before the native reply and preserves failure on th
     );
   }, terminalId);
   await expect(page.getByRole('article', { name: 'T-001 OpenCode' })).toHaveCount(0);
-  await expect(page.getByText('Encerrados (2)', { exact: true })).toBeVisible();
-  await expect(page.getByText('Encerrado', { exact: true })).toBeVisible();
+  await expect(page.getByText('Encerrados (3)', { exact: true })).toBeVisible();
+  await expect(page.getByText('Encerrado', { exact: true })).toHaveCount(2);
   if (evidence) await page.screenshot({ path: resolve(evidence, 'ended-1440.png') });
   await page.setViewportSize({ width: 1280, height: 800 });
   if (evidence) await page.screenshot({ path: resolve(evidence, 'ended-1280.png') });

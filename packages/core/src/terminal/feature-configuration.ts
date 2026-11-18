@@ -129,6 +129,29 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withTerminalPreferences(directory, (store) =>
         store.features().assignTerminal(scope(featureId), terminalId, expectedRevision),
       ),
+    releasedTerminal: (featureId: string, terminalId: string) =>
+      withTerminalPreferences(directory, (store) =>
+        store.features().releasedTerminal(scope(featureId), terminalId),
+      ),
+    recordTerminalRelease: (terminalId: string, manifest: string, epoch: string) =>
+      withTerminalPreferences(directory, (store) =>
+        store.features().recordTerminalRelease(workspaceId, terminalId, manifest, epoch),
+      ),
+    replaceReleasedTerminal: (
+      featureId: string,
+      terminalId: string,
+      replacementId: string,
+      expected: { viewRevision: number; featureRevision: number },
+    ) =>
+      withTerminalPreferences(directory, (store) =>
+        store
+          .features()
+          .replaceReleasedTerminal(scope(featureId), terminalId, replacementId, expected),
+      ),
+    removeReleasedTerminal: (featureId: string, terminalId: string, expectedRevision: number) =>
+      withTerminalPreferences(directory, (store) =>
+        store.features().removeReleasedTerminal(scope(featureId), terminalId, expectedRevision),
+      ),
     assignToOpenOrDefault: (
       requestedFeatureId: string | null,
       terminalIds: readonly string[],

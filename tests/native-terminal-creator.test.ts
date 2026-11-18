@@ -51,7 +51,7 @@ test('dialog catalog shows confirmed models, hides CLI-default and forwards loca
       ['codex', true, null, [id(2)]],
       ['claude', true, null, [id(3)]],
       ['opencode', false, 'localized:executable_not_found', []],
-      ['antigravity', false, 'localized:executable_unreviewed', []],
+      ['antigravity', false, 'localized:antigravity_executable_unreviewed', []],
     ],
   );
 });

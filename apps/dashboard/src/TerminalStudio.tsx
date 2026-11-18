@@ -192,6 +192,7 @@ interface Props {
   toolbarScopes?: ReactNode;
   /** Host controls shown just before New terminal (e.g. account limits). */
   toolbarEnd?: ReactNode;
+  dockEnd?: ReactNode;
   /** CLI accounts available for switching. */
   accounts?: AccountOption[];
   /** Actions the host can perform today; others are shown disabled. */
@@ -418,6 +419,7 @@ export function TerminalStudio({
   toolbarStart,
   toolbarScopes,
   toolbarEnd,
+  dockEnd,
   emptyHint,
 }: Props) {
   const { t } = useTranslation();
@@ -1774,6 +1776,7 @@ export function TerminalStudio({
           ))}
         </div>
       </footer>
+      {dockEnd}
       {details && byId.get(details) && (
         <TerminalDetails terminal={byId.get(details)!} onClose={() => setDetails(null)} />
       )}

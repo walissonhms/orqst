@@ -73,6 +73,15 @@ impl Default for Attempt {
 
 impl Attempt {
     pub fn begin() -> Self {
+        Self::from_start(Instant::now())
+    }
+
+    /// A distinct native attempt per member with elapsed time from the same submit.
+    pub fn member(&self) -> Self {
+        Self::from_start(self.started)
+    }
+
+    fn from_start(started: Instant) -> Self {
         // RandomState seeds independent hash keys from the standard library's random source.
         // No application identity, path, credential or terminal data contributes to the ID.
         let serial = SERIAL.fetch_add(1, Ordering::Relaxed);
@@ -93,7 +102,7 @@ impl Attempt {
                 &hex[16..20],
                 &hex[20..]
             ),
-            started: Instant::now(),
+            started,
         };
         attempt.record(Stage::Attempt, Outcome::Started, Effects::Unconfirmed);
         attempt

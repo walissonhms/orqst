@@ -247,7 +247,11 @@ async function start() {
     id: z.uuid(),
     generation: z.number().int().nonnegative().safe(),
   });
-  const paneDocument = (config: ReturnType<typeof readInteractiveTerminalConfig>, slot: number) => {
+  const paneDocument = (
+    config: ReturnType<typeof readInteractiveTerminalConfig>,
+    slot: number,
+    alias?: string,
+  ) => {
     const providers = selection.map(({ config }) =>
       translate(`shell.adapters.${interactiveProvider(config)}`),
     );
@@ -261,6 +265,7 @@ async function start() {
         providers,
         provider: providers[slot]!,
         project: config.project,
+        aliases: alias === undefined ? undefined : Object.assign([], { [slot]: alias }),
         version: config.executableVersion,
         startProfile: `${interactiveProvider(config)}-terminal-v1`,
         operationalOpen: true,
@@ -350,7 +355,13 @@ async function start() {
         presentation,
         ...(message.name ? { name: message.name } : {}),
       });
-      reply({ status: 'ready', receipt, pane: paneDocument(config, slot) });
+      const alias =
+        receipt.featureId === null
+          ? undefined
+          : (await core.features.read(receipt.featureId)).terminalDisplays?.find(
+              ({ terminalId }) => terminalId === receipt.member!.terminalId,
+            )?.displayId;
+      reply({ status: 'ready', receipt, pane: paneDocument(config, slot, alias) });
     } catch {
       // The new operation alone is uncertain. Never shut down/recreate the original Core.
       reply({ status: 'uncertain' });
@@ -521,6 +532,14 @@ async function start() {
     translate(`shell.adapters.${interactiveProvider(config)}`),
   );
   readySent = true;
+  const displayIds = (await core.features.list()).flatMap(
+    ({ terminalDisplays }) => terminalDisplays ?? [],
+  );
+  const aliases = core.identities.map(
+    (identity, slot) =>
+      displayIds.find(({ terminalId }) => terminalId === identity.terminalId)?.displayId ??
+      `T-${String(slot + 1).padStart(3, '0')}`,
+  );
   send({
     kind: 'ready',
     pendingOwnedExits: core.pendingOwnedExits,
@@ -550,6 +569,7 @@ async function start() {
         providers,
         provider: providers[slot]!,
         project: config.project,
+        aliases,
         version: config.executableVersion,
         startProfile: `${interactiveProvider(config)}-terminal-v1`,
         operationalOpen,

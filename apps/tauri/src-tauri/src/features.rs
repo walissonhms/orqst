@@ -185,6 +185,12 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                     || value["input"]["orchestratorTerminalId"].is_null()
                     || uuid(&value["input"]["orchestratorTerminalId"]))
         }
+        Some("removeTerminal") => {
+            exact(value, &["contractVersion", "generation", "action", "featureId", "terminalId", "expectedRevision"])
+                && uuid(&value["featureId"])
+                && uuid(&value["terminalId"])
+                && safe(&value["expectedRevision"]).is_some_and(|n| n > 0)
+        }
         Some("assign") => {
             exact(
                 value,
@@ -599,6 +605,31 @@ pub(crate) fn workspace_id(value: &Value) -> bool {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     })
 }
+pub(crate) fn terminal_display_id(value: &Value) -> bool {
+    value.as_str().and_then(|id| id.strip_prefix("T-")).is_some_and(|digits| {
+        (3..=5).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit())
+    })
+}
+
+pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
+    value.get("terminalDisplays").is_none_or(|displays| {
+        displays.as_array().is_some_and(|displays| {
+            value["terminalIds"].as_array().is_some_and(|ids| {
+                displays.len() == ids.len()
+                    && displays.iter().zip(ids).all(|(display, id)| {
+                        (exact(display, &["terminalId", "displayId"])
+                            || (exact(display, &["terminalId", "displayId", "released"])
+                                && display["released"] == true))
+                            && &display["terminalId"] == id
+                            && terminal_display_id(&display["displayId"])
+                    })
+                    && displays.iter().filter_map(|d| d["displayId"].as_str())
+                        .collect::<HashSet<_>>().len() == displays.len()
+            })
+        })
+    })
+}
+
 pub(crate) fn valid_snapshot(v: &Value) -> bool {
     if !exact(
         v,
@@ -660,9 +691,14 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
             "createdAt",
             "updatedAt",
         ];
-        let mut keys_with_label = base_keys.to_vec();
-        keys_with_label.push("orchestratorTerminalId");
-        if !(exact(f, &base_keys) || exact(f, &keys_with_label))
+        if !f.as_object().is_some_and(|fields| {
+            base_keys.iter().all(|key| fields.contains_key(*key))
+                && fields.keys().all(|key| {
+                    base_keys.contains(&key.as_str())
+                        || matches!(key.as_str(), "orchestratorTerminalId" | "terminalDisplays")
+                })
+        })
+            || !valid_terminal_displays(f)
             || (f.get("orchestratorTerminalId").is_some()
                 && !(f["orchestratorTerminalId"].is_null()
                     || (uuid(&f["orchestratorTerminalId"])

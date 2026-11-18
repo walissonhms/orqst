@@ -9,6 +9,7 @@ import {
   terminalMcpPairMembers,
   terminalMcpPairModelId,
   terminalBatchRequestSchema,
+  terminalRemoveRequestSchema,
   type TerminalPreparationCatalog,
   type TerminalLayoutRecord,
 } from '@orqst/protocol';
@@ -24,6 +25,7 @@ import {
   inspectTerminalPreparationCatalog,
   resolveCatalogSelection,
   terminalPreparationCatalog,
+  terminalCatalogId,
 } from './terminal-catalog.js';
 import { z } from 'zod';
 import {
@@ -45,6 +47,7 @@ export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
   terminalBatchRequestSchema,
+  terminalRemoveRequestSchema,
   z.strictObject({
     action: z.literal('create'),
     provider: z.enum(['codex', 'claude']),
@@ -100,6 +103,7 @@ export async function prepareTauriTerminals(
       previousLayout?: TerminalLayoutRecord;
     }
   | { status: 'catalog'; catalog: TerminalPreparationCatalog }
+  | { status: 'removed'; terminalId: string }
   | Awaited<ReturnType<typeof prepareTauriBatch>>
 > {
   let stage: TerminalPreparationFailure['stage'] = 'request';
@@ -129,6 +133,35 @@ export async function prepareTauriTerminals(
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
     if (request.action !== 'catalog') preflight();
+    if (request.action === 'remove-terminal') {
+      if (!trusted) return fail('failed');
+      const inspect = () =>
+        resolveTerminalPreparationContext(trusted, request.workspaceId, request.featureId);
+      const workspace = inspect();
+      stage = 'revalidation';
+      if (terminalCatalogId(trusted, workspace) !== request.catalogId)
+        return fail('catalog_changed');
+      if (
+        !workspace.feature?.terminalDisplays?.some(
+          ({ terminalId, released }) => terminalId === request.terminalId && released,
+        )
+      )
+        return fail('selection_unavailable');
+      const expectedRevision = workspace.feature.revision;
+      stage = 'commit';
+      if (!(await ports.commit()) || !current()) return { status: 'cancelled', files: [] };
+      preflight();
+      const fresh = inspect();
+      if (terminalCatalogId(trusted, fresh) !== request.catalogId) return fail('catalog_changed');
+      stage = 'feature_assignment';
+      effects = 'possible';
+      fresh.features.removeReleasedTerminal(
+        request.featureId,
+        request.terminalId,
+        expectedRevision,
+      );
+      return { status: 'removed', terminalId: request.terminalId };
+    }
     if (request.action === 'create-batch') {
       if (!trusted || !Number.isInteger(availableSlots) || availableSlots < 0 || availableSlots > 8)
         return fail('failed');

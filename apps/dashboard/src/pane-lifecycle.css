@@ -1,7 +1,8 @@
 .pane-lifecycle,
 .pane-lifecycle-actions,
-.pane-lifecycle-ended li,
-.pane-lifecycle-ended li > span {
+.pane-lifecycle-ended > ul > li,
+.pane-lifecycle-ended > ul > li > span,
+.pane-lifecycle-ended-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -51,15 +52,34 @@
   border: 1px solid var(--orqst-border, #262334);
 }
 
-.pane-lifecycle-ended li > span {
+.pane-lifecycle-ended > ul > li > span {
   flex-wrap: wrap;
   min-width: 0;
 }
 
-.pane-lifecycle-ended li {
+.pane-lifecycle-ended > ul > li {
   justify-content: space-between;
   flex-wrap: wrap;
   padding: 4px 0;
+}
+
+.pane-lifecycle-dock {
+  flex: 0 0 auto;
+  max-height: min(40vh, 22rem);
+  overflow: auto;
+  background: var(--orqst-panel, #090b10);
+}
+
+.pane-lifecycle-dock .saved-terminal-list > p {
+  display: none;
+}
+
+.pane-lifecycle-recovery {
+  max-width: 520px;
+}
+
+.pane-lifecycle-recovery ol {
+  padding-inline-start: 1.5rem;
 }
 
 @keyframes pane-lifecycle-pulse {

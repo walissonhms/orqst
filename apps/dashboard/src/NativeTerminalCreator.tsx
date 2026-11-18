@@ -82,7 +82,6 @@ export function NativeTerminalCreator({
   const [failure, setFailure] = useState<TerminalPreparationFailure>();
   const opening = useRef(false);
   const requestId = useRef(0);
-  const savedList = useRef<HTMLDivElement>(null);
   const [retry] = useState(() => consumeTerminalRetry(workspace.id, featureId));
 
   const load = useCallback(
@@ -149,7 +148,7 @@ export function NativeTerminalCreator({
         )
       : 0;
 
-  const open = async (requests: TerminalRequest[]) => {
+  const open = async (requests: TerminalRequest[], reopenTerminalId?: string) => {
     if (
       opening.current ||
       state !== 'ready' ||
@@ -158,7 +157,12 @@ export function NativeTerminalCreator({
       catalog.workspaceId !== workspace.id ||
       catalog.featureId !== featureId ||
       requests.length === 0 ||
-      requests.length > capacity
+      requests.length >
+        (reopenTerminalId
+          ? snapshot.canCreate && !snapshot.busy
+            ? snapshot.limit - snapshot.count
+            : 0
+          : capacity)
     )
       return;
     const counts = new Map<string, number>();
@@ -220,6 +224,7 @@ export function NativeTerminalCreator({
         workspaceId: workspace.id,
         featureId: catalog.restoredFeature?.featureId ?? featureId,
         catalogId: catalog.catalogId,
+        ...(reopenTerminalId ? { reopenTerminalId } : {}),
         requests: items.map(({ id, workspaceId, provider, modelId, name }) => ({
           id,
           workspaceId,
@@ -302,6 +307,67 @@ export function NativeTerminalCreator({
     }
   };
 
+  const remove = async (terminalId: string) => {
+    const restored = catalog?.restoredFeature;
+    if (
+      opening.current ||
+      !snapshot ||
+      !catalog ||
+      !restored ||
+      !restored.terminalDisplays?.some((entry) => entry.terminalId === terminalId && entry.released)
+    )
+      return;
+    opening.current = true;
+    try {
+      const reply = await native.request({
+        action: 'remove-terminal',
+        generation: snapshot.generation,
+        catalogId: catalog.catalogId,
+        workspaceId: workspace.id,
+        featureId: restored.featureId,
+        terminalId,
+      });
+      if (reply.status === 'ok') {
+        opening.current = false;
+        await load(true);
+        return;
+      }
+      setFailure(
+        reply.status === 'catalog' || reply.status === 'batch' ? undefined : reply.failure,
+      );
+      setMessage(t('paneLifecycle.removalUnconfirmed'));
+      setState('error');
+    } catch {
+      setFailure(undefined);
+      setMessage(t('paneLifecycle.removalUnconfirmed'));
+      setState('error');
+    } finally {
+      opening.current = false;
+    }
+  };
+
+  const reopen = (terminalId: string) => {
+    const member = catalog?.reopenable?.find((entry) => entry.terminalId === terminalId);
+    if (!member) {
+      setMessage(t('paneLifecycle.reopenBlocked'));
+      setState('error');
+      return;
+    }
+    void open(
+      [
+        {
+          workspaceId: workspace.id,
+          provider: member.provider,
+          model: member.modelId,
+          name: member.name,
+          accountId: null,
+          orchestrator: false,
+        },
+      ],
+      terminalId,
+    );
+  };
+
   const cancel = () => {
     if (!opening.current) {
       onClose(
@@ -310,6 +376,33 @@ export function NativeTerminalCreator({
     }
   };
   const form = (state === 'ready' || state === 'opening') && catalog;
+  const savedMembers =
+    form &&
+    (catalog.restoredFeature?.terminalIds.map((id) => {
+      const display = catalog.restoredFeature?.terminalDisplays?.find(
+        ({ terminalId }) => terminalId === id,
+      );
+      const reopen = catalog.reopenable?.find(({ terminalId }) => terminalId === id);
+      return {
+        id,
+        provider: reopen?.provider,
+        name: reopen?.name,
+        closed: !!display?.released,
+        confirmedExit: !!display?.released,
+        displayId: display?.displayId,
+        released: display?.released,
+      };
+    }) ??
+      catalog.reopenable?.map(({ terminalId, provider, name, displayId }) => ({
+        id: terminalId,
+        provider,
+        name,
+        displayId,
+        closed: true,
+        confirmedExit: true,
+        released: true,
+      })) ??
+      []);
   const choices = catalog
     ? dialogCatalog(catalog, (reason) => t(`terminalStudio.create.reason_${reason}`))
     : [];
@@ -412,28 +505,29 @@ export function NativeTerminalCreator({
           </footer>
         </div>
       )}
-      {form &&
-        (!!catalog.restoredFeature?.terminalIds.length || !!catalog.pendingOwnedExits?.length) && (
-          <div ref={savedList} className="ntd-history">
-            <SavedTerminalList
-              members={(catalog.restoredFeature?.terminalIds ?? []).map((id) => ({
-                id,
-                closed: false,
-              }))}
-              onReopen={
-                capacity > 0 && state === 'ready'
-                  ? () =>
-                      savedList.current?.parentElement
-                        ?.querySelector<HTMLElement>('form select')
-                        ?.focus()
-                  : undefined
-              }
-            />
-            {!!catalog.pendingOwnedExits?.length && (
-              <p role="status">{t('tauriPreparation.code_owned_exit_pending')}</p>
-            )}
-          </div>
-        )}
+      {form && savedMembers && (!!savedMembers.length || !!catalog.pendingOwnedExits?.length) && (
+        <div className="ntd-history">
+          <SavedTerminalList
+            members={savedMembers}
+            onRemove={
+              catalog.restoredFeature && state === 'ready' && !snapshot?.busy
+                ? (id) => void remove(id)
+                : undefined
+            }
+            onReopen={
+              state === 'ready' &&
+              snapshot?.canCreate &&
+              !snapshot.busy &&
+              snapshot.count < snapshot.limit
+                ? reopen
+                : undefined
+            }
+          />
+          {!!catalog.pendingOwnedExits?.length && (
+            <p role="status">{t('tauriPreparation.code_owned_exit_pending')}</p>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

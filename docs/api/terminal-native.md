@@ -1086,6 +1086,33 @@ The private Tauri host acknowledges a confirmed whole-cohort retirement or
 durable pending OpenCode exit after the Core has stopped. See the
 [operator workflow and acceptance checks](../development/terminal-close.md).
 
+## Studio lifecycle and saved membership
+
+Successful slot release and completed cohort retirement record the exact
+physical member and Core epoch in Feature metadata. A scoped catalog can list
+the release separately from current CLI and model availability. A reopen
+request uses `reopenTerminalId` on a single-item `create-batch`; the helper
+revalidates the saved project, provider and model, current catalog and Feature
+revisions before replacing the assignment. The replacement gets a fresh
+physical manifest and journal. The display number, saved name and Team handle
+survive while the earlier launch evidence stays intact. The replacement
+receives its own authorization.
+
+`removeTerminal` is a trusted Feature metadata mutation for a released member.
+When normal Core is absent, the main document can use `remove-terminal` through
+the scoped native preparation helper. Both routes require a current scope and
+preserve historical evidence. Unknown ownership remains in the Ended list with
+the existing administrative recovery guidance.
+
+The native parent can issue the private `startPrepared` pipe frame for a batch's
+exact newly admitted slots and native-bound profile IDs. The broker signs one
+fresh Core start challenge per member under an already allowed CLI policy.
+A background start supplies no attachment or input grant. The foreground
+opening intent later binds a new signed attach/input sequence to the same
+physical attempt. An uncertain start is never replayed.
+
+See [L3 integration and measurements](../development/spec-l3/README.md).
+
 ## Feature chrome to dashboard navigation — 2026-11-18
 
 The owned Feature chrome reuses the view-only `feature_prepare` handoff for

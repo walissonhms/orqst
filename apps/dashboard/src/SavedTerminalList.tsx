@@ -8,17 +8,19 @@ interface Props {
     id: string;
     closed: boolean;
     confirmedExit?: boolean;
+    released?: boolean;
     displayId?: string;
     provider?: EndedTerminal['provider'];
+    name?: string;
   }[];
-  onReopen?: () => void;
+  onReopen?: (terminalId: string) => void;
+  onRemove?: (terminalId: string) => void;
 }
 
 /** Presentation only. A saved ID conveys no authority or proof of process state. */
-export function SavedTerminalList({ members, onReopen }: Props) {
+export function SavedTerminalList({ members, onReopen, onRemove }: Props) {
   const { t } = useTranslation();
   const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
-  const [inspected, setInspected] = useState<string>();
   const visible = members.filter(({ id }) => !hidden.has(id));
   const hiddenCount = members.length - visible.length;
   if (!members.length) return null;
@@ -28,28 +30,22 @@ export function SavedTerminalList({ members, onReopen }: Props) {
       {visible.length > 0 && (
         <>
           <EndedTerminalList
-            terminals={visible.map(({ id, confirmedExit, displayId, provider }) => ({
-              terminalId: id,
-              displayId,
-              provider,
-              disposition: confirmedExit ? 'exit_confirmed' : 'uncertain',
-            }))}
-            onInspect={({ terminalId }) => setInspected(terminalId)}
+            terminals={visible.map(
+              ({ id, confirmedExit, released, displayId, provider, name }) => ({
+                terminalId: id,
+                displayId,
+                provider,
+                name,
+                released,
+                disposition: confirmedExit ? 'exit_confirmed' : 'uncertain',
+              }),
+            )}
+            onRemove={onRemove ? ({ terminalId }) => onRemove(terminalId) : undefined}
+            onReopen={onReopen ? ({ terminalId }) => onReopen(terminalId) : undefined}
             onHide={({ terminalId }) => {
               setHidden((ids) => new Set([...ids, terminalId]));
-              if (inspected === terminalId) setInspected(undefined);
             }}
           />
-          {inspected && (
-            <p role="status">
-              <code>{inspected}</code> {t('features.savedTerminals.detached')}
-            </p>
-          )}
-          {onReopen && (
-            <button type="button" onClick={onReopen}>
-              {t('features.savedTerminals.reopen')}
-            </button>
-          )}
         </>
       )}
       {hiddenCount > 0 && (

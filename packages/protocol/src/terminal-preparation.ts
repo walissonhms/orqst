@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { featureScopeSchema } from './features.js';
+import { featureScopeSchema, featureTerminalDisplaySchema } from './features.js';
 import { terminalDisplayNameSchema } from './terminal-workspace.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -20,10 +20,18 @@ export const terminalSelectedRequestSchema = z.strictObject({
   modelId: digest,
   count: z.number().int().min(1).max(8),
 });
+export const terminalRemoveRequestSchema = z.strictObject({
+  action: z.literal('remove-terminal'),
+  workspaceId: scope.workspaceId,
+  featureId: z.uuid(),
+  catalogId: digest,
+  terminalId: z.uuid(),
+});
 export const terminalBatchRequestSchema = z.strictObject({
   action: z.literal('create-batch'),
   ...scope,
   catalogId: digest,
+  reopenTerminalId: z.uuid().optional(),
   requests: z
     .array(
       z.strictObject({
@@ -149,10 +157,23 @@ export const terminalMcpPairRequestSchema = z
   });
 export const terminalPreparationCatalogSchema = z.strictObject({
   contractVersion: z.literal(1),
+  reopenable: z
+    .array(
+      z.strictObject({
+        terminalId: z.uuid(),
+        displayId: z.string().regex(/^T-[0-9]{3,5}$/),
+        provider: terminalProviderSchema,
+        modelId: digest,
+        name: terminalDisplayNameSchema,
+      }),
+    )
+    .max(8)
+    .optional(),
   restoredFeature: z
     .strictObject({
       featureId: z.uuid(),
       name: terminalDisplayNameSchema,
+      terminalDisplays: z.array(featureTerminalDisplaySchema).max(8).optional(),
       terminalIds: z
         .array(z.uuid())
         .max(8)
