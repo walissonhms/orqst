@@ -145,6 +145,7 @@
   "notificationCompleted": "Turno concluído",
   "notificationFailed": "Falha na execução",
   "notificationIntervention": "Sua resposta é necessária",
+  "liveOnly": "Alertas ao vivo",
   "resultTitle": "Trabalho entregue",
   "tokenRecords": "Registros de tokens",
   "limitNotice": "Exibindo {{count}} eventos recentes. Abra uma sessão para ver seu histórico retido.",

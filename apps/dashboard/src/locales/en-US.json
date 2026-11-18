@@ -177,6 +177,7 @@
   "notificationCompleted": "Turn completed",
   "notificationFailed": "Execution failed",
   "notificationIntervention": "Your input is needed",
+  "liveOnly": "Live alerts",
   "resultTitle": "Delivered work",
   "tokenRecords": "Token records",
   "limitNotice": "Showing {{count}} recent events. Open a session for its full retained history.",

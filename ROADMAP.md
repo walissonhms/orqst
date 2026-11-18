@@ -6,9 +6,13 @@ The V6 Studio separates Hide from native-confirmed Close terminal. The Node
 and Rust terminal Cores retain journal evidence and fence each confirmed closed
 slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
 
+## Token accounting and plan evidence
+
 Owned PTY and structured token projections have source and synthetic coverage.
 [Native token and allowance acceptance](docs/research/token-and-plan-accounting.md#native-acceptance-for-the-owner)
 remains open.
+
+## Native startup and terminal opening
 
 Native startup and terminal-opening performance is measured with [disposable host
 benchmarks](docs/development/native-opening-performance.md). Preview and real CLI
