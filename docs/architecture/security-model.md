@@ -1,5 +1,14 @@
 # Security model
 
+## Tauri Studio CLI update evidence
+
+Executable selection uses the packaged pin, a private exact native review, or
+a signed update at the same canonical path. Node and Rust verify the Apple
+Developer ID Application identity and apply the prior notarization requirement.
+The helper persists a current exact-hash review with its source. Provisioning,
+enrollment and launch continue to bind the existing native scope, identity,
+epoch and manifest bytes. See the [security review and verification limits](../development/cli-signed-updates.md#security-review).
+
 ## Studio terminal output continuation — 2026-11-18
 
 The native document can finish the output part of a policy-reviewed Open during

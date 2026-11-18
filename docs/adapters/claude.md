@@ -1,5 +1,13 @@
 # Claude Code adapter contract
 
+## CLI update evidence — 2026-11-18
+
+Studio can accept the native Claude TUI at the same reviewed canonical path
+with Anthropic Team ID `Q6L2SF6YDW` and required notarization. A launcher pointing
+to a different version directory requires review of that canonical file. This
+applies to the owned TUI and its existing MCP acknowledgment.
+See the [installation and update evidence](../development/cli-signed-updates.md#provider-evidence).
+
 ## Managed Tauri TUI update — 2026-11-05
 
 The separate managed terminal path now selects the reviewed 2.1.318 native TUI
@@ -7,7 +15,7 @@ pin and reuses catalogue/model/preparation/Core/PTY with existing single CLI
 authorization. Default and three reviewed aliases remain availability-unverified.
 Historical 2.1.178 manifests and the independent strict MCP contract are retained;
 the new TUI binary cannot opt into ORQST MCP without another review. The 512 MiB
-streaming hash bound remains finite, and upgrades require new exact pins.
+streaming hash bound remains finite under the later update policy above.
 See [passive sources, reuse decisions and acceptance limits](../research/claude-code-tauri.md).
 This does not implement external observation or change any capability below.
 

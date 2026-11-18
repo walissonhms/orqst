@@ -1,5 +1,6 @@
 //! Port of `antigravity-profile.ts` and `antigravity-launch-plan.ts`. Never opens native
 //! `~/.gemini` databases or credential files.
+use super::cli_review::accepted_review;
 use super::codex::assert_separate_terminal_state;
 use super::config::{model_value, AntigravityConfig, McpLaunch};
 use super::fsx::{terminal_directory, terminal_executable_sha256};
@@ -26,11 +27,18 @@ pub struct AntigravityLaunchInput<'a> {
 pub fn antigravity_interactive_launch_plan(
     input: &AntigravityLaunchInput,
 ) -> Result<(Js, Vec<(String, String)>)> {
+    interactive_launch_plan(input, false)
+}
+
+fn interactive_launch_plan(
+    input: &AntigravityLaunchInput,
+    reviewed: bool,
+) -> Result<(Js, Vec<(String, String)>)> {
     slash_path(&Js::str(input.executable), "executable")?;
-    if input.executable_version != REVIEWED_ANTIGRAVITY.version {
+    if !reviewed && input.executable_version != REVIEWED_ANTIGRAVITY.version {
         return Err(ProfileError::schema("executableVersion"));
     }
-    if input.executable_sha256 != REVIEWED_ANTIGRAVITY.sha256 {
+    if !reviewed && input.executable_sha256 != REVIEWED_ANTIGRAVITY.sha256 {
         return Err(ProfileError::schema("executableSha256"));
     }
     slash_path(&Js::str(input.project), "project")?;
@@ -99,6 +107,11 @@ pub fn validate_antigravity_selection(
 ) -> Result<()> {
     validate_terminal_model_selection(config.model.as_ref())?;
     prep.validate(config.preparation.as_ref(), &config.project)?;
+    if (config.executable_version != REVIEWED_ANTIGRAVITY.version || config.executable.sha256 != REVIEWED_ANTIGRAVITY.sha256)
+        && !accepted_review("antigravity", &config.executable, &config.executable_version, config.preparation.as_ref())
+    {
+        return Err(ProfileError::refused("No reviewed antigravity executable"));
+    }
     terminal_tool_path(config.tool_path.as_deref())?;
     terminal_directory(&config.project, false)?;
     assert_separate_terminal_state(&config.project, &config.state)?;
@@ -148,14 +161,14 @@ pub fn antigravity_terminal_environment(
         ));
     }
     validate_terminal_model_selection(config.model.as_ref())?;
-    let (_, mut environment) = antigravity_interactive_launch_plan(&AntigravityLaunchInput {
+    let (_, mut environment) = interactive_launch_plan(&AntigravityLaunchInput {
         executable: &config.executable.path,
         executable_version: &config.executable_version,
         executable_sha256: &config.executable.sha256,
         project: &config.project,
         home: &config.home,
         model: config.model.as_ref().map(|m| m.value.as_deref()),
-    })?;
+    }, accepted_review("antigravity", &config.executable, &config.executable_version, config.preparation.as_ref()))?;
     set(
         &mut environment,
         "PATH",

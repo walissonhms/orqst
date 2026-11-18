@@ -35,8 +35,10 @@ export function inspectTerminalPreparationCatalog(
     requestedProviders,
     context.environment.PATH ?? '',
     context.home,
-  ).map(({ provider, executables, refusal }) => {
-    if (executables.length !== 1) return { provider, executables, models: null, refusal };
+    trusted.preferencesDirectory,
+  ).map(({ provider, executables, refusal, candidate }) => {
+    if (executables.length !== 1)
+      return { provider, executables, models: null, refusal, candidate };
     let models;
     try {
       models = discoverTerminalModels(
@@ -47,7 +49,7 @@ export function inspectTerminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables, models: null, refusal };
+      return { provider, executables, models: null, refusal, candidate };
     }
     const executable = executables.length === 1 ? executables[0]! : null;
     const identity = JSON.stringify([
@@ -79,7 +81,7 @@ export function inspectTerminalPreparationCatalog(
         id: selectionId(identity, option.label, option.selection),
       })),
     };
-    return { provider, executables, models, identity, refusal };
+    return { provider, executables, models, identity, refusal, candidate };
   });
   return { request, catalogId: terminalCatalogId(trusted, workspace), providers, workspace };
 }
@@ -126,7 +128,7 @@ export function terminalPreparationCatalog(
           },
         }
       : {}),
-    providers: providers.map(({ provider, executables, models, refusal }) => ({
+    providers: providers.map(({ provider, executables, models, refusal, candidate }) => ({
       provider,
       status: executables.length === 1 && models ? 'available' : 'unavailable',
       reason: !executables.length
@@ -136,6 +138,13 @@ export function terminalPreparationCatalog(
           : !models || models.limited
             ? 'catalog_limited'
             : 'ready',
+      ...(candidate?.decision === 'review' && refusal === 'executable_unreviewed'
+        ? { reviewId: cliReviewId(candidate) }
+        : models &&
+            candidate?.decision === 'exact' &&
+            candidate.previous?.source === 'signature_continuity'
+          ? { verifiedUpdate: candidate.previous.version }
+          : {}),
       models:
         models?.options.map(({ id, label, selection }) => ({
           id,
@@ -173,7 +182,18 @@ export function resolveCatalogSelection(
       continue;
     const selection = { ...option.selection, ...(expiresAt ? { expiresAt } : {}) };
     if (selectionId(provider.identity, option.label, selection) === id)
-      return { provider: name, executable: provider.executables[0]!, model: selection };
+      return {
+        provider: name,
+        executable: provider.executables[0]!,
+        model: selection,
+        candidate: provider.candidate,
+      };
   }
   return undefined;
+}
+
+export function cliReviewId(
+  candidate: NonNullable<ReturnType<typeof inspectCatalogExecutables>[number]['candidate']>,
+) {
+  return terminalDigest(JSON.stringify(candidate));
 }

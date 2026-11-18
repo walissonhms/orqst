@@ -1,5 +1,14 @@
 # Security policy
 
+## Managed CLI publisher continuity
+
+Tauri Studio can accept an updated native CLI at its exact reviewed canonical
+path after valid Developer ID and required notarization continuity. It records
+the version, SHA-256, predecessor and verification source. Missing or changed
+publisher evidence and moved paths require a fresh native review of the exact
+candidate. Existing authorization epochs, scope and signed launch challenges
+still apply. See the [security review](docs/development/cli-signed-updates.md#security-review).
+
 ## Feature chrome dashboard navigation
 
 The existing native navigation handoff accepts a closed set of dashboard

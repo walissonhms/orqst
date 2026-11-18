@@ -59,10 +59,14 @@ export function PaneLifecycleContent({
       <div className="pane-lifecycle-actions">
         {onRetry && (
           <button type="button" disabled={!failure.retryable} onClick={onRetry}>
-            {t('paneLifecycle.retry')}
+            {t(
+              failure.reason === 'cli_review_required'
+                ? 'studio.cliReview.action'
+                : 'paneLifecycle.retry',
+            )}
           </button>
         )}
-        {onChangeCli && (
+        {onChangeCli && failure.reason !== 'cli_review_required' && (
           <button type="button" disabled={!failure.retryable} onClick={onChangeCli}>
             {t('paneLifecycle.changeCli')}
           </button>

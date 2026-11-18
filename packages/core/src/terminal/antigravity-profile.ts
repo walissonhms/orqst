@@ -1,3 +1,4 @@
+import { cliExecutableVersion, hasCliExecutableReview } from './cli-executable-review.js';
 import {
   terminalModelArguments,
   terminalModelSelectionSchema,
@@ -32,12 +33,12 @@ const path = z
   .startsWith('/')
   .refine((value) => !value.includes('\0'));
 const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
-export const managedAntigravityConfigSchema = z.strictObject({
+const managedAntigravityConfig = z.strictObject({
   version: z.literal(4),
   provider: z.literal('antigravity'),
   trust: z.literal('native-same-user'),
-  executable: binary.extend({ sha256: z.literal(reviewedAntigravityBinary.sha256) }),
-  executableVersion: z.literal(reviewedAntigravityBinary.version),
+  executable: binary,
+  executableVersion: cliExecutableVersion,
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
   identity: terminalIdentitySchema.optional(),
@@ -54,6 +55,12 @@ export const managedAntigravityConfigSchema = z.strictObject({
     sharedNativeSessions: z.literal(true),
   }),
 });
+export const managedAntigravityConfigSchema = managedAntigravityConfig.refine(
+  (value) =>
+    value.preparation !== undefined ||
+    (value.executableVersion === reviewedAntigravityBinary.version &&
+      value.executable.sha256 === reviewedAntigravityBinary.sha256),
+);
 export type ManagedAntigravityConfig = z.infer<typeof managedAntigravityConfigSchema>;
 
 /** Also used before provisioning; checks directories only, never ~/.gemini databases or auth. */
@@ -62,6 +69,12 @@ export function validateAntigravitySelection(
   verifyExecutable = terminalExecutableSha256,
 ): void {
   managedAntigravityConfigSchema.parse(config);
+  if (
+    (config.executableVersion !== reviewedAntigravityBinary.version ||
+      config.executable.sha256 !== reviewedAntigravityBinary.sha256) &&
+    !hasCliExecutableReview('antigravity', config)
+  )
+    throw new Error('No reviewed antigravity executable');
   validateTerminalModelSelection(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
@@ -99,14 +112,17 @@ export function antigravityTerminalEnvironment(
   if (mcp) throw new Error('Antigravity has no per-session MCP launch contract');
   validateTerminalModelSelection(config.model);
   return {
-    ...antigravityInteractiveLaunchPlan({
-      executable: config.executable.path,
-      executableVersion: config.executableVersion,
-      executableSha256: config.executable.sha256,
-      project: config.project,
-      home: config.authentication.home,
-      ...(config.model ? { model: config.model.value } : {}),
-    }).environment,
+    ...antigravityInteractiveLaunchPlan(
+      {
+        executable: config.executable.path,
+        executableVersion: config.executableVersion,
+        executableSha256: config.executable.sha256,
+        project: config.project,
+        home: config.authentication.home,
+        ...(config.model ? { model: config.model.value } : {}),
+      },
+      hasCliExecutableReview('antigravity', config),
+    ).environment,
     PATH: terminalToolPath(config.toolPath),
     TMPDIR: join(config.state, 'tmp'),
   };

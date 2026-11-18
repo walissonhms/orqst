@@ -1029,6 +1029,12 @@
     "invalidTarget": "Use IDs exatos e únicos de terminais desta Feature. Um terminal não pode enviar para si mesmo."
   },
   "studio": {
+    "cliReview": {
+      "refresh": "Atualizar",
+      "required": "CLI atualizado · revisão necessária",
+      "action": "Revisar",
+      "verified": "{{name}} atualizado para {{version}} · assinatura verificada"
+    },
     "create": {
       "title": "Novo terminal",
       "scope": "{{workspace}} / {{feature}}",
@@ -1179,6 +1185,8 @@
     }
   },
   "tauriPreparation": {
+    "cliUpdate": "Confira o caminho e o SHA-256 do executável. A aprovação permite que o ORQST execute uma verificação de versão limitada para esse arquivo.",
+    "cliUpdateApprove": "Aprovar executável",
     "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",
     "retired": "Seleção aposentada após saídas confirmadas dos processos próprios e encerramento do Core. Saia e reabra o Tauri com perfis recém-preparados para selecionar novos terminais. Diários, metadados e resultados incertos anteriores são preservados. A reseleção na mesma janela ainda não está disponível.",
     "menu": "Preparar terminais Tauri",
@@ -1453,6 +1461,7 @@
       "ended": "Encerrado"
     },
     "failure": {
+      "cli_review_required": "CLI atualizado · revisão necessária",
       "cli_not_installed": "CLI não instalada",
       "not_authenticated": "Faça login na CLI",
       "model_missing": "Modelo indisponível",
@@ -1572,7 +1581,7 @@
       "unavailable": "Indisponível",
       "reason_ready": "Pronto",
       "reason_executable_not_found": "CLI não encontrada",
-      "reason_executable_unreviewed": "Versão ou checksum da CLI não revisado",
+      "reason_executable_unreviewed": "CLI atualizado · revisão necessária",
       "reason_executable_inspection_failed": "Falha ao verificar a CLI",
       "reason_ambiguous_executable": "Várias instalações da CLI encontradas",
       "reason_catalog_limited": "Catálogo da CLI ou modelos não pôde ser validado",
@@ -1708,6 +1717,7 @@
         "unknown": "Desconhecido"
       },
       "reason": {
+        "cli_review_required": "CLI atualizado · revisão necessária",
         "core_enrolled": "Aceito pelo Core",
         "workspace_unsupported": "Por enquanto só o workspace atual é suportado",
         "account_unsupported": "Escolher conta ainda não está disponível",

@@ -1410,6 +1410,20 @@ export function FeatureWorkspace({
             if (id) focusedTerminals.current.set(scopeKey, id);
           }}
         >
+          {[
+            ...new Map(
+              openingTerminals
+                .filter((entry) => entry.verifiedUpdate)
+                .map((entry) => [entry.provider, entry.verifiedUpdate]),
+            ).entries(),
+          ].map(([provider, version]) => (
+            <p className="fine-print" role="status" key={provider}>
+              {t('studio.cliReview.verified', {
+                name: t(`terminalStudio.providers.${provider}`),
+                version,
+              })}
+            </p>
+          ))}
           <TerminalStudio
             key={scopeKey}
             storageKey={`orqst.studio.${snapshot?.workspace.id ?? 'none'}.${selected?.featureId ?? 'unassigned'}`}

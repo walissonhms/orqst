@@ -1,5 +1,13 @@
 # Codex CLI adapter
 
+## Managed CLI updates
+
+The native Codex binary can use publisher continuity at its reviewed canonical
+path with OpenAI Team ID `2DC432GLL2`. Standalone installer version directories
+and npm shims have different canonical identities. A moved native binary
+requires exact review, and the npm wrapper remains outside the native Mach-O
+launch contract. See the [installation and update evidence](../development/cli-signed-updates.md#provider-evidence).
+
 The Codex adapter is the only implemented integration in ORQST. It observes
 Codex CLI session files that were produced by Codex itself, outside ORQST. It
 never launches Codex and never writes to a session file.

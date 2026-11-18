@@ -223,6 +223,11 @@ fn valid_request(value: &Value) -> bool {
         Some("snapshot") => exact(value, &["action"]),
         Some("catalog") => exact(value, &["action", "workspaceId", "featureId"]) && scope(value),
         Some("create-mcp-pair") => generation && scope(value) && valid_mcp_pair(value),
+        Some("review-cli") => {
+            exact(value, &["action", "generation", "workspaceId", "featureId", "catalogId", "provider", "reviewId"])
+                && generation && scope(value) && digest(&value["catalogId"]) && digest(&value["reviewId"])
+                && matches!(value["provider"].as_str(), Some("codex" | "claude" | "opencode" | "antigravity"))
+        }
         Some("create-selected") => {
             exact(
                 value,
@@ -324,6 +329,16 @@ fn digest(value: &Value) -> bool {
                 .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     })
 }
+fn valid_version_label(value: &Value) -> bool {
+    value.as_str().is_some_and(|version| {
+        let (base, suffix) = version.split_once('-').unwrap_or((version, ""));
+        version.len() <= 40
+            && base.split('.').count() == 3
+            && base.split('.').all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+            && (!version.contains('-') || (!suffix.is_empty() && suffix.bytes().all(|b|
+                b.is_ascii_alphanumeric() || b == b'.' || b == b'-')))
+    })
+}
 fn valid_catalog(value: &Value, request: &Value) -> bool {
     value.as_object().is_some_and(|fields| {
         fields.keys().all(|key| {
@@ -369,7 +384,12 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                     .iter()
                     .all(|id| providers.iter().filter(|p| p["provider"] == *id).count() == 1)
                 && providers.iter().all(|p| {
-                    exact(p, &["provider", "status", "reason", "models"])
+                    p.as_object().is_some_and(|fields| fields.keys().all(|key|
+                        ["provider", "status", "reason", "models", "reviewId", "verifiedUpdate"].contains(&key.as_str())))
+                        && p.get("reviewId").is_none_or(|id| p["reason"] == "executable_unreviewed"
+                            && p["status"] == "unavailable" && digest(id))
+                        && p.get("verifiedUpdate").is_none_or(|version| p["status"] == "available"
+                            && p.get("reviewId").is_none() && valid_version_label(version))
                         && matches!(p["status"].as_str(), Some("available" | "unavailable"))
                         && matches!(
                             p["reason"].as_str(),
@@ -410,13 +430,16 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
         })
 }
 fn document_matches(label: &str, parent: &str, source: &str, origin: &str) -> bool {
+    matches_studio_document(label, parent, source, origin, false)
+}
+fn matches_studio_document(label: &str, parent: &str, source: &str, origin: &str, settings: bool) -> bool {
     let Ok(url) = tauri::Url::parse(source) else {
         return false;
     };
     label == "main"
         && parent == "main"
         && url.origin().ascii_serialization() == origin
-        && matches!(url.path(), "/" | "/studio")
+        && (matches!(url.path(), "/" | "/studio") || (settings && url.path() == "/settings"))
         && url.username().is_empty()
         && url.password().is_none()
         && url.query().is_none()
@@ -439,12 +462,16 @@ fn identity_from(
         && matches(&source, &guard.origin))
     .then_some((source, expected.1))
 }
-fn identity(view: &Webview) -> Option<(String, u64)> {
+fn identity(view: &Webview, settings: bool) -> Option<(String, u64)> {
     let parent = view.window();
     identity_from(
         &view.state::<Preparation>().0,
         || view.url().ok().map(|url| url.to_string()),
-        |source, origin| document_matches(view.label(), parent.label(), source, origin),
+        |source, origin| if settings {
+            matches_studio_document(view.label(), parent.label(), source, origin, true)
+        } else {
+            document_matches(view.label(), parent.label(), source, origin)
+        },
     )
 }
 /// Passive navigation cannot overlap the native preparation helper or its review.
@@ -477,7 +504,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let incremental = running
         && matches!(
             request["action"].as_str(),
-            Some("catalog" | "create-selected" | "create-batch")
+            Some("catalog" | "review-cli" | "create-selected" | "create-batch")
         );
     if running
         && (!incremental
@@ -500,7 +527,7 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
             !guard.begin(
                 matches!(
                     request["action"].as_str(),
-                    Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
+                    Some("review-cli" | "create" | "create-selected" | "create-mcp-pair" | "create-batch")
                 ),
                 running,
             )
@@ -653,6 +680,7 @@ fn execute(
     diagnostic: &Attempt,
 ) -> Value {
     let mut stage = "bootstrap";
+    let review_cli = request["action"] == "review-cli";
     let result = run(
         app,
         window,
@@ -677,7 +705,13 @@ fn execute(
     // Completion never waits for dismissal of an informational error sheet. Sticky
     // committed/opened and Core ownership remain untouched.
     stop(app);
-    app.state::<Preparation>().0.lock().unwrap().busy = false;
+    let state = app.state::<Preparation>();
+    let mut guard = state.0.lock().unwrap();
+    guard.busy = false;
+    if review_cli {
+        guard.committed = false;
+    }
+    drop(guard);
     if native_notice
         && !succeeded
         && window.window().is_visible().unwrap_or(false)
@@ -720,8 +754,10 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         return json!({"status":"denied"});
     }
     let app = window.app_handle().clone();
+    let settings = matches!(request["action"].as_str(), Some("catalog" | "review-cli"));
+    let identity = || identity(&window, settings);
     if request["action"] == "snapshot" {
-        return if identity(&window).is_some() {
+        return if identity().is_some() {
             json!({"status":"ok", "snapshot":snapshot(&app)})
         } else {
             json!({"status":"denied"})
@@ -738,7 +774,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         diagnostic.record(entry, Outcome::Refused, Effects::NotStarted);
         json!({"status":"denied"})
     };
-    let Some((source, generation)) = identity(&window) else {
+    let Some((source, generation)) = identity() else {
         return denied();
     };
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
@@ -749,7 +785,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         }
         return json!({"status":"focus_required"});
     }
-    if identity(&window) != Some((source.clone(), generation))
+    if identity() != Some((source.clone(), generation))
         || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
     {
         if request["action"] == "create-batch" {
@@ -783,7 +819,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"review", "files":files})
     } else if matches!(
         request["action"].as_str(),
-        Some("catalog" | "create-selected" | "create-mcp-pair" | "create-batch")
+        Some("catalog" | "review-cli" | "create-selected" | "create-mcp-pair" | "create-batch")
     ) {
         let mut native = request.clone();
         native.as_object_mut().unwrap().remove("generation");
@@ -824,7 +860,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         )
     })
     .await;
-    if identity(&window) != Some((source, generation)) {
+    if identity() != Some((source, generation)) {
         if requested["action"] == "catalog" {
             return denied();
         }
@@ -855,6 +891,9 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
             value["snapshot"] = current;
             diagnostic.record(Stage::Catalog, Outcome::Ready, Effects::NotStarted);
             value
+        }
+        Ok(value) if requested["action"] == "review-cli" && value.get("failure").is_none() => {
+            json!({"status":value["status"], "snapshot":snapshot(&app)})
         }
         Ok(value) if value["status"] == "denied" => {
             json!({"status":"denied", "failure":value["failure"], "snapshot":snapshot(&app)})
@@ -918,6 +957,7 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
                 "terminalId",
                 "file",
                 "name",
+                "verifiedUpdate",
             ]
             .contains(&key.as_str())
         }) || item["id"] != input["id"]
@@ -929,6 +969,7 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
                         | "account_unsupported"
                         | "capacity_exceeded"
                         | "selection_unavailable"
+                        | "cli_review_required"
                         | "catalog_changed"
                         | "review_cancelled"
                         | "context_changed"
@@ -960,7 +1001,9 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
                 return false;
             }
         }
-        if item.get("name").is_some_and(|name| *name != input["name"]) {
+        if item.get("verifiedUpdate").is_some_and(|version| {
+            item["status"] != "prepared" || !valid_version_label(version)
+        }) || item.get("name").is_some_and(|name| *name != input["name"]) {
             return false;
         }
         match item["status"].as_str() {
@@ -1066,8 +1109,10 @@ fn open_batch(
         }
     }
     let uncertain = items.iter().any(|item| item["status"] == "unknown");
-    if !uncertain && !prepared.is_empty() {
-        diagnostic.record(Stage::Opening, Outcome::Succeeded, Effects::Possible);
+    if !uncertain {
+        if !prepared.is_empty() {
+            diagnostic.record(Stage::Opening, Outcome::Succeeded, Effects::Possible);
+        }
         let state = app.state::<Preparation>();
         let mut guard = state.0.lock().unwrap();
         guard.prepared.clear();
@@ -1075,7 +1120,11 @@ fn open_batch(
         guard.opened = false;
     }
     for item in &mut items {
+        let accepted = item["status"] == "accepted";
         let fields = item.as_object_mut().unwrap();
+        if !accepted {
+            fields.remove("verifiedUpdate");
+        }
         fields.remove("file");
         fields.remove("name");
     }
@@ -1143,7 +1192,7 @@ fn run(
             && (!crate::terminal::is_running(app)
                 || (matches!(
                     request["action"].as_str(),
-                    Some("catalog" | "create-selected" | "create-batch")
+                    Some("catalog" | "review-cli" | "create-selected" | "create-batch")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
             && crate::terminal::preparation_admission_current(app, &admission)
@@ -1381,10 +1430,14 @@ fn run(
                         );
                         json!(accepted)
                     }
+                    Some("check") if exact(&value, &["kind", "id"]) => {
+                        let focused = tauri::async_runtime::block_on(crate::features::focused(window));
+                        json!(focused && current() && app.state::<Preparation>().0.lock().unwrap().committed)
+                    }
                     Some("commit")
                         if matches!(
                             request["action"].as_str(),
-                            Some("create" | "create-selected" | "create-mcp-pair" | "create-batch")
+                            Some("review-cli" | "create" | "create-selected" | "create-mcp-pair" | "create-batch")
                         ) =>
                     {
                         let valid = current();
@@ -1477,6 +1530,8 @@ fn run(
             // presence. Other providers remain independently usable.
             for provider in result["catalog"]["providers"].as_array_mut().unwrap() {
                 if provider["provider"] == "opencode" {
+                    provider.as_object_mut().unwrap().remove("reviewId");
+                    provider.as_object_mut().unwrap().remove("verifiedUpdate");
                     provider["status"] = json!("unavailable");
                     provider["reason"] = json!("catalog_limited");
                     provider["models"] = json!([]);
@@ -1485,10 +1540,24 @@ fn run(
         }
         return Ok(json!({"status":"catalog", "catalog":result["catalog"]}));
     }
+    if request["action"] == "review-cli" {
+        if !current() || !exact(&result, &["kind", "status", "files"])
+            || !result["files"].as_array().is_some_and(Vec::is_empty)
+            || !matches!(result["status"].as_str(), Some("prepared" | "cancelled"))
+        {
+            return Err("Invalid CLI review result".into());
+        }
+        return Ok(json!({"status": if result["status"] == "prepared" { "ok" } else { "denied" }}));
+    }
     let files = result["files"]
         .as_array()
         .ok_or("Invalid preparation result")?;
     if result["status"] == "cancelled" && files.is_empty() {
+        if matches!(request["action"].as_str(), Some("create-selected" | "create-mcp-pair")) {
+            // A CLI evidence commit can precede optional pair consent or final scope checks.
+            // This exact helper result confirms that no terminal manifest was published.
+            app.state::<Preparation>().0.lock().unwrap().committed = false;
+        }
         diagnostic.record(
             Stage::HelperComplete,
             Outcome::Cancelled,
@@ -2030,6 +2099,23 @@ mod catalog_tests {
             1
         );
     }
+    #[test]
+    fn cli_review_is_opaque_scoped_and_settings_only_adds_review_and_catalog() {
+        let mut request = json!({
+            "action": "review-cli", "workspaceId": "synthetic-workspace", "featureId": null,
+            "catalogId": "a".repeat(64), "reviewId": "b".repeat(64),
+            "provider": "codex", "generation": 1,
+        });
+        assert!(valid_request(&request));
+        request["path"] = json!("/synthetic/forged");
+        assert!(!valid_request(&request));
+        let origin = "http://127.0.0.1:4319";
+        let settings = format!("{origin}/settings");
+        assert!(super::matches_studio_document("main", "main", &settings, origin, true));
+        assert!(!super::matches_studio_document("main", "main", &settings, origin, false));
+        assert!(!super::matches_studio_document("terminal-a", "main", &settings, origin, true));
+    }
+
     #[test]
     fn pending_exits_are_bounded_ordered_and_strict() {
         let request =

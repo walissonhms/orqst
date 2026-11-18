@@ -1,5 +1,12 @@
 # Google Antigravity CLI adapter
 
+## Managed CLI updates
+
+Studio can verify a signed replacement at the reviewed canonical `agy`
+path with Google Team ID `EQHXZ8M8AV` and required notarization. The
+managed terminal still uses the native TUI with no per-session ORQST MCP.
+See the [installation and update evidence](../development/cli-signed-updates.md#provider-evidence).
+
 The Google Antigravity adapter passively observes session transcripts produced by
 the Antigravity CLI (`agy`) outside ORQST. It never launches `agy`, never sends
 input or approvals, never opens live SQLite conversation databases or credential

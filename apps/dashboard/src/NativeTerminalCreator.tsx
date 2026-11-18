@@ -14,6 +14,7 @@ import {
   NewTerminalDialog,
   type TerminalRequest,
 } from './NewTerminalDialog.js';
+import { CliReviewStatus, reviewTerminalCli } from './CliReviewStatus.js';
 import { Modal } from './Modal.js';
 import { SavedTerminalList } from './SavedTerminalList.js';
 import { catalogModelId, dialogCatalog } from './native-terminal-catalog.js';
@@ -309,6 +310,19 @@ export function NativeTerminalCreator({
       );
     }
   };
+  const [reviewingCli, setReviewingCli] = useState(false);
+  const reviewCli = async (entry: Entry) => {
+    if (!catalog || !snapshot || opening.current) return;
+    opening.current = true;
+    setReviewingCli(true);
+    try {
+      await reviewTerminalCli(native, catalog, snapshot.generation, entry);
+    } finally {
+      opening.current = false;
+      setReviewingCli(false);
+      await load(true);
+    }
+  };
   const form = (state === 'ready' || state === 'opening') && catalog;
   const choices = catalog
     ? dialogCatalog(catalog, (reason) => t(`terminalStudio.create.reason_${reason}`))
@@ -318,11 +332,25 @@ export function NativeTerminalCreator({
     (state === 'done' &&
       results.every((result) => result.effects === 'not_started') &&
       results.some(({ reason }) =>
-        ['catalog_changed', 'context_changed', 'selection_unavailable'].includes(reason),
+        [
+          'catalog_changed',
+          'context_changed',
+          'selection_unavailable',
+          'cli_review_required',
+        ].includes(reason),
       ));
   const title = t('terminalStudio.create.title');
   return (
     <Modal label={title} className={batch && form ? 'ntd' : 'ntd ntd-compact'} onClose={cancel}>
+      {form &&
+        form.providers.map((entry) => (
+          <CliReviewStatus
+            key={entry.provider}
+            entry={entry}
+            busy={state === 'opening' || reviewingCli}
+            onReview={(entry) => void reviewCli(entry).catch(() => undefined)}
+          />
+        ))}
       {form ? (
         batch ? (
           <NewTerminalDialog
@@ -332,7 +360,7 @@ export function NativeTerminalCreator({
             initialWorkspaceId={workspace.id}
             max={capacity}
             allowOrchestrator={window.orqstFeatures?.contractVersion === 1}
-            busy={state === 'opening'}
+            busy={state === 'opening' || reviewingCli}
             onCancel={cancel}
             onSingle={() => setBatch(false)}
             onAdvanced={onAdvanced}
@@ -347,7 +375,7 @@ export function NativeTerminalCreator({
               featureName ?? (featureId === null ? t('features.defaultName') : undefined)
             }
             max={capacity}
-            busy={state === 'opening'}
+            busy={state === 'opening' || reviewingCli}
             onCancel={cancel}
             onBatch={() => setBatch(true)}
             onAdvanced={onAdvanced}

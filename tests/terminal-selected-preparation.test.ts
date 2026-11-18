@@ -208,6 +208,74 @@ function fixture(openCodeCopies = false) {
   };
 }
 
+test('native CLI review refuses a moved candidate after consent without publishing evidence', async () => {
+  const f = fixture();
+  try {
+    const executable = join(f.context.environment.PATH.split(':')[0]!, 'codex');
+    writeFileSync(
+      executable,
+      Buffer.concat([readFileSync(binary), Buffer.from('unsigned update')]),
+    );
+    const scope = { workspaceId: f.workspaceId, featureId: null };
+    const result = await prepareTauriTerminals(
+      { action: 'catalog', ...scope },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'catalog');
+    if (result.status !== 'catalog') throw new Error('Missing catalog');
+    const entry = result.catalog.providers.find(({ provider }) => provider === 'codex');
+    assert.equal(entry?.reason, 'executable_unreviewed');
+    assert.ok(entry?.reviewId);
+    const moved = join(f.home, 'codex-moved');
+    let confirmed = 0;
+    let commits = 0;
+    await assert.rejects(
+      prepareTauriTerminals(
+        {
+          action: 'review-cli',
+          ...scope,
+          provider: 'codex',
+          catalogId: result.catalog.catalogId,
+          reviewId: entry.reviewId,
+        },
+        f.context,
+        {
+          ...f.ports,
+          confirm: async (key, detail) => {
+            assert.equal(key, 'cliUpdate');
+            assert.ok(detail.includes(terminalExecutableSha256(executable)));
+            confirmed++;
+            renameSync(executable, moved);
+            symlinkSync(moved, executable);
+            return true;
+          },
+          commit: async () => {
+            commits++;
+            return true;
+          },
+        },
+        Date.now,
+        f.trusted,
+      ),
+      /Terminal preparation review: catalog_changed/,
+    );
+    assert.equal(confirmed, 1);
+    assert.equal(commits, 0);
+    assert.deepEqual(
+      readdirSync(f.trusted.preferencesDirectory).filter(
+        (name) => name === 'cli-executable-reviews',
+      ),
+      [],
+    );
+    assert.deepEqual(readdirSync(f.context.parent), []);
+  } finally {
+    f.close();
+  }
+});
+
 test('terminal catalog distinguishes absent, unreviewed and unverifiable binaries', async () => {
   const f = fixture();
   try {

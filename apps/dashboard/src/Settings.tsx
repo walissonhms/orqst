@@ -15,6 +15,7 @@ export interface SettingsProps {
   storageUnavailable: boolean;
   systemReducedMotion: boolean;
   notifications: ReactNode;
+  agents?: ReactNode;
   onGuide: () => void;
   returnAction?: { label: string; onReturn: () => void };
 }
@@ -25,6 +26,7 @@ export function Settings({
   storageUnavailable,
   systemReducedMotion,
   notifications,
+  agents,
   onGuide,
   returnAction,
 }: SettingsProps) {
@@ -47,6 +49,7 @@ export function Settings({
         )}
       </div>
       <div className="settings-groups">
+        {agents}
         <section className="panel settings-group" aria-labelledby="settings-general">
           <h2 id="settings-general">{t('settings.general')}</h2>
           <label className="settings-field">

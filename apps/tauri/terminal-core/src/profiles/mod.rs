@@ -14,6 +14,7 @@ pub mod adapters;
 pub mod antigravity;
 pub mod backend;
 pub mod claude;
+mod cli_review;
 pub mod codex;
 pub mod config;
 pub mod fsx;

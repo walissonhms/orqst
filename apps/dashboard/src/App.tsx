@@ -77,6 +77,7 @@ import { unassignedTerminalCount } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { Modal } from './Modal';
 import { Settings } from './Settings';
+import { SettingsCliReviews } from './SettingsCliReviews.js';
 import { ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
@@ -655,6 +656,9 @@ export function App() {
           : undefined,
       }
     : undefined;
+  const studioNative =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const settingsWorkspaceId = studioScope?.workspace?.id ?? workspaceId;
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   const [quitFence, setQuitFence] = useState(false);
   const pendingSessionLink = useRef(isSessionLocation(location));
@@ -1514,6 +1518,15 @@ export function App() {
               storageUnavailable={appearance.storageUnavailable}
               systemReducedMotion={appearance.systemReducedMotion}
               notifications={notificationPreferences}
+              agents={
+                studioNative && settingsWorkspaceId ? (
+                  <SettingsCliReviews
+                    native={studioNative}
+                    workspaceId={settingsWorkspaceId}
+                    featureId={studioScope?.featureId ?? null}
+                  />
+                ) : undefined
+              }
               onGuide={() => setGuideOpen(true)}
               returnAction={
                 studioReturn

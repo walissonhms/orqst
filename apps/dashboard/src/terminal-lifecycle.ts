@@ -14,6 +14,7 @@ export type PaneLifecycleState =
 
 export type PaneFailureReason =
   | 'cli_not_installed'
+  | 'cli_review_required'
   | 'not_authenticated'
   | 'model_missing'
   | 'catalog_changed'
@@ -75,13 +76,19 @@ export interface TerminalOpenCard extends PaneLifecycle {
   name: string;
   provider: TerminalProvider;
   terminalId?: string;
+  verifiedUpdate?: string;
 }
 
 export function projectBatchOutcome(
   card: TerminalOpenCard,
   outcome: TerminalBatchItem | undefined,
 ): TerminalOpenCard {
-  if (outcome?.status === 'accepted') return { ...card, terminalId: outcome.terminalId };
+  if (outcome?.status === 'accepted')
+    return {
+      ...card,
+      terminalId: outcome.terminalId,
+      ...(outcome.verifiedUpdate ? { verifiedUpdate: outcome.verifiedUpdate } : {}),
+    };
   const evidence = outcome?.reason ?? 'opening_uncertain';
   if (!outcome || outcome.effects !== 'not_started')
     return {
@@ -91,11 +98,13 @@ export function projectBatchOutcome(
       failure: { reason: 'opening_uncertain', evidence, retryable: false },
     };
   const reason =
-    evidence === 'catalog_changed' || evidence === 'context_changed'
-      ? 'catalog_changed'
-      : evidence === 'focus_required' || evidence === 'admission_invalid'
-        ? 'native_authority_refused'
-        : 'open_refused';
+    evidence === 'cli_review_required'
+      ? 'cli_review_required'
+      : evidence === 'catalog_changed' || evidence === 'context_changed'
+        ? 'catalog_changed'
+        : evidence === 'focus_required' || evidence === 'admission_invalid'
+          ? 'native_authority_refused'
+          : 'open_refused';
   return { ...card, state: 'failed', failure: { reason, evidence, retryable: true } };
 }
 

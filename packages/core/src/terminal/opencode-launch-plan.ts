@@ -1,3 +1,4 @@
+import { cliExecutableVersion } from './cli-executable-review.js';
 // Review only. No filesystem, credential, database, socket or process access.
 import { z } from 'zod';
 import { terminalMcpLaunchSchema } from './mcp-launch.js';
@@ -23,8 +24,8 @@ export const opencodeNativeIdentitySchema = z.strictObject({
 });
 const inputSchema = z.strictObject({
   executable: path,
-  executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
-  executableSha256: z.literal(reviewedProviderMcpBinaries.opencode.sha256),
+  executableVersion: cliExecutableVersion,
+  executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
   project: path,
   nativeIdentity: opencodeNativeIdentitySchema,
   nodePath: path,
@@ -32,15 +33,24 @@ const inputSchema = z.strictObject({
 });
 
 /** An inspectable candidate, deliberately not a TerminalProfile or a native execution grant. */
-export function opencodeInteractiveLaunchPlan(raw: unknown) {
+export function opencodeInteractiveLaunchPlan(raw: unknown, reviewed = false) {
   const input = inputSchema.parse(raw);
+  if (
+    !reviewed &&
+    (input.executableVersion !== reviewedProviderMcpBinaries.opencode.version ||
+      input.executableSha256 !== reviewedProviderMcpBinaries.opencode.sha256)
+  )
+    throw new Error('No reviewed launch plan for this executable');
   const mcp = input.mcp
-    ? opencodeInteractiveMcpConfiguration({
-        executableVersion: input.executableVersion,
-        executableSha256: input.executableSha256,
-        nodePath: input.nodePath,
-        mcp: input.mcp,
-      })
+    ? opencodeInteractiveMcpConfiguration(
+        {
+          executableVersion: input.executableVersion,
+          executableSha256: input.executableSha256,
+          nodePath: input.nodePath,
+          mcp: input.mcp,
+        },
+        reviewed,
+      )
     : undefined;
   return {
     version: 1 as const,

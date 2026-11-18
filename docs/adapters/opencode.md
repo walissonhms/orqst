@@ -1,5 +1,13 @@
 # OpenCode adapter contract
 
+## Managed CLI updates
+
+The inspected OpenCode standalone binary is Mach-O with Team ID
+`5NZ4Q7NXJ4`. Studio can accept verified updates at the same canonical path
+and retains the shared native SQLite startup acknowledgments. A script wrapper
+does not inherit a publisher identity from its Node interpreter.
+See the [installation and update evidence](../development/cli-signed-updates.md#provider-evidence).
+
 Current increment: [OpenCode Desktop opt-in](../development/opencode-desktop-terminal.md) supersedes earlier no-factory/absolute launch-refusal statements below. A blocked-by-default review manifest, exact-binary factory and signed Desktop lifecycle are implemented with synthetic evidence only. Native startup/database effects, descendant exit and provider acceptance remain unvalidated.
 
 The passive [standalone launch review](../development/opencode-standalone-review.md)

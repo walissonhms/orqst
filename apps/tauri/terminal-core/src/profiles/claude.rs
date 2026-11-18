@@ -1,4 +1,5 @@
 //! Claude parts of `interactive-profile.ts`.
+use super::cli_review::accepted_review;
 use super::codex::assert_separate_terminal_state;
 use super::config::{ClaudeConfig, McpLaunch};
 use super::fsx::{terminal_directory, terminal_executable_sha256, terminal_file};
@@ -7,7 +8,7 @@ use super::interactive::{BuiltProfile, PreparationValidator};
 use super::js::Js;
 use super::local_cli_path::terminal_tool_path;
 use super::mcp::{
-    claude_interactive_mcp_configuration, reviewed_claude_mcp_binary, McpReviewInput,
+    reviewed_claude_mcp_configuration, reviewed_claude_mcp_binary, McpReviewInput,
     REVIEWED_CLAUDE_MCP, REVIEWED_CLAUDE_TUI,
 };
 use super::model::{terminal_model_arguments, validate_terminal_model_selection};
@@ -25,7 +26,8 @@ pub fn validate_claude_launch_contract(config: &ClaudeConfig) -> Result<()> {
     } else {
         REVIEWED_CLAUDE_MCP
     };
-    if config.executable_version != pin.version || config.executable.sha256 != pin.sha256 {
+    let updated = accepted_review("claude", &config.executable, &config.executable_version, config.preparation.as_ref());
+    if !updated && (config.executable_version != pin.version || config.executable.sha256 != pin.sha256) {
         return Err(ProfileError::refused(if mcp {
             "No reviewed Claude MCP launch contract for this version/hash"
         } else {
@@ -33,7 +35,7 @@ pub fn validate_claude_launch_contract(config: &ClaudeConfig) -> Result<()> {
         }));
     }
     if config.owned_hooks
-        && (config.executable_version != "2.1.318" || (mcp && !config.interactive.hub))
+        && ((config.executable_version != "2.1.318" && !updated) || (mcp && !config.interactive.hub))
     {
         return Err(ProfileError::refused(
             "Owned hooks require the reviewed Claude TUI contract",
@@ -114,7 +116,7 @@ pub fn claude_terminal_profiles(
         relay_unchanged(mcp)?;
     }
     let candidate = match mcp {
-        Some(mcp) => Some(claude_interactive_mcp_configuration(
+        Some(mcp) => Some(reviewed_claude_mcp_configuration(
             &McpReviewInput {
                 executable_version: &config.executable_version,
                 executable_sha256: &config.executable.sha256,
@@ -122,6 +124,7 @@ pub fn claude_terminal_profiles(
                 mcp,
             },
             &config.session_id,
+            accepted_review("claude", &config.executable, &config.executable_version, config.preparation.as_ref()),
         )?),
         None => None,
     };
