@@ -62,7 +62,10 @@ pub fn managed_codex_settings(config: &CodexConfig) -> String {
 }
 
 fn codex_mcp_version(version: &str) -> bool {
-    version == "0.162.1" || version == "codex-cli 0.162.1"
+    matches!(
+        version.strip_prefix("codex-cli ").unwrap_or(version),
+        "0.162.1" | "0.169.0"
+    )
 }
 
 /// `validateManagedCodexConfig`.

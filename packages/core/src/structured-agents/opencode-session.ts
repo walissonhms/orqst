@@ -12,9 +12,11 @@ import { OwnedOpenCode, openCodePermissions } from './opencode-process.js';
 import {
   display,
   StructuredProjection,
+  StructuredStartupFailure,
   type DelegationTask,
   type SessionScope,
   type StructuredDelegate,
+  type StructuredTurnOptions,
   type TurnReport,
 } from './session.js';
 
@@ -124,9 +126,11 @@ export class StructuredOpenCodeSession extends StructuredProjection {
   }
 
   async initialize(cwd: string): Promise<void> {
+    let failure: StructuredStartupFailure['reason'] = 'provider_connection_failed';
     try {
       await this.server.verify();
       await this.connect();
+      failure = 'provider_session_rejected';
       const result = z
         .object({
           data: z.object({
@@ -149,9 +153,11 @@ export class StructuredOpenCodeSession extends StructuredProjection {
         throw new Error('OpenCode session unavailable');
       this.state.threadId = result.data.id;
       this.state.lifecycle = 'ready';
-    } catch {
+    } catch (error) {
       await this.stop(true);
-      throw new Error('OpenCode session unavailable');
+      throw error instanceof StructuredStartupFailure
+        ? error
+        : new StructuredStartupFailure(failure);
     }
   }
 
@@ -159,17 +165,18 @@ export class StructuredOpenCodeSession extends StructuredProjection {
     text: string,
     origin: StructuredTurn['origin'],
     report?: TurnReport,
-    { delegation }: { delegation?: DelegationTask } = {},
+    { delegation, peerContext }: StructuredTurnOptions = {},
   ): Promise<void> {
     if (!this.ready || !text.trim() || text.length > limits.turnText)
       throw new Error('OpenCode turn unavailable');
     const grant =
       origin === 'human' && delegation ? { orqstDelegate: randomUUID(), ...delegation } : undefined;
+    const message = peerContext ? peerContext + '\n\n' + text : text;
     const input = grant
-      ? text +
+      ? message +
         '\n\nTo request the authorized ORQST delegation, reply with exactly this JSON object as your full final answer, without Markdown: ' +
         JSON.stringify(grant)
-      : text;
+      : message;
     await this.dispatch(input, text, 'user', origin, report, grant);
   }
 

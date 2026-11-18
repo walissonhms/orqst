@@ -41,6 +41,7 @@ const { HOME, TMPDIR, XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME, XDG_CACHE_
   process.env;
 const trace = {
   prompts: [],
+  peerRosters: [],
   returned: [],
   decisions: [],
   replays: 0,
@@ -143,12 +144,20 @@ const server = createServer(async (request, response) => {
     }
     if (route === '/prompt' || route === '/synthetic') {
       assert.equal(request.method, 'POST');
-      const { id, text, delivery, resume } = await body(request);
+      const { id, text: wireText, delivery, resume } = await body(request);
       assert.equal(delivery, 'queue');
       assert.equal(resume, true);
       assert.equal(activeInput, undefined);
       activeInput = id;
       const kind = route === '/prompt' ? 'user' : 'synthetic';
+      const separator = wireText.indexOf('\n\n');
+      let text = wireText;
+      if (wireText.startsWith('ORQST peer sessions at dispatch ')) {
+        assert.equal(kind, 'user');
+        const roster = wireText.slice(wireText.indexOf('\n') + 1, separator);
+        trace.peerRosters.push(JSON.parse(roster));
+        text = wireText.slice(separator + 2);
+      }
       (kind === 'user' ? trace.prompts : trace.returned).push(text);
       time.busy = ++tick;
       if (text !== 'unbound history')

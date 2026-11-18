@@ -13,34 +13,66 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { reviewedProviderMcpBinaries } from '../../../packages/core/src/terminal/provider-mcp-config.js';
 import { reviewedClaudeTuiBinary } from '../../../packages/core/src/terminal/interactive-profile.js';
-import { reviewedDesktopCodexBinary } from './terminal-creation.js';
+import { reviewedDesktopCodexBinaries } from './terminal-creation.js';
+
+export function inspectReviewedExecutables(
+  provider: LocalCliProvider,
+  searchPath: string,
+  home: string | undefined,
+  pins: readonly { sha256: string }[],
+  verify = cachedTerminalExecutableSha256,
+): {
+  executables: string[];
+  refusal: 'executable_not_found' | 'executable_unreviewed' | 'executable_inspection_failed';
+} {
+  let discovery;
+  try {
+    discovery = discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)!;
+  } catch {
+    return { executables: [], refusal: 'executable_inspection_failed' };
+  }
+  const executables: string[] = [];
+  let failed = discovery.lookup === 'incomplete';
+  for (const { canonical } of discovery.candidates) {
+    try {
+      const sha256 = verify(canonical);
+      if (!pins.some((pin) => pin.sha256 === sha256)) continue;
+    } catch {
+      failed = true;
+      continue;
+    }
+    executables.push(canonical);
+    // OpenCode already selects the first reviewed PATH candidate, even with separate installs.
+    if (provider === 'opencode') break;
+  }
+  const refusal = failed
+    ? 'executable_inspection_failed'
+    : discovery.candidates.length
+      ? 'executable_unreviewed'
+      : 'executable_not_found';
+  return { executables, refusal };
+}
+
+export function inspectTerminalExecutables(
+  provider: LocalCliProvider,
+  searchPath: string,
+  home: string,
+) {
+  const pins =
+    provider === 'codex'
+      ? reviewedDesktopCodexBinaries
+      : provider === 'claude'
+        ? [reviewedClaudeTuiBinary]
+        : [reviewedProviderMcpBinaries.opencode];
+  return inspectReviewedExecutables(provider, searchPath, home, pins);
+}
 
 export function discoverTerminalExecutable(
   provider: LocalCliProvider,
   searchPath: string,
   home: string,
 ): string[] {
-  const pin =
-    provider === 'codex'
-      ? reviewedDesktopCodexBinary
-      : provider === 'claude'
-        ? reviewedClaudeTuiBinary
-        : reviewedProviderMcpBinaries.opencode;
-  const candidates =
-    discoverLocalClis(searchPath, home).find((entry) => entry.provider === provider)?.candidates ??
-    [];
-  const reviewed: string[] = [];
-  for (const { canonical } of candidates) {
-    try {
-      if (cachedTerminalExecutableSha256(canonical) !== pin.sha256) continue;
-    } catch {
-      continue;
-    }
-    reviewed.push(canonical);
-    // OpenCode already selects the first reviewed PATH candidate, even with separate installs.
-    if (provider === 'opencode') break;
-  }
-  return reviewed;
+  return inspectTerminalExecutables(provider, searchPath, home).executables;
 }
 
 export function discoverTerminalNode(searchPath: string, home: string): string[] {

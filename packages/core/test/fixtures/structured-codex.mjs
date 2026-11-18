@@ -98,6 +98,10 @@ lines.on('line', (line) => {
   });
   rpc(id, { turn: turn('inProgress') });
   const text = params.input[0].text;
+  if (text === 'peers:view') {
+    const context = params.input[1].text;
+    return finish(context.slice(context.indexOf('\n') + 1));
+  }
   if (text === 'approval:command') {
     item('started', {
       id: 'approval-item',
@@ -143,7 +147,6 @@ lines.on('line', (line) => {
         turnId: active,
         callId: 'synthetic-call',
         tool: 'orqst_delegate_task',
-        namespace: null,
         arguments: request,
       },
     });

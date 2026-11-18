@@ -376,6 +376,8 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                             Some(
                                 "ready"
                                     | "executable_not_found"
+                                    | "executable_unreviewed"
+                                    | "executable_inspection_failed"
                                     | "ambiguous_executable"
                                     | "catalog_limited"
                             )

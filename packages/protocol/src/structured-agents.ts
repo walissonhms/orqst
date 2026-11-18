@@ -115,9 +115,29 @@ export const structuredAgentsReviewSchema = z.object({
   detail: z.string().min(1).max(4096),
 });
 
+export const structuredAgentsUnavailableReasonSchema = z.enum([
+  'executable_not_found',
+  'executable_unreviewed',
+  'executable_inspection_failed',
+  'native_context_unavailable',
+  'workspace_context_unavailable',
+  'host_unavailable',
+  'host_transport_failed',
+  'host_timeout',
+  'session_start_failed',
+  'provider_startup_timeout',
+  'provider_connection_failed',
+  'provider_session_rejected',
+  'operation_failed',
+]);
+export type StructuredAgentsUnavailableReason = z.infer<
+  typeof structuredAgentsUnavailableReasonSchema
+>;
+
 export type StructuredAgentsReply =
   | { status: 'ok'; snapshot?: StructuredAgentsSnapshot }
-  | { status: 'disabled' | 'denied' | 'cancelled' | 'busy' | 'unavailable' };
+  | { status: 'disabled' | 'denied' | 'cancelled' | 'busy' }
+  | { status: 'unavailable'; reason?: StructuredAgentsUnavailableReason };
 
 export interface DesktopStructuredAgents {
   request(

@@ -1930,7 +1930,7 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
     }
     let app = window.app_handle();
     let Some((epoch, presentation)) = terminal::metadata_context(app) else {
-        return json!({"status":"unavailable"});
+        return json!({"status":"unavailable", "reason":"native_context_unavailable"});
     };
     let Some(feature_id) = scope["featureId"].as_str() else {
         return denied();
@@ -1986,6 +1986,7 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
             "operation":"prepare", "scope":scope, "request":request
         })).await;
         if prepared["status"] != "ok" {
+            structured_agents::diagnose_refusal(action, &request["provider"], "prepare", &prepared);
             return prepared;
         }
         let Some(detail) = prepared["detail"].as_str().filter(|s| s.len() <= 16 * 1024) else {
@@ -2016,7 +2017,8 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
         let result = structured_agents::call(app, json!({
             "operation":"apply", "scope":scope, "request":request, "token":token
         })).await;
-        if current() { result } else { json!({"status":"unavailable"}) }
+        structured_agents::diagnose_refusal(action, &request["provider"], "apply", &result);
+        if current() { result } else { json!({"status":"unavailable", "reason":"native_context_unavailable"}) }
     }, |cancelled| terminal::permission_review_finish(app, &epoch, &review_id, cancelled)).await
 }
 

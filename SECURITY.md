@@ -27,7 +27,9 @@ The local Feature Webview can propose new Codex sessions and one-shot decisions
 when the native app starts with `ORQST_STRUCTURED_AGENTS=1`. The existing native
 focus and review gate controls each mutation. The Node host checks the reviewed
 executable and workspace before launch. The observer and ordinary dashboard
-remain read-only. See the [pilot security boundary](docs/design/structured-codex-pilot.md).
+remain read-only. Same-Feature peer context contains bounded redacted labels and
+execution metadata. It confers no action authority and omits peer conversation
+and credentials. See the [pilot security boundary](docs/design/structured-codex-pilot.md).
 
 ## Renderer unavailable presentation fence — 2026-11-05
 

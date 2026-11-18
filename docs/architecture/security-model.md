@@ -31,7 +31,11 @@ The opt-in local Feature command requires the existing native focus and own-shee
 review. Its private Node host binds one-use apply to the exact active Feature,
 workspace identity, request and reviewed executable digest. The pilot starts new
 ephemeral, read-only threads with human approval routing. Delegation requires a
-separate exact one-use grant within the Feature. See the
+separate exact one-use grant within the Feature. Codex and OpenCode receive a
+fresh same-workspace, same-Feature roster of other open sessions for human and
+delegated turns. Labels are untrusted data. The roster exposes no peer transcript
+or process metadata and grants no ability to write. Native refusal diagnostics
+use fixed phase and reason codes and exclude raw exceptions. See the
 [pilot review and remaining validation](../design/structured-codex-pilot.md).
 
 ## Studio arrangement boundary — 2026-11-05

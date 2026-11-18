@@ -123,6 +123,7 @@ async function harness(t: TestContext, binary?: string) {
 
 type Trace = {
   prompts: string[];
+  peerRosters: Array<Array<{ sessionId: string; provider: string; busy: boolean }>>;
   returned: string[];
   decisions: string[];
   replays: number;
@@ -160,7 +161,7 @@ test('OpenCode spawn failure leaves the exit unproved and preserves provider fil
   launch.executable = join(launch.cwd, 'missing-opencode');
   await assert.rejects(
     service.apply(scope, { action: 'start', provider: 'opencode', label: 'Spawn failure' }, launch),
-    /OpenCode session unavailable/,
+    { reason: 'provider_connection_failed' },
   );
   const [failed] = service.snapshot(scope).sessions;
   assert.equal(failed?.lifecycle, 'failed');
@@ -320,6 +321,19 @@ test(
     }
     const wire = await trace(servers[0]!);
     assert.equal(wire.prompts.filter((text) => text === task).length, 1);
+    assert.deepEqual(
+      wire.peerRosters.map((roster) =>
+        roster.map(({ sessionId, provider, busy }) => ({
+          sessionId,
+          provider,
+          busy,
+        })),
+      ),
+      [
+        [{ sessionId: codex, provider: 'codex', busy: true }],
+        [{ sessionId: codex, provider: 'codex', busy: false }],
+      ],
+    );
     assert.equal(wire.returned.length, 1);
     assert.match(wire.returned[0]!, /untrustedWorkerResult.*Exact mixed-provider task/);
   },
@@ -328,7 +342,7 @@ test(
 const real = process.env.ORQST_STRUCTURED_REAL_OPENCODE;
 test(
   'pinned OpenCode smoke with inherited HOME/XDG and no model turn',
-  { skip: !real, timeout: 30_000 },
+  { skip: !real, timeout: 75_000 },
   async (t) => {
     const executable = await realpath(real!);
     assert.equal(terminalExecutableSha256(executable), reviewedProviderMcpBinaries.opencode.sha256);

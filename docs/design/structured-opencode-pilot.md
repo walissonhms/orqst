@@ -15,7 +15,10 @@ Feature fence and session pool. See the
   `serve --stdio --hostname 127.0.0.1 --port 0`. It accepts only a numeric
   loopback endpoint, requires a 401 from the unauthenticated event endpoint,
   checks the authenticated server version and subscribes before creating the
-  session. The random Basic Auth password stays in Core memory and the child
+  session. A disposable-home cold start under load reported its stdio endpoint
+  after 32.4 seconds. Process readiness gets up to 36 seconds and HTTP calls
+  retain their separate eight-second budgets. Native apply allows 75 seconds for
+  this OpenCode startup sequence. The random Basic Auth password stays in Core memory and the child
   launch environment. HTTP requests go directly to IPv4 loopback.
 - The owner approved shared OpenCode storage on 2026-11-17. Each new process uses
   the user's `HOME` and any absolute `XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
@@ -81,6 +84,10 @@ input ID within that execution. A final assistant message is recovered only
 with matching history and timestamps. Without conclusive evidence Core
 retains `unknown`, ends the session and never resends the input. A proved
 outcome allows a fresh subscription for later operations.
+
+The Core sends a fresh same-Feature peer roster with each newly dispatched human
+or delegated turn. OpenCode receives it as a JSON preface with only peer
+identity and execution state. The roster is informational and supplies no grant.
 
 Codex uses its existing dynamic tool. OpenCode 2.2.5 exposes no equivalent
 in-process dynamic tool callback in the pinned HTTP API. An OpenCode source

@@ -5,7 +5,12 @@
 The local Tauri Feature command accepts `start` with an optional `provider`
 (`codex` by default, or `opencode`). Session snapshots expose the provider,
 owned execution lifecycle, latest turn, bounded history, permission decisions
-and same-Feature delegations. OpenCode's session ID comes from the provider.
+and same-Feature delegations. Human and delegated provider turns receive a fresh
+same-Feature roster with other open structured sessions' IDs, labels, provider
+and activity. The roster has no authority to create a turn or exchange messages.
+The private command may return an `unavailable` status with a fixed `reason`
+code for executable discovery, native/workspace context, host transport or
+provider startup. OpenCode's provider session has its own ID.
 Core generates each input ID and uses it only in that owned session. A matched inbox delivery and
 an execution outcome drive terminal turn state. A reconciled outcome also
 requires a fresh busy/idle pair and matching delivered input from provider

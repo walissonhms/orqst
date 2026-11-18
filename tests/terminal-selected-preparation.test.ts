@@ -30,6 +30,7 @@ import { build } from 'esbuild';
 import { Store } from '../packages/database/src/index.js';
 import {
   cachedTerminalExecutableSha256,
+  reviewedCodex169Binary,
   terminalExecutableSha256,
 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
@@ -43,6 +44,11 @@ after(() => rmSync(bundle, { recursive: true, force: true }));
 const binary = join(bundle, 'synthetic-binary');
 writeFileSync(binary, Buffer.from([0xfe, 0xed, 0xfa, 0xcf, 0, 0, 0, 0]), { mode: 0o700 });
 const hash = terminalExecutableSha256(binary);
+const newCodexBinary = join(bundle, 'synthetic-codex-169');
+writeFileSync(newCodexBinary, Buffer.concat([readFileSync(binary), Buffer.from('synthetic 169')]), {
+  mode: 0o700,
+});
+const newCodexHash = terminalExecutableSha256(newCodexBinary);
 await build({
   entryPoints: {
     preparation: 'apps/desktop/src/tauri-terminal-preparation.ts',
@@ -62,10 +68,14 @@ await build({
       name: 'synthetic-binary-pins-only',
       setup(builder) {
         builder.onLoad(
-          { filter: /(?:terminal-creation|provider-mcp-config|interactive-profile)\.ts$/ },
+          {
+            filter:
+              /(?:terminal-creation|provider-mcp-config|interactive-profile|codex-profile)\.ts$/,
+          },
           (args) => ({
             contents: readFileSync(args.path, 'utf8')
               .replaceAll(reviewedDesktopCodexBinary.sha256, hash)
+              .replaceAll(reviewedCodex169Binary.sha256, newCodexHash)
               .replaceAll(reviewedProviderMcpBinaries.claude.sha256, hash)
               .replaceAll(reviewedClaudeTuiBinary.sha256, hash)
               .replaceAll(reviewedProviderMcpBinaries.opencode.sha256, hash),
@@ -90,7 +100,7 @@ const {
 const { managedTerminalBackend } = (await import(
   pathToFileURL(join(bundle, 'backend.cjs')).href
 )) as typeof import('../packages/core/src/terminal/pty-backend.js');
-const { discoverTerminalExecutable } = (await import(
+const { discoverTerminalExecutable, inspectReviewedExecutables } = (await import(
   pathToFileURL(join(bundle, 'discovery.cjs')).href
 )) as typeof import('../apps/desktop/src/terminal-discovery.js');
 
@@ -194,6 +204,37 @@ function fixture(openCodeCopies = false) {
   };
 }
 
+test('terminal catalog distinguishes absent, unreviewed and unverifiable binaries', async () => {
+  const f = fixture();
+  try {
+    const executable = join(f.context.environment.PATH.split(':')[0]!, 'codex');
+    const inspect = async () => {
+      const result = await prepareTauriTerminals(
+        { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+        f.context,
+        f.ports,
+        Date.now,
+        f.trusted,
+      );
+      assert.equal(result.status, 'catalog');
+      return result.catalog.providers.find(({ provider }) => provider === 'codex')!;
+    };
+    writeFileSync(executable, Buffer.concat([readFileSync(binary), Buffer.from('unreviewed')]));
+    assert.equal((await inspect()).reason, 'executable_unreviewed');
+    chmodSync(executable, 0o702);
+    assert.equal((await inspect()).reason, 'executable_inspection_failed');
+    rmSync(executable);
+    assert.equal((await inspect()).status, 'unavailable');
+    assert.equal(
+      inspectReviewedExecutables('codex', f.context.environment.PATH, undefined, [{ sha256: hash }])
+        .refusal,
+      'executable_not_found',
+    );
+  } finally {
+    f.close();
+  }
+});
+
 test('executable digest reuse checks inode, restored mtimes, and current trust', () => {
   const f = fixture();
   const executable = join(f.root, 'reviewed');
@@ -234,15 +275,21 @@ function beforeCommit(f: ReturnType<typeof fixture>, mutate: () => void) {
   };
 }
 
-for (const [provider, useDefault] of [
-  ['codex', false],
+for (const [provider, useDefault, updatedCodex] of [
+  ['codex', false, true],
+  ['codex', false, false],
   ['claude', false],
   ['opencode', false],
   ['opencode', true],
 ] as const) {
-  test(`selected ${provider} ${useDefault ? 'default' : 'model'} reaches the launch profile without a file picker or alternate project`, async () => {
+  test(`selected ${provider}${updatedCodex ? ' 0.169.0' : ''} ${useDefault ? 'default' : 'model'} reaches the launch profile without a file picker or alternate project`, async () => {
     const f = fixture(provider === 'opencode');
     try {
+      if (updatedCodex)
+        writeFileSync(
+          join(f.context.environment.PATH.split(':')[0]!, 'codex'),
+          readFileSync(newCodexBinary),
+        );
       const features = featureConfigurationDatabase(f.trusted.preferencesDirectory, f.workspaceId);
       const feature = features.create({ name: 'Synthetic selected Feature' });
       features.saveView({ expectedRevision: 0, featureId: feature.featureId });
@@ -287,6 +334,10 @@ for (const [provider, useDefault] of [
         config.executable.path,
         join(f.context.environment.PATH.split(':')[0]!, provider),
       );
+      if (updatedCodex) {
+        assert.equal(config.executableVersion, '0.169.0');
+        assert.equal(config.executable.sha256, newCodexHash);
+      }
       const fullProfile = interactiveTerminalProfiles(config, hubLaunch())[0]!;
       const profile = withoutHubMcp(fullProfile);
       const model = profile.argv.indexOf('--model');

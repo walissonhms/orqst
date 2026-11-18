@@ -1,5 +1,12 @@
 # ORQST
 
+## Diag21 Codex and structured peers — 2026-11-17
+
+The Studio terminal picker now accepts the exact reviewed Codex 0.169.0 binary.
+The native Structured agents panel tells Codex and OpenCode about open peer
+sessions in the active Feature and uses the reviewed one-time grant to deliver
+delegated results. See the [diagnosis and native checks](docs/design/structured-codex-pilot.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

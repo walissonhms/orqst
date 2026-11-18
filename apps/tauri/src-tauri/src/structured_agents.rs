@@ -84,11 +84,21 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 pub async fn call(app: &tauri::AppHandle, mut message: Value) -> Value {
-    let unavailable = || json!({"status":"unavailable"});
+    // OpenCode has separate budgets for process readiness and its startup HTTP phases.
+    let seconds = if message["operation"] == "apply"
+        && message["request"]["action"] == "start"
+        && message["request"]["provider"] == "opencode"
+    {
+        75
+    } else {
+        65
+    };
     let state = app.state::<StructuredAgents>();
     let (id, rx) = {
         let mut guard = state.0.lock().unwrap();
-        let Some(running) = guard.as_mut() else { return unavailable() };
+        let Some(running) = guard.as_mut() else {
+            return json!({"status":"unavailable", "reason":"host_unavailable"});
+        };
         if running.pending.len() >= 8 || running.sequence >= 9_007_199_254_740_991 {
             return json!({"status":"busy"});
         }
@@ -97,21 +107,46 @@ pub async fn call(app: &tauri::AppHandle, mut message: Value) -> Value {
         message["id"] = id.into();
         let bytes = format!("{message}\n");
         if bytes.len() > 48 * 1024 || running.child.write(bytes.as_bytes()).is_err() {
-            return unavailable();
+            return json!({"status":"unavailable", "reason":"host_transport_failed"});
         }
         let (tx, rx) = oneshot::channel();
         running.pending.insert(id, tx);
         (id, rx)
     };
-    match tokio::time::timeout(Duration::from_secs(65), rx).await {
+    match tokio::time::timeout(Duration::from_secs(seconds), rx).await {
         Ok(Ok(value)) => value,
-        _ => {
+        Ok(Err(_)) => json!({"status":"unavailable", "reason":"host_transport_failed"}),
+        Err(_) => {
             if let Some(running) = state.0.lock().unwrap().as_mut() {
                 running.pending.remove(&id);
             }
-            unavailable()
+            json!({"status":"unavailable", "reason":"host_timeout"})
         }
     }
+}
+
+/// Emit only static codes for explicit native actions. Snapshot polling stays out of stderr.
+pub fn diagnose_refusal(action: &str, provider: &Value, stage: &str, result: &Value) {
+    if result["status"] != "unavailable"
+        || std::env::var("ORQST_TAURI_FOCUS_DIAGNOSTICS").as_deref() != Ok("1")
+    {
+        return;
+    }
+    let reason = match result["reason"].as_str() {
+        Some(reason @ (
+            "executable_not_found" | "executable_unreviewed" | "executable_inspection_failed"
+            | "workspace_context_unavailable" | "host_unavailable" | "host_transport_failed"
+            | "host_timeout" | "session_start_failed" | "operation_failed"
+            | "provider_startup_timeout" | "provider_connection_failed" | "provider_session_rejected"
+        )) => reason,
+        _ => "unknown",
+    };
+    let provider = match (action, provider.as_str()) {
+        ("start", None | Some("codex")) => "codex",
+        ("start", Some("opencode")) => "opencode",
+        _ => "unspecified",
+    };
+    eprintln!("ORQST_STRUCTURED_AGENTS action={action} provider={provider} stage={stage} reason={reason}");
 }
 
 pub fn stop(app: &tauri::AppHandle) {
