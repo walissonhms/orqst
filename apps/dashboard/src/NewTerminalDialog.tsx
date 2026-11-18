@@ -21,6 +21,7 @@ export interface ProviderCatalog {
   models: CatalogModel[];
   /** Native catalogs explicitly report whether a CLI-default selection exists. */
   cliDefault?: boolean;
+  modelCatalogLimited?: boolean;
   /** ORQST account profiles for this CLI; login always happens in the CLI itself. */
   accounts?: { id: string; label: string; state: 'ready' | 'limited' | 'signed_out' | 'unknown' }[];
 }
@@ -739,6 +740,7 @@ export function CompactTerminalForm({
             ))}
           </select>
         </label>
+        {entry?.modelCatalogLimited && <p>{t('studio.create.modelCatalogLimited')}</p>}
         {validModel && <p>{t('studio.create.modelUnverified')}</p>}
         {max === 0 && <p role="status">{t('studio.create.noCapacity')}</p>}
       </fieldset>

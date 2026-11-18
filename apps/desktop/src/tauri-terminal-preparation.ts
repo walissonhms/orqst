@@ -160,7 +160,7 @@ export async function prepareTauriTerminals(
         return {
           status: 'catalog',
           catalog: {
-            ...terminalPreparationCatalog(scope, trusted, context),
+            ...terminalPreparationCatalog(scope, trusted, context, !currentCore),
             pendingOwnedExits: inspectPendingOwnedExits(trusted.preferencesDirectory),
           },
         };

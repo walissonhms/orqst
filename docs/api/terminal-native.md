@@ -929,6 +929,12 @@ retain their existing header. No renderer request or runtime authority is added.
 
 ## Studio opening without a second sheet — 2026-11-06
 
+A passive scoped `catalog` reply may include `restoredFeature` when the
+managed Core is disconnected. It contains only the saved `featureId`, `name`
+and up to eight `terminalIds`. The renderer uses that Feature ID with the
+catalog ID in the next explicit Open request. Saved IDs convey no process
+state, reservation release or operation authority.
+
 `create-selected` and `create-batch` use the existing activated, focused main Studio
 Open gesture. No per-CLI preparation sheet is shown. Native commit and opening
 intent remain single-use and generation-bound. The consumed intent marks only the

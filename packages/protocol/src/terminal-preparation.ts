@@ -149,6 +149,16 @@ export const terminalMcpPairRequestSchema = z
   });
 export const terminalPreparationCatalogSchema = z.strictObject({
   contractVersion: z.literal(1),
+  restoredFeature: z
+    .strictObject({
+      featureId: z.uuid(),
+      name: terminalDisplayNameSchema,
+      terminalIds: z
+        .array(z.uuid())
+        .max(8)
+        .refine((ids) => new Set(ids).size === ids.length),
+    })
+    .optional(),
   pendingOwnedExits: z
     .array(
       z.strictObject({

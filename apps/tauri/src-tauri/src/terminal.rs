@@ -1369,8 +1369,10 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         }
         (r.generations[slot], r.layout_generation, intent.expires)
     };
-    if presentation_blocked(&app) || !focused(&window).await || self::slot(&window) != Some(slot) {
-        why("blocked_or_unfocused");
+    // Dispatch checks AppKit focus before writing to Core. A refusal before dispatch
+    // restores the exact intent below, so this path needs no duplicate AppKit round trip.
+    if presentation_blocked(&app) || self::slot(&window) != Some(slot) {
+        why("blocked_or_stale_document");
         return idle();
     }
     let profile = {

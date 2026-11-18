@@ -15,6 +15,7 @@ import {
   type TerminalRequest,
 } from './NewTerminalDialog.js';
 import { Modal } from './Modal.js';
+import { SavedTerminalList } from './SavedTerminalList.js';
 import { catalogModelId, dialogCatalog } from './native-terminal-catalog.js';
 
 type Native = TauriStudio;
@@ -74,12 +75,14 @@ export function NativeTerminalCreator({
   const [failure, setFailure] = useState<TerminalPreparationFailure>();
   const opening = useRef(false);
   const requestId = useRef(0);
+  const savedList = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (opening.current) return;
     const current = ++requestId.current;
     setSelection(undefined);
     setFailure(undefined);
+    setResults([]);
     setState('loading');
     try {
       const reply = await native.request({
@@ -127,7 +130,13 @@ export function NativeTerminalCreator({
   const catalog = selection?.catalog;
   const snapshot = selection?.snapshot;
   const capacity =
-    snapshot?.canCreate && !snapshot.busy ? Math.max(0, snapshot.limit - snapshot.count) : 0;
+    snapshot?.canCreate && !snapshot.busy
+      ? Math.max(
+          0,
+          snapshot.limit -
+            Math.max(snapshot.count, catalog?.restoredFeature?.terminalIds.length ?? 0),
+        )
+      : 0;
 
   const open = async (requests: TerminalRequest[]) => {
     if (
@@ -152,7 +161,7 @@ export function NativeTerminalCreator({
         workspaceId: request.workspaceId,
         provider: request.provider as Entry['provider'],
         entry,
-        modelId: request.model === null ? null : catalogModelId(entry, request.model),
+        modelId: catalogModelId(entry, request.model),
         name: request.name || `${t(`terminalStudio.providers.${request.provider}`)} ${n}`,
       };
     });
@@ -181,7 +190,7 @@ export function NativeTerminalCreator({
         action: 'create-batch',
         generation: snapshot.generation,
         workspaceId: workspace.id,
-        featureId,
+        featureId: catalog.restoredFeature?.featureId ?? featureId,
         catalogId: catalog.catalogId,
         requests: items.map(({ id, workspaceId, provider, modelId, name }) => ({
           id,
@@ -221,9 +230,12 @@ export function NativeTerminalCreator({
           items.find((item) => item.id === result.id)?.request.orchestrator,
       );
       if (lead?.terminalId)
-        void labelOrchestrator(featureId ?? defaultFeatureId(workspace.id), lead.terminalId);
+        void labelOrchestrator(
+          catalog.restoredFeature?.featureId ?? featureId ?? defaultFeatureId(workspace.id),
+          lead.terminalId,
+        );
       setState('done');
-      // Every terminal opened: go back to the live terminal views. Refusals keep the dialog
+      // Every terminal enrolled: go back to the managed terminal views. Refusals keep the dialog
       // open with their reasons.
       if (outcomes.every((result) => result.status === 'accepted')) onClose(true);
     } catch {
@@ -245,6 +257,13 @@ export function NativeTerminalCreator({
   const choices = catalog
     ? dialogCatalog(catalog, (reason) => t(`terminalStudio.create.reason_${reason}`))
     : [];
+  const canRefresh =
+    (state === 'error' && failure?.effects !== 'possible') ||
+    (state === 'done' &&
+      results.every((result) => result.effects === 'not_started') &&
+      results.some(({ reason }) =>
+        ['catalog_changed', 'context_changed', 'selection_unavailable'].includes(reason),
+      ));
   const title = t('terminalStudio.create.title');
   return (
     <Modal label={title} className={batch && form ? 'ntd' : 'ntd ntd-compact'} onClose={cancel}>
@@ -325,7 +344,7 @@ export function NativeTerminalCreator({
                 {t('terminalStudio.create.advanced')}
               </button>
             )}
-            {state === 'error' && failure?.effects !== 'possible' && (
+            {canRefresh && (
               <button type="button" className="ntd-secondary" onClick={() => void load()}>
                 {t('studio.refresh')}
               </button>
@@ -336,6 +355,28 @@ export function NativeTerminalCreator({
           </footer>
         </div>
       )}
+      {form &&
+        (!!catalog.restoredFeature?.terminalIds.length || !!catalog.pendingOwnedExits?.length) && (
+          <div ref={savedList} className="ntd-history">
+            <SavedTerminalList
+              members={(catalog.restoredFeature?.terminalIds ?? []).map((id) => ({
+                id,
+                closed: false,
+              }))}
+              onReopen={
+                capacity > 0 && state === 'ready'
+                  ? () =>
+                      savedList.current?.parentElement
+                        ?.querySelector<HTMLElement>('form select')
+                        ?.focus()
+                  : undefined
+              }
+            />
+            {!!catalog.pendingOwnedExits?.length && (
+              <p role="status">{t('tauriPreparation.code_owned_exit_pending')}</p>
+            )}
+          </div>
+        )}
     </Modal>
   );
 }

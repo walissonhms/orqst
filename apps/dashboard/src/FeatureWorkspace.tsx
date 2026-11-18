@@ -27,6 +27,7 @@ import {
 } from './feature-notice.js';
 import { FeaturePermissions } from './FeaturePermissions.js';
 import { StructuredAgents } from './StructuredAgents.js';
+import { SavedTerminalList } from './SavedTerminalList.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { FeatureCanvas } from './FeatureCanvas.js';
 import { CanvasSessionList, CanvasStatusBar } from './FeatureCanvasSummary.js';
@@ -826,6 +827,17 @@ export function FeatureWorkspace({
       ))}
     </nav>
   );
+  const savedMembers = members.flatMap((id) => {
+    const slot = snapshot?.slots.find((entry) => entry.terminalId === id);
+    return !slot || slot.closed ? [{ id, closed: slot?.closed === true }] : [];
+  });
+  const savedTerminalList = (
+    <SavedTerminalList
+      key={scopeKey}
+      members={savedMembers}
+      onReopen={canPrepare && !busy ? () => void prepare() : undefined}
+    />
+  );
   const gridReason = t('feature.noLayout');
   const mentionScope =
     snapshot && selected
@@ -1245,13 +1257,7 @@ export function FeatureWorkspace({
                 <div className="feature-members">
                   <p>{t('features.members', { count: selected.terminalIds.length })}</p>
                   <p>{t('features.available', { count: available.length })}</p>
-                  {selected.terminalIds.length > available.length && (
-                    <p>
-                      {t('features.missing', {
-                        count: selected.terminalIds.length - available.length,
-                      })}
-                    </p>
-                  )}
+                  {(available.length > 0 || canvas) && savedTerminalList}
                   {unassigned.length > 0 && selected.status !== 'archived' && (
                     <form
                       onSubmit={(event) => {
@@ -1361,7 +1367,9 @@ export function FeatureWorkspace({
                 <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
               ) : selected?.status === 'archived' ? (
                 <span>{t('feature.archived')}</span>
-              ) : undefined
+              ) : (
+                savedTerminalList
+              )
             }
             v6={{
               featureName: selected ? displayFeatureName(selected) : t('features.unassigned'),

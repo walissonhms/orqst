@@ -32,9 +32,10 @@ export function discoverLocalClis(
   searchPath: string,
   home?: string,
   selectedDirectories: readonly string[] = [],
+  providers: readonly LocalCliProvider[] = localCliProviders,
 ): LocalCliDiscovery[] {
   const search = localCliPathDirectories(searchPath, home, selectedDirectories);
-  return localCliProviders.map((provider) => {
+  return providers.map((provider) => {
     const candidates: LocalCliDiscovery['candidates'] = [];
     const seen = new Set<string>();
     let incomplete = search.inspection === 'limited' || search.rejected.length > 0;

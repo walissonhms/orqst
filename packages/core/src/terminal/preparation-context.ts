@@ -18,6 +18,7 @@ export function resolveTerminalPreparationContext(
   trusted: TerminalPreparationContext,
   workspaceId: string,
   featureId: string | null,
+  restoreSavedFeature = false,
 ) {
   terminalPreparationContextSchema.parse(trusted);
   // Bounded metadata validation without reading/copying captured session content.
@@ -41,6 +42,8 @@ export function resolveTerminalPreparationContext(
   if (db.ino !== after.ino || db.dev !== after.dev) throw new Error('Workspace catalogue changed');
   const features = featureConfigurationDatabase(trusted.preferencesDirectory, workspaceId);
   const { view, target } = features.readAssignmentScope();
+  // Only passive catalog reads without a live Core may resolve an unspecified scope.
+  if (restoreSavedFeature && featureId === null) featureId = view.featureId;
   if (view.featureId !== featureId) throw new Error('Selected Feature changed');
   const feature = featureId === null ? null : target;
   if (feature?.status === 'archived') throw new Error('Selected Feature is archived');

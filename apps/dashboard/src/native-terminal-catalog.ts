@@ -21,6 +21,7 @@ export function dialogCatalog(
     return {
       provider: entry.provider,
       available: entry.status === 'available',
+      modelCatalogLimited: entry.status === 'available' && entry.reason === 'catalog_limited',
       ...(entry.status === 'unavailable' && translateReason
         ? { reason: translateReason(entry.reason) }
         : {}),

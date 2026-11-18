@@ -13,7 +13,7 @@ import {
   localCliProviders,
   type LocalCliProvider,
 } from '../../../packages/core/src/terminal/local-cli.js';
-import { inspectTerminalExecutables } from './terminal-discovery.js';
+import { inspectCatalogExecutables } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
 
 /** Resolve the scope and re-read only providers participating in the request. */
@@ -22,19 +22,21 @@ export function inspectTerminalPreparationCatalog(
   trusted: TerminalPreparationContext,
   context: Pick<TerminalCreationInput, 'home' | 'environment'>,
   requestedProviders: readonly LocalCliProvider[],
+  restoreSavedFeature = false,
 ) {
   const request = terminalCatalogRequestSchema.parse(raw);
   const workspace = resolveTerminalPreparationContext(
     trusted,
     request.workspaceId,
     request.featureId,
+    restoreSavedFeature,
   );
-  const providers = [...new Set(requestedProviders)].map((provider) => {
-    const { executables, refusal } = inspectTerminalExecutables(
-      provider,
-      context.environment.PATH ?? '',
-      context.home,
-    );
+  const providers = inspectCatalogExecutables(
+    requestedProviders,
+    context.environment.PATH ?? '',
+    context.home,
+  ).map(({ provider, executables, refusal }) => {
+    if (executables.length !== 1) return { provider, executables, models: null, refusal };
     let models;
     try {
       models = discoverTerminalModels(
@@ -45,7 +47,7 @@ export function inspectTerminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables: [], models: null, refusal };
+      return { provider, executables, models: null, refusal };
     }
     const executable = executables.length === 1 ? executables[0]! : null;
     const identity = JSON.stringify([
@@ -101,30 +103,39 @@ export function terminalPreparationCatalog(
   raw: unknown,
   trusted: TerminalPreparationContext,
   context: Pick<TerminalCreationInput, 'home' | 'environment'>,
+  restoreSavedFeature = false,
 ) {
-  const { request, catalogId, providers } = inspectTerminalPreparationCatalog(
+  const { request, catalogId, providers, workspace } = inspectTerminalPreparationCatalog(
     raw,
     trusted,
     context,
     localCliProviders,
+    restoreSavedFeature,
   );
   return terminalPreparationCatalogSchema.parse({
     contractVersion: 1,
     workspaceId: request.workspaceId,
     featureId: request.featureId,
     catalogId,
+    ...(restoreSavedFeature && workspace.feature
+      ? {
+          restoredFeature: {
+            featureId: workspace.feature.featureId,
+            name: workspace.feature.name,
+            terminalIds: workspace.feature.terminalIds,
+          },
+        }
+      : {}),
     providers: providers.map(({ provider, executables, models, refusal }) => ({
       provider,
       status: executables.length === 1 && models ? 'available' : 'unavailable',
-      reason: !models
-        ? 'catalog_limited'
-        : !executables.length
-          ? refusal
-          : executables.length > 1
-            ? 'ambiguous_executable'
-            : models.limited
-              ? 'catalog_limited'
-              : 'ready',
+      reason: !executables.length
+        ? refusal
+        : executables.length > 1
+          ? 'ambiguous_executable'
+          : !models || models.limited
+            ? 'catalog_limited'
+            : 'ready',
       models:
         models?.options.map(({ id, label, selection }) => ({
           id,

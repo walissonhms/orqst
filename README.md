@@ -1,5 +1,10 @@
 # ORQST
 
+Saved Studio terminals remain visible when their managed Core is disconnected.
+Open the same Feature's terminal picker to create a fresh terminal, or dismiss
+a saved entry from the current view. See the
+[availability and opening contract](docs/development/diag25-terminal-availability.md).
+
 ## V6 Studio staging integration — 2026-11-18
 
 The managed Studio uses a persistent Workspace and Feature tree and one

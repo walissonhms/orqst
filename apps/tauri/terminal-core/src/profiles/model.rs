@@ -49,7 +49,7 @@ fn parse_codex_cache(bytes: &[u8]) -> Option<(String, String, Vec<CacheModel>)> 
         return None;
     }
     let client = value.get("client_version")?.as_str()?;
-    if client != "0.162.1" {
+    if !matches!(client, "0.162.1" | "0.169.0") {
         return None;
     }
     let fetched = value.get("fetched_at")?.as_str()?;
@@ -812,5 +812,20 @@ mod tests {
             toml_model_strings(text),
             ["\"a\"", "\"b\"", "\"d\\\"e\"", "\"f\""]
         );
+    }
+
+    #[test]
+    fn codex_cache_accepts_only_reviewed_versions() {
+        for (version, accepted) in [("0.162.1", true), ("0.169.0", true), ("0.170.0", false)] {
+            let fixture = serde_json::json!({
+                "client_version": version,
+                "fetched_at": "2026-11-18T18:41:00.000Z",
+                "models": [{"slug":"synthetic-picker", "visibility":"list"}],
+            });
+            assert_eq!(
+                parse_codex_cache(fixture.to_string().as_bytes()).is_some(),
+                accepted
+            );
+        }
     }
 }

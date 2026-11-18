@@ -1042,6 +1042,7 @@
       "cliDefault": "CLI default model",
       "chooseModel": "Choose a reviewed model",
       "modelUnknown": "No reviewed model available",
+      "modelCatalogLimited": "The model list is limited to reviewed local sources.",
       "modelUnverified": "Model availability is unverified.",
       "catalogUnverified": "The native catalog and its current session could not be verified.",
       "workspaceUnknown": "Current workspace",
@@ -1258,7 +1259,7 @@
     "core": {
       "connecting": "CORE CONNECTING",
       "online": "CORE ONLINE",
-      "unavailable": "CORE UNAVAILABLE"
+      "unavailable": "MANAGED TERMINALS DISCONNECTED"
     },
     "workspace": {
       "create": "＋ New Workspace",
@@ -1293,7 +1294,15 @@
     "unassigned": "Unassigned",
     "members": "{{count}} terminals",
     "available": "{{count}} in this selection",
-    "missing": "{{count}} unavailable here; not adopted or restarted.",
+    "savedTerminals": {
+      "title": "Saved terminals",
+      "closed": "Closed in this Core",
+      "detached": "No current Core connection. Process state unverified.",
+      "hide": "Remove from view",
+      "show_one": "Show {{count}} hidden terminal",
+      "show_other": "Show {{count}} hidden terminals",
+      "reopen": "Reopen as a new terminal"
+    },
     "assign": "Reviewed terminal",
     "choose": "Choose…",
     "addMember": "Assign to Feature",
@@ -1408,7 +1417,7 @@
     "agents_other": "{{count}} agents",
     "running": "{{count}} running",
     "needs": "{{count}} need you",
-    "unknown": "{{count}} unavailable",
+    "unknown": "{{count}} without current state evidence",
     "emptyTitle": "Your Feature starts here",
     "emptyBody": "Open a terminal to see its card. Activities and links appear only with source evidence.",
     "newSession": "New session",
@@ -1661,19 +1670,19 @@
     "showPanel": "Show the Feature panel",
     "hidePanel": "Hide the Feature panel",
     "batch": {
-      "summary": "{{accepted}} of {{total}} terminals opened.",
+      "summary": "Core accepted {{accepted}} of {{total}} terminals.",
       "status": {
-        "accepted": "Opened",
+        "accepted": "Accepted by Core",
         "refused": "Not opened",
         "unknown": "Unknown"
       },
       "reason": {
-        "core_enrolled": "Opened",
+        "core_enrolled": "Accepted by Core",
         "workspace_unsupported": "Only the current workspace is supported for now",
         "account_unsupported": "Choosing an account is not available yet",
         "capacity_exceeded": "No room: up to 8 terminals",
         "selection_unavailable": "This CLI or model is not available",
-        "catalog_changed": "The list of CLIs and models changed; reopen the dialog",
+        "catalog_changed": "The reviewed selection changed. Refresh the list and choose again.",
         "review_cancelled": "The review was cancelled",
         "context_changed": "The workspace or Feature changed meanwhile",
         "preparation_failed": "Preparation failed",

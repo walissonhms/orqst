@@ -9,6 +9,10 @@ import {
   terminalPreparationBindingSchema,
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
+import {
+  validateTerminalModelSelection,
+  type TerminalModelSelection,
+} from '../../../packages/core/src/terminal/model-selection.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import {
@@ -68,6 +72,7 @@ export async function prepareTauriBatch(
     featureId: request.featureId,
     fence: discovered.workspace.fence,
   });
+  const selectedModels = new Map<string, TerminalModelSelection>();
   const plans: Array<{
     index: number;
     provider: TerminalBatchRequest['requests'][number]['provider'];
@@ -125,6 +130,7 @@ export async function prepareTauriBatch(
         ...(input.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
       });
       plans.push({ index, provider: input.provider, modelId: modelId!, plan });
+      selectedModels.set(modelId!, selected.model);
     } catch {
       item.reason = 'preparation_failed';
     }
@@ -133,8 +139,26 @@ export async function prepareTauriBatch(
   const reviewed = () => current() && now() < expires;
   let activeFeatureId = request.featureId;
   let expectedCatalogId = request.catalogId;
-  const revalidate = () => {
+  const revalidateScope = () => {
     if (!reviewed()) throw new Error('Batch context changed');
+    const workspace = resolveTerminalPreparationContext(
+      trusted,
+      request.workspaceId,
+      activeFeatureId,
+    );
+    if (terminalCatalogId(trusted, workspace) !== expectedCatalogId)
+      throw new Error('Batch context changed');
+    preflight();
+    for (const model of selectedModels.values()) validateTerminalModelSelection(model);
+    return workspace;
+  };
+  if (!plans.length) return result();
+  try {
+    revalidateScope();
+    if (!(await ports.commit()) || !reviewed()) {
+      for (const { index } of plans) items[index]!.reason = 'context_changed';
+      return result();
+    }
     const fresh = inspectTerminalPreparationCatalog(
       { action: 'catalog', workspaceId: request.workspaceId, featureId: activeFeatureId },
       trusted,
@@ -144,65 +168,63 @@ export async function prepareTauriBatch(
     if (
       fresh.catalogId !== expectedCatalogId ||
       plans.some(({ provider, modelId }) => !resolveCatalogSelection(fresh, provider, modelId))
-    )
-      throw new Error('Batch catalog changed');
-    preflight();
-    return fresh.workspace;
-  };
-  if (!plans.length) return result();
-  try {
-    revalidate();
-    if (!(await ports.commit()) || !reviewed()) {
-      for (const { index } of plans) items[index]!.reason = 'context_changed';
+    ) {
+      for (const { index } of plans) items[index]!.reason = 'catalog_changed';
       return result();
     }
-    revalidate();
   } catch {
     for (const { index } of plans) items[index]!.reason = 'context_changed';
     return result();
   }
   let previousLayout: TerminalLayoutRecord | null = null;
   let capturedLayout = false;
+  const verifiedExecutables = new Set<string>();
   for (const { index, plan } of plans) {
     const item = items[index]!;
     try {
-      const workspace = revalidate();
+      // Provision rechecks this plan's exact model, executable and directory
+      // evidence. The only catalog-wide change here is our own assignment.
+      const workspace = revalidateScope();
       item.effects = 'possible';
-      const files = plan.provision(reviewed, (terminalIds) => {
-        if (!reviewed()) throw new Error('Batch context changed');
-        const assigned = discovered.workspace.features.assignToOpenOrDefault(
-          activeFeatureId,
-          terminalIds,
-          defaultFeatureTitle,
-          {
-            viewRevision: workspace.view.revision,
-            featureRevision: workspace.target?.revision ?? null,
-          },
-        );
-        if (!capturedLayout) {
-          previousLayout = assigned.previousLayout;
-          capturedLayout = true;
-        }
-        const resolved = resolveTerminalPreparationContext(
-          trusted,
-          request.workspaceId,
-          assigned.feature.featureId,
-        );
-        if (
-          resolved.project !== workspace.project ||
-          resolved.view.revision !== assigned.view.revision ||
-          resolved.target?.revision !== assigned.feature.revision
-        )
-          throw new Error('Batch context changed during assignment');
-        activeFeatureId = assigned.feature.featureId;
-        expectedCatalogId = terminalCatalogId(trusted, resolved);
-        return terminalPreparationBindingSchema.parse({
-          ...trusted,
-          workspaceId: request.workspaceId,
-          featureId: assigned.feature.featureId,
-          fence: resolved.fence,
-        });
-      });
+      const files = plan.provision(
+        reviewed,
+        (terminalIds) => {
+          if (!reviewed()) throw new Error('Batch context changed');
+          const assigned = discovered.workspace.features.assignToOpenOrDefault(
+            activeFeatureId,
+            terminalIds,
+            defaultFeatureTitle,
+            {
+              viewRevision: workspace.view.revision,
+              featureRevision: workspace.target?.revision ?? null,
+            },
+          );
+          if (!capturedLayout) {
+            previousLayout = assigned.previousLayout;
+            capturedLayout = true;
+          }
+          const resolved = resolveTerminalPreparationContext(
+            trusted,
+            request.workspaceId,
+            assigned.feature.featureId,
+          );
+          if (
+            resolved.project !== workspace.project ||
+            resolved.view.revision !== assigned.view.revision ||
+            resolved.target?.revision !== assigned.feature.revision
+          )
+            throw new Error('Batch context changed during assignment');
+          activeFeatureId = assigned.feature.featureId;
+          expectedCatalogId = terminalCatalogId(trusted, resolved);
+          return terminalPreparationBindingSchema.parse({
+            ...trusted,
+            workspaceId: request.workspaceId,
+            featureId: assigned.feature.featureId,
+            fence: resolved.fence,
+          });
+        },
+        verifiedExecutables,
+      );
       const inspected = inspectManagedTerminalFiles(files, 8);
       const member = inspected[0];
       if (files.length !== 1 || !member || member.blocker || !member.config.identity)

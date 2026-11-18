@@ -148,7 +148,8 @@ pub fn install(app: &tauri::AppHandle) -> tauri::Result<()> {
         if let Some(generation) = begin(app, &request, None) {
             let app = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
-                let _ = execute(&app, &window, request, source.as_str(), generation, true);
+                let diagnostic = Attempt::begin();
+                let _ = execute(&app, &window, request, source.as_str(), generation, true, &diagnostic);
             });
         }
     });
@@ -324,26 +325,25 @@ fn digest(value: &Value) -> bool {
     })
 }
 fn valid_catalog(value: &Value, request: &Value) -> bool {
-    (exact(
-        value,
-        &[
-            "contractVersion",
-            "workspaceId",
-            "featureId",
-            "catalogId",
-            "providers",
-        ],
-    ) || exact(
-        value,
-        &[
-            "contractVersion",
-            "workspaceId",
-            "featureId",
-            "catalogId",
-            "providers",
-            "pendingOwnedExits",
-        ],
-    )) && value.get("pendingOwnedExits").is_none_or(|pending| {
+    value.as_object().is_some_and(|fields| {
+        fields.keys().all(|key| {
+            [
+                "contractVersion", "workspaceId", "featureId", "catalogId",
+                "providers", "pendingOwnedExits", "restoredFeature",
+            ]
+            .contains(&key.as_str())
+        })
+    }) && value.get("restoredFeature").is_none_or(|feature| {
+        exact(feature, &["featureId", "name", "terminalIds"])
+            && crate::features::uuid(&feature["featureId"])
+            && (value["featureId"].is_null() || feature["featureId"] == value["featureId"])
+            && crate::features::name(&feature["name"])
+            && feature["terminalIds"].as_array().is_some_and(|ids| {
+                ids.len() <= 8
+                    && ids.iter().all(crate::features::uuid)
+                    && ids.iter().filter_map(Value::as_str).collect::<std::collections::HashSet<_>>().len() == ids.len()
+            })
+    }) && value.get("pendingOwnedExits").is_none_or(|pending| {
         pending.as_array().is_some_and(|exits| {
             exits.len() <= 64
                 && exits.iter().all(|exit| {
@@ -650,8 +650,8 @@ fn execute(
     source: &str,
     generation: u64,
     native_notice: bool,
+    diagnostic: &Attempt,
 ) -> Value {
-    let diagnostic = Attempt::begin();
     let mut stage = "bootstrap";
     let result = run(
         app,
@@ -660,7 +660,7 @@ fn execute(
         source,
         generation,
         &mut stage,
-        &diagnostic,
+        diagnostic,
     );
     let failure = result.as_ref().err().map(|error| {
         error
@@ -670,7 +670,7 @@ fn execute(
     });
     let succeeded = result.is_ok();
     if let Some(failure) = &failure {
-        record_failure(&diagnostic, failure, Stage::parse(stage));
+        record_failure(diagnostic, failure, Stage::parse(stage));
     } else {
         diagnostic.record(Stage::Attempt, Outcome::Succeeded, Effects::Unconfirmed);
     }
@@ -716,19 +716,34 @@ fn execute(
 }
 #[tauri::command]
 pub async fn studio_request(window: Webview, request: Value) -> Value {
-    let denied = || json!({"status":"denied"});
     if !valid_request(&request) {
-        return denied();
+        return json!({"status":"denied"});
     }
+    let app = window.app_handle().clone();
+    if request["action"] == "snapshot" {
+        return if identity(&window).is_some() {
+            json!({"status":"ok", "snapshot":snapshot(&app)})
+        } else {
+            json!({"status":"denied"})
+        };
+    }
+    let diagnostic = Attempt::begin();
+    let entry = if request["action"] == "catalog" {
+        Stage::Catalog
+    } else {
+        Stage::Request
+    };
+    diagnostic.record(entry, Outcome::Requested, Effects::NotStarted);
+    let denied = || {
+        diagnostic.record(entry, Outcome::Refused, Effects::NotStarted);
+        json!({"status":"denied"})
+    };
     let Some((source, generation)) = identity(&window) else {
         return denied();
     };
-    let app = window.app_handle().clone();
-    if request["action"] == "snapshot" {
-        return json!({"status":"ok", "snapshot":snapshot(&app)});
-    }
     // Reuse the actual AppKit Webview first-responder check; JS activation is not authority.
     if request["action"] != "catalog" && !crate::features::focused(&window).await {
+        diagnostic.record(entry, Outcome::Refused, Effects::NotStarted);
         if request["action"] == "create-batch" {
             return batch_failure(&request, "focus_required", false);
         }
@@ -737,6 +752,10 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     if identity(&window) != Some((source.clone(), generation))
         || (request["action"] != "catalog" && request["generation"].as_u64() != Some(generation))
     {
+        if request["action"] == "create-batch" {
+            diagnostic.record(entry, Outcome::CatalogChanged, Effects::NotStarted);
+            return batch_failure(&request, "catalog_changed", false);
+        }
         return denied();
     }
     // The retained chrome/PTY siblings make main a multi-webview Window, so
@@ -747,6 +766,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     };
     if request["action"] == "create-batch" && crate::terminal::pool_available_slots(&app) == Some(0)
     {
+        diagnostic.record(entry, Outcome::CapacityExceeded, Effects::NotStarted);
         return batch_failure(&request, "capacity_exceeded", false);
     }
     let native_request = if request["action"] == "review" {
@@ -772,6 +792,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
         json!({"action":"create", "provider":request["provider"], "count":request["count"]})
     };
     if begin(&app, &native_request, Some(generation)).is_none() {
+        diagnostic.record(entry, Outcome::Refused, Effects::NotStarted);
         let current = snapshot(&app);
         if request["action"] == "create-batch" {
             return batch_failure(
@@ -790,6 +811,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
     let native_app = app.clone();
     let native_source = source.clone();
     let requested = request.clone();
+    let preparation_diagnostic = diagnostic.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
         execute(
             &native_app,
@@ -798,11 +820,22 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
             &native_source,
             generation,
             false,
+            &preparation_diagnostic,
         )
     })
     .await;
     if identity(&window) != Some((source, generation)) {
-        return denied();
+        if requested["action"] == "catalog" {
+            return denied();
+        }
+        diagnostic.record(entry, Outcome::Uncertain, Effects::Possible);
+        // A lost document cannot receive scoped metadata or a false no-effect refusal.
+        if requested["action"] == "create-batch" {
+            return batch_failure(&requested, "opening_uncertain", true);
+        }
+        return json!({"status":"unavailable", "failure":{
+            "stage":"opening", "code":"failed", "effects":"possible"
+        }});
     }
     match result {
         Ok(value) if value["status"] == "batch" => value,
@@ -820,6 +853,7 @@ pub async fn studio_request(window: Webview, request: Value) -> Value {
                 return denied();
             }
             value["snapshot"] = current;
+            diagnostic.record(Stage::Catalog, Outcome::Ready, Effects::NotStarted);
             value
         }
         Ok(value) if value["status"] == "denied" => {
@@ -976,6 +1010,7 @@ fn open_batch(
         && current()
         && crate::terminal::preparation_admission_current(app, &admission)
     {
+        diagnostic.record(Stage::Opening, Outcome::Requested, Effects::Possible);
         // The existing latch is acquired before the first possible Core operation.
         app.state::<Preparation>().0.lock().unwrap().opened = true;
         if admission.is_none() {
@@ -1032,6 +1067,7 @@ fn open_batch(
     }
     let uncertain = items.iter().any(|item| item["status"] == "unknown");
     if !uncertain && !prepared.is_empty() {
+        diagnostic.record(Stage::Opening, Outcome::Succeeded, Effects::Possible);
         let state = app.state::<Preparation>();
         let mut guard = state.0.lock().unwrap();
         guard.prepared.clear();
@@ -1430,7 +1466,10 @@ fn run(
         );
     }
     if request["action"] == "catalog" {
-        if result["status"] != "catalog" || !valid_catalog(&result["catalog"], &request) {
+        if result["status"] != "catalog"
+            || !valid_catalog(&result["catalog"], &request)
+            || (admission.is_some() && result["catalog"].get("restoredFeature").is_some())
+        {
             return Err("Invalid scoped catalog".into());
         }
         if unsupported_opencode {
@@ -2029,6 +2068,24 @@ mod catalog_tests {
         catalog["pendingOwnedExits"] = json!(vec![item; 65]);
         assert!(!valid_catalog(&catalog, &request));
     }
+    #[test]
+    fn passive_catalog_restores_only_bounded_saved_feature_metadata() {
+        let request = json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
+        let providers: Vec<_> = ["codex", "claude", "opencode", "antigravity"].iter().map(|provider| json!({"provider":provider,"status":"unavailable","reason":"executable_not_found","models":[]})).collect();
+        let id = "89ddebd6-1eb8-4017-a310-7cf4ffbc60b2";
+        let mut catalog = json!({
+            "contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,
+            "catalogId":"a".repeat(64),"providers":providers,
+            "restoredFeature":{"featureId":id,"name":"Saved feature","terminalIds":[id]}
+        });
+        assert!(valid_catalog(&catalog, &request));
+        catalog["restoredFeature"]["terminalIds"] = json!([id, id]);
+        assert!(!valid_catalog(&catalog, &request));
+        catalog["restoredFeature"]["terminalIds"] = json!([id]);
+        catalog["restoredFeature"]["processState"] = json!("running");
+        assert!(!valid_catalog(&catalog, &request));
+    }
+
     #[test]
     fn catalogs_accept_all_reviewed_sources_but_never_entitlement_or_cross_scope() {
         let request =

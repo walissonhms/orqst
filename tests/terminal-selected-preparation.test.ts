@@ -1566,6 +1566,44 @@ async function batchFixture(f: ReturnType<typeof fixture>, count = 3) {
   return { request, features, feature };
 }
 
+test('cold catalog restores the saved Feature and binds Open to its exact scope', async () => {
+  const f = fixture();
+  try {
+    const { request, features, feature } = await batchFixture(f, 1);
+    const savedId = randomUUID();
+    features.assignTerminal(feature.featureId, savedId, feature.revision);
+    const catalog = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(catalog.status, 'catalog');
+    assert.equal(catalog.catalog.featureId, null);
+    assert.deepEqual(catalog.catalog.restoredFeature, {
+      featureId: feature.featureId,
+      name: feature.name,
+      terminalIds: [savedId],
+    });
+    const result = await prepareTauriTerminals(
+      { ...request, catalogId: catalog.catalog.catalogId },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'batch');
+    assert.equal(result.items[0]?.status, 'prepared');
+    assert.deepEqual(features.read(feature.featureId).terminalIds, [
+      savedId,
+      result.items[0]?.terminalId,
+    ]);
+  } finally {
+    f.close();
+  }
+});
+
 test('batch prepares eight independent owned manifests without dialogs and with one commit', async () => {
   const f = fixture();
   try {

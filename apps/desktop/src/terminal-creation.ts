@@ -355,13 +355,20 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     provision(
       current: () => boolean,
       beforePublish?: (terminalIds: string[]) => TerminalPreparationBinding | undefined,
+      batchVerifiedExecutables?: Set<string>,
     ): string[] {
       if (attempted || !current()) throw new Error('Creation unavailable');
       if (JSON.stringify(directoryIdentities()) !== identities)
         throw new Error('Creation directories changed');
-      for (const binary of [...executables, node])
-        if (terminalExecutableSha256(binary.path) !== binary.sha256)
-          throw new Error('Creation executable changed');
+      for (const binary of [...executables, node]) {
+        // The first write for a binary in this batch requires a fresh hash.
+        // Later writes re-open it and verify identity before reusing the digest.
+        const verify = batchVerifiedExecutables?.has(binary.path)
+          ? cachedTerminalExecutableSha256
+          : terminalExecutableSha256;
+        if (verify(binary.path) !== binary.sha256) throw new Error('Creation executable changed');
+        batchVerifiedExecutables?.add(binary.path);
+      }
       if (JSON.stringify(toolDirectoryIdentities()) !== toolIdentities)
         throw new Error('Tool PATH directory identity changed');
       if (JSON.stringify(configs) !== snapshot || !current()) throw new Error('Creation changed');
