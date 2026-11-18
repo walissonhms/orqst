@@ -5,6 +5,18 @@ use super::js::Js;
 use super::validate::{bounded, hex64_pattern, uuid_pattern};
 use super::{ProfileError, Result};
 
+// Keep the approval lists aligned with mcp-launch.ts and the shared relay's tool catalogs.
+pub(super) const HUB_RELAY_TOOLS: &[&str] = &[
+    "list_terminals",
+    "send_message",
+    "read_messages",
+    "wait_messages",
+    "delegate_task",
+    "submit_result",
+    "task_status",
+];
+pub(super) const PAIR_RELAY_TOOLS: &[&str] = &["delegate_task", "wait_task", "submit_result"];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReviewedBinary {
     pub version: &'static str,
@@ -123,6 +135,8 @@ pub fn claude_interactive_mcp_configuration(
         "--strict-mcp-config".to_owned(),
         "--mcp-config".to_owned(),
         config.stringify(),
+        "--allowedTools".to_owned(),
+        format!("mcp__{}__*", mcp.server_name),
         "--session-id".to_owned(),
         session_id.to_owned(),
     ];
@@ -184,37 +198,51 @@ pub fn opencode_interactive_mcp_configuration(
         return Err(not_reviewed());
     }
     let mcp = input.mcp;
-    let content = Js::obj([(
-        "mcp",
-        Js::obj([(
-            "servers",
+    let permissions = HUB_RELAY_TOOLS
+        .iter()
+        .chain(PAIR_RELAY_TOOLS.iter().filter(|tool| !HUB_RELAY_TOOLS.contains(tool)))
+        .map(|tool| {
+            Js::obj([
+                ("action", Js::Str(format!("{}_{tool}", mcp.server_name))),
+                ("resource", Js::str("*")),
+                ("effect", Js::str("allow")),
+            ])
+        })
+        .collect();
+    let content = Js::obj([
+        ("permissions", Js::Arr(permissions)),
+        (
+            "mcp",
             Js::obj([(
-                mcp.server_name.as_str(),
-                Js::obj([
-                    ("type", Js::str("local")),
-                    ("command", Js::strs([input.node_path, &mcp.relay.path])),
-                    (
-                        "environment",
-                        Js::obj([
-                            ("ORQST_SOCKET_PATH", Js::str(&mcp.socket_path)),
-                            ("ORQST_CAP_FILE", Js::str(&mcp.capability_file)),
-                        ]),
-                    ),
-                    ("disabled", Js::Bool(false)),
-                    ("codemode", Js::Bool(false)),
-                    ("protocol", Js::str("legacy")),
-                    (
-                        "timeout",
-                        Js::obj([
-                            ("startup", Js::Num(10000.0)),
-                            ("catalog", Js::Num(10000.0)),
-                            ("execution", Js::Num(125000.0)),
-                        ]),
-                    ),
-                ]),
+                "servers",
+                Js::obj([(
+                    mcp.server_name.as_str(),
+                    Js::obj([
+                        ("type", Js::str("local")),
+                        ("command", Js::strs([input.node_path, &mcp.relay.path])),
+                        (
+                            "environment",
+                            Js::obj([
+                                ("ORQST_SOCKET_PATH", Js::str(&mcp.socket_path)),
+                                ("ORQST_CAP_FILE", Js::str(&mcp.capability_file)),
+                            ]),
+                        ),
+                        ("disabled", Js::Bool(false)),
+                        ("codemode", Js::Bool(false)),
+                        ("protocol", Js::str("legacy")),
+                        (
+                            "timeout",
+                            Js::obj([
+                                ("startup", Js::Num(10000.0)),
+                                ("catalog", Js::Num(10000.0)),
+                                ("execution", Js::Num(125000.0)),
+                            ]),
+                        ),
+                    ]),
+                )]),
             )]),
-        )]),
-    )]);
+        ),
+    ]);
     let environment_overrides = vec![("OPENCODE_CONFIG_CONTENT".to_owned(), content.stringify())];
     let mut blockers: Vec<&str> = COMMON_BLOCKERS.to_vec();
     blockers.extend([

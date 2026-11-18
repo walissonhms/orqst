@@ -1847,3 +1847,67 @@ grant per task with a session capability scoped to the terminal's Feature:
 - Claude hub terminals keep the owned metadata-only hooks together with MCP.
 
 Implemented and unit/socket-tested; native and provider acceptance pending.
+
+### Managed PTY relay approval review — 2026-11-18
+
+The managed profiles pre-approve tool calls to the private, hash-pinned ORQST
+relay under its generated per-launch server name. This removes the provider
+confirmation for calls such as `list_terminals` because Core already binds
+the sender to the private socket and checks current Feature membership and
+the target on each call. Unassigned senders and unknown or out-of-Feature
+targets are still refused. Feature hub tasks use the existing session
+capability. Legacy pair delegation still requires a separate native one-use
+grant. Native launch approval, provider policy for shell, file and other MCP
+tools, and managed provider restrictions still apply. The profiles supply
+arguments or a child environment only, with no writes to global configuration.
+
+- **Codex PTY (Node and Rust)** uses
+  `mcp_servers.<generated_name>.default_tools_approval_mode = "approve"` and
+  `enabled_tools` limited to the Feature hub catalog or legacy pair tools.
+  The authenticated relay still exposes only the applicable pair role.
+  Codex 0.169.0 accepts `auto`, `prompt`, `writes`, and `approve`.
+  `auto` can prompt on tools without read-only annotations. The explicit
+  `Approve` branch skips the tool confirmation. See
+  [configuration types](https://github.com/openai/codex/blob/d32063f96c2dff1dc96af839b3952abb6acfeda4/codex-rs/config/src/mcp_types.rs#L24-L31),
+  [approval logic](https://github.com/openai/codex/blob/d32063f96c2dff1dc96af839b3952abb6acfeda4/codex-rs/core/src/mcp_tool_call.rs#L2755-L2784),
+  and the [0.162.1 schema](https://github.com/openai/codex/blob/092d3acd6bec3e3a14bdc7e7a2810ab628ab759d/codex-rs/core/config.schema.json).
+- **Claude Code interactive PTY** adds `--allowedTools mcp__<generated_name>__*`
+  to the existing strict inline MCP invocation. The rule names one server.
+  Strict MCP selection and provider policy still apply. Both reviewed binaries
+  (2.1.178 and 2.1.318) advertise the flag. See the
+  [MCP permission pattern](https://code.claude.com/docs/en/permissions#mcp).
+- **OpenCode 2.2.5 PTY** adds an `allow` rule per relay action
+  (`<generated_name>_<tool>`) to the existing `OPENCODE_CONFIG_CONTENT`.
+  The CLI checks that exact normalized action with resource `*`. Its agent
+  configuration collects permission rules from all documents and applies
+  managed layers after the inline configuration. See
+  [tool registration](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/tool/mcp.ts#L19-L67),
+  [config layer order](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config.ts#L357-L368),
+  and [agent rule composition](https://github.com/anomalyco/opencode/blob/9bbb8ce18c80f099e0e448775f59d965ead40a21/packages/core/src/config/plugin/agent.ts#L78-L92).
+
+The reviewed Codex 0.169.0 binary was exercised with a disposable
+`CODEX_HOME`, a local mock model endpoint, and a synthetic stdio MCP server.
+`list_terminals` ran without elicitation under `approve`. The same call under
+`auto` and a call to the separate control server still elicited approval.
+Claude Code and OpenCode provider inference and native Preview acceptance
+remain unverified.
+
+#### Reference review
+
+- Anywh's [`buildClaudeHostSpec`](https://github.com/anywh-sh/anywh/blob/4f8aef7b5f0dc9cf0832e457c224dc09a9792a21/relay/src/runtimes/defs/claude/roomSpec.ts#L71-L110)
+  keys its allowlist to room tools and passes it through its persistent Claude
+  driver. Its [Codex profile](https://github.com/anywh-sh/anywh/blob/4f8aef7b5f0dc9cf0832e457c224dc09a9792a21/relay/src/runtimes/defs/codex.ts#L250-L271)
+  uses `enabled_tools` to remove configured servers' tools. Keep the ORQST
+  profiles and adopt the provider settings only for the owned stdio relay.
+  Anywh's room driver also manages built-in tools and approvals. ORQST uses the
+  existing PTY profile and Core checks for those boundaries.
+- Tucano's [`parseRoute` and `route`](https://github.com/eduwxyz/tucano/blob/4522704ecdcb2d51d7ad4ea002375dcfe8d447be/src/core/router.ts#L225-L270)
+  interpret model output and select channel agents. Keep ORQST's
+  authenticated, Feature-scoped routing for MCP calls. Overclock's
+  [pane documentation](https://overclock.sh/features/panes) describes separate
+  CLIs but provides no matching approval implementation or licensed source.
+- The inspected Anywh and Tucano pins declare Apache-2.0, with no root NOTICE
+  in either source tree. Codex declares Apache-2.0 and includes a NOTICE.
+  OpenCode declares MIT, with no root NOTICE at the reviewed pin. Provider
+  settings are applied through existing ORQST profiles. This change imports
+  no upstream code, assets or dependencies.

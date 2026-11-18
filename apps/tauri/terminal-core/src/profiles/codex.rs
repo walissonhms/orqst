@@ -7,6 +7,7 @@ use super::fsx::{
 use super::interactive::{BuiltProfile, PreparationValidator};
 use super::js::{self, quote, Js};
 use super::local_cli_path::terminal_tool_path;
+use super::mcp::{HUB_RELAY_TOOLS, PAIR_RELAY_TOOLS};
 use super::model::{terminal_model_arguments, validate_terminal_model_selection};
 use super::nodepath::{contains, join2};
 use super::{terminal_digest, ProfileError, Result};
@@ -139,15 +140,25 @@ fn codex_mcp_arguments(config: &CodexConfig, mcp: &McpLaunch) -> Result<Vec<Stri
     {
         return Err(ProfileError::refused("MCP relay changed"));
     }
+    let enabled_tools = if config
+        .interactive
+        .as_ref()
+        .is_some_and(|settings| settings.hub)
+    {
+        HUB_RELAY_TOOLS
+    } else {
+        PAIR_RELAY_TOOLS
+    };
     Ok(vec![
         "-c".into(),
         format!(
-            "mcp_servers.{}={{command={},args=[{}],env={{ORQST_SOCKET_PATH={},ORQST_CAP_FILE={}}},startup_timeout_sec=10,tool_timeout_sec=125,required=true}}",
+            "mcp_servers.{}={{command={},args=[{}],env={{ORQST_SOCKET_PATH={},ORQST_CAP_FILE={}}},startup_timeout_sec=10,tool_timeout_sec=125,required=true,default_tools_approval_mode=\"approve\",enabled_tools={}}}",
             mcp.server_name,
             quote(&config.node.path),
             quote(&mcp.relay.path),
             quote(&mcp.socket_path),
             quote(&mcp.capability_file),
+            Js::strs(enabled_tools.iter().copied()).stringify(),
         ),
     ])
 }

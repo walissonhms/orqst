@@ -152,7 +152,42 @@ test('opt-in MCP profiles pin the local relay and reviewed version without writi
     assert.throws(() => managedCodexProfiles(f.config), /composition required/);
     const profile = managedCodexProfiles(f.config, launch)[0]!;
     assert.match(profile.argv.join(' '), /mcp_servers\.orqst_a{32}=\{command=/);
-    assert.match(profile.argv.join(' '), /tool_timeout_sec=125/);
+    const overrides = profile.argv.filter((arg) => arg.startsWith('mcp_servers.'));
+    assert.equal(overrides.length, 1);
+    assert.ok(overrides[0]?.includes('tool_timeout_sec=125,required=true'));
+    assert.ok(
+      overrides[0]?.endsWith(
+        'default_tools_approval_mode="approve",enabled_tools=["delegate_task","wait_task","submit_result"]}',
+      ),
+    );
+    assert.equal(profile.argv[profile.argv.indexOf('--ask-for-approval') + 1], 'on-request');
+    assert.equal(profile.argv[profile.argv.indexOf('--sandbox') + 1], 'read-only');
+    const hubProfile = managedCodexProfiles(
+      {
+        ...f.config,
+        executableVersion: '0.169.0',
+        interactive: { sharedNativeSessions: true, mcp: true, hub: true },
+      },
+      launch,
+    )[0]!;
+    assert.deepEqual(
+      hubProfile.argv
+        .filter((arg) => arg.startsWith('mcp_servers.'))
+        .map((arg) =>
+          JSON.parse(arg.slice(arg.indexOf('enabled_tools=') + 'enabled_tools='.length, -1)),
+        ),
+      [
+        [
+          'list_terminals',
+          'send_message',
+          'read_messages',
+          'wait_messages',
+          'delegate_task',
+          'submit_result',
+          'task_status',
+        ],
+      ],
+    );
     assert.match(profile.permissions, /Inherited MCPs remain enabled/);
     assert.equal(managedCodexEnvironment(f.config).HOME, nativeHome);
     assert.equal(managedCodexEnvironment(f.config).CODEX_HOME, nativeHome);

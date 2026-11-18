@@ -142,6 +142,13 @@ test('OpenCode MCP factory produces v2 inline environment and rejects compositio
       variant: 'high',
     });
     assert.deepEqual(inline.mcp, original.mcp);
+    assert.deepEqual(inline.permissions, original.permissions);
+    assert.ok(
+      inline.permissions.some(
+        ({ action, effect }: { action: string; effect: string }) =>
+          action === `${mcp.serverName}_list_terminals` && effect === 'allow',
+      ),
+    );
     assert.deepEqual(openCodeTerminalProfiles(config, mcp)[0]!.argv, ['--standalone']);
     assert.match(
       openCodeTerminalProfiles(config, mcp)[0]!.permissions,

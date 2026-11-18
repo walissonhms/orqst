@@ -33,7 +33,12 @@ test('Claude 2.1.178 configuration uses evidenced strict inline MCP/session flag
   const sessionId = randomUUID();
   const plan = claudeInteractiveMcpConfiguration({ ...fixture('claude'), sessionId });
   assert.deepEqual(plan.argv.slice(0, 2), ['--strict-mcp-config', '--mcp-config']);
-  assert.deepEqual(plan.argv.slice(-2), ['--session-id', sessionId]);
+  assert.deepEqual(plan.argv.slice(3), [
+    '--allowedTools',
+    `mcp__${fixture('claude').mcp.serverName}__*`,
+    '--session-id',
+    sessionId,
+  ]);
   const config = JSON.parse(plan.argv[2]!);
   assert.equal(config.mcpServers[fixture('claude').mcp.serverName].type, 'stdio');
   assert.equal(
@@ -60,7 +65,21 @@ test('OpenCode 2.2.5 configuration uses a merged runtime environment document, n
   const config = JSON.parse(plan.environmentOverrides.OPENCODE_CONFIG_CONTENT);
   // v2.2.5 Config.MCP decodes native fields only under servers; direct entries use v1 decoding.
   assert.deepEqual(Object.keys(config.mcp), ['servers']);
-  assert.deepEqual(Object.keys(config.mcp.servers), [fixture('opencode').mcp.serverName]);
+  const { serverName } = fixture('opencode').mcp;
+  assert.deepEqual(Object.keys(config.mcp.servers), [serverName]);
+  assert.deepEqual(
+    config.permissions,
+    [
+      'list_terminals',
+      'send_message',
+      'read_messages',
+      'wait_messages',
+      'delegate_task',
+      'submit_result',
+      'task_status',
+      'wait_task',
+    ].map((tool) => ({ action: `${serverName}_${tool}`, resource: '*', effect: 'allow' })),
+  );
   const server = config.mcp.servers[fixture('opencode').mcp.serverName];
   assert.deepEqual(server.command, ['/synthetic/private/node', '/synthetic/private/relay.cjs']);
   assert.equal(server.type, 'local');
@@ -123,7 +142,7 @@ test('provider configuration review rejects version/hash drift and injected cred
     assert.equal('CODEX_HOME' in plan.environmentOverrides, false);
     assert.doesNotMatch(
       JSON.stringify(plan),
-      /--print|--continue|--resume|--session"|--channels|--allowedTools|--auto|--dangerously/,
+      /--print|--continue|--resume|--session"|--channels|--auto|--dangerously/,
     );
   }
   for (const descriptor of [claudeDescriptor, opencodeDescriptor]) {

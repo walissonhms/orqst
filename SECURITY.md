@@ -29,6 +29,16 @@ membership against the original Feature. The hub persists queue metadata and kee
 message bodies in memory. Relay authentication establishes a bound socket.
 [Communication contract and acceptance limits](docs/development/feature-mention-routing.md).
 
+## Managed PTY relay tool approval
+
+Managed Codex, Claude Code and OpenCode PTYs pre-approve only the tools of
+ORQST's private per-launch MCP relay. Core authenticates the sender and checks
+Feature scope at each call, so provider confirmation adds a second prompt
+without granting additional routing authority. Native launch review and the
+legacy pair's one-use task grant still apply. Shell, file and other MCP tools
+remain subject to provider policy. See the
+[security review and provider contracts](docs/architecture/security-model.md#managed-pty-relay-approval-review--2026-11-18).
+
 ## Structured Claude Studio pilot — 2026-11-18
 
 Core implements the `claude -p --input-format stream-json --output-format stream-json`

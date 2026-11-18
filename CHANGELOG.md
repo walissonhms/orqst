@@ -1,5 +1,13 @@
 # Changelog
 
+## Managed terminal relay approvals — 2026-11-18
+
+Managed Codex, Claude Code and OpenCode PTYs pre-approve calls to their
+own ORQST MCP relay, including `list_terminals`. The Node and Rust profiles
+apply the provider rules per launch. Core continues to enforce Feature scope
+and one-use grants where required. See the
+[security review](docs/architecture/security-model.md#managed-pty-relay-approval-review--2026-11-18).
+
 ## V6 Studio terminal cards — 2026-11-18
 
 Running cards show the native PTY without pair setup controls. A reviewed opening
